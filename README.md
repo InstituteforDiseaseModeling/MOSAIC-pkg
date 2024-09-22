@@ -13,7 +13,7 @@ Note that this repo holds code for data and models only, for full documentation 
 
 The MOSAIC R package is designed to be used within a triad of Github repos where all functions are documented here at [MOSAIC-pkg](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg). The package downloads and processes all required data to be saved in [MOSAIC-data](https://github.com/InstituteforDiseaseModeling/MOSAIC-data) and prepares model quantities to run MOSAIC which are saved in [MOSAIC-pkg/model/input](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/model/input). The package also produces all figures and tables used to make the documentation located at [MOSAIC-docs](https://github.com/InstituteforDiseaseModeling/MOSAIC-docs).
 
-Below is the directory structure for the **MOSAIC** project:
+Below is the directory structure for the **MOSAIC** project. See [./src/mosiac_setup.sh](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/src/mosiac_setup.sh) for a project setup script.
 ```bash
 MOSAIC/               # Local parent directory to hold 3 repositories, root directory in get_paths()
 ├── MOSAIC-data/      
