@@ -16,7 +16,7 @@ cd "$MOSAIC_DIR"
 
 # Clone the MOSAIC-data repository
 if [ ! -d "MOSAIC-data" ]; then
-    git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-data.git
+    git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
     echo "Cloned MOSAIC-data repository."
 else
     echo "MOSAIC-data repository already exists."
@@ -24,7 +24,7 @@ fi
 
 # Clone the MOSAIC-pkg repository
 if [ ! -d "MOSAIC-pkg" ]; then
-    git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg.git
+    git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
     echo "Cloned MOSAIC-pkg repository."
 else
     echo "MOSAIC-pkg repository already exists."
@@ -32,7 +32,7 @@ fi
 
 # Clone the MOSAIC-docs repository
 if [ ! -d "MOSAIC-docs" ]; then
-    git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-docs.git
+    git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
     echo "Cloned MOSAIC-docs repository."
 else
     echo "MOSAIC-docs repository already exists."

@@ -1,6 +1,6 @@
-#' Download and Save Climate Data for Multiple Countries
+#' Download and Save Climate Data for Multiple Countries (Parquet Format)
 #'
-#' This function downloads daily climate data for a list of specified countries, saving the data as CSV files. The data includes both historical and future climate variables at grid points within each country.
+#' This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country.
 #'
 #' @param PATHS A list containing paths where raw and processed data are stored.
 #' PATHS is typically the output of the `get_paths()` function and should include:
@@ -14,9 +14,9 @@
 #' @param date_start A character string representing the start date for the climate data (in "YYYY-MM-DD" format).
 #' @param date_stop A character string representing the end date for the climate data (in "YYYY-MM-DD" format).
 #'
-#' @return The function does not return a value. It downloads the climate data for each country and saves the results as CSV files in the specified directory.
+#' @return The function does not return a value. It downloads the climate data for each country and saves the results as Parquet files in the specified directory.
 #'
-#' @details This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (`date_start` to `date_stop`). The data is saved for each country in a CSV file named `climate_data_<date_start>_<date_stop>_<ISO3>.csv`.
+#' @details This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (`date_start` to `date_stop`). The data is saved for each country in a Parquet file named `climate_data_<date_start>_<date_stop>_<ISO3>.parquet`.
 #'
 #' The climate data variables include temperature, wind speed, cloud cover, precipitation, and more. The function retrieves data from multiple climate models, including MRI and EC Earth models.
 #'
@@ -24,8 +24,7 @@
 #' @importFrom lubridate year month week yday
 #' @importFrom sf st_read st_coordinates
 #' @importFrom glue glue
-#' @importFrom utils write.csv
-#' @importFrom MOSAIC convert_iso_to_country generate_country_grid_n get_climate_future
+#' @importFrom arrow write_parquet
 #' @examples
 #' \dontrun{
 #' # Define paths for raw and processed data using get_paths()
@@ -43,14 +42,10 @@
 #'}
 #'
 #' @export
-download_climate_data <- function(PATHS, iso_codes, api_key, n_points = 3, date_start = "1970-01-01", date_stop = "2030-12-31") {
+download_climate_data <- function(PATHS, iso_codes, api_key, n_points, date_start, date_stop) {
 
-     # Ensure output directory exists, if not, create it
-     if (!dir.exists(PATHS$DATA_CLIMATE)) {
-          dir.create(PATHS$DATA_CLIMATE, recursive = TRUE)
-     }
+     if (!dir.exists(PATHS$DATA_CLIMATE)) dir.create(PATHS$DATA_CLIMATE, recursive = TRUE)
 
-     # List of climate variables for both historical and future data
      climate_variables_historical_and_future <- c(
           "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
           "wind_speed_10m_mean", "wind_speed_10m_max", "cloud_cover_mean",
@@ -96,10 +91,9 @@ download_climate_data <- function(PATHS, iso_codes, api_key, n_points = 3, date_
                climate_data
           )
 
-          # Save climate data as CSV
-          write.csv(climate_data,
-                    file = file.path(PATHS$DATA_CLIMATE, paste0("climate_data_", date_start, "_", date_stop, "_", country_iso_code, ".csv")),
-                    row.names = FALSE)
+          # Save climate data as Parquet
+          arrow::write_parquet(climate_data,
+                               sink = file.path(PATHS$DATA_CLIMATE, paste0("climate_data_", date_start, "_", date_stop, "_", country_iso_code, ".parquet")))
      }
 
      message(glue::glue("Climate data saved for all countries here: {PATHS$DATA_CLIMATE}"))

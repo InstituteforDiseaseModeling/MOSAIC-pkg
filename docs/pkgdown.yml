@@ -2,7 +2,7 @@ pandoc: 3.1.12.3
 pkgdown: 2.0.9
 pkgdown_sha: ~
 articles: {}
-last_built: 2024-09-22T20:52Z
+last_built: 2024-09-22T21:33Z
 urls:
   reference: institutefordiseasemodeling.github.io/MOSAIC-pkg/reference
   article: institutefordiseasemodeling.github.io/MOSAIC-pkg/articles

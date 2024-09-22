@@ -47,7 +47,8 @@ Imports:
   RColorBrewer,
   remotes,
   scales,
-  shiny
+  shiny,
+  arrow
 Depends: 
   R (>= 4.1.1),
   stats, 
