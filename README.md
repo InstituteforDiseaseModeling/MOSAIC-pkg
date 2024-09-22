@@ -30,3 +30,10 @@ MOSAIC/               # Local parent directory to hold 3 repositories, root dire
     ├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
     └── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
 ```
+
+## Contact 
+For questions or further information about the MOSAIC project, please contact:
+
+- **John Giles**: [john.giles@gatesfoundation.org](mailto:john.giles@gatesfoundation.org)
+- **Jillian Gauld**: [jillian.gauld@gatesfoundation.org](mailto:jillian.gauld@gatesfoundation.org)
+- **Rajiv Sodhi**: [rajiv.sodhi@gatesfoundation.org](mailto:rajiv.sodhi@gatesfoundation.org)
