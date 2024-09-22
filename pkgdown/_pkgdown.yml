@@ -1,4 +1,4 @@
-url: https://gilesjohnr.github.io/MOSAIC-docs/
+url: institutefordiseasemodeling.github.io/MOSAIC-pkg/
 
 template:
   bootstrap: 5
@@ -31,7 +31,7 @@ navbar:
         href: articles/LAUNCH.html
   right:
   - icon: fa-github
-    href: https://github.com/gilesjohnr/MOSAIC-pkg
+    href: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg
     aria-label: GitHub
 
 
