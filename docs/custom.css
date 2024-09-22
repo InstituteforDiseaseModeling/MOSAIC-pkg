@@ -1,0 +1,12 @@
+/* Custom CSS for code chunks background color */
+pre {
+  background-color: #f4f4f4 !important; /* Change this to your desired background color */
+  padding: 10px;
+  border-radius: 5px;
+}
+
+code {
+  background-color: #f4f4f4 !important; /* Inline code background color */
+  padding: 2px 4px;
+  border-radius: 3px;
+}

@@ -1,0 +1,32 @@
+exportPattern("^[[:alpha:]]+")
+importFrom("grDevices", "dev.off", "png")
+importFrom("methods", "as")
+importFrom("stats", "ave", "df", "predict", "reorder")
+importFrom("utils", "download.file", "head", "read.csv", "read.table",
+           "setTxtProgressBar", "txtProgressBar", "write.csv")
+importFrom("ggplot2", "ggplot", "aes", "geom_line", "geom_hline", "geom_vline",
+           "annotate", "labs", "theme_minimal", "theme", "element_blank",
+           "geom_point", "geom_segment", "geom_tile", "ggtitle",
+           "scale_color_gradient", "scale_fill_gradient",
+           "scale_size_continuous", "geom_bar", "geom_errorbarh",
+           "scale_x_sqrt", "theme_bw", "theme_void")
+importFrom("ggplot2", "xlab", "ylab", "element_text", "geom_text", "guides",
+           "guide_colorbar", "margin", "geom_sf")
+importFrom("sf", "st_read", "st_as_sf", "st_centroid", "st_coordinates",
+           "st_transform", "st_bbox", "st_geometry", "st_intersection",
+           "st_make_grid", "st_crs")
+importFrom("dplyr", "mutate", "select", "arrange", "left_join", "rename", "bind_rows")
+importFrom("tidyr", "pivot_longer")
+importFrom("jsonlite", "fromJSON")
+importFrom("reshape2", "melt")
+importFrom("glue", "glue")
+importFrom("rnaturalearth", "ne_countries")
+importFrom("cowplot", "plot_grid")
+importFrom("zoo", "na.approx", "na.spline")
+importFrom("magrittr", "%>%")
+importFrom("lubridate", "ceiling_date")
+importFrom("glue", "glue")
+importFrom("propvacc", "get_beta_params")
+importFrom("tidyr", "pivot_longer")
+importFrom("stats", "aggregate", "cor", "median", "optim", "quantile")
+importFrom("utils", "install.packages", "installed.packages")

@@ -1,0 +1,57 @@
+Package: MOSAIC
+Type: Package
+Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
+Version: 0.0.1
+Date: 2024-09-06
+Authors@R: c(
+          person("John R", "Giles", 
+                 email = "john.giles@gatesfoundation.org", 
+                 role = c("aut", "cre"), 
+                 comment = c(ORCID = "0000-0002-0954-4093"))
+     )
+Description: Tools for preparing data and models for the MOSAIC framework. The MOSAIC framework 
+     simulates the transmission dynamics of cholera in Sub-Saharan Africa and provides tools 
+     to understand the impact of interventions, such as vaccination, as well as large-scale 
+     drivers like climate change. 
+License: file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Imports:
+  cowplot,
+  countrycode,
+  dplyr,
+  ggplot2,
+  ggraph,
+  ggrepel,
+  glue,
+  grid,
+  gridExtra,
+  gtools,
+  httr,
+  igraph,
+  jsonlite,
+  lubridate,
+  magrittr,
+  mobility,
+  propvacc,
+  reshape2,
+  rnaturalearth,
+  sf,
+  sp,
+  tidyr,
+  tidyverse,
+  viridis,
+  zoo,
+  RColorBrewer,
+  remotes,
+  scales,
+  shiny
+Depends: 
+  R (>= 4.1.1),
+  stats, 
+  graphics,
+  grDevices,
+  utils,
+  methods

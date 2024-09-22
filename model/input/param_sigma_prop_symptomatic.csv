@@ -1,0 +1,3 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"sigma","proportion symptomatic","beta",NA,NA,NA,"shape1",4.30388734401523
+"sigma","proportion symptomatic","beta",NA,NA,NA,"shape2",13.5091995798322

@@ -1,0 +1,107 @@
+url: https://gilesjohnr.github.io/MOSAIC-docs/
+
+template:
+  bootstrap: 5
+  pkgdown-nav-height: 50px
+  bslib:
+    primary: "#0167af"
+    border-radius: 0.5rem
+    btn-border-radius: 0.25rem
+    danger: "#FF6347"
+  params:
+    ganalytics:
+    light-switch: true
+    theme: gruvbox-light
+    theme-dark: gruvbox-dark
+  assets:
+    css: ["./pkgdown/"]
+
+navbar:
+  bg: primary
+  toc: true
+  left:
+  - icon: fa-home
+    href: index.html
+  - text: Functions
+    href: reference/index.html
+  - text: Vignettes
+    href: articles/index.html
+    menu:
+      - text: Running MOSAIC
+        href: articles/LAUNCH.html
+  right:
+  - icon: fa-github
+    href: https://github.com/gilesjohnr/MOSAIC-pkg
+    aria-label: GitHub
+
+
+
+reference:
+  - title: "Downloading and Processing Data: Climate and Environment"
+    contents:
+      - download_climate_data
+      - get_DMI_forecast
+      - get_DMI_historical
+      - get_ENSO_forecast
+      - get_ENSO_historical
+      - compile_ENSO_data
+      - get_climate_historical
+      - get_climate_forecast
+      - get_climate_future
+      - get_elevation
+
+  - title: "Downloading and Processing Data: Cholera Incidence, Disease Dynamics, and Population Characteristics"
+    contents:
+      - process_WHO_annual_data
+      - process_WHO_weekly_data
+      - process_demographics_data
+      - process_OAG_data
+      - get_WASH_data
+      - get_symptomatic_prop_data
+
+  - title: "Estimating model quantities"
+    contents:
+      - est_mobility
+      - est_WASH_coverage
+      - est_symptomatic_prop
+
+  - title: "Shapefiles and Spatial Data Functions"
+    contents:
+      - download_africa_shapefile
+      - download_all_country_shapefiles
+      - get_country_shp
+      - get_centroid
+      - generate_country_grid_dist
+      - generate_country_grid_n
+
+  - title: "Country Code Functions"
+    contents:
+      - convert_country_to_iso
+      - convert_iso_codes
+      - convert_iso_to_country
+      - iso_codes_africa
+      - iso_codes_africa_central
+      - iso_codes_africa_east
+      - iso_codes_africa_north
+      - iso_codes_africa_south
+      - iso_codes_africa_west
+      - iso_codes_mosaic
+      - iso_codes_ssa
+      - iso_codes_who_afro
+
+  - title: "Utility Functions"
+    contents:
+      - load_or_install_packages
+      - get_paths
+      - get_ggplot_legend
+      - make_param_df
+      - set_root_directory
+      - set_openmeteo_api_key
+
+  - title: "Shiny Apps"
+    contents:
+      - run_WHO_annual_data_app
+
+  - title: "Plotting Functions"
+    contents:
+      - starts_with("plot_")
