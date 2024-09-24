@@ -9,9 +9,6 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup, eval=FALSE}
-library(MOSAIC)
-```
 
 ```{r run, eval=FALSE}
 if (!requireNamespace("MOSAIC", quietly = TRUE)) {
