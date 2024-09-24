@@ -35,27 +35,25 @@ get_elevation <- function(PATHS, n_points, api_key = NULL) {
      requireNamespace('utils')
 
      # Load the list of ISO3 country codes for the MOSAIC model
-     iso_codes <- MOSAIC::iso_codes_mosaic
+     iso_codes <- MOSAIC::iso_codes_africa
 
      # Ensure the elevation directory exists
      if (!dir.exists(PATHS$DATA_ELEVATION)) dir.create(PATHS$DATA_ELEVATION, recursive = TRUE)
 
      results_list <- list()
 
-     # Initialize a progress bar
      pb <- utils::txtProgressBar(min = 0, max = length(iso_codes), style = 3)
 
-     # Loop through each country's ISO3 code in iso_codes_mosaic
-     for (idx in seq_along(iso_codes)) {
+     for (i in seq_along(iso_codes)) {
 
-          iso_code <- iso_codes[idx]
+          country_results_list <- list()
 
           # Construct the path to the shapefile for each country
-          shapefile_path <- file.path(PATHS$DATA_SHAPEFILES, paste0(iso_code, "_ADM0.shp"))
+          shapefile_path <- file.path(PATHS$DATA_SHAPEFILES, paste0(iso_codes[i], "_ADM0.shp"))
 
           # Check if the shapefile exists
           if (!file.exists(shapefile_path)) {
-               message(paste("Shapefile for", iso_code, "not found. Skipping."))
+               message(paste("Shapefile for", iso_codes[i], "not found. Skipping."))
                next
           }
 
@@ -63,15 +61,16 @@ get_elevation <- function(PATHS, n_points, api_key = NULL) {
           country_shapefile <- sf::st_read(shapefile_path, quiet = TRUE)
 
           # Generate n_points random points within the country's shapefile boundary
-          random_points <- sf::st_sample(country_shapefile, size = n_points, type = "random")
-          coords <- sf::st_coordinates(random_points)
+          pts <- MOSAIC::generate_country_grid_n(country_shapefile, n_points)
+          coords <- sf::st_coordinates(pts)
+          rm(pts)
+          rm(country_shapefile)
 
-          # Loop through each generated point to get elevation
-          for (i in seq_len(nrow(coords))) {
-               lat <- coords[i, "Y"]
-               lon <- coords[i, "X"]
+          for (j in 1:nrow(coords)) {
 
-               # Construct the API request URL for each location
+               lat <- coords[j, "Y"]
+               lon <- coords[j, "X"]
+
                url <- paste0(
                     "https://customer-api.open-meteo.com/v1/elevation?",
                     "latitude=", lat,
@@ -79,46 +78,33 @@ get_elevation <- function(PATHS, n_points, api_key = NULL) {
                     "&apikey=", api_key
                )
 
-               # Create a temporary file to save the data
                temp_file <- tempfile(fileext = ".json")
-
-               # Download the file using download.file with mode = "wb"
                utils::download.file(url, temp_file, mode = "wb", quiet = TRUE)
-
-               # Load the downloaded JSON file into a data frame
                data <- jsonlite::fromJSON(temp_file)
 
-               # Append the result for this location to the results list
-               results_list[[length(results_list) + 1]] <- data.frame(
-                    country = iso_code,
-                    latitude = lat,
-                    longitude = lon,
-                    elevation = data$elevation
-               )
+               country_df <- data.frame(country = iso_codes[i],
+                                        latitude = lat,
+                                        longitude = lon,
+                                        elevation = data$elevation)
+
+               country_results_list <- c(country_results_list, list(country_df))
+
           }
 
-          # Update progress bar
-          utils::setTxtProgressBar(pb, idx)
+          result_country <- do.call(rbind, country_results_list)
+          result_country <- aggregate(elevation ~ country, data = result_country, FUN = median, na.rm = TRUE)
+          results_list <- c(results_list, list(result_country))
+
+          utils::setTxtProgressBar(pb, i)
+
      }
 
-     # Close the progress bar
      close(pb)
 
-     # Combine all results into a single data frame
      out <- do.call(rbind, results_list)
 
-     # Calculate the median elevation for each country
-     median_elevations <- aggregate(elevation ~ country, data = out, FUN = median, na.rm = TRUE)
-
-     # Define the file path to save the elevation data
      file_path <- file.path(PATHS$DATA_ELEVATION, "median_elevation_data.csv")
-
-     # Save the data to a CSV file
      utils::write.csv(out, file = file_path, row.names = FALSE)
-
      message(paste("Elevation data saved to:", file_path))
-
-     # Return the median elevations as a data frame
-     return(median_elevations)
 
 }

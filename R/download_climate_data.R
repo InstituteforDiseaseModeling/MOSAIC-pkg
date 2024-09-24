@@ -1,6 +1,6 @@
-#' Download and Save Climate Data for Multiple Countries (Parquet Format)
+#' Download and Save Climate Data for Multiple Countries (Parquet Format, Single Model)
 #'
-#' This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country.
+#' This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country for a specified climate model.
 #'
 #' @param PATHS A list containing paths where raw and processed data are stored.
 #' PATHS is typically the output of the `get_paths()` function and should include:
@@ -13,12 +13,22 @@
 #' @param n_points An integer specifying the number of grid points to generate within each country for which climate data will be downloaded.
 #' @param date_start A character string representing the start date for the climate data (in "YYYY-MM-DD" format).
 #' @param date_stop A character string representing the end date for the climate data (in "YYYY-MM-DD" format).
+#' @param climate_model A single character string representing the climate model to use. Available models include:
+#' \itemize{
+#'   \item \strong{CMCC_CM2_VHR4}
+#'   \item \strong{FGOALS_f3_H}
+#'   \item \strong{HiRAM_SIT_HR}
+#'   \item \strong{MRI_AGCM3_2_S}
+#'   \item \strong{EC_Earth3P_HR}
+#'   \item \strong{MPI_ESM1_2_XR}
+#'   \item \strong{NICAM16_8S}
+#' }
 #'
 #' @return The function does not return a value. It downloads the climate data for each country and saves the results as Parquet files in the specified directory.
 #'
-#' @details This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (`date_start` to `date_stop`). The data is saved for each country in a Parquet file named `climate_data_<date_start>_<date_stop>_<ISO3>.parquet`.
+#' @details This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (`date_start` to `date_stop`) and the specified climate model. The data is saved for each country in a Parquet file named `climate_data_{climate_model}_{date_start}_{date_stop}_{ISO3}.parquet`.
 #'
-#' The climate data variables include temperature, wind speed, cloud cover, precipitation, and more. The function retrieves data from multiple climate models, including MRI and EC Earth models.
+#' The climate data variables include temperature, wind speed, cloud cover, precipitation, and more. The function retrieves data from a single climate model.
 #'
 #' @importFrom dplyr select mutate
 #' @importFrom lubridate year month week yday
@@ -36,16 +46,30 @@
 #' # API key for climate data API
 #' api_key <- "your-api-key-here"
 #'
-#' # Download climate data and save it for the specified countries
-#' download_climate_data(PATHS, iso_codes, api_key, n_points = 5,
-#'                       date_start = "1970-01-01", date_stop = "2030-12-31")
+#' # Download climate data for a specified model and save it for the specified countries
+#' download_climate_data(PATHS, iso_codes, n_points = 5,
+#'                       date_start = "1970-01-01", date_stop = "2030-12-31",
+#'                       climate_model = "MRI_AGCM3_2_S", api_key)
 #'}
 #'
 #' @export
-download_climate_data <- function(PATHS, iso_codes, api_key, n_points, date_start, date_stop) {
 
-     if (!dir.exists(PATHS$DATA_CLIMATE)) dir.create(PATHS$DATA_CLIMATE, recursive = TRUE)
+download_climate_data <- function(PATHS,
+                                  iso_codes,
+                                  n_points,
+                                  date_start,
+                                  date_stop,
+                                  climate_model,
+                                  api_key) {
 
+     if (length(climate_model) > 1) stop("One climate model at a time")
+
+     # Ensure output directory exists, if not, create it
+     if (!dir.exists(PATHS$DATA_CLIMATE)) {
+          dir.create(PATHS$DATA_CLIMATE, recursive = TRUE)
+     }
+
+     # List of climate variables for both historical and future data
      climate_variables_historical_and_future <- c(
           "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
           "wind_speed_10m_mean", "wind_speed_10m_max", "cloud_cover_mean",
@@ -60,7 +84,7 @@ download_climate_data <- function(PATHS, iso_codes, api_key, n_points, date_star
      # Loop through each ISO3 country code
      for (country_iso_code in iso_codes) {
 
-          message(glue::glue("Downloading daily climate data for {country_iso_code} at {n_points} points"))
+          message(glue::glue("Downloading daily climate data for {country_iso_code} using {climate_model} at {n_points} points"))
 
           # Convert ISO3 code to country name and read country shapefile
           country_name <- MOSAIC::convert_iso_to_country(country_iso_code)
@@ -70,14 +94,16 @@ download_climate_data <- function(PATHS, iso_codes, api_key, n_points, date_star
           grid_points <- MOSAIC::generate_country_grid_n(country_shp, n_points = n_points)
           coords <- sf::st_coordinates(grid_points)
           coords <- as.data.frame(coords)
+          rm(grid_points)
+          rm(country_shp)
 
           # Download climate data for the generated grid points
           climate_data <- MOSAIC::get_climate_future(lat = coords$Y,
                                                      lon = coords$X,
-                                                     start_date = date_start,
-                                                     end_date = date_stop,
+                                                     date_start = date_start,
+                                                     date_stop = date_stop,
                                                      climate_variables = climate_variables_historical_and_future,
-                                                     climate_models = c("MRI_AGCM3_2_S", "EC_Earth3P_HR"),
+                                                     climate_model = climate_model,
                                                      api_key = api_key)
 
           # Add additional metadata columns
@@ -91,10 +117,10 @@ download_climate_data <- function(PATHS, iso_codes, api_key, n_points, date_star
                climate_data
           )
 
-          # Save climate data as Parquet
+          # Save climate data as Parquet, including the climate model in the file name
           arrow::write_parquet(climate_data,
-                               sink = file.path(PATHS$DATA_CLIMATE, paste0("climate_data_", date_start, "_", date_stop, "_", country_iso_code, ".parquet")))
+                               sink = file.path(PATHS$DATA_CLIMATE, paste0("climate_data_", climate_model, "_", date_start, "_", date_stop, "_", country_iso_code, ".parquet")))
      }
 
-     message(glue::glue("Climate data saved for all countries here: {PATHS$DATA_CLIMATE}"))
+     message(glue::glue("Climate data saved for all countries using {climate_model} here: {PATHS$DATA_CLIMATE}"))
 }

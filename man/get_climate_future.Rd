@@ -2,15 +2,15 @@
 % Please edit documentation in R/get_climate_future.R
 \name{get_climate_future}
 \alias{get_climate_future}
-\title{Download Future Climate Data for Multiple Locations}
+\title{Download Future Climate Data for Multiple Locations (One Model at a Time)}
 \usage{
 get_climate_future(
   lat,
   lon,
-  start_date,
-  end_date,
+  date_start,
+  date_stop,
   climate_variables,
-  climate_models,
+  climate_model,
   api_key = NULL
 )
 }
@@ -19,9 +19,9 @@ get_climate_future(
 
 \item{lon}{A numeric vector representing the longitudes of the locations.}
 
-\item{start_date}{A character string representing the start date for the data in "YYYY-MM-DD" format.}
+\item{date_start}{A character string representing the start date for the data in "YYYY-MM-DD" format.}
 
-\item{end_date}{A character string representing the end date for the data in "YYYY-MM-DD" format.}
+\item{date_stop}{A character string representing the end date for the data in "YYYY-MM-DD" format.}
 
 \item{climate_variables}{A character vector of climate variables to retrieve. Valid options include:
 \itemize{
@@ -46,7 +46,7 @@ get_climate_future(
 \item \strong{et0_fao_evapotranspiration_sum}: Sum of evapotranspiration (FAO standard).
 }}
 
-\item{climate_models}{A character vector of climate models to use. Available models include:
+\item{climate_model}{A single character string representing the climate model to use. Available models include:
 \itemize{
 \item \strong{CMCC_CM2_VHR4}
 \item \strong{FGOALS_f3_H}
@@ -71,10 +71,10 @@ A data frame with columns:
 }
 }
 \description{
-This function retrieves daily future climate data for multiple specified locations and climate variables over a specified date range using specified climate models.
+This function retrieves daily future climate data for multiple specified locations and climate variables over a specified date range using a specified climate model.
 }
 \details{
-The function retrieves daily future climate data for multiple specified locations using the Open-Meteo Climate API. It downloads the specified climate variables for each latitude and longitude provided, using the selected climate models. The data is retrieved for the date range specified by \code{start_date} and \code{end_date}. A progress bar is displayed to indicate the download progress.
+The function retrieves daily future climate data for multiple specified locations using the Open-Meteo Climate API. It downloads the specified climate variables for each latitude and longitude provided, using a single climate model. The data is retrieved for the date range specified by \code{date_start} and \code{date_stop}. A progress bar is displayed to indicate the download progress.
 }
 \examples{
 \dontrun{
@@ -82,18 +82,18 @@ The function retrieves daily future climate data for multiple specified location
 lat <- c(40.7128, 34.0522)
 lon <- c(-74.0060, -118.2437)
 
-# Define the climate variables and models
+# Define the climate variables and model
 climate_vars <- c("temperature_2m_mean", "precipitation_sum")
-climate_models <- c("MRI_AGCM3_2_S", "EC_Earth3P_HR")
+climate_model <- "MRI_AGCM3_2_S"
 
 # Set the date range and API key
-start_date <- "2023-01-01"
-end_date <- "2030-12-31"
+date_start <- "2023-01-01"
+date_stop <- "2030-12-31"
 api_key <- "your_api_key_here"
 
 # Download the climate data
-climate_data <- get_climate_future(lat, lon, start_date, end_date,
-                                   climate_vars, climate_models, api_key)
+climate_data <- get_climate_future(lat, lon, date_start, date_stop,
+                                   climate_vars, climate_model, api_key)
 
 # Display the climate data
 head(climate_data)

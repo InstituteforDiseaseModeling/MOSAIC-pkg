@@ -1,11 +1,11 @@
-#' Download Future Climate Data for Multiple Locations
+#' Download Future Climate Data for Multiple Locations (One Model at a Time)
 #'
-#' This function retrieves daily future climate data for multiple specified locations and climate variables over a specified date range using specified climate models.
+#' This function retrieves daily future climate data for multiple specified locations and climate variables over a specified date range using a specified climate model.
 #'
 #' @param lat A numeric vector representing the latitudes of the locations.
 #' @param lon A numeric vector representing the longitudes of the locations.
-#' @param start_date A character string representing the start date for the data in "YYYY-MM-DD" format.
-#' @param end_date A character string representing the end date for the data in "YYYY-MM-DD" format.
+#' @param date_start A character string representing the start date for the data in "YYYY-MM-DD" format.
+#' @param date_stop A character string representing the end date for the data in "YYYY-MM-DD" format.
 #' @param climate_variables A character vector of climate variables to retrieve. Valid options include:
 #' \itemize{
 #'   \item \strong{temperature_2m_mean}: Mean 2m air temperature.
@@ -28,7 +28,7 @@
 #'   \item \strong{soil_moisture_0_to_10cm_mean}: Mean soil moisture (0-10 cm depth).
 #'   \item \strong{et0_fao_evapotranspiration_sum}: Sum of evapotranspiration (FAO standard).
 #' }
-#' @param climate_models A character vector of climate models to use. Available models include:
+#' @param climate_model A single character string representing the climate model to use. Available models include:
 #' \itemize{
 #'   \item \strong{CMCC_CM2_VHR4}
 #'   \item \strong{FGOALS_f3_H}
@@ -51,7 +51,7 @@
 #' }
 #'
 #' @details
-#' The function retrieves daily future climate data for multiple specified locations using the Open-Meteo Climate API. It downloads the specified climate variables for each latitude and longitude provided, using the selected climate models. The data is retrieved for the date range specified by \code{start_date} and \code{end_date}. A progress bar is displayed to indicate the download progress.
+#' The function retrieves daily future climate data for multiple specified locations using the Open-Meteo Climate API. It downloads the specified climate variables for each latitude and longitude provided, using a single climate model. The data is retrieved for the date range specified by \code{date_start} and \code{date_stop}. A progress bar is displayed to indicate the download progress.
 #'
 #' @examples
 #' \dontrun{
@@ -59,25 +59,34 @@
 #' lat <- c(40.7128, 34.0522)
 #' lon <- c(-74.0060, -118.2437)
 #'
-#' # Define the climate variables and models
+#' # Define the climate variables and model
 #' climate_vars <- c("temperature_2m_mean", "precipitation_sum")
-#' climate_models <- c("MRI_AGCM3_2_S", "EC_Earth3P_HR")
+#' climate_model <- "MRI_AGCM3_2_S"
 #'
 #' # Set the date range and API key
-#' start_date <- "2023-01-01"
-#' end_date <- "2030-12-31"
+#' date_start <- "2023-01-01"
+#' date_stop <- "2030-12-31"
 #' api_key <- "your_api_key_here"
 #'
 #' # Download the climate data
-#' climate_data <- get_climate_future(lat, lon, start_date, end_date,
-#'                                    climate_vars, climate_models, api_key)
+#' climate_data <- get_climate_future(lat, lon, date_start, date_stop,
+#'                                    climate_vars, climate_model, api_key)
 #'
 #' # Display the climate data
 #' head(climate_data)
 #' }
 #'
 #' @export
-get_climate_future <- function(lat, lon, start_date, end_date, climate_variables, climate_models, api_key = NULL) {
+
+get_climate_future <- function(lat,
+                               lon,
+                               date_start,
+                               date_stop,
+                               climate_variables,
+                               climate_model,
+                               api_key = NULL) {
+
+     if (length(climate_model) > 1) stop("One climate model at a time")
 
      available_climate_variables <- c(
           "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
@@ -100,11 +109,10 @@ get_climate_future <- function(lat, lon, start_date, end_date, climate_variables
           "NICAM16_8S"
      )
 
-     if (!all(climate_models %in% available_models)) {
-          stop(paste("Error: Some of the provided models are not available. Please choose from:", paste(available_models, collapse = ", ")))
+     if (!(climate_model %in% available_models)) {
+          stop(paste("Error: The provided climate model is not available. Please choose from:", paste(available_models, collapse = ", ")))
      }
 
-     models_param <- paste(climate_models, collapse = ",")
      variables_param <- paste(climate_variables, collapse = ",")
 
      results_list <- list()
@@ -117,9 +125,9 @@ get_climate_future <- function(lat, lon, start_date, end_date, climate_variables
                "https://customer-climate-api.open-meteo.com/v1/climate?",
                "latitude=", lat[i],
                "&longitude=", lon[i],
-               "&start_date=", start_date,
-               "&end_date=", end_date,
-               "&models=", models_param,
+               "&date_start=", date_start,
+               "&date_stop=", date_stop,
+               "&models=", climate_model,
                "&daily=", variables_param,
                "&apikey=", api_key
           )
@@ -130,27 +138,20 @@ get_climate_future <- function(lat, lon, start_date, end_date, climate_variables
 
                data <- jsonlite::fromJSON(httr::content(response, "text", encoding = "UTF-8"))
                dates <- data$daily$time
+               if (is.character(dates)) dates <- as.Date(substr(dates, 1, 10)) # trim hours if present
 
-               if (is.character(dates)) {
-                    dates <- as.Date(substr(dates, 1, 10))
-               }
+               for (variable in climate_variables) {
 
-               for (model in climate_models) {
+                    if (!is.null(data$daily[[variable]])) {
 
-                    for (variable in climate_variables) {
+                         results_list[[paste0(i, "_", variable)]] <-
+                              data.frame(date = dates,
+                                         latitude = lat[i],
+                                         longitude = lon[i],
+                                         climate_model = climate_model,
+                                         variable_name = variable,
+                                         value = data$daily[[variable]])
 
-                         variable_name <- paste0(variable, "_", model)
-
-                         if (!is.null(data$daily[[variable_name]])) {
-                              results_list[[paste0(i, "_", model, "_", variable)]] <- data.frame(
-                                   date = dates,
-                                   latitude = lat[i],
-                                   longitude = lon[i],
-                                   climate_model = model,
-                                   variable_name = variable,
-                                   value = data$daily[[variable_name]]
-                              )
-                         }
                     }
                }
 
