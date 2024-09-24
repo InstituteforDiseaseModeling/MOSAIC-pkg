@@ -50,6 +50,7 @@ reference:
       - get_climate_historical
       - get_climate_forecast
       - get_climate_future
+      - download_country_DEM
       - get_elevation
 
   - title: "Downloading and Processing Data: Cholera Incidence, Disease Dynamics, and Population Characteristics"
@@ -68,6 +69,7 @@ reference:
 
   - title: "Estimating model quantities"
     contents:
+      - est_seasonal_dynamics
       - est_mobility
       - est_WASH_coverage
       - est_symptomatic_prop

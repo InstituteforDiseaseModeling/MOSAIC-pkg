@@ -42,6 +42,7 @@ get_paths <- function(root=NULL) {
      PATHS$DATA_RAW <- file.path(root, "MOSAIC-data/raw")
      PATHS$DATA_PROCESSED <- file.path(root, "MOSAIC-data/processed")
      PATHS$DATA_SHAPEFILES <- file.path(root, "MOSAIC-data/processed/shapefiles")
+     PATHS$DATA_DEM <- file.path(root, "MOSAIC-data/raw/DEM")
      PATHS$DATA_ELEVATION <- file.path(root, "MOSAIC-data/processed/elevation")
      PATHS$DATA_CLIMATE <- file.path(root, "MOSAIC-data/processed/climate")
      PATHS$DATA_ENSO <- file.path(root, "MOSAIC-data/processed/ENSO")
