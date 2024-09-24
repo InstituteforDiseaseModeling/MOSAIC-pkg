@@ -297,25 +297,28 @@ est_WASH_coverage <- function(PATHS) {
      print(weights_table)
 
 
-     path1 <- file.path(PATHS$MODEL_INPUT, "WASH_data_weights.csv")
-     path2 <- file.path(PATHS$DOCS_TABLES, "WASH_data_weights.csv")
-
-     write.csv(weights_table, file=path1, row.names = FALSE)
-     write.csv(weights_table, file=path2, row.names = FALSE)
-
+     path <- file.path(PATHS$DOCS_TABLES, "WASH_data_weights.csv")
+     write.csv(weights_table, file=path, row.names = FALSE)
      message("WASH weights table saved here:")
-     message(path1)
-     message(path2)
+     message(path)
 
 
 
-     wash_weight_mean <- wash_data[,c("Country", "iso_code", "Weighted_Mean_WASH")]
+     param_df <- make_param_df(variable_name = 'theta',
+                               variable_description = 'WASH coverage',
+                               parameter_distribution = 'point',
+                               j = wash_data$iso_code,
+                               parameter_name = 'mean',
+                               parameter_value = wash_data$Weighted_Mean_WASH)
 
-     path1 <- file.path(PATHS$MODEL_INPUT, "WASH_weighted_mean_theta.csv")
+
+     path1 <- file.path(PATHS$MODEL_INPUT, "param_theta_WASH.csv")
      path2 <- file.path(PATHS$DOCS_TABLES, "WASH_weighted_mean_theta.csv")
 
-     write.csv(wash_weight_mean, file=path1, row.names = FALSE)
-     write.csv(wash_weight_mean, file=path2, row.names = FALSE)
+     write.csv(param_df, file=path1, row.names = FALSE)
+
+     write.csv(wash_data[,c("Country", "iso_code", "Weighted_Mean_WASH")],
+               file=path2, row.names = FALSE)
 
      message("WASH weighted mean (tau) saved here:")
      message(path1)

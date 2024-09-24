@@ -167,11 +167,9 @@ est_mobility <- function(PATHS) {
      param_df_point <- make_param_df(
           variable_name = "tau",  # Assuming 'tau' represents travel probabilities
           variable_description = "Country-level travel probabilities",
-          parameter_distribution = "beta",
-          i = df_travel_prob$iso_code,  # i is set to the iso_code
-          j = NA,             # j is not applicable in this case
-          t = NA,             # t is not applicable in this case
-          parameter_name = "point",
+          parameter_distribution = "point",
+          i = df_travel_prob$iso_code,
+          parameter_name = "mean",
           parameter_value = df_travel_prob$mean
      )
 
@@ -179,9 +177,7 @@ est_mobility <- function(PATHS) {
           variable_name = "tau",  # Assuming 'tau' represents travel probabilities
           variable_description = "Country-level travel probabilities",
           parameter_distribution = "beta",
-          i = df_travel_prob$iso_code,  # i is set to the iso_code
-          j = NA,             # j is not applicable in this case
-          t = NA,             # t is not applicable in this case
+          i = df_travel_prob$iso_code,
           parameter_name = c(rep("shape1", nrow(df_travel_prob)), rep("shape2", nrow(df_travel_prob))),
           parameter_value = c(df_travel_prob$shape1, df_travel_prob$shape2)
      )
@@ -190,12 +186,26 @@ est_mobility <- function(PATHS) {
      param_df <- param_df[order(param_df$i),]
 
      utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_tau_departure.csv"), row.names = FALSE)
-     utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "param_diffusion_model.csv"), row.names = TRUE)
+
+     tmp <- melt(pi)
+
+     param_df <- make_param_df(
+          variable_name = "pi",  # Assuming 'tau' represents travel probabilities
+          variable_description = "Probability of travel from i to j",
+          parameter_distribution = "point",
+          i = tmp$origin,
+          j = tmp$destination,
+          parameter_name = 'mean',
+          parameter_value = tmp$value
+     )
+
+     utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_pi_diffusion.csv"), row.names = FALSE)
 
 
-     utils::write.csv(df_travel_prob[,c("country", "iso_code", "mean", "sd", "ci_lo", "ci_hi")],
-                      file.path(PATHS$MODEL_INPUT, "pred_tau_departure.csv"), row.names = FALSE)
-     utils::write.csv(melt(pi), file.path(PATHS$MODEL_INPUT, "pred_pi_diffusion.csv"), row.names = FALSE)
+     #utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "param_diffusion_model.csv"), row.names = TRUE)
+
+     #utils::write.csv(df_travel_prob[,c("country", "iso_code", "mean", "sd", "ci_lo", "ci_hi")],
+     #                 file.path(PATHS$MODEL_INPUT, "pred_tau_departure.csv"), row.names = FALSE)
 
 
      message("Mobility model fitting complete.")

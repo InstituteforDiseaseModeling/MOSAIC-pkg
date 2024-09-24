@@ -27,8 +27,10 @@ navbar:
   - text: Vignettes
     href: articles/index.html
     menu:
+      - text: Project setup
+        href: articles/Project-setup.html
       - text: Running MOSAIC
-        href: articles/LAUNCH.html
+        href: articles/Running-MOSAIC.html
   right:
   - icon: fa-github
     href: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg

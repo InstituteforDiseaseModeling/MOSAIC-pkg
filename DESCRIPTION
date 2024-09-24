@@ -58,3 +58,4 @@ Depends:
   grDevices,
   utils,
   methods
+Config/Needs/website: rmarkdown

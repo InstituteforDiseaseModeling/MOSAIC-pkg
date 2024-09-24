@@ -1,6 +1,20 @@
-#!/bin/bash
+---
+title: "Project setup"
+---
 
-# Script to set up the MOSAIC project directory and clone the required repositories
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+### Instructions to setup a MOSAIC project programmatically
+
+The following instructions guide you through setting up the MOSAIC project directory and programmatically cloning the necessary repositories using a Bash script. 
+
+```{sh , eval=FALSE, echo=TRUE}
+#!/bin/bash
 
 # Set the MOSAIC parent directory
 MOSAIC_DIR="MOSAIC"
@@ -40,3 +54,16 @@ fi
 
 echo "MOSAIC project setup complete."
 
+```
+
+
+```{sh}
+#> Created directory: MOSAIC
+#> #> Cloning into 'MOSAIC-data'...
+#> Cloned MOSAIC-data repository.
+#> Cloning into 'MOSAIC-pkg'...
+#> Cloned MOSAIC-pkg repository.
+#> Cloning into 'MOSAIC-docs'...
+#> Cloned MOSAIC-docs repository.
+#> MOSAIC project setup complete.
+```

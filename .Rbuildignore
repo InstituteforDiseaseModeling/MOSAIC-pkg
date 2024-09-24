@@ -6,3 +6,4 @@ model/
 src/
 docs/
 pkgdown/
+^vignettes/articles$
