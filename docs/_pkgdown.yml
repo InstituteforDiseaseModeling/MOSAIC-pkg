@@ -9,7 +9,7 @@ template:
     btn-border-radius: 0.25rem
     danger: "#FF6347"
   params:
-    ganalytics:
+    ganalytics: G-11MTYCTQ7F
     light-switch: true
     theme: gruvbox-light
     theme-dark: gruvbox-dark
