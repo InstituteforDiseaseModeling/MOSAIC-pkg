@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_elevation.R
 \name{get_elevation}
 \alias{get_elevation}
-\title{Get Mean Elevation Data for Multiple Countries Using Shapefiles}
+\title{Get Median Elevation Data for Multiple Countries Using Shapefiles}
 \usage{
 get_elevation(PATHS, n_points, api_key = NULL)
 }
@@ -18,21 +18,21 @@ get_elevation(PATHS, n_points, api_key = NULL)
 \item{api_key}{A character string representing the API key for the Open-Meteo API.}
 }
 \value{
-A data frame with the mean elevation for each country in \code{iso_codes_mosaic}.
+A data frame with the median elevation for each country in \code{iso_codes_mosaic}.
 }
 \description{
-This function retrieves elevation data for a specified number of points within the boundary of each country's shapefile from the \code{iso_codes_mosaic} list using the Open-Meteo API. It returns the mean elevation for each country.
+This function retrieves elevation data for a specified number of points within the boundary of each country's shapefile from the \code{iso_codes_mosaic} list using the Open-Meteo API. It returns the median elevation for each country.
 }
 \details{
-The function loads the shapefiles for all countries in \code{iso_codes_mosaic} from the specified directory, generates \code{n_points} random points within each country's boundary, and queries the Open-Meteo API for the elevation data at each point. It returns the mean elevation for each country and saves the data as a CSV file.
+The function loads the shapefiles for all countries in \code{iso_codes_mosaic} from the specified directory, generates \code{n_points} random points within each country's boundary, and queries the Open-Meteo API for the elevation data at each point. It returns the median elevation for each country and saves the data as a CSV file.
 }
 \examples{
 \dontrun{
-# Example usage to get mean elevation data for all countries in iso_codes_mosaic
+# Example usage to get median elevation data for all countries in iso_codes_mosaic
 n_points <- 10
 api_key <- "your_api_key_here"
 PATHS <- get_paths()
-mean_elevations <- get_elevation(n_points, api_key, PATHS)
-print(mean_elevations)
+median_elevations <- get_elevation(n_points, api_key, PATHS)
+print(median_elevations)
 }
 }

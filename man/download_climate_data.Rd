@@ -2,15 +2,15 @@
 % Please edit documentation in R/download_climate_data.R
 \name{download_climate_data}
 \alias{download_climate_data}
-\title{Download and Save Climate Data for Multiple Countries}
+\title{Download and Save Climate Data for Multiple Countries (Parquet Format)}
 \usage{
 download_climate_data(
   PATHS,
   iso_codes,
   api_key,
-  n_points = 3,
-  date_start = "1970-01-01",
-  date_stop = "2030-12-31"
+  n_points,
+  date_start,
+  date_stop
 )
 }
 \arguments{
@@ -32,13 +32,13 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 \item{date_stop}{A character string representing the end date for the climate data (in "YYYY-MM-DD" format).}
 }
 \value{
-The function does not return a value. It downloads the climate data for each country and saves the results as CSV files in the specified directory.
+The function does not return a value. It downloads the climate data for each country and saves the results as Parquet files in the specified directory.
 }
 \description{
-This function downloads daily climate data for a list of specified countries, saving the data as CSV files. The data includes both historical and future climate variables at grid points within each country.
+This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country.
 }
 \details{
-This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (\code{date_start} to \code{date_stop}). The data is saved for each country in a CSV file named \verb{climate_data_<date_start>_<date_stop>_<ISO3>.csv}.
+This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (\code{date_start} to \code{date_stop}). The data is saved for each country in a Parquet file named \verb{climate_data_<date_start>_<date_stop>_<ISO3>.parquet}.
 
 The climate data variables include temperature, wind speed, cloud cover, precipitation, and more. The function retrieves data from multiple climate models, including MRI and EC Earth models.
 }

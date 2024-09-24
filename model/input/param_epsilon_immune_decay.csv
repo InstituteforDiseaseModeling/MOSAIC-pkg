@@ -1,0 +1,6 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"epsilon","Immunity decay rate","point",NA,NA,NA,"low",0.00103365339774061
+"epsilon","Immunity decay rate","point",NA,NA,NA,"mean",0.000387129333562113
+"epsilon","Immunity decay rate","point",NA,NA,NA,"high",0.000172000445055218
+"epsilon","Immunity decay rate","lognormal",NA,NA,NA,"mean",0.000387129333562113
+"epsilon","Immunity decay rate","lognormal",NA,NA,NA,"sd",0.000219809426705456

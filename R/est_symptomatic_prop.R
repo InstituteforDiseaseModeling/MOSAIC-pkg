@@ -25,7 +25,7 @@
 est_symptomatic_prop <- function(PATHS) {
 
      # Read the symptomatic proportion data
-     df <- utils::read.csv(file.path(PATHS$DATA_PROCESSED, "summary_symptomatic_cases.csv"))
+     df <- utils::read.csv(file.path(PATHS$DATA_SYMPTOMATIC, "summary_symptomatic_cases.csv"))
 
      # Simulate sigma (proportion of infections that are symptomatic) using a Beta distribution
      quantiles <- c(0.0001, 0.0275, 0.25, 0.5, 0.75, 0.975, 0.9999)

@@ -1,0 +1,7 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"rho","Proportion of suspected cases that are true infections: Point estimate low (all settings)","beta",NA,NA,NA,"mean",0.52
+"rho","Proportion of suspected cases that are true infections: Point estimate high (during outbreaks)","beta",NA,NA,NA,"mean",0.78
+"rho","Proportion of suspected cases that are true infections: Low estimate (all settings)","beta",NA,NA,NA,"shape1",5.42988327430809
+"rho","Proportion of suspected cases that are true infections: Low estimate (all settings)","beta",NA,NA,NA,"shape2",5.00904617715547
+"rho","Proportion of suspected cases that are true infections: High estimate (during outbreaks)","beta",NA,NA,NA,"shape1",4.78806160754615
+"rho","Proportion of suspected cases that are true infections: High estimate (during outbreaks)","beta",NA,NA,NA,"shape2",1.53280128097088

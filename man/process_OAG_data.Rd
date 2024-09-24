@@ -12,26 +12,17 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 \itemize{
 \item \strong{DATA_RAW}: Path to the directory containing the raw data files.
 \item \strong{DATA_PROCESSED}: Path to the directory where processed data should be saved.
+\item \strong{DATA_SHAPEFILES}: Path to the directory containing shapefiles for African countries.
 }}
 }
 \value{
-The function does not return a value. It processes the OAG flight data and saves the
+The function processes the OAG flight data and saves the
 aggregated results to the specified processed data paths.
 }
 \description{
 This function processes raw OAG flight data for African countries, including data cleaning,
 location and date conversion, and aggregation. The processed data is saved as CSV files for
 all African countries and a subset of countries used in the MOSAIC modeling framework.
-}
-\details{
-The function performs the following steps:
-\enumerate{
-\item Loads raw OAG flight data from a CSV file.
-\item Cleans and formats the data, including converting country codes and date information.
-\item Aggregates the data by year and calculates the mean weekly passenger counts.
-\item Saves the aggregated data for African countries and the MOSAIC framework countries as separate CSV files.
-}
-The output files are saved in the processed data directory defined in \code{PATHS$DATA_PROCESSED}.
 }
 \examples{
 \dontrun{

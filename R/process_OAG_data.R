@@ -9,23 +9,16 @@
 #' \itemize{
 #'   \item \strong{DATA_RAW}: Path to the directory containing the raw data files.
 #'   \item \strong{DATA_PROCESSED}: Path to the directory where processed data should be saved.
+#'   \item \strong{DATA_SHAPEFILES}: Path to the directory containing shapefiles for African countries.
 #' }
 #'
-#' @return The function does not return a value. It processes the OAG flight data and saves the
+#' @return The function processes the OAG flight data and saves the
 #' aggregated results to the specified processed data paths.
-#'
-#' @details The function performs the following steps:
-#' \enumerate{
-#'   \item Loads raw OAG flight data from a CSV file.
-#'   \item Cleans and formats the data, including converting country codes and date information.
-#'   \item Aggregates the data by year and calculates the mean weekly passenger counts.
-#'   \item Saves the aggregated data for African countries and the MOSAIC framework countries as separate CSV files.
-#' }
-#' The output files are saved in the processed data directory defined in `PATHS$DATA_PROCESSED`.
 #'
 #' @importFrom lubridate ceiling_date days
 #' @importFrom glue glue
 #' @importFrom utils read.csv write.csv
+#' @importFrom sf st_read st_centroid st_coordinates
 #'
 #' @examples
 #' \dontrun{
@@ -40,11 +33,9 @@
 process_OAG_data <- function(PATHS) {
 
      # Ensure output directory exists, if not, create it
-     if (!dir.exists(PATHS$DATA_CLIMATE)) {
+     if (!dir.exists(PATHS$DATA_OAG)) {
           dir.create(PATHS$DATA_OAG, recursive = TRUE)
      }
-
-
 
      # Load necessary packages and functions
      message("Loading raw OAG flight data")
@@ -77,17 +68,34 @@ process_OAG_data <- function(PATHS) {
      d$month <- as.numeric(format(d$date_start, "%m"))
      d$month_name <- format(d$date_start, "%B")
 
+     # Load African shapefiles and calculate centroids
+     africa <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, "AFRICA_ADM0.shp"), quiet = TRUE)
+     centroids <- sf::st_centroid(africa)
+     data_centroids <- data.frame(
+          iso3 = centroids$iso_a3,
+          lon = sf::st_coordinates(centroids)[, 1],
+          lat = sf::st_coordinates(centroids)[, 2]
+     )
+
+     # Add origin and destination lat/lon to the dataset
+     d <- dplyr::left_join(d, data_centroids, by = c("origin_iso3" = "iso3"))
+     colnames(d)[colnames(d) == "lon"] <- "origin_lon"
+     colnames(d)[colnames(d) == "lat"] <- "origin_lat"
+
+     d <- dplyr::left_join(d, data_centroids, by = c("destination_iso3" = "iso3"))
+     colnames(d)[colnames(d) == "lon"] <- "destination_lon"
+     colnames(d)[colnames(d) == "lat"] <- "destination_lat"
+
      # Keep relevant columns
-     d <- d[, c("origin_iso2", "origin_iso3", "origin_name",
-                "destination_iso2", "destination_iso3", "destination_name",
-                "date_start", "date_stop", "year", "month", "month_name",
-                "count")]
+     d <- d[, c("origin_iso2", "origin_iso3", "origin_name", "origin_lat", "origin_lon",
+                "destination_iso2", "destination_iso3", "destination_name", "destination_lat", "destination_lon",
+                "date_start", "date_stop", "year", "month", "month_name", "count")]
 
      message("Aggregating by year")
 
      # Aggregate data by year and calculate mean weekly passengers
-     d <- aggregate(count ~ origin_iso2 + origin_iso3 + origin_name +
-                         destination_iso2 + destination_iso3 + destination_name + year,
+     d <- aggregate(count ~ origin_iso2 + origin_iso3 + origin_name + origin_lat + origin_lon +
+                         destination_iso2 + destination_iso3 + destination_name + destination_lat + destination_lon + year,
                     data = d, function(x) sum(x, na.rm=TRUE) / 52)
 
      message("Saving to file")
@@ -103,13 +111,13 @@ process_OAG_data <- function(PATHS) {
      if (!(all(MOSAIC::iso_codes_africa %in% d_africa$origin_iso3))) {
           sel <- !(MOSAIC::iso_codes_africa %in% unique(d_africa$origin_iso3))
           missing <- unique(d_africa$origin_iso3)[sel]
-          stop(glue("Some iso codes in MOSAIC::iso_codes_africa are missing: {missing}"))
+          warning(glue("Some iso codes in MOSAIC::iso_codes_africa are missing: {paste(missing, collapse=' ')}"))
      }
 
      if (!(all(MOSAIC::iso_codes_mosaic %in% d_mosaic$origin_iso3))) {
           sel <- !(MOSAIC::iso_codes_mosaic %in% unique(d_mosaic$origin_iso3))
           missing <- unique(d_mosaic$origin_iso3)[sel]
-          stop(glue("Some iso codes in MOSAIC::iso_codes_mosaic are missing: {missing}"))
+          warning(glue("Some iso codes in MOSAIC::iso_codes_mosaic are missing: {paste(missing, collapse=' ')}"))
      }
 
      # Define paths for saving processed data
@@ -123,4 +131,5 @@ process_OAG_data <- function(PATHS) {
      message("OAG data saved here:")
      message(path_africa)
      message(path_mosaic)
+
 }

@@ -1,2 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+data-raw/
+local/
+model/
+src/
+docs/
+pkgdown/

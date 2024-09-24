@@ -40,6 +40,7 @@ Imports:
   rnaturalearth,
   sf,
   sp,
+  stringr,
   tidyr,
   tidyverse,
   viridis,
@@ -48,7 +49,8 @@ Imports:
   remotes,
   scales,
   shiny,
-  arrow
+  arrow,
+  minpack.lm
 Depends: 
   R (>= 4.1.1),
   stats, 

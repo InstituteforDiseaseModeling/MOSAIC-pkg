@@ -39,24 +39,23 @@ get_paths <- function(root=NULL) {
 
      PATHS <- list()
      PATHS$ROOT <- root
-
      PATHS$DATA_RAW <- file.path(root, "MOSAIC-data/raw")
      PATHS$DATA_PROCESSED <- file.path(root, "MOSAIC-data/processed")
-
      PATHS$DATA_SHAPEFILES <- file.path(root, "MOSAIC-data/processed/shapefiles")
      PATHS$DATA_ELEVATION <- file.path(root, "MOSAIC-data/processed/elevation")
      PATHS$DATA_CLIMATE <- file.path(root, "MOSAIC-data/processed/climate")
      PATHS$DATA_ENSO <- file.path(root, "MOSAIC-data/processed/ENSO")
-
+     PATHS$DATA_OAG <- file.path(root, "MOSAIC-data/processed/OAG")
      PATHS$DATA_WHO_ANNUAL <- file.path(root, "MOSAIC-data/processed/WHO/annual")
      PATHS$DATA_WHO_WEEKLY <- file.path(root, "MOSAIC-data/processed/WHO/weekly")
      PATHS$DATA_DEMOGRAPHICS <- file.path(root, "MOSAIC-data/processed/demographics")
      PATHS$DATA_WASH <- file.path(root, "MOSAIC-data/processed/WASH")
-     PATHS$DATA_OAG <- file.path(root, "MOSAIC-data/processed/OAG")
-
+     PATHS$DATA_SYMPTOMATIC <- file.path(root, "MOSAIC-data/processed/symptomatic")
+     PATHS$DATA_IMMUNITY <- file.path(root, "MOSAIC-data/processed/immunity")
+     PATHS$DATA_SUSPECTED <- file.path(root, "MOSAIC-data/processed/suspected_cases")
+     PATHS$DATA_VACCINE_EFFECTIVENESS <- file.path(root, "MOSAIC-data/processed/vaccine_effectiveness")
      PATHS$MODEL_INPUT <- file.path(root, "MOSAIC-pkg/model/input")
      PATHS$MODEL_OUTPUT <- file.path(root, "MOSAIC-pkg/model/output")
-
      PATHS$DOCS_FIGURES <- file.path(root, "MOSAIC-docs/figures")
      PATHS$DOCS_TABLES <- file.path(root, "MOSAIC-docs/tables")
      PATHS$DOCS_PARAMS <- file.path(root, "MOSAIC-docs/parameters")

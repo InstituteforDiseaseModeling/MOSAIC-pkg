@@ -1,0 +1,4 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"g","The generation time","point",NA,NA,NA,"mean",5
+"g","The generation time","gamma",NA,NA,NA,"shape",0.5
+"g","The generation time","gamma",NA,NA,NA,"rate",0.1

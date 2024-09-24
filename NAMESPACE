@@ -31,3 +31,8 @@ importFrom("tidyr", "pivot_longer")
 importFrom("stats", "aggregate", "cor", "median", "optim", "quantile")
 importFrom("utils", "install.packages", "installed.packages")
 importFrom("arrow", "write_parquet", "read_parquet")
+importFrom("minpack.lm", "nls.lm", "nls.lm.control")
+importFrom("grDevices", "colorRampPalette")
+importFrom("graphics", "legend", "lines", "points", "text")
+importFrom("stats", "dbeta", "density", "dgamma", "dlnorm", "qgamma",
+               "rbeta", "runif")

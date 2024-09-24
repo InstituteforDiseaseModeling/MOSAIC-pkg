@@ -37,10 +37,16 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_WASH_coverage.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_immune_decay.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_symptomatic_prop.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_mobility_model.html</loc>
@@ -88,13 +94,25 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_elevation.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_generation_time_distribution.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_ggplot_legend.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_immune_decay_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_suspected_cases.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_symptomatic_prop_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_vaccine_effectiveness_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/index.html</loc>
@@ -133,7 +151,31 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_by_country.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_ENSO_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_generation_time.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_shedding_rate.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suspected_cases.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccine_effectiveness.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_OAG_data.html</loc>

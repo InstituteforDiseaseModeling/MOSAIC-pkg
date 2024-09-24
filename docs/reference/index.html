@@ -67,7 +67,7 @@
           
           <code><a href="download_climate_data.html">download_climate_data()</a></code> 
         </dt>
-        <dd>Download and Save Climate Data for Multiple Countries</dd>
+        <dd>Download and Save Climate Data for Multiple Countries (Parquet Format)</dd>
       </dl><dl><dt>
           
           <code><a href="get_DMI_forecast.html">get_DMI_forecast()</a></code> 
@@ -112,7 +112,7 @@
           
           <code><a href="get_elevation.html">get_elevation()</a></code> 
         </dt>
-        <dd>Get Mean Elevation Data for Multiple Countries Using Shapefiles</dd>
+        <dd>Get Median Elevation Data for Multiple Countries Using Shapefiles</dd>
       </dl></div><div class="section level2">
       <h2 id="downloading-and-processing-data-cholera-incidence-disease-dynamics-and-population-characteristics">Downloading and Processing Data: Cholera Incidence, Disease Dynamics, and Population Characteristics<a class="anchor" aria-label="anchor" href="#downloading-and-processing-data-cholera-incidence-disease-dynamics-and-population-characteristics"></a></h2>
       
@@ -146,6 +146,11 @@
         <dd>Process and Save OAG Flight Data for Africa</dd>
       </dl><dl><dt>
           
+          <code><a href="process_CFR_data.html">process_CFR_data()</a></code> 
+        </dt>
+        <dd>Process Cholera Data to Calculate Aggregated Case Fatality Ratios and Fit Beta Distributions (2014-2024)</dd>
+      </dl><dl><dt>
+          
           <code><a href="get_WASH_data.html">get_WASH_data()</a></code> 
         </dt>
         <dd>Download, Process, and Save WASH Coverage Data</dd>
@@ -154,6 +159,26 @@
           <code><a href="get_symptomatic_prop_data.html">get_symptomatic_prop_data()</a></code> 
         </dt>
         <dd>Get Symptomatic Proportion Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="get_immune_decay_data.html">get_immune_decay_data()</a></code> 
+        </dt>
+        <dd>Get Immune Decay Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="get_suspected_cases.html">get_suspected_cases()</a></code> 
+        </dt>
+        <dd>Get Proportion of Suspected Cholera Cases and Save Parameter Data Frame</dd>
+      </dl><dl><dt>
+          
+          <code><a href="get_generation_time_distribution.html">get_generation_time_distribution()</a></code> 
+        </dt>
+        <dd>Estimate the Generation Time Distribution for Days and Weeks</dd>
+      </dl><dl><dt>
+          
+          <code><a href="get_vaccine_effectiveness_data.html">get_vaccine_effectiveness_data()</a></code> 
+        </dt>
+        <dd>Get Vaccine Effectiveness Data</dd>
       </dl></div><div class="section level2">
       <h2 id="estimating-model-quantities">Estimating model quantities<a class="anchor" aria-label="anchor" href="#estimating-model-quantities"></a></h2>
       
@@ -169,7 +194,7 @@
           
           <code><a href="est_mobility.html">est_mobility()</a></code> 
         </dt>
-        <dd>Estimate and Visualize Mobility Model for MOSAIC Data</dd>
+        <dd>Fit Mobility Model Using Flight Data and Distance Matrices</dd>
       </dl><dl><dt>
           
           <code><a href="est_WASH_coverage.html">est_WASH_coverage()</a></code> 
@@ -180,6 +205,16 @@
           <code><a href="est_symptomatic_prop.html">est_symptomatic_prop()</a></code> 
         </dt>
         <dd>Estimate and Visualize Symptomatic Proportion Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="est_immune_decay.html">est_immune_decay()</a></code> 
+        </dt>
+        <dd>Estimate Immune Decay</dd>
+      </dl><dl><dt>
+          
+          <code><a href="est_vaccine_effectiveness.html">est_vaccine_effectiveness()</a></code> 
+        </dt>
+        <dd>Estimate Vaccine Effectiveness Decay Model</dd>
       </dl></div><div class="section level2">
       <h2 id="shapefiles-and-spatial-data-functions">Shapefiles and Spatial Data Functions<a class="anchor" aria-label="anchor" href="#shapefiles-and-spatial-data-functions"></a></h2>
       
@@ -362,9 +397,44 @@
 
       <dl><dt>
           
+          <code><a href="plot_CFR_by_country.html">plot_CFR_by_country()</a></code> 
+        </dt>
+        <dd>Plot Case Fatality Ratios, Total Cases, and Beta Distributions by Country</dd>
+      </dl><dl><dt>
+          
           <code><a href="plot_ENSO_data.html">plot_ENSO_data()</a></code> 
         </dt>
         <dd>Plot ENSO and DMI Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_africa_map.html">plot_africa_map()</a></code> 
+        </dt>
+        <dd>Plot Africa Map with Cholera Outbreak Countries</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_generation_time.html">plot_generation_time()</a></code> 
+        </dt>
+        <dd>Plot Generation Time as Gamma Distribution for Days and Weeks</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_mobility.html">plot_mobility()</a></code> 
+        </dt>
+        <dd>Plot Mobility Data, Mobility Network, and Results</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_shedding_rate.html">plot_shedding_rate()</a></code> 
+        </dt>
+        <dd>Plot Shedding Rate as a Function of Environmental Suitability</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_suspected_cases.html">plot_suspected_cases()</a></code> 
+        </dt>
+        <dd>Plot Proportion of Suspected Cholera Cases</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_vaccine_effectiveness.html">plot_vaccine_effectiveness()</a></code> 
+        </dt>
+        <dd>Plot Vaccine Effectiveness and Beta Distribution</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>

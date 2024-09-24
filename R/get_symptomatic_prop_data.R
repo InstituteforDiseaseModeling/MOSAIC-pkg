@@ -21,6 +21,8 @@
 
 get_symptomatic_prop_data <- function(PATHS) {
 
+     if (!dir.exists(PATHS$DATA_SYMPTOMATIC)) dir.create(PATHS$DATA_SYMPTOMATIC, recursive = TRUE)
+
      df <- data.frame(
           mean     = c(0.57, 0.25, NA, 0.238, 0.213, 0.204, 0.371, 0.184, 0.0005996),
           ci_lo    = c(NA, NA, 0.2, 0.227, 0.194, NA, NA, 0.256, 0.0004998),
@@ -35,7 +37,7 @@ get_symptomatic_prop_data <- function(PATHS) {
           note2    = c("", "", "", "", "", "El Tor Ogawa", "Inaba", "", "")
      )
 
-     path <- file.path(PATHS$DATA_PROCESSED, "summary_symptomatic_cases.csv")
+     path <- file.path(PATHS$DATA_SYMPTOMATIC, "summary_symptomatic_cases.csv")
      utils::write.csv(df, file = path, row.names = FALSE)
      message(paste("Symptomatic proportion data saved to:", path))
 

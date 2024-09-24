@@ -56,14 +56,21 @@ reference:
       - process_WHO_weekly_data
       - process_demographics_data
       - process_OAG_data
+      - process_CFR_data
       - get_WASH_data
       - get_symptomatic_prop_data
+      - get_immune_decay_data
+      - get_suspected_cases
+      - get_generation_time_distribution
+      - get_vaccine_effectiveness_data
 
   - title: "Estimating model quantities"
     contents:
       - est_mobility
       - est_WASH_coverage
       - est_symptomatic_prop
+      - est_immune_decay
+      - est_vaccine_effectiveness
 
   - title: "Shapefiles and Spatial Data Functions"
     contents:

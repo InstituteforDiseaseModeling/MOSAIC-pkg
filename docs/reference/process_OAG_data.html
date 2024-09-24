@@ -75,6 +75,7 @@ all African countries and a subset of countries used in the MOSAIC modeling fram
 <dd><p>A list containing the paths where raw and processed data are stored.
 PATHS is typically the output of the <code><a href="get_paths.html">get_paths()</a></code> function and should include the following components:</p><ul><li><p><strong>DATA_RAW</strong>: Path to the directory containing the raw data files.</p></li>
 <li><p><strong>DATA_PROCESSED</strong>: Path to the directory where processed data should be saved.</p></li>
+<li><p><strong>DATA_SHAPEFILES</strong>: Path to the directory containing shapefiles for African countries.</p></li>
 </ul></dd>
 
 </dl></div>
@@ -82,16 +83,8 @@ PATHS is typically the output of the <code><a href="get_paths.html">get_paths()<
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     
 
-<p>The function does not return a value. It processes the OAG flight data and saves the
+<p>The function processes the OAG flight data and saves the
 aggregated results to the specified processed data paths.</p>
-    </div>
-    <div class="section level2">
-    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function performs the following steps:</p><ol><li><p>Loads raw OAG flight data from a CSV file.</p></li>
-<li><p>Cleans and formats the data, including converting country codes and date information.</p></li>
-<li><p>Aggregates the data by year and calculates the mean weekly passenger counts.</p></li>
-<li><p>Saves the aggregated data for African countries and the MOSAIC framework countries as separate CSV files.</p></li>
-</ol><p>The output files are saved in the processed data directory defined in <code>PATHS$DATA_PROCESSED</code>.</p>
     </div>
 
     <div class="section level2">
