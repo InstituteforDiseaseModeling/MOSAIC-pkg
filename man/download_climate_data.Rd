@@ -2,7 +2,7 @@
 % Please edit documentation in R/download_climate_data.R
 \name{download_climate_data}
 \alias{download_climate_data}
-\title{Download and Save Climate Data for Multiple Countries (Parquet Format, Single Model)}
+\title{Download and Save Climate Data for Multiple Countries (Parquet Format, Multiple Models and Variables)}
 \usage{
 download_climate_data(
   PATHS,
@@ -10,7 +10,8 @@ download_climate_data(
   n_points,
   date_start,
   date_stop,
-  climate_model,
+  climate_models,
+  climate_variables,
   api_key
 )
 }
@@ -30,7 +31,7 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 
 \item{date_stop}{A character string representing the end date for the climate data (in "YYYY-MM-DD" format).}
 
-\item{climate_model}{A single character string representing the climate model to use. Available models include:
+\item{climate_models}{A character vector of climate models to use. Available models include:
 \itemize{
 \item \strong{CMCC_CM2_VHR4}
 \item \strong{FGOALS_f3_H}
@@ -41,18 +42,32 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 \item \strong{NICAM16_8S}
 }}
 
+\item{climate_variables}{A character vector of climate variables to retrieve. See details for available variables.}
+
 \item{api_key}{A character string representing the API key required to access the climate data API.}
 }
 \value{
-The function does not return a value. It downloads the climate data for each country and saves the results as Parquet files in the specified directory.
+The function does not return a value. It downloads the climate data for each country, climate model, and climate variable, saving the results as Parquet files in the specified directory.
 }
 \description{
-This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country for a specified climate model.
+This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country for a specified set of climate models and variables.
 }
 \details{
-This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (\code{date_start} to \code{date_stop}) and the specified climate model. The data is saved for each country in a Parquet file named \verb{climate_data_\{climate_model\}_\{date_start\}_\{date_stop\}_\{ISO3\}.parquet}.
+This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (\code{date_start} to \code{date_stop}) and the specified climate models and variables. The data is saved for each country, climate model, and climate variable in a Parquet file named \verb{climate_data_\{climate_model\}_\{climate_variable\}_\{date_start\}_\{date_stop\}_\{ISO3\}.parquet}.
 
-The climate data variables include temperature, wind speed, cloud cover, precipitation, and more. The function retrieves data from a single climate model.
+The available climate variables include:
+\itemize{
+\item \strong{temperature_2m_mean}, \strong{temperature_2m_max}, \strong{temperature_2m_min}
+\item \strong{wind_speed_10m_mean}, \strong{wind_speed_10m_max}
+\item \strong{cloud_cover_mean}
+\item \strong{shortwave_radiation_sum}
+\item \strong{relative_humidity_2m_mean}, \strong{relative_humidity_2m_max}, \strong{relative_humidity_2m_min}
+\item \strong{dew_point_2m_mean}, \strong{dew_point_2m_min}, \strong{dew_point_2m_max}
+\item \strong{precipitation_sum}, \strong{rain_sum}, \strong{snowfall_sum}
+\item \strong{pressure_msl_mean}
+\item \strong{soil_moisture_0_to_10cm_mean}
+\item \strong{et0_fao_evapotranspiration_sum}
+}
 }
 \examples{
 \dontrun{
@@ -65,10 +80,11 @@ iso_codes <- c("ZAF", "KEN", "NGA")
 # API key for climate data API
 api_key <- "your-api-key-here"
 
-# Download climate data for a specified model and save it for the specified countries
+# Download climate data for multiple models and variables and save it for the specified countries
 download_climate_data(PATHS, iso_codes, n_points = 5,
                       date_start = "1970-01-01", date_stop = "2030-12-31",
-                      climate_model = "MRI_AGCM3_2_S", api_key)
+                      climate_models = c("MRI_AGCM3_2_S", "EC_Earth3P_HR"),
+                      climate_variables = c("temperature_2m_mean", "precipitation_sum"), api_key)
 }
 
 }

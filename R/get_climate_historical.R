@@ -97,7 +97,7 @@ get_climate_historical <- function(lat, lon, start_date, end_date, climate_varia
                     results_list[[variable]] <- data.frame(
                          date = as.Date(dates),
                          climate_variable = variable,
-                         climate_value = data$daily[[variable]]
+                         value = data$daily[[variable]]
                     )
                }
           }

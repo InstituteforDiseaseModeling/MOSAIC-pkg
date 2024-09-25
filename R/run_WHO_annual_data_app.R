@@ -13,7 +13,6 @@
 #' @importFrom ggplot2 ggplot geom_bar geom_hline geom_vline geom_errorbar geom_point theme_minimal labs scale_y_sqrt scale_x_discrete theme element_text
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom grDevices adjustcolor
-#' @importFrom shinyWidgets shinyApp
 #' @importFrom utils read.csv
 #'
 #' @examples

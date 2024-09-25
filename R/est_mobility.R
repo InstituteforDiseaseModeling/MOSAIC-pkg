@@ -15,7 +15,7 @@
 #'
 #' @importFrom ggplot2 ggplot aes geom_tile xlab ylab theme_bw element_text margin scale_fill_gradient guides guide_colorbar geom_segment geom_sf geom_point geom_text scale_size_continuous theme_void
 #' @importFrom reshape2 melt
-#' @importFrom mobility fit_prob_travel fit_mobility mobility summary predict
+#' @importFrom mobility fit_prob_travel mobility summary predict
 #' @importFrom sf st_read st_coordinates st_centroid
 #' @importFrom dplyr left_join rename
 #' @importFrom glue glue

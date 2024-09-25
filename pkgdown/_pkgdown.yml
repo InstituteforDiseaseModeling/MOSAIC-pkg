@@ -70,6 +70,7 @@ reference:
   - title: "Estimating model quantities"
     contents:
       - est_seasonal_dynamics
+      - fourier_series_double
       - est_mobility
       - est_WASH_coverage
       - est_symptomatic_prop
