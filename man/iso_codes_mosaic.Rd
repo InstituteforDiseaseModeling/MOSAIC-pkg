@@ -11,7 +11,7 @@ A character vector of ISO3 country codes.
 iso_codes_mosaic
 }
 \description{
-A character vector containing the ISO3 country codes for 40 countries modeled in the MOSAIC framework.
+A character vector containing the ISO3 country codes for 41 countries modeled in the MOSAIC framework.
 }
 \examples{
 # Access ISO3 codes for countries modeled in the MOSAIC framework

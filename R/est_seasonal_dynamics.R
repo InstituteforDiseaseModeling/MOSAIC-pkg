@@ -21,13 +21,13 @@
 #' @importFrom ggplot2 ggplot geom_sf labs theme_minimal
 #' @importFrom minpack.lm nlsLM
 #' @export
+
 est_seasonal_dynamics <- function(PATHS) {
 
-
+     requireNamespace('dplyr')
      requireNamespace('minpack.lm')
      requireNamespace('FNN')
      requireNamespace('sf')
-
 
      # Load necessary country data
      iso_codes <- MOSAIC::iso_codes_mosaic
@@ -53,7 +53,7 @@ est_seasonal_dynamics <- function(PATHS) {
           country_name <- MOSAIC::convert_iso_to_country(country_iso_code)
 
           # Load climate data for the country
-          precip_file <- file.path(PATHS$DATA_CLIMATE, glue::glue("climate_data_MRI_AGCM3_2_S_precipitation_sum_1970-01-01_2030-12-31_{country_iso_code}.parquet"))
+          precip_file <- file.path(PATHS$DATA_RAW, "climate", glue::glue("climate_data_MRI_AGCM3_2_S_precipitation_sum_1970-01-01_2030-12-31_{country_iso_code}.parquet"))
 
           # Check if the precipitation file exists
           if (file.exists(precip_file)) {
@@ -82,7 +82,7 @@ est_seasonal_dynamics <- function(PATHS) {
           precip_data$precip_scaled <- scale(precip_data$weekly_precipitation_sum, center = TRUE, scale = TRUE)
           precip_data$cases_scaled <- scale(precip_data$cases, center = TRUE, scale = TRUE)
 
-          # Fit the Generalized Fourier Series model to precipitation data using MOSAIC::fourier_series_double
+          message("Fitting fourier series to precip data")
           fit_fourier_precip <- minpack.lm::nlsLM(
                precip_scaled ~ MOSAIC::fourier_series_double(week, a1, b1, a2, b2, p = 52, beta0 = 0),
                data = precip_data,
@@ -109,6 +109,9 @@ est_seasonal_dynamics <- function(PATHS) {
 
           # Fit the Fourier series model to cholera cases if data is available
           if (country_iso_code %in% iso_codes_with_data) {
+
+               message("Cases data present: fitting fourier series to case data")
+
                fit_fourier_cases <- minpack.lm::nlsLM(
                     cases_scaled ~ MOSAIC::fourier_series_double(week, a1, b1, a2, b2, p = 52, beta0 = 0),
                     data = precip_data,
@@ -136,7 +139,11 @@ est_seasonal_dynamics <- function(PATHS) {
 
                # Use MOSAIC::fourier_series_double to calculate fitted values for cholera cases
                fitted_values_cases <- MOSAIC::fourier_series_double(week_seq, coefs_cases["a1"], coefs_cases["b1"], coefs_cases["a2"], coefs_cases["b2"], p = 52, beta0 = 0)
+
           } else {
+
+               message("No case data present")
+
                fitted_values_cases <- rep(NA, length(week_seq))
 
                param_values_cases <- data.frame(
@@ -175,19 +182,219 @@ est_seasonal_dynamics <- function(PATHS) {
      combined_fitted_values <- do.call(rbind, all_fitted_values)
      combined_param_values <- do.call(rbind, all_param_values)
 
-     # Remove beta0 and p parameters
      combined_param_values <- combined_param_values[!(combined_param_values$parameter %in% c("beta0", "p")),]
+     row.names(combined_param_values) <- NULL
 
-     path <- file.path(PATHS$MODEL_INPUT, "param_fourier_series.csv")
-     utils::write.csv(combined_param_values, file = path, row.names = FALSE)
-     message("Parameter values saved to:")
+
+
+
+     ################################################################################
+
+     # Check within cluster first, if not neighbors with data then get nearest neighbor
+     # with highest precip correlation
+
+     ################################################################################
+
+     message('Estimating culstering of countries based on seasonal rainfall patterns
+             and inferring seasonal transmission dynamics based on the clustering...')
+
+
+     # Step 1: Perform hierarchical clustering with k = 4
+
+     # Prepare data for clustering
+     precip_fitted_df <- combined_fitted_values %>%
+          dplyr::filter(!is.na(fitted_values_fourier_precip)) %>%
+          dplyr::select(iso_code, week, fitted_values_fourier_precip) %>%
+          tidyr::spread(key = week, value = fitted_values_fourier_precip)  # Reshape data
+
+     # Remove rows with missing data
+     precip_fitted_df <- na.omit(precip_fitted_df)
+
+     # Perform hierarchical clustering with k = 4
+     set.seed(123)
+     precip_matrix <- precip_fitted_df %>% dplyr::select(-iso_code)
+     dist_matrix <- dist(precip_matrix)  # Compute distance matrix
+     hc <- hclust(dist_matrix, method = "ward.D2")
+     precip_fitted_df$cluster <- cutree(hc, k = 4)  # Assign countries to 4 clusters
+
+     # Step 2: Merge clustering results with spatial data
+
+     africa <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, "AFRICA_ADM0.shp"))
+
+     africa_with_clusters <- africa %>%
+          dplyr::left_join(precip_fitted_df %>% dplyr::select(iso_code, cluster), by = c("iso_a3" = "iso_code"))
+
+     africa_with_clusters <- africa_with_clusters[!(africa_with_clusters$iso_a3 %in% c("ZAF")),]
+
+     # Step 3: Calculate centroids for all African countries
+     centroids <- sf::st_centroid(africa)
+     coords <- sf::st_coordinates(centroids)
+
+     # Initial value of k for nearest neighbors
+     initial_k <- 10
+
+     # Step 4: Loop through countries with no cholera data and select the best neighbor
+
+     for (country_iso_code_no_data in iso_codes_no_data) {
+
+          print(glue("Processing country with no cholera data: {country_iso_code_no_data}"))
+
+          # Get the shapefile for the country with no data
+          country_shp_no_data <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, paste0(country_iso_code_no_data, "_ADM0.shp")))
+
+          # Ensure both country_shp_no_data and africa have the same CRS
+          country_shp_no_data <- sf::st_transform(country_shp_no_data, sf::st_crs(africa))
+
+          # Get the centroid of the country with no data
+          centroid_no_data <- sf::st_centroid(country_shp_no_data)
+          coord_no_data <- sf::st_coordinates(centroid_no_data)
+
+          # Get the cluster assignment for the country with no data
+          country_cluster <- precip_fitted_df %>%
+               dplyr::filter(iso_code == country_iso_code_no_data) %>%
+               dplyr::pull(cluster)
+
+          # Initialize variables for tracking the best neighbor
+          best_neighbor_iso_code <- NULL
+          highest_corr <- -Inf
+
+          # Step 5: Check for neighbors within the same cluster
+          neighbors_within_cluster <- africa_with_clusters %>%
+               dplyr::filter(cluster == country_cluster, iso_a3 != country_iso_code_no_data, iso_a3 %in% iso_codes_with_data)
+
+          if (nrow(neighbors_within_cluster) > 0) {
+
+               print(glue("Found neighbors within the same cluster for {country_iso_code_no_data}"))
+
+               # Get the precipitation data for the country with no data
+               precip_no_data <- all_precip_data[[country_iso_code_no_data]] %>%
+                    dplyr::select(year, week, weekly_precipitation_sum)
+
+               # Loop through neighbors within the cluster and find the best one based on correlation
+               for (neighbor_iso_code in neighbors_within_cluster$iso_a3) {
+
+                    precip_neighbor <- all_precip_data[[neighbor_iso_code]] %>%
+                         dplyr::select(year, week, weekly_precipitation_sum)
+
+                    # Merge data by year and week for correlation calculation
+                    merged_precip <- merge(precip_no_data, precip_neighbor, by = c("year", "week"), suffixes = c("_no_data", "_neighbor"))
+
+                    if (nrow(merged_precip) > 0) {
+
+                         # Calculate Pearson correlation
+                         corr <- cor(merged_precip$weekly_precipitation_sum_no_data, merged_precip$weekly_precipitation_sum_neighbor, use = "complete.obs")
+
+                         print(glue("Correlation between {country_iso_code_no_data} and {neighbor_iso_code}: {corr}"))
+
+                         # Update the best neighbor if this correlation is higher
+                         if (corr > highest_corr) {
+                              highest_corr <- corr
+                              best_neighbor_iso_code <- neighbor_iso_code
+                         }
+                    }
+               }
+
+          }
+
+          # Step 6: If no valid neighbor is found within the cluster, check k-nearest neighbors
+          if (is.null(best_neighbor_iso_code)) {
+
+               print(glue("No neighbors within the same cluster for {country_iso_code_no_data}. Checking nearest neighbors."))
+
+               k <- initial_k
+
+               while (is.null(best_neighbor_iso_code)) {
+
+                    # Find k-nearest neighbors based on centroid distance
+                    k_neighbors <- FNN::get.knnx(coords, coord_no_data, k = k)
+                    nearest_neighbors <- africa[k_neighbors$nn.index, ]
+
+                    # Filter neighbors to only include those that have cholera data
+                    neighbors_with_data <- nearest_neighbors %>%
+                         dplyr::filter(iso_a3 %in% iso_codes_with_data)
+
+                    if (nrow(neighbors_with_data) == 0) {
+                         print(glue("No neighbors with data found with k = {k}. Increasing k."))
+                         k <- k + 1  # Increase k until a valid neighbor with data is found
+                    }
+
+                    # Stop if k exceeds the total number of available neighbors
+                    if (k > nrow(africa)) {
+                         print(glue("No valid neighbors found for {country_iso_code_no_data} even after increasing k. Skipping."))
+                         next
+                    }
+
+                    # Get the precipitation data (weekly_precipitation_sum) for the country with no data
+                    precip_no_data <- all_precip_data[[country_iso_code_no_data]] %>%
+                         dplyr::select(year, week, weekly_precipitation_sum)
+
+                    # Loop through k-nearest neighbors and calculate the correlation between weekly_precipitation_sum
+                    for (neighbor_iso_code in neighbors_with_data$iso_a3) {
+
+                         if (is.null(all_precip_data[[neighbor_iso_code]])) stop(paste0("Cannot find neighbor iso code: ", neighbor_iso_code))
+
+                         precip_neighbor <- all_precip_data[[neighbor_iso_code]] %>%
+                              dplyr::select(year, week, weekly_precipitation_sum)
+
+                         # Merge data by year and week for correlation calculation
+                         merged_precip <- merge(precip_no_data, precip_neighbor, by = c("year", "week"), suffixes = c("_no_data", "_neighbor"))
+
+                         if (nrow(merged_precip) > 0) {
+
+                              # Calculate Pearson correlation
+                              corr <- cor(merged_precip$weekly_precipitation_sum_no_data, merged_precip$weekly_precipitation_sum_neighbor, use = "complete.obs")
+
+                              print(glue("Correlation between {country_iso_code_no_data} and {neighbor_iso_code}: {corr}"))
+
+                              # Update the best neighbor if this correlation is higher and positive
+                              if (corr > highest_corr) {
+                                   highest_corr <- corr
+                                   best_neighbor_iso_code <- neighbor_iso_code
+                              }
+                         }
+                    }
+               }
+          }
+
+          # Step 7: If a best neighbor is found, assign the fitted and parameter values
+          if (!is.null(best_neighbor_iso_code)) {
+
+               print(glue("Best neighbor based on correlation: {best_neighbor_iso_code} with correlation {highest_corr}"))
+
+               combined_fitted_values[combined_fitted_values$iso_code == country_iso_code_no_data, 'fitted_values_fourier_cases'] <-
+                    combined_fitted_values[combined_fitted_values$iso_code == best_neighbor_iso_code, 'fitted_values_fourier_cases']
+
+               combined_fitted_values[combined_fitted_values$iso_code == country_iso_code_no_data, 'inferred_from_neighbor'] <- convert_iso3_to_country(best_neighbor_iso_code)
+
+               combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data & combined_param_values$response == 'cases', c('parameter', 'mean', 'se', 'ci_lo', 'ci_hi')] <-
+                    combined_param_values[combined_param_values$country_iso_code == best_neighbor_iso_code & combined_param_values$response == 'cases', c('parameter', 'mean', 'se', 'ci_lo', 'ci_hi')]
+
+               combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data & combined_param_values$response == 'cases', 'inferred_from_neighbor'] <- convert_iso3_to_country(best_neighbor_iso_code)
+
+               print(glue("Assigned data from {best_neighbor_iso_code} to {country_iso_code_no_data}"))
+
+          } else {
+               print(glue("No valid neighbor found with a positive correlation for {country_iso_code_no_data}."))
+          }
+     }
+
+
+
+
+     path <- file.path(PATHS$MODEL_INPUT, "data_seasonal_precipitation.csv")
+     utils::write.csv(combined_precip_data, file = path, row.names = FALSE)
+     message(paste0("Weekly precipitation data saved to: ", path))
      message(path)
 
+     path <- file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv")
+     utils::write.csv(combined_precip_data, file = path, row.names = FALSE)
+     message(paste0("Estimated fourier series parameters saved to: ", path))
+     message(path)
 
-
-
-
-
+     path <- file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics.csv")
+     utils::write.csv(combined_precip_data, file = path, row.names = FALSE)
+     message(paste0("Predicted seasonal dynamics using fourier series model saved to: ", path))
+     message(path)
 
 
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/est_WASH_coverage.R
 \name{est_WASH_coverage}
 \alias{est_WASH_coverage}
-\title{Estimate and Visualize WASH Coverage and Correlation with Cholera Incidence}
+\title{Estimate, Visualize, and Impute WASH Coverage and Correlation with Cholera Incidence}
 \usage{
 est_WASH_coverage(PATHS)
 }
@@ -13,21 +13,23 @@ est_WASH_coverage(PATHS)
 \item \strong{DOCS_FIGURES}: Path to save output figures.
 \item \strong{MODEL_INPUT}: Path to save model input data.
 \item \strong{DOCS_TABLES}: Path to save tables used in documentation.
+\item \strong{DATA_SIMILARITY_MATRIX}: Path to the similarity matrix CSV file for imputation.
 }}
 }
 \value{
-The function does not return a value, but generates and saves plots and CSV files showing WASH coverage estimates, optimized weights for WASH variables, and their correlation with cholera incidence.
+The function does not return a value, but generates and saves plots and CSV files showing WASH coverage estimates, optimized weights for WASH variables, their correlation with cholera incidence, and imputed values for missing data.
 }
 \description{
-This function processes Water, Sanitation, and Hygiene (WASH) coverage data for African countries, optimizes the weights of WASH variables, calculates weighted means, and examines their correlation with cholera incidence. The function generates plots and tables showing these relationships and saves the results to specified paths.
+This function processes Water, Sanitation, and Hygiene (WASH) coverage data for African countries, optimizes the weights of WASH variables, calculates weighted means, examines their correlation with cholera incidence, and imputes missing WASH values using a similarity matrix. The function generates plots and tables showing these relationships and saves the results to specified paths.
 }
 \details{
 The WASH coverage data is first normalized (on a 0-1 scale). Risk-related WASH variables (such as unimproved water sources, surface water, unimproved sanitation, and open defecation) are converted to protective factors by taking the complement (1 - value). Then, the function:
 \itemize{
 \item Optimizes the weights for each WASH variable to maximize correlation with cholera incidence using the L-BFGS-B method.
 \item Calculates the weighted mean of WASH variables for each country.
+\item Imputes missing WASH data based on a country similarity matrix. Missing WASH values are estimated using the weighted average of the top 3 most similar countries.
 \item Generates multiple plots showing relationships between WASH variables and cholera incidence.
-\item Saves tables of optimized weights and weighted mean WASH indices.
+\item Saves tables of optimized weights, weighted mean WASH indices, and imputed WASH values.
 }
 
 Data Source: Sikder et al. (2023). Water, Sanitation, and Hygiene Coverage and Cholera Incidence in Sub-Saharan Africa. \doi{10.1021/acs.est.3c01317}.
