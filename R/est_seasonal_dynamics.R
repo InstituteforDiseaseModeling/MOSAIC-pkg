@@ -63,7 +63,7 @@ est_seasonal_dynamics <- function(PATHS) {
                stop(glue::glue("Precipitation data not found for {country_iso_code}."))
           }
 
-          precip_data <- precip_data[precip_data$date >= '2014-09-01' & precip_data$date < '2024-09-01',]
+          precip_data <- precip_data[precip_data$date >= '2004-09-01' & precip_data$date < '2024-09-01',]
 
           # Aggregate weekly precipitation data
           precip_data <- precip_data %>%
@@ -116,10 +116,10 @@ est_seasonal_dynamics <- function(PATHS) {
                     cases_scaled ~ MOSAIC::fourier_series_double(week, a1, b1, a2, b2, p = 52, beta0 = 0),
                     data = precip_data,
                     start = list(
-                         a1 = coefs_precip["a1"],
-                         b1 = coefs_precip["b1"],
-                         a2 = coefs_precip["a2"],
-                         b2 = coefs_precip["b2"]
+                         a1 = as.vector(coefs_precip["a1"]),
+                         b1 = as.vector(coefs_precip["b1"]),
+                         a2 = as.vector(coefs_precip["a2"]),
+                         b2 = as.vector(coefs_precip["b2"])
                     )
                )
 
@@ -169,6 +169,7 @@ est_seasonal_dynamics <- function(PATHS) {
           # Store results for each country
           precip_data$Country <- country_name
           fitted_values$Country <- country_name
+
           param_values <- rbind(param_values_precip, param_values_cases)
 
           all_precip_data[[country_iso_code]] <- precip_data
@@ -224,7 +225,7 @@ est_seasonal_dynamics <- function(PATHS) {
      africa_with_clusters <- africa %>%
           dplyr::left_join(precip_fitted_df %>% dplyr::select(iso_code, cluster), by = c("iso_a3" = "iso_code"))
 
-     africa_with_clusters <- africa_with_clusters[!(africa_with_clusters$iso_a3 %in% c("ZAF")),]
+     #africa_with_clusters <- africa_with_clusters[!(africa_with_clusters$iso_a3 %in% c("ZAF")),]
 
      # Step 3: Calculate centroids for all African countries
      centroids <- sf::st_centroid(africa)
@@ -331,7 +332,10 @@ est_seasonal_dynamics <- function(PATHS) {
                     # Loop through k-nearest neighbors and calculate the correlation between weekly_precipitation_sum
                     for (neighbor_iso_code in neighbors_with_data$iso_a3) {
 
-                         if (is.null(all_precip_data[[neighbor_iso_code]])) stop(paste0("Cannot find neighbor iso code: ", neighbor_iso_code))
+                         if (is.null(all_precip_data[[neighbor_iso_code]])) {
+                              print(paste0("Cannot find neighbor iso code: ", neighbor_iso_code))
+                              next
+                         }
 
                          precip_neighbor <- all_precip_data[[neighbor_iso_code]] %>%
                               dplyr::select(year, week, weekly_precipitation_sum)
@@ -356,6 +360,7 @@ est_seasonal_dynamics <- function(PATHS) {
                }
           }
 
+
           # Step 7: If a best neighbor is found, assign the fitted and parameter values
           if (!is.null(best_neighbor_iso_code)) {
 
@@ -364,12 +369,12 @@ est_seasonal_dynamics <- function(PATHS) {
                combined_fitted_values[combined_fitted_values$iso_code == country_iso_code_no_data, 'fitted_values_fourier_cases'] <-
                     combined_fitted_values[combined_fitted_values$iso_code == best_neighbor_iso_code, 'fitted_values_fourier_cases']
 
-               combined_fitted_values[combined_fitted_values$iso_code == country_iso_code_no_data, 'inferred_from_neighbor'] <- convert_iso3_to_country(best_neighbor_iso_code)
+               combined_fitted_values[combined_fitted_values$iso_code == country_iso_code_no_data, 'inferred_from_neighbor'] <- convert_iso_to_country(best_neighbor_iso_code)
 
                combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data & combined_param_values$response == 'cases', c('parameter', 'mean', 'se', 'ci_lo', 'ci_hi')] <-
                     combined_param_values[combined_param_values$country_iso_code == best_neighbor_iso_code & combined_param_values$response == 'cases', c('parameter', 'mean', 'se', 'ci_lo', 'ci_hi')]
 
-               combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data & combined_param_values$response == 'cases', 'inferred_from_neighbor'] <- convert_iso3_to_country(best_neighbor_iso_code)
+               combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data & combined_param_values$response == 'cases', 'inferred_from_neighbor'] <- convert_iso_to_country(best_neighbor_iso_code)
 
                print(glue("Assigned data from {best_neighbor_iso_code} to {country_iso_code_no_data}"))
 
@@ -381,21 +386,28 @@ est_seasonal_dynamics <- function(PATHS) {
 
 
 
-     path <- file.path(PATHS$MODEL_INPUT, "data_seasonal_precipitation.csv")
-     utils::write.csv(combined_precip_data, file = path, row.names = FALSE)
-     message(paste0("Weekly precipitation data saved to: ", path))
-     message(path)
+     path1 <- file.path(PATHS$MODEL_INPUT, "data_seasonal_precipitation.csv")
+     path2 <- file.path(PATHS$DOCS_TABLES, "data_seasonal_precipitation.csv")
+     utils::write.csv(combined_precip_data, file = path1, row.names = FALSE)
+     utils::write.csv(combined_precip_data, file = path2, row.names = FALSE)
+     message("Weekly precipitation data saved to:")
+     message(path1)
+     message(path2)
 
-     path <- file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv")
-     utils::write.csv(combined_precip_data, file = path, row.names = FALSE)
-     message(paste0("Estimated fourier series parameters saved to: ", path))
-     message(path)
+     path1 <- file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv")
+     path2 <- file.path(PATHS$DOCS_TABLES, "param_seasonal_dynamics.csv")
+     utils::write.csv(combined_param_values, file = path1, row.names = FALSE)
+     utils::write.csv(combined_param_values, file = path2, row.names = FALSE)
+     message("Estimated fourier series parameters saved to: ")
+     message(path1)
+     message(path2)
 
-     path <- file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics.csv")
-     utils::write.csv(combined_precip_data, file = path, row.names = FALSE)
-     message(paste0("Predicted seasonal dynamics using fourier series model saved to: ", path))
-     message(path)
-
-
+     path1 <- file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics.csv")
+     path2 <- file.path(PATHS$DOCS_TABLES, "pred_seasonal_dynamics.csv")
+     utils::write.csv(combined_fitted_values, file = path1, row.names = FALSE)
+     utils::write.csv(combined_fitted_values, file = path2, row.names = FALSE)
+     message("Predicted seasonal dynamics using fourier series model saved to: ")
+     message(path1)
+     message(path2)
 
 }
