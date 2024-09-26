@@ -117,39 +117,67 @@ repositories using a Bash script.</p>
 <span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="co"># Change to the MOSAIC directory</span></span>
 <span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="bu">cd</span> <span class="st">"</span><span class="va">$MOSAIC_DIR</span><span class="st">"</span></span>
 <span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a></span>
-<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co"># Clone the MOSAIC-data repository</span></span>
-<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="ot">!</span> <span class="ot">-d</span> <span class="st">"MOSAIC-data"</span> <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
-<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>    <span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git</span>
-<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Cloned MOSAIC-data repository."</span></span>
-<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="cf">else</span></span>
-<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"MOSAIC-data repository already exists."</span></span>
-<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a><span class="cf">fi</span></span>
-<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a></span>
-<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a><span class="co"># Clone the MOSAIC-pkg repository</span></span>
-<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="ot">!</span> <span class="ot">-d</span> <span class="st">"MOSAIC-pkg"</span> <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
-<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a>    <span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git</span>
-<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Cloned MOSAIC-pkg repository."</span></span>
-<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a><span class="cf">else</span></span>
-<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"MOSAIC-pkg repository already exists."</span></span>
-<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a><span class="cf">fi</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co"># Function to clone or update a repository</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="fu">clone_or_update_repo()</span> <span class="kw">{</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>    <span class="va">REPO_NAME</span><span class="op">=</span><span class="va">$1</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>    <span class="va">REPO_URL</span><span class="op">=</span><span class="va">$2</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">[</span> <span class="ot">!</span> <span class="ot">-d</span> <span class="st">"</span><span class="va">$REPO_NAME</span><span class="st">"</span> <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>        <span class="fu">git</span> clone <span class="st">"</span><span class="va">$REPO_URL</span><span class="st">"</span></span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>        <span class="bu">echo</span> <span class="st">"Cloned </span><span class="va">$REPO_NAME</span><span class="st"> repository."</span></span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a>        <span class="bu">echo</span> <span class="st">"</span><span class="va">$REPO_NAME</span><span class="st"> repository already exists. Pulling latest changes."</span></span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a>        <span class="bu">cd</span> <span class="st">"</span><span class="va">$REPO_NAME</span><span class="st">"</span></span>
+<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a>        <span class="fu">git</span> pull</span>
+<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a>        <span class="bu">cd</span> ..</span>
+<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a>    <span class="cf">fi</span></span>
+<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a><span class="kw">}</span></span>
 <span id="cb1-30"><a href="#cb1-30" tabindex="-1"></a></span>
-<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a><span class="co"># Clone the MOSAIC-docs repository</span></span>
-<span id="cb1-32"><a href="#cb1-32" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="ot">!</span> <span class="ot">-d</span> <span class="st">"MOSAIC-docs"</span> <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
-<span id="cb1-33"><a href="#cb1-33" tabindex="-1"></a>    <span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git</span>
-<span id="cb1-34"><a href="#cb1-34" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"Cloned MOSAIC-docs repository."</span></span>
-<span id="cb1-35"><a href="#cb1-35" tabindex="-1"></a><span class="cf">else</span></span>
-<span id="cb1-36"><a href="#cb1-36" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">"MOSAIC-docs repository already exists."</span></span>
-<span id="cb1-37"><a href="#cb1-37" tabindex="-1"></a><span class="cf">fi</span></span>
-<span id="cb1-38"><a href="#cb1-38" tabindex="-1"></a></span>
-<span id="cb1-39"><a href="#cb1-39" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"MOSAIC project setup complete."</span></span></code></pre></div>
-<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co">#&gt; Created directory: MOSAIC</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co">#&gt; #&gt; Cloning into 'MOSAIC-data'...</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt; Cloned MOSAIC-data repository.</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co">#&gt; Cloning into 'MOSAIC-pkg'...</span></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co">#&gt; Cloned MOSAIC-pkg repository.</span></span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co">#&gt; Cloning into 'MOSAIC-docs'...</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="co">#&gt; Cloned MOSAIC-docs repository.</span></span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co">#&gt; MOSAIC project setup complete.</span></span></code></pre></div>
+<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a><span class="co"># Clone or update the MOSAIC-data repository</span></span>
+<span id="cb1-32"><a href="#cb1-32" tabindex="-1"></a><span class="ex">clone_or_update_repo</span> <span class="st">"MOSAIC-data"</span> <span class="st">"git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git"</span></span>
+<span id="cb1-33"><a href="#cb1-33" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" tabindex="-1"></a><span class="co"># Clone or update the MOSAIC-pkg repository</span></span>
+<span id="cb1-35"><a href="#cb1-35" tabindex="-1"></a><span class="ex">clone_or_update_repo</span> <span class="st">"MOSAIC-pkg"</span> <span class="st">"git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git"</span></span>
+<span id="cb1-36"><a href="#cb1-36" tabindex="-1"></a></span>
+<span id="cb1-37"><a href="#cb1-37" tabindex="-1"></a><span class="co"># Clone or update the MOSAIC-docs repository</span></span>
+<span id="cb1-38"><a href="#cb1-38" tabindex="-1"></a><span class="ex">clone_or_update_repo</span> <span class="st">"MOSAIC-docs"</span> <span class="st">"git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git"</span></span>
+<span id="cb1-39"><a href="#cb1-39" tabindex="-1"></a></span>
+<span id="cb1-40"><a href="#cb1-40" tabindex="-1"></a><span class="co"># Clone or update the ees-cholera-mapping repository</span></span>
+<span id="cb1-41"><a href="#cb1-41" tabindex="-1"></a><span class="ex">clone_or_update_repo</span> <span class="st">"ees-cholera-mapping"</span> <span class="st">"git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git"</span></span>
+<span id="cb1-42"><a href="#cb1-42" tabindex="-1"></a></span>
+<span id="cb1-43"><a href="#cb1-43" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"MOSAIC project setup complete."</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">Created</span> directory: MOSAIC</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="ex">Cloning</span> into <span class="st">'MOSAIC-data'</span>...</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="ex">remote:</span> Enumerating objects: 282, done.</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="ex">remote:</span> Counting objects: 100% <span class="er">(</span><span class="ex">282/282</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="ex">remote:</span> Compressing objects: 100% <span class="er">(</span><span class="ex">218/218</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="ex">remote:</span> Total 282 <span class="er">(</span><span class="ex">delta</span> 61<span class="kw">)</span><span class="ex">,</span> reused 280 <span class="er">(</span><span class="ex">delta</span> 59<span class="kw">)</span><span class="ex">,</span> pack-reused 0 <span class="er">(</span><span class="ex">from</span> 0<span class="kw">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="ex">Receiving</span> objects: 100% <span class="er">(</span><span class="ex">282/282</span><span class="kw">)</span><span class="ex">,</span> 30.82 MiB <span class="kw">|</span> <span class="ex">21.81</span> MiB/s, done.</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="ex">Resolving</span> deltas: 100% <span class="er">(</span><span class="ex">61/61</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="ex">Cloned</span> MOSAIC-data repository.</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="ex">Cloning</span> into <span class="st">'MOSAIC-pkg'</span>...</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="ex">remote:</span> Enumerating objects: 695, done.</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="ex">remote:</span> Counting objects: 100% <span class="er">(</span><span class="ex">695/695</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="ex">remote:</span> Compressing objects: 100% <span class="er">(</span><span class="ex">388/388</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="ex">remote:</span> Total 695 <span class="er">(</span><span class="ex">delta</span> 422<span class="kw">)</span><span class="ex">,</span> reused 569 <span class="er">(</span><span class="ex">delta</span> 296<span class="kw">)</span><span class="ex">,</span> pack-reused 0 <span class="er">(</span><span class="ex">from</span> 0<span class="kw">)</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="ex">Receiving</span> objects: 100% <span class="er">(</span><span class="ex">695/695</span><span class="kw">)</span><span class="ex">,</span> 4.24 MiB <span class="kw">|</span> <span class="ex">6.23</span> MiB/s, done.</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="ex">Resolving</span> deltas: 100% <span class="er">(</span><span class="ex">422/422</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="ex">Cloned</span> MOSAIC-pkg repository.</span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="ex">Cloning</span> into <span class="st">'MOSAIC-docs'</span>...</span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="ex">remote:</span> Enumerating objects: 330, done.</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a><span class="ex">remote:</span> Total 330 <span class="er">(</span><span class="ex">delta</span> 0<span class="kw">)</span><span class="ex">,</span> reused 0 <span class="er">(</span><span class="ex">delta</span> 0<span class="kw">)</span><span class="ex">,</span> pack-reused 330 <span class="er">(</span><span class="ex">from</span> 1<span class="kw">)</span></span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="ex">Receiving</span> objects: 100% <span class="er">(</span><span class="ex">330/330</span><span class="kw">)</span><span class="ex">,</span> 53.60 MiB <span class="kw">|</span> <span class="ex">19.46</span> MiB/s, done.</span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="ex">Resolving</span> deltas: 100% <span class="er">(</span><span class="ex">102/102</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="ex">Cloned</span> MOSAIC-docs repository.</span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="ex">Cloning</span> into <span class="st">'ees-cholera-mapping'</span>...</span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="ex">remote:</span> Enumerating objects: 281, done.</span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="ex">remote:</span> Counting objects: 100% <span class="er">(</span><span class="ex">24/24</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a><span class="ex">remote:</span> Compressing objects: 100% <span class="er">(</span><span class="ex">19/19</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a><span class="ex">remote:</span> Total 281 <span class="er">(</span><span class="ex">delta</span> 6<span class="kw">)</span><span class="ex">,</span> reused 9 <span class="er">(</span><span class="ex">delta</span> 4<span class="kw">)</span><span class="ex">,</span> pack-reused 257 <span class="er">(</span><span class="ex">from</span> 1<span class="kw">)</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a><span class="ex">Receiving</span> objects: 100% <span class="er">(</span><span class="ex">281/281</span><span class="kw">)</span><span class="ex">,</span> 169.76 KiB <span class="kw">|</span> <span class="ex">1.40</span> MiB/s, done.</span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a><span class="ex">Resolving</span> deltas: 100% <span class="er">(</span><span class="ex">122/122</span><span class="kw">)</span><span class="ex">,</span> done.</span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a><span class="ex">Cloned</span> ees-cholera-mapping repository.</span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a><span class="ex">MOSAIC</span> project setup complete.</span></code></pre></div>
 </div>
   </main>
 </div>

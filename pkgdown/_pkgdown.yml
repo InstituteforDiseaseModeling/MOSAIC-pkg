@@ -42,6 +42,7 @@ reference:
   - title: "Downloading and Processing Data: Climate and Environment"
     contents:
       - download_climate_data
+      - process_climate_data
       - get_DMI_forecast
       - get_DMI_historical
       - get_ENSO_forecast

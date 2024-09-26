@@ -39,6 +39,8 @@ get_paths <- function(root=NULL) {
 
      PATHS <- list()
      PATHS$ROOT <- root
+     PATHS$DATA_SCRAPE_WHO_WEEKLY <- file.path(root, "ees-cholera-mapping/data/cholera/who/awd")
+     PATHS$DATA_SCRAPE_GTFCC <- file.path(root, "ees-cholera-mapping/data/cholera/epicentre/gtfcc")
      PATHS$DATA_RAW <- file.path(root, "MOSAIC-data/raw")
      PATHS$DATA_PROCESSED <- file.path(root, "MOSAIC-data/processed")
      PATHS$DATA_SHAPEFILES <- file.path(root, "MOSAIC-data/processed/shapefiles")

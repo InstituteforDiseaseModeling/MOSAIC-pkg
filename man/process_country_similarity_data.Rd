@@ -17,7 +17,9 @@ process_country_similarity_data(PATHS)
 The function saves the processed similarity matrix for African countries in the specified directory.
 }
 \description{
-This function processes a global country similarity distance matrix and extracts the subset of African countries, normalizes country names, and matches them to ISO3 codes. The resulting matrix for African countries is saved as a CSV file.
+This function processes a global country similarity distance matrix and extracts the subset of African countries,
+normalizes country names, and matches them to ISO3 codes. The resulting matrix for African countries is saved as a CSV file.
+Country similarity data comes from the \href{https://objectivelists.com/country-similarity-index/}{Objective Lists Country Similarity Index}.
 }
 \details{
 This function performs the following steps:

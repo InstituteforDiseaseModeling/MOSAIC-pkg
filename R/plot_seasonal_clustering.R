@@ -22,7 +22,6 @@
 #' @importFrom utils read.csv
 #' @importFrom glue glue
 #' @importFrom RColorBrewer brewer.pal
-#' @importFrom cluster hclust
 #' @importFrom FNN get.knnx
 #' @importFrom sf st_read st_centroid st_transform st_coordinates
 #' @importFrom dbscan dbscan

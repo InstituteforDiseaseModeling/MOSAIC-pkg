@@ -28,11 +28,14 @@ importFrom("lubridate", "ceiling_date")
 importFrom("glue", "glue")
 importFrom("propvacc", "get_beta_params")
 importFrom("tidyr", "pivot_longer")
-importFrom("stats", "aggregate", "cor", "median", "optim", "quantile", "vcov")
-importFrom("stats", "dbeta", "density", "dgamma", "dlnorm", "qgamma", "rbeta", "runif")
+importFrom("stats", "aggregate", "cor", "median", "optim", "quantile", "vcov",
+           "dbeta", "density", "dgamma", "dlnorm", "qgamma", "rbeta", "runif",
+            "coef", "complete.cases", "cutree", "dist",
+           "hclust", "kmeans", "na.omit", "weighted.mean")
 importFrom("utils", "install.packages", "installed.packages")
 importFrom("arrow", "write_parquet", "read_parquet")
 importFrom("minpack.lm", "nls.lm", "nls.lm.control")
 importFrom("grDevices", "colorRampPalette")
 importFrom("graphics", "legend", "lines", "points", "text")
-
+importFrom("ISOweek", "ISOweek2date")
+importFrom("exactextractr", "exact_extract")

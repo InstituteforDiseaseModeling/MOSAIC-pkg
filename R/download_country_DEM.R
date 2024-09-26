@@ -6,7 +6,7 @@
 #' \itemize{
 #'   \item \strong{DATA_DEM}: Path to the directory where DEM rasters will be saved.
 #' }
-#' #' @param iso_codes A character vector of ISO3 country codes for which DEM data should be downloaded.
+#' @param iso_codes A character vector of ISO3 country codes for which DEM data should be downloaded.
 #' @param zoom_level An integer representing the zoom level for the DEM data. Zoom levels 6-8 are recommended for 1km resolution (default = 6).
 #'
 #' @return The function does not return a value. It downloads the DEM data for each country and saves the results as GeoTIFF files in the specified directory.

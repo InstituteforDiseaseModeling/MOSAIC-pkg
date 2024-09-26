@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Script to set up the MOSAIC project directory and clone the required repositories
-
 # Set the MOSAIC parent directory
 MOSAIC_DIR="MOSAIC"
 
@@ -14,29 +12,32 @@ fi
 # Change to the MOSAIC directory
 cd "$MOSAIC_DIR"
 
-# Clone the MOSAIC-data repository
-if [ ! -d "MOSAIC-data" ]; then
-    git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
-    echo "Cloned MOSAIC-data repository."
-else
-    echo "MOSAIC-data repository already exists."
-fi
+# Function to clone or update a repository
+clone_or_update_repo() {
+    REPO_NAME=$1
+    REPO_URL=$2
 
-# Clone the MOSAIC-pkg repository
-if [ ! -d "MOSAIC-pkg" ]; then
-    git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
-    echo "Cloned MOSAIC-pkg repository."
-else
-    echo "MOSAIC-pkg repository already exists."
-fi
+    if [ ! -d "$REPO_NAME" ]; then
+        git clone "$REPO_URL"
+        echo "Cloned $REPO_NAME repository."
+    else
+        echo "$REPO_NAME repository already exists. Pulling latest changes."
+        cd "$REPO_NAME"
+        git pull
+        cd ..
+    fi
+}
 
-# Clone the MOSAIC-docs repository
-if [ ! -d "MOSAIC-docs" ]; then
-    git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
-    echo "Cloned MOSAIC-docs repository."
-else
-    echo "MOSAIC-docs repository already exists."
-fi
+# Clone or update the MOSAIC-data repository
+clone_or_update_repo "MOSAIC-data" "git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git"
+
+# Clone or update the MOSAIC-pkg repository
+clone_or_update_repo "MOSAIC-pkg" "git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git"
+
+# Clone or update the MOSAIC-docs repository
+clone_or_update_repo "MOSAIC-docs" "git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git"
+
+# Clone or update the ees-cholera-mapping repository
+clone_or_update_repo "ees-cholera-mapping" "git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git"
 
 echo "MOSAIC project setup complete."
-
