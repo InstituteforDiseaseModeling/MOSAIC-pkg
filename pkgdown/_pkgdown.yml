@@ -47,7 +47,7 @@ reference:
       - get_DMI_historical
       - get_ENSO_forecast
       - get_ENSO_historical
-      - compile_ENSO_data
+      - process_ENSO_data
       - get_climate_historical
       - get_climate_forecast
       - get_climate_future
@@ -58,6 +58,7 @@ reference:
     contents:
       - process_WHO_annual_data
       - process_WHO_weekly_data
+      - process_suitability_data
       - process_demographics_data
       - process_country_similarity_data
       - process_OAG_data
@@ -78,6 +79,7 @@ reference:
       - est_symptomatic_prop
       - est_immune_decay
       - est_vaccine_effectiveness
+      - est_suitability
 
   - title: "Shapefiles and Spatial Data Functions"
     contents:
@@ -108,9 +110,11 @@ reference:
       - load_or_install_packages
       - get_paths
       - get_ggplot_legend
+      - make_lagged_data
       - make_param_df
       - set_root_directory
       - set_openmeteo_api_key
+      - get_greek_unicode
 
   - title: "Shiny Apps"
     contents:

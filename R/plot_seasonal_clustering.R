@@ -27,7 +27,7 @@
 #' @importFrom dbscan dbscan
 #' @export
 
-plot_seasnoal_clustering <- function(PATHS,
+plot_seasonal_clustering <- function(PATHS,
                                      use_cases = FALSE,
                                      set_inferred_to_na = TRUE,
                                      clustering_method = "hierarchical",

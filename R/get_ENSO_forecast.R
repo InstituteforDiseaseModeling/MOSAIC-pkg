@@ -24,20 +24,29 @@ get_ENSO_forecast <- function() {
 
      # Niño3.4 probabilities
      nino3_4_text <- "
-Month Oct 2024 Nov 2024 Dec 2024 Jan 2025 Feb 2025
-Nino3.4 −0.4 −0.3 −0.3 −0.1 0.1
+Month	Oct 2024	Nov 2024	Dec 2024	Jan 2025	Feb 2025
+Niño3.4	−0.4℃	−0.3℃	−0.3℃	−0.1℃	0.1℃
+below −0.8℃	1.0%	5.1%	2.0%	1.0%	1.0%
+neutral	99.0%	94.9%	98.0%	99.0%	94.9%
+above 0.8℃	0%	0%	0%	0%	4.0%
      "
 
      # Niño3 probabilities
      nino3_text <- "
-Month Oct 2024 Nov 2024 Dec 2024 Jan 2025 Feb 2025
-Nino3 −0.2 −0.2 −0.2 0 0.3
+Month	Oct 2024	Nov 2024	Dec 2024	Jan 2025	Feb 2025
+Niño3	−0.2℃	−0.2℃	−0.2℃	0℃	0.3℃
+below −0.8℃	1.0%	2.0%	1.0%	1.0%	1.0%
+neutral	99.0%	98.0%	99.0%	98.0%	82.8%
+above 0.8℃	0%	0%	0%	1.0%	16.2%
      "
 
      # Niño4 probabilities
      nino4_text <- "
-Month Oct 2024 Nov 2024 Dec 2024 Jan 2025 Feb 2025
-Nino4 0.1 0.1 0.1 0.2 0.3
+Month	Oct 2024	Nov 2024	Dec 2024	Jan 2025	Feb 2025
+Niño4	0.1℃	0.1℃	0.1℃	0.2℃	0.3℃
+below −0.8℃	0%	0%	0%	0%	0%
+neutral	100%	100%	100%	97.0%	97.0%
+above 0.8℃	0%	0%	0%	3.0%	3.0%
      "
 
      # Helper function to process each ENSO text chunk
@@ -88,4 +97,5 @@ Nino4 0.1 0.1 0.1 0.2 0.3
      combined_df$year <- as.integer(combined_df$year)
 
      return(combined_df)
+
 }

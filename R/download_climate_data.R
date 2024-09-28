@@ -83,8 +83,7 @@ download_climate_data <- function(PATHS,
           "shortwave_radiation_sum", "relative_humidity_2m_mean",
           "relative_humidity_2m_max", "relative_humidity_2m_min",
           "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
-          "precipitation_sum", "rain_sum",
-          "pressure_msl_mean", "soil_moisture_0_to_10cm_mean",
+          "precipitation_sum", "pressure_msl_mean", "soil_moisture_0_to_10cm_mean",
           "et0_fao_evapotranspiration_sum"
      )
 

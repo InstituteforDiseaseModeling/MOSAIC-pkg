@@ -64,6 +64,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_symptomatic_prop.html</loc>
   </url>
   <url>
@@ -124,6 +127,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_ggplot_legend.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_greek_unicode.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_immune_decay_data.html</loc>
   </url>
   <url>
@@ -172,6 +178,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/load_or_install_packages.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.html</loc>
   </url>
   <url>
@@ -184,6 +193,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_climate_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_generation_time.html</loc>
   </url>
   <url>
@@ -191,6 +203,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasnoal_clustering.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.html</loc>
@@ -202,6 +217,12 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_shedding_rate.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suitability_and_cases.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suitability_by_country.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suspected_cases.html</loc>
   </url>
   <url>
@@ -209,6 +230,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_OAG_data.html</loc>
@@ -227,6 +251,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_demographics_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.html</loc>

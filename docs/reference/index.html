@@ -102,7 +102,7 @@
         <dd>Download and Process Historical ENSO Data (Niño3, Niño3.4, Niño4)</dd>
       </dl><dl><dt>
           
-          <code><a href="compile_ENSO_data.html">compile_ENSO_data()</a></code> 
+          <code><a href="process_ENSO_data.html">process_ENSO_data()</a></code> 
         </dt>
         <dd>Compile ENSO and DMI Data (Historical and Forecast)</dd>
       </dl><dl><dt>
@@ -150,7 +150,12 @@
           
           <code><a href="process_WHO_weekly_data.html">process_WHO_weekly_data()</a></code> 
         </dt>
-        <dd>Process Weekly Cholera Data: Convert Country Names to ISO3 and Filter by WHO AFRO Region</dd>
+        <dd>Process Weekly Cholera Data: Convert Country Names to ISO3 and Filter by WHO AFRO Region with Cutoff for Binary Cases</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_suitability_data.html">process_suitability_data()</a></code> 
+        </dt>
+        <dd>Process Environmental Suitability Data for Cholera Transmission</dd>
       </dl><dl><dt>
           
           <code><a href="process_demographics_data.html">process_demographics_data()</a></code> 
@@ -247,6 +252,11 @@
           <code><a href="est_vaccine_effectiveness.html">est_vaccine_effectiveness()</a></code> 
         </dt>
         <dd>Estimate Vaccine Effectiveness Decay Model</dd>
+      </dl><dl><dt>
+          
+          <code><a href="est_suitability.html">est_suitability()</a></code> 
+        </dt>
+        <dd>Estimate Environmental Suitability (psi) for Cholera Transmission</dd>
       </dl></div><div class="section level2">
       <h2 id="shapefiles-and-spatial-data-functions">Shapefiles and Spatial Data Functions<a class="anchor" aria-label="anchor" href="#shapefiles-and-spatial-data-functions"></a></h2>
       
@@ -387,6 +397,11 @@
         <dd>Extract the Legend from a ggplot Object</dd>
       </dl><dl><dt>
           
+          <code><a href="make_lagged_data.html">make_lagged_data()</a></code> 
+        </dt>
+        <dd>Create Lagged Versions of Data</dd>
+      </dl><dl><dt>
+          
           <code><a href="make_param_df.html">make_param_df()</a></code> 
         </dt>
         <dd>Get Template for Parameter Values</dd>
@@ -400,6 +415,11 @@
           <code><a href="set_openmeteo_api_key.html">set_openmeteo_api_key()</a></code> 
         </dt>
         <dd>Set OpenMeteo API Key</dd>
+      </dl><dl><dt>
+          
+          <code><a href="get_greek_unicode.html">get_greek_unicode()</a></code> 
+        </dt>
+        <dd>Get Unicode Hex Key for a Greek Letter</dd>
       </dl></div><div class="section level2">
       <h2 id="shiny-apps">Shiny Apps<a class="anchor" aria-label="anchor" href="#shiny-apps"></a></h2>
       
@@ -444,6 +464,11 @@
         <dd>Plot Africa Map with Cholera Outbreak Countries</dd>
       </dl><dl><dt>
           
+          <code><a href="plot_climate_data.html">plot_climate_data()</a></code> 
+        </dt>
+        <dd>Plot Weekly Climate Data for a Given Country and Save to File</dd>
+      </dl><dl><dt>
+          
           <code><a href="plot_generation_time.html">plot_generation_time()</a></code> 
         </dt>
         <dd>Plot Generation Time as Gamma Distribution for Days and Weeks</dd>
@@ -454,7 +479,7 @@
         <dd>Plot Mobility Data, Mobility Network, and Results</dd>
       </dl><dl><dt>
           
-          <code><a href="plot_seasnoal_clustering.html">plot_seasnoal_clustering()</a></code> 
+          <code><a href="plot_seasonal_clustering.html">plot_seasonal_clustering()</a></code> 
         </dt>
         <dd>Plot Clustering of Countries Based on Seasonal Dynamics</dd>
       </dl><dl><dt>
@@ -472,6 +497,16 @@
           <code><a href="plot_shedding_rate.html">plot_shedding_rate()</a></code> 
         </dt>
         <dd>Plot Shedding Rate as a Function of Environmental Suitability</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_suitability_and_cases.html">plot_suitability_and_cases()</a></code> 
+        </dt>
+        <dd>Plot Predicted Suitability and Reported Cholera Cases for a Specific Country</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_suitability_by_country.html">plot_suitability_by_country()</a></code> 
+        </dt>
+        <dd>Plot Predicted Suitability for All Countries</dd>
       </dl><dl><dt>
           
           <code><a href="plot_suspected_cases.html">plot_suspected_cases()</a></code> 
