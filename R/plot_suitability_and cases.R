@@ -16,14 +16,15 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      requireNamespace('patchwork')
      requireNamespace('glue')
 
+     # Load prediction data
+     d_all <- read.csv(file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv"), stringsAsFactors = FALSE)
+
+
      # Define the professional color palette
      color_cases <- "#152F45"  # Navy Blue for bars (cases)
      color_shaded <- "#B0E0E6"  # Light Blue for shaded regions
      color_pred <- "#ff7f0e"    # Orange for predicted values
      color_actual <- "black"    # Black for actual predictions
-
-     # Load prediction data
-     d_all <- read.csv(file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv"), stringsAsFactors = FALSE)
 
      # Convert date columns to Date format
      d_all$date_start <- as.Date(d_all$date_start)
@@ -86,7 +87,7 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
           ggplot2::annotate("text", x = as.Date(date_present) - 7, y = Inf, label = as.character(date_present),
                             angle = 90, hjust = 1, vjust = -0.5, size = 3, color = "black") +
           ggplot2::labs(x = NULL, y = 'Predicted Suitability') +
-          ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0.0025, 0.0025)) +
+          ggplot2::scale_y_continuous(limits = c(-0.001, 1), expand = c(0.0025, 0.0025)) +
           ggplot2::scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", expand = c(0, 0),
                                 limits = c(date_min, date_max)) +
           ggplot2::theme_minimal() +

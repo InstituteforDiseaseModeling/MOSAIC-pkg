@@ -33,6 +33,7 @@ get_ENSO_historical <- function() {
 
      # Helper function to download and process each dataset
      process_enso_historical <- function(url, variable_name) {
+
           # Read the raw data, skipping the header lines and excluding missing values (-99.99)
           raw_data <- utils::read.table(url, skip = 1, fill = TRUE, na.strings = "-99.99", header = FALSE)
 
@@ -60,6 +61,7 @@ get_ENSO_historical <- function() {
           enso_long <- dplyr::arrange(enso_long, year, month)
 
           return(enso_long)
+
      }
 
      # Process and combine all datasets (ENSO3, ENSO34, ENSO4)

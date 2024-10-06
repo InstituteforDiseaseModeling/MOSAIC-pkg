@@ -103,7 +103,7 @@ process_suitability_data <- function(PATHS) {
      # Remove unnecessary objects from memory
      rm(cases_data, combined_climate_data, combined_climate_data_wide, enso_data, enso_data_wide)
 
-     if (53 %in% d_all$week) stop("week index is out of bounds")
+     if (53 %in% d$week) stop("week index is out of bounds")
 
      # Save the merged dataset to a CSV file
      path <- file.path(PATHS$DATA_WHO_WEEKLY, 'cholera_country_weekly_suitability_data.csv')

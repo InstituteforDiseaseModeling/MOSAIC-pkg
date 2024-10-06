@@ -54,7 +54,7 @@
 #' }
 #'
 #' @note
-#' The LSTM model uses lagged climate variables to predict cholera suitability. The model's predictions are saved as
+#' The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
 #' a CSV file and a plot showing the model fit (accuracy and loss) is generated.
 #'
 #' @seealso
@@ -77,6 +77,8 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
      elevation_data <- read.csv(path, stringsAsFactors = FALSE)
      d_all <- merge(d_all, elevation_data[c("iso_code", "elevation")], by="iso_code")
 
+     if (53 %in% d_all$week) stop("week index is out of bounds")
+
      message("Adding covariates...")
      covariates <- c(
           "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
@@ -86,7 +88,8 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
           "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
           "precipitation_sum", "snowfall_sum", "pressure_msl_mean",
           "soil_moisture_0_to_10cm_mean", "et0_fao_evapotranspiration_sum",
-          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation"
+          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation"#,
+          #"year", "month", "week"
      )
 
      X_all <- d_all[, colnames(d_all) %in% covariates]
@@ -106,8 +109,8 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
      # Step 3: Standardize the features (covariates)
      if (include_lagged_covariates) {
 
-          X_all_lagged <- MOSAIC::make_lagged_data(X_all, lags=1:3)
-          X_lagged <- MOSAIC::make_lagged_data(X, lags=1:3)
+          X_all_lagged <- MOSAIC::make_lagged_data(X_all, lags=1:7)
+          X_lagged <- MOSAIC::make_lagged_data(X, lags=1:7)
 
           X_all_scaled <- scale(X_all_lagged)
           X_scaled <- scale(X_lagged)
@@ -146,33 +149,123 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
      cat('Number of samples in test set:', dim(X_test)[1], '\n')
      cat('Number of positive samples in test set:', sum(y_test == 1), '\n')
 
+
+
+     message("Compiling LSTM model...")
+     # Define an exponential decay schedule for learning rate
+     lr_schedule <- tf$keras$optimizers$schedules$ExponentialDecay(
+          initial_learning_rate = 0.001,
+          decay_steps = 10000,
+          decay_rate = 0.9
+     )
+
      # Step 6: Build and Compile the LSTM model
      model <- keras_model_sequential() %>%
-          layer_lstm(units = 200, input_shape = c(timesteps, n_features), return_sequences = FALSE,
+          layer_lstm(units = 500, input_shape = c(timesteps, n_features), return_sequences = TRUE,
                      kernel_regularizer = regularizer_l2(0.001)) %>%
-          layer_dropout(rate = 0.2) %>%
+          layer_dropout(rate = 0.5) %>%
+          layer_lstm(units = 250, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001)) %>%
+          layer_dropout(rate = 0.5) %>%
+          layer_lstm(units = 200, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001)) %>%
+          layer_dropout(rate = 0.5) %>%
           layer_dense(units = 1, activation = 'sigmoid')
 
+     # Compile the model with the learning rate schedule
      model %>% compile(
-          optimizer = optimizer_adam(learning_rate = 0.001),
+          optimizer = optimizer_adam(learning_rate = lr_schedule),  # Using the exponential decay schedule
           loss = 'binary_crossentropy',
           metrics = 'accuracy'
      )
 
+     print(model)
+
+     message("Training LSTM model...")
      # Step 7: Train the model
      history <- model %>% fit(
           X_train,
           y_train_array,
-          epochs = 100,
-          batch_size = 512,
-          validation_split = 0.2
+          epochs = 200,
+          batch_size = 1024,
+          validation_split = 0.2,
+          callbacks = list(callback_early_stopping(patience = 10))  # Early stopping for stability
      )
 
      # Step 8: Evaluate the model
+     message("Calculating overall model fit...")
      score <- model %>% evaluate(X_test, y_test_array)
      cat('Test loss:', score$loss, '\n')
      cat('Test accuracy:', score$acc, '\n')
 
+
+
+
+     df <- data.frame(
+          epoch = 1:length(history$metrics$loss),
+          loss = history$metrics$loss,
+          val_loss = history$metrics$val_loss,
+          accuracy = history$metrics$accuracy,
+          val_accuracy = history$metrics$val_accuracy
+     )
+
+     # Step 8: Evaluate the model and get final test loss and accuracy
+     message("Calculating overall model fit...")
+     score <- model %>% evaluate(X_test, y_test_array)
+     final_loss <- score$loss
+     final_accuracy <- score$acc
+
+     cat('Test loss:', final_loss, '\n')
+     cat('Test accuracy:', final_accuracy, '\n')
+
+
+
+     df <- data.frame(
+          epoch = 1:length(history$metrics$loss),
+          loss = history$metrics$loss,
+          val_loss = history$metrics$val_loss,
+          accuracy = history$metrics$accuracy,
+          val_accuracy = history$metrics$val_accuracy
+     )
+
+     loss_plot <-
+          ggplot(df, aes(x = epoch)) +
+          geom_line(aes(y = loss, color = "Training Loss")) +
+          geom_line(aes(y = val_loss, color = "Validation Loss")) +
+          labs(x = "Epoch", y = "Loss", title = "Training and Validation Loss") +
+          scale_color_manual(name = "",
+                             values = c("Training Loss" = "blue3",
+                                        "Validation Loss" = "red3")) +
+          theme_bw() +  # White background
+          theme(legend.position = "bottom") +
+          annotate("text", x = max(df$epoch), y = max(df$loss),
+                   label = paste("Final Test Loss:", round(final_loss, 2)),
+                   vjust=5, hjust=1, color = "blue3")
+
+     accuracy_plot <-
+          ggplot(df, aes(x = epoch)) +
+          geom_line(aes(y = accuracy, color = "Training Accuracy")) +
+          geom_line(aes(y = val_accuracy, color = "Validation Accuracy")) +
+          labs(x = "Epoch", y = "Accuracy", title = "Training and Validation Accuracy") +
+          scale_color_manual(name = "",
+                             values = c("Training Accuracy" = "green4",
+                                        "Validation Accuracy" = "darkorange")) +
+          theme_bw() +  # White background
+          theme(legend.position = "bottom") +
+          annotate("text", x = max(df$epoch), y = min(df$accuracy),
+                   label = paste("Final Test Accuracy:", round(final_accuracy, 2)),
+                   vjust=-5,     hjust=1, color = "green4")
+
+     combined_plot <- plot_grid(accuracy_plot, loss_plot, labels = "AUTO", ncol = 2, align = "v")
+
+     print(combined_plot)
+
+     plot_file <- file.path(PATHS$DOCS_FIGURES, "suitability_LSTM_fit.png")
+     ggplot2::ggsave(filename = plot_file, plot = combined_plot, width = 8, height = 4, units = "in", dpi = 300)
+     message(glue::glue("Model fit plot saved to: {plot_file}"))
+
+
+
+
+     message("Predicting response values...")
      # Step 9: Make predictions on all data
      d$pred <- model %>% predict(X_reshaped)
      d_all$pred <- model %>% predict(X_all_reshaped)
@@ -196,17 +289,13 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
           # Remove rows where pred is NA before applying LOESS to avoid errors
           filter(!is.na(pred)) %>%
           mutate(
-               # Use LOESS smoothing after ensuring that all rows are present
-               pred_smooth = stats::predict(loess(pred ~ as.numeric(date_start), span = 0.01))
+               pred_smooth = inv_logit(stats::predict(loess(logit(pred) ~ as.numeric(date_start), span = 0.01)))
           ) %>%
           ungroup()
 
 
      if (53 %in% d_all$week) stop("week index is out of bounds")
 
-     #tmp <- d_all[d_all$iso_code == "MOZ",]
-     #plot(tmp$date_start, tmp$pred, type='l')
-     #lines(tmp$date_start, tmp$pred_smooth, col='red')
 
      # Save predictions to CSV
      path <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability.csv")

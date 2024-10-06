@@ -43,7 +43,7 @@ The function performs the following steps:
 }
 }
 \note{
-The LSTM model uses lagged climate variables to predict cholera suitability. The model's predictions are saved as
+The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
 a CSV file and a plot showing the model fit (accuracy and loss) is generated.
 }
 \examples{

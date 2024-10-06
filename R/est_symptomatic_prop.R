@@ -27,19 +27,107 @@ est_symptomatic_prop <- function(PATHS) {
      # Read the symptomatic proportion data
      df <- utils::read.csv(file.path(PATHS$DATA_SYMPTOMATIC, "summary_symptomatic_cases.csv"))
 
-     # Simulate sigma (proportion of infections that are symptomatic) using a Beta distribution
-     quantiles <- c(0.0001, 0.0275, 0.25, 0.5, 0.75, 0.975, 0.9999)
-     probs <- c(min(df$ci_lo, na.rm = TRUE),
-                quantile(df$ci_lo, probs = 0.0275, na.rm = TRUE),
-                quantile(df$ci_lo, probs = 0.25, na.rm = TRUE),
-                mean(df$mean, na.rm = TRUE),
-                quantile(df$ci_hi, probs = 0.75, na.rm = TRUE),
-                quantile(df$ci_hi, probs = 0.975, na.rm = TRUE),
-                max(df$ci_hi, na.rm = TRUE))
 
-     prm <- propvacc::get_beta_params(quantiles = quantiles, probs = probs)
-     samps <- stats::rbeta(1000, shape1 = prm$shape1, shape2 = prm$shape2)
-     ci <- stats::quantile(samps, probs = c(0.025, 0.5, 0.975))
+     # Make a Beta distribution to simulate sigma (proportion of infections that are symptomatic)
+
+     quantiles <- c(0.0001, 0.0275, 0.25, 0.5, 0.75, 0.975, 0.9999)
+
+     probs <- c(min(df$ci_lo, na.rm=T),
+                quantile(df$ci_lo, probs=0.0275, na.rm=T),
+                quantile(df$ci_lo, probs=0.25, na.rm=T),
+                mean(df$mean, na.rm=T),
+                quantile(df$ci_hi, probs=0.75, na.rm=T),
+                quantile(df$ci_hi, probs=0.975, na.rm=T),
+                max(df$ci_hi, na.rm=T))
+
+     prm <- get_beta_params(quantiles=quantiles, probs=probs)
+
+     samps <- rbeta(1000, shape1 = prm$shape1, shape2 = prm$shape2)
+     ci <- quantile(samps, probs = c(0.025, 0.5, 0.975))
+     df_samples <- data.frame(x = samps)
+
+     x_vals <- seq(0, 1, length.out = 1000)
+     y_vals <- dbeta(x_vals, prm$shape1, prm$shape2)
+     df_beta <- data.frame(x = x_vals, y = y_vals)
+
+     p1 <-
+          ggplot(df_samples, aes(x = x)) +
+          geom_histogram(aes(y = ..density..), bins = 35, fill = "#1B4F72", color='white', alpha = 0.5) +
+          #stat_function(fun = dbeta, args = list(shape1 = prm$shape1, shape2 = prm$shape2), color = "black", size = 1) +
+          geom_line(data = df_beta, aes(x = x, y = y), color = "black", size = 1) +  # Plot Beta distribution
+          geom_vline(xintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", size = 0.25) +
+          geom_vline(xintercept = ci[2], linetype = "dashed", color = "grey20", size = 0.25) +
+          labs(title = "A", x = "", y = "") +
+          scale_x_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
+          scale_y_continuous(expand=c(0.005, 0.005)) +
+          theme_minimal(base_size = 14) +
+          theme(
+               legend.position = "none",
+               panel.grid.major.y = element_blank(),
+               panel.grid.major.x = element_line(color='grey80', size=0.25),
+               panel.grid.minor = element_blank(),
+               axis.title.x = element_text(margin = margin(t = 30), hjust=0.3),
+               plot.margin = unit(c(0.25, 0.25, 0, 0), "inches")
+          )
+
+
+
+     # How does this compare with previous studies?
+
+
+
+     #pal <- c("#1B4F72", "#239B56", "#884EA0", "#D35400", "#7D3C98", "#566573", "#CD6155", "#5D6D7E", "#AF601A")
+     pal <- c("#274001", "#828a00", "#D35400", "#7D3C98", "#1B4F72", "#a62f03", "#400d01", "#4d8584")
+
+     p2 <-
+          ggplot(df, aes(x = source, y = mean, color = source)) +
+          geom_hline(yintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", size = 0.25) +
+          geom_hline(yintercept = ci[2], linetype = "dashed", color = "grey20", size = 0.25) +
+          geom_rect(aes(xmin = as.numeric(factor(source)) - 0.2,
+                        xmax = as.numeric(factor(source)) + 0.2,
+                        ymin = ci_lo, ymax = ci_hi,
+                        fill = source),
+                    alpha = 0.3, color=NA) +
+          geom_rect(aes(xmin = as.numeric(factor(source)) - 0.2,
+                        xmax = as.numeric(factor(source)) + 0.2,
+                        ymin = mean-0.0025, ymax = mean+0.0025, fill = source)) +
+          geom_text(aes(label = note2), vjust = -1, hjust = 1.25, size=3) +
+          annotate("text", x = 1, y = 1.02, hjust = 0, vjust = 0.5,  label = "Pakistan", color = pal[1], alpha=0.7, size = 3.5) +
+          annotate("text", x = 2, y = 1.02, hjust = 0, vjust = 0.5, label = "Haiti", color = pal[2], alpha=0.7, size = 3.5) +
+          annotate("text", x = 3, y = 1.02, hjust = 0, vjust = 0.5, label = "Bangladesh", color = pal[3], alpha=0.7, size = 3.5) +
+          annotate("text", x = 4, y = 1.02, hjust = 0, vjust = 0.5, label = "Endemic regions", color = pal[4], alpha=0.7, size = 3.5) +
+          annotate("text", x = 5, y = 1.02, hjust = 0, vjust = 0.5, label = "Bangladesh", color = pal[5], alpha=0.7, size = 3.5) +
+          annotate("text", x = 6, y = 1.02, hjust = 0, vjust = 0.5, label = "Haiti", color = pal[6], alpha=0.7, size = 3.5) +
+          labs(title = "B", x = "", y = "Proportion of infections that are symptomatic") +
+          scale_fill_manual(values = pal) +
+          scale_color_manual(values = pal) +
+          scale_y_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
+          theme_minimal(base_size = 14) +
+          theme(
+               legend.position = "none",
+               panel.grid.major.y = element_blank(),
+               panel.grid.major.x = element_line(color='grey80', size=0.25),
+               panel.grid.minor = element_blank(),
+               axis.title.x = element_text(margin = margin(t = 30), hjust=0.3),
+               axis.title.y = element_text(margin = margin(r = 15)),
+               plot.margin = unit(c(0, 0.25, 0.25, 0), "inches")
+          ) +
+          coord_flip()
+
+
+     combo <- plot_grid(p1, p2, ncol = 1, rel_heights = c(1, 1.5), align='vh')
+     print(combo)
+
+
+     figure_path <- file.path(PATHS$DOCS_FIGURES, "proportion_symptomatic.png")
+     grDevices::png(filename = figure_path, width = 2400, height = 2400, units = "px", res = 300)
+     print(combo)
+     grDevices::dev.off()
+     message(paste("Symptomatic proportion plot saved to:", figure_path))
+
+
+
+     # Save parameters
 
      param_df <- MOSAIC::make_param_df(
           variable_name = 'sigma',
@@ -53,50 +141,6 @@ est_symptomatic_prop <- function(PATHS) {
      write.csv(param_df, path, row.names = FALSE)
      message(paste("Parameter data frame for symptomatic proportion (theta) saved to:", path))
 
-     # Create Beta distribution plot
-     df_samples <- data.frame(x = samps)
-     x_vals <- seq(0, 1, length.out = 1000)
-     y_vals <- stats::dbeta(x_vals, prm$shape1, prm$shape2)
-     df_beta <- data.frame(x = x_vals, y = y_vals)
-
-     p1 <- ggplot2::ggplot(df_samples, ggplot2::aes(x = x)) +
-          ggplot2::geom_histogram(ggplot2::aes(y = ..density..), bins = 35, fill = "#1B4F72", color = 'white', alpha = 0.5) +
-          ggplot2::geom_line(data = df_beta, ggplot2::aes(x = x, y = y), color = "black", size = 1) +
-          ggplot2::geom_vline(xintercept = ci[c(1, 3)], linetype = "dashed", color = "grey20", size = 0.25) +
-          ggplot2::geom_vline(xintercept = ci[2], linetype = "dashed", color = "grey20", size = 0.25) +
-          ggplot2::labs(title = "A", x = "", y = "") +
-          ggplot2::scale_x_continuous(limits = c(-0.02, 1.25), breaks = seq(0, 1, 0.25), expand = c(0, 0)) +
-          ggplot2::scale_y_continuous(expand = c(0.005, 0.005)) +
-          ggplot2::theme_minimal(base_size = 14)
-
-     # Comparison with previous studies
-     pal <- c("#274001", "#828a00", "#D35400", "#7D3C98", "#1B4F72", "#a62f03", "#400d01", "#4d8584")
-
-     p2 <- ggplot2::ggplot(df, ggplot2::aes(x = source, y = mean, color = source)) +
-          ggplot2::geom_hline(yintercept = ci[c(1, 3)], linetype = "dashed", color = "grey20", size = 0.25) +
-          ggplot2::geom_hline(yintercept = ci[2], linetype = "dashed", color = "grey20", size = 0.25) +
-          ggplot2::geom_rect(ggplot2::aes(xmin = as.numeric(factor(source)) - 0.2,
-                                          xmax = as.numeric(factor(source)) + 0.2,
-                                          ymin = ci_lo, ymax = ci_hi, fill = source), alpha = 0.3, color = NA) +
-          ggplot2::geom_rect(ggplot2::aes(xmin = as.numeric(factor(source)) - 0.2,
-                                          xmax = as.numeric(factor(source)) + 0.2,
-                                          ymin = mean - 0.0025, ymax = mean + 0.0025, fill = source)) +
-          ggplot2::labs(title = "B", x = "", y = "Proportion of infections that are symptomatic") +
-          ggplot2::scale_fill_manual(values = pal) +
-          ggplot2::scale_color_manual(values = pal) +
-          ggplot2::theme_minimal(base_size = 14) +
-          ggplot2::coord_flip()
-
-     # Combine and save plot
-     combo <- cowplot::plot_grid(p1, p2, ncol = 1, rel_heights = c(1, 1.5), align = 'vh')
-
-     figure_path <- file.path(PATHS$DOCS_FIGURES, "proportion_symptomatic.png")
-
-     grDevices::png(filename = figure_path, width = 2400, height = 2400, units = "px", res = 300)
-     print(combo)
-     grDevices::dev.off()
-
-     message(paste("Symptomatic proportion plot saved to:", figure_path))
 
 
 }

@@ -115,6 +115,8 @@ reference:
       - set_root_directory
       - set_openmeteo_api_key
       - get_greek_unicode
+      - logit
+      - inv_logit
 
   - title: "Shiny Apps"
     contents:

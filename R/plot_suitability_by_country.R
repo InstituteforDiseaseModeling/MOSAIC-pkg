@@ -14,13 +14,14 @@ plot_suitability_by_country <- function(PATHS) {
      requireNamespace('ggplot2')
      requireNamespace('glue')
 
+     # Load prediction data (generated from est_suitability function)
+     d_all <- read.csv(file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv"), stringsAsFactors = FALSE)
+
+
      # Define the professional color palette
      color_shaded <- "#B0E0E6"  # Light Blue for shaded regions
      color_pred <- "#ff7f0e"    # Orange for predicted values
      color_actual <- "black"    # Black for actual predictions
-
-     # Load prediction data (generated from est_suitability function)
-     d_all <- read.csv(file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv"), stringsAsFactors = FALSE)
 
      # Convert date columns to Date format
      d_all$date_start <- as.Date(d_all$date_start)
@@ -47,7 +48,7 @@ plot_suitability_by_country <- function(PATHS) {
                     aes(x = date_start, y = pred_smooth), linewidth = 1, color = color_actual) +
           facet_wrap(~ country, ncol = 3) +  # Facet by country
           labs(x = NULL, y = 'Predicted Suitability') +
-          scale_y_continuous(limits = c(-0.05, 1), breaks = c(0, 0.5, 1), expand = c(0.1, 0.1)) +
+          scale_y_continuous(limits = c(-0.001, 1), breaks = c(0, 0.5, 1), expand = c(0.1, 0.1)) +
           scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", expand = c(0, 0),
                        limits = c(date_min, date_max)) +
           theme_minimal() +

@@ -65,8 +65,10 @@ process_WHO_weekly_data <- function(PATHS, cutoff) {
      d$date_stop <- ISOweek::ISOweek2date(paste0(d$iso_week, "-7"))
      d$iso_week <- NULL
 
+     d$month <- lubridate::month(as.Date(d$date_start))
+
      # Reorganize the columns for clarity
-     d <- d[, c("country", "iso_code", "year", "week", "date_start", "date_stop", "cases", "deaths")]
+     d <- d[, c("country", "iso_code", "year", "month", "week", "date_start", "date_stop", "cases", "deaths")]
 
 
 
@@ -132,7 +134,7 @@ process_WHO_weekly_data <- function(PATHS, cutoff) {
 
      message("Latest observation: ", max(d$date_stop, na.rm=TRUE))
 
-     if (53 %in% d_all$week) stop("week index is out of bounds")
+     if (53 %in% d$week) stop("week index is out of bounds")
 
      # Save the processed data to the processed data directory
      processed_data_path <- file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv")

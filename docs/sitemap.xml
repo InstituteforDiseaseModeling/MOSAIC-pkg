@@ -148,6 +148,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/index.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/inv_logit.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/iso_codes_africa.html</loc>
   </url>
   <url>
@@ -176,6 +179,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/load_or_install_packages.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/logit.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.html</loc>

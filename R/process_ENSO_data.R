@@ -37,7 +37,6 @@
 #' }
 #'
 #' @export
-
 process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method = "linear") {
 
      if (is.null(year_start)) year_start <- 1870
@@ -95,13 +94,16 @@ process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method =
           merged_df <- merge(all_dates_df, df, by = "date", all.x = TRUE)
           merged_df$variable <- df$variable[1]  # Preserve variable name
 
-          # Fill in missing year, month, week, and doy
+          # Use ISOweek package to get ISO week numbers and years
           merged_df <- merged_df %>%
                dplyr::mutate(
-                    year = lubridate::year(date),
+                    ISOweek = ISOweek::ISOweek(date),
+                    ISOyear = as.integer(substr(ISOweek, 1, 4)),
+                    ISOweeknum = as.integer(substr(ISOweek, 7, 8)),
+                    week = ISOweeknum,
+                    year = ISOyear,
                     month = lubridate::month(date),
                     month_name = base::month.name[lubridate::month(date)],
-                    week = lubridate::week(date),
                     doy = lubridate::yday(date)
                )
 
@@ -128,21 +130,26 @@ process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method =
 
      } else if (frequency == "weekly") {
 
-          # Aggregate data by week and calculate the mean for each variable
+          # Aggregate data by ISOyear and ISOweeknum
           weekly_data <- compiled_df %>%
-               dplyr::group_by(variable, year, week) %>%
+               dplyr::group_by(variable, ISOyear, ISOweeknum) %>%
                dplyr::summarise(value = mean(value, na.rm = TRUE)) %>%
                dplyr::ungroup()
 
-          # Add columns for date_start and date_stop using ISOweek
+          # Add date_start and date_stop using ISOweek strings
           weekly_data <- weekly_data %>%
                dplyr::mutate(
-                    date_start = ISOweek::ISOweek2date(paste0(year, "-W", sprintf("%02d", week), "-1")),
-                    date_stop = ISOweek::ISOweek2date(paste0(year, "-W", sprintf("%02d", week), "-7"))
-               )
+                    ISOweek_str = paste0(ISOyear, "-W", sprintf("%02d", ISOweeknum)),
+                    date_start = ISOweek::ISOweek2date(paste0(ISOweek_str, "-1")),
+                    date_stop = ISOweek::ISOweek2date(paste0(ISOweek_str, "-7")),
+                    year = ISOyear,
+                    week = ISOweeknum
+               ) %>%
+               dplyr::select(variable, year, week, value, date_start, date_stop)
 
           # Reorder the data and return it
-          return(weekly_data[base::order(weekly_data$date_start), ])
+          weekly_data <- weekly_data[order(weekly_data$date_start), ]
+          return(weekly_data)
 
      } else if (frequency == "monthly") {
 
