@@ -4,7 +4,7 @@ pkgdown_sha: ~
 articles:
   Project-setup: Project-setup.html
   Running-MOSAIC: Running-MOSAIC.html
-last_built: 2024-10-04T03:11Z
+last_built: 2024-10-06T01:05Z
 urls:
   reference: institutefordiseasemodeling.github.io/MOSAIC-pkg/reference
   article: institutefordiseasemodeling.github.io/MOSAIC-pkg/articles
