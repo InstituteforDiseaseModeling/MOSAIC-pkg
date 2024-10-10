@@ -103,6 +103,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_WHO_annual_data.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_WHO_vaccination_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_centroid.html</loc>
   </url>
   <url>
@@ -196,6 +199,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_ENSO_data.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_WHO_vaccination_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.html</loc>
   </url>
   <url>
@@ -247,6 +253,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_annual_data.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_vaccination_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.html</loc>
   </url>
   <url>
@@ -260,6 +269,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_vaccination_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.html</loc>

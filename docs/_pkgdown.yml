@@ -58,6 +58,8 @@ reference:
     contents:
       - process_WHO_annual_data
       - process_WHO_weekly_data
+      - get_WHO_vaccination_data
+      - process_WHO_vaccination_data
       - process_suitability_data
       - process_demographics_data
       - process_country_similarity_data
