@@ -166,7 +166,7 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
           layer_dropout(rate = 0.5) %>%
           layer_lstm(units = 250, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001)) %>%
           layer_dropout(rate = 0.5) %>%
-          layer_lstm(units = 200, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001)) %>%
+          layer_lstm(units = 100, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001)) %>%
           layer_dropout(rate = 0.5) %>%
           layer_dense(units = 1, activation = 'sigmoid')
 

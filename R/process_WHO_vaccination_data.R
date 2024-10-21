@@ -225,7 +225,7 @@ process_WHO_vaccination_data <- function(PATHS, max_rate_per_day) {
           parameter_distribution = 'point',
           parameter_name = 'mean',
           j = redistributed_data$iso_code,
-          t = redistributed_data$distribution_date,
+          t = redistributed_data$date,
           parameter_value = redistributed_data$doses_distributed
      )
 
