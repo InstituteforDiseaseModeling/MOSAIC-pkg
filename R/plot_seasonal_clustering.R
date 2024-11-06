@@ -10,7 +10,7 @@
 #' }
 #' @param use_cases A logical value. If `TRUE`, clustering is based on Fourier series fitted to cholera cases. If `FALSE`, clustering is based on precipitation.
 #' @param set_inferred_to_na A logical value. If `TRUE`, inferred countries are set to `NA` in the clustering. Default is `TRUE` when using precipitation, `FALSE` when using cases.
-#' @param clustering_method A character string specifying the clustering method. Options are `"kmeans"`, `"hierarchical"`, `"dbscan"`, or `"knn"`. Default is `"hierarchical"`.
+#' @param clustering_method A character string specifying the clustering method. Options are `"kmeans"`, `"ward.D2"`, `"dbscan"`, or `"knn"`. Default is `"ward.D2"` for hierarchical clustering.
 #' @param k An integer specifying the number of clusters for k-means and hierarchical clustering. Default is 4.
 #'
 #' @return The function generates and saves a PNG file showing the clustering of countries based on seasonal dynamics.
@@ -44,7 +44,7 @@ plot_seasonal_clustering <- function(PATHS,
           map_title <- "Clustering of countries based on seasonal transmission"
      } else {
           fitted_column <- "fitted_values_fourier_precip"
-          plot_title <- "Fourier series fitted to weekly precipitation (1994-2024)"
+          plot_title <- "Fourier series fitted to weekly precipitation (2014-2024)"
           map_title <- "Clustering of countries based on seasonal precipitation"
           set_inferred_to_na <- FALSE  # If using precipitation, inferred countries are not set to NA
      }
@@ -64,9 +64,9 @@ plot_seasonal_clustering <- function(PATHS,
           set.seed(123)
           clustering_result <- kmeans(precip_matrix, centers = k)
           precip_fitted_df$cluster <- clustering_result$cluster
-     } else if (clustering_method == "hierarchical") {
+     } else if (clustering_method == "ward.D2") {
           dist_matrix <- dist(precip_matrix)
-          hc <- hclust(dist_matrix, method = "ward.D2")
+          hc <- hclust(dist_matrix, method = "ward.D2") # hierarchical
           precip_fitted_df$cluster <- cutree(hc, k = k)
      } else if (clustering_method == "dbscan") {
           set.seed(123)

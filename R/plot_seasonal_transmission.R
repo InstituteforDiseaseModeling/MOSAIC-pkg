@@ -20,6 +20,14 @@ plot_seasonal_transmission <- function(PATHS) {
      # Load the combined precipitation data, fitted values, and clustering results from DOCS_TABLES
      combined_precip_data <- utils::read.csv(file.path(PATHS$DOCS_TABLES, "data_seasonal_precipitation.csv"))
      combined_fitted_values <- utils::read.csv(file.path(PATHS$DOCS_TABLES, "pred_seasonal_dynamics.csv"))
+     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv"), stringsAsFactors = FALSE)
+
+     combined_fitted_values$inferred_from_neighbor[combined_fitted_values$inferred_from_neighbor == "Democratic Republic of Congo"] <- "DRC"
+
+     iso_codes <- sort(unique(combined_fitted_values$iso_code))
+     iso_codes_with_data <- sort(unique(cholera_data$iso_code))
+     iso_codes_no_data <- setdiff(iso_codes, unique(cholera_data$iso_code))
+
 
      # Updated plot to include annotation for countries with inferred data and Z-score scaling for precipitation and cases
      p_facet <- ggplot(combined_precip_data, aes(x = factor(week))) +

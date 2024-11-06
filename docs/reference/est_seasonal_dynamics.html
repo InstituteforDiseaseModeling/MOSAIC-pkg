@@ -67,7 +67,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">est_seasonal_dynamics</span><span class="op">(</span><span class="va">PATHS</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">est_seasonal_dynamics</span><span class="op">(</span><span class="va">PATHS</span>, <span class="va">date_start</span>, <span class="va">date_stop</span>, <span class="va">clustering_method</span>, <span class="va">k</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -78,6 +78,22 @@
 <li><p><strong>DATA_WHO_WEEKLY</strong>: Path to the directory containing cholera data.</p></li>
 <li><p><strong>MODEL_INPUT</strong>: Path to the directory where model input files will be saved.</p></li>
 </ul></dd>
+
+
+<dt>date_start</dt>
+<dd><p>A date in YYYY-MM-DD format indicating the start date of the precipitation data (1970-01-01 is earliest)</p></dd>
+
+
+<dt>date_stop</dt>
+<dd><p>A date in YYYY-MM-DD format indicating the stop date of the precipitation date</p></dd>
+
+
+<dt>clustering_method</dt>
+<dd><p>The name of the clustering method to use when grouping countries by seasonality (i.e. "kmeans", "hierarchical", "ward.D2", "knn")</p></dd>
+
+
+<dt>k</dt>
+<dd><p>The number of clusters to group countries by seasonality</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -9,6 +9,10 @@
 #'   \item \strong{DATA_WHO_WEEKLY}: Path to the directory containing cholera data.
 #'   \item \strong{MODEL_INPUT}: Path to the directory where model input files will be saved.
 #' }
+#' @param date_start A date in YYYY-MM-DD format indicating the start date of the precipitation data (1970-01-01 is earliest)
+#' @param date_stop A date in YYYY-MM-DD format indicating the stop date of the precipitation date
+#' @param clustering_method The name of the clustering method to use when grouping countries by seasonality (i.e. "kmeans", "hierarchical", "ward.D2", "knn")
+#' @param k The number of clusters to group countries by seasonality
 #'
 #' @return The function saves the parameter estimates, fitted values, and processed data to a CSV file.
 #'
@@ -22,7 +26,11 @@
 #' @importFrom minpack.lm nlsLM
 #' @export
 
-est_seasonal_dynamics <- function(PATHS) {
+est_seasonal_dynamics <- function(PATHS,
+                                  date_start,
+                                  date_stop,
+                                  clustering_method,
+                                  k) {
 
      requireNamespace('dplyr')
      requireNamespace('minpack.lm')
@@ -63,7 +71,7 @@ est_seasonal_dynamics <- function(PATHS) {
                stop(glue::glue("Precipitation data not found for {country_iso_code}."))
           }
 
-          precip_data <- precip_data[precip_data$date >= '2004-09-01' & precip_data$date < '2024-09-01',]
+          precip_data <- precip_data[precip_data$date >= date_start & precip_data$date < date_stop,]
 
           # Aggregate weekly precipitation data
           precip_data <- precip_data %>%
@@ -73,10 +81,10 @@ est_seasonal_dynamics <- function(PATHS) {
 
           # Merge with cholera data by week and ISO code
           precip_data$iso_code <- country_iso_code
-          precip_data <- merge(precip_data, cholera_data, by = c("week", "iso_code"), all.x = TRUE)
+          precip_data <- merge(precip_data, cholera_data, by = c("year", "week", "iso_code"), all.x = TRUE)
 
           # Create a sequence of weeks for the fitted curve
-          week_seq <- seq(min(precip_data$week), max(precip_data$week), length.out = 100)
+          week_seq <- 1:52
 
           # Scale the precipitation and cholera data
           precip_data$precip_scaled <- scale(precip_data$weekly_precipitation_sum, center = TRUE, scale = TRUE)
@@ -215,8 +223,8 @@ est_seasonal_dynamics <- function(PATHS) {
      set.seed(123)
      precip_matrix <- precip_fitted_df %>% dplyr::select(-iso_code)
      dist_matrix <- dist(precip_matrix)  # Compute distance matrix
-     hc <- hclust(dist_matrix, method = "ward.D2")
-     precip_fitted_df$cluster <- cutree(hc, k = 4)  # Assign countries to 4 clusters
+     hc <- hclust(dist_matrix, method = clustering_method)
+     precip_fitted_df$cluster <- cutree(hc, k = k)  # Assign countries to 4 clusters
 
      # Step 2: Merge clustering results with spatial data
 
@@ -265,7 +273,7 @@ est_seasonal_dynamics <- function(PATHS) {
 
           if (nrow(neighbors_within_cluster) > 0) {
 
-               print(glue("Found neighbors within the same cluster for {country_iso_code_no_data}"))
+               print(glue("Found {nrow(neighbors_within_cluster)} neighbors within the same cluster for {country_iso_code_no_data}"))
 
                # Get the precipitation data for the country with no data
                precip_no_data <- all_precip_data[[country_iso_code_no_data]] %>%

@@ -88,7 +88,7 @@ plot_seasonal_transmission_example <- function(PATHS, country_iso_code, n_points
                 panel.grid.major.y = element_line(color = "grey90", linewidth = 0.25),
                 panel.grid.minor = element_blank(),
                 plot.margin = margin(3, 3, 3, 3)) +
-          guides(color = guide_legend(ncol = 2, byrow = TRUE))
+          guides(color = guide_legend(nrow = 2, byrow = T))
 
      # Remove the legend from p2 and extract it separately
      p2_no_legend <- p2 + theme(legend.position = "none")
