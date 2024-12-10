@@ -58,7 +58,8 @@ Imports:
   remotes,
   scales,
   shiny,
-  shinyWidgets
+  shinyWidgets,
+  yaml
 Depends: 
   R (>= 4.1.1),
   stats, 

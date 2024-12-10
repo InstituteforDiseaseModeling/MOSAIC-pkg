@@ -112,8 +112,7 @@ reference:
       - load_or_install_packages
       - get_paths
       - get_ggplot_legend
-      - make_lagged_data
-      - make_param_df
+      - starts_with("make_")
       - set_root_directory
       - set_openmeteo_api_key
       - get_greek_unicode

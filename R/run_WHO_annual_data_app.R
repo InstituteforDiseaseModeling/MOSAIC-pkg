@@ -117,7 +117,9 @@ run_WHO_annual_data_app <- function(PATHS) {
                                         ggplot2::geom_hline(yintercept = 0, color = "black", linewidth = 0.25) +
                                         ggplot2::theme_minimal(base_size = 13.5) +
                                         ggplot2::labs(x = "Year", y = "Case Fatality Rate (CFR)", title = country) +
-                                        ggplot2::scale_y_continuous(labels = scales::percent, limits = c(0, global_y_max), expand = c(0.05, 0)) +
+                                        ggplot2::scale_y_continuous(labels = scales::percent,
+                                                                    #limits = c(0, global_y_max),
+                                                                    expand = c(0.05, 0)) +
                                         ggplot2::scale_x_discrete(drop = FALSE) +
                                         ggplot2::theme(
                                              plot.title = ggplot2::element_text(size = 14, color = 'black', hjust = 0.5, face = "bold"),

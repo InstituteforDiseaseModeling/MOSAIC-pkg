@@ -1,0 +1,5 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"omega","Waning rate of vaccine derived immunity","point",NA,NA,NA,"mean",0.000568010078163538
+"phi","Initial vaccine effectiveness","point",NA,NA,NA,"mean",0.641193308748988
+"phi","Initial vaccine effectiveness","beta",NA,NA,NA,"shape1",4.57105628588219
+"phi","Initial vaccine effectiveness","beta",NA,NA,NA,"shape2",2.40976179405494
