@@ -1,104 +1,129 @@
 #' Create a YAML File for MOSAIC Model Parameters
 #'
 #' This function generates a YAML file for MOSAIC model simulation parameters or returns the parameters as a list if no file output is specified.
-#' It validates all input parameters to ensure they meet the required constraints for the MOSAIC simulation framework.
-#'
-#' This function is designed for use with the MOSAIC R package and ensures compatibility with downstream Python-based tools.
+#' It validates all input parameters to ensure they meet the required constraints for the MOSAIC simulation framework. The YAML file output is designed
+#' for use with the MOSAIC R package and ensures compatibility with downstream Python-based tools such as the Light-agent Spatial Model for ERadication (LASER) platform.
 #'
 #' @param output_file_path A character string representing the full file path of the output YAML file (e.g., 'path/to/parameters.yaml'). If `NULL`, no file is written.
+#'
+#' ## Initialization
 #' @param date_start Start date for the simulation period in "YYYY-MM-DD" format.
 #' @param date_stop End date for the simulation period in "YYYY-MM-DD" format.
 #' @param location_id A vector of integers giving the numerical index for metapopulations.
 #' @param location_name A character vector giving the names of each metapopulation location, matching the length of `location_id`.
+#' @param S_j_initial An integer vector of length `location_id` that gives the starting values for the number of susceptible individuals in each j location.
+#' @param I_j_initial An integer vector of length `location_id` that gives the starting values for the number of infected individuals in each j location.
+#' @param R_j_initial An integer vector of length `location_id` that gives the starting values for the number of recovered individuals in each j location.
+#'
+#' ## Demographics
 #' @param b_j Birth rate of population j. Must be numeric, non-negative, and the same length as `location_id`.
 #' @param d_j Mortality rate of population j. Must be numeric, non-negative, and the same length as `location_id`.
-#' @param N_j Population size of destination j. Must be an integer vector, positive, and the same length as `location_id`.
-#' @param phi Effectiveness of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
+#'
+#' ## Immune Dynamics
 #' @param nu_jt A matrix of vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
+#' @param phi Effectiveness of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
 #' @param omega Waning immunity rate of vaccinated individuals. Must be a numeric scalar greater than or equal to zero.
 #' @param epsilon Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
 #' @param gamma Recovery rate of infected individuals. Must be a numeric scalar greater than or equal to zero.
+#'
+#' ## Observation Processes
 #' @param mu Mortality rate due to V. cholerae infection. Must be a numeric scalar greater than or equal to zero.
-#' @param sigma Proportion of symptomatic V. cholerae infections. Must be a numeric scalar between 0 and 1.
 #' @param rho Proportion of suspected cholera cases that are true infections. Must be a numeric scalar between 0 and 1.
+#' @param sigma Proportion of symptomatic V. cholerae infections. Must be a numeric scalar between 0 and 1.
+#'
+#' ## Force of Infection (human-to-human)
+#' @param beta_j0_hum Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
+#' @param tau_i Departure probability for each origin location. Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
+#' @param pi_ij A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to `length(location_id)` x `length(location_id)` and values between 0 and 1.
+#' @param alpha Population mixing parameter. Must be a numeric scalar between 0 and 1.
+#'
+#' ## Force of Infection (environment-to-human)
+#' @param beta_j0_env Baseline environment-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
+#' @param theta_j Proportion of the population with adequate Water, Sanitation, and Hygiene (WASH). Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
+#' @param psi_jt A 2D matrix of environmental suitability values for V. cholerae. Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`, with values between 0 and 1.
 #' @param zeta Shedding rate of V. cholerae into the environment. Must be a numeric scalar greater than zero.
 #' @param kappa Concentration of V. cholerae required for 50% infection probability. Must be a numeric scalar greater than zero.
 #' @param delta_min Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than `delta_max`.
 #' @param delta_max Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and greater than `delta_min`.
-#' @param psi_jt A 2D matrix of environmental suitability values for V. cholerae. Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`, with values between 0 and 1.
-#' @param beta_j0_hum Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
-#' @param beta_j0_env Baseline environment-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
-#' @param alpha Population mixing parameter. Must be a numeric scalar between 0 and 1.
-#' @param tau_i Departure probability for each origin location. Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
-#' @param pi_ij A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to `length(location_id)` x `length(location_id)` and values between 0 and 1.
-#' @param theta_j Proportion of the population with adequate Water, Sanitation, and Hygiene (WASH). Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
 #'
 #' @return Returns the validated list of parameters. If `output_file_path` is provided, the parameters are also written to a YAML file.
 #'
 #' @examples
-#' # Generate parameters and write to file
-#'
-#'
 #' make_param_yaml(
 #'      output_file_path = "parameters.yaml",
 #'      date_start = "2024-12-01",
 #'      date_stop = "2024-12-31",
 #'      location_id = 1:2,
 #'      location_name = c("Location A", "Location B"),
+#'      S_j_initial = as.integer(c(999, 999)),
+#'      I_j_initial = as.integer(c(1, 1)),
+#'      R_j_initial = as.integer(c(0, 0)),
 #'      b_j = c(0.01, 0.02),
 #'      d_j = c(0.01, 0.02),
-#'      N_j = c(1000L, 2000L),
-#'      phi = 0.8,
 #'      nu_jt = matrix(data = 0, nrow = 2, ncol = 31),
+#'      phi = 0.8,
 #'      omega = 0.1,
 #'      epsilon = 0.05,
 #'      gamma = 0.2,
 #'      mu = 0.01,
-#'      sigma = 0.5,
 #'      rho = 0.9,
+#'      sigma = 0.5,
+#'      beta_j0_hum = c(0.05, 0.03),
+#'      tau_i = c(0.1, 0.2),
+#'      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
+#'      alpha = 0.95,
+#'      beta_j0_env = c(0.02, 0.04),
+#'      theta_j = c(0.6, 0.7),
+#'      psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
 #'      zeta = 0.5,
 #'      kappa = 10^5,
 #'      delta_min = 0.001,
-#'      delta_max = 0.01,
-#'      psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
-#'      beta_j0_hum = c(0.05, 0.03),
-#'      beta_j0_env = c(0.02, 0.04),
-#'      alpha = 0.95,
-#'      tau_i = c(0.1, 0.2),
-#'      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
-#'      theta_j = c(0.6, 0.7)
+#'      delta_max = 0.01
 #' )
 #'
 #' @export
 
 make_param_yaml <- function(output_file_path = NULL,
+
+                            # Initialization
                             date_start = NULL,
                             date_stop = NULL,
                             location_id = NULL,
                             location_name = NULL,
+                            S_j_initial = NULL,
+                            I_j_initial = NULL,
+                            R_j_initial = NULL,
+
+                            # Demographics
                             b_j = NULL,
                             d_j = NULL,
-                            N_j = NULL,
-                            phi = NULL,
+
+                            # Immune Dynamics
                             nu_jt = NULL,
+                            phi = NULL,
                             omega = NULL,
                             epsilon = NULL,
                             gamma = NULL,
+
+                            # Observation Processes
                             mu = NULL,
-                            sigma = NULL,
                             rho = NULL,
+                            sigma = NULL,
+
+                            # Force of Infection (human-to-human)
+                            beta_j0_hum = NULL,
+                            tau_i = NULL,
+                            pi_ij = NULL,
+                            alpha = NULL,
+
+                            # Force of Infection (environment-to-human)
+                            beta_j0_env = NULL,
+                            theta_j = NULL,
+                            psi_jt = NULL,
                             zeta = NULL,
                             kappa = NULL,
                             delta_min = NULL,
-                            delta_max = NULL,
-                            psi_jt = NULL,
-                            beta_j0_hum = NULL,
-                            beta_j0_env = NULL,
-                            alpha = NULL,
-                            tau_i = NULL,
-                            pi_ij = NULL,
-                            theta_j = NULL)
-{
+                            delta_max = NULL) {
 
      # Combine all parameters into a named list
      params <- list(
@@ -106,30 +131,33 @@ make_param_yaml <- function(output_file_path = NULL,
           date_stop = date_stop,
           location_id = location_id,
           location_name = location_name,
+          S_j_initial = S_j_initial,
+          I_j_initial = I_j_initial,
+          R_j_initial = R_j_initial,
           b_j = b_j,
           d_j = d_j,
-          N_j = N_j,
-          phi = phi,
           nu_jt = nu_jt,
+          phi = phi,
           omega = omega,
           epsilon = epsilon,
           gamma = gamma,
           mu = mu,
-          sigma = sigma,
           rho = rho,
+          sigma = sigma,
+          beta_j0_hum = beta_j0_hum,
+          tau_i = tau_i,
+          pi_ij = pi_ij,
+          alpha = alpha,
+          beta_j0_env = beta_j0_env,
+          theta_j = theta_j,
+          psi_jt = psi_jt,
           zeta = zeta,
           kappa = kappa,
           delta_min = delta_min,
-          delta_max = delta_max,
-          psi_jt = psi_jt,
-          beta_j0_hum = beta_j0_hum,
-          beta_j0_env = beta_j0_env,
-          alpha = alpha,
-          tau_i = tau_i,
-          pi_ij = pi_ij,
-          theta_j = theta_j
+          delta_max = delta_max
      )
 
+     message('Validating parameter values')
 
      # Check for NULL values
      null_fields <- names(params)[sapply(params, is.null)]
@@ -140,9 +168,7 @@ make_param_yaml <- function(output_file_path = NULL,
      # Generate the index t from date_start to date_stop
      t <- seq.Date(as.Date(date_start), as.Date(date_stop), by = "day")
 
-     # Additional validation checks
-     current_date <- Sys.Date()
-
+     # Initialization validation
      if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", date_start)) {
           stop("date_start must be in the format 'YYYY-MM-DD'. Provided: ", date_start)
      }
@@ -151,17 +177,9 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("date_stop must be in the format 'YYYY-MM-DD'. Provided: ", date_stop)
      }
 
-     if (as.Date(date_start) >= current_date) {
+     if (as.Date(date_start) >= Sys.Date()) {
           stop("date_start must be earlier than the current date. Provided: ", date_start)
      }
-
-     sim_days <- as.Date(date_stop) - as.Date(date_start)
-     days_prior <- current_date - as.Date(date_start)
-     days_post <- as.Date(date_stop) - current_date
-
-     message("Total simulation days: ", sim_days)
-     message("Days prior to current date: ", days_prior)
-     message("Days post current date: ", days_post)
 
      if (!is.integer(location_id)) {
           stop("location_id must be a vector of integers.")
@@ -175,6 +193,19 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("location_id and location_name must have the same length.")
      }
 
+     if (!is.integer(S_j_initial) || length(S_j_initial) != length(location_id) || any(S_j_initial < 0)) {
+          stop("S_j_initial must be an integer vector of length equal to location_id with values greater than or equal to zero.")
+     }
+
+     if (!is.integer(I_j_initial) || length(I_j_initial) != length(location_id) || any(I_j_initial < 0)) {
+          stop("I_j_initial must be an integer vector of length equal to location_id with values greater than or equal to zero.")
+     }
+
+     if (!is.integer(R_j_initial) || length(R_j_initial) != length(location_id) || any(R_j_initial < 0)) {
+          stop("R_j_initial must be an integer vector of length equal to location_id with values greater than or equal to zero.")
+     }
+
+     # Demographics validation
      if (!is.numeric(b_j) || any(b_j < 0)) {
           stop("b_j must be a numeric vector with values greater than or equal to zero.")
      }
@@ -191,16 +222,11 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("d_j must have the same length as location_id.")
      }
 
-     if (!is.integer(N_j)) {
-          stop("N_j must be an integer vector.")
-     }
-
-     if (any(N_j <= 0)) {
-          stop("N_j must contain values greater than zero.")
-     }
-
-     if (length(N_j) != length(location_id)) {
-          stop("N_j must have the same length as location_id.")
+     # Immune Dynamics validation
+     if (!is.null(nu_jt)) {
+          if (!is.matrix(nu_jt) || nrow(nu_jt) != length(location_id) || ncol(nu_jt) != length(t)) {
+               stop("nu_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+          }
      }
 
      if (!is.numeric(phi) || phi < 0 || phi > 1) {
@@ -219,16 +245,51 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("gamma must be a numeric scalar greater than or equal to zero.")
      }
 
+     # Observation Processes validation
      if (!is.numeric(mu) || mu < 0) {
           stop("mu must be a numeric scalar greater than or equal to zero.")
+     }
+
+     if (!is.numeric(rho) || rho < 0 || rho > 1) {
+          stop("rho must be a numeric scalar between 0 and 1.")
      }
 
      if (!is.numeric(sigma) || sigma < 0 || sigma > 1) {
           stop("sigma must be a numeric scalar between 0 and 1.")
      }
 
-     if (!is.numeric(rho) || rho < 0 || rho > 1) {
-          stop("rho must be a numeric scalar between 0 and 1.")
+     # Force of Infection (human-to-human) validation
+     if (!is.numeric(beta_j0_hum) || any(beta_j0_hum < 0) || length(beta_j0_hum) != length(location_id)) {
+          stop("beta_j0_hum must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
+     }
+
+     if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
+          stop("tau_i must be a numeric vector of length equal to location_id and values between 0 and 1.")
+     }
+
+     if (!is.null(pi_ij)) {
+          if (!is.matrix(pi_ij) || nrow(pi_ij) != length(location_id) || ncol(pi_ij) != length(location_id)) {
+               stop("pi_ij must be a matrix with dimensions equal to length(location_id) x length(location_id).")
+          }
+     }
+
+     if (!is.numeric(alpha) || alpha < 0 || alpha > 1) {
+          stop("alpha must be a numeric scalar between 0 and 1.")
+     }
+
+     # Force of Infection (environment-to-human) validation
+     if (!is.numeric(beta_j0_env) || any(beta_j0_env < 0) || length(beta_j0_env) != length(location_id)) {
+          stop("beta_j0_env must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
+     }
+
+     if (!is.numeric(theta_j) || any(theta_j < 0 | theta_j > 1) || length(theta_j) != length(location_id)) {
+          stop("theta_j must be a numeric vector of length equal to location_id and values between 0 and 1.")
+     }
+
+     if (!is.null(psi_jt)) {
+          if (!is.matrix(psi_jt) || nrow(psi_jt) != length(location_id) || ncol(psi_jt) != length(t)) {
+               stop("psi_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+          }
      }
 
      if (!is.numeric(zeta) || zeta <= 0) {
@@ -251,69 +312,27 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("delta_min must be less than delta_max.")
      }
 
-     if (!is.null(psi_jt)) {
-          if (!is.matrix(psi_jt)) {
-               stop("psi_jt must be a 2D matrix.")
-          }
+     # Converting matrices for YAML format
+     message("Converting matrices for YAML format")
 
-          if (!all(psi_jt >= 0 & psi_jt <= 1)) {
-               stop("psi_jt must contain values between 0 and 1.")
-          }
-
-          if (nrow(psi_jt) != length(location_id)) {
-               stop("The number of rows in psi_jt must equal the number of location_id.")
-          }
-
-          if (ncol(psi_jt) != length(t)) {
-               stop("The number of columns in psi_jt must equal the length of the daily vector from date_start to date_stop.")
-          }
+     if (!is.null(params$nu_jt)) {
+          params$nu_jt <- lapply(split(params$nu_jt, row(params$nu_jt)), as.numeric)
      }
 
-     if (!is.numeric(beta_j0_hum) || any(beta_j0_hum < 0) || length(beta_j0_hum) != length(location_id)) {
-          stop("beta_j0_hum must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
+     if (!is.null(params$psi_jt)) {
+          params$psi_jt <- lapply(split(params$psi_jt, row(params$psi_jt)), as.numeric)
      }
 
-     if (!is.numeric(beta_j0_env) || any(beta_j0_env < 0) || length(beta_j0_env) != length(location_id)) {
-          stop("beta_j0_env must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
-     }
-
-     if (!is.numeric(alpha) || alpha < 0 || alpha > 1) {
-          stop("alpha must be a numeric scalar between 0 and 1.")
-     }
-
-     if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
-          stop("tau_i must be a numeric vector of length equal to location_id and values between 0 and 1.")
-     }
-
-     if (!is.null(pi_ij)) {
-          if (!is.matrix(pi_ij)) {
-               stop("pi_ij must be a 2D matrix.")
-          }
-
-          if (nrow(pi_ij) != length(location_id) || ncol(pi_ij) != length(location_id)) {
-               stop("pi_ij must have rows and columns equal to length of location_id.")
-          }
-
-          if (!all(pi_ij >= 0 & pi_ij <= 1)) {
-               stop("pi_ij must contain values between 0 and 1.")
-          }
-     }
-
-     if (!is.numeric(theta_j) || any(theta_j < 0 | theta_j > 1) || length(theta_j) != length(location_id)) {
-          stop("theta_j must be a numeric vector of length equal to location_id and values between 0 and 1.")
+     if (!is.null(params$pi_ij)) {
+          params$pi_ij <- lapply(split(params$pi_ij, row(params$pi_ij)), as.numeric)
      }
 
      # Write to file if output_file_path is provided
      if (!is.null(output_file_path)) {
-
-          if (!grepl("\\.yaml$", output_file_path, ignore.case = TRUE)) {
-               stop("The output_file_path must end with '.yaml'. Provided: ", output_file_path)
-          }
-
           yaml::write_yaml(params, file = output_file_path)
           message("YAML file written to: ", output_file_path)
-
      }
 
+     # Return the parameters list
      return(params)
 }

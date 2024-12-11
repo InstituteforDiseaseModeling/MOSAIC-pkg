@@ -2,18 +2,9 @@ pandoc: 3.1.12.3
 pkgdown: 2.0.9
 pkgdown_sha: ~
 articles:
-  01-intro: MOSAIC/MOSAIC-docs/01-intro.html
-  02-rationale: MOSAIC/MOSAIC-docs/02-rationale.html
-  03-data: MOSAIC/MOSAIC-docs/03-data.html
-  04-model-description: MOSAIC/MOSAIC-docs/04-model-description.html
-  05-scenarios: MOSAIC/MOSAIC-docs/05-scenarios.html
-  06-code: MOSAIC/MOSAIC-docs/06-code.html
-  07-news: MOSAIC/MOSAIC-docs/07-news.html
-  99-references: MOSAIC/MOSAIC-docs/99-references.html
-  index: MOSAIC/MOSAIC-docs/index.html
   Project-setup: Project-setup.html
   Running-MOSAIC: Running-MOSAIC.html
-last_built: 2024-12-10T19:47Z
+last_built: 2024-12-11T11:17Z
 urls:
   reference: institutefordiseasemodeling.github.io/MOSAIC-pkg/reference
   article: institutefordiseasemodeling.github.io/MOSAIC-pkg/articles
