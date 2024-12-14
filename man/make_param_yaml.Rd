@@ -10,6 +10,7 @@ make_param_yaml(
   date_stop = NULL,
   location_id = NULL,
   location_name = NULL,
+  N_j_initial = NULL,
   S_j_initial = NULL,
   I_j_initial = NULL,
   R_j_initial = NULL,
@@ -48,6 +49,8 @@ make_param_yaml(
 \item{location_id}{A vector of integers giving the numerical index for metapopulations.}
 
 \item{location_name}{A character vector giving the names of each metapopulation location, matching the length of \code{location_id}.}
+
+\item{N_j_initial}{An integer vector of length \code{location_id} that gives the total initial population size of each j location.}
 
 \item{S_j_initial}{An integer vector of length \code{location_id} that gives the starting values for the number of susceptible individuals in each j location.}
 
@@ -122,6 +125,7 @@ make_param_yaml(
      date_stop = "2024-12-31",
      location_id = 1:2,
      location_name = c("Location A", "Location B"),
+     N_j_initial = as.integer(c(1000, 1000)),
      S_j_initial = as.integer(c(999, 999)),
      I_j_initial = as.integer(c(1, 1)),
      R_j_initial = as.integer(c(0, 0)),

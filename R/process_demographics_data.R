@@ -75,5 +75,47 @@ process_demographics_data <- function(PATHS) {
 
      # Save the processed data as a CSV file
      write.csv(out, file = path, row.names = FALSE)
-     message(glue("Demographics data saved here: {path}"))
+     message(glue("Demographics data from 2000 to 2023 saved here: {path}"))
+
+
+     tmp <- out[out$year == 2023,]
+
+     param_birth_rate <-
+          make_param_df(variable_name = 'b',
+                        variable_description = 'Population birth rate per day as of 2023',
+                        parameter_distribution = 'point',
+                        j = tmp$iso_code,
+                        parameter_name = 'mean',
+                        parameter_value = tmp$birth_rate_per_day)
+
+     param_death_rate <-
+          make_param_df(variable_name = 'd',
+                        variable_description = 'Population death rate per day as of 2023',
+                        parameter_distribution = 'point',
+                        j = tmp$iso_code,
+                        parameter_name = 'mean',
+                        parameter_value = tmp$death_rate_per_day)
+
+     param_population_size <-
+          make_param_df(variable_name = 'N',
+                        variable_description = 'Total population size as of 2023',
+                        parameter_distribution = 'point',
+                        j = tmp$iso_code,
+                        parameter_name = 'mean',
+                        parameter_value = tmp$population)
+
+
+     path <- file.path(PATHS$MODEL_INPUT, "param_b_birth_rate.csv")
+     write.csv(param_birth_rate, path, row.names = FALSE)
+     message(paste("2023 birth rate for all locations saved to:", path))
+
+     path <- file.path(PATHS$MODEL_INPUT, "param_d_death_rate.csv")
+     write.csv(param_death_rate, path, row.names = FALSE)
+     message(paste("2023 death rate for all locations saved to:", path))
+
+     path <- file.path(PATHS$MODEL_INPUT, "param_N_population_size.csv")
+     write.csv(param_population_size, path, row.names = FALSE)
+     message(paste("2023 population size for all locations saved to:", path))
+
+
 }

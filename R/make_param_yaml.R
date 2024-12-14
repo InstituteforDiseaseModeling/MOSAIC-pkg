@@ -11,6 +11,7 @@
 #' @param date_stop End date for the simulation period in "YYYY-MM-DD" format.
 #' @param location_id A vector of integers giving the numerical index for metapopulations.
 #' @param location_name A character vector giving the names of each metapopulation location, matching the length of `location_id`.
+#' @param N_j_initial An integer vector of length `location_id` that gives the total initial population size of each j location.
 #' @param S_j_initial An integer vector of length `location_id` that gives the starting values for the number of susceptible individuals in each j location.
 #' @param I_j_initial An integer vector of length `location_id` that gives the starting values for the number of infected individuals in each j location.
 #' @param R_j_initial An integer vector of length `location_id` that gives the starting values for the number of recovered individuals in each j location.
@@ -55,6 +56,7 @@
 #'      date_stop = "2024-12-31",
 #'      location_id = 1:2,
 #'      location_name = c("Location A", "Location B"),
+#'      N_j_initial = as.integer(c(1000, 1000)),
 #'      S_j_initial = as.integer(c(999, 999)),
 #'      I_j_initial = as.integer(c(1, 1)),
 #'      R_j_initial = as.integer(c(0, 0)),
@@ -90,6 +92,7 @@ make_param_yaml <- function(output_file_path = NULL,
                             date_stop = NULL,
                             location_id = NULL,
                             location_name = NULL,
+                            N_j_initial = NULL,
                             S_j_initial = NULL,
                             I_j_initial = NULL,
                             R_j_initial = NULL,
@@ -131,6 +134,7 @@ make_param_yaml <- function(output_file_path = NULL,
           date_stop = date_stop,
           location_id = location_id,
           location_name = location_name,
+          N_j_initial = N_j_initial,
           S_j_initial = S_j_initial,
           I_j_initial = I_j_initial,
           R_j_initial = R_j_initial,
@@ -144,7 +148,9 @@ make_param_yaml <- function(output_file_path = NULL,
           mu = mu,
           rho = rho,
           sigma = sigma,
-          beta_j0_hum = beta_j0_hum,
+          beta_j0_hum_mean = beta_j0_hum,
+          beta_j0_hum_sd = NULL,
+          beta_j_seasonality = NULL,
           tau_i = tau_i,
           pi_ij = pi_ij,
           alpha = alpha,
@@ -165,9 +171,6 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("The following parameters are NULL and must be provided: ", paste(null_fields, collapse = ", "))
      }
 
-     # Generate the index t from date_start to date_stop
-     t <- seq.Date(as.Date(date_start), as.Date(date_stop), by = "day")
-
      # Initialization validation
      if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", date_start)) {
           stop("date_start must be in the format 'YYYY-MM-DD'. Provided: ", date_start)
@@ -177,13 +180,13 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("date_stop must be in the format 'YYYY-MM-DD'. Provided: ", date_stop)
      }
 
-     if (as.Date(date_start) >= Sys.Date()) {
-          stop("date_start must be earlier than the current date. Provided: ", date_start)
-     }
-
      if (!is.integer(location_id)) {
           stop("location_id must be a vector of integers.")
      }
+
+     t <- seq.Date(as.Date(date_start), as.Date(date_stop), by = "day")
+     message(paste0('Number of daily time steps: ', length(t)))
+     message(paste0('Number of metapopulation locations: ', length(location_id)))
 
      if (!is.character(location_name)) {
           stop("location_name must be a character vector.")
@@ -191,6 +194,10 @@ make_param_yaml <- function(output_file_path = NULL,
 
      if (length(location_id) != length(location_name)) {
           stop("location_id and location_name must have the same length.")
+     }
+
+     if (!is.integer(N_j_initial) || length(N_j_initial) != length(location_id) || any(N_j_initial <= 0)) {
+          stop("N_j_initial must be an integer vector of length equal to location_id with values greater than zero.")
      }
 
      if (!is.integer(S_j_initial) || length(S_j_initial) != length(location_id) || any(S_j_initial < 0)) {
@@ -203,6 +210,13 @@ make_param_yaml <- function(output_file_path = NULL,
 
      if (!is.integer(R_j_initial) || length(R_j_initial) != length(location_id) || any(R_j_initial < 0)) {
           stop("R_j_initial must be an integer vector of length equal to location_id with values greater than or equal to zero.")
+     }
+
+     # Check that N_j_initial equals the sum of S_j_initial, I_j_initial, and R_j_initial
+     calculated_N <- S_j_initial + I_j_initial + R_j_initial
+     if (!all(N_j_initial == calculated_N)) {
+          mismatch <- which(N_j_initial != calculated_N)
+          stop("N_j_initial must equal the sum of S_j_initial, I_j_initial, and R_j_initial for all locations. Mismatched indices: ", paste(mismatch, collapse = ", "))
      }
 
      # Demographics validation
@@ -312,27 +326,17 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("delta_min must be less than delta_max.")
      }
 
-     # Converting matrices for YAML format
-     message("Converting matrices for YAML format")
-
-     if (!is.null(params$nu_jt)) {
-          params$nu_jt <- lapply(split(params$nu_jt, row(params$nu_jt)), as.numeric)
-     }
-
-     if (!is.null(params$psi_jt)) {
-          params$psi_jt <- lapply(split(params$psi_jt, row(params$psi_jt)), as.numeric)
-     }
-
-     if (!is.null(params$pi_ij)) {
-          params$pi_ij <- lapply(split(params$pi_ij, row(params$pi_ij)), as.numeric)
-     }
-
      # Write to file if output_file_path is provided
      if (!is.null(output_file_path)) {
+
           yaml::write_yaml(params, file = output_file_path)
           message("YAML file written to: ", output_file_path)
+
+     } else {
+
+          return(params)
+
      }
 
-     # Return the parameters list
-     return(params)
+
 }

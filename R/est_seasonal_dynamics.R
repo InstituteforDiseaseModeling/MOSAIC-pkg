@@ -392,7 +392,108 @@ est_seasonal_dynamics <- function(PATHS,
      }
 
 
+     convert_doy_to_woy <- function(day_of_year, year) {
+          # Validate inputs
+          if (any(day_of_year < 1 | day_of_year > 366)) {
+               stop("day_of_year must be between 1 and 366.")
+          }
 
+          if (any(year < 0)) {
+               stop("year must be a positive integer.")
+          }
+
+          # Convert day_of_year to ISO date
+          dates <- as.Date(ISOdate(year, 1, 1)) + (day_of_year - 1)
+
+          # Extract ISO week of year
+          week_of_year <- as.integer(strftime(dates, format = "%V"))
+
+          # Cap the week number at 52
+          week_of_year <- pmin(week_of_year, 52)
+
+          return(week_of_year)
+     }
+
+     convert_woy_to_moy <- function(weeks_of_year, year) {
+          # Validate inputs
+          if (any(weeks_of_year < 1 | weeks_of_year > 52)) {
+               stop("weeks_of_year must be between 1 and 52.")
+          }
+
+          if (any(year < 0)) {
+               stop("year must be a positive integer.")
+          }
+
+          # Convert weeks to approximate middle day of the week
+          middle_days <- (weeks_of_year - 1) * 7 + 4  # Middle of the week (ISO weeks start on Monday)
+
+          # Convert middle day of the week to an ISOdate
+          dates <- as.Date(ISOdate(year, 1, 1)) + (middle_days - 1)
+
+          # Extract the month from the ISOdate
+          months_of_year <- as.integer(format(dates, "%m"))
+
+          return(months_of_year)
+     }
+
+
+
+     # Seasonal patterns done on weekly time scale
+     combined_fitted_values_weekly <- combined_fitted_values
+
+
+     # Convert to day of year scale and smooth
+     combined_fitted_values_daily <- expand.grid(list(day = 1:366, iso_code = unique(combined_fitted_values$iso_code)))
+     combined_fitted_values_daily$week <- convert_doy_to_woy(combined_fitted_values_daily$day, 2024)
+     combined_fitted_values_daily <- merge(combined_fitted_values_daily, combined_fitted_values_weekly, by=c('week', 'iso_code'))
+
+
+     split_data <- split(combined_fitted_values_daily, combined_fitted_values_daily$iso_code)
+
+     smoothed_list <- lapply(split_data, function(group) {
+
+          days <- seq(min(group$day), max(group$day), by = 1)
+
+          smoothed_precip <- predict(loess(fitted_values_fourier_precip ~ day, data = group, span = 0.1), newdata = days)
+          smoothed_cases <- predict(loess(fitted_values_fourier_cases ~ day, data = group, span = 0.1), newdata = days)
+
+          data.frame(
+               iso_code = unique(group$iso_code),
+               day = days,
+               fitted_values_fourier_precip = smoothed_precip,
+               fitted_values_fourier_cases = smoothed_cases,
+               Country = unique(group$Country),
+               inferred_from_neighbor = unique(group$inferred_from_neighbor)
+          )
+     })
+
+     combined_fitted_values_daily <- do.call(rbind, smoothed_list)
+
+
+     # Convert to monthly scale and aggregate
+     combined_fitted_values_monthly <- combined_fitted_values_weekly
+     combined_fitted_values_monthly$month <- convert_woy_to_moy(combined_fitted_values_monthly$week, 2024)
+
+     sel <- order(combined_fitted_values_monthly$iso_code, combined_fitted_values_monthly$month)
+     combined_fitted_values_monthly <- combined_fitted_values_monthly[sel,]
+
+     combined_fitted_values_monthly <-
+          combined_fitted_values_monthly %>%
+          group_by(iso_code, Country, inferred_from_neighbor, month) %>%
+          mutate(fitted_values_fourier_precip = mean(fitted_values_fourier_precip, na.rm = TRUE),
+                 fitted_values_fourier_cases = mean(fitted_values_fourier_cases, na.rm = TRUE)) %>%
+          distinct() %>%
+          as.data.frame()
+
+     combined_fitted_values_monthly <- combined_fitted_values_monthly[,-1]
+
+
+
+     # Save the outputs to CSV files
+     utils::write.csv(combined_fitted_values_daily, file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics_day.csv"), row.names = FALSE)
+     utils::write.csv(combined_fitted_values_weekly, file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics_week.csv"), row.names = FALSE)
+     utils::write.csv(combined_fitted_values_monthly, file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics_month.csv"), row.names = FALSE)
+     message(glue("Daily, weekly, and monthly seasonal outputs saved to {PATHS$MODEL_INPUT}"))
 
      path1 <- file.path(PATHS$MODEL_INPUT, "data_seasonal_precipitation.csv")
      path2 <- file.path(PATHS$DOCS_TABLES, "data_seasonal_precipitation.csv")
@@ -410,12 +511,6 @@ est_seasonal_dynamics <- function(PATHS,
      message(path1)
      message(path2)
 
-     path1 <- file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics.csv")
-     path2 <- file.path(PATHS$DOCS_TABLES, "pred_seasonal_dynamics.csv")
-     utils::write.csv(combined_fitted_values, file = path1, row.names = FALSE)
-     utils::write.csv(combined_fitted_values, file = path2, row.names = FALSE)
-     message("Predicted seasonal dynamics using fourier series model saved to: ")
-     message(path1)
-     message(path2)
+
 
 }
