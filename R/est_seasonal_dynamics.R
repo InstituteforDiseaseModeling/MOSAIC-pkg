@@ -440,7 +440,8 @@ est_seasonal_dynamics <- function(PATHS,
 
      # Seasonal patterns done on weekly time scale
      combined_fitted_values_weekly <- combined_fitted_values
-
+     cols <- c('week', 'iso_code', 'Country', 'fitted_values_fourier_precip', 'fitted_values_fourier_cases', 'inferred_from_neighbor')
+     combined_fitted_values_weekly <- combined_fitted_values_weekly[,cols]
 
      # Convert to day of year scale and smooth
      combined_fitted_values_daily <- expand.grid(list(day = 1:366, iso_code = unique(combined_fitted_values$iso_code)))
@@ -468,6 +469,8 @@ est_seasonal_dynamics <- function(PATHS,
      })
 
      combined_fitted_values_daily <- do.call(rbind, smoothed_list)
+     cols <- c('day', 'iso_code', 'Country', 'fitted_values_fourier_precip', 'fitted_values_fourier_cases', 'inferred_from_neighbor')
+     combined_fitted_values_daily <- combined_fitted_values_daily[,cols]
 
 
      # Convert to monthly scale and aggregate
@@ -487,6 +490,8 @@ est_seasonal_dynamics <- function(PATHS,
 
      combined_fitted_values_monthly <- combined_fitted_values_monthly[,-1]
 
+     cols <- c('month', 'iso_code', 'Country', 'fitted_values_fourier_precip', 'fitted_values_fourier_cases', 'inferred_from_neighbor')
+     combined_fitted_values_monthly <- combined_fitted_values_monthly[,cols]
 
 
      # Save the outputs to CSV files

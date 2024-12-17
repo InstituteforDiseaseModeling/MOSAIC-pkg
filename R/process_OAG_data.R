@@ -32,10 +32,7 @@
 
 process_OAG_data <- function(PATHS) {
 
-     # Ensure output directory exists, if not, create it
-     if (!dir.exists(PATHS$DATA_OAG)) {
-          dir.create(PATHS$DATA_OAG, recursive = TRUE)
-     }
+     if (!dir.exists(PATHS$DATA_OAG)) dir.create(PATHS$DATA_OAG, recursive = TRUE)
 
      # Load necessary packages and functions
      message("Loading raw OAG flight data")
@@ -93,43 +90,49 @@ process_OAG_data <- function(PATHS) {
 
      message("Aggregating by year")
 
+     # Aggregate data by year and calculate mean daily passengers
+     d_day <- aggregate(count ~ origin_iso2 + origin_iso3 + origin_name + origin_lat + origin_lon +
+                             destination_iso2 + destination_iso3 + destination_name + destination_lat + destination_lon + year,
+                        data = d, function(x) sum(x, na.rm=TRUE) / 365)
+
      # Aggregate data by year and calculate mean weekly passengers
-     d <- aggregate(count ~ origin_iso2 + origin_iso3 + origin_name + origin_lat + origin_lon +
-                         destination_iso2 + destination_iso3 + destination_name + destination_lat + destination_lon + year,
-                    data = d, function(x) sum(x, na.rm=TRUE) / 52)
+     d_week <- aggregate(count ~ origin_iso2 + origin_iso3 + origin_name + origin_lat + origin_lon +
+                              destination_iso2 + destination_iso3 + destination_name + destination_lat + destination_lon + year,
+                         data = d, function(x) sum(x, na.rm=TRUE) / 52)
+
+     # Aggregate data by year and calculate mean monthly passengers
+     d_month <- aggregate(count ~ origin_iso2 + origin_iso3 + origin_name + origin_lat + origin_lon +
+                               destination_iso2 + destination_iso3 + destination_name + destination_lat + destination_lon + year,
+                          data = d, function(x) sum(x, na.rm=TRUE) / 12)
 
      message("Saving to file")
 
      # Select African and MOSAIC countries
      sel_africa <- d$origin_iso3 %in% MOSAIC::iso_codes_africa & d$destination_iso3 %in% MOSAIC::iso_codes_africa
-     sel_mosaic <- d$origin_iso3 %in% MOSAIC::iso_codes_mosaic & d$destination_iso3 %in% MOSAIC::iso_codes_mosaic
-
-     d_africa <- d[sel_africa,]
-     d_mosaic <- d[sel_mosaic,]
+     d_day_africa <- d_day[sel_africa,]
+     d_week_africa <- d_week[sel_africa,]
+     d_month_africa <- d_month[sel_africa,]
 
      # Check if all ISO codes for Africa and MOSAIC are present
-     if (!(all(MOSAIC::iso_codes_africa %in% d_africa$origin_iso3))) {
-          sel <- !(MOSAIC::iso_codes_africa %in% unique(d_africa$origin_iso3))
-          missing <- unique(d_africa$origin_iso3)[sel]
+     if (!(all(MOSAIC::iso_codes_africa %in% d_day_africa$origin_iso3))) {
+          sel <- !(MOSAIC::iso_codes_africa %in% unique(d_day_africa$origin_iso3))
+          missing <- unique(d_day_africa$origin_iso3)[sel]
           warning(glue("Some iso codes in MOSAIC::iso_codes_africa are missing: {paste(missing, collapse=' ')}"))
      }
 
-     if (!(all(MOSAIC::iso_codes_mosaic %in% d_mosaic$origin_iso3))) {
-          sel <- !(MOSAIC::iso_codes_mosaic %in% unique(d_mosaic$origin_iso3))
-          missing <- unique(d_mosaic$origin_iso3)[sel]
-          warning(glue("Some iso codes in MOSAIC::iso_codes_mosaic are missing: {paste(missing, collapse=' ')}"))
-     }
-
      # Define paths for saving processed data
-     path_africa <- file.path(PATHS$DATA_OAG, "oag_africa_2017_mean_weekly.csv")
-     path_mosaic <- file.path(PATHS$DATA_OAG, "oag_mosaic_2017_mean_weekly.csv")
+     path_day_africa <- file.path(PATHS$DATA_OAG, "oag_africa_2017_mean_daily.csv")
+     path_week_africa <- file.path(PATHS$DATA_OAG, "oag_africa_2017_mean_weekly.csv")
+     path_month_africa <- file.path(PATHS$DATA_OAG, "oag_africa_2017_mean_monthly.csv")
 
      # Save processed data as CSV
-     write.csv(d_africa, file=path_africa, row.names = FALSE)
-     write.csv(d_mosaic, file=path_mosaic, row.names = FALSE)
+     write.csv(d_day_africa, file=path_day_africa, row.names = FALSE)
+     write.csv(d_week_africa, file=path_week_africa, row.names = FALSE)
+     write.csv(d_month_africa, file=path_month_africa, row.names = FALSE)
 
      message("OAG data saved here:")
-     message(path_africa)
-     message(path_mosaic)
+     message(path_day_africa)
+     message(path_week_africa)
+     message(path_month_africa)
 
 }

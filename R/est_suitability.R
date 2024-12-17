@@ -272,7 +272,7 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
 
 
      # Step 10: Ensure all year-week combinations are present, then smooth predictions by country
-     message("Smoothing time series predictions...")
+     message("Smoothing time series predictions on weekly time scale...")
      d_all <- d_all %>%
           group_by(iso_code) %>%
           # Create a complete dataset for each country with all year-week combinations
@@ -296,10 +296,58 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
 
      if (53 %in% d_all$week) stop("week index is out of bounds")
 
+     message("Smoothing time series predictions on daily time scale...")
+
+     d_pred_weekly <- as.data.frame(d_all[,c('iso_code', 'week', 'date_start', 'date_stop', 'pred', 'pred_smooth')])
+
+     split_data <- split(d_pred_weekly, d_pred_weekly$iso_code)
+
+     d_pred_daily <- expand.grid(list(date = seq(min(as.Date(d_pred_weekly$date_start)),
+                                                 max(as.Date(d_pred_weekly$date_stop)),
+                                                 by='day'),
+                                      iso_code = unique(d_pred_weekly$iso_code)))
+
+     d_pred_daily$week <- lubridate::isoweek(d_pred_daily$date)
+     d_pred_daily <- merge(d_pred_daily, d_pred_weekly, by=c('week', 'iso_code'))
+
+     split_data <- split(d_pred_weekly, d_pred_weekly$iso_code)
+
+     smoothed_list <-
+          lapply(split_data, function(x) {
+
+               iso_code <- unique(x$iso_code)
+               date_min <- min(as.Date(x$date_start))
+               date_max <- max(as.Date(x$date_stop))
+               x <- x[,c('date_start', 'pred')]
+
+               d_pred_daily <- data.frame(date = seq(date_min, date_max, by='day'))
+               d_pred_daily <- merge(d_pred_daily, x, by.x='date', by.y='date_start', all.x=TRUE)
+               d_pred_daily$pred <- zoo::na.locf(d_pred_daily$pred)
+               d_pred_daily$pred_smooth <- inv_logit(stats::predict(loess(logit(pred) ~ as.numeric(date), span = 0.005, data=d_pred_daily)))
+
+               #sel <- 1:1000
+               #plot(d_pred_daily$date[sel], d_pred_daily$pred[sel], type='l')
+               #lines(d_pred_daily$date[sel], d_pred_daily$pred_smooth[sel], col='red')
+
+               data.frame(
+                    iso_code = iso_code,
+                    d_pred_daily
+               )
+
+          })
+
+     d_pred_daily <- do.call(rbind, smoothed_list)
+     row.names(d_pred_daily) <- NULL
+     rm(split_data)
+     rm(smoothed_list)
 
      # Save predictions to CSV
-     path <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability.csv")
-     write.csv(d_all[,c('country', 'iso_code', 'week', 'date_start', 'date_stop', 'pred', 'pred_smooth')], path, row.names = FALSE)
+     path <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_week.csv")
+     write.csv(d_pred_weekly, path, row.names = FALSE)
+     message("Predictions saved to: ", path)
+
+     path <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
+     write.csv(d_pred_daily, path, row.names = FALSE)
      message("Predictions saved to: ", path)
 
      # Save observed data
