@@ -109,14 +109,15 @@ process_OAG_data <- function(PATHS) {
 
      # Select African and MOSAIC countries
      sel_africa <- d$origin_iso3 %in% MOSAIC::iso_codes_africa & d$destination_iso3 %in% MOSAIC::iso_codes_africa
+
      d_day_africa <- d_day[sel_africa,]
      d_week_africa <- d_week[sel_africa,]
      d_month_africa <- d_month[sel_africa,]
 
      # Check if all ISO codes for Africa and MOSAIC are present
-     if (!(all(MOSAIC::iso_codes_africa %in% d_day_africa$origin_iso3))) {
-          sel <- !(MOSAIC::iso_codes_africa %in% unique(d_day_africa$origin_iso3))
-          missing <- unique(d_day_africa$origin_iso3)[sel]
+     check <- MOSAIC::iso_codes_africa %in% d_day_africa$origin_iso3
+     if (!(all(check))) {
+          missing <- MOSAIC::iso_codes_africa[!check]
           warning(glue("Some iso codes in MOSAIC::iso_codes_africa are missing: {paste(missing, collapse=' ')}"))
      }
 

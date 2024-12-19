@@ -28,8 +28,9 @@ plot_mobility <- function(PATHS) {
 
      message("Loading mobility data...")
 
-     data_flights <- utils::read.csv(file.path(PATHS$DATA_OAG, "oag_mosaic_2017_mean_weekly.csv"), stringsAsFactors = FALSE)
+     data_flights <- utils::read.csv(file.path(PATHS$DATA_OAG, "oag_africa_2017_mean_daily.csv"), stringsAsFactors = FALSE)
      data_flights <- data_flights[data_flights$origin_iso3 %in% MOSAIC::iso_codes_mosaic,]
+     data_flights <- data_flights[data_flights$destination_iso3 %in% MOSAIC::iso_codes_mosaic,]
 
      # Load the mobility matrices (M, D, N) and parameter estimates
      M <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_M.csv"))
@@ -98,7 +99,7 @@ plot_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
      message("Plotting mobility network...")
 
-     min_trips <- 30
+     min_trips <- 1
 
      # Sort data_flights by count in ascending order so that larger edges are plotted last (on top)
      data_flights_sorted <- data_flights[data_flights$count > min_trips, ]
@@ -195,7 +196,7 @@ plot_mobility <- function(PATHS) {
           geom_bar(stat="identity", fill="dodgerblue") +
           scale_x_sqrt(breaks=c(1000, 10000, 25000)) +
           theme_minimal() +
-          xlab("Estimated total\nweekly travelers") +
+          xlab("Estimated total\ndaily travelers") +
           theme(axis.title.x = element_text(size=12, margin = margin(t = 15)),
                 axis.title.y = element_blank(),
                 axis.text.x = element_text(size=10),
@@ -237,7 +238,7 @@ plot_mobility <- function(PATHS) {
                              legend.position='bottom') +
           viridis::scale_fill_viridis(option="G",
                                       direction=1) +
-          guides(fill=guide_colorbar(title='Probability of travel given departure from origin',
+          guides(fill=guide_colorbar(title='Probability of daily travel given departure from origin',
                                      title.position='top',
                                      label.theme=element_text(size=9),
                                      barwidth=20,

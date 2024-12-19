@@ -224,7 +224,20 @@ Year	Country	Request Number	Status	Context	ICG decision date	Number of Doses req
 2024	Zambia	#3,2024	Partially approved	Outbreak response	2/7/2024	3,613,580	2,246,140	2,246,140	6/25/2024
 2024	Zimbabwe	#9,2024	Partially approved	Outbreak response	6/24/2024	2,067,430	213,586	213,600
 2024	Sudan (the)	#19,2024	Approved	Outbreak response	10/7/2024	2,237,252	2,237,252
+2024	Sudan (the)	#20,2024	Approved	Outbreak response	10/21/2024	1,180,308	1,180,308	1,180,350
+2024	Ghana	#21,2024	Approved	Outbreak response	11/8/2024	158,477	158,477	158,500	11/30/2024
+2024	Niger	#22,2024	Partially approved	Outbreak response	11/8/2024	775,891	79,842	79,850
+2024	South Sudan	#23,2024	Approved	Outbreak response	11/8/2024	151,208	151,208	151,250
+2024	Sudan (the)	#24,2024	Approved	Outbreak response	11/19/2024	2,311,000	2,311,000	2,311,000
+2024	South Sudan	#25,2024	Approved	Outbreak response	11/21/2024	130,945	130,945	130,950
+2024	Ghana	#26,2024	Approved	Outbreak response	11/26/2024	623,587	623,587	623,600
+2024	South Sudan	#27,2024	Approved	Outbreak response	12/6/2024	1,104,840	1,104,840	1,104,850
+2024	Mozambique	#28,2024	Approved	Outbreak response	12/4/2024	199,695	199,695	200,000
+2024	Myanmar	#29,2024	Approved	Outbreak response	12/16/2024	296,455	296,455	296,500
+2024	Malawi	#30,2024	Partially approved	Outbreak response	12/16/2024	978,216	720,185	720,200
+2024	Ghana	#31,2024		Outbreak response		699,967
 "
+
 
 message("Processing raw text")
 
@@ -394,7 +407,14 @@ message("Processing raw text")
           who_data <- who_data[!duplicate_rows, ]
      }
 
-     print(head(who_data))
+     check <- is.na(who_data$doses_shipped)
+     if (any(check)) {
+          who_data <- who_data[!check,]
+          message("Found and removed rows with incomplete shipping information:")
+          message(capture.output(print(who_data[check,])))
+     }
+
+     print(tail(who_data))
 
      message("Start date: ", min(who_data$decision_date, na.rm = TRUE))
      message("End date: ", max(who_data$decision_date, na.rm = TRUE))

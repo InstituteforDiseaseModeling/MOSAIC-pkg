@@ -1,49 +1,96 @@
 
-path_to_yaml_file <- file.path(getwd(), 'inst/extdata/default_parameters.yaml')
+path_to_yaml_file <- file.path(getwd(), 'inst/extdata/default_parameters.json')
 
 date_start <- as.Date("2023-01-01")
-date_stop <- as.Date("2024-12-31")
+date_stop <- as.Date("2024-12-17")
+
+# Set simulation time steps
 t <- seq.Date(date_start, date_stop, by = "day")
+str(t)
+
+# Ste simulation locations
 j <- MOSAIC::iso_codes_mosaic
+str(j)
 
 # Get birth rate of each location (b_j)
 tmp <- read.csv(file.path(getwd(), 'model/input/param_b_birth_rate.csv'))
 sel <- match(j, tmp$j)
 b_j <- tmp$parameter_value[sel]
 names(b_j) <- tmp$j[sel]
+str(b_j)
 
 # Get death rate of each location (d_j)
 tmp <- read.csv(file.path(getwd(), 'model/input/param_d_death_rate.csv'))
 sel <- match(j, tmp$j)
 d_j <- tmp$parameter_value[sel]
 names(d_j) <- tmp$j[sel]
+str(d_j)
 
 # Get population size of each location (N_j)
 tmp <- read.csv(file.path(getwd(), 'model/input/param_N_population_size.csv'))
+tmp <- tmp[tmp$j %in% j,]
 sel <- match(j, tmp$j)
 N_j <- tmp$parameter_value[sel]
 names(N_j) <- tmp$j[sel]
+str(N_j)
+
+
+#####
+# Vaccination rate needs work
+# Must be square by dates and locations
+#####
+
+# Add vaccination rate over time for each location (nu_jt)
+tmp <- read.csv(file.path(getwd(), 'model/input/param_nu_vaccination_rate.csv'))
+tmp$t <- as.Date(tmp$t)
+tmp <- tmp[tmp$j %in% j,]
+tmp <- tmp[tmp$t >= date_start & tmp$t <= date_stop,]
+nu_jt <- reshape2::acast(tmp, j ~ t, value.var = "parameter_value")
+
+
+# Add seasonal pattern to human to human force of infection (daily time scale)
+tmp <- read.csv(file.path(getwd(), 'model/input/pred_seasonal_dynamics_day.csv'))
+tmp <- tmp[tmp$iso_code %in% j,]
+beta_j_seasonality <- acast(tmp, iso_code ~ day, value.var = "fitted_values_fourier_cases")
+sel <- match(j, row.names(beta_j_seasonality))
+beta_j_seasonality <- beta_j_seasonality[sel,]
+str(beta_j_seasonality)
 
 # Get departure probability of each location (tau_j)
 tmp <- read.csv(file.path(getwd(), 'model/input/param_tau_departure.csv'))
+tmp <- tmp[tmp$i %in% j,]
 tmp <- tmp[tmp$parameter_name =='mean',]
 sel <- match(j, tmp$i)
 tau_i <- tmp$parameter_value[sel]
 names(tau_i) <- tmp$i[sel]
+str(tau_i)
 
 # Get diffusion probability between all locations (pi_ij)
 tmp <- read.csv(file.path(getwd(), 'model/input/pred_pi_diffusion.csv'))
+tmp <- tmp[tmp$origin %in% j,]
+tmp <- tmp[tmp$destination %in% j,]
 pi_ij <- reshape2::acast(tmp, origin ~ destination, value.var = "value")
+sel_rows <- match(j, row.names(pi_ij))
+sel_cols <- match(j, colnames(pi_ij))
+pi_ij <- pi_ij[sel_rows, sel_cols]
+str(pi_ij)
 
 # Get WASH variables for each location
-tmp <- read.csv(file.path(getwd(), 'model/input/WASH_weighted_mean_theta.csv'))
-theta_j <- tmp$Weighted_Mean_WASH
-names(theta_j) <- tmp$iso_code
+tmp <- read.csv(file.path(getwd(), 'model/input/param_theta_WASH.csv'))
+tmp <- tmp[tmp$j %in% j,]
+sel <- match(j, tmp$j)
+theta_j <- tmp$parameter_value[sel]
+names(theta_j) <- tmp$j[sel]
+str(theta_j)
 
 # Get environmental suitability (psi) for each location
-tmp <- read.csv(file.path(getwd(), 'model/input/pred_psi_suitability.csv'))
-theta_j <- tmp$Weighted_Mean_WASH
-names(theta_j) <- tmp$iso_code
+tmp <- read.csv(file.path(getwd(), 'model/input/pred_psi_suitability_day.csv'))
+tmp <- tmp[tmp$iso_code %in% j,]
+tmp <- tmp[tmp$date >= date_start & tmp$date <= date_stop,]
+psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "pred_smooth")
+sel <- match(j, row.names(psi_jt))
+psi_jt <- psi_jt[sel,]
+str(psi_jt)
 
 make_param_yaml(
      output_file_path = path_to_yaml_file,
@@ -52,9 +99,9 @@ make_param_yaml(
      location_id = seq_along(j),
      location_name = j,
      N_j_initial = N_j,
-     S_j_initial = round(N_j*0.99),
-     I_j_initial = round(N_j*0.01),
-     R_j_initial = rep(0, length(N_j)),
+     S_j_initial = as.integer(round(N_j*0.99)),
+     I_j_initial = as.integer(round(N_j*0.01)),
+     R_j_initial = as.integer(rep(0, length(N_j))),
      b_j = b_j,
      d_j = b_j,
      nu_jt = matrix(data = 0, nrow = length(j), ncol = length(t)), # No vaccination
@@ -66,12 +113,13 @@ make_param_yaml(
      rho = 0.52,
      sigma = 0.24,
      beta_j0_hum = rep(0.2, length(j)),
+     beta_j_seasonality = beta_j_seasonality,
      tau_i = tau_i,
      pi_ij = pi_ij,
      alpha = 0.95,
      beta_j0_env = rep(0.4, length(j)), # Assume environmental transmission is twice that of human to human
      theta_j = theta_j,
-     psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
+     psi_jt = psi_jt,
      zeta = 0.5,
      kappa = 10^5,
      delta_min = 1/3,
@@ -79,5 +127,5 @@ make_param_yaml(
 )
 
 yaml_contents <- yaml::read_yaml(path_to_yaml_file)
-print(yaml_contents)
+
 

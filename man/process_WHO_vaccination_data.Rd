@@ -31,7 +31,7 @@ calculates cumulative doses, and computes vaccination proportions.
 \details{
 The function performs the following steps:
 \itemize{
-\item Loads WHO vaccination request data and population data for 2023.
+\item Loads WHO vaccination request data from 2016 to present and population data for 2023.
 \item Converts country names to ISO codes and removes rows for countries not included in MOSAIC's ISO code list.
 \item Infers missing campaign dates using the decision dates and calculates mean delays between decision and campaign dates.
 \item Redistributes shipped doses day by day, based on the maximum daily rate.

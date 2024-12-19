@@ -33,14 +33,14 @@ est_mobility <- function(PATHS) {
      requireNamespace('glue')
 
 
-
      #--------------------------------------------------------------------------
      # Load flight data and build mobility matrix (M)
      #--------------------------------------------------------------------------
 
-     message("Getting flight data")
-     data_flights <- utils::read.csv(file.path(PATHS$DATA_OAG, "oag_mosaic_2017_mean_weekly.csv"), stringsAsFactors = FALSE)
+     message("Getting mean DAILY OAG flight data from 2017")
+     data_flights <- utils::read.csv(file.path(PATHS$DATA_OAG, "oag_africa_2017_mean_daily.csv"), stringsAsFactors = FALSE)
      data_flights <- data_flights[data_flights$origin_iso3 %in% MOSAIC::iso_codes_mosaic,]
+     data_flights <- data_flights[data_flights$destination_iso3 %in% MOSAIC::iso_codes_mosaic,]
 
      M <- mobility::get_mob_matrix(orig=data_flights$origin_iso3,
                                    dest=data_flights$destination_iso3,
@@ -121,6 +121,7 @@ est_mobility <- function(PATHS) {
                                                   n_burn = 1000,
                                                   n_samp = 1000,
                                                   n_thin = 10)
+
      mod_travel_prob <- mobility::summary(mod_travel_prob)
 
      beta_params <- propvacc::get_beta_params(mu = mod_travel_prob$mean, mod_travel_prob$sd^2)

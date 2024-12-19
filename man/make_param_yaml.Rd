@@ -25,6 +25,7 @@ make_param_yaml(
   rho = NULL,
   sigma = NULL,
   beta_j0_hum = NULL,
+  beta_j_seasonality = NULL,
   tau_i = NULL,
   pi_ij = NULL,
   alpha = NULL,
@@ -88,6 +89,9 @@ make_param_yaml(
 
 \item{beta_j0_hum}{Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to \code{location_id} and values greater than or equal to zero.}
 
+\item{beta_j_seasonality}{The seasonal derivation from mean transmission (beta_j0_hum) for each j location. The seasonality term is given in the Z-score indicating the number of standard deviations
+away from the mean rate of transmission. Length should be 365 for each day of the year. Values are estimated in the \code{est_seasonal_dynamics()} function.}
+
 \item{tau_i}{Departure probability for each origin location. Must be a numeric vector of length equal to \code{location_id} and values between 0 and 1.}
 
 \item{pi_ij}{A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to \code{length(location_id)} x \code{length(location_id)} and values between 0 and 1.}
@@ -140,6 +144,7 @@ make_param_yaml(
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),
+     beta_j_seasonality = rep(0, 365),
      tau_i = c(0.1, 0.2),
      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
      alpha = 0.95,

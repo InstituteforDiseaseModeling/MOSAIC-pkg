@@ -34,6 +34,8 @@
 #'
 #' ## Force of Infection (human-to-human)
 #' @param beta_j0_hum Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
+#' @param beta_j_seasonality The seasonal derivation from mean transmission (beta_j0_hum) for each j location. The seasonality term is given in the Z-score indicating the number of standard deviations
+#' away from the mean rate of transmission. Length should be 365 for each day of the year. Values are estimated in the `est_seasonal_dynamics()` function.
 #' @param tau_i Departure probability for each origin location. Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
 #' @param pi_ij A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to `length(location_id)` x `length(location_id)` and values between 0 and 1.
 #' @param alpha Population mixing parameter. Must be a numeric scalar between 0 and 1.
@@ -44,8 +46,8 @@
 #' @param psi_jt A 2D matrix of environmental suitability values for V. cholerae. Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`, with values between 0 and 1.
 #' @param zeta Shedding rate of V. cholerae into the environment. Must be a numeric scalar greater than zero.
 #' @param kappa Concentration of V. cholerae required for 50% infection probability. Must be a numeric scalar greater than zero.
-#' @param delta_min Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than `delta_max`.
-#' @param delta_max Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and greater than `delta_min`.
+#' @param delta_min Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than `delta_max` (indicating a faster decay rate).
+#' @param delta_max Maximum environmental decay rate of V. cholerae.
 #'
 #' @return Returns the validated list of parameters. If `output_file_path` is provided, the parameters are also written to a YAML file.
 #'
@@ -71,6 +73,7 @@
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
+#'      beta_j_seasonality = rep(0, 365),
 #'      tau_i = c(0.1, 0.2),
 #'      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
 #'      alpha = 0.95,
@@ -115,6 +118,7 @@ make_param_yaml <- function(output_file_path = NULL,
 
                             # Force of Infection (human-to-human)
                             beta_j0_hum = NULL,
+                            beta_j_seasonality = NULL,
                             tau_i = NULL,
                             pi_ij = NULL,
                             alpha = NULL,
@@ -149,6 +153,7 @@ make_param_yaml <- function(output_file_path = NULL,
           rho = rho,
           sigma = sigma,
           beta_j0_hum = beta_j0_hum,
+          beta_j_seasonality = beta_j_seasonality,
           tau_i = tau_i,
           pi_ij = pi_ij,
           alpha = alpha,
@@ -170,11 +175,11 @@ make_param_yaml <- function(output_file_path = NULL,
      }
 
      # Initialization validation
-     if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", date_start)) {
+     if (!lubridate::is.Date(date_start) || !grepl("^\\d{4}-\\d{2}-\\d{2}$", date_start)) {
           stop("date_start must be in the format 'YYYY-MM-DD'. Provided: ", date_start)
      }
 
-     if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", date_stop)) {
+     if (!lubridate::is.Date(date_stop) || !grepl("^\\d{4}-\\d{2}-\\d{2}$", date_stop)) {
           stop("date_stop must be in the format 'YYYY-MM-DD'. Provided: ", date_stop)
      }
 
@@ -275,6 +280,13 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("beta_j0_hum must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
      }
 
+     if (!is.numeric(beta_j_seasonality) ||
+         !is.matrix(beta_j_seasonality) ||
+         nrow(beta_j_seasonality) != length(location_id) ||
+         ncol(beta_j_seasonality) != 366) {
+          stop("beta_j_seasonality must be a matrix with rows equal to length(location_id), columns equal to 366 for annual seasonality on the daily scale, and values greater than or equal to zero.")
+     }
+
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
           stop("tau_i must be a numeric vector of length equal to location_id and values between 0 and 1.")
      }
@@ -320,15 +332,51 @@ make_param_yaml <- function(output_file_path = NULL,
           stop("delta_max must be a numeric scalar greater than zero and less than Inf.")
      }
 
-     if (delta_min >= delta_max) {
-          stop("delta_min must be less than delta_max.")
+     if (delta_min <= delta_max) {
+          stop("The decay rate delta_min must be greater than decay rate for delta_max.")
      }
+
+     tmp <- split(params$nu_jt, row(params$nu_jt))
+     params$nu_jt <- lapply(tmp, as.integer)
+
+     tmp <- split(params$beta_j_seasonality, row(params$beta_j_seasonality))
+     params$beta_j_seasonality <- lapply(tmp, as.numeric)
+
+     tmp <- split(params$pi_ij, row(params$pi_ij))
+     params$pi_ij <- lapply(tmp, as.numeric)
+
+     tmp <- split(params$psi_jt, row(params$psi_jt))
+     params$psi_jt <- lapply(tmp, as.numeric)
 
      # Write to file if output_file_path is provided
      if (!is.null(output_file_path)) {
 
-          yaml::write_yaml(params, file = output_file_path)
+          yaml::write_yaml(params, file = output_file_path, indent.mapping.sequence = TRUE)
           message("YAML file written to: ", output_file_path)
+
+     } else {
+
+          return(params)
+
+     }
+
+     if (!is.null(output_file_path)) {
+
+          if (grepl("\\.yaml$", output_file_path, ignore.case = TRUE)) {
+
+               yaml::write_yaml(params, file = output_file_path, indent.mapping.sequence = TRUE)
+               message("YAML file written to: ", output_file_path)
+
+          } else if (grepl("\\.json$", output_file_path, ignore.case = TRUE)) {
+
+               jsonlite::write_json(params, path = output_file_path, auto_unbox = TRUE, pretty = TRUE)
+               message("JSON file written to: ", output_file_path)
+
+          } else {
+
+               stop("Unsupported file format. The output file must have a .yaml or .json extension.")
+
+          }
 
      } else {
 
