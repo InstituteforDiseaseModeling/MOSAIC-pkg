@@ -1,34 +1,40 @@
-#' Process WHO Vaccination Data
+#' Estimate OCV Vaccination Rates
 #'
-#' This function processes WHO vaccination request data, redistributes doses based on a maximum daily rate, and saves the processed data
-#' into a format suitable for use in the MOSAIC cholera model. It also fills in missing campaign dates, infers decision dates when needed,
-#' calculates cumulative doses, and computes vaccination proportions.
+#' This function processes vaccination data from WHO or GTFCC, redistributes doses based on a maximum daily rate, and calculates vaccination parameters for use in the MOSAIC cholera model. The processed data includes redistributed daily doses, cumulative doses, and the proportion of the population vaccinated. The results are saved as CSV files for downstream modeling.
 #'
-#' @param PATHS A list of file paths, which should include the following elements:
+#' @param PATHS A list containing file paths, including:
 #' \describe{
-#'   \item{DATA_SCRAPE_WHO_VACCINATION}{The path to the folder containing the scraped WHO vaccination data.}
-#'   \item{DATA_DEMOGRAPHICS}{The path to the folder containing demographic data for population information.}
-#'   \item{MODEL_INPUT}{The path to the folder where the processed data and parameter files will be saved.}
+#'   \item{DATA_SCRAPE_WHO_VACCINATION}{The path to the folder containing WHO vaccination data.}
+#'   \item{DATA_DEMOGRAPHICS}{The path to the folder containing demographic data.}
+#'   \item{MODEL_INPUT}{The path to the folder where processed data will be saved.}
 #' }
-#' @param max_rate_per_day The maximum vaccination rate per day for dose redistribution. Default is 100,000 doses/day.
+#' @param date_start The start date for the vaccination data range (in "YYYY-MM-DD" format). Defaults to the earliest date in the data.
+#' @param date_stop The stop date for the vaccination data range (in "YYYY-MM-DD" format). Defaults to the latest date in the data.
+#' @param max_rate_per_day The maximum vaccination rate per day used to redistribute doses. Default is 100,000 doses/day.
+#' @param data_source The source of the vaccination data. Must be one of \code{"WHO"} or \code{"GTFCC"}.
 #'
-#' @return This function returns no R object, but it saves two CSV files:
+#' @return This function does not return an R object but saves the following files to the directory specified in \code{PATHS$MODEL_INPUT}:
 #' \itemize{
-#'   \item A parameter data frame for the vaccination rate (nu) saved as \code{"param_nu_vaccination_rate.csv"}.
-#'   \item The full redistributed vaccination data saved as \code{"data_vaccinations.csv"}.
+#'   \item A redistributed vaccination data file named \code{"data_vaccinations_<data_source>_redistributed.csv"}.
+#'   \item A parameter data frame for the vaccination rate (nu) named \code{"param_nu_vaccination_rate.csv"}.
 #' }
 #'
 #' @details
 #' The function performs the following steps:
-#' \itemize{
-#'   \item Loads WHO vaccination request data from 2016 to present and population data for 2023.
-#'   \item Converts country names to ISO codes and removes rows for countries not included in MOSAIC's ISO code list.
-#'   \item Infers missing campaign dates using the decision dates and calculates mean delays between decision and campaign dates.
-#'   \item Redistributes shipped doses day by day, based on the maximum daily rate.
-#'   \item Ensures that the full date range from the minimum distribution date to the current date is covered for all ISO codes, filling in any missing dates.
-#'   \item Calculates cumulative doses, the proportion of the population vaccinated, and other related metrics.
-#'   \item Merges population data and computes vaccination rates.
-#'   \item Saves the processed vaccination data and parameter data frame for use in the MOSAIC cholera model.
+#' \enumerate{
+#'   \item **Load Vaccination Data**:
+#'     - Reads processed vaccination data from WHO or GTFCC and filters for relevant columns (\code{iso_code}, \code{campaign_date}, \code{doses_shipped}).
+#'   \item **Redistribute Doses**:
+#'     - Redistributes shipped doses day by day based on a maximum daily rate (\code{max_rate_per_day}).
+#'     - Ensures no duplication of \code{distribution_date} within \code{iso_code}.
+#'   \item **Validate Redistribution**:
+#'     - Checks that the redistributed doses sum to the total shipped doses.
+#'   \item **Ensure Full Coverage**:
+#'     - Ensures all ISO codes have data across the full date range (\code{date_start} to \code{date_stop}), filling missing dates with zero doses.
+#'   \item **Calculate Population Metrics**:
+#'     - Merges population data for 2023, calculates cumulative doses, and computes the proportion of the population vaccinated.
+#'   \item **Save Outputs**:
+#'     - Saves the redistributed vaccination data and the vaccination rate parameter data frame.
 #' }
 #'
 #' @examples
@@ -38,10 +44,14 @@
 #'   DATA_DEMOGRAPHICS = "path/to/demographics",
 #'   MODEL_INPUT = "path/to/save/processed/data"
 #' )
-#' process_WHO_vaccination_data(PATHS, max_rate_per_day = 100000)
+#' est_vaccination_rate(PATHS, max_rate_per_day = 100000, data_source = "WHO")
 #' }
 #'
+#' @importFrom glue glue
+#' @importFrom utils read.csv write.csv
+#' @importFrom base mean unique
 #' @export
+
 
 est_vaccination_rate <- function(PATHS,
                                  date_start=NULL,

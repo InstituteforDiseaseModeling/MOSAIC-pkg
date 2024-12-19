@@ -7,6 +7,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/LICENSE-text.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Default-MOSAIC-parameters.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/MOSAIC/MOSAIC-docs/01-intro.html</loc>
   </url>
   <url>
@@ -122,6 +125,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_symptomatic_prop.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccination_rate.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.html</loc>

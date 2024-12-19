@@ -77,11 +77,12 @@ reference:
       - est_seasonal_dynamics
       - fourier_series_double
       - est_mobility
-      - est_WASH_coverage
-      - est_symptomatic_prop
-      - est_immune_decay
-      - est_vaccine_effectiveness
       - est_suitability
+      - est_WASH_coverage
+      - est_vaccination_rate
+      - est_vaccine_effectiveness
+      - est_immune_decay
+      - est_symptomatic_prop
 
   - title: "Shapefiles and Spatial Data Functions"
     contents:

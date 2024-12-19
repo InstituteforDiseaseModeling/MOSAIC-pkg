@@ -110,9 +110,9 @@ away from the mean rate of transmission. Length should be 365 for each day of th
 
 \item{kappa}{Concentration of V. cholerae required for 50\% infection probability. Must be a numeric scalar greater than zero.}
 
-\item{delta_min}{Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than \code{delta_max}.}
+\item{delta_min}{Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than \code{delta_max} (indicating a faster decay rate).}
 
-\item{delta_max}{Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and greater than \code{delta_min}.}
+\item{delta_max}{Maximum environmental decay rate of V. cholerae.}
 }
 \value{
 Returns the validated list of parameters. If \code{output_file_path} is provided, the parameters are also written to a YAML file.

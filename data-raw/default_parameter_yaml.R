@@ -104,7 +104,7 @@ make_param_yaml(
      R_j_initial = as.integer(rep(0, length(N_j))),
      b_j = b_j,
      d_j = b_j,
-     nu_jt = matrix(data = 0, nrow = length(j), ncol = length(t)), # No vaccination
+     nu_jt = nu_jt, # No vaccination
      phi = 0.64,
      omega = 0.00057,
      epsilon = 0.00039,

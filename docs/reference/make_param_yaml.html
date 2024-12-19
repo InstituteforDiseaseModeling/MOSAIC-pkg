@@ -79,6 +79,7 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 <span>  date_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  location_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  location_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  N_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  S_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  I_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  R_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -93,6 +94,7 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 <span>  rho <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  beta_j0_hum <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta_j_seasonality <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tau_i <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  pi_ij <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -130,6 +132,10 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 
 <dt>location_name</dt>
 <dd><p>A character vector giving the names of each metapopulation location, matching the length of <code>location_id</code>.</p></dd>
+
+
+<dt>N_j_initial</dt>
+<dd><p>An integer vector of length <code>location_id</code> that gives the total initial population size of each j location.</p></dd>
 
 
 <dt>S_j_initial</dt>
@@ -204,6 +210,11 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 <dd><p>Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to <code>location_id</code> and values greater than or equal to zero.</p></dd>
 
 
+<dt>beta_j_seasonality</dt>
+<dd><p>The seasonal derivation from mean transmission (beta_j0_hum) for each j location. The seasonality term is given in the Z-score indicating the number of standard deviations
+away from the mean rate of transmission. Length should be 365 for each day of the year. Values are estimated in the <code><a href="est_seasonal_dynamics.html">est_seasonal_dynamics()</a></code> function.</p></dd>
+
+
 <dt>tau_i</dt>
 <dd><p>Departure probability for each origin location. Must be a numeric vector of length equal to <code>location_id</code> and values between 0 and 1.</p></dd>
 
@@ -241,11 +252,11 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 
 
 <dt>delta_min</dt>
-<dd><p>Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than <code>delta_max</code>.</p></dd>
+<dd><p>Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and less than <code>delta_max</code> (indicating a faster decay rate).</p></dd>
 
 
 <dt>delta_max</dt>
-<dd><p>Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero and greater than <code>delta_min</code>.</p></dd>
+<dd><p>Maximum environmental decay rate of V. cholerae.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -263,6 +274,7 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 <span class="r-in"><span>     date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span></span>
 <span class="r-in"><span>     location_id <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">2</span>,</span></span>
 <span class="r-in"><span>     location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span>, <span class="st">"Location B"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     N_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">1000</span><span class="op">)</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     S_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">999</span>, <span class="fl">999</span><span class="op">)</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     I_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     R_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span></span>
@@ -277,6 +289,7 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 <span class="r-in"><span>     rho <span class="op">=</span> <span class="fl">0.9</span>,</span></span>
 <span class="r-in"><span>     sigma <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
 <span class="r-in"><span>     beta_j0_hum <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.03</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     beta_j_seasonality <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">365</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     tau_i <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     pi_ij <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.8</span>, <span class="fl">0.2</span>, <span class="fl">0.2</span>, <span class="fl">0.8</span><span class="op">)</span>, nrow <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     alpha <span class="op">=</span> <span class="fl">0.95</span>,</span></span>
@@ -289,107 +302,7 @@ for use with the MOSAIC R package and ensures compatibility with downstream Pyth
 <span class="r-in"><span>     delta_max <span class="op">=</span> <span class="fl">0.01</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Validating parameter values</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Converting matrices for YAML format</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> YAML file written to: parameters.yaml</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $date_start</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "2024-12-01"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $date_stop</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "2024-12-31"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $location_id</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1 2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $location_name</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Location A" "Location B"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $S_j_initial</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 999 999</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $I_j_initial</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1 1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $R_j_initial</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0 0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $b_j</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.01 0.02</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $d_j</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.01 0.02</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $nu_jt</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $nu_jt$`1`</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $nu_jt$`2`</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $phi</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.8</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $omega</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $epsilon</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.05</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $gamma</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $mu</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $rho</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.9</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $sigma</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $beta_j0_hum</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.05 0.03</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $tau_i</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.1 0.2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $pi_ij</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $pi_ij$`1`</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.8 0.2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $pi_ij$`2`</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.2 0.8</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $alpha</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.95</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $beta_j0_env</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.02 0.04</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $theta_j</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.6 0.7</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $psi_jt</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $psi_jt$`1`</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $psi_jt$`2`</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  [1] 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $zeta</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $kappa</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1e+05</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $delta_min</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.001</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $delta_max</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.01</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in make_param_yaml(output_file_path = "parameters.yaml", date_start = "2024-12-01",     date_stop = "2024-12-31", location_id = 1:2, location_name = c("Location A",         "Location B"), N_j_initial = as.integer(c(1000, 1000)),     S_j_initial = as.integer(c(999, 999)), I_j_initial = as.integer(c(1,         1)), R_j_initial = as.integer(c(0, 0)), b_j = c(0.01,         0.02), d_j = c(0.01, 0.02), nu_jt = matrix(data = 0,         nrow = 2, ncol = 31), phi = 0.8, omega = 0.1, epsilon = 0.05,     gamma = 0.2, mu = 0.01, rho = 0.9, sigma = 0.5, beta_j0_hum = c(0.05,         0.03), beta_j_seasonality = rep(0, 365), tau_i = c(0.1,         0.2), pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),     alpha = 0.95, beta_j0_env = c(0.02, 0.04), theta_j = c(0.6,         0.7), psi_jt = matrix(data = 0, nrow = 2, ncol = 31),     zeta = 0.5, kappa = 10^5, delta_min = 0.001, delta_max = 0.01):</span> date_start must be in the format 'YYYY-MM-DD'. Provided: 2024-12-01</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

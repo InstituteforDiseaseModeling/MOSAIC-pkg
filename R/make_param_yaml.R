@@ -348,17 +348,6 @@ make_param_yaml <- function(output_file_path = NULL,
      tmp <- split(params$psi_jt, row(params$psi_jt))
      params$psi_jt <- lapply(tmp, as.numeric)
 
-     # Write to file if output_file_path is provided
-     if (!is.null(output_file_path)) {
-
-          yaml::write_yaml(params, file = output_file_path, indent.mapping.sequence = TRUE)
-          message("YAML file written to: ", output_file_path)
-
-     } else {
-
-          return(params)
-
-     }
 
      if (!is.null(output_file_path)) {
 

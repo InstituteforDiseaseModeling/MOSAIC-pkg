@@ -2,53 +2,53 @@
 % Please edit documentation in R/process_WHO_vaccination_data.R
 \name{process_WHO_vaccination_data}
 \alias{process_WHO_vaccination_data}
-\title{Process WHO Vaccination Data}
+\title{Process Vaccination Data for MOSAIC Model}
 \usage{
-process_WHO_vaccination_data(PATHS, max_rate_per_day)
+process_WHO_vaccination_data(PATHS)
 }
 \arguments{
-\item{PATHS}{A list of file paths, which should include the following elements:
-\describe{
-\item{DATA_SCRAPE_WHO_VACCINATION}{The path to the folder containing the scraped WHO vaccination data.}
-\item{DATA_DEMOGRAPHICS}{The path to the folder containing demographic data for population information.}
-\item{MODEL_INPUT}{The path to the folder where the processed data and parameter files will be saved.}
+\item{PATHS}{A list containing file paths for input and output data. The list should include:
+\itemize{
+\item \strong{DATA_DEMOGRAPHICS}: Path to the directory where demographic data is stored.
+\item \strong{DATA_SCRAPE_WHO_VACCINATION}: Path to the directory containing raw WHO vaccination data.
+\item \strong{MODEL_INPUT}: Path to the directory where processed vaccination data will be saved.
 }}
-
-\item{max_rate_per_day}{The maximum vaccination rate per day for dose redistribution. Default is 100,000 doses/day.}
 }
 \value{
-This function returns no R object, but it saves two CSV files:
-\itemize{
-\item A parameter data frame for the vaccination rate (nu) saved as \code{"param_nu_vaccination_rate.csv"}.
-\item The full redistributed vaccination data saved as \code{"data_vaccinations.csv"}.
-}
+The function saves the processed vaccination data to a CSV file in the directory specified by \code{PATHS$MODEL_INPUT}. It also returns the processed data as a data frame for further use in R.
 }
 \description{
-This function processes WHO vaccination request data, redistributes doses based on a maximum daily rate, and saves the processed data
-into a format suitable for use in the MOSAIC cholera model. It also fills in missing campaign dates, infers decision dates when needed,
-calculates cumulative doses, and computes vaccination proportions.
+This function processes raw vaccination data from WHO and associated population data to create a clean, structured dataset for the MOSAIC model. It handles data cleaning, infers missing campaign dates, validates the dataset, and saves the output for use in modeling cholera vaccination efforts.
 }
 \details{
-The function performs the following steps:
-\itemize{
-\item Loads WHO vaccination request data from 2016 to present and population data for 2023.
-\item Converts country names to ISO codes and removes rows for countries not included in MOSAIC's ISO code list.
-\item Infers missing campaign dates using the decision dates and calculates mean delays between decision and campaign dates.
-\item Redistributes shipped doses day by day, based on the maximum daily rate.
-\item Ensures that the full date range from the minimum distribution date to the current date is covered for all ISO codes, filling in any missing dates.
-\item Calculates cumulative doses, the proportion of the population vaccinated, and other related metrics.
-\item Merges population data and computes vaccination rates.
-\item Saves the processed vaccination data and parameter data frame for use in the MOSAIC cholera model.
+This function performs the following steps:
+\enumerate{
+\item \strong{Load and Filter Demographic Data}:
+- Reads demographic data for African countries from a CSV file.
+- Filters the data for the year 2023 and retains population sizes.
+\item \strong{Load and Clean Vaccination Data}:
+- Reads raw WHO vaccination data.
+- Converts country names to ISO codes for consistency.
+- Filters the data to include only countries in the MOSAIC database.
+\item \strong{Infer Missing Campaign Dates}:
+- Computes the delay between decision and campaign dates.
+- Infers missing campaign dates based on the mean delay where possible.
+- Fixes missing decision dates for grouped request numbers.
+\item \strong{Validate and Filter Data}:
+- Ensures all rows have valid campaign dates.
+- Removes rows where \code{doses_shipped} is zero or missing.
+\item \strong{Save Processed Data}:
+- Writes the cleaned and processed dataset to a CSV file for further modeling.
 }
 }
 \examples{
-\dontrun{
+# Example usage
 PATHS <- list(
-  DATA_SCRAPE_WHO_VACCINATION = "path/to/who_vaccination_data",
   DATA_DEMOGRAPHICS = "path/to/demographics",
-  MODEL_INPUT = "path/to/save/processed/data"
+  DATA_SCRAPE_WHO_VACCINATION = "path/to/who/vaccination",
+  MODEL_INPUT = "path/to/model/input"
 )
-process_WHO_vaccination_data(PATHS, max_rate_per_day = 100000)
-}
+
+processed_data <- process_WHO_vaccination_data(PATHS)
 
 }
