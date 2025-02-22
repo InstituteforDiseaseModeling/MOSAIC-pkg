@@ -74,6 +74,7 @@ reference:
 
   - title: "Estimating model quantities"
     contents:
+      - est_demographic_rates
       - est_seasonal_dynamics
       - fourier_series_double
       - est_mobility
