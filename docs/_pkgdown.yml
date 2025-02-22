@@ -61,7 +61,7 @@ reference:
       - get_WHO_vaccination_data
       - process_WHO_vaccination_data
       - process_suitability_data
-      - process_demographics_data
+      - process_UN_demographics_data
       - process_country_similarity_data
       - process_OAG_data
       - process_CFR_data
@@ -74,6 +74,7 @@ reference:
 
   - title: "Estimating model quantities"
     contents:
+      - est_demographic_rates
       - est_seasonal_dynamics
       - fourier_series_double
       - est_mobility

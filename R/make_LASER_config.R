@@ -375,6 +375,12 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("The decay rate delta_min must be greater than decay rate delta_max.")
      }
 
+     tmp <- split(params$b_jt, row(params$b_jt))
+     params$b_jt <- lapply(tmp, as.numeric)
+
+     tmp <- split(params$d_jt, row(params$d_jt))
+     params$d_jt <- lapply(tmp, as.numeric)
+
      tmp <- split(params$nu_jt, row(params$nu_jt))
      params$nu_jt <- lapply(tmp, as.integer)
 
