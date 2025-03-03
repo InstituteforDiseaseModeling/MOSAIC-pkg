@@ -18,14 +18,14 @@
 plot_seasonal_transmission <- function(PATHS) {
 
      # Load the combined precipitation data, fitted values, and clustering results from DOCS_TABLES
-     combined_precip_data <- utils::read.csv(file.path(PATHS$DOCS_TABLES, "data_seasonal_precipitation.csv"))
-     combined_fitted_values <- utils::read.csv(file.path(PATHS$DOCS_TABLES, "pred_seasonal_dynamics.csv"))
+     combined_precip_data <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "data_seasonal_precipitation.csv"))
+     combined_fitted_values <- utils::read.csv( file.path(PATHS$MODEL_INPUT, "pred_seasonal_dynamics_week.csv"))
      cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv"), stringsAsFactors = FALSE)
 
      combined_fitted_values$inferred_from_neighbor[combined_fitted_values$inferred_from_neighbor == "Democratic Republic of Congo"] <- "DRC"
 
      iso_codes <- sort(unique(combined_fitted_values$iso_code))
-     iso_codes_with_data <- sort(unique(cholera_data$iso_code))
+     iso_codes_with_data <- sort(unique(combined_fitted_values$iso_code[is.na(combined_fitted_values$inferred_from_neighbor)]))
      iso_codes_no_data <- setdiff(iso_codes, unique(cholera_data$iso_code))
 
 
@@ -81,7 +81,7 @@ plot_seasonal_transmission <- function(PATHS) {
                legend.box = "vertical",  # Arrange the legends vertically
                legend.box.just = "left",
                panel.grid.major.x = element_blank(),
-               panel.grid.major.y = element_line(color = "grey90", size = 0.25),
+               panel.grid.major.y = element_line(color = "grey90", linewidth = 0.25),
                panel.grid.minor = element_blank(),
                strip.text = element_text(size = 11)
           ) +

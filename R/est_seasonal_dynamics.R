@@ -11,6 +11,7 @@
 #' }
 #' @param date_start A date in YYYY-MM-DD format indicating the start date of the precipitation data (1970-01-01 is earliest)
 #' @param date_stop A date in YYYY-MM-DD format indicating the stop date of the precipitation date
+#' @param min_obs The minimum number of observations required to fit the fourier series to cholera case data (default is 30)
 #' @param clustering_method The name of the clustering method to use when grouping countries by seasonality (i.e. "kmeans", "hierarchical", "ward.D2", "knn")
 #' @param k The number of clusters to group countries by seasonality
 #'
@@ -29,6 +30,7 @@
 est_seasonal_dynamics <- function(PATHS,
                                   date_start,
                                   date_stop,
+                                  min_obs = 30,
                                   clustering_method,
                                   k) {
 
@@ -43,12 +45,42 @@ est_seasonal_dynamics <- function(PATHS,
      # Load cholera cases data
      cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv"), stringsAsFactors = FALSE)
 
-     iso_codes_with_data <- sort(unique(cholera_data$iso_code))
-     iso_codes_no_data <- setdiff(iso_codes, unique(cholera_data$iso_code))
+     # Filter cholera_data to include only observations within the specified date range
+     tmp <- cholera_data[cholera_data$date_start >= date_start & cholera_data$date_stop < date_stop,]
+
+     # Count the number of observations per iso_code within the date range
+     n_obs <- table(tmp$iso_code)
+
+     # Define iso_codes_with_data as those with at least min_obs observations.
+     # Countries with fewer observations (or none) will be treated as having insufficient data.
+     iso_codes_with_data <- names(n_obs[n_obs >= min_obs])
+
+     # Filter cholera_data to include only countries with sufficient data.
+     cholera_data <- cholera_data[cholera_data$iso_code %in% iso_codes_with_data,]
+
+     # Define iso_codes_no_data as the set of countries that are missing or have insufficient observations.
+     iso_codes_no_data <- setdiff(iso_codes, iso_codes_with_data)
 
      ################################################################################
      # Model seasonal dynamics of cases and precipitation using Fourier series
      ################################################################################
+
+     normalize_if_needed <- function(x, verbose = FALSE) {
+
+          normalized_x <- tryCatch({
+
+               check_affine_normalization(x, verbose = verbose)
+               x
+
+          }, error = function(e) {
+
+               message("Normalization check failed: ", e$message, "\nApplying affine normalization.")
+               calc_affine_normalization(x)
+
+          })
+
+          return(normalized_x)
+     }
 
      all_precip_data <- list()
      all_fitted_values <- list()
@@ -86,9 +118,9 @@ est_seasonal_dynamics <- function(PATHS,
           # Create a sequence of weeks for the fitted curve
           week_seq <- 1:52
 
-          # Scale the precipitation and cholera data
-          precip_data$precip_scaled <- scale(precip_data$weekly_precipitation_sum, center = TRUE, scale = TRUE)
-          precip_data$cases_scaled <- scale(precip_data$cases, center = TRUE, scale = TRUE)
+          # Scale the precipitation and cholera data so that scaled variable is > -1 with mean = 0
+          precip_data$precip_scaled <- calc_affine_normalization(precip_data$weekly_precipitation_sum)
+          precip_data$cases_scaled <- calc_affine_normalization(precip_data$cases)
 
           message("Fitting fourier series to precip data")
           fit_fourier_precip <- minpack.lm::nlsLM(
@@ -114,11 +146,15 @@ est_seasonal_dynamics <- function(PATHS,
 
           # Use MOSAIC::fourier_series_double to calculate fitted values for precipitation
           fitted_values_precip <- MOSAIC::fourier_series_double(week_seq, coefs_precip["a1"], coefs_precip["b1"], coefs_precip["a2"], coefs_precip["b2"], p = 52, beta0 = 0)
+          fitted_values_precip <- normalize_if_needed(fitted_values_precip)
+
 
           # Fit the Fourier series model to cholera cases if data is available
-          if (country_iso_code %in% iso_codes_with_data) {
+          n_obs <- sum(!is.na(precip_data$cases))
 
-               message("Cases data present: fitting fourier series to case data")
+          if (country_iso_code %in% iso_codes_with_data && n_obs >= min_obs) {
+
+               message(glue::glue("Case data present and >= {min_obs}: fitting fourier series to case data"))
 
                fit_fourier_cases <- minpack.lm::nlsLM(
                     cases_scaled ~ MOSAIC::fourier_series_double(week, a1, b1, a2, b2, p = 52, beta0 = 0),
@@ -147,6 +183,7 @@ est_seasonal_dynamics <- function(PATHS,
 
                # Use MOSAIC::fourier_series_double to calculate fitted values for cholera cases
                fitted_values_cases <- MOSAIC::fourier_series_double(week_seq, coefs_cases["a1"], coefs_cases["b1"], coefs_cases["a2"], coefs_cases["b2"], p = 52, beta0 = 0)
+               fitted_values_cases <- normalize_if_needed(fitted_values_cases)
 
           } else {
 
@@ -195,6 +232,14 @@ est_seasonal_dynamics <- function(PATHS,
      row.names(combined_param_values) <- NULL
 
 
+     # Final check for correct affine normalization for fitted fourier function output
+     message("Checking for proper scaling of fourier function values fitted to precip data:")
+     check_affine_normalization(combined_fitted_values$fitted_values_fourier_precip, verbose = TRUE)
+
+     message("Checking for proper scaling of fourier function values fitted to case data:")
+     check_affine_normalization(combined_fitted_values$fitted_values_fourier_cases, verbose = TRUE)
+
+
 
 
      ################################################################################
@@ -206,7 +251,6 @@ est_seasonal_dynamics <- function(PATHS,
 
      message('Estimating culstering of countries based on seasonal rainfall patterns
              and inferring seasonal transmission dynamics based on the clustering...')
-
 
      # Step 1: Perform hierarchical clustering with k = 4
 
@@ -392,6 +436,8 @@ est_seasonal_dynamics <- function(PATHS,
      }
 
 
+     message('Downscaling weekly seasonality to daily time steps...')
+
      convert_doy_to_woy <- function(day_of_year, year) {
           # Validate inputs
           if (any(day_of_year < 1 | day_of_year > 366)) {
@@ -453,10 +499,11 @@ est_seasonal_dynamics <- function(PATHS,
 
      smoothed_list <- lapply(split_data, function(group) {
 
+          message(group$iso_code[1])
           days <- seq(min(group$day), max(group$day), by = 1)
 
-          smoothed_precip <- predict(loess(fitted_values_fourier_precip ~ day, data = group, span = 0.1), newdata = days)
-          smoothed_cases <- predict(loess(fitted_values_fourier_cases ~ day, data = group, span = 0.1), newdata = days)
+          smoothed_precip <- stats::predict(loess(fitted_values_fourier_precip ~ day, data = group, span = 0.1), newdata = days)
+          smoothed_cases <- stats::predict(loess(fitted_values_fourier_cases ~ day, data = group, span = 0.1), newdata = days)
 
           data.frame(
                iso_code = unique(group$iso_code),
