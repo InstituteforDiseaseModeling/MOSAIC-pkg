@@ -76,7 +76,7 @@ beta_j0_hum <- rep(0.2, length(j))
 
 tmp <- read.csv(file.path(getwd(), 'model/input/pred_seasonal_dynamics_day.csv'))
 tmp <- tmp[tmp$iso_code %in% j,]
-beta_j_seasonality <- acast(tmp, iso_code ~ day, value.var = "fitted_values_fourier_cases")
+beta_j_seasonality <- reshape2::acast(tmp, iso_code ~ day, value.var = "fitted_values_fourier_cases")
 sel <- match(j, row.names(beta_j_seasonality))
 beta_j_seasonality <- beta_j_seasonality[sel,]
 str(beta_j_seasonality)
@@ -137,10 +137,13 @@ make_LASER_config(
      b_jt = b_jt,
      d_jt = b_jt,
      nu_jt = nu_jt, # No vaccination
-     phi = 0.64,
-     omega = 0.00057,
-     epsilon = 0.00039,
-     gamma = 0.1,
+     phi_1 = 0.64,
+     phi_2 = 0.85,
+     omega_1 = 0.0006,
+     omega_2 = 0.0004,
+     epsilon = 0.0003,
+     gamma_1 = 0.14,
+     gamma_2 = 0.33,
      mu = 0.015,
      rho = 0.52,
      sigma = 0.24,
@@ -148,11 +151,13 @@ make_LASER_config(
      beta_j_seasonality = beta_j_seasonality,
      tau_i = tau_i,
      pi_ij = pi_ij,
-     alpha = 0.95,
+     alpha_1 = 0.95,
+     alpha_2 = 0.95,
      beta_j0_env = rep(0.4, length(j)), # Assume environmental transmission is twice that of human to human
      theta_j = theta_j,
      psi_jt = psi_jt,
-     zeta = 0.5,
+     zeta_1 = 7.5,
+     zeta_2 = 2.5,
      kappa = 10^5,
      delta_min = 1/3,
      delta_max = 1/90

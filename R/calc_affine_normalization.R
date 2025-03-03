@@ -3,9 +3,9 @@
 #' Transforms a numeric vector by centering it at zero and scaling it so that the
 #' minimum value becomes \code{-1}. Specifically, the affine normalization is defined as:
 #'
-#' \deqn{scaled = \frac{x - \mu}{\mu - \min(x)}}
+#' \deqn{x_{\text{scaled}} = \frac{x - \mu}{\mu - \min(x)}}
 #'
-#' where \eqn{\mu} is the mean of \code{x} computed with \code{na.rm = TRUE}.
+#' where \eqn{\mu} is the mean of \code{x}.
 #'
 #' The transformation produces a vector with a mean that is approximately zero (ignoring
 #' \code{NA} values), a minimum of \code{-1}, and a maximum above zero if the original

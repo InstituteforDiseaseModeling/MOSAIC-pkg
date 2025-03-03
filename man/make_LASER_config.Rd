@@ -20,10 +20,13 @@ make_LASER_config(
   b_jt = NULL,
   d_jt = NULL,
   nu_jt = NULL,
-  phi = NULL,
-  omega = NULL,
+  phi_1 = NULL,
+  phi_2 = NULL,
+  omega_1 = NULL,
+  omega_2 = NULL,
   epsilon = NULL,
-  gamma = NULL,
+  gamma_1 = NULL,
+  gamma_2 = NULL,
   mu = NULL,
   rho = NULL,
   sigma = NULL,
@@ -31,11 +34,13 @@ make_LASER_config(
   beta_j_seasonality = NULL,
   tau_i = NULL,
   pi_ij = NULL,
-  alpha = NULL,
+  alpha_1 = NULL,
+  alpha_2 = NULL,
   beta_j0_env = NULL,
   theta_j = NULL,
   psi_jt = NULL,
-  zeta = NULL,
+  zeta_1 = NULL,
+  zeta_2 = NULL,
   kappa = NULL,
   delta_min = NULL,
   delta_max = NULL
@@ -78,13 +83,19 @@ make_LASER_config(
 
 \item{nu_jt}{A matrix of vaccination rates for each location (\code{j}) and time step (\code{t}). Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}.}
 
-\item{phi}{Effectiveness of Oral Cholera Vaccine (OCV). Must be numeric and within the range \link{0, 1}.}
+\item{phi_1}{Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range \link{0, 1}.}
 
-\item{omega}{Waning immunity rate of vaccinated individuals. Must be a numeric scalar greater than or equal to zero.}
+\item{phi_2}{Effectiveness of two doses of Oral Cholera Vaccine (OCV). Must be numeric and within the range \link{0, 1}.}
+
+\item{omega_1}{Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.}
+
+\item{omega_2}{Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.}
 
 \item{epsilon}{Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.}
 
-\item{gamma}{Recovery rate of infected individuals. Must be a numeric scalar greater than or equal to zero.
+\item{gamma_1}{Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.}
+
+\item{gamma_2}{Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.
 \subsection{Observation Processes}{
 }}
 
@@ -104,7 +115,9 @@ make_LASER_config(
 
 \item{pi_ij}{A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to \code{length(location_id)} x \code{length(location_id)} and values between 0 and 1.}
 
-\item{alpha}{Population mixing parameter. Must be a numeric scalar between 0 and 1.
+\item{alpha_1}{Transmission parameter for the level population mixing between infectious (I) and susceptible (S) individuals. Must be a numeric scalar between 0 and 1.}
+
+\item{alpha_2}{Transmission parameter determining the extent to which transmission is frequency dependent (\eqn{\alpha_2 = 1}) or density dependent (\eqn{\alpha_2 \approx 0}). Must be a numeric scalar between 0 and 1.
 \subsection{Force of Infection (environment-to-human)}{
 }}
 
@@ -114,7 +127,9 @@ make_LASER_config(
 
 \item{psi_jt}{A matrix of environmental suitability values for V. cholerae. Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}, with values between 0 and 1.}
 
-\item{zeta}{Shedding rate of V. cholerae into the environment. Must be a numeric scalar greater than zero.}
+\item{zeta_1}{Shedding rate of V. cholerae into the environment by individuals with severe infection. Must be a numeric scalar greater than zero.}
+
+\item{zeta_2}{Shedding rate of V. cholerae into the environment by individuals with mild or asymptomatic infection. Must be a numeric scalar greater than zero.}
 
 \item{kappa}{Concentration of V. cholerae required for 50\% infection probability. Must be a numeric scalar greater than zero.}
 
@@ -147,10 +162,13 @@ make_LASER_config(
      b_jt = matrix(data = 0.0015, nrow = 2, ncol = 31),
      d_jt = matrix(data = 0.001, nrow = 2, ncol = 31),
      nu_jt = matrix(data = 0, nrow = 2, ncol = 31),
-     phi = 0.8,
-     omega = 0.1,
+     phi_1 = 0.8,
+     phi_2 = 0.85,
+     omega_1 = 0.1,
+     omega_2 = 0.12,
      epsilon = 0.05,
-     gamma = 0.2,
+     gamma_1 = 0.2,
+     gamma_2 = 0.25,
      mu = 0.01,
      rho = 0.9,
      sigma = 0.5,
@@ -158,11 +176,13 @@ make_LASER_config(
      beta_j_seasonality = matrix(0, nrow = 2, ncol = 366),
      tau_i = c(0.1, 0.2),
      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
-     alpha = 0.95,
+     alpha_1 = 0.95,
+     alpha_2 = 1,
      beta_j0_env = c(0.02, 0.04),
      theta_j = c(0.6, 0.7),
      psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
-     zeta = 0.5,
+     zeta_1 = 0.5,
+     zeta_2 = 0.4,
      kappa = 10^5,
      delta_min = 0.1,
      delta_max = 0.01

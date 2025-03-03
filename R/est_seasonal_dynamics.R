@@ -69,13 +69,13 @@ est_seasonal_dynamics <- function(PATHS,
 
           normalized_x <- tryCatch({
 
-               check_affine_normalization(x, verbose = verbose)
+               MOSAIC::check_affine_normalization(x, verbose = verbose)
                x
 
           }, error = function(e) {
 
                message("Normalization check failed: ", e$message, "\nApplying affine normalization.")
-               calc_affine_normalization(x)
+               MOSAIC::calc_affine_normalization(x)
 
           })
 
@@ -119,8 +119,8 @@ est_seasonal_dynamics <- function(PATHS,
           week_seq <- 1:52
 
           # Scale the precipitation and cholera data so that scaled variable is > -1 with mean = 0
-          precip_data$precip_scaled <- calc_affine_normalization(precip_data$weekly_precipitation_sum)
-          precip_data$cases_scaled <- calc_affine_normalization(precip_data$cases)
+          precip_data$precip_scaled <- MOSAIC::calc_affine_normalization(precip_data$weekly_precipitation_sum)
+          precip_data$cases_scaled <- MOSAIC::calc_affine_normalization(precip_data$cases)
 
           message("Fitting fourier series to precip data")
           fit_fourier_precip <- minpack.lm::nlsLM(
@@ -234,10 +234,10 @@ est_seasonal_dynamics <- function(PATHS,
 
      # Final check for correct affine normalization for fitted fourier function output
      message("Checking for proper scaling of fourier function values fitted to precip data:")
-     check_affine_normalization(combined_fitted_values$fitted_values_fourier_precip, verbose = TRUE)
+     MOSAIC::check_affine_normalization(combined_fitted_values$fitted_values_fourier_precip, verbose = TRUE)
 
      message("Checking for proper scaling of fourier function values fitted to case data:")
-     check_affine_normalization(combined_fitted_values$fitted_values_fourier_cases, verbose = TRUE)
+     MOSAIC::check_affine_normalization(combined_fitted_values$fitted_values_fourier_cases, verbose = TRUE)
 
 
 

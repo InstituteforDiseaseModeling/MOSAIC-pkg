@@ -21,9 +21,9 @@
 #' @details The check uses a tolerance of \code{1e-8} to account for floating point precision.
 #'          The conditions verified correspond to a transformation defined as:
 #'
-#' \deqn{scaled = \frac{x - \mu}{\mu - \min(x)}}
+#' \deqn{x_{\text{scaled}} = \frac{x - \mu}{\mu - \min(x)}}
 #'
-#' where \eqn{\mu} is the mean of \code{x} computed with \code{na.rm = TRUE}. Note that
+#' where \eqn{\mu} is the mean of \code{x}. Note that
 #' while the transformation forces a zero-centered result, the minimum value need not be
 #' exactly \code{-1} but should be no less than \code{-1}.
 #'

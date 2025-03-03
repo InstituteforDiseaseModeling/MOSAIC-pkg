@@ -25,10 +25,13 @@
 #'
 #' ## Immune Dynamics
 #' @param nu_jt A matrix of vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
-#' @param phi Effectiveness of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
-#' @param omega Waning immunity rate of vaccinated individuals. Must be a numeric scalar greater than or equal to zero.
+#' @param phi_1 Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
+#' @param phi_2 Effectiveness of two doses of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
+#' @param omega_1 Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.
+#' @param omega_2 Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.
 #' @param epsilon Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
-#' @param gamma Recovery rate of infected individuals. Must be a numeric scalar greater than or equal to zero.
+#' @param gamma_1 Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.
+#' @param gamma_2 Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.
 #'
 #' ## Observation Processes
 #' @param mu Mortality rate due to V. cholerae infection. Must be a numeric scalar greater than or equal to zero.
@@ -40,13 +43,15 @@
 #' @param beta_j_seasonality The seasonal derivation from mean transmission (beta_j0_hum) for each location. Must be a matrix with rows equal to `length(location_id)` and 366 columns representing the annual daily scale.
 #' @param tau_i Departure probability for each origin location. Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
 #' @param pi_ij A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to `length(location_id)` x `length(location_id)` and values between 0 and 1.
-#' @param alpha Population mixing parameter. Must be a numeric scalar between 0 and 1.
+#' @param alpha_1 Transmission parameter for the level population mixing between infectious (I) and susceptible (S) individuals. Must be a numeric scalar between 0 and 1.
+#' @param alpha_2 Transmission parameter determining the extent to which transmission is frequency dependent (\eqn{\alpha_2 = 1}) or density dependent (\eqn{\alpha_2 \approx 0}). Must be a numeric scalar between 0 and 1.
 #'
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
 #' @param theta_j Proportion of the population with adequate Water, Sanitation, and Hygiene (WASH). Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
 #' @param psi_jt A matrix of environmental suitability values for V. cholerae. Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`, with values between 0 and 1.
-#' @param zeta Shedding rate of V. cholerae into the environment. Must be a numeric scalar greater than zero.
+#' @param zeta_1 Shedding rate of V. cholerae into the environment by individuals with severe infection. Must be a numeric scalar greater than zero.
+#' @param zeta_2 Shedding rate of V. cholerae into the environment by individuals with mild or asymptomatic infection. Must be a numeric scalar greater than zero.
 #' @param kappa Concentration of V. cholerae required for 50% infection probability. Must be a numeric scalar greater than zero.
 #' @param delta_min Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero.
 #' @param delta_max Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero.
@@ -70,10 +75,13 @@
 #'      b_jt = matrix(data = 0.0015, nrow = 2, ncol = 31),
 #'      d_jt = matrix(data = 0.001, nrow = 2, ncol = 31),
 #'      nu_jt = matrix(data = 0, nrow = 2, ncol = 31),
-#'      phi = 0.8,
-#'      omega = 0.1,
+#'      phi_1 = 0.8,
+#'      phi_2 = 0.85,
+#'      omega_1 = 0.1,
+#'      omega_2 = 0.12,
 #'      epsilon = 0.05,
-#'      gamma = 0.2,
+#'      gamma_1 = 0.2,
+#'      gamma_2 = 0.25,
 #'      mu = 0.01,
 #'      rho = 0.9,
 #'      sigma = 0.5,
@@ -81,11 +89,13 @@
 #'      beta_j_seasonality = matrix(0, nrow = 2, ncol = 366),
 #'      tau_i = c(0.1, 0.2),
 #'      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
-#'      alpha = 0.95,
+#'      alpha_1 = 0.95,
+#'      alpha_2 = 1,
 #'      beta_j0_env = c(0.02, 0.04),
 #'      theta_j = c(0.6, 0.7),
 #'      psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
-#'      zeta = 0.5,
+#'      zeta_1 = 0.5,
+#'      zeta_2 = 0.4,
 #'      kappa = 10^5,
 #'      delta_min = 0.1,
 #'      delta_max = 0.01
@@ -93,7 +103,6 @@
 #'
 #' @export
 #'
-
 make_LASER_config <- function(output_file_path = NULL,
 
                               # Initialization
@@ -115,10 +124,13 @@ make_LASER_config <- function(output_file_path = NULL,
 
                               # Immune Dynamics
                               nu_jt = NULL,
-                              phi = NULL,
-                              omega = NULL,
+                              phi_1 = NULL,
+                              phi_2 = NULL,
+                              omega_1 = NULL,
+                              omega_2 = NULL,
                               epsilon = NULL,
-                              gamma = NULL,
+                              gamma_1 = NULL,
+                              gamma_2 = NULL,
 
                               # Observation Processes
                               mu = NULL,
@@ -130,13 +142,15 @@ make_LASER_config <- function(output_file_path = NULL,
                               beta_j_seasonality = NULL,
                               tau_i = NULL,
                               pi_ij = NULL,
-                              alpha = NULL,
+                              alpha_1 = NULL,
+                              alpha_2 = NULL,
 
                               # Force of Infection (environment-to-human)
                               beta_j0_env = NULL,
                               theta_j = NULL,
                               psi_jt = NULL,
-                              zeta = NULL,
+                              zeta_1 = NULL,
+                              zeta_2 = NULL,
                               kappa = NULL,
                               delta_min = NULL,
                               delta_max = NULL) {
@@ -178,10 +192,13 @@ make_LASER_config <- function(output_file_path = NULL,
           b_jt = b_jt,
           d_jt = d_jt,
           nu_jt = nu_jt,
-          phi = phi,
-          omega = omega,
+          phi_1 = phi_1,
+          phi_2 = phi_2,
+          omega_1 = omega_1,
+          omega_2 = omega_2,
           epsilon = epsilon,
-          gamma = gamma,
+          gamma_1 = gamma_1,
+          gamma_2 = gamma_2,
           mu = mu,
           rho = rho,
           sigma = sigma,
@@ -189,11 +206,13 @@ make_LASER_config <- function(output_file_path = NULL,
           beta_j_seasonality = beta_j_seasonality,
           tau_i = tau_i,
           pi_ij = pi_ij,
-          alpha = alpha,
+          alpha_1 = alpha_1,
+          alpha_2 = alpha_2,
           beta_j0_env = beta_j0_env,
           theta_j = theta_j,
           psi_jt = psi_jt,
-          zeta = zeta,
+          zeta_1 = zeta_1,
+          zeta_2 = zeta_2,
           kappa = kappa,
           delta_min = delta_min,
           delta_max = delta_max
@@ -290,20 +309,33 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("nu_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
-     if (!is.numeric(phi) || phi < 0 || phi > 1) {
-          stop("phi must be numeric and within the range [0, 1].")
+     if (!is.numeric(phi_1) || phi_1 < 0 || phi_1 > 1) {
+          stop("phi_1 must be numeric and within the range [0, 1].")
+     }
+     if (!is.numeric(phi_2) || phi_2 < 0 || phi_2 > 1) {
+          stop("phi_2 must be numeric and within the range [0, 1].")
      }
 
-     if (!is.numeric(omega) || omega < 0) {
-          stop("omega must be a numeric scalar greater than or equal to zero.")
+     if (!is.numeric(omega_1) || omega_1 < 0) {
+          stop("omega_1 must be a numeric scalar greater than or equal to zero.")
+     }
+     if (!is.numeric(omega_2) || omega_2 < 0) {
+          stop("omega_2 must be a numeric scalar greater than or equal to zero.")
      }
 
      if (!is.numeric(epsilon) || epsilon < 0) {
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     if (!is.numeric(gamma) || gamma < 0) {
-          stop("gamma must be a numeric scalar greater than or equal to zero.")
+     if (!is.numeric(gamma_1) || gamma_1 < 0) {
+          stop("gamma_1 must be a numeric scalar greater than or equal to zero.")
+     }
+     if (!is.numeric(gamma_2) || gamma_2 < 0) {
+          stop("gamma_2 must be a numeric scalar greater than or equal to zero.")
+     }
+     # Check that the recovery rate for severe infection is slower than for mild infection.
+     if (gamma_1 >= gamma_2) {
+          stop("gamma_1 must be less than gamma_2, as the recovery rate for severe infection should be slower than for mild infection.")
      }
 
      # Observation Processes validation.
@@ -338,8 +370,11 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("pi_ij must be a matrix with dimensions equal to length(location_id) x length(location_id).")
      }
 
-     if (!is.numeric(alpha) || alpha < 0 || alpha > 1) {
-          stop("alpha must be a numeric scalar between 0 and 1.")
+     if (!is.numeric(alpha_1) || alpha_1 < 0 || alpha_1 > 1) {
+          stop("alpha_1 must be a numeric scalar between 0 and 1.")
+     }
+     if (!is.numeric(alpha_2) || alpha_2 < 0 || alpha_2 > 1) {
+          stop("alpha_2 must be a numeric scalar between 0 and 1.")
      }
 
      # Force of Infection (environment-to-human) validation.
@@ -355,8 +390,15 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("psi_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
-     if (!is.numeric(zeta) || zeta <= 0) {
-          stop("zeta must be a numeric scalar greater than zero.")
+     if (!is.numeric(zeta_1) || zeta_1 <= 0) {
+          stop("zeta_1 must be a numeric scalar greater than zero.")
+     }
+     if (!is.numeric(zeta_2) || zeta_2 <= 0) {
+          stop("zeta_2 must be a numeric scalar greater than zero.")
+     }
+     # Check that zeta_1 is greater than zeta_2.
+     if (zeta_1 <= zeta_2) {
+          stop("zeta_1 must be greater than zeta_2.")
      }
 
      if (!is.numeric(kappa) || kappa <= 0) {
