@@ -89,10 +89,13 @@ model simulation.</p>
 <span>  b_jt <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  d_jt <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  nu_jt <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  phi <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  omega <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  phi_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  phi_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  omega_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  omega_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  epsilon <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gamma <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  gamma_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  gamma_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mu <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  rho <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -100,11 +103,13 @@ model simulation.</p>
 <span>  beta_j_seasonality <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tau_i <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  pi_ij <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  alpha <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  alpha_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  alpha_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  beta_j0_env <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  theta_j <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  psi_jt <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  zeta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zeta_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zeta_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  kappa <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  delta_min <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  delta_max <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -185,20 +190,32 @@ model simulation.</p>
 <dd><p>A matrix of vaccination rates for each location (<code>j</code>) and time step (<code>t</code>). Must have rows equal to <code>length(location_id)</code> and columns equal to the daily sequence from <code>date_start</code> to <code>date_stop</code>.</p></dd>
 
 
-<dt>phi</dt>
-<dd><p>Effectiveness of Oral Cholera Vaccine (OCV). Must be numeric and within the range 0, 1.</p></dd>
+<dt>phi_1</dt>
+<dd><p>Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range 0, 1.</p></dd>
 
 
-<dt>omega</dt>
-<dd><p>Waning immunity rate of vaccinated individuals. Must be a numeric scalar greater than or equal to zero.</p></dd>
+<dt>phi_2</dt>
+<dd><p>Effectiveness of two doses of Oral Cholera Vaccine (OCV). Must be numeric and within the range 0, 1.</p></dd>
+
+
+<dt>omega_1</dt>
+<dd><p>Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.</p></dd>
+
+
+<dt>omega_2</dt>
+<dd><p>Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.</p></dd>
 
 
 <dt>epsilon</dt>
 <dd><p>Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.</p></dd>
 
 
-<dt>gamma</dt>
-<dd><p>Recovery rate of infected individuals. Must be a numeric scalar greater than or equal to zero.</p><div class="section">
+<dt>gamma_1</dt>
+<dd><p>Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.</p></dd>
+
+
+<dt>gamma_2</dt>
+<dd><p>Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.</p><div class="section">
 <h3 id="observation-processes">Observation Processes<a class="anchor" aria-label="anchor" href="#observation-processes"></a></h3>
 
 
@@ -237,8 +254,12 @@ model simulation.</p>
 <dd><p>A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to <code>length(location_id)</code> x <code>length(location_id)</code> and values between 0 and 1.</p></dd>
 
 
-<dt>alpha</dt>
-<dd><p>Population mixing parameter. Must be a numeric scalar between 0 and 1.</p><div class="section">
+<dt>alpha_1</dt>
+<dd><p>Transmission parameter for the level population mixing between infectious (I) and susceptible (S) individuals. Must be a numeric scalar between 0 and 1.</p></dd>
+
+
+<dt>alpha_2</dt>
+<dd><p>Transmission parameter determining the extent to which transmission is frequency dependent (\(\alpha_2 = 1\)) or density dependent (\(\alpha_2 \approx 0\)). Must be a numeric scalar between 0 and 1.</p><div class="section">
 <h3 id="force-of-infection-environment-to-human-">Force of Infection (environment-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-environment-to-human-"></a></h3>
 
 
@@ -257,8 +278,12 @@ model simulation.</p>
 <dd><p>A matrix of environmental suitability values for V. cholerae. Must have rows equal to <code>length(location_id)</code> and columns equal to the daily sequence from <code>date_start</code> to <code>date_stop</code>, with values between 0 and 1.</p></dd>
 
 
-<dt>zeta</dt>
-<dd><p>Shedding rate of V. cholerae into the environment. Must be a numeric scalar greater than zero.</p></dd>
+<dt>zeta_1</dt>
+<dd><p>Shedding rate of V. cholerae into the environment by individuals with severe infection. Must be a numeric scalar greater than zero.</p></dd>
+
+
+<dt>zeta_2</dt>
+<dd><p>Shedding rate of V. cholerae into the environment by individuals with mild or asymptomatic infection. Must be a numeric scalar greater than zero.</p></dd>
 
 
 <dt>kappa</dt>
@@ -298,10 +323,13 @@ model simulation.</p>
 <span class="r-in"><span>     b_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0.0015</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">31</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     d_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0.001</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">31</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     nu_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">31</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>     phi <span class="op">=</span> <span class="fl">0.8</span>,</span></span>
-<span class="r-in"><span>     omega <span class="op">=</span> <span class="fl">0.1</span>,</span></span>
+<span class="r-in"><span>     phi_1 <span class="op">=</span> <span class="fl">0.8</span>,</span></span>
+<span class="r-in"><span>     phi_2 <span class="op">=</span> <span class="fl">0.85</span>,</span></span>
+<span class="r-in"><span>     omega_1 <span class="op">=</span> <span class="fl">0.1</span>,</span></span>
+<span class="r-in"><span>     omega_2 <span class="op">=</span> <span class="fl">0.12</span>,</span></span>
 <span class="r-in"><span>     epsilon <span class="op">=</span> <span class="fl">0.05</span>,</span></span>
-<span class="r-in"><span>     gamma <span class="op">=</span> <span class="fl">0.2</span>,</span></span>
+<span class="r-in"><span>     gamma_1 <span class="op">=</span> <span class="fl">0.2</span>,</span></span>
+<span class="r-in"><span>     gamma_2 <span class="op">=</span> <span class="fl">0.25</span>,</span></span>
 <span class="r-in"><span>     mu <span class="op">=</span> <span class="fl">0.01</span>,</span></span>
 <span class="r-in"><span>     rho <span class="op">=</span> <span class="fl">0.9</span>,</span></span>
 <span class="r-in"><span>     sigma <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
@@ -309,11 +337,13 @@ model simulation.</p>
 <span class="r-in"><span>     beta_j_seasonality <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">366</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     tau_i <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     pi_ij <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.8</span>, <span class="fl">0.2</span>, <span class="fl">0.2</span>, <span class="fl">0.8</span><span class="op">)</span>, nrow <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>     alpha <span class="op">=</span> <span class="fl">0.95</span>,</span></span>
+<span class="r-in"><span>     alpha_1 <span class="op">=</span> <span class="fl">0.95</span>,</span></span>
+<span class="r-in"><span>     alpha_2 <span class="op">=</span> <span class="fl">1</span>,</span></span>
 <span class="r-in"><span>     beta_j0_env <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.02</span>, <span class="fl">0.04</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     theta_j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.7</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     psi_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">31</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>     zeta <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
+<span class="r-in"><span>     zeta_1 <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
+<span class="r-in"><span>     zeta_2 <span class="op">=</span> <span class="fl">0.4</span>,</span></span>
 <span class="r-in"><span>     kappa <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fl">5</span>,</span></span>
 <span class="r-in"><span>     delta_min <span class="op">=</span> <span class="fl">0.1</span>,</span></span>
 <span class="r-in"><span>     delta_max <span class="op">=</span> <span class="fl">0.01</span></span></span>

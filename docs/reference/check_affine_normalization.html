@@ -100,8 +100,8 @@ with an error message detailing the failed condition(s).</p>
 informative error message.</p>
 <p>The check uses a tolerance of <code>1e-8</code> to account for floating point precision.
 The conditions verified correspond to a transformation defined as:</p>
-<p>$$scaled = \frac{x - \mu}{\mu - \min(x)}$$</p>
-<p>where \(\mu\) is the mean of <code>x</code> computed with <code>na.rm = TRUE</code>. Note that
+<p>$$x_{\text{scaled}} = \frac{x - \mu}{\mu - \min(x)}$$</p>
+<p>where \(\mu\) is the mean of <code>x</code>. Note that
 while the transformation forces a zero-centered result, the minimum value need not be
 exactly <code>-1</code> but should be no less than <code>-1</code>.</p>
     </div>

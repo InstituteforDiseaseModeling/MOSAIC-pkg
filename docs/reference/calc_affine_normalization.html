@@ -87,8 +87,8 @@ minimum value becomes <code>-1</code>. Specifically, the affine normalization is
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>$$scaled = \frac{x - \mu}{\mu - \min(x)}$$</p>
-<p>where \(\mu\) is the mean of <code>x</code> computed with <code>na.rm = TRUE</code>.</p>
+    <p>$$x_{\text{scaled}} = \frac{x - \mu}{\mu - \min(x)}$$</p>
+<p>where \(\mu\) is the mean of <code>x</code>.</p>
 <p>The transformation produces a vector with a mean that is approximately zero (ignoring
 <code>NA</code> values), a minimum of <code>-1</code>, and a maximum above zero if the original
 maximum exceeds the mean.</p>
