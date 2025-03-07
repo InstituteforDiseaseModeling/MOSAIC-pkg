@@ -19,14 +19,16 @@ make_LASER_config(
   V2_j_initial = NULL,
   b_jt = NULL,
   d_jt = NULL,
-  nu_jt = NULL,
+  nu_1_jt = NULL,
+  nu_2_jt = NULL,
   phi_1 = NULL,
   phi_2 = NULL,
   omega_1 = NULL,
   omega_2 = NULL,
-  epsilon = NULL,
+  iota = NULL,
   gamma_1 = NULL,
   gamma_2 = NULL,
+  epsilon = NULL,
   mu = NULL,
   rho = NULL,
   sigma = NULL,
@@ -78,10 +80,12 @@ make_LASER_config(
 \item{b_jt}{A matrix of birth rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.}
 
 \item{d_jt}{A matrix of mortality rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
-\subsection{Immune Dynamics}{
+\subsection{Vaccination}{
 }}
 
-\item{nu_jt}{A matrix of vaccination rates for each location (\code{j}) and time step (\code{t}). Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}.}
+\item{nu_1_jt}{A matrix of first-dose vaccination rates for each location (\code{j}) and time step (\code{t}). Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}.}
+
+\item{nu_2_jt}{A matrix of second-dose vaccination rates for each location (\code{j}) and time step (\code{t}). Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}.}
 
 \item{phi_1}{Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range \link{0, 1}.}
 
@@ -89,13 +93,17 @@ make_LASER_config(
 
 \item{omega_1}{Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.}
 
-\item{omega_2}{Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.}
+\item{omega_2}{Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.
+\subsection{Infection dynamics}{
+}}
 
-\item{epsilon}{Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.}
+\item{iota}{The incubation period of cholera infection. Must be a numeric scalar greater than zero.}
 
 \item{gamma_1}{Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.}
 
-\item{gamma_2}{Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.
+\item{gamma_2}{Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.}
+
+\item{epsilon}{Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
 \subsection{Observation Processes}{
 }}
 
@@ -142,8 +150,7 @@ Returns the validated list of parameters. If \code{output_file_path} is provided
 }
 \description{
 This function generates a JSON file to be used as LASER model simulation parameters. The function validates all
-input parameters to ensure they meet the required constraints for the dynamic transmission
-model simulation.
+input parameters to ensure they meet the required constraints for the dynamic transmission model simulation.
 }
 \examples{
 make_LASER_config(
@@ -161,14 +168,16 @@ make_LASER_config(
      V2_j_initial = c("Location A" = 0, "Location B" = 0),
      b_jt = matrix(data = 0.0015, nrow = 2, ncol = 31),
      d_jt = matrix(data = 0.001, nrow = 2, ncol = 31),
-     nu_jt = matrix(data = 0, nrow = 2, ncol = 31),
+     nu_1_jt = matrix(data = 0, nrow = 2, ncol = 31),
+     nu_2_jt = matrix(data = 0, nrow = 2, ncol = 31),
      phi_1 = 0.8,
      phi_2 = 0.85,
      omega_1 = 0.1,
      omega_2 = 0.12,
-     epsilon = 0.05,
+     iota = 1.4,
      gamma_1 = 0.2,
      gamma_2 = 0.25,
+     epsilon = 0.05,
      mu = 0.01,
      rho = 0.9,
      sigma = 0.5,
