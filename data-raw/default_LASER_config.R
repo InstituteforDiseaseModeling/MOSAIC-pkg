@@ -70,6 +70,8 @@ tmp <- tmp[tmp$j %in% j,]
 tmp <- tmp[tmp$t >= date_start & tmp$t <= date_stop,]
 nu_jt <- reshape2::acast(tmp, j ~ t, value.var = "parameter_value")
 
+nu_1_jt <- nu_2_jt <- nu_jt
+nu_2_jt[,] <- 0
 
 # Add seasonal pattern to human to human force of infection (daily time scale)
 beta_j0_hum <- rep(0.2, length(j))
@@ -122,45 +124,52 @@ psi_jt <- psi_jt[sel,]
 str(psi_jt)
 
 make_LASER_config(
-     output_file_path = path_to_json_file,
-     date_start = date_start,
-     date_stop = date_stop,
-     location_id = seq_along(j),
-     location_name = j,
-     N_j_initial = N_j,
-     S_j_initial = S_j,
-     E_j_initial = N_j*0,
-     I_j_initial = I_j,
-     R_j_initial = N_j*0,
-     V1_j_initial = N_j*0,
-     V2_j_initial = N_j*0,
-     b_jt = b_jt,
-     d_jt = b_jt,
-     nu_jt = nu_jt, # No vaccination
-     phi_1 = 0.64,
-     phi_2 = 0.85,
-     omega_1 = 0.0006,
-     omega_2 = 0.0004,
-     epsilon = 0.0003,
-     gamma_1 = 0.14,
-     gamma_2 = 0.33,
-     mu = 0.015,
-     rho = 0.52,
-     sigma = 0.24,
-     beta_j0_hum = rep(0.2, length(j)),
+     output_file_path   = path_to_json_file,
+     date_start         = date_start,
+     date_stop          = date_stop,
+     location_id        = seq_along(j),
+     location_name      = j,
+     N_j_initial        = N_j,
+     S_j_initial        = S_j,
+     E_j_initial        = N_j * 0,
+     I_j_initial        = I_j,
+     R_j_initial        = N_j * 0,
+     V1_j_initial       = N_j * 0,
+     V2_j_initial       = N_j * 0,
+     b_jt               = b_jt,
+     d_jt               = b_jt,
+     ## Vaccination
+     nu_1_jt            = nu_1_jt,
+     nu_2_jt            = nu_2_jt,
+     phi_1              = 0.64,
+     phi_2              = 0.85,
+     omega_1            = 0.0006,
+     omega_2            = 0.0004,
+     ## Infection dynamics
+     iota               = 1/1.4,
+     gamma_1            = 0.14,
+     gamma_2            = 0.33,
+     epsilon            = 0.0003,
+     ## Observation Processes
+     mu                 = 0.015,
+     rho                = 0.52,
+     sigma              = 0.24,
+     ## Force of Infection (human-to-human)
+     beta_j0_hum        = rep(0.2, length(j)),
      beta_j_seasonality = beta_j_seasonality,
-     tau_i = tau_i,
-     pi_ij = pi_ij,
-     alpha_1 = 0.95,
-     alpha_2 = 0.95,
-     beta_j0_env = rep(0.4, length(j)), # Assume environmental transmission is twice that of human to human
-     theta_j = theta_j,
-     psi_jt = psi_jt,
-     zeta_1 = 7.5,
-     zeta_2 = 2.5,
-     kappa = 10^5,
-     delta_min = 1/3,
-     delta_max = 1/90
+     tau_i              = tau_i,
+     pi_ij              = pi_ij,
+     alpha_1            = 0.95,
+     alpha_2            = 0.95,
+     ## Force of Infection (environment-to-human)
+     beta_j0_env        = rep(0.4, length(j)),
+     theta_j            = theta_j,
+     psi_jt             = psi_jt,
+     zeta_1             = 7.5,
+     zeta_2             = 2.5,
+     kappa              = 10^5,
+     delta_min          = 1/3,
+     delta_max          = 1/90
 )
 
 config <- jsonlite::fromJSON(path_to_json_file)

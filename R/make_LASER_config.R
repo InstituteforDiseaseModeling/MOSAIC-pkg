@@ -1,8 +1,7 @@
 #' Create a JSON Configuration File for LASER
 #'
 #' This function generates a JSON file to be used as LASER model simulation parameters. The function validates all
-#' input parameters to ensure they meet the required constraints for the dynamic transmission
-#' model simulation.
+#' input parameters to ensure they meet the required constraints for the dynamic transmission model simulation.
 #'
 #' @param output_file_path A character string representing the full file path of the output JSON file (e.g., 'path/to/parameters.json'). Must have a .json extension. If `NULL`, no file is written.
 #'
@@ -23,15 +22,19 @@
 #' @param b_jt A matrix of birth rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
 #' @param d_jt A matrix of mortality rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
 #'
-#' ## Immune Dynamics
-#' @param nu_jt A matrix of vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
+#' ## Vaccination
+#' @param nu_1_jt A matrix of first-dose vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
+#' @param nu_2_jt A matrix of second-dose vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
 #' @param phi_1 Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
 #' @param phi_2 Effectiveness of two doses of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
 #' @param omega_1 Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.
 #' @param omega_2 Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.
-#' @param epsilon Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
+#'
+#' ## Infection dynamics
+#' @param iota The incubation period of cholera infection. Must be a numeric scalar greater than zero.
 #' @param gamma_1 Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.
 #' @param gamma_2 Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.
+#' @param epsilon Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
 #'
 #' ## Observation Processes
 #' @param mu Mortality rate due to V. cholerae infection. Must be a numeric scalar greater than or equal to zero.
@@ -74,14 +77,16 @@
 #'      V2_j_initial = c("Location A" = 0, "Location B" = 0),
 #'      b_jt = matrix(data = 0.0015, nrow = 2, ncol = 31),
 #'      d_jt = matrix(data = 0.001, nrow = 2, ncol = 31),
-#'      nu_jt = matrix(data = 0, nrow = 2, ncol = 31),
+#'      nu_1_jt = matrix(data = 0, nrow = 2, ncol = 31),
+#'      nu_2_jt = matrix(data = 0, nrow = 2, ncol = 31),
 #'      phi_1 = 0.8,
 #'      phi_2 = 0.85,
 #'      omega_1 = 0.1,
 #'      omega_2 = 0.12,
-#'      epsilon = 0.05,
+#'      iota = 1.4,
 #'      gamma_1 = 0.2,
 #'      gamma_2 = 0.25,
+#'      epsilon = 0.05,
 #'      mu = 0.01,
 #'      rho = 0.9,
 #'      sigma = 0.5,
@@ -103,6 +108,7 @@
 #'
 #' @export
 #'
+
 make_LASER_config <- function(output_file_path = NULL,
 
                               # Initialization
@@ -122,15 +128,19 @@ make_LASER_config <- function(output_file_path = NULL,
                               b_jt = NULL,
                               d_jt = NULL,
 
-                              # Immune Dynamics
-                              nu_jt = NULL,
+                              ## Vaccination
+                              nu_1_jt = NULL,
+                              nu_2_jt = NULL,
                               phi_1 = NULL,
                               phi_2 = NULL,
                               omega_1 = NULL,
                               omega_2 = NULL,
-                              epsilon = NULL,
+
+                              ## Infection dynamics
+                              iota = NULL,
                               gamma_1 = NULL,
                               gamma_2 = NULL,
+                              epsilon = NULL,
 
                               # Observation Processes
                               mu = NULL,
@@ -178,44 +188,46 @@ make_LASER_config <- function(output_file_path = NULL,
 
      # Combine all parameters into a named list.
      params <- list(
-          date_start = date_start,
-          date_stop = date_stop,
-          location_id = location_id,
-          location_name = location_name,
-          N_j_initial = N_j_initial,
-          S_j_initial = S_j_initial,
-          E_j_initial = E_j_initial,
-          I_j_initial = I_j_initial,
-          R_j_initial = R_j_initial,
-          V1_j_initial = V1_j_initial,
-          V2_j_initial = V2_j_initial,
-          b_jt = b_jt,
-          d_jt = d_jt,
-          nu_jt = nu_jt,
-          phi_1 = phi_1,
-          phi_2 = phi_2,
-          omega_1 = omega_1,
-          omega_2 = omega_2,
-          epsilon = epsilon,
-          gamma_1 = gamma_1,
-          gamma_2 = gamma_2,
-          mu = mu,
-          rho = rho,
-          sigma = sigma,
-          beta_j0_hum = beta_j0_hum,
-          beta_j_seasonality = beta_j_seasonality,
-          tau_i = tau_i,
-          pi_ij = pi_ij,
-          alpha_1 = alpha_1,
-          alpha_2 = alpha_2,
-          beta_j0_env = beta_j0_env,
-          theta_j = theta_j,
-          psi_jt = psi_jt,
-          zeta_1 = zeta_1,
-          zeta_2 = zeta_2,
-          kappa = kappa,
-          delta_min = delta_min,
-          delta_max = delta_max
+          date_start        = date_start,
+          date_stop         = date_stop,
+          location_id       = location_id,
+          location_name     = location_name,
+          N_j_initial       = N_j_initial,
+          S_j_initial       = S_j_initial,
+          E_j_initial       = E_j_initial,
+          I_j_initial       = I_j_initial,
+          R_j_initial       = R_j_initial,
+          V1_j_initial      = V1_j_initial,
+          V2_j_initial      = V2_j_initial,
+          b_jt              = b_jt,
+          d_jt              = d_jt,
+          nu_1_jt           = nu_1_jt,
+          nu_2_jt           = nu_2_jt,
+          phi_1             = phi_1,
+          phi_2             = phi_2,
+          omega_1           = omega_1,
+          omega_2           = omega_2,
+          iota              = iota,
+          gamma_1           = gamma_1,
+          gamma_2           = gamma_2,
+          epsilon           = epsilon,
+          mu                = mu,
+          rho               = rho,
+          sigma             = sigma,
+          beta_j0_hum       = beta_j0_hum,
+          beta_j_seasonality= beta_j_seasonality,
+          tau_i             = tau_i,
+          pi_ij             = pi_ij,
+          alpha_1           = alpha_1,
+          alpha_2           = alpha_2,
+          beta_j0_env       = beta_j0_env,
+          theta_j           = theta_j,
+          psi_jt            = psi_jt,
+          zeta_1            = zeta_1,
+          zeta_2            = zeta_2,
+          kappa             = kappa,
+          delta_min         = delta_min,
+          delta_max         = delta_max
      )
 
      # Check for NULL values.
@@ -251,23 +263,18 @@ make_LASER_config <- function(output_file_path = NULL,
 
      # Validate initial population vectors.
      for (v in c("N_j_initial", "S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial")) {
-
           vec <- params[[v]]
-
           # If supplied as numeric (i.e. double) then convert to integer.
           if (is.numeric(vec) && !is.integer(vec)) {
                vec <- as.integer(vec)
                names(vec) <- names(params[[v]])
           }
-
           if (is.null(names(vec)) || any(names(vec) == "")) {
                stop(v, " must be a named vector with names corresponding to each location.")
           }
-
           if (length(vec) != length(location_id)) {
                stop(v, " must be a vector of length equal to the number of locations.")
           }
-
           # For N_j_initial, values must be > 0; for compartments, values must be >= 0.
           if (v == "N_j_initial") {
                if (any(vec <= 0)) {
@@ -278,12 +285,10 @@ make_LASER_config <- function(output_file_path = NULL,
                     stop(v, " must have values greater than or equal to zero.")
                }
           }
-
           # Check that the names match exactly the location_name vector.
           if (!all(names(vec) == location_name)) {
                stop(v, " names must exactly match the provided location_name values.")
           }
-
           params[[v]] <- vec
      }
 
@@ -304,9 +309,12 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("d_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
-     # Immune Dynamics validation.
-     if (!is.matrix(nu_jt) || nrow(nu_jt) != length(location_id) || ncol(nu_jt) != length(t)) {
-          stop("nu_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     ## Vaccination validation.
+     if (!is.matrix(nu_1_jt) || nrow(nu_1_jt) != length(location_id) || ncol(nu_1_jt) != length(t)) {
+          stop("nu_1_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     }
+     if (!is.matrix(nu_2_jt) || nrow(nu_2_jt) != length(location_id) || ncol(nu_2_jt) != length(t)) {
+          stop("nu_2_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
      if (!is.numeric(phi_1) || phi_1 < 0 || phi_1 > 1) {
@@ -323,8 +331,9 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("omega_2 must be a numeric scalar greater than or equal to zero.")
      }
 
-     if (!is.numeric(epsilon) || epsilon < 0) {
-          stop("epsilon must be a numeric scalar greater than or equal to zero.")
+     ## Infection dynamics validation.
+     if (!is.numeric(iota) || length(iota) != 1 || iota <= 0) {
+          stop("iota must be a numeric scalar greater than zero.")
      }
 
      if (!is.numeric(gamma_1) || gamma_1 < 0) {
@@ -336,6 +345,10 @@ make_LASER_config <- function(output_file_path = NULL,
      # Check that the recovery rate for severe infection is slower than for mild infection.
      if (gamma_1 >= gamma_2) {
           stop("gamma_1 must be less than gamma_2, as the recovery rate for severe infection should be slower than for mild infection.")
+     }
+
+     if (!is.numeric(epsilon) || epsilon < 0) {
+          stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
      # Observation Processes validation.
@@ -423,8 +436,11 @@ make_LASER_config <- function(output_file_path = NULL,
      tmp <- split(params$d_jt, row(params$d_jt))
      params$d_jt <- lapply(tmp, as.numeric)
 
-     tmp <- split(params$nu_jt, row(params$nu_jt))
-     params$nu_jt <- lapply(tmp, as.integer)
+     tmp <- split(params$nu_1_jt, row(params$nu_1_jt))
+     params$nu_1_jt <- lapply(tmp, as.integer)
+
+     tmp <- split(params$nu_2_jt, row(params$nu_2_jt))
+     params$nu_2_jt <- lapply(tmp, as.integer)
 
      tmp <- split(params$beta_j_seasonality, row(params$beta_j_seasonality))
      params$beta_j_seasonality <- lapply(tmp, as.numeric)
