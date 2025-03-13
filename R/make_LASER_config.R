@@ -23,10 +23,10 @@
 #' @param d_jt A matrix of mortality rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
 #'
 #' ## Vaccination
-#' @param nu_1_jt A matrix of first-dose vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
-#' @param nu_2_jt A matrix of second-dose vaccination rates for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
-#' @param phi_1 Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
-#' @param phi_2 Effectiveness of two doses of Oral Cholera Vaccine (OCV). Must be numeric and within the range [0, 1].
+#' @param nu_1_jt A matrix of first-dose Oral Cholera Vaccine (OCV) vaccinations for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
+#' @param nu_2_jt A matrix of second-dose Oral Cholera Vaccine (OCV) vaccinations for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
+#' @param phi_1 Effectiveness of one dose of OCV. Must be numeric and within the range [0, 1].
+#' @param phi_2 Effectiveness of two doses of OCV. Must be numeric and within the range [0, 1].
 #' @param omega_1 Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.
 #' @param omega_2 Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.
 #'
