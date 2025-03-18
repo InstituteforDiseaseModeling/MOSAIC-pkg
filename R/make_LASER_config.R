@@ -54,9 +54,10 @@
 #' @param gamma_1 Recovery rate for severe infection (numeric >= 0).
 #' @param gamma_2 Recovery rate for mild infection (numeric >= 0).
 #' @param epsilon Waning immunity rate (numeric >= 0).
+#' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_id)
+#'        and columns equal to length(t). All values must be numeric and between 0 and 1.
 #'
 #' ## Observation Processes
-#' @param mu Mortality rate due to infection (numeric >= 0).
 #' @param rho Proportion of true infections (numeric in [0, 1]).
 #' @param sigma Proportion of symptomatic infections (numeric in [0, 1]).
 #'
@@ -111,7 +112,7 @@
 #'      gamma_1 = 0.2,
 #'      gamma_2 = 0.25,
 #'      epsilon = 0.05,
-#'      mu = 0.01,
+#'      mu_jt = 0.01,
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
@@ -164,8 +165,9 @@ make_LASER_config <- function(output_file_path = NULL,
                               gamma_1 = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
+                              mu_jt = NULL,
+
                               # Observation Processes
-                              mu = NULL,
                               rho = NULL,
                               sigma = NULL,
                               # Force of Infection (human-to-human)
@@ -236,7 +238,7 @@ make_LASER_config <- function(output_file_path = NULL,
           gamma_1           = gamma_1,
           gamma_2           = gamma_2,
           epsilon           = epsilon,
-          mu                = mu,
+          mu_jt             = mu_jt,
           rho               = rho,
           sigma             = sigma,
           beta_j0_hum       = beta_j0_hum,
@@ -376,11 +378,15 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     # Observation Processes validation.
-     if (!is.numeric(mu) || mu < 0) {
-          stop("mu must be a numeric scalar greater than or equal to zero.")
+     # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1]
+     if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_id) || ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
+          stop("mu_jt must be a numeric matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     }
+     if (any(mu_jt < 0 | mu_jt > 1)) {
+          stop("All values in mu_jt must be between 0 and 1.")
      }
 
+     # Observation Processes validation.
      if (!is.numeric(rho) || rho < 0 || rho > 1) {
           stop("rho must be a numeric scalar between 0 and 1.")
      }
@@ -486,6 +492,10 @@ make_LASER_config <- function(output_file_path = NULL,
 
      tmp <- split(params$psi_jt, row(params$psi_jt))
      params$psi_jt <- lapply(tmp, as.numeric)
+
+     tmp <- split(mu_jt, row(mu_jt))
+     params$mu_jt <- lapply(tmp, as.numeric)
+
 
      if (!is.null(output_file_path)) {
 

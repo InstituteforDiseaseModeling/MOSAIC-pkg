@@ -31,7 +31,7 @@ make_LASER_config(
   gamma_1 = NULL,
   gamma_2 = NULL,
   epsilon = NULL,
-  mu = NULL,
+  mu_jt = NULL,
   rho = NULL,
   sigma = NULL,
   beta_j0_hum = NULL,
@@ -121,11 +121,12 @@ sequence from date_start to date_stop.
 
 \item{gamma_2}{Recovery rate for mild infection (numeric >= 0).}
 
-\item{epsilon}{Waning immunity rate (numeric >= 0).
+\item{epsilon}{Waning immunity rate (numeric >= 0).}
+
+\item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_id)
+and columns equal to length(t). All values must be numeric and between 0 and 1.
 \subsection{Observation Processes}{
 }}
-
-\item{mu}{Mortality rate due to infection (numeric >= 0).}
 
 \item{rho}{Proportion of true infections (numeric in \link{0, 1}).}
 
@@ -207,7 +208,7 @@ make_LASER_config(
      gamma_1 = 0.2,
      gamma_2 = 0.25,
      epsilon = 0.05,
-     mu = 0.01,
+     mu_jt = 0.01,
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),
