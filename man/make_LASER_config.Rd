@@ -2,10 +2,12 @@
 % Please edit documentation in R/make_LASER_config.R
 \name{make_LASER_config}
 \alias{make_LASER_config}
-\title{Create a JSON Configuration File for LASER}
+\title{Create a Configuration File for LASER}
 \usage{
 make_LASER_config(
   output_file_path = NULL,
+  compress = FALSE,
+  seed = NULL,
   date_start = NULL,
   date_stop = NULL,
   location_id = NULL,
@@ -49,112 +51,142 @@ make_LASER_config(
 )
 }
 \arguments{
-\item{output_file_path}{A character string representing the full file path of the output JSON file (e.g., 'path/to/parameters.json'). Must have a .json extension. If \code{NULL}, no file is written.
+\item{output_file_path}{A character string representing the full file path of the output file.
+Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
+If NULL, no file is written and the parameters are returned.}
+
+\item{compress}{Logical. If TRUE, the output file is written with compression (gzipped for JSON/YAML and file-level compression for HDF5).
+Default is FALSE.}
+
+\item{seed}{Integer scalar giving the random seed value for the simulation run.
 \subsection{Initialization}{
 }}
 
-\item{date_start}{Start date for the simulation period in "YYYY-MM-DD" format. If provided as a character string, it will be converted to a Date object.}
+\item{date_start}{Start date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
+it will be converted to a Date object.}
 
-\item{date_stop}{End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string, it will be converted to a Date object.}
+\item{date_stop}{End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
+it will be converted to a Date object.}
 
 \item{location_id}{A vector of integers giving the numerical index for metapopulations.}
 
-\item{location_name}{A character vector giving the names of each metapopulation location. The order and names here must match those used in the initial population vectors.}
+\item{location_name}{A character vector giving the names of each metapopulation location.
+The order and names here must match those used in the initial population vectors.}
 
-\item{N_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the total initial population size for each location. The names must match the values in \code{location_name}.}
+\item{N_j_initial}{A named numeric or integer vector of length equal to location_id giving the total initial
+population size for each location. Names must match the values in location_name.}
 
-\item{S_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the starting number of susceptible individuals for each location. Names must match \code{location_name}.}
+\item{S_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+of susceptible individuals for each location. Names must match location_name.}
 
-\item{E_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the starting number of exposed individuals for each location. Names must match \code{location_name}.}
+\item{E_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+of exposed individuals for each location. Names must match location_name.}
 
-\item{I_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the starting number of infected individuals for each location. Names must match \code{location_name}.}
+\item{I_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+of infected individuals for each location. Names must match location_name.}
 
-\item{R_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the starting number of recovered individuals for each location. Names must match \code{location_name}.}
+\item{R_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+of recovered individuals for each location. Names must match location_name.}
 
-\item{V1_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the starting number of individuals in vaccine compartment V1 for each location. Names must match \code{location_name}.}
+\item{V1_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+of individuals in vaccine compartment V1 for each location. Names must match location_name.}
 
-\item{V2_j_initial}{A named numeric or integer vector of length equal to \code{location_id} that gives the starting number of individuals in vaccine compartment V2 for each location. Names must match \code{location_name}.
+\item{V2_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+of individuals in vaccine compartment V2 for each location. Names must match location_name.
 \subsection{Demographics}{
 }}
 
-\item{b_jt}{A matrix of birth rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.}
+\item{b_jt}{A matrix of birth rates with rows equal to length(location_id) and columns equal to the daily
+sequence from date_start to date_stop.}
 
-\item{d_jt}{A matrix of mortality rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
+\item{d_jt}{A matrix of mortality rates with rows equal to length(location_id) and columns equal to the daily
+sequence from date_start to date_stop.
 \subsection{Vaccination}{
 }}
 
-\item{nu_1_jt}{A matrix of first-dose vaccination rates for each location (\code{j}) and time step (\code{t}). Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}.}
+\item{nu_1_jt}{A matrix of first-dose OCV vaccinations for each location and time step.}
 
-\item{nu_2_jt}{A matrix of second-dose vaccination rates for each location (\code{j}) and time step (\code{t}). Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}.}
+\item{nu_2_jt}{A matrix of second-dose OCV vaccinations for each location and time step.}
 
-\item{phi_1}{Effectiveness of one dose of Oral Cholera Vaccine (OCV). Must be numeric and within the range \link{0, 1}.}
+\item{phi_1}{Effectiveness of one dose of OCV (numeric in \link{0, 1}).}
 
-\item{phi_2}{Effectiveness of two doses of Oral Cholera Vaccine (OCV). Must be numeric and within the range \link{0, 1}.}
+\item{phi_2}{Effectiveness of two doses of OCV (numeric in \link{0, 1}).}
 
-\item{omega_1}{Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.}
+\item{omega_1}{Waning immunity rate for one dose (numeric >= 0).}
 
-\item{omega_2}{Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.
+\item{omega_2}{Waning immunity rate for two doses (numeric >= 0).
 \subsection{Infection dynamics}{
 }}
 
-\item{iota}{The incubation period of cholera infection. Must be a numeric scalar greater than zero.}
+\item{iota}{Incubation period (numeric > 0).}
 
-\item{gamma_1}{Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.}
+\item{gamma_1}{Recovery rate for severe infection (numeric >= 0).}
 
-\item{gamma_2}{Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.}
+\item{gamma_2}{Recovery rate for mild infection (numeric >= 0).}
 
-\item{epsilon}{Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
+\item{epsilon}{Waning immunity rate (numeric >= 0).
 \subsection{Observation Processes}{
 }}
 
-\item{mu}{Mortality rate due to V. cholerae infection. Must be a numeric scalar greater than or equal to zero.}
+\item{mu}{Mortality rate due to infection (numeric >= 0).}
 
-\item{rho}{Proportion of suspected cholera cases that are true infections. Must be a numeric scalar between 0 and 1.}
+\item{rho}{Proportion of true infections (numeric in \link{0, 1}).}
 
-\item{sigma}{Proportion of symptomatic V. cholerae infections. Must be a numeric scalar between 0 and 1.
+\item{sigma}{Proportion of symptomatic infections (numeric in \link{0, 1}).
 \subsection{Force of Infection (human-to-human)}{
 }}
 
-\item{beta_j0_hum}{Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to \code{location_id} and values greater than or equal to zero.}
+\item{beta_j0_hum}{Baseline human-to-human transmission rate (numeric vector of length(location_id)).}
 
-\item{beta_j_seasonality}{The seasonal derivation from mean transmission (beta_j0_hum) for each location. Must be a matrix with rows equal to \code{length(location_id)} and 366 columns representing the annual daily scale.}
+\item{beta_j_seasonality}{Seasonal variation in transmission (matrix with rows = length(location_id) and 366 columns).}
 
-\item{tau_i}{Departure probability for each origin location. Must be a numeric vector of length equal to \code{location_id} and values between 0 and 1.}
+\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_id) in \link{0, 1}).}
 
-\item{pi_ij}{A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to \code{length(location_id)} x \code{length(location_id)} and values between 0 and 1.}
+\item{pi_ij}{Matrix of travel probabilities (dimensions: length(location_id) x length(location_id)).}
 
-\item{alpha_1}{Transmission parameter for the level population mixing between infectious (I) and susceptible (S) individuals. Must be a numeric scalar between 0 and 1.}
+\item{alpha_1}{Transmission parameter for mixing (numeric in \link{0, 1}).}
 
-\item{alpha_2}{Transmission parameter determining the extent to which transmission is frequency dependent (\eqn{\alpha_2 = 1}) or density dependent (\eqn{\alpha_2 \approx 0}). Must be a numeric scalar between 0 and 1.
+\item{alpha_2}{Transmission parameter for density dependence (numeric in \link{0, 1}).
 \subsection{Force of Infection (environment-to-human)}{
 }}
 
-\item{beta_j0_env}{Baseline environment-to-human transmission rate for each location. Must be a numeric vector of length equal to \code{location_id} and values greater than or equal to zero.}
+\item{beta_j0_env}{Baseline environment-to-human transmission rate (numeric vector of length(location_id)).}
 
-\item{theta_j}{Proportion of the population with adequate Water, Sanitation, and Hygiene (WASH). Must be a numeric vector of length equal to \code{location_id} and values between 0 and 1.}
+\item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_id) in \link{0, 1}).}
 
-\item{psi_jt}{A matrix of environmental suitability values for V. cholerae. Must have rows equal to \code{length(location_id)} and columns equal to the daily sequence from \code{date_start} to \code{date_stop}, with values between 0 and 1.}
+\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_id) and columns
+equal to the daily sequence from date_start to date_stop).}
 
-\item{zeta_1}{Shedding rate of V. cholerae into the environment by individuals with severe infection. Must be a numeric scalar greater than zero.}
+\item{zeta_1}{Shedding rate (numeric > 0).}
 
-\item{zeta_2}{Shedding rate of V. cholerae into the environment by individuals with mild or asymptomatic infection. Must be a numeric scalar greater than zero.}
+\item{zeta_2}{Shedding rate (numeric > 0; must be less than zeta_1).}
 
-\item{kappa}{Concentration of V. cholerae required for 50\% infection probability. Must be a numeric scalar greater than zero.}
+\item{kappa}{Concentration required for 50\% infection (numeric > 0).}
 
-\item{delta_min}{Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero.}
+\item{delta_min}{Minimum environmental decay rate (numeric > 0; must be > delta_max).}
 
-\item{delta_max}{Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero.}
+\item{delta_max}{Maximum environmental decay rate (numeric > 0).}
 }
 \value{
-Returns the validated list of parameters. If \code{output_file_path} is provided, the parameters are written to a JSON file.
+Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
+in the format determined by the file extension.
 }
 \description{
-This function generates a JSON file to be used as LASER model simulation parameters. The function validates all
-input parameters to ensure they meet the required constraints for the dynamic transmission model simulation.
+This function generates a JSON/HDF5/YAML configuration file to be used as LASER model simulation parameters.
+It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
+The file extension determines which output format is used:
+\itemize{
+\item .json or .json.gz → written with write_list_to_json,
+\item .h5, .hdf5, .h5.gz, or .hdf5.gz → written with write_list_to_hdf5,
+\item .yaml or .yaml.gz → written with write_list_to_yaml.
+}
 }
 \examples{
+\dontrun{
 make_LASER_config(
      output_file_path = "parameters.json",
+     compress = TRUE,
+     seed = 123,
      date_start = "2024-12-01",
      date_stop = "2024-12-31",
      location_id = 1:2,
@@ -166,10 +198,10 @@ make_LASER_config(
      R_j_initial = c("Location A" = 50, "Location B" = 50),
      V1_j_initial = c("Location A" = 0, "Location B" = 0),
      V2_j_initial = c("Location A" = 0, "Location B" = 0),
-     b_jt = matrix(data = 0.0015, nrow = 2, ncol = 31),
-     d_jt = matrix(data = 0.001, nrow = 2, ncol = 31),
-     nu_1_jt = matrix(data = 0, nrow = 2, ncol = 31),
-     nu_2_jt = matrix(data = 0, nrow = 2, ncol = 31),
+     b_jt = matrix(data = 0.0015, nrow = 2, ncol = 366),
+     d_jt = matrix(data = 0.001, nrow = 2, ncol = 366),
+     nu_1_jt = matrix(data = 0, nrow = 2, ncol = 366),
+     nu_2_jt = matrix(data = 0, nrow = 2, ncol = 366),
      phi_1 = 0.8,
      phi_2 = 0.85,
      omega_1 = 0.1,
@@ -189,12 +221,13 @@ make_LASER_config(
      alpha_2 = 1,
      beta_j0_env = c(0.02, 0.04),
      theta_j = c(0.6, 0.7),
-     psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
+     psi_jt = matrix(data = 0, nrow = 2, ncol = 366),
      zeta_1 = 0.5,
      zeta_2 = 0.4,
      kappa = 10^5,
      delta_min = 0.1,
      delta_max = 0.01
 )
+}
 
 }

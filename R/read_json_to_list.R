@@ -1,7 +1,7 @@
 #' Read a JSON File into an R List
 #'
 #' @description
-#' \code{read_json_to_list} reads a JSON file (optionally compressed with gzip) and converts it into a named R list.
+#' Reads a JSON file (optionally compressed with gzip) and converts it into a named R list.
 #'
 #' @param file_path A character string specifying the full file path to the input JSON file.
 #'
@@ -33,9 +33,7 @@ read_json_to_list <- function(file_path) {
           stop("You must provide a valid input file path.")
      }
 
-     if (!file.exists(file_path)) {
-          stop("The file does not exist: ", file_path)
-     }
+     if (!file.exists(file_path)) stop("The file does not exist: ", file_path)
 
      # Read file as gzipped if the extension indicates gzip.
      if (grepl("\\.gz$", file_path, ignore.case = TRUE)) {

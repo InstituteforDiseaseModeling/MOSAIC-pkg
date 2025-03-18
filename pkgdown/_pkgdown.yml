@@ -122,6 +122,12 @@ reference:
       - get_greek_unicode
       - logit
       - inv_logit
+      - read_hdf5_to_list
+      - read_json_to_list
+      - read_yaml_to_list
+      - write_list_to_hdf5
+      - write_list_to_json
+      - write_list_to_yaml
 
   - title: "Shiny Apps"
     contents:

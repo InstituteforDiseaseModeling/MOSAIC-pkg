@@ -1,72 +1,39 @@
-#' Write an R List to an HDF5 File with Optional Compression
+#' Write an R list to an HDF5 file
 #'
-#' @description
-#' \code{write_list_to_hdf5} takes a named R list and writes it recursively to an HDF5 file. The hierarchical
-#' structure of the list is preserved by creating groups for nested lists and writing atomic values, vectors, or
-#' matrices directly as datasets. If \code{compress} is TRUE, every dataset is written using deflate compression
-#' at level 9.
+#' Writes an R list to an HDF5 file (.h5 or .h5.gz) format.
 #'
 #' @param data_list A named list containing the data to write.
-#' @param file_path A character string specifying the full file path for the output HDF5 file.
-#' @param compress Logical. If TRUE, HDF5 file datasets are created with compression level 9. Default is FALSE.
+#' @param file_path A character string specifying the full file path, including file extension (.h5 or .h5.gz).
+#' @param compress_chunks Logical. If TRUE, applies internal dataset compression (level 9).
+#' @param compress_file Logical. If TRUE, creates a gzip-compressed copy (.gz) without removing the original file.
 #'
-#' @return This function does not return a value. It prints a message indicating that the file was successfully written.
-#'
-#' @details
-#' The function checks that the output directory exists and removes any existing file at \code{file_path}. It opens
-#' an HDF5 file for writing, then uses an internal recursive function to traverse the R list. For each atomic value
-#' (or matrix), if \code{compress} is TRUE, the dataset is created with level 9 compression (using a default chunk size);
-#' otherwise it is written without compression.
-#'
-#' @examples
-#' \dontrun{
-#'   sample_data <- list(
-#'     group1 = list(
-#'       value1 = rnorm(100),
-#'       value2 = runif(100)
-#'     ),
-#'     group2 = list(
-#'       message = "Hello, MOSAIC!",
-#'       timestamp = Sys.time()
-#'     )
-#'   )
-#'
-#'   # Write the list to a specified HDF5 file with compression enabled.
-#'   output_file <- "output.h5"
-#'   write_list_to_hdf5(data_list = sample_data, file_path = output_file, compress = TRUE)
-#'
-#'   # Load the file to inspect its contents.
-#'   h5_file <- hdf5r::H5File$new(output_file, mode = "r")
-#'   print(h5_file$ls())
-#'   print(h5_file[["group1"]][["value1"]][,])
-#'   h5_file$close_all()
-#' }
+#' @return No value returned. Prints message upon successful writing.
 #'
 #' @importFrom hdf5r H5File
+#' @importFrom R.utils gzip
 #' @export
-write_list_to_hdf5 <- function(data_list, file_path, compress = FALSE) {
+#'
 
-     if (missing(file_path) || !is.character(file_path) || nchar(file_path) == 0) {
-          stop("You must provide a valid output file path.")
-     }
+write_list_to_hdf5 <- function(data_list,
+                               file_path,
+                               compress_chunks = FALSE,
+                               compress_file = FALSE) {
 
-     # Check that the directory exists.
+     if (missing(file_path)) stop("You must provide a valid output file path.")
+
      output_dir <- dirname(file_path)
-     if (!dir.exists(output_dir)) {
-          stop("The directory for the output file path does not exist: ", output_dir)
-     }
+     if (!dir.exists(output_dir)) stop("The directory for the output file path does not exist: ", output_dir)
 
-     # If a file already exists at this location, remove it.
-     if (file.exists(file_path)) {
-          if (!file.remove(file_path)) {
-               stop("Unable to remove existing file at: ", normalizePath(file_path, winslash = "/"))
-          }
-     }
+     is_gz <- grepl("\\.gz$", file_path)
+     base_file_ext <- tools::file_ext(gsub("\\.gz$", "", file_path))
 
-     # Open an HDF5 file for writing.
-     h5_file <- hdf5r::H5File$new(file_path, mode = "w")
+     if (base_file_ext != "h5") stop("Unsupported file extension: ", base_file_ext)
 
-     # Internal recursive function to write the list to the HDF5 object.
+     if (!compress_file && file.exists(file_path)) file.remove(file_path)
+
+     temp_file <- tempfile(fileext = paste0(".", base_file_ext))
+     h5_file <- hdf5r::H5File$new(temp_file, mode = "w")
+
      write_recursive <- function(h5_obj, lst) {
 
           for (item_name in names(lst)) {
@@ -75,27 +42,21 @@ write_list_to_hdf5 <- function(data_list, file_path, compress = FALSE) {
 
                if (is.list(item_value)) {
 
-                    # Create a subgroup for nested lists.
                     subgroup <- h5_obj$create_group(item_name)
                     write_recursive(h5_obj = subgroup, lst = item_value)
                     subgroup$close()
 
                } else {
 
-                    if (compress) {
+                    if (compress_chunks) {
 
-                         # Create the dataset with compression level 9.
-                         # Note: Order of named arguments is re-arranged to avoid ambiguity.
-                         h5_obj$create_dataset(
-                              name = item_name,
-                              robj = item_value,
-                              chunk_dims = 'auto',
-                              gzip_level = 9
-                         )
+                         h5_obj$create_dataset(name = item_name,
+                                               robj = item_value,
+                                               chunk_dims = "auto",
+                                               gzip_level = 9)
 
                     } else {
 
-                         # Write atomic or matrix objects without compression.
                          h5_obj[[item_name]] <- item_value
 
                     }
@@ -103,14 +64,31 @@ write_list_to_hdf5 <- function(data_list, file_path, compress = FALSE) {
           }
      }
 
-     # Write the provided list to the HDF5 file.
      write_recursive(h5_obj = h5_file, lst = data_list)
-
      h5_file$close_all()
 
-     if (!file.exists(file_path)) {
-          stop("HDF5 file was not successfully created at: ", normalizePath(file_path, winslash = "/"))
+     final_path <- if (compress_file || is_gz) {
+
+          if (is_gz) file_path else paste0(file_path, ".gz")
+
+     } else {
+
+          file_path
+
      }
 
-     message("HDF5 file successfully written to: ", normalizePath(file_path, winslash = "/"))
+     if (compress_file || is_gz) {
+
+          R.utils::gzip(temp_file, destname = final_path, overwrite = TRUE, remove = TRUE)
+
+     } else {
+
+          file.copy(temp_file, final_path, overwrite = TRUE)
+          file.remove(temp_file)
+
+     }
+
+     if (!file.exists(final_path)) stop("File was not successfully created at: ", final_path)
+     message("File successfully written to: ", normalizePath(final_path, winslash = "/"))
+
 }

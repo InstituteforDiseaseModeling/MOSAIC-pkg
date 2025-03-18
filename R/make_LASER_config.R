@@ -1,69 +1,95 @@
-#' Create a JSON Configuration File for LASER
+#' Create a Configuration File for LASER
 #'
-#' This function generates a JSON file to be used as LASER model simulation parameters. The function validates all
-#' input parameters to ensure they meet the required constraints for the dynamic transmission model simulation.
+#' This function generates a JSON/HDF5/YAML configuration file to be used as LASER model simulation parameters.
+#' It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
+#' The file extension determines which output format is used:
+#' - .json or .json.gz → written with write_list_to_json,
+#' - .h5, .hdf5, .h5.gz, or .hdf5.gz → written with write_list_to_hdf5,
+#' - .yaml or .yaml.gz → written with write_list_to_yaml.
 #'
-#' @param output_file_path A character string representing the full file path of the output JSON file (e.g., 'path/to/parameters.json'). Must have a .json extension. If `NULL`, no file is written.
+#' @param output_file_path A character string representing the full file path of the output file.
+#'        Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
+#'        If NULL, no file is written and the parameters are returned.
+#' @param compress Logical. If TRUE, the output file is written with compression (gzipped for JSON/YAML and file-level compression for HDF5).
+#'        Default is FALSE.
+#' @param seed Integer scalar giving the random seed value for the simulation run.
 #'
 #' ## Initialization
-#' @param date_start Start date for the simulation period in "YYYY-MM-DD" format. If provided as a character string, it will be converted to a Date object.
-#' @param date_stop End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string, it will be converted to a Date object.
+#' @param date_start Start date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
+#'        it will be converted to a Date object.
+#' @param date_stop End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
+#'        it will be converted to a Date object.
 #' @param location_id A vector of integers giving the numerical index for metapopulations.
-#' @param location_name A character vector giving the names of each metapopulation location. The order and names here must match those used in the initial population vectors.
-#' @param N_j_initial A named numeric or integer vector of length equal to `location_id` that gives the total initial population size for each location. The names must match the values in `location_name`.
-#' @param S_j_initial A named numeric or integer vector of length equal to `location_id` that gives the starting number of susceptible individuals for each location. Names must match `location_name`.
-#' @param E_j_initial A named numeric or integer vector of length equal to `location_id` that gives the starting number of exposed individuals for each location. Names must match `location_name`.
-#' @param I_j_initial A named numeric or integer vector of length equal to `location_id` that gives the starting number of infected individuals for each location. Names must match `location_name`.
-#' @param R_j_initial A named numeric or integer vector of length equal to `location_id` that gives the starting number of recovered individuals for each location. Names must match `location_name`.
-#' @param V1_j_initial A named numeric or integer vector of length equal to `location_id` that gives the starting number of individuals in vaccine compartment V1 for each location. Names must match `location_name`.
-#' @param V2_j_initial A named numeric or integer vector of length equal to `location_id` that gives the starting number of individuals in vaccine compartment V2 for each location. Names must match `location_name`.
+#' @param location_name A character vector giving the names of each metapopulation location.
+#'        The order and names here must match those used in the initial population vectors.
+#' @param N_j_initial A named numeric or integer vector of length equal to location_id giving the total initial
+#'        population size for each location. Names must match the values in location_name.
+#' @param S_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#'        of susceptible individuals for each location. Names must match location_name.
+#' @param E_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#'        of exposed individuals for each location. Names must match location_name.
+#' @param I_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#'        of infected individuals for each location. Names must match location_name.
+#' @param R_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#'        of recovered individuals for each location. Names must match location_name.
+#' @param V1_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#'        of individuals in vaccine compartment V1 for each location. Names must match location_name.
+#' @param V2_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#'        of individuals in vaccine compartment V2 for each location. Names must match location_name.
 #'
 #' ## Demographics
-#' @param b_jt A matrix of birth rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
-#' @param d_jt A matrix of mortality rates with dimensions corresponding to the number of locations (rows) and the number of daily time steps (columns). All values must be numeric and non-negative.
+#' @param b_jt A matrix of birth rates with rows equal to length(location_id) and columns equal to the daily
+#'        sequence from date_start to date_stop.
+#' @param d_jt A matrix of mortality rates with rows equal to length(location_id) and columns equal to the daily
+#'        sequence from date_start to date_stop.
 #'
 #' ## Vaccination
-#' @param nu_1_jt A matrix of first-dose Oral Cholera Vaccine (OCV) vaccinations for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
-#' @param nu_2_jt A matrix of second-dose Oral Cholera Vaccine (OCV) vaccinations for each location (`j`) and time step (`t`). Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`.
-#' @param phi_1 Effectiveness of one dose of OCV. Must be numeric and within the range [0, 1].
-#' @param phi_2 Effectiveness of two doses of OCV. Must be numeric and within the range [0, 1].
-#' @param omega_1 Waning immunity rate of individuals vaccinated with one dose of OCV. Must be a numeric scalar greater than or equal to zero.
-#' @param omega_2 Waning immunity rate of individuals vaccinated with two doses of OCV. Must be a numeric scalar greater than or equal to zero.
+#' @param nu_1_jt A matrix of first-dose OCV vaccinations for each location and time step.
+#' @param nu_2_jt A matrix of second-dose OCV vaccinations for each location and time step.
+#' @param phi_1 Effectiveness of one dose of OCV (numeric in [0, 1]).
+#' @param phi_2 Effectiveness of two doses of OCV (numeric in [0, 1]).
+#' @param omega_1 Waning immunity rate for one dose (numeric >= 0).
+#' @param omega_2 Waning immunity rate for two doses (numeric >= 0).
 #'
 #' ## Infection dynamics
-#' @param iota The incubation period of cholera infection. Must be a numeric scalar greater than zero.
-#' @param gamma_1 Recovery rate of infected individuals with severe infection. Must be a numeric scalar greater than or equal to zero.
-#' @param gamma_2 Recovery rate of infected individuals with mild or asymptomatic infection. Must be a numeric scalar greater than or equal to zero.
-#' @param epsilon Waning immunity rate of recovered individuals. Must be a numeric scalar greater than or equal to zero.
+#' @param iota Incubation period (numeric > 0).
+#' @param gamma_1 Recovery rate for severe infection (numeric >= 0).
+#' @param gamma_2 Recovery rate for mild infection (numeric >= 0).
+#' @param epsilon Waning immunity rate (numeric >= 0).
 #'
 #' ## Observation Processes
-#' @param mu Mortality rate due to V. cholerae infection. Must be a numeric scalar greater than or equal to zero.
-#' @param rho Proportion of suspected cholera cases that are true infections. Must be a numeric scalar between 0 and 1.
-#' @param sigma Proportion of symptomatic V. cholerae infections. Must be a numeric scalar between 0 and 1.
+#' @param mu Mortality rate due to infection (numeric >= 0).
+#' @param rho Proportion of true infections (numeric in [0, 1]).
+#' @param sigma Proportion of symptomatic infections (numeric in [0, 1]).
 #'
 #' ## Force of Infection (human-to-human)
-#' @param beta_j0_hum Baseline human-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
-#' @param beta_j_seasonality The seasonal derivation from mean transmission (beta_j0_hum) for each location. Must be a matrix with rows equal to `length(location_id)` and 366 columns representing the annual daily scale.
-#' @param tau_i Departure probability for each origin location. Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
-#' @param pi_ij A matrix of travel probabilities between origin and destination locations. Must have dimensions equal to `length(location_id)` x `length(location_id)` and values between 0 and 1.
-#' @param alpha_1 Transmission parameter for the level population mixing between infectious (I) and susceptible (S) individuals. Must be a numeric scalar between 0 and 1.
-#' @param alpha_2 Transmission parameter determining the extent to which transmission is frequency dependent (\eqn{\alpha_2 = 1}) or density dependent (\eqn{\alpha_2 \approx 0}). Must be a numeric scalar between 0 and 1.
+#' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_id)).
+#' @param beta_j_seasonality Seasonal variation in transmission (matrix with rows = length(location_id) and 366 columns).
+#' @param tau_i Departure probability for each origin location (numeric vector of length(location_id) in [0, 1]).
+#' @param pi_ij Matrix of travel probabilities (dimensions: length(location_id) x length(location_id)).
+#' @param alpha_1 Transmission parameter for mixing (numeric in [0, 1]).
+#' @param alpha_2 Transmission parameter for density dependence (numeric in [0, 1]).
 #'
 #' ## Force of Infection (environment-to-human)
-#' @param beta_j0_env Baseline environment-to-human transmission rate for each location. Must be a numeric vector of length equal to `location_id` and values greater than or equal to zero.
-#' @param theta_j Proportion of the population with adequate Water, Sanitation, and Hygiene (WASH). Must be a numeric vector of length equal to `location_id` and values between 0 and 1.
-#' @param psi_jt A matrix of environmental suitability values for V. cholerae. Must have rows equal to `length(location_id)` and columns equal to the daily sequence from `date_start` to `date_stop`, with values between 0 and 1.
-#' @param zeta_1 Shedding rate of V. cholerae into the environment by individuals with severe infection. Must be a numeric scalar greater than zero.
-#' @param zeta_2 Shedding rate of V. cholerae into the environment by individuals with mild or asymptomatic infection. Must be a numeric scalar greater than zero.
-#' @param kappa Concentration of V. cholerae required for 50% infection probability. Must be a numeric scalar greater than zero.
-#' @param delta_min Minimum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero.
-#' @param delta_max Maximum environmental decay rate of V. cholerae. Must be a numeric scalar greater than zero.
+#' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_id)).
+#' @param theta_j Proportion with adequate WASH (numeric vector of length(location_id) in [0, 1]).
+#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_id) and columns
+#'        equal to the daily sequence from date_start to date_stop).
+#' @param zeta_1 Shedding rate (numeric > 0).
+#' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
+#' @param kappa Concentration required for 50% infection (numeric > 0).
+#' @param delta_min Minimum environmental decay rate (numeric > 0; must be > delta_max).
+#' @param delta_max Maximum environmental decay rate (numeric > 0).
 #'
-#' @return Returns the validated list of parameters. If `output_file_path` is provided, the parameters are written to a JSON file.
+#' @return Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
+#'         in the format determined by the file extension.
 #'
 #' @examples
+#' \dontrun{
 #' make_LASER_config(
 #'      output_file_path = "parameters.json",
+#'      compress = TRUE,
+#'      seed = 123,
 #'      date_start = "2024-12-01",
 #'      date_stop = "2024-12-31",
 #'      location_id = 1:2,
@@ -75,10 +101,10 @@
 #'      R_j_initial = c("Location A" = 50, "Location B" = 50),
 #'      V1_j_initial = c("Location A" = 0, "Location B" = 0),
 #'      V2_j_initial = c("Location A" = 0, "Location B" = 0),
-#'      b_jt = matrix(data = 0.0015, nrow = 2, ncol = 31),
-#'      d_jt = matrix(data = 0.001, nrow = 2, ncol = 31),
-#'      nu_1_jt = matrix(data = 0, nrow = 2, ncol = 31),
-#'      nu_2_jt = matrix(data = 0, nrow = 2, ncol = 31),
+#'      b_jt = matrix(data = 0.0015, nrow = 2, ncol = 366),
+#'      d_jt = matrix(data = 0.001, nrow = 2, ncol = 366),
+#'      nu_1_jt = matrix(data = 0, nrow = 2, ncol = 366),
+#'      nu_2_jt = matrix(data = 0, nrow = 2, ncol = 366),
 #'      phi_1 = 0.8,
 #'      phi_2 = 0.85,
 #'      omega_1 = 0.1,
@@ -98,19 +124,19 @@
 #'      alpha_2 = 1,
 #'      beta_j0_env = c(0.02, 0.04),
 #'      theta_j = c(0.6, 0.7),
-#'      psi_jt = matrix(data = 0, nrow = 2, ncol = 31),
+#'      psi_jt = matrix(data = 0, nrow = 2, ncol = 366),
 #'      zeta_1 = 0.5,
 #'      zeta_2 = 0.4,
 #'      kappa = 10^5,
 #'      delta_min = 0.1,
 #'      delta_max = 0.01
 #' )
+#' }
 #'
 #' @export
-#'
-
 make_LASER_config <- function(output_file_path = NULL,
-
+                              compress = FALSE,
+                              seed = NULL,
                               # Initialization
                               date_start = NULL,
                               date_stop = NULL,
@@ -123,11 +149,9 @@ make_LASER_config <- function(output_file_path = NULL,
                               R_j_initial = NULL,
                               V1_j_initial = NULL,
                               V2_j_initial = NULL,
-
-                              # Demographics (time-varying)
+                              # Demographics
                               b_jt = NULL,
                               d_jt = NULL,
-
                               ## Vaccination
                               nu_1_jt = NULL,
                               nu_2_jt = NULL,
@@ -135,18 +159,15 @@ make_LASER_config <- function(output_file_path = NULL,
                               phi_2 = NULL,
                               omega_1 = NULL,
                               omega_2 = NULL,
-
                               ## Infection dynamics
                               iota = NULL,
                               gamma_1 = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
-
                               # Observation Processes
                               mu = NULL,
                               rho = NULL,
                               sigma = NULL,
-
                               # Force of Infection (human-to-human)
                               beta_j0_hum = NULL,
                               beta_j_seasonality = NULL,
@@ -154,7 +175,6 @@ make_LASER_config <- function(output_file_path = NULL,
                               pi_ij = NULL,
                               alpha_1 = NULL,
                               alpha_2 = NULL,
-
                               # Force of Infection (environment-to-human)
                               beta_j0_env = NULL,
                               theta_j = NULL,
@@ -166,6 +186,10 @@ make_LASER_config <- function(output_file_path = NULL,
                               delta_max = NULL) {
 
      message('Validating parameter values')
+
+     if (is.null(seed) || !is.numeric(seed) || length(seed) != 1 || seed <= 0 || seed %% 1 != 0) {
+          stop("'seed' must be provided as an integer scalar greater than zero.")
+     }
 
      # Convert date_start and date_stop to Date objects if provided as character strings.
      if (is.character(date_start)) {
@@ -400,7 +424,7 @@ make_LASER_config <- function(output_file_path = NULL,
      }
 
      if (!is.matrix(psi_jt) || nrow(psi_jt) != length(location_id) || ncol(psi_jt) != length(t)) {
-          stop("psi_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+          stop("psi_jt must be a matrix with rows equal to location_id and columns equal to the daily sequence from date_start to date_stop.")
      }
 
      if (!is.numeric(zeta_1) || zeta_1 <= 0) {
@@ -452,11 +476,18 @@ make_LASER_config <- function(output_file_path = NULL,
      params$psi_jt <- lapply(tmp, as.numeric)
 
      if (!is.null(output_file_path)) {
-          if (grepl("\\.json$", output_file_path, ignore.case = TRUE)) {
-               jsonlite::write_json(params, path = output_file_path, auto_unbox = TRUE, pretty = TRUE)
-               message("JSON file written to: ", output_file_path)
+
+          if (grepl("\\.json(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+               compress_flag <- if (grepl("\\.json\\.gz$", output_file_path, ignore.case = TRUE)) TRUE else compress
+               write_list_to_json(data_list = params, file_path = output_file_path, compress = compress_flag)
+          } else if (grepl("\\.(h5|hdf5)(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+               compress_flag <- if (grepl("\\.(h5|hdf5)\\.gz$", output_file_path, ignore.case = TRUE)) TRUE else compress
+               write_list_to_hdf5(data_list = params, file_path = output_file_path, compress_chunks = TRUE, compress_file = compress_flag)
+          } else if (grepl("\\.yaml(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+               compress_flag <- if (grepl("\\.yaml\\.gz$", output_file_path, ignore.case = TRUE)) TRUE else compress
+               write_list_to_yaml(data_list = params, file_path = output_file_path, compress = compress_flag)
           } else {
-               stop("Unsupported file format. The output file must have a .json extension.")
+               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.")
           }
      } else {
           return(params)
