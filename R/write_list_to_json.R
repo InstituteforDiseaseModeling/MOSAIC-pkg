@@ -71,7 +71,10 @@ write_list_to_json <- function(data_list, file_path, compress = FALSE) {
           }
      }
 
-     json_text <- jsonlite::toJSON(data_list, auto_unbox = TRUE, pretty = TRUE)
+     json_text <- jsonlite::toJSON(data_list,
+                                   digits = 8,   # Matches precision of HDF5
+                                   pretty = TRUE,
+                                   auto_unbox = TRUE)
 
      if (compress) {
 
@@ -85,10 +88,7 @@ write_list_to_json <- function(data_list, file_path, compress = FALSE) {
 
      }
 
-     if (!file.exists(file_path)) {
-          stop("JSON file was not successfully created at: ", normalizePath(file_path, winslash = "/"))
-     }
-
+     if (!file.exists(file_path)) stop("JSON file was not successfully created at: ", normalizePath(file_path, winslash = "/"))
      message("JSON file successfully written to: ", normalizePath(file_path, winslash = "/"))
 
 }

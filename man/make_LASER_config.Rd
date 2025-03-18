@@ -55,9 +55,6 @@ make_LASER_config(
 Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
 If NULL, no file is written and the parameters are returned.}
 
-\item{compress}{Logical. If TRUE, the output file is written with compression (gzipped for JSON/YAML and file-level compression for HDF5).
-Default is FALSE.}
-
 \item{seed}{Integer scalar giving the random seed value for the simulation run.
 \subsection{Initialization}{
 }}
@@ -177,7 +174,7 @@ It validates all input parameters and, if an output file path is provided, write
 The file extension determines which output format is used:
 \itemize{
 \item .json or .json.gz → written with write_list_to_json,
-\item .h5, .hdf5, .h5.gz, or .hdf5.gz → written with write_list_to_hdf5,
+\item .h5, or .h5.gz → written with write_list_to_hdf5,
 \item .yaml or .yaml.gz → written with write_list_to_yaml.
 }
 }

@@ -1,3 +1,7 @@
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+
 
 date_start <- as.Date("2023-01-01")
 date_stop <- as.Date("2024-12-17")
@@ -115,6 +119,68 @@ psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "pred_smooth")
 sel <- match(j, row.names(psi_jt))
 psi_jt <- psi_jt[sel,]
 str(psi_jt)
+
+
+
+path_to_json_file <- file.path(getwd(), 'inst/extdata/default_parameters.json')
+
+make_LASER_config(
+     output_file_path   = path_to_json_file,
+     seed = 123,
+     date_start         = date_start,
+     date_stop          = date_stop,
+     location_id        = seq_along(j),
+     location_name      = j,
+     N_j_initial        = N_j,
+     S_j_initial        = S_j,
+     E_j_initial        = N_j * 0,
+     I_j_initial        = I_j,
+     R_j_initial        = N_j * 0,
+     V1_j_initial       = N_j * 0,
+     V2_j_initial       = N_j * 0,
+     b_jt               = b_jt,
+     d_jt               = b_jt,
+     nu_1_jt            = nu_1_jt,
+     nu_2_jt            = nu_2_jt,
+     phi_1              = 0.64,
+     phi_2              = 0.85,
+     omega_1            = 0.0006,
+     omega_2            = 0.0004,
+     iota               = 1/1.4,
+     gamma_1            = 0.14,
+     gamma_2            = 0.33,
+     epsilon            = 0.0003,
+     mu                 = 0.015,
+     rho                = 0.52,
+     sigma              = 0.24,
+     beta_j0_hum        = rep(0.2, length(j)),
+     beta_j_seasonality = beta_j_seasonality,
+     tau_i              = tau_i,
+     pi_ij              = pi_ij,
+     alpha_1            = 0.95,
+     alpha_2            = 0.95,
+     beta_j0_env        = rep(0.4, length(j)),
+     theta_j            = theta_j,
+     psi_jt             = psi_jt,
+     zeta_1             = 7.5,
+     zeta_2             = 2.5,
+     kappa              = 10^5,
+     delta_min          = 1/3,
+     delta_max          = 1/90
+)
+
+
+config <- jsonlite::fromJSON(path_to_json_file)
+
+
+
+
+
+
+
+
+
+
 
 # Create default configuration files in all six formats
 
@@ -333,6 +399,92 @@ print(p1)
 print(p2)
 print(p3)
 
+
+
+
+# Number of files scenarios
+num_files <- c(10e03)
+
+# Calculate totals
+results2 <- expand.grid(format = results$format, Files = num_files) %>%
+     left_join(results, by = "format") %>%
+     mutate(
+          Total_Size_GB = (file_size * Files) / (1024^3),
+          Total_Write_Time_Hours = (write_time * Files) / 3600
+     )
+
+# Plot 1: Total Size Bar Plot
+ggplot(results2, aes(x = factor(Files), y = Total_Size_GB, fill = format)) +
+     geom_bar(stat = "identity", position = "dodge") +
+     labs(title = "Total Disk Size by Format and Number of Files",
+          x = "Number of Files", y = "Total Size (GB)") +
+     theme_minimal()
+
+# Plot 2: Total Write Time Bar Plot
+ggplot(results2, aes(x = factor(Files), y = Total_Write_Time_Hours, fill = format)) +
+     geom_bar(stat = "identity", position = "dodge") +
+     labs(title = "Total Write Time by Format and Number of Files",
+          x = "Number of Files", y = "Total Write Time (hours)") +
+     theme_minimal()
+
+# Plot 3: Scatter Plot - Total Size vs Total Write Time
+ggplot(results2, aes(x = Total_Size_GB, y = Total_Write_Time_Hours, color = format, shape = FileType)) +
+     geom_point(size = 4) +
+     facet_wrap(~Files, scales = "free") +
+     scale_color_brewer(palette = "Set1") +
+     scale_shape_manual(values = c(15, 16, 17)) +
+     labs(title = "Total Size vs Total Write Time",
+          x = "Total Size (GB)", y = "Total Write Time (hours)") +
+     theme_minimal()
+
+
+
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+
+# Select file type for analysis (e.g., "json_gz")
+selected_format <- "json_gz"
+
+# Number of files scenarios
+num_files <- c(1e03, 10e03, 25e03, 50e03, 100e03, 250e03, 500e03)
+
+# Filter data for the selected file format
+selected_data <- results %>%
+     filter(format == selected_format)
+
+# Calculate totals
+results_single <- data.frame(Files = num_files) %>%
+     mutate(
+          Total_Size_GB = (selected_data$file_size * Files) / (1024^3),
+          Total_Write_Time_Hours = (selected_data$write_time * Files) / 3600,
+          Write_Time_Label = ifelse(Total_Write_Time_Hours < 1,
+                                    paste0(round(Total_Write_Time_Hours * 60, 1), " min"),
+                                    paste0(round(Total_Write_Time_Hours, 2), " hr")),
+          Size_Label = ifelse(Total_Size_GB < 1,
+                              paste0(round(Total_Size_GB * 1024, 1), " MB"),
+                              paste0(round(Total_Size_GB, 2), " GB"))
+     )
+
+# Plot 1: Total Size Bar Plot
+plot_size <- ggplot(results_single, aes(x = factor(Files), y = Total_Size_GB)) +
+     geom_bar(stat = "identity", fill = "skyblue") +
+     geom_text(aes(label = Size_Label), vjust = -0.3, size = 3.5) +
+     labs(title = paste("Total Disk Size for", selected_format),
+          x = "Number of Files", y = "Total Size (GB)") +
+     theme_minimal()
+
+# Plot 2: Total Write Time Bar Plot
+plot_time <- ggplot(results_single, aes(x = factor(Files), y = Total_Write_Time_Hours)) +
+     geom_bar(stat = "identity", fill = "orange") +
+     geom_text(aes(label = Write_Time_Label), vjust = -0.3, size = 3.5) +
+     labs(title = paste("Total Write Time for", selected_format),
+          x = "Number of Files", y = "Total Write Time (hours)") +
+     theme_minimal()
+
+# Stack plots vertically
+plot_size / plot_time
 
 
 

@@ -4,14 +4,12 @@
 #' It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 #' The file extension determines which output format is used:
 #' - .json or .json.gz → written with write_list_to_json,
-#' - .h5, .hdf5, .h5.gz, or .hdf5.gz → written with write_list_to_hdf5,
+#' - .h5, or .h5.gz → written with write_list_to_hdf5,
 #' - .yaml or .yaml.gz → written with write_list_to_yaml.
 #'
 #' @param output_file_path A character string representing the full file path of the output file.
 #'        Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
 #'        If NULL, no file is written and the parameters are returned.
-#' @param compress Logical. If TRUE, the output file is written with compression (gzipped for JSON/YAML and file-level compression for HDF5).
-#'        Default is FALSE.
 #' @param seed Integer scalar giving the random seed value for the simulation run.
 #'
 #' ## Initialization
@@ -134,6 +132,8 @@
 #' }
 #'
 #' @export
+#'
+
 make_LASER_config <- function(output_file_path = NULL,
                               compress = FALSE,
                               seed = NULL,
@@ -212,6 +212,7 @@ make_LASER_config <- function(output_file_path = NULL,
 
      # Combine all parameters into a named list.
      params <- list(
+          seed              = seed,
           date_start        = date_start,
           date_stop         = date_stop,
           location_id       = location_id,
@@ -399,6 +400,17 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("beta_j_seasonality must be a matrix with rows equal to length(location_id) and 366 columns for annual seasonality.")
      }
 
+     # Ensure beta_j_seasonality values conform to affine normalization
+     for (i in 1:nrow(beta_j_seasonality)) {
+
+          tryCatch({
+               MOSAIC::check_affine_normalization(beta_j_seasonality[i, ], verbose=FALSE)
+          }, error = function(e) {
+               stop(sprintf("beta_j_seasonality for location '%s' failed affine normalization check: %s", location_name[i], e$message))
+          })
+
+     }
+
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
           stop("tau_i must be a numeric vector of length equal to location_id and values between 0 and 1.")
      }
@@ -478,18 +490,26 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.null(output_file_path)) {
 
           if (grepl("\\.json(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-               compress_flag <- if (grepl("\\.json\\.gz$", output_file_path, ignore.case = TRUE)) TRUE else compress
-               write_list_to_json(data_list = params, file_path = output_file_path, compress = compress_flag)
+
+               write_list_to_json(data_list = params, file_path = output_file_path, compress = grepl("\\.gz$", output_file_path))
+
           } else if (grepl("\\.(h5|hdf5)(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-               compress_flag <- if (grepl("\\.(h5|hdf5)\\.gz$", output_file_path, ignore.case = TRUE)) TRUE else compress
-               write_list_to_hdf5(data_list = params, file_path = output_file_path, compress_chunks = TRUE, compress_file = compress_flag)
+
+               write_list_to_hdf5(data_list = params, file_path = output_file_path, compress_chunks = TRUE, compress_file = grepl("\\.gz$", output_file_path))
+
           } else if (grepl("\\.yaml(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-               compress_flag <- if (grepl("\\.yaml\\.gz$", output_file_path, ignore.case = TRUE)) TRUE else compress
-               write_list_to_yaml(data_list = params, file_path = output_file_path, compress = compress_flag)
+
+               write_list_to_yaml(data_list = params, file_path = output_file_path, compress = grepl("\\.gz$", output_file_path))
+
           } else {
+
                stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.")
+
           }
+
      } else {
+
           return(params)
+
      }
 }

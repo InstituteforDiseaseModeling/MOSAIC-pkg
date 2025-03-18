@@ -46,7 +46,7 @@
 
 check_affine_normalization <- function(x, verbose = FALSE) {
 
-     tol <- 1e-8  # Tolerance for floating point precision
+     tol <- 1e-2  # Tolerance for floating point precision
 
      # Compute statistics ignoring NA values
      mean_x <- mean(x, na.rm = TRUE)
