@@ -2,7 +2,7 @@
 % Please edit documentation in R/check_installed_dependencies.R
 \name{check_installed_dependencies}
 \alias{check_installed_dependencies}
-\title{Check Installed Python and R Dependencies for MOSAIC}
+\title{Check Installed R and Python Dependencies for MOSAIC}
 \usage{
 check_installed_dependencies(pkgname = "MOSAIC")
 }
