@@ -125,9 +125,11 @@ reference:
       - read_hdf5_to_list
       - read_json_to_list
       - read_yaml_to_list
+      - read_obj_to_list
       - write_list_to_hdf5
       - write_list_to_json
       - write_list_to_yaml
+      - write_list_to_obj
 
   - title: "Shiny Apps"
     contents:

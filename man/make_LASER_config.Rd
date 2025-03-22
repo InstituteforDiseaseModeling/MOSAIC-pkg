@@ -170,13 +170,14 @@ Returns the validated list of parameters. If output_file_path is provided, the p
 in the format determined by the file extension.
 }
 \description{
-This function generates a JSON/HDF5/YAML configuration file to be used as LASER model simulation parameters.
+This function generates a JSON/HDF5/YAML/OBJ configuration file to be used as LASER model simulation parameters.
 It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 The file extension determines which output format is used:
 \itemize{
 \item .json or .json.gz → written with write_list_to_json,
 \item .h5, or .h5.gz → written with write_list_to_hdf5,
 \item .yaml or .yaml.gz → written with write_list_to_yaml.
+\item .obj or .obj.gz → written with write_list_to_obj (Python-compatible).
 }
 }
 \examples{

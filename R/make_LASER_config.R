@@ -1,11 +1,12 @@
 #' Create a Configuration File for LASER
 #'
-#' This function generates a JSON/HDF5/YAML configuration file to be used as LASER model simulation parameters.
+#' This function generates a JSON/HDF5/YAML/OBJ configuration file to be used as LASER model simulation parameters.
 #' It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 #' The file extension determines which output format is used:
 #' - .json or .json.gz → written with write_list_to_json,
 #' - .h5, or .h5.gz → written with write_list_to_hdf5,
 #' - .yaml or .yaml.gz → written with write_list_to_yaml.
+#' - .obj or .obj.gz → written with write_list_to_obj (Python-compatible).
 #'
 #' @param output_file_path A character string representing the full file path of the output file.
 #'        Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
@@ -472,6 +473,7 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("The decay rate delta_min must be greater than decay rate delta_max.")
      }
 
+
      tmp <- split(params$b_jt, row(params$b_jt))
      params$b_jt <- lapply(tmp, as.numeric)
 
@@ -501,19 +503,23 @@ make_LASER_config <- function(output_file_path = NULL,
 
           if (grepl("\\.json(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
 
-               write_list_to_json(data_list = params, file_path = output_file_path, compress = grepl("\\.gz$", output_file_path))
+               MOSAIC::write_list_to_json(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
 
           } else if (grepl("\\.(h5|hdf5)(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
 
-               write_list_to_hdf5(data_list = params, file_path = output_file_path, compress_chunks = TRUE, compress_file = grepl("\\.gz$", output_file_path))
+               MOSAIC::write_list_to_hdf5(params, output_file_path, compress_chunks = TRUE, compress_file = grepl("\\.gz$", output_file_path))
 
           } else if (grepl("\\.yaml(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
 
-               write_list_to_yaml(data_list = params, file_path = output_file_path, compress = grepl("\\.gz$", output_file_path))
+               MOSAIC::write_list_to_yaml(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
+
+          } else if (grepl("\\.obj(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+
+               MOSAIC::write_list_to_obj(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
 
           } else {
 
-               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.")
+               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, .yaml.gz, .obj, or .obj.gz extension.")
 
           }
 
@@ -522,4 +528,5 @@ make_LASER_config <- function(output_file_path = NULL,
           return(params)
 
      }
+
 }

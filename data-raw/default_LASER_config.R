@@ -125,25 +125,17 @@ str(psi_jt)
 
 
 
-# Create default configuration files in all six formats
 
-# Define output file paths for all six formats
-path_to_json_file     <- file.path(getwd(), 'inst/extdata/default_parameters.json')
-path_to_json_gz_file  <- file.path(getwd(), 'inst/extdata/default_parameters.json.gz')
-path_to_h5_file       <- file.path(getwd(), 'inst/extdata/default_parameters.h5')
-path_to_h5_gz_file    <- file.path(getwd(), 'inst/extdata/default_parameters.h5.gz')
-path_to_yaml_file     <- file.path(getwd(), 'inst/extdata/default_parameters.yaml')
-path_to_yaml_gz_file  <- file.path(getwd(), 'inst/extdata/default_parameters.yaml.gz')
-
-
-# Define the six output file paths
+# Define output file paths for all seven formats
 file_paths <- list(
-     path_to_json_file,      # .json
-     path_to_json_gz_file,   # .json.gz
-     path_to_h5_file,        # .h5
-     path_to_h5_gz_file,     # .h5.gz
-     path_to_yaml_file,      # .yaml
-     path_to_yaml_gz_file    # .yaml.gz
+     file.path(getwd(), 'inst/extdata/default_parameters.json'),
+     file.path(getwd(), 'inst/extdata/default_parameters.json.gz'),
+     file.path(getwd(), 'inst/extdata/default_parameters.h5'),
+     file.path(getwd(), 'inst/extdata/default_parameters.h5.gz'),
+     file.path(getwd(), 'inst/extdata/default_parameters.yaml'),
+     file.path(getwd(), 'inst/extdata/default_parameters.yaml.gz'),
+     file.path(getwd(), 'inst/extdata/default_parameters.obj'),
+     file.path(getwd(), 'inst/extdata/default_parameters.obj.gz')
 )
 
 
@@ -195,16 +187,12 @@ base_args <- list(
 
 # Loop over the file paths and call make_LASER_config() for each one.
 for (fp in file_paths) {
-     # Set compress_flag to TRUE if the filename ends with .gz; otherwise, use the default compress value.
+
      compress_flag <- grepl("\\.gz$", fp, ignore.case = TRUE)
-
-     # Combine the output file path and compress flag with the base arguments.
      args <- c(list(output_file_path = fp, compress = compress_flag), base_args)
-
-     # Call make_LASER_config with all the arguments.
      do.call(make_LASER_config, args)
 }
 
 
-config <- jsonlite::fromJSON(path_to_json_file)
+config <- jsonlite::fromJSON(file_paths[[1]])
 

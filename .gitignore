@@ -4,5 +4,6 @@
 .RData
 .Ruserdata
 local/
+inst/py/mosaic-python-env
 model/LAUNCH.R
 **data_psi_suitability.csv

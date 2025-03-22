@@ -38,6 +38,7 @@ Imports:
   igraph,
   ISOweek,
   jsonlite,
+  keras3,
   lubridate,
   magrittr,
   minpack.lm,
@@ -52,6 +53,7 @@ Imports:
   stringr,
   tidyr,
   tidyverse,
+  tensorflow,
   viridis,
   zoo,
   RColorBrewer,
@@ -61,7 +63,8 @@ Imports:
   shinyWidgets,
   yaml,
   hdf5r,
-  R.utils
+  R.utils,
+  reticulate
 Depends: 
   R (>= 4.1.1),
   stats, 
