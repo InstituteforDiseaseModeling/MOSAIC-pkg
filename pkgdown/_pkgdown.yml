@@ -112,7 +112,7 @@ reference:
   - title: "Utility Functions"
     contents:
       - install_dependencies
-      - check_installed_dependencies
+      - check_dependencies
       - calc_affine_normalization
       - check_affine_normalization
       - load_or_install_packages
