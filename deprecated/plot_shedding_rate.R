@@ -29,19 +29,21 @@ plot_shedding_rate <- function(PATHS) {
      set.seed(123)
 
      # Generate environmental suitability values and transformations
-     psi <- c(runif(1000, min = 0, max = 1), 1)
+     psi <- runif(100, min = 0, max = 1)
      psi_transform <- 1 / (1 + (1 - psi))
 
-     days_vibrio_survival_short <- 1
-     days_vibrio_survival_long <- 100
+     days_min <- 3
+     days_max <- 90
 
-     decay_rate <- 1 / days_vibrio_survival_short + psi * (1 / days_vibrio_survival_long - 1 / days_vibrio_survival_short)
+     delta_min <- 1/days_min
+     delta_max <- 1/days_max
+     decay_rate <- delta_min + psi * (delta_max - delta_min)
 
      # Define the output file path
-     #output_file <- file.path(PATHS$DOCS_FIGURES, "shedding_rate.png")
+     output_file <- file.path(PATHS$DOCS_FIGURES, "shedding_rate.png")
 
      # Create the plot and save as PNG
-     #png(filename = output_file, width = 1800, height = 1800, units = "px", res = 300)
+     png(filename = output_file, width = 1800, height = 1800, units = "px", res = 300)
 
      # Base plot: linear transformation
      plot(psi, 1 - psi,
@@ -61,56 +63,17 @@ plot_shedding_rate <- function(PATHS) {
      # Add legend
      legend("topright", legend = c(expression(delta[jt] == 1 - psi[jt]),
                                    expression(delta[jt] == 1 - frac(1, 1 + (1 - psi[jt]))),
-                                   expression(delta[jt] == delta[min] + psi[jt] * (delta[max] - delta[min]))),
+                                   expression(delta[jt] == delta[min] + psi * (delta[max] - delta[min]))),
             col = c("#377EB8", "#E41A1C", "#4DAF4A"), lty = 1, pch = 19, lwd = 2, cex = 1.2, bty = "n")
 
      # Annotate text on the plot
-     text(x = 0, y = 1.01, "Shortest survival (~1 day)", pos = 4, col = "#377EB8", cex = 1)
+     text(x = 0, y = 1.01, "0 days", pos = 4, col = "#377EB8", cex = 1)
      text(x = 0, y = 0.54, "2 days", pos = 4, col = "#E41A1C", cex = 1)
-     text(x = 0, y = delta_max, labels = paste0(days_vibrio_survival_short, " days"), pos = 4, col = "#4DAF4A", cex = 1)
-     text(x = 0.75, y = delta_min, labels = paste0(days_vibrio_survival_long, " days"), pos = 4, col = "#4DAF4A", cex = 1)
-
-     pretty_days <- c(1, 2, 3, 7, 14, 30, 60, 90)
-     axis(4, at = 1 / pretty_days, labels = pretty_days)
-     mtext("Approximate survival time (days)", side = 4, line = 3)
+     text(x = 0, y = 0.36, labels = paste0(days_min, " days"), pos = 4, col = "#4DAF4A", cex = 1)
+     text(x = 0.75, y = 0, labels = paste0(days_max, " days"), pos = 4, col = "#4DAF4A", cex = 1)
 
      # Close the PNG device
      dev.off()
 
-
-
-
-     # Calculate vibrio survival in days (1 / decay_rate)
-     vibrio_survival_days <- 1 / decay_rate
-
-     # Sort psi and corresponding values for clean lines
-     ord <- order(psi)
-     psi_sorted <- psi[ord]
-     survival_sorted <- vibrio_survival_days[ord]
-     decay_sorted <- decay_rate[ord]
-
-     # Create base plot: psi vs survival in days
-     plot(psi_sorted, survival_sorted,
-          type = "l", lwd = 3, col = "#4DAF4A",
-          xlab = expression("Climate driven environmental suitability (" * psi[jt] * ")"),
-          ylab = "Vibrio survival (days)",
-          xlim = c(0, 1), ylim = c(0, max(survival_sorted) * 1.05),
-          bty = "n")
-
-     # Add grid
-     grid()
-
-     # Add right-side axis for decay rate
-     axis(side = 4, at = pretty(survival_sorted), labels = round(1 / pretty(survival_sorted), 3))
-     mtext(expression("Decay rate (" * delta[jt] * ")"), side = 4, line = 3)
-
-     # Optional: Add points for raw data (not just lines)
-     points(psi, vibrio_survival_days, pch = 19, col = adjustcolor("#4DAF4A", 0.5))
-
-     # Add title (optional)
-     title("Environmental suitability and Vibrio survival duration")
-
-
      message(paste("Shedding rate plot saved to:", output_file))
 }
-

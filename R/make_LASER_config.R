@@ -73,13 +73,14 @@
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_id)).
 #' @param theta_j Proportion with adequate WASH (numeric vector of length(location_id) in [0, 1]).
-#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_id) and columns
-#'        equal to the daily sequence from date_start to date_stop).
+#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_id) and columns equal to the daily sequence from date_start to date_stop).
 #' @param zeta_1 Shedding rate (numeric > 0).
 #' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
 #' @param kappa Concentration required for 50% infection (numeric > 0).
-#' @param delta_min Minimum environmental decay rate (numeric > 0; must be > delta_max).
-#' @param delta_max Maximum environmental decay rate (numeric > 0).
+#' @param decay_days_short Time constant (in days) for short-term survival of *V. cholerae* in the environment. Must be > 0 and < decay_days_long.
+#' @param decay_days_long Time constant (in days) for long-term survival of *V. cholerae* in the environment. Must be > 0 and > decay_days_short.
+#' @param decay_shape_1 First shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
+#' @param decay_shape_2 Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
 #'
 #' @return Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
 #'         in the format determined by the file extension.
@@ -128,8 +129,10 @@
 #'      zeta_1 = 0.5,
 #'      zeta_2 = 0.4,
 #'      kappa = 10^5,
-#'      delta_min = 0.1,
-#'      delta_max = 0.01
+#'      decay_days_short  = 3,
+#'      decay_days_long   = 90,
+#'      decay_shape_1     = 1,
+#'.     decay_shape_2     = 1
 #' )
 #' }
 #'
@@ -167,7 +170,6 @@ make_LASER_config <- function(output_file_path = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
                               mu_jt = NULL,
-
                               # Observation Processes
                               rho = NULL,
                               sigma = NULL,
@@ -185,8 +187,11 @@ make_LASER_config <- function(output_file_path = NULL,
                               zeta_1 = NULL,
                               zeta_2 = NULL,
                               kappa = NULL,
-                              delta_min = NULL,
-                              delta_max = NULL) {
+                              decay_days_short = NULL,
+                              decay_days_long = NULL,
+                              decay_shape_1 = NULL,
+                              decay_shape_2 = NULL
+) {
 
      message('Validating parameter values')
 
@@ -254,8 +259,10 @@ make_LASER_config <- function(output_file_path = NULL,
           zeta_1            = zeta_1,
           zeta_2            = zeta_2,
           kappa             = kappa,
-          delta_min         = delta_min,
-          delta_max         = delta_max
+          decay_days_short  = decay_days_short,
+          decay_days_long   = decay_days_long,
+          decay_shape_1     = decay_shape_1,
+          decay_shape_2     = decay_shape_2
      )
 
      # Check for NULL values.
@@ -461,18 +468,26 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("kappa must be a numeric scalar greater than zero.")
      }
 
-     if (!is.numeric(delta_min) || delta_min <= 0) {
-          stop("delta_min must be a numeric scalar greater than zero.")
+     # Environmental decay parameter validation
+     if (!is.numeric(decay_days_short) || decay_days_short <= 0) {
+          stop("decay_days_short must be a numeric scalar greater than zero.")
      }
 
-     if (!is.numeric(delta_max) || delta_max <= 0) {
-          stop("delta_max must be a numeric scalar greater than zero.")
+     if (!is.numeric(decay_days_long) || decay_days_long <= 0) {
+          stop("decay_days_long must be a numeric scalar greater than zero.")
      }
 
-     if (delta_min <= delta_max) {
-          stop("The decay rate delta_min must be greater than decay rate delta_max.")
+     if (decay_days_short >= decay_days_long) {
+          stop("decay_days_short must be less than decay_days_long.")
      }
 
+     if (!is.numeric(decay_shape_1) || decay_shape_1 <= 0) {
+          stop("decay_shape_1 must be a numeric scalar greater than zero.")
+     }
+
+     if (!is.numeric(decay_shape_2) || decay_shape_2 <= 0) {
+          stop("decay_shape_2 must be a numeric scalar greater than zero.")
+     }
 
      tmp <- split(params$b_jt, row(params$b_jt))
      params$b_jt <- lapply(tmp, as.numeric)
