@@ -1,5 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+deprecated/
 data-raw/
 local/
 model/

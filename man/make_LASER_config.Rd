@@ -46,8 +46,10 @@ make_LASER_config(
   zeta_1 = NULL,
   zeta_2 = NULL,
   kappa = NULL,
-  delta_min = NULL,
-  delta_max = NULL
+  decay_days_short = NULL,
+  decay_days_long = NULL,
+  decay_shape_1 = NULL,
+  decay_shape_2 = NULL
 )
 }
 \arguments{
@@ -152,8 +154,7 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 
 \item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_id) in \link{0, 1}).}
 
-\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_id) and columns
-equal to the daily sequence from date_start to date_stop).}
+\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_id) and columns equal to the daily sequence from date_start to date_stop).}
 
 \item{zeta_1}{Shedding rate (numeric > 0).}
 
@@ -161,9 +162,13 @@ equal to the daily sequence from date_start to date_stop).}
 
 \item{kappa}{Concentration required for 50\% infection (numeric > 0).}
 
-\item{delta_min}{Minimum environmental decay rate (numeric > 0; must be > delta_max).}
+\item{decay_days_short}{Time constant (in days) for short-term survival of \emph{V. cholerae} in the environment. Must be > 0 and < decay_days_long.}
 
-\item{delta_max}{Maximum environmental decay rate (numeric > 0).}
+\item{decay_days_long}{Time constant (in days) for long-term survival of \emph{V. cholerae} in the environment. Must be > 0 and > decay_days_short.}
+
+\item{decay_shape_1}{First shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
+
+\item{decay_shape_2}{Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
 }
 \value{
 Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
@@ -224,8 +229,10 @@ make_LASER_config(
      zeta_1 = 0.5,
      zeta_2 = 0.4,
      kappa = 10^5,
-     delta_min = 0.1,
-     delta_max = 0.01
+     decay_days_short  = 3,
+     decay_days_long   = 90,
+     decay_shape_1     = 1,
+.     decay_shape_2     = 1
 )
 }
 

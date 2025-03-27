@@ -81,7 +81,7 @@ write_list_to_obj <- function(data_list, file_path, compress = FALSE) {
           }
      }
 
-     define_precision <- function(x, digits = 3) {
+     define_precision <- function(x, digits) {
           if (is.numeric(x)) {
                return(signif(x, digits = digits))  # or use round(x, digits) for decimal precision
           } else if (is.list(x)) {
@@ -92,7 +92,7 @@ write_list_to_obj <- function(data_list, file_path, compress = FALSE) {
      }
 
      # Optionally reduce precision of numeric data
-     data_list <- define_precision(data_list, digits = 3)
+     data_list <- define_precision(data_list, digits = 4)
 
      # Convert R list to Python dictionary
      py_data <- tryCatch(

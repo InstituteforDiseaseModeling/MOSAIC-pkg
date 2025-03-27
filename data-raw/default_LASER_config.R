@@ -180,8 +180,10 @@ base_args <- list(
      zeta_1 = 7.5,
      zeta_2 = 2.5,
      kappa = 10^5,
-     delta_min = 1/3,
-     delta_max = 1/90
+     decay_days_short = 3,
+     decay_days_long = 90,
+     decay_shape_1 = 1,
+     decay_shape_2 = 1
 )
 
 
