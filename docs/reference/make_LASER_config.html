@@ -94,9 +94,7 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  date_start <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  date_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  location_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  location_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  N_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  S_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  E_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  I_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -171,47 +169,38 @@ it will be converted to a Date object.</p></dd>
 it will be converted to a Date object.</p></dd>
 
 
-<dt>location_id</dt>
-<dd><p>A vector of integers giving the numerical index for metapopulations.</p></dd>
-
-
 <dt>location_name</dt>
 <dd><p>A character vector giving the names of each metapopulation location.
 The order and names here must match those used in the initial population vectors.</p></dd>
 
 
-<dt>N_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the total initial
-population size for each location. Names must match the values in location_name.</p></dd>
-
-
 <dt>S_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the starting number
+<dd><p>A named numeric or integer vector of length equal to location_name giving the starting number
 of susceptible individuals for each location. Names must match location_name.</p></dd>
 
 
 <dt>E_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the starting number
+<dd><p>A named numeric or integer vector of length equal to location_name giving the starting number
 of exposed individuals for each location. Names must match location_name.</p></dd>
 
 
 <dt>I_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the starting number
+<dd><p>A named numeric or integer vector of length equal to location_name giving the starting number
 of infected individuals for each location. Names must match location_name.</p></dd>
 
 
 <dt>R_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the starting number
+<dd><p>A named numeric or integer vector of length equal to location_name giving the starting number
 of recovered individuals for each location. Names must match location_name.</p></dd>
 
 
 <dt>V1_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the starting number
+<dd><p>A named numeric or integer vector of length equal to location_name giving the starting number
 of individuals in vaccine compartment V1 for each location. Names must match location_name.</p></dd>
 
 
 <dt>V2_j_initial</dt>
-<dd><p>A named numeric or integer vector of length equal to location_id giving the starting number
+<dd><p>A named numeric or integer vector of length equal to location_name giving the starting number
 of individuals in vaccine compartment V2 for each location. Names must match location_name.</p><div class="section">
 <h3 id="demographics">Demographics<a class="anchor" aria-label="anchor" href="#demographics"></a></h3>
 
@@ -220,12 +209,12 @@ of individuals in vaccine compartment V2 for each location. Names must match loc
 
 
 <dt>b_jt</dt>
-<dd><p>A matrix of birth rates with rows equal to length(location_id) and columns equal to the daily
+<dd><p>A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily
 sequence from date_start to date_stop.</p></dd>
 
 
 <dt>d_jt</dt>
-<dd><p>A matrix of mortality rates with rows equal to length(location_id) and columns equal to the daily
+<dd><p>A matrix of mortality rates with rows equal to length(location_name) and columns equal to the daily
 sequence from date_start to date_stop.</p><div class="section">
 <h3 id="vaccination">Vaccination<a class="anchor" aria-label="anchor" href="#vaccination"></a></h3>
 
@@ -278,7 +267,7 @@ sequence from date_start to date_stop.</p><div class="section">
 
 
 <dt>mu_jt</dt>
-<dd><p>A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_id)
+<dd><p>A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_name)
 and columns equal to length(t). All values must be numeric and between 0 and 1.</p><div class="section">
 <h3 id="observation-processes">Observation Processes<a class="anchor" aria-label="anchor" href="#observation-processes"></a></h3>
 
@@ -299,11 +288,11 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 
 
 <dt>longitude</dt>
-<dd><p>A numeric vector of longitudes for each location. Must be same length as location_id.</p></dd>
+<dd><p>A numeric vector of longitudes for each location. Must be same length as location_name.</p></dd>
 
 
 <dt>latitude</dt>
-<dd><p>A numeric vector of latitudes for each location. Must be same length as location_id.</p></dd>
+<dd><p>A numeric vector of latitudes for each location. Must be same length as location_name.</p></dd>
 
 
 <dt>mobility_omega</dt>
@@ -315,7 +304,7 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 
 
 <dt>tau_i</dt>
-<dd><p>Departure probability for each origin location (numeric vector of length(location_id) in 0, 1).</p><div class="section">
+<dd><p>Departure probability for each origin location (numeric vector of length(location_name) in 0, 1).</p><div class="section">
 <h3 id="force-of-infection-human-to-human-">Force of Infection (human-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-human-to-human-"></a></h3>
 
 
@@ -323,23 +312,23 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 
 
 <dt>beta_j0_hum</dt>
-<dd><p>Baseline human-to-human transmission rate (numeric vector of length(location_id)).</p></dd>
+<dd><p>Baseline human-to-human transmission rate (numeric vector of length(location_name)).</p></dd>
 
 
 <dt>a_1_j</dt>
-<dd><p>Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).</p></dd>
+<dd><p>Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).</p></dd>
 
 
 <dt>a_2_j</dt>
-<dd><p>Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).</p></dd>
+<dd><p>Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).</p></dd>
 
 
 <dt>b_1_j</dt>
-<dd><p>Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).</p></dd>
+<dd><p>Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).</p></dd>
 
 
 <dt>b_2_j</dt>
-<dd><p>Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).</p></dd>
+<dd><p>Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).</p></dd>
 
 
 <dt>p</dt>
@@ -359,15 +348,15 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 
 
 <dt>beta_j0_env</dt>
-<dd><p>Baseline environment-to-human transmission rate (numeric vector of length(location_id)).</p></dd>
+<dd><p>Baseline environment-to-human transmission rate (numeric vector of length(location_name)).</p></dd>
 
 
 <dt>theta_j</dt>
-<dd><p>Proportion with adequate WASH (numeric vector of length(location_id) in 0, 1).</p></dd>
+<dd><p>Proportion with adequate WASH (numeric vector of length(location_name) in 0, 1).</p></dd>
 
 
 <dt>psi_jt</dt>
-<dd><p>Matrix of environmental suitability values (matrix with rows = length(location_id) and columns equal to the daily sequence from date_start to date_stop).</p></dd>
+<dd><p>Matrix of environmental suitability values (matrix with rows = length(location_name) and columns equal to the daily sequence from date_start to date_stop).</p></dd>
 
 
 <dt>zeta_1</dt>
@@ -454,9 +443,7 @@ in the format determined by the file extension.</p>
 <span class="r-in"><span>     seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
 <span class="r-in"><span>     date_start <span class="op">=</span> <span class="st">"2024-12-01"</span>,</span></span>
 <span class="r-in"><span>     date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span></span>
-<span class="r-in"><span>     location_id <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">2</span>,</span></span>
 <span class="r-in"><span>     location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span>, <span class="st">"Location B"</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>     N_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">1000</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     S_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">900</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">900</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     E_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">0</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     I_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">50</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>,</span></span>
