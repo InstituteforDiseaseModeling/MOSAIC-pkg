@@ -34,14 +34,17 @@ make_LASER_config(
   mu_jt = NULL,
   rho = NULL,
   sigma = NULL,
+  longitude = NULL,
+  latitude = NULL,
+  mobility_omega = NULL,
+  mobility_gamma = NULL,
+  tau_i = NULL,
   beta_j0_hum = NULL,
   a_1_j = NULL,
   a_2_j = NULL,
   b_1_j = NULL,
   b_2_j = NULL,
   p = NULL,
-  tau_i = NULL,
-  pi_ij = NULL,
   alpha_1 = NULL,
   alpha_2 = NULL,
   beta_j0_env = NULL,
@@ -53,7 +56,8 @@ make_LASER_config(
   decay_days_short = NULL,
   decay_days_long = NULL,
   decay_shape_1 = NULL,
-  decay_shape_2 = NULL
+  decay_shape_2 = NULL,
+  return = NULL
 )
 }
 \arguments{
@@ -137,6 +141,18 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 \item{rho}{Proportion of true infections (numeric in \link{0, 1}).}
 
 \item{sigma}{Proportion of symptomatic infections (numeric in \link{0, 1}).
+\subsection{Spatial model}{
+}}
+
+\item{longitude}{A numeric vector of longitudes for each location. Must be same length as location_id.}
+
+\item{latitude}{A numeric vector of latitudes for each location. Must be same length as location_id.}
+
+\item{mobility_omega}{Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.}
+
+\item{mobility_gamma}{Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.}
+
+\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_id) in \link{0, 1}).
 \subsection{Force of Infection (human-to-human)}{
 }}
 
@@ -151,10 +167,6 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 \item{b_2_j}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).}
 
 \item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.}
-
-\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_id) in \link{0, 1}).}
-
-\item{pi_ij}{Matrix of travel probabilities (dimensions: length(location_id) x length(location_id)).}
 
 \item{alpha_1}{Transmission parameter for mixing (numeric in \link{0, 1}).}
 
@@ -180,7 +192,23 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 
 \item{decay_shape_1}{First shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
 
-\item{decay_shape_2}{Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
+\item{decay_shape_2}{Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.
+\subsection{Outputs}{
+}}
+
+\item{return}{A character vector of model quantities to return after running the LASER model. Each element should be one of the following:
+\describe{
+\item{"LL"}{Log-likelihood of the fitted model.}
+\item{"S"}{Number of susceptible individuals.}
+\item{"E"}{Number of exposed (latent) individuals.}
+\item{"I"}{Number of infectious individuals.}
+\item{"R"}{Number of recovered individuals.}
+\item{"V1"}{Number of individuals with one dose of vaccine. Includes all V1 subcompartments.}
+\item{"V2"}{Number of individuals with two doses of vaccine. Includes all V2 subcompartments.}
+\item{"W"}{Environmental concentration of \emph{V. cholerae}.}
+\item{"C"}{Estimated number of symptomatic cholera cases.}
+\item{"D"}{Estimated number of cholera deaths.}
+}}
 }
 \value{
 Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
@@ -226,7 +254,7 @@ make_LASER_config(
      gamma_1 = 0.2,
      gamma_2 = 0.25,
      epsilon = 0.05,
-     mu_jt = 0.01,
+     mu_jt = matrix(0.01, nrow = 2, ncol = 31),
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),
@@ -234,9 +262,12 @@ make_LASER_config(
      a_2_j = c(0.01, 0.01),
      b_1_j = c(0.03, 0.03),
      b_2_j = c(0.01, 0.01),
-     p     = 366,
+     p     = 365,
+     longitude = c(36.8, 37.0),
+     latitude = c(-1.3, -1.2),
+     mobility_omega = 1.0,
+     mobility_gamma = 2.0,
      tau_i = c(0.1, 0.2),
-     pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
      alpha_1 = 0.95,
      alpha_2 = 1,
      beta_j0_env = c(0.02, 0.04),
@@ -248,7 +279,8 @@ make_LASER_config(
      decay_days_short  = 3,
      decay_days_long   = 90,
      decay_shape_1     = 1,
-.     decay_shape_2     = 1
+     decay_shape_2     = 1,
+     return = "LL"
 )
 }
 
