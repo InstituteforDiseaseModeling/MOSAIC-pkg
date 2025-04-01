@@ -10,9 +10,7 @@ make_LASER_config(
   seed = NULL,
   date_start = NULL,
   date_stop = NULL,
-  location_id = NULL,
   location_name = NULL,
-  N_j_initial = NULL,
   S_j_initial = NULL,
   E_j_initial = NULL,
   I_j_initial = NULL,
@@ -75,38 +73,33 @@ it will be converted to a Date object.}
 \item{date_stop}{End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
 it will be converted to a Date object.}
 
-\item{location_id}{A vector of integers giving the numerical index for metapopulations.}
-
 \item{location_name}{A character vector giving the names of each metapopulation location.
 The order and names here must match those used in the initial population vectors.}
 
-\item{N_j_initial}{A named numeric or integer vector of length equal to location_id giving the total initial
-population size for each location. Names must match the values in location_name.}
-
-\item{S_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+\item{S_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of susceptible individuals for each location. Names must match location_name.}
 
-\item{E_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+\item{E_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of exposed individuals for each location. Names must match location_name.}
 
-\item{I_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+\item{I_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of infected individuals for each location. Names must match location_name.}
 
-\item{R_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+\item{R_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of recovered individuals for each location. Names must match location_name.}
 
-\item{V1_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+\item{V1_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of individuals in vaccine compartment V1 for each location. Names must match location_name.}
 
-\item{V2_j_initial}{A named numeric or integer vector of length equal to location_id giving the starting number
+\item{V2_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of individuals in vaccine compartment V2 for each location. Names must match location_name.
 \subsection{Demographics}{
 }}
 
-\item{b_jt}{A matrix of birth rates with rows equal to length(location_id) and columns equal to the daily
+\item{b_jt}{A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily
 sequence from date_start to date_stop.}
 
-\item{d_jt}{A matrix of mortality rates with rows equal to length(location_id) and columns equal to the daily
+\item{d_jt}{A matrix of mortality rates with rows equal to length(location_name) and columns equal to the daily
 sequence from date_start to date_stop.
 \subsection{Vaccination}{
 }}
@@ -133,7 +126,7 @@ sequence from date_start to date_stop.
 
 \item{epsilon}{Waning immunity rate (numeric >= 0).}
 
-\item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_id)
+\item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_name)
 and columns equal to length(t). All values must be numeric and between 0 and 1.
 \subsection{Observation Processes}{
 }}
@@ -144,27 +137,27 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 \subsection{Spatial model}{
 }}
 
-\item{longitude}{A numeric vector of longitudes for each location. Must be same length as location_id.}
+\item{longitude}{A numeric vector of longitudes for each location. Must be same length as location_name.}
 
-\item{latitude}{A numeric vector of latitudes for each location. Must be same length as location_id.}
+\item{latitude}{A numeric vector of latitudes for each location. Must be same length as location_name.}
 
 \item{mobility_omega}{Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.}
 
 \item{mobility_gamma}{Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.}
 
-\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_id) in \link{0, 1}).
+\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_name) in \link{0, 1}).
 \subsection{Force of Infection (human-to-human)}{
 }}
 
-\item{beta_j0_hum}{Baseline human-to-human transmission rate (numeric vector of length(location_id)).}
+\item{beta_j0_hum}{Baseline human-to-human transmission rate (numeric vector of length(location_name)).}
 
-\item{a_1_j}{Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).}
+\item{a_1_j}{Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{a_2_j}{Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).}
+\item{a_2_j}{Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{b_1_j}{Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).}
+\item{b_1_j}{Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{b_2_j}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).}
+\item{b_2_j}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
 
 \item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.}
 
@@ -174,11 +167,11 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 \subsection{Force of Infection (environment-to-human)}{
 }}
 
-\item{beta_j0_env}{Baseline environment-to-human transmission rate (numeric vector of length(location_id)).}
+\item{beta_j0_env}{Baseline environment-to-human transmission rate (numeric vector of length(location_name)).}
 
-\item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_id) in \link{0, 1}).}
+\item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_name) in \link{0, 1}).}
 
-\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_id) and columns equal to the daily sequence from date_start to date_stop).}
+\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_name) and columns equal to the daily sequence from date_start to date_stop).}
 
 \item{zeta_1}{Shedding rate (numeric > 0).}
 
@@ -233,9 +226,7 @@ make_LASER_config(
      seed = 123,
      date_start = "2024-12-01",
      date_stop = "2024-12-31",
-     location_id = 1:2,
      location_name = c("Location A", "Location B"),
-     N_j_initial = c("Location A" = 1000, "Location B" = 1000),
      S_j_initial = c("Location A" = 900, "Location B" = 900),
      E_j_initial = c("Location A" = 0, "Location B" = 0),
      I_j_initial = c("Location A" = 50, "Location B" = 50),

@@ -159,7 +159,6 @@ base_args <- list(
      seed = 123,
      date_start = date_start,
      date_stop = date_stop,
-     location_id = seq_along(j),
      location_name = j,
      N_j_initial = N_j,
      S_j_initial = S_j,

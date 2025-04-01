@@ -18,28 +18,25 @@
 #'        it will be converted to a Date object.
 #' @param date_stop End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
 #'        it will be converted to a Date object.
-#' @param location_id A vector of integers giving the numerical index for metapopulations.
 #' @param location_name A character vector giving the names of each metapopulation location.
 #'        The order and names here must match those used in the initial population vectors.
-#' @param N_j_initial A named numeric or integer vector of length equal to location_id giving the total initial
-#'        population size for each location. Names must match the values in location_name.
-#' @param S_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#' @param S_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of susceptible individuals for each location. Names must match location_name.
-#' @param E_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#' @param E_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of exposed individuals for each location. Names must match location_name.
-#' @param I_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#' @param I_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of infected individuals for each location. Names must match location_name.
-#' @param R_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#' @param R_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of recovered individuals for each location. Names must match location_name.
-#' @param V1_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#' @param V1_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of individuals in vaccine compartment V1 for each location. Names must match location_name.
-#' @param V2_j_initial A named numeric or integer vector of length equal to location_id giving the starting number
+#' @param V2_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of individuals in vaccine compartment V2 for each location. Names must match location_name.
 #'
 #' ## Demographics
-#' @param b_jt A matrix of birth rates with rows equal to length(location_id) and columns equal to the daily
+#' @param b_jt A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily
 #'        sequence from date_start to date_stop.
-#' @param d_jt A matrix of mortality rates with rows equal to length(location_id) and columns equal to the daily
+#' @param d_jt A matrix of mortality rates with rows equal to length(location_name) and columns equal to the daily
 #'        sequence from date_start to date_stop.
 #'
 #' ## Vaccination
@@ -55,7 +52,7 @@
 #' @param gamma_1 Recovery rate for severe infection (numeric >= 0).
 #' @param gamma_2 Recovery rate for mild infection (numeric >= 0).
 #' @param epsilon Waning immunity rate (numeric >= 0).
-#' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_id)
+#' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_name)
 #'        and columns equal to length(t). All values must be numeric and between 0 and 1.
 #'
 #' ## Observation Processes
@@ -63,26 +60,26 @@
 #' @param sigma Proportion of symptomatic infections (numeric in [0, 1]).
 #'
 #' ## Spatial model
-#' @param longitude A numeric vector of longitudes for each location. Must be same length as location_id.
-#' @param latitude A numeric vector of latitudes for each location. Must be same length as location_id.
+#' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
+#' @param latitude A numeric vector of latitudes for each location. Must be same length as location_name.
 #' @param mobility_omega Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.
 #' @param mobility_gamma Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.
-#' @param tau_i Departure probability for each origin location (numeric vector of length(location_id) in [0, 1]).
+#' @param tau_i Departure probability for each origin location (numeric vector of length(location_name) in [0, 1]).
 #'
 #' ## Force of Infection (human-to-human)
-#' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_id)).
-#' @param a_1_j Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).
-#' @param a_2_j Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).
-#' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).
-#' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).
+#' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_name)).
+#' @param a_1_j Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
+#' @param a_2_j Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
+#' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
+#' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.
 #' @param alpha_1 Transmission parameter for mixing (numeric in [0, 1]).
 #' @param alpha_2 Transmission parameter for density dependence (numeric in [0, 1]).
 #'
 #' ## Force of Infection (environment-to-human)
-#' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_id)).
-#' @param theta_j Proportion with adequate WASH (numeric vector of length(location_id) in [0, 1]).
-#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_id) and columns equal to the daily sequence from date_start to date_stop).
+#' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
+#' @param theta_j Proportion with adequate WASH (numeric vector of length(location_name) in [0, 1]).
+#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_name) and columns equal to the daily sequence from date_start to date_stop).
 #' @param zeta_1 Shedding rate (numeric > 0).
 #' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
 #' @param kappa Concentration required for 50% infection (numeric > 0).
@@ -117,9 +114,7 @@
 #'      seed = 123,
 #'      date_start = "2024-12-01",
 #'      date_stop = "2024-12-31",
-#'      location_id = 1:2,
 #'      location_name = c("Location A", "Location B"),
-#'      N_j_initial = c("Location A" = 1000, "Location B" = 1000),
 #'      S_j_initial = c("Location A" = 900, "Location B" = 900),
 #'      E_j_initial = c("Location A" = 0, "Location B" = 0),
 #'      I_j_initial = c("Location A" = 50, "Location B" = 50),
@@ -178,9 +173,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               # Initialization
                               date_start = NULL,
                               date_stop = NULL,
-                              location_id = NULL,
                               location_name = NULL,
-                              N_j_initial = NULL,
                               S_j_initial = NULL,
                               E_j_initial = NULL,
                               I_j_initial = NULL,
@@ -274,9 +267,7 @@ make_LASER_config <- function(output_file_path = NULL,
           seed              = seed,
           date_start        = date_start,
           date_stop         = date_stop,
-          location_id       = location_id,
           location_name     = location_name,
-          N_j_initial       = N_j_initial,
           S_j_initial       = S_j_initial,
           E_j_initial       = E_j_initial,
           I_j_initial       = I_j_initial,
@@ -339,24 +330,17 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("date_stop must be in the format 'YYYY-MM-DD'. Provided: ", date_stop)
      }
 
-     if (!is.integer(location_id)) {
-          stop("location_id must be a vector of integers.")
-     }
 
      t <- seq.Date(as.Date(date_start), as.Date(date_stop), by = "day")
      message(paste0('Number of daily time steps: ', length(t)))
-     message(paste0('Number of metapopulation locations: ', length(location_id)))
+     message(paste0('Number of metapopulation locations: ', length(location_name)))
 
      if (!is.character(location_name)) {
           stop("location_name must be a character vector.")
      }
 
-     if (length(location_id) != length(location_name)) {
-          stop("location_id and location_name must have the same length.")
-     }
-
      # Validate initial population vectors.
-     for (v in c("N_j_initial", "S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial")) {
+     for (v in c("S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial")) {
           vec <- params[[v]]
           # If supplied as numeric (i.e. double) then convert to integer.
           if (is.numeric(vec) && !is.integer(vec)) {
@@ -366,19 +350,10 @@ make_LASER_config <- function(output_file_path = NULL,
           if (is.null(names(vec)) || any(names(vec) == "")) {
                stop(v, " must be a named vector with names corresponding to each location.")
           }
-          if (length(vec) != length(location_id)) {
+          if (length(vec) != length(location_name)) {
                stop(v, " must be a vector of length equal to the number of locations.")
           }
-          # For N_j_initial, values must be > 0; for compartments, values must be >= 0.
-          if (v == "N_j_initial") {
-               if (any(vec <= 0)) {
-                    stop("N_j_initial must have values greater than zero.")
-               }
-          } else {
-               if (any(vec < 0)) {
-                    stop(v, " must have values greater than or equal to zero.")
-               }
-          }
+
           # Check that the names match exactly the location_name vector.
           if (!all(names(vec) == location_name)) {
                stop(v, " names must exactly match the provided location_name values.")
@@ -386,29 +361,21 @@ make_LASER_config <- function(output_file_path = NULL,
           params[[v]] <- vec
      }
 
-     # Check that N_j_initial equals the sum of the compartment vectors.
-     calculated_N <- params[["S_j_initial"]] + params[["E_j_initial"]] + params[["I_j_initial"]] +
-          params[["R_j_initial"]] + params[["V1_j_initial"]] + params[["V2_j_initial"]]
-     if (!all(params[["N_j_initial"]] == calculated_N)) {
-          mismatch <- which(params[["N_j_initial"]] != calculated_N)
-          stop("N_j_initial must equal the sum of S_j_initial, E_j_initial, I_j_initial, R_j_initial, V1_j_initial, and V2_j_initial for all locations. Mismatched indices: ", paste(mismatch, collapse = ", "))
+     # Demographics validation: b_jt and d_jt should be matrices with rows equal to length(location_name) and columns equal to length(t).
+     if (!is.matrix(b_jt) || nrow(b_jt) != length(location_name) || ncol(b_jt) != length(t)) {
+          stop("b_jt must be a matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
-     # Demographics validation: b_jt and d_jt should be matrices with rows equal to length(location_id) and columns equal to length(t).
-     if (!is.matrix(b_jt) || nrow(b_jt) != length(location_id) || ncol(b_jt) != length(t)) {
-          stop("b_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
-     }
-
-     if (!is.matrix(d_jt) || nrow(d_jt) != length(location_id) || ncol(d_jt) != length(t)) {
-          stop("d_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     if (!is.matrix(d_jt) || nrow(d_jt) != length(location_name) || ncol(d_jt) != length(t)) {
+          stop("d_jt must be a matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
      ## Vaccination validation.
-     if (!is.matrix(nu_1_jt) || nrow(nu_1_jt) != length(location_id) || ncol(nu_1_jt) != length(t)) {
-          stop("nu_1_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     if (!is.matrix(nu_1_jt) || nrow(nu_1_jt) != length(location_name) || ncol(nu_1_jt) != length(t)) {
+          stop("nu_1_jt must be a matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
-     if (!is.matrix(nu_2_jt) || nrow(nu_2_jt) != length(location_id) || ncol(nu_2_jt) != length(t)) {
-          stop("nu_2_jt must be a matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     if (!is.matrix(nu_2_jt) || nrow(nu_2_jt) != length(location_name) || ncol(nu_2_jt) != length(t)) {
+          stop("nu_2_jt must be a matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
 
      if (!is.numeric(phi_1) || phi_1 < 0 || phi_1 > 1) {
@@ -446,8 +413,8 @@ make_LASER_config <- function(output_file_path = NULL,
      }
 
      # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1]
-     if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_id) || ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
-          stop("mu_jt must be a numeric matrix with rows equal to length(location_id) and columns equal to the daily sequence from date_start to date_stop.")
+     if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_name) || ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
+          stop("mu_jt must be a numeric matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
      if (any(mu_jt < 0 | mu_jt > 1)) {
           stop("All values in mu_jt must be between 0 and 1.")
@@ -463,21 +430,21 @@ make_LASER_config <- function(output_file_path = NULL,
      }
 
      # Force of Infection (human-to-human) validation.
-     if (!is.numeric(beta_j0_hum) || any(beta_j0_hum < 0) || length(beta_j0_hum) != length(location_id)) {
-          stop("beta_j0_hum must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
+     if (!is.numeric(beta_j0_hum) || any(beta_j0_hum < 0) || length(beta_j0_hum) != length(location_name)) {
+          stop("beta_j0_hum must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
      }
 
-     if (!is.numeric(a_1_j) || length(a_1_j) != length(location_id)) {
-          stop("a_1_j must be a numeric vector of length equal to location_id.")
+     if (!is.numeric(a_1_j) || length(a_1_j) != length(location_name)) {
+          stop("a_1_j must be a numeric vector of length equal to location_name.")
      }
-     if (!is.numeric(a_2_j) || length(a_2_j) != length(location_id)) {
-          stop("a_2_j must be a numeric vector of length equal to location_id.")
+     if (!is.numeric(a_2_j) || length(a_2_j) != length(location_name)) {
+          stop("a_2_j must be a numeric vector of length equal to location_name.")
      }
-     if (!is.numeric(b_1_j) || length(b_1_j) != length(location_id)) {
-          stop("b_1_j must be a numeric vector of length equal to location_id.")
+     if (!is.numeric(b_1_j) || length(b_1_j) != length(location_name)) {
+          stop("b_1_j must be a numeric vector of length equal to location_name.")
      }
-     if (!is.numeric(b_2_j) || length(b_2_j) != length(location_id)) {
-          stop("b_2_j must be a numeric vector of length equal to location_id.")
+     if (!is.numeric(b_2_j) || length(b_2_j) != length(location_name)) {
+          stop("b_2_j must be a numeric vector of length equal to location_name.")
      }
      if (!is.numeric(p) || length(p) != 1 || p <= 0) {
           stop("p must be a numeric scalar greater than zero.")
@@ -485,12 +452,12 @@ make_LASER_config <- function(output_file_path = NULL,
 
 
      # Gravity mobility parameters
-     if (!is.numeric(longitude) || length(longitude) != length(location_id)) {
-          stop("longitude must be a numeric vector of length equal to location_id.")
+     if (!is.numeric(longitude) || length(longitude) != length(location_name)) {
+          stop("longitude must be a numeric vector of length equal to location_name.")
      }
 
-     if (!is.numeric(latitude) || length(latitude) != length(location_id)) {
-          stop("latitude must be a numeric vector of length equal to location_id.")
+     if (!is.numeric(latitude) || length(latitude) != length(location_name)) {
+          stop("latitude must be a numeric vector of length equal to location_name.")
      }
 
      if (!is.numeric(mobility_omega) || length(mobility_omega) != 1 || mobility_omega < 0) {
@@ -501,8 +468,8 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("mobility_gamma must be a numeric scalar greater than or equal to zero.")
      }
 
-     if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
-          stop("tau_i must be a numeric vector of length equal to location_id and values between 0 and 1.")
+     if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_name)) {
+          stop("tau_i must be a numeric vector of length equal to location_name and values between 0 and 1.")
      }
 
 
@@ -514,16 +481,16 @@ make_LASER_config <- function(output_file_path = NULL,
      }
 
      # Force of Infection (environment-to-human) validation.
-     if (!is.numeric(beta_j0_env) || any(beta_j0_env < 0) || length(beta_j0_env) != length(location_id)) {
-          stop("beta_j0_env must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
+     if (!is.numeric(beta_j0_env) || any(beta_j0_env < 0) || length(beta_j0_env) != length(location_name)) {
+          stop("beta_j0_env must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
      }
 
-     if (!is.numeric(theta_j) || any(theta_j < 0 | theta_j > 1) || length(theta_j) != length(location_id)) {
-          stop("theta_j must be a numeric vector of length equal to location_id and values between 0 and 1.")
+     if (!is.numeric(theta_j) || any(theta_j < 0 | theta_j > 1) || length(theta_j) != length(location_name)) {
+          stop("theta_j must be a numeric vector of length equal to location_name and values between 0 and 1.")
      }
 
-     if (!is.matrix(psi_jt) || nrow(psi_jt) != length(location_id) || ncol(psi_jt) != length(t)) {
-          stop("psi_jt must be a matrix with rows equal to location_id and columns equal to the daily sequence from date_start to date_stop.")
+     if (!is.matrix(psi_jt) || nrow(psi_jt) != length(location_name) || ncol(psi_jt) != length(t)) {
+          stop("psi_jt must be a matrix with rows equal to location_name and columns equal to the daily sequence from date_start to date_stop.")
      }
 
      if (!is.numeric(zeta_1) || zeta_1 <= 0) {
