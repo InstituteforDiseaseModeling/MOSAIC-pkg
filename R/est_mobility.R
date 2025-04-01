@@ -66,7 +66,8 @@ est_mobility <- function(PATHS) {
                               id=data_centroids$iso3)
      D <- D*111.35  # Convert decimal degrees to kilometers
 
-
+     message("Writing location lon/lat to file")
+     utils::write.csv(data_centroids, file.path(PATHS$MODEL_INPUT, "data_mobility_lon_lat.csv"), row.names = FALSE)
 
      #--------------------------------------------------------------------------
      # Get Population size vector (N)
@@ -146,6 +147,7 @@ est_mobility <- function(PATHS) {
      mobility_matrices <- list(M=M, D=D, N=N)
      mod_mobility <- mobility::mobility(data=mobility_matrices, model='departure-diffusion', type='power', hierarchical = F)
      mod_mobility_summary <- mobility::summary(mod_mobility, probs=c(0.025, 0.975), ac_lags=10)
+     mod_mobility_summary <- data.frame(parameter = row.names(mod_mobility_summary), mod_mobility_summary)
      mobility::check(mod_mobility)
 
      M_hat <- mobility::predict(mod_mobility)
@@ -154,7 +156,7 @@ est_mobility <- function(PATHS) {
      pi <- t(apply(M_hat, 1, function(x) x / sum(x)))
      diag(pi) <- NA
 
-
+     utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "params_mobility_model.csv"), row.names = FALSE)
 
      #--------------------------------------------------------------------------
      # Save matrices and parameters to file

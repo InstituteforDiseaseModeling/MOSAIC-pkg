@@ -62,6 +62,13 @@
 #' @param rho Proportion of true infections (numeric in [0, 1]).
 #' @param sigma Proportion of symptomatic infections (numeric in [0, 1]).
 #'
+#' ## Spatial model
+#' @param longitude A numeric vector of longitudes for each location. Must be same length as location_id.
+#' @param latitude A numeric vector of latitudes for each location. Must be same length as location_id.
+#' @param mobility_omega Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.
+#' @param mobility_gamma Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.
+#' @param tau_i Departure probability for each origin location (numeric vector of length(location_id) in [0, 1]).
+#'
 #' ## Force of Infection (human-to-human)
 #' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_id)).
 #' @param a_1_j Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).
@@ -69,8 +76,6 @@
 #' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).
 #' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.
-#' @param tau_i Departure probability for each origin location (numeric vector of length(location_id) in [0, 1]).
-#' @param pi_ij Matrix of travel probabilities (dimensions: length(location_id) x length(location_id)).
 #' @param alpha_1 Transmission parameter for mixing (numeric in [0, 1]).
 #' @param alpha_2 Transmission parameter for density dependence (numeric in [0, 1]).
 #'
@@ -85,6 +90,21 @@
 #' @param decay_days_long Time constant (in days) for long-term survival of *V. cholerae* in the environment. Must be > 0 and > decay_days_short.
 #' @param decay_shape_1 First shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
 #' @param decay_shape_2 Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
+#'
+#' ## Outputs
+#' @param return A character vector of model quantities to return after running the LASER model. Each element should be one of the following:
+#'        \describe{
+#'          \item{"LL"}{Log-likelihood of the fitted model.}
+#'          \item{"S"}{Number of susceptible individuals.}
+#'          \item{"E"}{Number of exposed (latent) individuals.}
+#'          \item{"I"}{Number of infectious individuals.}
+#'          \item{"R"}{Number of recovered individuals.}
+#'          \item{"V1"}{Number of individuals with one dose of vaccine. Includes all V1 subcompartments.}
+#'          \item{"V2"}{Number of individuals with two doses of vaccine. Includes all V2 subcompartments.}
+#'          \item{"W"}{Environmental concentration of *V. cholerae*.}
+#'          \item{"C"}{Estimated number of symptomatic cholera cases.}
+#'          \item{"D"}{Estimated number of cholera deaths.}
+#'        }
 #'
 #' @return Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
 #'         in the format determined by the file extension.
@@ -118,7 +138,7 @@
 #'      gamma_1 = 0.2,
 #'      gamma_2 = 0.25,
 #'      epsilon = 0.05,
-#'      mu_jt = 0.01,
+#'      mu_jt = matrix(0.01, nrow = 2, ncol = 31),
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
@@ -126,9 +146,12 @@
 #'      a_2_j = c(0.01, 0.01),
 #'      b_1_j = c(0.03, 0.03),
 #'      b_2_j = c(0.01, 0.01),
-#'      p     = 366,
+#'      p     = 365,
+#'      longitude = c(36.8, 37.0),
+#'      latitude = c(-1.3, -1.2),
+#'      mobility_omega = 1.0,
+#'      mobility_gamma = 2.0,
 #'      tau_i = c(0.1, 0.2),
-#'      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
 #'      alpha_1 = 0.95,
 #'      alpha_2 = 1,
 #'      beta_j0_env = c(0.02, 0.04),
@@ -140,7 +163,8 @@
 #'      decay_days_short  = 3,
 #'      decay_days_long   = 90,
 #'      decay_shape_1     = 1,
-#'.     decay_shape_2     = 1
+#'      decay_shape_2     = 1,
+#'      return = "LL"
 #' )
 #' }
 #'
@@ -150,6 +174,7 @@
 make_LASER_config <- function(output_file_path = NULL,
                               compress = FALSE,
                               seed = NULL,
+
                               # Initialization
                               date_start = NULL,
                               date_stop = NULL,
@@ -162,9 +187,11 @@ make_LASER_config <- function(output_file_path = NULL,
                               R_j_initial = NULL,
                               V1_j_initial = NULL,
                               V2_j_initial = NULL,
+
                               # Demographics
                               b_jt = NULL,
                               d_jt = NULL,
+
                               ## Vaccination
                               nu_1_jt = NULL,
                               nu_2_jt = NULL,
@@ -172,15 +199,25 @@ make_LASER_config <- function(output_file_path = NULL,
                               phi_2 = NULL,
                               omega_1 = NULL,
                               omega_2 = NULL,
+
                               ## Infection dynamics
                               iota = NULL,
                               gamma_1 = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
                               mu_jt = NULL,
+
                               # Observation Processes
                               rho = NULL,
                               sigma = NULL,
+
+                              # Spatial model
+                              longitude = NULL,
+                              latitude = NULL,
+                              mobility_omega = NULL,
+                              mobility_gamma = NULL,
+                              tau_i = NULL,
+
                               # Force of Infection (human-to-human)
                               beta_j0_hum = NULL,
                               a_1_j = NULL,
@@ -188,10 +225,9 @@ make_LASER_config <- function(output_file_path = NULL,
                               b_1_j = NULL,
                               b_2_j = NULL,
                               p      = NULL,
-                              tau_i = NULL,
-                              pi_ij = NULL,
                               alpha_1 = NULL,
                               alpha_2 = NULL,
+
                               # Force of Infection (environment-to-human)
                               beta_j0_env = NULL,
                               theta_j = NULL,
@@ -202,7 +238,10 @@ make_LASER_config <- function(output_file_path = NULL,
                               decay_days_short = NULL,
                               decay_days_long = NULL,
                               decay_shape_1 = NULL,
-                              decay_shape_2 = NULL
+                              decay_shape_2 = NULL,
+
+                              # Outputs
+                              return = NULL
 ) {
 
      message('Validating parameter values')
@@ -259,14 +298,17 @@ make_LASER_config <- function(output_file_path = NULL,
           mu_jt             = mu_jt,
           rho               = rho,
           sigma             = sigma,
+          longitude         = longitude,
+          latitude          = latitude,
+          mobility_omega    = mobility_omega,
+          mobility_gamma    = mobility_gamma,
+          tau_i             = tau_i,
           beta_j0_hum       = beta_j0_hum,
           a_1_j             = a_1_j,
           a_2_j             = a_2_j,
           b_1_j             = b_1_j,
           b_2_j             = b_2_j,
           p                 = p,
-          tau_i             = tau_i,
-          pi_ij             = pi_ij,
           alpha_1           = alpha_1,
           alpha_2           = alpha_2,
           beta_j0_env       = beta_j0_env,
@@ -278,7 +320,8 @@ make_LASER_config <- function(output_file_path = NULL,
           decay_days_short  = decay_days_short,
           decay_days_long   = decay_days_long,
           decay_shape_1     = decay_shape_1,
-          decay_shape_2     = decay_shape_2
+          decay_shape_2     = decay_shape_2,
+          return            = return
      )
 
      # Check for NULL values.
@@ -440,13 +483,28 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("p must be a numeric scalar greater than zero.")
      }
 
+
+     # Gravity mobility parameters
+     if (!is.numeric(longitude) || length(longitude) != length(location_id)) {
+          stop("longitude must be a numeric vector of length equal to location_id.")
+     }
+
+     if (!is.numeric(latitude) || length(latitude) != length(location_id)) {
+          stop("latitude must be a numeric vector of length equal to location_id.")
+     }
+
+     if (!is.numeric(mobility_omega) || length(mobility_omega) != 1 || mobility_omega < 0) {
+          stop("mobility_omega must be a numeric scalar greater than or equal to zero.")
+     }
+
+     if (!is.numeric(mobility_gamma) || length(mobility_gamma) != 1 || mobility_gamma < 0) {
+          stop("mobility_gamma must be a numeric scalar greater than or equal to zero.")
+     }
+
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
           stop("tau_i must be a numeric vector of length equal to location_id and values between 0 and 1.")
      }
 
-     if (!is.matrix(pi_ij) || nrow(pi_ij) != length(location_id) || ncol(pi_ij) != length(location_id)) {
-          stop("pi_ij must be a matrix with dimensions equal to length(location_id) x length(location_id).")
-     }
 
      if (!is.numeric(alpha_1) || alpha_1 < 0 || alpha_1 > 1) {
           stop("alpha_1 must be a numeric scalar between 0 and 1.")
@@ -504,6 +562,21 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("decay_shape_2 must be a numeric scalar greater than zero.")
      }
 
+     # Validate return vector
+     valid_return_keys <- c("LL", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
+
+     if (!is.character(return) || length(return) == 0) {
+          stop("return must be a non-empty character vector.")
+     }
+
+     invalid <- setdiff(return, valid_return_keys)
+
+     if (length(invalid) > 0) {
+          stop("Invalid entries in return: ", paste(invalid, collapse = ", "),
+               ". Allowed values are: ", paste(valid_return_keys, collapse = ", "))
+     }
+
+
      tmp <- split(params$b_jt, row(params$b_jt))
      params$b_jt <- lapply(tmp, as.numeric)
 
@@ -515,9 +588,6 @@ make_LASER_config <- function(output_file_path = NULL,
 
      tmp <- split(params$nu_2_jt, row(params$nu_2_jt))
      params$nu_2_jt <- lapply(tmp, as.integer)
-
-     tmp <- split(params$pi_ij, row(params$pi_ij))
-     params$pi_ij <- lapply(tmp, as.numeric)
 
      tmp <- split(params$psi_jt, row(params$psi_jt))
      params$psi_jt <- lapply(tmp, as.numeric)

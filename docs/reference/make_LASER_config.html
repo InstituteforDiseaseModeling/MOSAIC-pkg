@@ -118,10 +118,17 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  mu_jt <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  rho <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_j0_hum <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  beta_j_seasonality <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  longitude <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  latitude <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mobility_omega <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mobility_gamma <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tau_i <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  pi_ij <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  beta_j0_hum <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  a_1_j <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  a_2_j <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  b_1_j <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  b_2_j <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  p <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  alpha_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  alpha_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  beta_j0_env <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -133,7 +140,8 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  decay_days_short <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  decay_days_long <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  decay_shape_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  decay_shape_2 <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  decay_shape_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  return <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -284,6 +292,30 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 
 <dt>sigma</dt>
 <dd><p>Proportion of symptomatic infections (numeric in 0, 1).</p><div class="section">
+<h3 id="spatial-model">Spatial model<a class="anchor" aria-label="anchor" href="#spatial-model"></a></h3>
+
+
+</div></dd>
+
+
+<dt>longitude</dt>
+<dd><p>A numeric vector of longitudes for each location. Must be same length as location_id.</p></dd>
+
+
+<dt>latitude</dt>
+<dd><p>A numeric vector of latitudes for each location. Must be same length as location_id.</p></dd>
+
+
+<dt>mobility_omega</dt>
+<dd><p>Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.</p></dd>
+
+
+<dt>mobility_gamma</dt>
+<dd><p>Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.</p></dd>
+
+
+<dt>tau_i</dt>
+<dd><p>Departure probability for each origin location (numeric vector of length(location_id) in 0, 1).</p><div class="section">
 <h3 id="force-of-infection-human-to-human-">Force of Infection (human-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-human-to-human-"></a></h3>
 
 
@@ -294,16 +326,24 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 <dd><p>Baseline human-to-human transmission rate (numeric vector of length(location_id)).</p></dd>
 
 
-<dt>beta_j_seasonality</dt>
-<dd><p>Seasonal variation in transmission (matrix with rows = length(location_id) and 366 columns).</p></dd>
+<dt>a_1_j</dt>
+<dd><p>Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).</p></dd>
 
 
-<dt>tau_i</dt>
-<dd><p>Departure probability for each origin location (numeric vector of length(location_id) in 0, 1).</p></dd>
+<dt>a_2_j</dt>
+<dd><p>Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).</p></dd>
 
 
-<dt>pi_ij</dt>
-<dd><p>Matrix of travel probabilities (dimensions: length(location_id) x length(location_id)).</p></dd>
+<dt>b_1_j</dt>
+<dd><p>Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).</p></dd>
+
+
+<dt>b_2_j</dt>
+<dd><p>Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).</p></dd>
+
+
+<dt>p</dt>
+<dd><p>Period of the seasonal forcing function. Scalar numeric &gt; 0. Default is 366 for daily annual seasonality including the leap year.</p></dd>
 
 
 <dt>alpha_1</dt>
@@ -355,7 +395,46 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.<
 
 
 <dt>decay_shape_2</dt>
-<dd><p>Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of <em>V. cholerae</em> in the environment. Must be numeric &gt; 0.</p></dd>
+<dd><p>Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of <em>V. cholerae</em> in the environment. Must be numeric &gt; 0.</p><div class="section">
+<h3 id="outputs">Outputs<a class="anchor" aria-label="anchor" href="#outputs"></a></h3>
+
+
+</div></dd>
+
+
+<dt>return</dt>
+<dd><p>A character vector of model quantities to return after running the LASER model. Each element should be one of the following:</p><dl><dt>"LL"</dt>
+<dd><p>Log-likelihood of the fitted model.</p></dd>
+
+<dt>"S"</dt>
+<dd><p>Number of susceptible individuals.</p></dd>
+
+<dt>"E"</dt>
+<dd><p>Number of exposed (latent) individuals.</p></dd>
+
+<dt>"I"</dt>
+<dd><p>Number of infectious individuals.</p></dd>
+
+<dt>"R"</dt>
+<dd><p>Number of recovered individuals.</p></dd>
+
+<dt>"V1"</dt>
+<dd><p>Number of individuals with one dose of vaccine. Includes all V1 subcompartments.</p></dd>
+
+<dt>"V2"</dt>
+<dd><p>Number of individuals with two doses of vaccine. Includes all V2 subcompartments.</p></dd>
+
+<dt>"W"</dt>
+<dd><p>Environmental concentration of <em>V. cholerae</em>.</p></dd>
+
+<dt>"C"</dt>
+<dd><p>Estimated number of symptomatic cholera cases.</p></dd>
+
+<dt>"D"</dt>
+<dd><p>Estimated number of cholera deaths.</p></dd>
+
+
+</dl></dd>
 
 </dl></div>
     <div class="section level2">
@@ -368,7 +447,65 @@ in the format determined by the file extension.</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span><span class="fu">make_LASER_config</span><span class="op">(</span></span></span>
+<span class="r-in"><span>     output_file_path <span class="op">=</span> <span class="st">"parameters.json"</span>,</span></span>
+<span class="r-in"><span>     compress <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>     seed <span class="op">=</span> <span class="fl">123</span>,</span></span>
+<span class="r-in"><span>     date_start <span class="op">=</span> <span class="st">"2024-12-01"</span>,</span></span>
+<span class="r-in"><span>     date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span></span>
+<span class="r-in"><span>     location_id <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">2</span>,</span></span>
+<span class="r-in"><span>     location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span>, <span class="st">"Location B"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     N_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">1000</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     S_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">900</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">900</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     E_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">0</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     I_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">50</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     R_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">50</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     V1_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">0</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     V2_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">0</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     b_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0.0015</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">366</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     d_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0.001</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">366</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     nu_1_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">366</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     nu_2_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">366</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     phi_1 <span class="op">=</span> <span class="fl">0.8</span>,</span></span>
+<span class="r-in"><span>     phi_2 <span class="op">=</span> <span class="fl">0.85</span>,</span></span>
+<span class="r-in"><span>     omega_1 <span class="op">=</span> <span class="fl">0.1</span>,</span></span>
+<span class="r-in"><span>     omega_2 <span class="op">=</span> <span class="fl">0.12</span>,</span></span>
+<span class="r-in"><span>     iota <span class="op">=</span> <span class="fl">1.4</span>,</span></span>
+<span class="r-in"><span>     gamma_1 <span class="op">=</span> <span class="fl">0.2</span>,</span></span>
+<span class="r-in"><span>     gamma_2 <span class="op">=</span> <span class="fl">0.25</span>,</span></span>
+<span class="r-in"><span>     epsilon <span class="op">=</span> <span class="fl">0.05</span>,</span></span>
+<span class="r-in"><span>     mu_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0.01</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">31</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     rho <span class="op">=</span> <span class="fl">0.9</span>,</span></span>
+<span class="r-in"><span>     sigma <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
+<span class="r-in"><span>     beta_j0_hum <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.03</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     a_1_j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.02</span>, <span class="fl">0.02</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     a_2_j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.01</span>, <span class="fl">0.01</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     b_1_j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.03</span>, <span class="fl">0.03</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     b_2_j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.01</span>, <span class="fl">0.01</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     p     <span class="op">=</span> <span class="fl">365</span>,</span></span>
+<span class="r-in"><span>     longitude <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">36.8</span>, <span class="fl">37.0</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     latitude <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.3</span>, <span class="op">-</span><span class="fl">1.2</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     mobility_omega <span class="op">=</span> <span class="fl">1.0</span>,</span></span>
+<span class="r-in"><span>     mobility_gamma <span class="op">=</span> <span class="fl">2.0</span>,</span></span>
+<span class="r-in"><span>     tau_i <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     alpha_1 <span class="op">=</span> <span class="fl">0.95</span>,</span></span>
+<span class="r-in"><span>     alpha_2 <span class="op">=</span> <span class="fl">1</span>,</span></span>
+<span class="r-in"><span>     beta_j0_env <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.02</span>, <span class="fl">0.04</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     theta_j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.7</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     psi_jt <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span>data <span class="op">=</span> <span class="fl">0</span>, nrow <span class="op">=</span> <span class="fl">2</span>, ncol <span class="op">=</span> <span class="fl">366</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     zeta_1 <span class="op">=</span> <span class="fl">0.5</span>,</span></span>
+<span class="r-in"><span>     zeta_2 <span class="op">=</span> <span class="fl">0.4</span>,</span></span>
+<span class="r-in"><span>     kappa <span class="op">=</span> <span class="fl">10</span><span class="op">^</span><span class="fl">5</span>,</span></span>
+<span class="r-in"><span>     decay_days_short  <span class="op">=</span> <span class="fl">3</span>,</span></span>
+<span class="r-in"><span>     decay_days_long   <span class="op">=</span> <span class="fl">90</span>,</span></span>
+<span class="r-in"><span>     decay_shape_1     <span class="op">=</span> <span class="fl">1</span>,</span></span>
+<span class="r-in"><span>     decay_shape_2     <span class="op">=</span> <span class="fl">1</span>,</span></span>
+<span class="r-in"><span>     return <span class="op">=</span> <span class="st">"LL"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-in"><span></span></span>
+</code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside></div>

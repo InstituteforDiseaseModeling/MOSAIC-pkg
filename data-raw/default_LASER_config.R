@@ -106,15 +106,20 @@ tau_i <- tmp$parameter_value[sel]
 names(tau_i) <- tmp$i[sel]
 str(tau_i)
 
-# Get diffusion probability between all locations (pi_ij)
-tmp <- read.csv(file.path(getwd(), 'model/input/pred_pi_diffusion.csv'))
-tmp <- tmp[tmp$origin %in% j,]
-tmp <- tmp[tmp$destination %in% j,]
-pi_ij <- reshape2::acast(tmp, origin ~ destination, value.var = "value")
-sel_rows <- match(j, row.names(pi_ij))
-sel_cols <- match(j, colnames(pi_ij))
-pi_ij <- pi_ij[sel_rows, sel_cols]
-str(pi_ij)
+# Gravity model parameters
+tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "data_mobility_lon_lat.csv"))
+
+lon <- tmp$lon
+names(lon) <- tmp$iso3
+longitude <- lon[match(j, names(lon))]
+
+lat <- tmp$lat
+names(lat) <- tmp$iso3
+latitude <- lat[match(j, names(lat))]
+
+tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "params_mobility_model.csv"))
+mobility_omega <- tmp$mean[tmp$parameter == 'omega']
+mobility_gamma <- tmp$mean[tmp$parameter == 'gamma']
 
 # Get WASH variables for each location
 tmp <- read.csv(file.path(getwd(), 'model/input/param_theta_WASH.csv'))
@@ -178,14 +183,17 @@ base_args <- list(
      mu_jt = mu_jt,
      rho = 0.52,
      sigma = 0.24,
+     longitude         = longitude,
+     latitude          = latitude,
+     mobility_omega    = mobility_omega,
+     mobility_gamma    = mobility_gamma,
+     tau_i             = tau_i,
      beta_j0_hum = rep(0.2, length(j)),
      a_1_j = a1,
      a_2_j = a2,
      b_1_j = b1,
      b_2_j = b2,
      p     = 366,
-     tau_i = tau_i,
-     pi_ij = pi_ij,
      alpha_1 = 0.95,
      alpha_2 = 0.95,
      beta_j0_env = rep(0.4, length(j)),
@@ -197,7 +205,8 @@ base_args <- list(
      decay_days_short = 3,
      decay_days_long = 90,
      decay_shape_1 = 1,
-     decay_shape_2 = 1
+     decay_shape_2 = 1,
+     return = c("LL", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
 )
 
 
