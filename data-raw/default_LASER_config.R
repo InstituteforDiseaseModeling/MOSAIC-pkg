@@ -73,19 +73,29 @@ nu_jt <- reshape2::acast(tmp, j ~ t, value.var = "parameter_value")
 nu_1_jt <- nu_2_jt <- nu_jt
 nu_2_jt[,] <- 0
 
-# Add seasonal pattern to human to human force of infection (daily time scale)
-beta_j0_hum <- rep(0.2, length(j))
+# Add fourier params for seasonal force of infection
+tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv"))
 
-tmp <- read.csv(file.path(getwd(), 'model/input/pred_seasonal_dynamics_day.csv'))
-tmp <- tmp[tmp$iso_code %in% j,]
-beta_j_seasonality <- reshape2::acast(tmp, iso_code ~ day, value.var = "fitted_values_fourier_cases")
-sel <- match(j, row.names(beta_j_seasonality))
-beta_j_seasonality <- beta_j_seasonality[sel,]
-str(beta_j_seasonality)
+sel <- tmp$response == 'cases' & tmp$parameter == 'a1'
+a1 <- tmp$mean[sel]
+names(a1) <- tmp$country_iso_code[sel]
+a1 <- a1[match(j, names(a1))]
 
-# Adjust so that beta_j_seasonality is expressed in units of transmission rate (instead of units of standard deviation)
-max_z_score <- ceiling(max(abs(beta_j_seasonality))*10)/10
-beta_j0_hum/max_z_score
+sel <- tmp$response == 'cases' & tmp$parameter == 'a2'
+a2 <- tmp$mean[sel]
+names(a2) <- tmp$country_iso_code[sel]
+a2 <- a2[match(j, names(a2))]
+
+sel <- tmp$response == 'cases' & tmp$parameter == 'b1'
+b1 <- tmp$mean[sel]
+names(b1) <- tmp$country_iso_code[sel]
+b1 <- b1[match(j, names(b1))]
+
+sel <- tmp$response == 'cases' & tmp$parameter == 'b2'
+b2 <- tmp$mean[sel]
+names(b2) <- tmp$country_iso_code[sel]
+b2 <- b2[match(j, names(b2))]
+
 
 # Get departure probability of each location (tau_j)
 tmp <- read.csv(file.path(getwd(), 'model/input/param_tau_departure.csv'))
@@ -169,7 +179,11 @@ base_args <- list(
      rho = 0.52,
      sigma = 0.24,
      beta_j0_hum = rep(0.2, length(j)),
-     beta_j_seasonality = beta_j_seasonality,
+     a_1_j = a1,
+     a_2_j = a2,
+     b_1_j = b1,
+     b_2_j = b2,
+     p     = 366,
      tau_i = tau_i,
      pi_ij = pi_ij,
      alpha_1 = 0.95,

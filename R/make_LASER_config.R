@@ -64,7 +64,11 @@
 #'
 #' ## Force of Infection (human-to-human)
 #' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_id)).
-#' @param beta_j_seasonality Seasonal variation in transmission (matrix with rows = length(location_id) and 366 columns).
+#' @param a_1_j Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).
+#' @param a_2_j Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).
+#' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).
+#' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).
+#' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.
 #' @param tau_i Departure probability for each origin location (numeric vector of length(location_id) in [0, 1]).
 #' @param pi_ij Matrix of travel probabilities (dimensions: length(location_id) x length(location_id)).
 #' @param alpha_1 Transmission parameter for mixing (numeric in [0, 1]).
@@ -118,7 +122,11 @@
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
-#'      beta_j_seasonality = matrix(0, nrow = 2, ncol = 366),
+#'      a_1_j = c(0.02, 0.02),
+#'      a_2_j = c(0.01, 0.01),
+#'      b_1_j = c(0.03, 0.03),
+#'      b_2_j = c(0.01, 0.01),
+#'      p     = 366,
 #'      tau_i = c(0.1, 0.2),
 #'      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
 #'      alpha_1 = 0.95,
@@ -175,7 +183,11 @@ make_LASER_config <- function(output_file_path = NULL,
                               sigma = NULL,
                               # Force of Infection (human-to-human)
                               beta_j0_hum = NULL,
-                              beta_j_seasonality = NULL,
+                              a_1_j = NULL,
+                              a_2_j = NULL,
+                              b_1_j = NULL,
+                              b_2_j = NULL,
+                              p      = NULL,
                               tau_i = NULL,
                               pi_ij = NULL,
                               alpha_1 = NULL,
@@ -248,7 +260,11 @@ make_LASER_config <- function(output_file_path = NULL,
           rho               = rho,
           sigma             = sigma,
           beta_j0_hum       = beta_j0_hum,
-          beta_j_seasonality= beta_j_seasonality,
+          a_1_j             = a_1_j,
+          a_2_j             = a_2_j,
+          b_1_j             = b_1_j,
+          b_2_j             = b_2_j,
+          p                 = p,
           tau_i             = tau_i,
           pi_ij             = pi_ij,
           alpha_1           = alpha_1,
@@ -408,21 +424,20 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("beta_j0_hum must be a numeric vector of length equal to location_id and values greater than or equal to zero.")
      }
 
-     if (!is.matrix(beta_j_seasonality) ||
-         nrow(beta_j_seasonality) != length(location_id) ||
-         ncol(beta_j_seasonality) != 366) {
-          stop("beta_j_seasonality must be a matrix with rows equal to length(location_id) and 366 columns for annual seasonality.")
+     if (!is.numeric(a_1_j) || length(a_1_j) != length(location_id)) {
+          stop("a_1_j must be a numeric vector of length equal to location_id.")
      }
-
-     # Ensure beta_j_seasonality values conform to affine normalization
-     for (i in 1:nrow(beta_j_seasonality)) {
-
-          tryCatch({
-               MOSAIC::check_affine_normalization(beta_j_seasonality[i, ], verbose=FALSE)
-          }, error = function(e) {
-               stop(sprintf("beta_j_seasonality for location '%s' failed affine normalization check: %s", location_name[i], e$message))
-          })
-
+     if (!is.numeric(a_2_j) || length(a_2_j) != length(location_id)) {
+          stop("a_2_j must be a numeric vector of length equal to location_id.")
+     }
+     if (!is.numeric(b_1_j) || length(b_1_j) != length(location_id)) {
+          stop("b_1_j must be a numeric vector of length equal to location_id.")
+     }
+     if (!is.numeric(b_2_j) || length(b_2_j) != length(location_id)) {
+          stop("b_2_j must be a numeric vector of length equal to location_id.")
+     }
+     if (!is.numeric(p) || length(p) != 1 || p <= 0) {
+          stop("p must be a numeric scalar greater than zero.")
      }
 
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_id)) {
@@ -500,9 +515,6 @@ make_LASER_config <- function(output_file_path = NULL,
 
      tmp <- split(params$nu_2_jt, row(params$nu_2_jt))
      params$nu_2_jt <- lapply(tmp, as.integer)
-
-     tmp <- split(params$beta_j_seasonality, row(params$beta_j_seasonality))
-     params$beta_j_seasonality <- lapply(tmp, as.numeric)
 
      tmp <- split(params$pi_ij, row(params$pi_ij))
      params$pi_ij <- lapply(tmp, as.numeric)
