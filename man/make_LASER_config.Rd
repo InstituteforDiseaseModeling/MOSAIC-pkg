@@ -35,7 +35,11 @@ make_LASER_config(
   rho = NULL,
   sigma = NULL,
   beta_j0_hum = NULL,
-  beta_j_seasonality = NULL,
+  a_1_j = NULL,
+  a_2_j = NULL,
+  b_1_j = NULL,
+  b_2_j = NULL,
+  p = NULL,
   tau_i = NULL,
   pi_ij = NULL,
   alpha_1 = NULL,
@@ -138,7 +142,15 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 
 \item{beta_j0_hum}{Baseline human-to-human transmission rate (numeric vector of length(location_id)).}
 
-\item{beta_j_seasonality}{Seasonal variation in transmission (matrix with rows = length(location_id) and 366 columns).}
+\item{a_1_j}{Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).}
+
+\item{a_2_j}{Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).}
+
+\item{b_1_j}{Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_id).}
+
+\item{b_2_j}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_id).}
+
+\item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.}
 
 \item{tau_i}{Departure probability for each origin location (numeric vector of length(location_id) in \link{0, 1}).}
 
@@ -218,7 +230,11 @@ make_LASER_config(
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),
-     beta_j_seasonality = matrix(0, nrow = 2, ncol = 366),
+     a_1_j = c(0.02, 0.02),
+     a_2_j = c(0.01, 0.01),
+     b_1_j = c(0.03, 0.03),
+     b_2_j = c(0.01, 0.01),
+     p     = 366,
      tau_i = c(0.1, 0.2),
      pi_ij = matrix(c(0.8, 0.2, 0.2, 0.8), nrow = 2),
      alpha_1 = 0.95,
