@@ -22,11 +22,11 @@ N_j <- N_j[sel]
 str(N_j)
 
 # Get number of susceptible individuals in each location
-S_j <- N_j - 10
+S_j <- N_j - 1
 
 # Get number of infected individuals in each location
 I_j <- N_j
-I_j[] <- 10
+I_j[] <- 1
 
 # Get birth rate of each location (b_j)
 tmp <- read.csv(file.path(getwd(), 'model/input/param_b_birth_rate.csv'))
@@ -144,13 +144,13 @@ str(psi_jt)
 # Define output file paths for all seven formats
 file_paths <- list(
      file.path(getwd(), 'inst/extdata/default_parameters.json'),
-     file.path(getwd(), 'inst/extdata/default_parameters.json.gz'),
-     file.path(getwd(), 'inst/extdata/default_parameters.h5'),
-     file.path(getwd(), 'inst/extdata/default_parameters.h5.gz'),
-     file.path(getwd(), 'inst/extdata/default_parameters.yaml'),
-     file.path(getwd(), 'inst/extdata/default_parameters.yaml.gz'),
-     file.path(getwd(), 'inst/extdata/default_parameters.obj'),
-     file.path(getwd(), 'inst/extdata/default_parameters.obj.gz')
+     file.path(getwd(), 'inst/extdata/default_parameters.json.gz')#,
+     #file.path(getwd(), 'inst/extdata/default_parameters.h5'),
+     #file.path(getwd(), 'inst/extdata/default_parameters.h5.gz'),
+     #file.path(getwd(), 'inst/extdata/default_parameters.yaml'),
+     #file.path(getwd(), 'inst/extdata/default_parameters.yaml.gz'),
+     #file.path(getwd(), 'inst/extdata/default_parameters.obj'),
+     #file.path(getwd(), 'inst/extdata/default_parameters.obj.gz')
 )
 
 
@@ -160,7 +160,6 @@ base_args <- list(
      date_start = date_start,
      date_stop = date_stop,
      location_name = j,
-     N_j_initial = N_j,
      S_j_initial = S_j,
      E_j_initial = N_j * 0,
      I_j_initial = I_j,
@@ -187,15 +186,15 @@ base_args <- list(
      mobility_omega    = mobility_omega,
      mobility_gamma    = mobility_gamma,
      tau_i             = tau_i,
-     beta_j0_hum = rep(0.2, length(j)),
+     beta_j0_hum = rep(0.1, length(j)),
      a_1_j = a1,
      a_2_j = a2,
      b_1_j = b1,
      b_2_j = b2,
-     p     = 366,
+     p     = 365,
      alpha_1 = 0.95,
      alpha_2 = 0.95,
-     beta_j0_env = rep(0.4, length(j)),
+     beta_j0_env = rep(0.2, length(j)),
      theta_j = theta_j,
      psi_jt = psi_jt,
      zeta_1 = 7.5,
