@@ -22,5 +22,6 @@ plot_seasonal_transmission_example(PATHS, country_iso_code, n_points = 30)
 The function generates and saves a PNG file showing the grid points on the country map and the seasonal transmission dynamics.
 }
 \description{
-This function plots the map of a selected country with grid points used for climate data sampling, and visualizes the seasonal transmission dynamics using Fourier series for both precipitation and cholera cases.
+This function plots the map of a selected country with grid points used for climate data sampling,
+and visualizes the seasonal transmission dynamics using Fourier series for both precipitation and cholera cases.
 }
