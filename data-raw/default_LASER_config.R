@@ -107,7 +107,7 @@ names(tau_i) <- tmp$i[sel]
 str(tau_i)
 
 # Gravity model parameters
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "data_mobility_lon_lat.csv"))
+tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_lon_lat.csv"))
 
 lon <- tmp$lon
 names(lon) <- tmp$iso3
@@ -117,9 +117,9 @@ lat <- tmp$lat
 names(lat) <- tmp$iso3
 latitude <- lat[match(j, names(lat))]
 
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "params_mobility_model.csv"))
-mobility_omega <- tmp$mean[tmp$parameter == 'omega']
-mobility_gamma <- tmp$mean[tmp$parameter == 'gamma']
+tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv"), row.names=1)
+mobility_omega <- tmp['omega', 'mean']
+mobility_gamma <- tmp['gamma', 'mean']
 
 # Get WASH variables for each location
 tmp <- read.csv(file.path(getwd(), 'model/input/param_theta_WASH.csv'))
