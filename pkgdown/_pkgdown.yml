@@ -113,6 +113,7 @@ reference:
     contents:
       - install_dependencies
       - check_dependencies
+      - calc_diffusion_matrix_pi
       - calc_affine_normalization
       - check_affine_normalization
       - load_or_install_packages
