@@ -32,29 +32,28 @@ plot_mobility <- function(PATHS) {
      data_flights <- data_flights[data_flights$origin_iso3 %in% MOSAIC::iso_codes_mosaic,]
      data_flights <- data_flights[data_flights$destination_iso3 %in% MOSAIC::iso_codes_mosaic,]
 
-     # Load the mobility matrices (M, D, N) and parameter estimates
-     M <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_M.csv"))
-     D <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_D.csv"))
-     N <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_N.csv"))
-     tau <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "pred_tau_departure.csv"))
-     pi <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "pred_pi_diffusion.csv"))
+     message("Loading the mobility model quantities (M, D, N) and parameter estimates...")
+     lonlat <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "mobility_lon_lat.csv"))
+     M <- as.matrix(read.csv(file.path(PATHS$MODEL_INPUT, "mobility_M.csv"), header = TRUE, row.names = 1, stringsAsFactors = FALSE))
+     D <- as.matrix(read.csv(file.path(PATHS$MODEL_INPUT, "mobility_D.csv"), header = TRUE, row.names = 1, stringsAsFactors = FALSE))
+     pi <- as.matrix(read.csv(file.path(PATHS$MODEL_INPUT, "mobility_pi.csv"), header = TRUE, row.names = 1, stringsAsFactors = FALSE))
 
+     N <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "mobility_N.csv"), header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+     tmp <- as.vector(N[,1])
+     names(tmp) <- row.names(N)
+     N <- tmp
 
+     tau <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "mobility_tau.csv"))
+     tmp <- as.vector(tau[,1])
+     names(tmp) <- row.names(tau)
+     tau <- tmp
 
-     africa <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, "AFRICA_ADM0.shp"), quiet = TRUE)
+     tau_df <- read.csv(file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv"), header = TRUE, row.names = 1, stringsAsFactors = FALSE)
+     tau_df <- merge(tau_df, data.frame(iso3 = names(N), population = N), by='iso3')
 
-     centroids <- sf::st_centroid(africa)
-     data_centroids <- data.frame(
-          iso3 = centroids$iso_a3,
-          lon = sf::st_coordinates(centroids)[, 1],
-          lat = sf::st_coordinates(centroids)[, 2]
-     )
-
-     data_centroids <- data_centroids[data_centroids$iso3 %in% unique(c(M$origin, M$destination)),]
 
      # Order the countries from south to north based on latitude
-     iso3_ordered_south_north <- data_centroids$iso3[order(data_centroids$lat, decreasing = FALSE)]
-
+     iso3_ordered <- lonlat$iso3[order(lonlat$lat, lonlat$lat)]
 
 
      #--------------------------------------------------------------------------
@@ -62,26 +61,44 @@ plot_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
 
      message("Plotting flight data (mobility matrix M)...")
-     p1 <- ggplot2::ggplot(data = reshape2::melt(M)) +
-          ggplot2::geom_tile(ggplot2::aes(x = factor(destination, levels = iso3_ordered_south_north),
-                                          y = factor(origin, levels = iso3_ordered_south_north),
-                                          fill = log(value + 1))) +
+
+     p1 <- ggplot2::ggplot(
+          data = reshape2::melt(M, varnames = c("origin", "destination"), value.name = "value")
+     ) +
+          ggplot2::geom_tile(
+               ggplot2::aes(
+                    x = factor(destination, levels = iso3_ordered),
+                    y = factor(origin, levels = iso3_ordered),
+                    fill = log(value + 1)
+               )
+          ) +
           ggplot2::xlab('Destination') +
           ggplot2::ylab("Origin") +
           ggplot2::theme_bw() +
-          ggplot2::theme(axis.text.x = ggplot2::element_text(size = 10, angle = 90, vjust = 0.5),
-                         axis.text.y = ggplot2::element_text(size = 10),
-                         axis.title.x = ggplot2::element_text(size = 12, margin = ggplot2::margin(t = 15)),
-                         axis.title.y = ggplot2::element_text(size = 12, margin = ggplot2::margin(r = 15)),
-                         legend.position = 'bottom') +
-          ggplot2::scale_fill_gradient(low = "black", high = "skyblue",
-                                       guide = ggplot2::guide_colorbar(title = 'Observed trips (log-scale)',
-                                                                       title.position = 'top',
-                                                                       label.theme = ggplot2::element_text(size = 9),
-                                                                       barwidth = 20,
-                                                                       barheight = 0.5,
-                                                                       frame.colour = 'black',
-                                                                       ticks = TRUE))
+          ggplot2::theme(
+               axis.text.x = ggplot2::element_text(size = 10, angle = 90, vjust = 0.5),
+               axis.text.y = ggplot2::element_text(size = 10),
+               axis.title.x = ggplot2::element_text(size = 12, margin = ggplot2::margin(t = 15)),
+               axis.title.y = ggplot2::element_text(size = 12, margin = ggplot2::margin(r = 15)),
+               legend.position = 'bottom'
+          ) +
+          ggplot2::scale_fill_gradient(
+               low = "black",
+               high = "skyblue",
+               # Here we set the breaks to the log-transformed values.
+               breaks = log(c(0, 10, 100, 1000, 10000) + 1),
+               # And we set the labels to the original (non-log) values.
+               labels = c("0", "10", "100", "1,000", "10,000"),
+               guide = ggplot2::guide_colorbar(
+                    title = 'Observed mean daily trips',
+                    title.position = 'top',
+                    label.theme = ggplot2::element_text(size = 9),
+                    barwidth = 20,
+                    barheight = 0.5,
+                    frame.colour = 'black',
+                    ticks = TRUE
+               )
+          )
 
      print(p1)
 
@@ -99,65 +116,89 @@ plot_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
      message("Plotting mobility network...")
 
+
+     # Set a minimum threshold for trips
      min_trips <- 1
 
-     # Sort data_flights by count in ascending order so that larger edges are plotted last (on top)
-     data_flights_sorted <- data_flights[data_flights$count > min_trips, ]
-     data_flights_sorted <- data_flights_sorted[order(data_flights_sorted$count), ]
+     # Melt the M matrix (which has row names for origins and column names for destinations)
+     melt_M <- reshape2::melt(M, varnames = c("origin", "destination"), value.name = "count")
+     # Filter out flows with counts <= min_trips and sort in ascending order
+     melt_M <- melt_M[melt_M$count > min_trips, ]
+     melt_M <- melt_M[order(melt_M$count), ]
 
-     p2 <-
-          ggplot() +
-          geom_sf(data = africa, fill = "#E0E0E0", color = "black") +  # Light gray for country map
-          geom_segment(data = data_flights_sorted,
-                       aes(x = origin_lon,
-                           y = origin_lat,
-                           xend = destination_lon,
-                           yend = destination_lat,
-                           color = log(count + 1))) +  # Combine size and color in legend
-          scale_color_viridis_c(
-               option = "B",   # Viridis color palette option A
-               direction = -1, # Reverse the color direction for better contrast
-               breaks = c(log(100), log(1000), log(10000), log(100000)),  # Set breaks in log units
-               labels = c("100", "1,000", "10,000", "100,000"),  # Non-log labels
-               guide = guide_colorbar(
-                    title = "Trip Count",    # Legend title
-                    title.position = "top",  # Move the title above the color bar
-                    barwidth = 20,           # Make the legend longer
-                    barheight = 0.6,         # Make the legend narrower
-                    ticks = TRUE,            # Show ticks on the legend
-                    frame.colour = "black",  # Add a border around the colorbar
+     # Join the melted M data with the centroids to get geographic coordinates.
+     # For origins:
+     melt_M <- dplyr::left_join(melt_M, data_centroids, by = c("origin" = "iso3"))
+     # Rename the joined lon/lat columns to origin_lon and origin_lat:
+     melt_M <- melt_M %>% dplyr::rename(origin_lon = lon, origin_lat = lat)
+     # For destinations:
+     melt_M <- dplyr::left_join(melt_M, data_centroids, by = c("destination" = "iso3"))
+     # Rename the joined lon/lat columns to destination_lon and destination_lat:
+     melt_M <- melt_M %>% dplyr::rename(destination_lon = lon, destination_lat = lat)
+
+     # Now build the network plot using the M matrix flows
+     p2 <- ggplot2::ggplot() +
+          # Base map of Africa
+          ggplot2::geom_sf(data = africa, fill = "#E0E0E0", color = "black") +
+          # Plot segments based on flows from M; map color to log(count+1)
+          ggplot2::geom_segment(data = melt_M,
+                                ggplot2::aes(x = origin_lon,
+                                             y = origin_lat,
+                                             xend = destination_lon,
+                                             yend = destination_lat,
+                                             color = log(count + 1)),
+                                size = 0.8) +
+          # Use viridis color palette on the log-transformed counts
+          ggplot2::scale_color_viridis_c(
+               option = "B",    # Viridis option
+               direction = -1,  # Reverse the color direction
+               breaks = log(c(0, 10, 100, 1000, 10000) + 1),
+               labels = c("0", "10", "100", "1,000", "10,000"),
+               guide = ggplot2::guide_colorbar(
+                    title = "Observed mean daily trips",
+                    title.position = "top",
+                    barwidth = 20,
+                    barheight = 0.6,
+                    ticks = TRUE,
+                    frame.colour = "black",
                     ticks.colour = "black"
                )
           ) +
-          theme_void() +  # Remove axes and background
-          theme(
-               legend.position = "bottom",               # Move the legend to the bottom
-               legend.text = element_text(size = 10),    # Adjust text size for readability
-               legend.title = element_text(size = 12),   # Adjust legend title size
-               legend.key.width = unit(3, "cm")          # Make the colorbar longer
+          ggplot2::theme_void() +  # Remove axes and background
+          ggplot2::theme(
+               legend.position = "bottom",
+               legend.text = ggplot2::element_text(size = 10),
+               legend.title = ggplot2::element_text(size = 12),
+               legend.key.width = grid::unit(3, "cm")
           )
 
-     # Extract the legend
+     # Extract legend (using the MOSAIC package function)
      legend <- MOSAIC::get_ggplot_legend(p2)
 
-     # Create the final plot with line size mapping included
-     p2 <- p2 + geom_segment(data = data_flights_sorted,
-                             aes(x = origin_lon,
-                                 y = origin_lat,
-                                 xend = destination_lon,
-                                 yend = destination_lat,
-                                 linewidth = log(count + 1),
-                                 color = log(count + 1))) +
-          geom_point(data = data_centroids, aes(x = lon, y = lat), color = "black", fill = 'white', shape=21, size = 2.5) +
-          geom_text_repel(data = data_centroids, aes(x = lon, y = lat, label = iso3), size = 3.25, vjust = -1) +  # Repel the labels
-          scale_size_continuous(range = c(0.001, 2.5)) +
-          theme(legend.position = 'none')
+     # Now add the segments again with line size mapping, and include centroids & country labels.
+     p2 <- p2 +
+          ggplot2::geom_segment(data = melt_M,
+                                ggplot2::aes(x = origin_lon,
+                                             y = origin_lat,
+                                             xend = destination_lon,
+                                             yend = destination_lat,
+                                             linewidth = log(count + 1),
+                                             color = log(count + 1))) +
+          ggplot2::geom_point(data = data_centroids,
+                              ggplot2::aes(x = lon, y = lat),
+                              color = "black", fill = 'white',
+                              shape = 21, size = 2.5) +
+          ggrepel::geom_text_repel(data = data_centroids,
+                                   ggplot2::aes(x = lon, y = lat, label = iso3),
+                                   size = 3.25, vjust = -1) +
+          ggplot2::scale_size_continuous(range = c(0.001, 2.5)) +
+          ggplot2::theme(legend.position = 'none')
 
-     # Combine the plot and the extracted legend
+     # Combine the final plot with the extracted legend
      combined_plot <- gridExtra::grid.arrange(
           grobs = list(p2, legend),
           ncol = 1,
-          heights = c(0.9, 0.1)  # Relative heights for plot and legend
+          heights = c(0.9, 0.1)  # Adjust relative heights for plot and legend
      )
 
      print(combined_plot)
@@ -176,13 +217,12 @@ plot_mobility <- function(PATHS) {
 
      message("Plotting travel probability (tau_j)...")
 
-     # Plot travel probability
-
-     main_plot <- ggplot(df_travel_prob, aes(x = mean, y = reorder(country, mean))) +
-          geom_vline(xintercept = mean(df_travel_prob$mean), linetype=2, color='red') +
+     main_plot <-
+          ggplot(tau_df, aes(x = mean, y = reorder(iso3, mean))) +
+          geom_vline(xintercept = mean(tau_df$mean), linetype=2, color='red') +
           geom_point(size=2.5, shape=21, fill="black") +  # Black circles for the mean
-          geom_errorbarh(aes(xmin = ci_lo, xmax = ci_hi), height = 0, linewidth=0.75) +  # Error bars for CI
-          xlab("Mean weekly probability of travel") +
+          geom_errorbarh(aes(xmin = Q2.5, xmax = Q97.5), height = 0, linewidth=0.75) +  # Error bars for CI
+          xlab("Mean daily probability of travel") +
           ylab(NULL) +
           theme_minimal() +
           theme(axis.text.x = element_text(size=10),
@@ -192,9 +232,10 @@ plot_mobility <- function(PATHS) {
                 plot.margin = margin(20, 5, 5, 0))  # Remove margin on the right
 
      # Create the horizontal barplot for mean * population
-     bar_plot <- ggplot(df_travel_prob, aes(x = mean * population, y = reorder(country, mean))) +
+     bar_plot <- ggplot(tau_df, aes(x = mean * population, y = reorder(iso3, mean))) +
           geom_bar(stat="identity", fill="dodgerblue") +
-          scale_x_sqrt(breaks=c(1000, 10000, 25000)) +
+          scale_x_sqrt(breaks = c(0, 500, 2000, 5000),
+                       label = c("0", "500", "2,000", "5,000")) +
           theme_minimal() +
           xlab("Estimated total\ndaily travelers") +
           theme(axis.title.x = element_text(size=12, margin = margin(t = 15)),
@@ -220,15 +261,10 @@ plot_mobility <- function(PATHS) {
 
      message("Plotting diffusion matrix (pi_ij)...")
 
-
-     # Plot diffusion
-
-     iso3_ordered_south_north <- data_centroids$iso3[order(data_centroids$lat, decreasing = FALSE)]
-
      p4 <-
-          ggplot(data=melt(pi)) +
-          geom_tile(aes(x=factor(destination, levels = iso3_ordered_south_north),
-                        y=factor(origin, levels = iso3_ordered_south_north),
+          ggplot(data=melt(pi, varnames = c("origin", "destination"), value.name = "value")) +
+          geom_tile(aes(x=factor(destination, levels = iso3_ordered),
+                        y=factor(origin, levels = iso3_ordered),
                         fill=value)) +
           xlab('Destination') + ylab("Origin") +
           theme_bw() + theme(axis.text.x=element_text(size=10, angle=90, vjust=0.5),

@@ -1,0 +1,3 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"mobility_gamma","Distance parameter in mobility model","point",NA,NA,NA,"mean",1.36062497899017
+"mobility_omega","Population parameter in mobility model","point",NA,NA,NA,"mean",0.61256545868307
