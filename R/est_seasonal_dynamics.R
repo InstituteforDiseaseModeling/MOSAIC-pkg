@@ -14,6 +14,8 @@
 #'
 #' @return Saves daily fitted values and parameter estimates to CSV.
 #' @export
+#'
+
 est_seasonal_dynamics <- function(PATHS,
                                   date_start,
                                   date_stop,
@@ -30,8 +32,7 @@ est_seasonal_dynamics <- function(PATHS,
 
      # Read weekly cholera case data.
      iso_codes <- MOSAIC::iso_codes_mosaic
-     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv"),
-                                     stringsAsFactors = FALSE)
+     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv"), stringsAsFactors = FALSE)
      cholera_data <- cholera_data[cholera_data$date_start >= date_start & cholera_data$date_stop < date_stop, ]
      n_obs <- table(cholera_data$iso_code)
      iso_codes_with_data <- names(n_obs[n_obs >= min_obs])
@@ -103,6 +104,7 @@ est_seasonal_dynamics <- function(PATHS,
                data = daily,
                start = list(a1 = 1, b1 = 1, a2 = 0.5, b2 = 0.5)
           )
+
           coef_p <- coef(fit_p)
           se_p <- sqrt(diag(vcov(fit_p)))
           param_p <- data.frame(
@@ -123,11 +125,13 @@ est_seasonal_dynamics <- function(PATHS,
           fitted_precip <- normalize_if_needed(fitted_precip)
 
           if (iso %in% iso_codes_with_data && n_obs >= min_obs) {
+
                fit_c <- minpack.lm::nlsLM(
                     cases_scaled ~ MOSAIC::fourier_series_double(day_of_year, a1, b1, a2, b2, p = 365, beta0 = 0),
                     data = daily,
                     start = as.list(coef_p)
                )
+
                coef_c <- coef(fit_c)
                se_c <- sqrt(diag(vcov(fit_c)))
                param_c <- data.frame(
@@ -140,11 +144,15 @@ est_seasonal_dynamics <- function(PATHS,
                     ci_lo = coef_c - 1.96 * se_c,
                     ci_hi = coef_c + 1.96 * se_c
                )
+
                fitted_cases <- MOSAIC::fourier_series_double(fitted_days, coef_c["a1"], coef_c["b1"],
                                                              coef_c["a2"], coef_c["b2"],
                                                              p = 365, beta0 = 0)
+
                fitted_cases <- normalize_if_needed(fitted_cases)
+
           } else {
+
                fitted_cases <- rep(NA, 365)
                param_c <- data.frame(
                     country_name = country_name,
@@ -153,6 +161,7 @@ est_seasonal_dynamics <- function(PATHS,
                     parameter = names(coef_p),
                     mean = NA, se = NA, ci_lo = NA, ci_hi = NA
                )
+
           }
 
           fitted_df <- data.frame(
@@ -166,6 +175,7 @@ est_seasonal_dynamics <- function(PATHS,
           all_precip_data[[iso]] <- daily
           all_fitted_values[[iso]] <- fitted_df
           all_param_values[[iso]] <- rbind(param_p, param_c)
+
      }
 
      combined_precip_data <- do.call(rbind, all_precip_data)
@@ -207,10 +217,12 @@ est_seasonal_dynamics <- function(PATHS,
 
      # For each country with no cholera data, identify the best neighbor based on precipitation correlation.
      for (country_iso_code_no_data in iso_codes_no_data) {
+
           if (!is.null(exclude_iso_codes) && country_iso_code_no_data %in% exclude_iso_codes) {
                message(glue::glue("Skipping neighbor matching for excluded country: {country_iso_code_no_data}"))
                next
           }
+
           message(glue::glue("Processing country with no cholera data: {country_iso_code_no_data}"))
           country_shp_no_data <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES,
                                                              paste0(country_iso_code_no_data, "_ADM0.shp")))
@@ -227,78 +239,111 @@ est_seasonal_dynamics <- function(PATHS,
                     africa_with_clusters$iso_a3 != country_iso_code_no_data &
                     africa_with_clusters$iso_a3 %in% iso_codes_with_data &
                     !(africa_with_clusters$iso_a3 %in% exclude_iso_codes), ]
+
           if (nrow(neighbors_within_cluster) > 0) {
+
                message(glue::glue("Found {nrow(neighbors_within_cluster)} neighbors within the same cluster for {country_iso_code_no_data}"))
                precip_no_data <- combined_fitted_values_daily[combined_fitted_values_daily$iso_code == country_iso_code_no_data, ]
                precip_no_data <- precip_no_data[order(precip_no_data$day), ]
                precip_no_data_vec <- precip_no_data$fitted_values_fourier_precip
+
                for (neighbor_iso_code in neighbors_within_cluster$iso_a3) {
+
                     precip_neighbor <- combined_fitted_values_daily[combined_fitted_values_daily$iso_code == neighbor_iso_code, ]
                     precip_neighbor <- precip_neighbor[order(precip_neighbor$day), ]
                     precip_neighbor_vec <- precip_neighbor$fitted_values_fourier_precip
+
                     if (all(is.na(precip_no_data_vec)) || all(is.na(precip_neighbor_vec))) next
+
                     corr <- cor(precip_no_data_vec, precip_neighbor_vec, use = "complete.obs")
+
                     message(glue::glue("Correlation between {country_iso_code_no_data} and {neighbor_iso_code}: {corr}"))
+
                     if (!is.na(corr) && corr > highest_corr) {
                          highest_corr <- corr
                          best_neighbor_iso_code <- neighbor_iso_code
                     }
                }
           }
+
           if (is.null(best_neighbor_iso_code)) {
+
                message(glue::glue("No neighbors within the same cluster for {country_iso_code_no_data}. Checking nearest neighbors..."))
                k_nn <- initial_k
+
                repeat {
+
                     k_neighbors <- FNN::get.knnx(coords, coord_no_data, k = k_nn)
                     nearest_neighbors <- africa[k_neighbors$nn.index, ]
                     # Exclude any neighbors in the exclusion list
                     neighbors_with_data <- nearest_neighbors[nearest_neighbors$iso_a3 %in% iso_codes_with_data &
                                                                   !(nearest_neighbors$iso_a3 %in% exclude_iso_codes), ]
                     if (nrow(neighbors_with_data) == 0) {
+
                          message(glue::glue("No neighbors with data found with k = {k_nn}. Increasing k."))
                          k_nn <- k_nn + 1
+
                          if (k_nn > nrow(africa)) {
+
                               message(glue::glue("No valid neighbors found for {country_iso_code_no_data} even after increasing k. Skipping."))
                               break
+
                          }
+
                          next
+
                     }
+
                     precip_no_data <- combined_fitted_values_daily[combined_fitted_values_daily$iso_code == country_iso_code_no_data, ]
                     precip_no_data <- precip_no_data[order(precip_no_data$day), ]
                     precip_no_data_vec <- precip_no_data$fitted_values_fourier_precip
+
                     for (neighbor_iso_code in neighbors_with_data$iso_a3) {
+
                          precip_neighbor <- combined_fitted_values_daily[combined_fitted_values_daily$iso_code == neighbor_iso_code, ]
                          precip_neighbor <- precip_neighbor[order(precip_neighbor$day), ]
                          precip_neighbor_vec <- precip_neighbor$fitted_values_fourier_precip
+
                          if (all(is.na(precip_no_data_vec)) || all(is.na(precip_neighbor_vec))) next
+
                          corr <- cor(precip_no_data_vec, precip_neighbor_vec, use = "complete.obs")
                          message(glue::glue("Correlation between {country_iso_code_no_data} and {neighbor_iso_code}: {corr}"))
+
                          if (!is.na(corr) && corr > highest_corr) {
                               highest_corr <- corr
                               best_neighbor_iso_code <- neighbor_iso_code
                          }
                     }
+
                     if (!is.null(best_neighbor_iso_code)) break
                     k_nn <- k_nn + 1
+
                }
           }
+
           if (!is.null(best_neighbor_iso_code)) {
+
                message(glue::glue("Best neighbor based on correlation: {best_neighbor_iso_code} (correlation: {highest_corr})"))
                combined_fitted_values_daily[combined_fitted_values_daily$iso_code == country_iso_code_no_data, "fitted_values_fourier_cases"] <-
                     combined_fitted_values_daily[combined_fitted_values_daily$iso_code == best_neighbor_iso_code, "fitted_values_fourier_cases"]
                combined_fitted_values_daily[combined_fitted_values_daily$iso_code == country_iso_code_no_data, "inferred_from_neighbor"] <-
                     MOSAIC::convert_iso_to_country(best_neighbor_iso_code)
+
                combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data &
                                           combined_param_values$response == "cases",
                                      c("parameter", "mean", "se", "ci_lo", "ci_hi")] <-
                     combined_param_values[combined_param_values$country_iso_code == best_neighbor_iso_code &
                                                combined_param_values$response == "cases",
                                           c("parameter", "mean", "se", "ci_lo", "ci_hi")]
+
                combined_param_values[combined_param_values$country_iso_code == country_iso_code_no_data &
                                           combined_param_values$response == "cases", "inferred_from_neighbor"] <-
                     MOSAIC::convert_iso_to_country(best_neighbor_iso_code)
+
                message(glue::glue("Assigned data from {best_neighbor_iso_code} to {country_iso_code_no_data}"))
+
           } else {
+
                message(glue::glue("No valid neighbor with positive correlation found for {country_iso_code_no_data}."))
           }
      }

@@ -74,14 +74,24 @@ est_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
 
      message("Getting population sizes")
-     data_demographics <- utils::read.csv(file.path(PATHS$DATA_DEMOGRAPHICS, "demographics_africa_2000_2023.csv"), stringsAsFactors = FALSE)
-     data_demographics <- data_demographics[data_demographics$year == 2017 & data_demographics$iso_code %in% MOSAIC::iso_codes_mosaic,]
-     data_demographics <- data_demographics[order(data_demographics$iso_code),]
 
-     N <- as.vector(data_demographics$population)
-     names(N) <- data_demographics$iso_code
+     match_pop_data_to_OAG_year <- FALSE
 
-
+     if (match_pop_data_to_OAG_year) {
+          message("Using 2017 population sizes")
+          data_demographics <- utils::read.csv(file.path(PATHS$DATA_DEMOGRAPHICS, "demographics_africa_2000_2023.csv"), stringsAsFactors = FALSE)
+          data_demographics <- data_demographics[data_demographics$year == 2017 & data_demographics$iso_code %in% MOSAIC::iso_codes_mosaic,]
+          data_demographics <- data_demographics[order(data_demographics$iso_code),]
+          N <- as.integer(data_demographics$population)
+          names(N) <- data_demographics$iso_code
+     } else {
+          message("Using 2023-01-01 population sizes")
+          data_demographics <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "param_N_population_size.csv"), stringsAsFactors = FALSE)
+          data_demographics <- data_demographics[data_demographics$t == '2023-01-01'& data_demographics$j %in% MOSAIC::iso_codes_mosaic,]
+          data_demographics <- data_demographics[order(data_demographics$j),]
+          N <- as.integer(data_demographics$parameter_value)
+          names(N) <- data_demographics$j
+     }
 
      #--------------------------------------------------------------------------
      # Check that dimensions match
@@ -118,9 +128,9 @@ est_mobility <- function(PATHS) {
 
      mod_travel_prob <- mobility::fit_prob_travel(travel = y,
                                                   total = N,
-                                                  n_chain = 4,
+                                                  n_chain = 10,
                                                   n_burn = 1000,
-                                                  n_samp = 1000,
+                                                  n_samp = 5000,
                                                   n_thin = 10)
 
      mod_travel_prob <- mobility::summary(mod_travel_prob)
@@ -145,7 +155,14 @@ est_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
      message("Fitting diffusion process: gravity power model for pi_ij")
      mobility_matrices <- list(M=M, D=D, N=N)
-     mod_mobility <- mobility::mobility(data=mobility_matrices, model='departure-diffusion', type='power', hierarchical = F)
+     mod_mobility <- mobility::mobility(data=mobility_matrices,
+                                        model='departure-diffusion',
+                                        type='power',
+                                        hierarchical = F,
+                                        n_chain = 10,
+                                        n_burn = 1000,
+                                        n_samp = 5000,
+                                        n_thin = 10)
      mod_mobility_summary <- mobility::summary(mod_mobility, probs=c(0.025, 0.975), ac_lags=10)
      mod_mobility_summary <- data.frame(parameter = row.names(mod_mobility_summary), mod_mobility_summary)
      mobility::check(mod_mobility)
@@ -161,6 +178,7 @@ est_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
      # Save matrices and parameters to file
      #--------------------------------------------------------------------------
+
      message("Writing models objects to file")
      utils::write.csv(reshape2::melt(M), file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_M.csv"), row.names = FALSE)
      utils::write.csv(reshape2::melt(D), file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_D.csv"), row.names = FALSE)
