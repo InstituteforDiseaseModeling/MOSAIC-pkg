@@ -111,10 +111,10 @@ process_OAG_data <- function(PATHS) {
 
      message("Saving to file")
 
-     check <- MOSAIC::iso_codes_africa %in% d_day$origin_iso3
+     check <- MOSAIC::iso_codes_mosaic %in% d_day$origin_iso3
      if (!all(check)) {
-          missing <- MOSAIC::iso_codes_africa[!check]
-          warning(glue("Some iso codes in MOSAIC::iso_codes_africa are missing: {paste(missing, collapse = ' ')}"))
+          missing <- MOSAIC::iso_codes_mosaic[!check]
+          warning(glue("Some iso codes in MOSAIC::iso_codes_mosaic are missing: {paste(missing, collapse = ' ')}"))
      }
 
      # Define paths for saving processed data

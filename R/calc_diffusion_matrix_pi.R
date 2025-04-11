@@ -41,11 +41,7 @@ calc_diffusion_matrix_pi <- function(D, N, omega, gamma) {
 
      n <- length(N)
      pi_mat <- matrix(NA_real_, nrow = n, ncol = n)
-
-     if (!is.null(names(N))) {
-          rownames(pi_mat) <- names(N)
-          colnames(pi_mat) <- names(N)
-     }
+     if (!is.null(names(N))) dimnames(pi_mat) <- list(origin = names(N), destination = names(N))
 
      for (i in 1:n) {
 

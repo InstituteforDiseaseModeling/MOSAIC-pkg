@@ -66,32 +66,18 @@ est_mobility <- function(PATHS) {
                               id=data_centroids$iso3)
      D <- D*111.35  # Convert decimal degrees to kilometers
 
-     message("Writing location lon/lat to file")
-     utils::write.csv(data_centroids, file.path(PATHS$MODEL_INPUT, "data_mobility_lon_lat.csv"), row.names = FALSE)
 
      #--------------------------------------------------------------------------
      # Get Population size vector (N)
      #--------------------------------------------------------------------------
 
-     message("Getting population sizes")
+     message("Getting population sizes (2017 to match OAG data)")
+     data_demographics <- utils::read.csv(file.path(PATHS$DATA_DEMOGRAPHICS, "demographics_africa_2000_2023.csv"), stringsAsFactors = FALSE)
+     data_demographics <- data_demographics[data_demographics$year == 2017 & data_demographics$iso_code %in% MOSAIC::iso_codes_mosaic,]
+     data_demographics <- data_demographics[order(data_demographics$iso_code),]
+     N <- as.integer(data_demographics$population)
+     names(N) <- data_demographics$iso_code
 
-     match_pop_data_to_OAG_year <- FALSE
-
-     if (match_pop_data_to_OAG_year) {
-          message("Using 2017 population sizes")
-          data_demographics <- utils::read.csv(file.path(PATHS$DATA_DEMOGRAPHICS, "demographics_africa_2000_2023.csv"), stringsAsFactors = FALSE)
-          data_demographics <- data_demographics[data_demographics$year == 2017 & data_demographics$iso_code %in% MOSAIC::iso_codes_mosaic,]
-          data_demographics <- data_demographics[order(data_demographics$iso_code),]
-          N <- as.integer(data_demographics$population)
-          names(N) <- data_demographics$iso_code
-     } else {
-          message("Using 2023-01-01 population sizes")
-          data_demographics <- utils::read.csv(file.path(PATHS$MODEL_INPUT, "param_N_population_size.csv"), stringsAsFactors = FALSE)
-          data_demographics <- data_demographics[data_demographics$t == '2023-01-01'& data_demographics$j %in% MOSAIC::iso_codes_mosaic,]
-          data_demographics <- data_demographics[order(data_demographics$j),]
-          N <- as.integer(data_demographics$parameter_value)
-          names(N) <- data_demographics$j
-     }
 
      #--------------------------------------------------------------------------
      # Check that dimensions match
@@ -118,6 +104,7 @@ est_mobility <- function(PATHS) {
      #--------------------------------------------------------------------------
      # Fit probability of travel, departure (tau_i)
      #--------------------------------------------------------------------------
+
      message("Fitting departure process: travel probability (tau_j)")
      diagonal <- diag(M)
      diagonal[is.na(diagonal)] <- 0
@@ -126,67 +113,79 @@ est_mobility <- function(PATHS) {
      y <- as.integer(trips_total - diagonal)
      names(y) <- names(diag(M))
 
+     y <- y[match(names(N), names(y))]
+
      mod_travel_prob <- mobility::fit_prob_travel(travel = y,
                                                   total = N,
-                                                  n_chain = 10,
+                                                  n_chain = 5,
                                                   n_burn = 1000,
-                                                  n_samp = 5000,
-                                                  n_thin = 10)
+                                                  n_samp = 1000,
+                                                  n_thin = 5)
 
-     mod_travel_prob <- mobility::summary(mod_travel_prob)
+     mod_travel_prob_summary <- mobility::summary(mod_travel_prob)
+     mod_travel_prob_summary <- data.frame(iso3 = names(N), mod_travel_prob_summary)
 
-     beta_params <- propvacc::get_beta_params(mu = mod_travel_prob$mean, mod_travel_prob$sd^2)
+     beta_params <- propvacc::get_beta_params(mu = mod_travel_prob_summary$mean, mod_travel_prob_summary$sd^2)
 
      df_travel_prob <- data.frame(
           country = convert_iso_to_country(names(y)),
           iso_code = names(y),
-          mean = mod_travel_prob$mean,
-          sd = mod_travel_prob$sd,
-          ci_lo = mod_travel_prob$Q2.5,
-          ci_hi = mod_travel_prob$Q97.5,
+          mean = mod_travel_prob_summary$mean,
+          sd = mod_travel_prob_summary$sd,
+          ci_lo = mod_travel_prob_summary$Q2.5,
+          ci_hi = mod_travel_prob_summary$Q97.5,
           shape1 = beta_params$shape1,
           shape2 = beta_params$shape2
      )
 
      df_travel_prob <- merge(df_travel_prob, data.frame(iso_code = names(N), population = N), by='iso_code')
 
+     tau_vec <- as.vector(df_travel_prob$mean)
+     names(tau_vec) <- df_travel_prob$iso_code
+
+
      #--------------------------------------------------------------------------
      # Fit probability of travel from origin to destination, diffusion (pi_i)
      #--------------------------------------------------------------------------
+
      message("Fitting diffusion process: gravity power model for pi_ij")
      mobility_matrices <- list(M=M, D=D, N=N)
      mod_mobility <- mobility::mobility(data=mobility_matrices,
                                         model='departure-diffusion',
                                         type='power',
                                         hierarchical = F,
-                                        n_chain = 10,
+                                        n_chain = 5,
                                         n_burn = 1000,
-                                        n_samp = 5000,
-                                        n_thin = 10)
+                                        n_samp = 1000,
+                                        n_thin = 5)
      mod_mobility_summary <- mobility::summary(mod_mobility, probs=c(0.025, 0.975), ac_lags=10)
      mod_mobility_summary <- data.frame(parameter = row.names(mod_mobility_summary), mod_mobility_summary)
      mobility::check(mod_mobility)
 
-     M_hat <- mobility::predict(mod_mobility)
-     diag(M_hat) <- 0
+     pi_mat <- MOSAIC::calc_diffusion_matrix_pi(D = D,
+                                                N = N,
+                                                gamma = mod_mobility_summary['gamma', 'mean'],
+                                                omega = mod_mobility_summary['omega', 'mean'])
 
-     pi <- t(apply(M_hat, 1, function(x) x / sum(x)))
-     diag(pi) <- NA
-
-     utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "params_mobility_model.csv"), row.names = FALSE)
 
      #--------------------------------------------------------------------------
      # Save matrices and parameters to file
      #--------------------------------------------------------------------------
 
-     message("Writing models objects to file")
-     utils::write.csv(reshape2::melt(M), file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_M.csv"), row.names = FALSE)
-     utils::write.csv(reshape2::melt(D), file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_D.csv"), row.names = FALSE)
-     utils::write.csv(reshape2::melt(N), file.path(PATHS$MODEL_INPUT, "data_mobility_matrix_N.csv"), row.names = FALSE)
+     message("Writing mobility model matrices to file: M, D, N, tau, pi")
+     utils::write.csv(data_centroids, file.path(PATHS$MODEL_INPUT, "mobility_lon_lat.csv"), row.names = FALSE)
+     utils::write.csv(M, file.path(PATHS$MODEL_INPUT, "mobility_M.csv"), row.names = TRUE)
+     utils::write.csv(D, file.path(PATHS$MODEL_INPUT, "mobility_D.csv"), row.names = TRUE)
+     utils::write.csv(N, file.path(PATHS$MODEL_INPUT, "mobility_N.csv"), row.names = TRUE)
+     utils::write.csv(mod_travel_prob_summary, file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv"), row.names = TRUE)
+     utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "mobility_gravity_params.csv"), row.names = TRUE)
+     utils::write.csv(tau_vec, file.path(PATHS$MODEL_INPUT, "mobility_tau.csv"), row.names = TRUE)
+     utils::write.csv(pi_mat, file.path(PATHS$MODEL_INPUT, "mobility_pi.csv"), row.names = TRUE)
 
 
+     message("Writing standard format parameter data frames")
      param_df_point <- make_param_df(
-          variable_name = "tau",  # Assuming 'tau' represents travel probabilities
+          variable_name = "tau",
           variable_description = "Country-level travel probabilities",
           parameter_distribution = "point",
           i = df_travel_prob$iso_code,
@@ -208,7 +207,7 @@ est_mobility <- function(PATHS) {
 
      utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_tau_departure.csv"), row.names = FALSE)
 
-     tmp <- melt(pi)
+     tmp <- melt(pi_mat)
 
      param_df <- make_param_df(
           variable_name = "pi",  # Assuming 'tau' represents travel probabilities
@@ -223,13 +222,25 @@ est_mobility <- function(PATHS) {
      utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_pi_diffusion.csv"), row.names = FALSE)
 
 
-     #utils::write.csv(mod_mobility_summary, file.path(PATHS$MODEL_INPUT, "param_diffusion_model.csv"), row.names = TRUE)
+     param_df <- rbind(
+          make_param_df(
+               variable_name = "mobility_gamma",
+               variable_description = "Distance parameter in mobility model",
+               parameter_distribution = "point",
+               parameter_name = 'mean',
+               parameter_value = mod_mobility_summary['gamma', 'mean']
+          ),
+          make_param_df(
+               variable_name = "mobility_omega",
+               variable_description = "Population parameter in mobility model",
+               parameter_distribution = "point",
+               parameter_name = 'mean',
+               parameter_value = mod_mobility_summary['omega', 'mean']
+          )
+     )
 
-     #utils::write.csv(df_travel_prob[,c("country", "iso_code", "mean", "sd", "ci_lo", "ci_hi")],
-     #                 file.path(PATHS$MODEL_INPUT, "pred_tau_departure.csv"), row.names = FALSE)
+     utils::write.csv(param_df, file.path(PATHS$MODEL_INPUT, "param_gravity_model.csv"), row.names = FALSE)
 
-
-     message("Mobility model fitting complete.")
      message("Matrices and parameter estimates saved here:")
      message(PATHS$MODEL_INPUT)
 
