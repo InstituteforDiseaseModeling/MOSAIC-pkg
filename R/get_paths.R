@@ -53,6 +53,7 @@ get_paths <- function(root=NULL) {
      PATHS$DATA_OAG <- file.path(root, "MOSAIC-data/processed/OAG")
      PATHS$DATA_WHO_ANNUAL <- file.path(root, "MOSAIC-data/processed/WHO/annual")
      PATHS$DATA_WHO_WEEKLY <- file.path(root, "MOSAIC-data/processed/WHO/weekly")
+     PATHS$DATA_WHO_DAILY <- file.path(root, "MOSAIC-data/processed/WHO/daily")
      PATHS$DATA_DEMOGRAPHICS <- file.path(root, "MOSAIC-data/processed/demographics")
      PATHS$DATA_WASH <- file.path(root, "MOSAIC-data/processed/WASH")
      PATHS$DATA_SYMPTOMATIC <- file.path(root, "MOSAIC-data/processed/symptomatic")

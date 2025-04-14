@@ -32,4 +32,5 @@ saved as a PNG in that directory as "recovery_rates.png".
 \examples{
 plot_recovery_duration()
 plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12))
+
 }

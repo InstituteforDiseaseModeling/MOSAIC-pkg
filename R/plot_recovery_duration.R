@@ -17,6 +17,8 @@
 #' @examples
 #' plot_recovery_duration()
 #' plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12))
+#'
+
 plot_recovery_duration <- function(PATHS = NULL, symp_range = c(3, 7), asymp_range = c(7, 14)) {
 
      requireNamespace("ggplot2")
