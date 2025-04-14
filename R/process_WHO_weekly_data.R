@@ -140,5 +140,5 @@ process_WHO_weekly_data <- function(PATHS, cutoff) {
      processed_data_path <- file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv")
      utils::write.csv(d, file = processed_data_path, row.names = FALSE)
 
-     message("Processed cholera data saved to: ", processed_data_path)
+     message("Processed weekly cholera data saved to: ", processed_data_path)
 }
