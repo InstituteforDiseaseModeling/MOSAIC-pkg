@@ -6,7 +6,6 @@
 \usage{
 make_LASER_config(
   output_file_path = NULL,
-  compress = FALSE,
   seed = NULL,
   date_start = NULL,
   date_stop = NULL,
@@ -42,7 +41,7 @@ make_LASER_config(
   a_2_j = NULL,
   b_1_j = NULL,
   b_2_j = NULL,
-  p = NULL,
+  p = 365,
   alpha_1 = NULL,
   alpha_2 = NULL,
   beta_j0_env = NULL,
@@ -55,6 +54,8 @@ make_LASER_config(
   decay_days_long = NULL,
   decay_shape_1 = NULL,
   decay_shape_2 = NULL,
+  reported_cases = NULL,
+  reported_deaths = NULL,
   return = NULL
 )
 }
@@ -126,8 +127,8 @@ sequence from date_start to date_stop.
 
 \item{epsilon}{Waning immunity rate (numeric >= 0).}
 
-\item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_name)
-and columns equal to length(t). All values must be numeric and between 0 and 1.
+\item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
+length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
 \subsection{Observation Processes}{
 }}
 
@@ -159,7 +160,7 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 
 \item{b_2_j}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.}
+\item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.}
 
 \item{alpha_1}{Transmission parameter for mixing (numeric in \link{0, 1}).}
 
@@ -171,7 +172,8 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 
 \item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_name) in \link{0, 1}).}
 
-\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_name) and columns equal to the daily sequence from date_start to date_stop).}
+\item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_name) and columns
+equal to the daily sequence from date_start to date_stop).}
 
 \item{zeta_1}{Shedding rate (numeric > 0).}
 
@@ -179,17 +181,30 @@ and columns equal to length(t). All values must be numeric and between 0 and 1.
 
 \item{kappa}{Concentration required for 50\% infection (numeric > 0).}
 
-\item{decay_days_short}{Time constant (in days) for short-term survival of \emph{V. cholerae} in the environment. Must be > 0 and < decay_days_long.}
+\item{decay_days_short}{Time constant (in days) for short-term survival of \emph{V. cholerae} in the environment.
+Must be > 0 and < decay_days_long.}
 
-\item{decay_days_long}{Time constant (in days) for long-term survival of \emph{V. cholerae} in the environment. Must be > 0 and > decay_days_short.}
+\item{decay_days_long}{Time constant (in days) for long-term survival of \emph{V. cholerae} in the environment.
+Must be > 0 and > decay_days_short.}
 
-\item{decay_shape_1}{First shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
+\item{decay_shape_1}{First shape parameter for beta distribution controlling how environmental suitability maps to
+the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
 
-\item{decay_shape_2}{Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.
+\item{decay_shape_2}{Second shape parameter for beta distribution controlling how environmental suitability maps to
+the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.
+\subsection{Reported data}{
+}}
+
+\item{reported_cases}{Matrix of daily reported cholera cases. Must be integer. NA allowed.
+nrow=length(location_name), ncol=length(t).}
+
+\item{reported_deaths}{Matrix of daily reported cholera deaths. Must be integer. NA allowed.
+nrow=length(location_name), ncol=length(t).
 \subsection{Outputs}{
 }}
 
-\item{return}{A character vector of model quantities to return after running the LASER model. Each element should be one of the following:
+\item{return}{A character vector of model quantities to return after running the LASER model. Each element should
+be one of the following:
 \describe{
 \item{"LL"}{Log-likelihood of the fitted model.}
 \item{"S"}{Number of susceptible individuals.}
@@ -208,21 +223,19 @@ Returns the validated list of parameters. If output_file_path is provided, the p
 in the format determined by the file extension.
 }
 \description{
-This function generates a JSON/HDF5/YAML/OBJ configuration file to be used as LASER model simulation parameters.
+This function generates a JSON/HDF5/YAML configuration file to be used as LASER model simulation parameters.
 It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 The file extension determines which output format is used:
 \itemize{
 \item .json or .json.gz → written with write_list_to_json,
 \item .h5, or .h5.gz → written with write_list_to_hdf5,
 \item .yaml or .yaml.gz → written with write_list_to_yaml.
-\item .obj or .obj.gz → written with write_list_to_obj (Python-compatible).
 }
 }
 \examples{
 \dontrun{
 make_LASER_config(
      output_file_path = "parameters.json",
-     compress = TRUE,
      seed = 123,
      date_start = "2024-12-01",
      date_stop = "2024-12-31",
@@ -271,6 +284,8 @@ make_LASER_config(
      decay_days_long   = 90,
      decay_shape_1     = 1,
      decay_shape_2     = 1,
+     reported_cases    = matrix(NA, nrow=2, ncol=366),
+     reported_deaths   = matrix(NA, nrow=2, ncol=366),
      return = "LL"
 )
 }

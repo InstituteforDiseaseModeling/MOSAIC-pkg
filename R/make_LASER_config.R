@@ -1,12 +1,11 @@
 #' Create a Configuration File for LASER
 #'
-#' This function generates a JSON/HDF5/YAML/OBJ configuration file to be used as LASER model simulation parameters.
+#' This function generates a JSON/HDF5/YAML configuration file to be used as LASER model simulation parameters.
 #' It validates all input parameters and, if an output file path is provided, writes the parameters to a file.
 #' The file extension determines which output format is used:
 #' - .json or .json.gz → written with write_list_to_json,
 #' - .h5, or .h5.gz → written with write_list_to_hdf5,
 #' - .yaml or .yaml.gz → written with write_list_to_yaml.
-#' - .obj or .obj.gz → written with write_list_to_obj (Python-compatible).
 #'
 #' @param output_file_path A character string representing the full file path of the output file.
 #'        Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.
@@ -52,8 +51,8 @@
 #' @param gamma_1 Recovery rate for severe infection (numeric >= 0).
 #' @param gamma_2 Recovery rate for mild infection (numeric >= 0).
 #' @param epsilon Waning immunity rate (numeric >= 0).
-#' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to length(location_name)
-#'        and columns equal to length(t). All values must be numeric and between 0 and 1.
+#' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to
+#'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
 #'
 #' ## Observation Processes
 #' @param rho Proportion of true infections (numeric in [0, 1]).
@@ -72,24 +71,36 @@
 #' @param a_2_j Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
 #' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
-#' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 366 for daily annual seasonality including the leap year.
+#' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.
 #' @param alpha_1 Transmission parameter for mixing (numeric in [0, 1]).
 #' @param alpha_2 Transmission parameter for density dependence (numeric in [0, 1]).
 #'
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
 #' @param theta_j Proportion with adequate WASH (numeric vector of length(location_name) in [0, 1]).
-#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_name) and columns equal to the daily sequence from date_start to date_stop).
+#' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_name) and columns
+#'        equal to the daily sequence from date_start to date_stop).
 #' @param zeta_1 Shedding rate (numeric > 0).
 #' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
 #' @param kappa Concentration required for 50% infection (numeric > 0).
-#' @param decay_days_short Time constant (in days) for short-term survival of *V. cholerae* in the environment. Must be > 0 and < decay_days_long.
-#' @param decay_days_long Time constant (in days) for long-term survival of *V. cholerae* in the environment. Must be > 0 and > decay_days_short.
-#' @param decay_shape_1 First shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
-#' @param decay_shape_2 Second shape parameter for beta distribution controlling how environmental suitability maps to the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
+#' @param decay_days_short Time constant (in days) for short-term survival of *V. cholerae* in the environment.
+#'        Must be > 0 and < decay_days_long.
+#' @param decay_days_long Time constant (in days) for long-term survival of *V. cholerae* in the environment.
+#'        Must be > 0 and > decay_days_short.
+#' @param decay_shape_1 First shape parameter for beta distribution controlling how environmental suitability maps to
+#'        the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
+#' @param decay_shape_2 Second shape parameter for beta distribution controlling how environmental suitability maps to
+#'        the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
+#'
+#' ## Reported data
+#' @param reported_cases Matrix of daily reported cholera cases. Must be integer. NA allowed.
+#'        nrow=length(location_name), ncol=length(t).
+#' @param reported_deaths Matrix of daily reported cholera deaths. Must be integer. NA allowed.
+#'        nrow=length(location_name), ncol=length(t).
 #'
 #' ## Outputs
-#' @param return A character vector of model quantities to return after running the LASER model. Each element should be one of the following:
+#' @param return A character vector of model quantities to return after running the LASER model. Each element should
+#'        be one of the following:
 #'        \describe{
 #'          \item{"LL"}{Log-likelihood of the fitted model.}
 #'          \item{"S"}{Number of susceptible individuals.}
@@ -110,7 +121,6 @@
 #' \dontrun{
 #' make_LASER_config(
 #'      output_file_path = "parameters.json",
-#'      compress = TRUE,
 #'      seed = 123,
 #'      date_start = "2024-12-01",
 #'      date_stop = "2024-12-31",
@@ -159,15 +169,14 @@
 #'      decay_days_long   = 90,
 #'      decay_shape_1     = 1,
 #'      decay_shape_2     = 1,
+#'      reported_cases    = matrix(NA, nrow=2, ncol=366),
+#'      reported_deaths   = matrix(NA, nrow=2, ncol=366),
 #'      return = "LL"
 #' )
 #' }
 #'
 #' @export
-#'
-
 make_LASER_config <- function(output_file_path = NULL,
-                              compress = FALSE,
                               seed = NULL,
 
                               # Initialization
@@ -217,7 +226,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               a_2_j = NULL,
                               b_1_j = NULL,
                               b_2_j = NULL,
-                              p      = NULL,
+                              p = 365,
                               alpha_1 = NULL,
                               alpha_2 = NULL,
 
@@ -233,11 +242,15 @@ make_LASER_config <- function(output_file_path = NULL,
                               decay_shape_1 = NULL,
                               decay_shape_2 = NULL,
 
+                              ## Reported data
+                              reported_cases = NULL,
+                              reported_deaths = NULL,
+
                               # Outputs
                               return = NULL
 ) {
 
-     message('Validating parameter values')
+     message('Validating parameter values...')
 
      if (is.null(seed) || !is.numeric(seed) || length(seed) != 1 || seed <= 0 || seed %% 1 != 0) {
           stop("'seed' must be provided as an integer scalar greater than zero.")
@@ -312,6 +325,8 @@ make_LASER_config <- function(output_file_path = NULL,
           decay_days_long   = decay_days_long,
           decay_shape_1     = decay_shape_1,
           decay_shape_2     = decay_shape_2,
+          reported_cases    = reported_cases,
+          reported_deaths   = reported_deaths,
           return            = return
      )
 
@@ -330,10 +345,7 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("date_stop must be in the format 'YYYY-MM-DD'. Provided: ", date_stop)
      }
 
-
      t <- seq.Date(as.Date(date_start), as.Date(date_stop), by = "day")
-     message(paste0('Number of daily time steps: ', length(t)))
-     message(paste0('Number of metapopulation locations: ', length(location_name)))
 
      if (!is.character(location_name)) {
           stop("location_name must be a character vector.")
@@ -341,27 +353,34 @@ make_LASER_config <- function(output_file_path = NULL,
 
      # Validate initial population vectors.
      for (v in c("S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial")) {
+
           vec <- params[[v]]
-          # If supplied as numeric (i.e. double) then convert to integer.
+
+          # Convert numeric doubles to integer
           if (is.numeric(vec) && !is.integer(vec)) {
                vec <- as.integer(vec)
+               # If there were names before, keep them
                names(vec) <- names(params[[v]])
           }
-          if (is.null(names(vec)) || any(names(vec) == "")) {
-               stop(v, " must be a named vector with names corresponding to each location.")
-          }
+
+          # Must match location length
           if (length(vec) != length(location_name)) {
-               stop(v, " must be a vector of length equal to the number of locations.")
+               stop(v, " must be a vector of length equal to number of locations.")
           }
 
-          # Check that the names match exactly the location_name vector.
-          if (!all(names(vec) == location_name)) {
-               stop(v, " names must exactly match the provided location_name values.")
+          # If the vector has names, check them; if not, skip that check
+          name_vec <- names(vec)
+          if (!is.null(name_vec) && any(name_vec != "")) {
+               # If the vector has names, require they match location_name exactly
+               if (!all(name_vec == location_name)) {
+                    stop(v, " names must match the provided location_name values.")
+               }
           }
+
           params[[v]] <- vec
      }
 
-     # Demographics validation: b_jt and d_jt should be matrices with rows equal to length(location_name) and columns equal to length(t).
+     # Demographics validation.
      if (!is.matrix(b_jt) || nrow(b_jt) != length(location_name) || ncol(b_jt) != length(t)) {
           stop("b_jt must be a matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
@@ -403,17 +422,18 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(gamma_2) || gamma_2 < 0) {
           stop("gamma_2 must be a numeric scalar greater than or equal to zero.")
      }
-     # Check that the recovery rate for severe infection is slower than for mild infection.
-     if (gamma_1 >= gamma_2) {
-          stop("gamma_1 must be less than gamma_2, as the recovery rate for severe infection should be slower than for mild infection.")
+     # Check that the recovery rate for severe infection is faster than for mild infection.
+     if (gamma_1 <= gamma_2) {
+          stop("gamma_1 must be greater than gamma_2, as the recovery rate for severe infection should be faster than for mild infection.")
      }
 
      if (!is.numeric(epsilon) || epsilon < 0) {
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1]
-     if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_name) || ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
+     # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1].
+     if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_name) ||
+         ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
           stop("mu_jt must be a numeric matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
      }
      if (any(mu_jt < 0 | mu_jt > 1)) {
@@ -424,12 +444,11 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(rho) || rho < 0 || rho > 1) {
           stop("rho must be a numeric scalar between 0 and 1.")
      }
-
      if (!is.numeric(sigma) || sigma < 0 || sigma > 1) {
           stop("sigma must be a numeric scalar between 0 and 1.")
      }
 
-     # Force of Infection (human-to-human) validation.
+     # Force of Infection (human-to-human).
      if (!is.numeric(beta_j0_hum) || any(beta_j0_hum < 0) || length(beta_j0_hum) != length(location_name)) {
           stop("beta_j0_hum must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
      }
@@ -450,29 +469,22 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("p must be a numeric scalar greater than zero.")
      }
 
-
-     # Gravity mobility parameters
+     # Gravity mobility parameters.
      if (!is.numeric(longitude) || length(longitude) != length(location_name)) {
           stop("longitude must be a numeric vector of length equal to location_name.")
      }
-
      if (!is.numeric(latitude) || length(latitude) != length(location_name)) {
           stop("latitude must be a numeric vector of length equal to location_name.")
      }
-
      if (!is.numeric(mobility_omega) || length(mobility_omega) != 1 || mobility_omega < 0) {
           stop("mobility_omega must be a numeric scalar greater than or equal to zero.")
      }
-
      if (!is.numeric(mobility_gamma) || length(mobility_gamma) != 1 || mobility_gamma < 0) {
           stop("mobility_gamma must be a numeric scalar greater than or equal to zero.")
      }
-
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_name)) {
           stop("tau_i must be a numeric vector of length equal to location_name and values between 0 and 1.")
      }
-
-
      if (!is.numeric(alpha_1) || alpha_1 < 0 || alpha_1 > 1) {
           stop("alpha_1 must be a numeric scalar between 0 and 1.")
      }
@@ -480,117 +492,139 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("alpha_2 must be a numeric scalar between 0 and 1.")
      }
 
-     # Force of Infection (environment-to-human) validation.
+     # Force of Infection (environment-to-human).
      if (!is.numeric(beta_j0_env) || any(beta_j0_env < 0) || length(beta_j0_env) != length(location_name)) {
           stop("beta_j0_env must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
      }
-
      if (!is.numeric(theta_j) || any(theta_j < 0 | theta_j > 1) || length(theta_j) != length(location_name)) {
           stop("theta_j must be a numeric vector of length equal to location_name and values between 0 and 1.")
      }
-
      if (!is.matrix(psi_jt) || nrow(psi_jt) != length(location_name) || ncol(psi_jt) != length(t)) {
           stop("psi_jt must be a matrix with rows equal to location_name and columns equal to the daily sequence from date_start to date_stop.")
      }
-
      if (!is.numeric(zeta_1) || zeta_1 <= 0) {
           stop("zeta_1 must be a numeric scalar greater than zero.")
      }
      if (!is.numeric(zeta_2) || zeta_2 <= 0) {
           stop("zeta_2 must be a numeric scalar greater than zero.")
      }
-     # Check that zeta_1 is greater than zeta_2.
      if (zeta_1 <= zeta_2) {
           stop("zeta_1 must be greater than zeta_2.")
      }
-
      if (!is.numeric(kappa) || kappa <= 0) {
           stop("kappa must be a numeric scalar greater than zero.")
      }
 
-     # Environmental decay parameter validation
+     # Environmental decay parameter validation.
      if (!is.numeric(decay_days_short) || decay_days_short <= 0) {
           stop("decay_days_short must be a numeric scalar greater than zero.")
      }
-
      if (!is.numeric(decay_days_long) || decay_days_long <= 0) {
           stop("decay_days_long must be a numeric scalar greater than zero.")
      }
-
      if (decay_days_short >= decay_days_long) {
           stop("decay_days_short must be less than decay_days_long.")
      }
-
      if (!is.numeric(decay_shape_1) || decay_shape_1 <= 0) {
           stop("decay_shape_1 must be a numeric scalar greater than zero.")
      }
-
      if (!is.numeric(decay_shape_2) || decay_shape_2 <= 0) {
           stop("decay_shape_2 must be a numeric scalar greater than zero.")
      }
 
-     # Validate return vector
-     valid_return_keys <- c("LL", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
+     ## Reported data checks
+     # If reported_cases or reported_deaths exist, they must be integer matrices with dimensions matching (locations x t).
+     if (!is.matrix(reported_cases) || nrow(reported_cases) != length(location_name) || ncol(reported_cases) != length(t)) {
+          stop("reported_cases must be a matrix with rows = length(location_name) and columns = length(t).")
+     }
+     not_na_rc <- !is.na(reported_cases)
+     if (any(reported_cases[not_na_rc] != floor(reported_cases[not_na_rc]))) {
+          stop("reported_cases must be integer (NA allowed).")
+     }
 
+     if (!is.matrix(reported_deaths) || nrow(reported_deaths) != length(location_name) || ncol(reported_deaths) != length(t)) {
+          stop("reported_deaths must be a matrix with rows = length(location_name) and columns = length(t).")
+     }
+     not_na_rd <- !is.na(reported_deaths)
+     if (any(reported_deaths[not_na_rd] != floor(reported_deaths[not_na_rd]))) {
+          stop("reported_deaths must be integer (NA allowed).")
+     }
+
+     # Validate return vector.
+     valid_return_keys <- c("LL", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
      if (!is.character(return) || length(return) == 0) {
           stop("return must be a non-empty character vector.")
      }
-
      invalid <- setdiff(return, valid_return_keys)
-
      if (length(invalid) > 0) {
           stop("Invalid entries in return: ", paste(invalid, collapse = ", "),
                ". Allowed values are: ", paste(valid_return_keys, collapse = ", "))
      }
 
+     message("All parameters have passed config checks.")
 
-     tmp <- split(params$b_jt, row(params$b_jt))
-     params$b_jt <- lapply(tmp, as.numeric)
+     # Convert date objects to character in the final param list
+     params$date_start <- as.character(date_start)
+     params$date_stop  <- as.character(date_stop)
 
-     tmp <- split(params$d_jt, row(params$d_jt))
-     params$d_jt <- lapply(tmp, as.numeric)
+     # Remove dimnames from all list objects
+     message("Cleaning parameter list for output...")
+     for (nm in names(params)) {
 
-     tmp <- split(params$nu_1_jt, row(params$nu_1_jt))
-     params$nu_1_jt <- lapply(tmp, as.integer)
+          val <- params[[nm]]
 
-     tmp <- split(params$nu_2_jt, row(params$nu_2_jt))
-     params$nu_2_jt <- lapply(tmp, as.integer)
+          if (is.matrix(val) || length(dim(val)) > 1) {
 
-     tmp <- split(params$psi_jt, row(params$psi_jt))
-     params$psi_jt <- lapply(tmp, as.numeric)
+               dimnames(val) <- NULL
+               params[[nm]] <- val
 
-     tmp <- split(mu_jt, row(mu_jt))
-     params$mu_jt <- lapply(tmp, as.numeric)
+          } else if (is.vector(val) && !is.list(val)) {
 
-
-     if (!is.null(output_file_path)) {
-
-          if (grepl("\\.json(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-
-               MOSAIC::write_list_to_json(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
-
-          } else if (grepl("\\.(h5|hdf5)(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-
-               MOSAIC::write_list_to_hdf5(params, output_file_path, compress_chunks = TRUE, compress_file = grepl("\\.gz$", output_file_path))
-
-          } else if (grepl("\\.yaml(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-
-               MOSAIC::write_list_to_yaml(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
-
-          } else if (grepl("\\.obj(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
-
-               MOSAIC::write_list_to_obj(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
-
-          } else {
-
-               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, .yaml.gz, .obj, or .obj.gz extension.")
+               names(val) <- NULL
+               params[[nm]] <- val
 
           }
+     }
 
+     # Round all numeric entries to four significant figures
+     for (nm in names(params)) {
+
+          val <- params[[nm]]
+
+          # If it's numeric:
+          if (is.numeric(val)) {
+
+               if (is.matrix(val) || length(dim(val)) > 1) {
+                    # For matrix or multi-dimensional array
+                    dims <- dim(val)                      # store dimensions
+                    val_flat <- as.numeric(val)           # flatten to vector
+                    val_flat <- signif(val_flat, 3)       # round
+                    val <- array(val_flat, dim = dims)    # reshape
+                    dimnames(val) <- dimnames(params[[nm]])  # preserve dimnames if desired
+                    params[[nm]] <- val
+
+               } else {
+                    # For simple numeric vector
+                    params[[nm]] <- signif(val, 3)
+               }
+          }
+     }
+
+     if (!is.null(output_file_path)) {
+          if (grepl("\\.json(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+               MOSAIC::write_list_to_json(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
+          } else if (grepl("\\.(h5|hdf5)(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+               MOSAIC::write_list_to_hdf5(params, output_file_path,
+                                          compress_chunks = TRUE,
+                                          compress_file = grepl("\\.gz$", output_file_path))
+          } else if (grepl("\\.yaml(\\.gz)?$", output_file_path, ignore.case = TRUE)) {
+               MOSAIC::write_list_to_yaml(params, output_file_path, compress = grepl("\\.gz$", output_file_path))
+          } else {
+               stop("Unsupported file format. The output file must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz extension.")
+          }
      } else {
-
+          message("LASER config returned as list object (no file written as output).")
           return(params)
-
      }
 
 }
