@@ -113,9 +113,12 @@ reference:
     contents:
       - install_dependencies
       - check_dependencies
+      - check_overdispersion
       - calc_diffusion_matrix_pi
       - calc_affine_normalization
       - check_affine_normalization
+      - downscale_weekly_values
+      - downscale_weekly_cholera_data
       - load_or_install_packages
       - get_paths
       - get_ggplot_legend
