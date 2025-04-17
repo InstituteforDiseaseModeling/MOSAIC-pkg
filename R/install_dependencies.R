@@ -9,7 +9,6 @@
 #' @return No return value. Side effect: installs R and Python dependencies and configures the backend.
 #' @export
 #'
-
 install_dependencies <- function(force = FALSE) {
 
      # ------------------------
@@ -60,35 +59,22 @@ install_dependencies <- function(force = FALSE) {
 
      message("")
 
-     message("Installing Python packages one by one using pip...")
+     # Install all Python packages from requirements.txt in one pip call
+     message("📦 Installing all Python packages from requirements.txt using pip...")
 
-     req_lines <- readLines(req_path)
-     req_lines <- trimws(sub("#.*$", "", req_lines))      # Remove inline comments
-     req_lines <- req_lines[nzchar(req_lines)]            # Remove empty lines
-
-     for (pkg in req_lines) {
-
-          message("📦 Installing: ", pkg)
-          pip_args <- c("-m", "pip", "install", pkg)
-
-          output <- tryCatch(
-               system2(command = py_exec, args = pip_args, stdout = TRUE, stderr = TRUE),
-               error = function(e) paste("❌ Error during installation of", pkg, ":", e$message)
-          )
-
-          message(paste(output, collapse = "\n"))
-          message("")
-     }
+     output <- tryCatch(
+          system2(command = py_exec,
+                  args = c("-m", "pip", "install", "--upgrade", "--no-cache-dir", "-r", req_path),
+                  stdout = TRUE, stderr = TRUE),
+          error = function(e) paste("❌ pip install failed:", e$message)
+     )
+     message(paste(output, collapse = "\n"))
 
      if (reticulate::py_available()) {
-
           message("🚀 Reticulate has embedded the virtual Python environment 'mosaic-python-env' within MOSAIC R package!")
           reticulate::py_config()
           message("")
-
      }
-
-
 
      # -------------------------------------
      # 2. Keras and tensorflow backend setup
@@ -112,7 +98,6 @@ install_dependencies <- function(force = FALSE) {
 
      tensorflow <- getNamespace("tensorflow")
 
-
      if (force) {
 
           message("Installing Keras + TensorFlow Python backend...")
@@ -128,7 +113,6 @@ install_dependencies <- function(force = FALSE) {
      } else {
 
           # Check is tensorflow backend is installed
-
           backend_ok <- tryCatch({
                backend <- keras3::config_backend()
                message("✔️  Keras 3 backend detected: ", backend)
@@ -138,9 +122,7 @@ install_dependencies <- function(force = FALSE) {
                FALSE
           })
 
-
           if (!backend_ok) {
-
                message("Installing Keras + TensorFlow Python backend...")
                Sys.setenv(RETICULATE_PYTHON = file.path(env_path, "bin", "python"))
                keras3::install_keras(
@@ -150,14 +132,8 @@ install_dependencies <- function(force = FALSE) {
                     tensorflow = "cpu",
                     extra_packages = character()
                )
-
           }
-
-
      }
 
-
      invisible(NULL)
-
-
 }
