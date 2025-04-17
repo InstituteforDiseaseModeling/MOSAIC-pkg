@@ -77,6 +77,8 @@ check_dependencies <- function() {
           message("❌ Warning: Unable to retrieve Python version.")
      })
 
+
+
      # -----------------------------
      # Check Python package versions
      # -----------------------------
@@ -88,15 +90,36 @@ check_dependencies <- function() {
      req_lines <- readLines(requirements_path)
      pkg_names <- unique(req_lines)
 
+     # Replace github install line with its pkg import name "laser-cholera"
+     sel <- grep("laser-cholera", pkg_names)
+     if (length(sel) > 0) pkg_names[sel] <- "laser_cholera"
+
      # Loop through and check each package
      for (pkg in pkg_names) {
+
           tryCatch({
+
                module <- reticulate::import(pkg, delay_load = TRUE)
                version <- module[["__version__"]]
                message(sprintf("✔️  %s: %s", pkg, version))
+
+               if (pkg == 'laser_cholera') {
+
+                    message("LASER info:")
+                    freeze <- system2(command = python_exec, args = c("-m", "pip", "freeze"), stdout = TRUE)
+                    laser_lines <- grep("laser", freeze, value = TRUE)
+                    message(paste(laser_lines, collapse = "\n"))
+
+               }
+
           }, error = function(e) {
-               message(sprintf("❌ %s is not available in the Python environment.", pkg))
+
+               message(sprintf("❌ %s cannot be found in the Python environment.", pkg))
+
           })
+
+
+
      }
 
      message("")
@@ -124,6 +147,8 @@ check_dependencies <- function() {
      # ------------------------
 
      if (requireNamespace("keras3", quietly = TRUE) && requireNamespace("tensorflow", quietly = TRUE)) {
+
+          message("Configuring keras backend...")
 
           backend_name <- tryCatch({
                keras3::config_backend()
