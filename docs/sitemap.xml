@@ -94,6 +94,27 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_beta.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_binomial.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_gamma.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_negbin.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_normal.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_poisson.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.html</loc>
   </url>
   <url>
@@ -227,6 +248,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_immune_decay_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_model_likelihood.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.html</loc>
@@ -404,6 +428,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/read_yaml_to_list.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_MOSAIC_python_env.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.html</loc>

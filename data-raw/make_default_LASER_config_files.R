@@ -4,6 +4,9 @@ library(MOSAIC)
 
 default_args <- MOSAIC::get_default_LASER_config(PATHS)
 
+var(as.vector(default_args$reported_cases), na.rm=T) / mean(default_args$reported_cases, na.rm=T)
+var(as.vector(default_args$reported_deaths), na.rm=T) / mean(default_args$reported_deaths, na.rm=T)
+
 # Define output file paths for all seven formats
 file_paths <- list(
      file.path(getwd(), 'inst/extdata/default_parameters.json'),

@@ -39,6 +39,12 @@ navbar:
 
 
 reference:
+  - title: "Package setup"
+    contents:
+      - install_dependencies
+      - check_dependencies
+      - remove_MOSAIC_python_env
+
   - title: "Downloading and Processing Data: Climate and Environment"
     contents:
       - download_climate_data
@@ -85,6 +91,11 @@ reference:
       - est_immune_decay
       - est_symptomatic_prop
 
+  - title: "Model calibration"
+    contents:
+      - get_model_likelihood
+      - starts_with("calc_log_likelihood")
+
   - title: "Shapefiles and Spatial Data Functions"
     contents:
       - download_africa_shapefile
@@ -111,8 +122,6 @@ reference:
 
   - title: "Utility Functions"
     contents:
-      - install_dependencies
-      - check_dependencies
       - check_overdispersion
       - calc_diffusion_matrix_pi
       - calc_affine_normalization
@@ -132,11 +141,9 @@ reference:
       - read_hdf5_to_list
       - read_json_to_list
       - read_yaml_to_list
-      - read_obj_to_list
       - write_list_to_hdf5
       - write_list_to_json
       - write_list_to_yaml
-      - write_list_to_obj
 
   - title: "Shiny Apps"
     contents:
