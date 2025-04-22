@@ -1,139 +1,155 @@
 #' Install R and Python Dependencies for MOSAIC
 #'
 #' @description
-#' Sets up the Python virtual environment and installs packages listed in `requirements.txt`,
-#' along with the R packages `keras3` and `tensorflow`. Ensures that the Keras + TensorFlow backend is usable.
+#' Sets up a conda environment for MOSAIC using the `environment.yml` file located in the package.
+#' The environment is stored in a fixed directory ("~/.MOSAIC_conda_env") and installs the LASER disease
+#' transmission model simulation tool. This function also installs the R packages `keras3` and `tensorflow`, and ensures that the Keras + TensorFlow
+#' Python backend is available for use in R.
 #'
-#' @param force Logical. If TRUE, deletes and recreates the Python virtual environment from scratch. Default is FALSE.
+#' @param force Logical. If TRUE, deletes and recreates the conda environment from scratch. Default is FALSE.
 #'
-#' @return No return value. Side effect: installs R and Python dependencies and configures the backend.
+#' @return No return value
 #' @export
 #'
+
 install_dependencies <- function(force = FALSE) {
 
-     # ------------------------
-     # 0. Load tensorflow before reticulate initializes Python
-     # ------------------------
+     Sys.unsetenv("RETICULATE_PYTHON")
+
+     # Set the conda environment directory manually (cross-platform, stored in the user's home directory)
+     env_dir <- normalizePath(file.path("~", ".MOSAIC_conda_env"), winslash = "/", mustWork = FALSE)
+     message("Conda environment will be stored at: ", env_dir)
+
+     # -----------------------------------------------------------------------
+     # 0. Ensure required R packages (reticulate and yaml) are available
+     # -----------------------------------------------------------------------
 
      if (!requireNamespace("reticulate", quietly = TRUE)) {
           message("Installing R package: reticulate")
           utils::install.packages("reticulate", dependencies = TRUE)
      }
 
+     if (!requireNamespace("yaml", quietly = TRUE)) {
+          message("Installing R package: yaml")
+          utils::install.packages("yaml", dependencies = TRUE)
+     }
+
      reticulate <- getNamespace("reticulate")
 
-     # ------------------------
-     # 1. Python environment
-     # ------------------------
+     # -----------------------------------------------------------------------
+     # 1. Locate the environment.yml file in the package using system.file
+     # -----------------------------------------------------------------------
 
-     env_path <- file.path(system.file(package = "MOSAIC"), "py", "mosaic-python-env")
-     req_path <- system.file("py/requirements.txt", package = "MOSAIC")
+     env_yml_path <- system.file("py", "environment.yml", package = "MOSAIC")
+     if (!file.exists(env_yml_path)) stop("environment.yml not found at: ", env_yml_path)
+     message("Using environment.yml at: ", env_yml_path)
 
-     if (!file.exists(req_path)) {
-          stop("requirements.txt not found at: ", req_path)
+     # -----------------------------------------------------------------------
+     # 2. Remove the existing conda environment if force == TRUE
+     # -----------------------------------------------------------------------
+
+     if (force && dir.exists(env_dir)) {
+
+          message("Removing existing conda environment (force = TRUE): ", env_dir)
+          unlink(env_dir, recursive = TRUE, force = TRUE)
+
+          if (.Platform$OS.type == "windows") {
+               system_cmd <- paste("rmdir /S /Q", shQuote(env_dir))
+          } else {
+               system_cmd <- paste("rm -rf", shQuote(env_dir))
+          }
+
+          system(system_cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+
      }
 
-     message("Python packages to be installed from requirements.txt:")
-     req_lines <- readLines(req_path)
-     for (line in req_lines) {
-          message("  - ", line)
-     }
+     # -----------------------------------------------------------------------
+     # 3. Create or update the conda environment using reticulate and environment.yml
+     # -----------------------------------------------------------------------
 
-     if (force && dir.exists(env_path)) {
-          message("Removing existing Python environment (force = TRUE): ", env_path)
-          unlink(env_path, recursive = TRUE, force = TRUE)
-     }
+     # Parse the YAML file to extract dependencies
+     env_specs <- yaml::read_yaml(env_yml_path)
+     deps <- env_specs$dependencies
 
-     if (!reticulate::virtualenv_exists(env_path)) {
-          message("Creating Python virtual environment at: ", env_path)
-          reticulate::virtualenv_create(envname = env_path)
-     } else {
-          message("Python virtual environment already exists at: ", env_path)
-     }
-
-     # Set RETICULATE_PYTHON before initialization
-     py_exec <- file.path(env_path, if (.Platform$OS.type == "windows") "Scripts/python.exe" else "bin/python")
-     Sys.setenv(RETICULATE_PYTHON = py_exec)
-
-     reticulate::use_virtualenv(env_path, required = TRUE)
-
-     message("")
-
-     # Install all Python packages from requirements.txt in one pip call
-     message("📦 Installing all Python packages from requirements.txt using pip...")
-
-     output <- tryCatch(
-          system2(command = py_exec,
-                  args = c("-m", "pip", "install", "--upgrade", "--no-cache-dir", "-r", req_path),
-                  stdout = TRUE, stderr = TRUE),
-          error = function(e) paste("❌ pip install failed:", e$message)
-     )
-     message(paste(output, collapse = "\n"))
-
-     if (reticulate::py_available()) {
-          message("🚀 Reticulate has embedded the virtual Python environment 'mosaic-python-env' within MOSAIC R package!")
-          reticulate::py_config()
-          message("")
-     }
-
-     # -------------------------------------
-     # 2. Keras and tensorflow backend setup
-     # -------------------------------------
-
-     message("Checking keras and tensorflow backend...")
-
-     if (!requireNamespace("keras3", quietly = TRUE)) {
-          stop("❌ The 'keras3' package is required but not installed.\n",
-               "Please install it using: utils::install.packages('keras3', dependencies = TRUE) before running MOSAIC::install_dependencies().")
-     } else {
-          message("📦 R package 'keras3' is installed.")
-          keras3 <- getNamespace("keras3")
-     }
-
-     if (!requireNamespace("tensorflow", quietly = TRUE)) {
-          utils::install.packages('tensorflow', dependencies = TRUE)
-     } else {
-          message("📦 R package 'tensorflow' is installed.")
-     }
-
-     tensorflow <- getNamespace("tensorflow")
-
-     if (force) {
-
-          message("Installing Keras + TensorFlow Python backend...")
-          Sys.setenv(RETICULATE_PYTHON = file.path(env_path, "bin", "python"))
-          keras3::install_keras(
-               method = "virtualenv",
-               envname = env_path,
-               backend = "tensorflow",
-               tensorflow = "cpu",
-               extra_packages = character()
-          )
-
-     } else {
-
-          # Check is tensorflow backend is installed
-          backend_ok <- tryCatch({
-               backend <- keras3::config_backend()
-               message("✔️  Keras 3 backend detected: ", backend)
-               TRUE
-          }, error = function(e) {
-               message("Keras 3 backend not found.")
-               FALSE
-          })
-
-          if (!backend_ok) {
-               message("Installing Keras + TensorFlow Python backend...")
-               Sys.setenv(RETICULATE_PYTHON = file.path(env_path, "bin", "python"))
-               keras3::install_keras(
-                    method = "virtualenv",
-                    envname = env_path,
-                    backend = "tensorflow",
-                    tensorflow = "cpu",
-                    extra_packages = character()
-               )
+     # Separate out conda and pip dependencies
+     conda_packages <- c()
+     pip_packages <- c()
+     for (dep in deps) {
+          if (is.character(dep)) {
+               conda_packages <- c(conda_packages, dep)
+          } else if (is.list(dep) && !is.null(dep$pip)) {
+               pip_packages <- c(pip_packages, dep$pip)
           }
      }
 
-     invisible(NULL)
+     # Extract Python version if specified (e.g., "python=3.12")
+     py_version <- NULL
+     if (any(grepl("^python=", conda_packages))) {
+          py_version <- sub("^python=", "", conda_packages[grep("^python=", conda_packages)][1])
+          conda_packages <- conda_packages[!grepl("^python=", conda_packages)]
+     }
+
+     # Check if the environment exists (by checking if the directory exists)
+     env_exists <- dir.exists(env_dir)
+     if (!env_exists) {
+
+          message("Creating new conda environment at: ", env_dir)
+          reticulate::conda_create(envname = env_dir,
+                                   python_version = py_version,
+                                   packages = conda_packages)
+
+          if (length(pip_packages) > 0) {
+               reticulate::conda_install(envname = env_dir,
+                                         packages = pip_packages,
+                                         pip = TRUE)
+          }
+
+     } else {
+
+          message("Conda environment already exists at: ", env_dir, ". Updating dependencies ...")
+          if (length(conda_packages) > 0) {
+               reticulate::conda_install(envname = env_dir,
+                                         packages = conda_packages,
+                                         pip = FALSE)
+          }
+
+          if (length(pip_packages) > 0) {
+               reticulate::conda_install(envname = env_dir,
+                                         packages = pip_packages,
+                                         pip = TRUE)
+          }
+
+     }
+
+     # -----------------------------------------------------------------------
+     # 4. Explicitly verify that the expected Python executable exists
+     # -----------------------------------------------------------------------
+
+     py_exe <- file.path(env_dir, "bin", "python")
+     if (!file.exists(py_exe)) stop("Python executable not found at ", py_exe, ". The conda environment may not have been created properly.")
+
+     # -----------------------------------------------------------------------
+     # 5. Use this conda environment for reticulate
+     # -----------------------------------------------------------------------
+
+     reticulate::use_condaenv(env_dir, required = TRUE)
+
+     # Retrieve the current Python configuration.
+     config <- reticulate::py_config()
+
+     # Check that the active python executable is located within your desired environment.
+     if (grepl(env_dir, config$python)) {
+
+          message("\n🚀 Reticulate has activated the conda environment at '", env_dir, "' for MOSAIC!")
+          message("Python configuration:")
+          print(config)
+          message("")
+
+     } else {
+
+          stop("Failed to activate the conda environment at ", env_dir, "\nActivated Python: ", config$python)
+     }
+
+     cli::cli_text("To check setup, run {.run MOSAIC::check_dependencies()}. To remove the current installation, run {.run MOSAIC::remove_MOSAIC_python_env()}.")
+
 }

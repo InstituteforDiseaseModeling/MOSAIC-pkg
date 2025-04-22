@@ -7,12 +7,14 @@
 install_dependencies(force = FALSE)
 }
 \arguments{
-\item{force}{Logical. If TRUE, deletes and recreates the Python virtual environment from scratch. Default is FALSE.}
+\item{force}{Logical. If TRUE, deletes and recreates the conda environment from scratch. Default is FALSE.}
 }
 \value{
-No return value. Side effect: installs R and Python dependencies and configures the backend.
+No return value
 }
 \description{
-Sets up the Python virtual environment and installs packages listed in \code{requirements.txt},
-along with the R packages \code{keras3} and \code{tensorflow}. Ensures that the Keras + TensorFlow backend is usable.
+Sets up a conda environment for MOSAIC using the \code{environment.yml} file located in the package.
+The environment is stored in a fixed directory ("~/.MOSAIC_conda_env") and installs the LASER disease
+transmission model simulation tool. This function also installs the R packages \code{keras3} and \code{tensorflow}, and ensures that the Keras + TensorFlow
+Python backend is available for use in R.
 }

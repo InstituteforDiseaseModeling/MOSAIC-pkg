@@ -1,6 +1,0 @@
-git+https://github.com/institutefordiseasemodeling/laser-cholera.git@metapop#egg=laser-cholera
-numpy
-pandas
-scipy
-keras
-tensorflow

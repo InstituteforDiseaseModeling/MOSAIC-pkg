@@ -48,11 +48,14 @@ get_default_LASER_config <- function(PATHS) {
      N_j <- N_j[sel]
 
      # Get number of susceptible individuals in each location
-     S_j <- N_j - 1
+     S_j <- N_j - floor(N_j * 0.5)
 
      # Get number of infected individuals in each location
      I_j <- N_j
-     I_j[] <- 1
+     I_j[] <- 0
+     I_j[1] <- 1
+
+     R_j <- N_j - S_j - I_j
 
      message("Get birth rate of each location (b_j)")
      tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_b_birth_rate.csv'))
@@ -195,7 +198,7 @@ get_default_LASER_config <- function(PATHS) {
           S_j_initial = S_j,
           E_j_initial = N_j * 0,
           I_j_initial = I_j,
-          R_j_initial = N_j * 0,
+          R_j_initial = R_j,
           V1_j_initial = N_j * 0,
           V2_j_initial = N_j * 0,
           b_jt = b_jt,
@@ -218,7 +221,7 @@ get_default_LASER_config <- function(PATHS) {
           mobility_omega    = mobility_omega,
           mobility_gamma    = mobility_gamma,
           tau_i             = tau_i,
-          beta_j0_hum = rep(0.1, length(j)),
+          beta_j0_hum = rep(0.00625, length(j)),
           a_1_j = a1,
           a_2_j = a2,
           b_1_j = b1,
@@ -226,7 +229,7 @@ get_default_LASER_config <- function(PATHS) {
           p     = 365,
           alpha_1 = 0.95,
           alpha_2 = 0.95,
-          beta_j0_env = rep(0.2, length(j)),
+          beta_j0_env = rep(0.0125, length(j)),
           theta_j = theta_j,
           psi_jt = psi_jt,
           zeta_1 = 7.5,

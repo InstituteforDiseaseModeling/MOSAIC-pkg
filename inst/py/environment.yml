@@ -1,0 +1,15 @@
+name: mosaic-conda-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - llvmlite
+  - keras
+  - tensorflow
+  - pip:
+    - git+https://github.com/institutefordiseasemodeling/laser-cholera.git@metapop#egg=laser-cholera

@@ -1,98 +1,135 @@
-#' Calculate Poisson or Negative Binomial log-likelihood
+#' Dispatcher for multiple distribution log-likelihood functions
 #'
-#' Computes the log-likelihood of observed counts given expected values under either
-#' the Poisson or Negative Binomial distribution. Dispersion for NB is estimated via
-#' method-of-moments unless \code{family = "poisson"} is used.
+#' This function routes to the appropriate \code{calc_log_likelihood_*()} sub-function
+#' based on the specified \code{family}. It supports the six distributions (Beta, Binomial, Gamma, Negative Binomial, Normal, Poisson)
+#' and also allows a top-level \code{weights} argument that is passed down to the chosen sub-function.
 #'
-#' @param observed Integer vector of observed counts (e.g., cases or deaths).
-#' @param estimated Numeric vector of expected values from the model.
-#' @param family Character string: one of \code{"auto"}, \code{"poisson"}, or \code{"negbin"}.
-#' @param verbose Logical; if \code{TRUE}, prints messages about model choice, dispersion, and likelihood.
+#' @param observed Numeric or integer vector of observed data (depends on distribution). NAs allowed.
+#' @param estimated Numeric vector of model-predicted values (depends on distribution). NAs allowed.
+#' @param family Character string, one of:
+#'   \itemize{
+#'     \item \code{"beta"}
+#'     \item \code{"binomial"}
+#'     \item \code{"gamma"}
+#'     \item \code{"negbin"}
+#'     \item \code{"normal"}
+#'     \item \code{"poisson"}
+#'   }
+#' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
+#'                Default is \code{NULL}, which sets all weights to 1.
+#' @param ... Additional arguments passed to the underlying distribution function:
+#'   \itemize{
+#'     \item \code{mean_precision} (for \code{\link{calc_log_likelihood_beta}})
+#'     \item \code{trials} (for \code{\link{calc_log_likelihood_binomial}})
+#'     \item \code{k} (for \code{\link{calc_log_likelihood_negbin}})
+#'     \item \code{verbose} (common to all distributions)
+#'   }
 #'
 #' @details
-#' The choice of likelihood family is handled as follows:
-#'
-#' \tabular{llll}{
-#' \strong{Family}   \tab \strong{Variance/Mean} \tab \strong{Behavior}               \tab \strong{Notes} \cr
-#' "poisson" \tab any               \tab Poisson used                \tab Warns if Var/Mean > 1.5 \cr
-#' "negbin"  \tab > 1               \tab NegBin used with estimated k\tab Errors if Var ≤ Mean \cr
-#' "auto"    \tab ≤ 1               \tab Poisson used                \tab Safe fallback \cr
-#' "auto"    \tab > 1               \tab NegBin used with estimated k\tab Smart selection
+#' Based on the value of \code{family}, this function internally calls:
+#' \itemize{
+#'   \item \code{\link{calc_log_likelihood_beta}} for \code{family = "beta"}
+#'   \item \code{\link{calc_log_likelihood_binomial}} for \code{family = "binomial"}
+#'   \item \code{\link{calc_log_likelihood_gamma}} for \code{family = "gamma"}
+#'   \item \code{\link{calc_log_likelihood_negbin}} for \code{family = "negbin"}
+#'   \item \code{\link{calc_log_likelihood_normal}} for \code{family = "normal"}
+#'   \item \code{\link{calc_log_likelihood_poisson}} for \code{family = "poisson"}
 #' }
 #'
-#' The NB log-likelihood is calculated using the gamma-function form. When \code{family = "negbin"}
-#' or \code{"auto"} and \eqn{\text{Var}(Y) > \mathbb{E}(Y)}, the dispersion is estimated as:
+#' The \code{weights} argument (if not \code{NULL}) is passed to the chosen sub-likelihood
+#' function, which multiplies each observation's log-likelihood contribution by \code{weights[i]}.
 #'
-#' \deqn{
-#' k = \frac{\mu^2}{\text{Var} - \mu}
-#' }
+#' @return The total log-likelihood (scalar) for most families, or (in the case of Normal)
+#'   a list with \code{log_likelihood}, \code{sigma}, \code{shapiro_p}.
 #'
-#' @return A scalar log-likelihood value.
+#' @seealso
+#'   \code{\link{calc_log_likelihood_beta}},
+#'   \code{\link{calc_log_likelihood_binomial}},
+#'   \code{\link{calc_log_likelihood_gamma}},
+#'   \code{\link{calc_log_likelihood_negbin}},
+#'   \code{\link{calc_log_likelihood_normal}},
+#'   \code{\link{calc_log_likelihood_poisson}}
+#'
 #' @export
-calc_log_likelihood <- function(observed,
-                                estimated,
-                                family = c("auto", "poisson", "negbin"),
-                                verbose = TRUE) {
+#'
+#' @examples
+#' # Poisson example with weights
+#' calc_log_likelihood(
+#'   observed  = c(2, 3, 4),
+#'   estimated = c(2.2, 2.9, 3.8),
+#'   family    = "poisson",
+#'   weights   = c(1, 2, 1),
+#'   verbose   = TRUE
+#' )
+#'
+#' # Negative Binomial with known k and weights
+#' calc_log_likelihood(
+#'   observed  = c(0, 5, 9),
+#'   estimated = c(3, 4, 5),
+#'   family    = "negbin",
+#'   k         = 2.0,
+#'   weights   = c(1, 1, 2),
+#'   verbose   = TRUE
+#' )
+#'
+
+calc_log_likelihood <- function(observed, estimated,
+                                family = c("beta", "binomial", "gamma",
+                                           "negbin", "normal", "poisson"),
+                                weights = NULL,
+                                ...) {
+
      family <- match.arg(family)
 
-     # Remove NA pairs
-     valid_idx <- which(!is.na(observed) & !is.na(estimated))
-     observed <- observed[valid_idx]
-     estimated <- estimated[valid_idx]
-
-     # Validate
-     if (length(observed) != length(estimated)) stop("observed and estimated must be the same length.")
-     if (any(observed < 0 | observed %% 1 != 0)) stop("observed must contain non-negative integers.")
-
-     # Internal log-likelihood functions
-     log_nb <- function(y, mu, k) {
-          lgamma(y + k) - lgamma(k) - lgamma(y + 1) +
-               k * log(k / (k + mu)) +
-               y * log(mu / (k + mu))
-     }
-
-     log_pois <- function(y, mu) {
-          y * log(mu) - mu - lgamma(y + 1)
-     }
-
-     # Compute moments
-     mu <- mean(observed)
-     s2 <- var(observed)
-     disp_ratio <- s2 / mu
-
-     # Family logic
-     if (family == "poisson") {
-          if (verbose) message("Using Poisson model (forced).")
-          if (disp_ratio > 1.5) {
-               warning(sprintf("Var/Mean = %.2f suggests overdispersion. Consider family = 'negbin'.", disp_ratio))
+     switch(
+          family,
+          "beta" = {
+               calc_log_likelihood_beta(
+                    observed  = observed,
+                    estimated = estimated,
+                    weights   = weights,
+                    ...
+               )
+          },
+          "binomial" = {
+               calc_log_likelihood_binomial(
+                    observed  = observed,
+                    estimated = estimated,
+                    weights   = weights,
+                    ...
+               )
+          },
+          "gamma" = {
+               calc_log_likelihood_gamma(
+                    observed  = observed,
+                    estimated = estimated,
+                    weights   = weights,
+                    ...
+               )
+          },
+          "negbin" = {
+               calc_log_likelihood_negbin(
+                    observed  = observed,
+                    estimated = estimated,
+                    weights   = weights,
+                    ...
+               )
+          },
+          "normal" = {
+               calc_log_likelihood_normal(
+                    observed  = observed,
+                    estimated = estimated,
+                    weights   = weights,
+                    ...
+               )
+          },
+          "poisson" = {
+               calc_log_likelihood_poisson(
+                    observed  = observed,
+                    estimated = estimated,
+                    weights   = weights,
+                    ...
+               )
           }
-          ll <- sum(log_pois(observed, estimated))
-
-     } else if (family == "negbin") {
-          if (disp_ratio <= 1) {
-               stop(sprintf("Negative Binomial requested but Var/Mean = %.2f ≤ 1 — invalid dispersion.", disp_ratio))
-          }
-          k <- mu^2 / (s2 - mu)
-          if (verbose) {
-               message(sprintf("Using Negative Binomial model (forced) with estimated k = %.2f", k))
-               if (k < 1.5) warning(sprintf("k = %.2f indicates near-Poisson dispersion", k))
-          }
-          ll <- sum(log_nb(observed, estimated, k))
-
-     } else if (family == "auto") {
-          if (disp_ratio <= 1) {
-               if (verbose) message(sprintf("Auto: Var/Mean = %.2f ≤ 1 → using Poisson", disp_ratio))
-               ll <- sum(log_pois(observed, estimated))
-          } else {
-               k <- mu^2 / (s2 - mu)
-               if (verbose) {
-                    message(sprintf("Auto: Var/Mean = %.2f → using Negative Binomial with k = %.2f", disp_ratio, k))
-                    if (k < 1.5) warning(sprintf("k = %.2f indicates near-Poisson dispersion", k))
-               }
-               ll <- sum(log_nb(observed, estimated, k))
-          }
-     }
-
-     if (verbose) message(sprintf("Log-likelihood: %.2f", ll))
-     return(ll)
+     )
 }

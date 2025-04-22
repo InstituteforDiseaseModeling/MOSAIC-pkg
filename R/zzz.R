@@ -1,30 +1,35 @@
 .onAttach <- function(libname, pkgname) {
 
-     packageStartupMessage("
- __  __   ___   ____     _     ___  ____
-|  \\/  | / _ \\ / ___|   / \\   |_ _|/ ___|
-| |\\/| || | | |\\___ \\  / _ \\   | || |
-| |  | || |_| | ___) |/ ___ \\  | || |___
-|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|
+     packageStartupMessage(
+          "\n",
+          " __  __   ___   ____     _     ___  ____       __      ___    _____  _____   _____ ___\n",
+          "|  \\/  | / _ \\ / ___|   / \\   |_ _|/ ___|   __/ /_    / /    /   |  / ___/ / ____// __ \\\n",
+          "| |\\/| || | | |\\___ \\  / _ \\   | || |      /_  __/   / /    / /| |  \\__ \\ / __/  / /_/ /\n",
+          "| |  | || |_| | ___) |/ ___ \\  | || |___    /_/     / /___ / ___ | ___/ // /___ / _, _/\n",
+          "|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|          /_____//_/  |_|/____//_____//_/ |_|\n",
+          "\n",
+          "Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation\n",
+          "for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!\n"
+     )
 
-Welcome to the MOSAIC package!
-")
+     if (interactive()) {
 
-     # Locate virtualenv path
-     python_env_path <- system.file("py/mosaic-python-env", package = pkgname)
+          env_dir <- normalizePath(file.path("~", ".MOSAIC_conda_env"), winslash = "/", mustWork = FALSE)
 
-     python_exec <- if (.Platform$OS.type == "windows") {
-          file.path(python_env_path, "Scripts", "python.exe")
-     } else {
-          file.path(python_env_path, "bin", "python")
-     }
+          python_exec <- if (.Platform$OS.type == "windows") {
+               file.path(env_dir, "Scripts", "python.exe")
+          } else {
+               file.path(env_dir, "bin", "python")
+          }
 
-     if (!dir.exists(python_env_path) || !file.exists(python_exec)) {
-          message("❌ Python virtual environment not found or incomplete.")
-          message("To finish setup, run: MOSAIC::install_dependencies(). To re-install, run MOSAIC::install_dependencies(force = TRUE).")
-          return()
-     } else {
-          message("🐍 Found Python virtual environment")
+          if (!dir.exists(env_dir) || !file.exists(python_exec)) {
+               packageStartupMessage("❌ Python environment not found or incomplete.")
+               cli::cli_text("To finish setup, run {.run MOSAIC::install_dependencies()}.")
+          } else {
+               packageStartupMessage("🐍 Found Python environment")
+               cli::cli_text("To check setup, run {.run MOSAIC::check_dependencies()}.")
+          }
+
      }
 
 }
