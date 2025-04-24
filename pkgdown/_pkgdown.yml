@@ -43,7 +43,9 @@ reference:
     contents:
       - install_dependencies
       - check_dependencies
-      - remove_MOSAIC_python_env
+      - check_python_env
+      - remove_python_env
+      - get_python_paths
 
   - title: "Downloading and Processing Data: Climate and Environment"
     contents:
@@ -93,6 +95,8 @@ reference:
 
   - title: "Model calibration"
     contents:
+      - default_config
+      - get_default_config
       - get_model_likelihood
       - starts_with("calc_log_likelihood")
 
@@ -131,7 +135,6 @@ reference:
       - load_or_install_packages
       - get_paths
       - get_ggplot_legend
-      - get_default_LASER_config
       - starts_with("make_")
       - set_root_directory
       - set_openmeteo_api_key

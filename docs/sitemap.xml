@@ -127,6 +127,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_ENSO_data.html</loc>
   </url>
   <url>
@@ -137,6 +140,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/convert_iso_to_country.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/default_config.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_africa_shapefile.html</loc>
@@ -235,6 +241,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_LASER_config.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_config.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_elevation.html</loc>
   </url>
   <url>
@@ -254,6 +263,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_python_paths.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_suspected_cases.html</loc>
@@ -431,6 +443,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_MOSAIC_python_env.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.html</loc>
