@@ -14,21 +14,7 @@
 
      if (interactive()) {
 
-          env_dir <- normalizePath(file.path("~", ".MOSAIC_conda_env"), winslash = "/", mustWork = FALSE)
-
-          python_exec <- if (.Platform$OS.type == "windows") {
-               file.path(env_dir, "Scripts", "python.exe")
-          } else {
-               file.path(env_dir, "bin", "python")
-          }
-
-          if (!dir.exists(env_dir) || !file.exists(python_exec)) {
-               packageStartupMessage("❌ Python environment not found or incomplete.")
-               cli::cli_text("To finish setup, run {.run MOSAIC::install_dependencies()}.")
-          } else {
-               packageStartupMessage("🐍 Found Python environment")
-               cli::cli_text("To check setup, run {.run MOSAIC::check_dependencies()}.")
-          }
+          MOSAIC::check_python_env()
 
      }
 

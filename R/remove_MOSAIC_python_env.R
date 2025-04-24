@@ -10,10 +10,10 @@
 #' @export
 #'
 
-remove_MOSAIC_python_env <- function(force = FALSE) {
+remove_python_env <- function(force = FALSE) {
 
      # Determine the environment directory
-     env_dir <- normalizePath(file.path("~", ".MOSAIC_conda_env"), winslash = "/", mustWork = FALSE)
+     env_dir <- normalizePath(file.path("~", ".virtualenvs", "r-mosaic"), winslash = "/", mustWork = FALSE)
 
      # Check if the environment exists
      if (!dir.exists(env_dir)) {

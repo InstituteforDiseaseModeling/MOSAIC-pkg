@@ -14,7 +14,7 @@ No return value
 }
 \description{
 Sets up a conda environment for MOSAIC using the \code{environment.yml} file located in the package.
-The environment is stored in a fixed directory ("~/.MOSAIC_conda_env") and installs the LASER disease
-transmission model simulation tool. This function also installs the R packages \code{keras3} and \code{tensorflow}, and ensures that the Keras + TensorFlow
-Python backend is available for use in R.
+The environment is stored in a fixed directory ("~/.virtualenvs/r-mosaic") and installs the LASER disease
+transmission model simulation tool. This function also installs the R packages \code{keras3} and \code{tensorflow},
+and ensures that the Keras + TensorFlow Python backend is available for use in R.
 }

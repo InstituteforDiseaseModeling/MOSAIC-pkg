@@ -10,7 +10,8 @@ check_dependencies()
 No return value. Prints diagnostic messages about environment status and package versions.
 }
 \description{
-This function checks the MOSAIC Python conda environment, verifies that the expected Python packages are installed,
-and confirms that the R packages \code{keras3} and \code{tensorflow} are present and configured correctly.
-It prints the currently active Python configuration and confirms whether the backend is working.
+This function checks the MOSAIC Python conda environment, verifies that the expected Python
+packages are installed, and confirms that the R packages \code{keras3} and \code{tensorflow} are present and
+configured correctly. It prints the currently active Python configuration and confirms whether the
+backend is working.
 }

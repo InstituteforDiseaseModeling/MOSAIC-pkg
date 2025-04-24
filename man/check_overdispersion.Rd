@@ -43,3 +43,12 @@ Overdispersion is assessed using the Pearson dispersion statistic and the
 variance-to-mean ratio. If the Pearson statistic exceeds 1.5, the series is flagged
 as overdispersed.
 }
+\examples{
+\dontrun{
+  check_overdispersion(y = c(0, 2, 1, 0, 1, 3, 2, 0))
+  dates <- as.Date("2023-01-01") + 0:13
+  cases <- c(0, 1, 2, 0, 2, 4, 3, 1, 0, 5, 2, 3, 1, 0)
+  check_overdispersion(y = cases, date = dates, seasonality = TRUE)
+}
+
+}
