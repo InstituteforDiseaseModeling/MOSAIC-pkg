@@ -23,16 +23,23 @@
 #' \item{overdispersed_seasonal}{Logical; TRUE if seasonal model dispersion > 1.5 (if applicable)}
 #' \item{n_obs}{Number of non-missing observations}
 #'
-#' @example
-#'
-#' check_overdispersion(y = c(0, 2, 1, 0, 1, 3, 2, 0))
-#'
-#' dates <- as.Date("2023-01-01") + 0:13
-#' cases <- c(0, 1, 2, 0, 2, 4, 3, 1, 0, 5, 2, 3, 1, 0)
-#' check_overdispersion(y = cases, date = dates, seasonality = TRUE)
+#' @examples
+#' \dontrun{
+#'   check_overdispersion(y = c(0, 2, 1, 0, 1, 3, 2, 0))
+#'   dates <- as.Date("2023-01-01") + 0:13
+#'   cases <- c(0, 1, 2, 0, 2, 4, 3, 1, 0, 5, 2, 3, 1, 0)
+#'   check_overdispersion(y = cases, date = dates, seasonality = TRUE)
+#' }
 #'
 #' @export
-check_overdispersion <- function(y, date = NULL, seasonality = FALSE, period = 365, print = TRUE) {
+#'
+
+check_overdispersion <- function(y,
+                                 date = NULL,
+                                 seasonality = FALSE,
+                                 period = 365,
+                                 print = TRUE) {
+
      if (!is.numeric(y)) stop("'y' must be numeric.")
      if (any(y < 0, na.rm = TRUE) || any(y %% 1 != 0, na.rm = TRUE)) {
           stop("'y' must contain non-negative integers.")

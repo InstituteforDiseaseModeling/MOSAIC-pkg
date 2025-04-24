@@ -10,10 +10,10 @@ get_model_likelihood(
   est_cases,
   obs_deaths,
   est_deaths,
-  weights_location = NULL,
-  weights_time = NULL,
   weight_cases = NULL,
   weight_deaths = NULL,
+  weights_location = NULL,
+  weights_time = NULL,
   verbose = FALSE
 )
 }
@@ -26,53 +26,29 @@ get_model_likelihood(
 
 \item{est_deaths}{Matrix of estimated deaths, same dimension as \code{obs_deaths}.}
 
+\item{weight_cases}{Numeric scalar (or \code{NULL}), default \code{NULL} which sets to 1 internally.}
+
+\item{weight_deaths}{Numeric scalar (or \code{NULL}), default \code{NULL} which sets to 1 internally.}
+
 \item{weights_location}{Optional numeric vector of length \code{n_locations}, or \code{NULL}.
 If \code{NULL}, all locations are weighted equally.}
 
 \item{weights_time}{Optional numeric vector of length \code{n_time_steps}, or \code{NULL}.
 If \code{NULL}, all time steps are weighted equally.}
 
-\item{weight_cases}{Numeric scalar (or \code{NULL}), default \code{NULL} which sets to 1 internally.}
-
-\item{weight_deaths}{Numeric scalar (or \code{NULL}), default \code{NULL} which sets to 1 internally.}
-
 \item{verbose}{Logical; if \code{TRUE}, prints summary messages. Default is \code{FALSE}.}
 }
 \value{
 A single numeric value giving the total log-likelihood across all locations
-and time steps, with each outcome using Poisson or NB automatically.
+and time steps, or \code{NA_real_} if all locations are skipped.
 }
 \description{
 This function expects matrices of observed and estimated cases and deaths (size
 \code{n_locations} x \code{n_time_steps}), plus optional weight vectors for
 locations and time steps (\code{weights_location} and \code{weights_time}).
 It automatically selects Poisson or Negative Binomial for each location and outcome
-based on whether \code{Var(observed) > Mean(observed)}.
-it uses Poisson; otherwise it uses NegBin. Then it multiplies
+based on whether \code{Var(observed) / Mean(observed) >= 1.5}. If the ratio is below
+1.5, it uses Poisson; otherwise it uses NegBin. Then it multiplies
 the cases log-likelihood by \code{weight_cases} and the deaths log-likelihood by
 \code{weight_deaths} for additional flexibility in balancing the two outcomes.
-}
-\details{
-For each location \eqn{j} and each outcome (cases/deaths):
-\enumerate{
-\item If \code{Var(obs_*) > Mean(obs_*)}, use Negative Binomial. Otherwise, use Poisson.
-\item Compute the log-likelihood with \code{\link{calc_log_likelihood}}, passing
-\code{weights_time} as the observation-level weights.
-}
-Then it scales the cases-likelihood by \code{weight_cases} and the deaths-likelihood
-by \code{weight_deaths}, sums them up, and multiplies by \code{weights_location[j]}
-for location-level weighting.
-}
-\examples{
-# 3 locations, 4 time steps
-obsC <- matrix(c(0,1,2,1, 4,5,6,5, 9,8,7,9), nrow=3, byrow=TRUE)
-estC <- obsC + 0.2
-obsD <- matrix(c(0,0,1,1, 1,0,0,2, 0,1,0,1), nrow=3, byrow=TRUE)
-estD <- obsD + 0.1
-
-w_loc <- c(1, 2, 1)
-w_time <- c(1, 1, 1, 1)
-
-get_model_likelihood_auto(obsC, estC, obsD, estD, w_loc, w_time, verbose=TRUE)
-
 }

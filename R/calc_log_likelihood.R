@@ -84,7 +84,7 @@ calc_log_likelihood <- function(observed, estimated,
      switch(
           family,
           "beta" = {
-               calc_log_likelihood_beta(
+               MOSAIC::calc_log_likelihood_beta(
                     observed  = observed,
                     estimated = estimated,
                     weights   = weights,
@@ -92,7 +92,7 @@ calc_log_likelihood <- function(observed, estimated,
                )
           },
           "binomial" = {
-               calc_log_likelihood_binomial(
+               MOSAIC::calc_log_likelihood_binomial(
                     observed  = observed,
                     estimated = estimated,
                     weights   = weights,
@@ -100,7 +100,7 @@ calc_log_likelihood <- function(observed, estimated,
                )
           },
           "gamma" = {
-               calc_log_likelihood_gamma(
+               MOSAIC::calc_log_likelihood_gamma(
                     observed  = observed,
                     estimated = estimated,
                     weights   = weights,
@@ -108,7 +108,7 @@ calc_log_likelihood <- function(observed, estimated,
                )
           },
           "negbin" = {
-               calc_log_likelihood_negbin(
+               MOSAIC::calc_log_likelihood_negbin(
                     observed  = observed,
                     estimated = estimated,
                     weights   = weights,
@@ -116,7 +116,7 @@ calc_log_likelihood <- function(observed, estimated,
                )
           },
           "normal" = {
-               calc_log_likelihood_normal(
+               MOSAIC::calc_log_likelihood_normal(
                     observed  = observed,
                     estimated = estimated,
                     weights   = weights,
@@ -124,7 +124,7 @@ calc_log_likelihood <- function(observed, estimated,
                )
           },
           "poisson" = {
-               calc_log_likelihood_poisson(
+               MOSAIC::calc_log_likelihood_poisson(
                     observed  = observed,
                     estimated = estimated,
                     weights   = weights,

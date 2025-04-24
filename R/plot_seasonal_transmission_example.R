@@ -15,7 +15,6 @@
 #' @return The function generates and saves a PNG file showing the grid points on the country map and the seasonal transmission dynamics.
 #'
 #' @importFrom ggplot2 ggplot aes geom_sf geom_point geom_line geom_text labs scale_color_manual scale_x_continuous scale_y_continuous theme_minimal theme element_text element_blank
-#' @importFrom cowplot plot_grid get_ggplot_legend
 #' @importFrom dplyr filter
 #' @importFrom glue glue
 #' @importFrom sf st_read st_coordinates

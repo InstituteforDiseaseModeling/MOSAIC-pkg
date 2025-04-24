@@ -37,14 +37,12 @@
 #' @importFrom utils read.csv
 #' @importFrom glue glue
 #' @importFrom dplyr left_join select mutate filter group_by summarize ungroup
-#' @importFrom tidyr pivot_wider complete.cases
+#' @importFrom tidyr pivot_wider
 #' @importFrom keras keras_model_sequential layer_lstm layer_dropout layer_dense compile fit evaluate predict
 #' @importFrom ggplot2 ggplot geom_rect geom_bar geom_line facet_wrap labs scale_y_continuous scale_x_date theme_minimal theme element_text element_line element_blank annotate
 #' @importFrom patchwork plot_layout
-#' @importFrom scales scale_color_manual
 #' @importFrom zoo rollmean
 #' @importFrom lubridate today
-#' @importFrom tensorflow keras
 #' @export
 #'
 #' @examples

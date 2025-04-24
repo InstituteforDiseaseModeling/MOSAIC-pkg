@@ -17,7 +17,6 @@
 #'
 #' @importFrom dplyr mutate across
 #' @importFrom purrr map
-#' @importFrom tidyr bind_cols
 #'
 #' @examples
 #' \dontrun{

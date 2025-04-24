@@ -61,6 +61,12 @@ calc_log_likelihood_beta <- function(observed,
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
+     # Handle empty input after NA removal
+     if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
+          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          return(NA_real_)
+     }
+
      # Check lengths
      n <- length(observed)
      if (length(estimated) != n || length(weights) != n) {
@@ -179,6 +185,12 @@ calc_log_likelihood_binomial <- function(observed,
      trials    <- trials[idx]
      weights   <- weights[idx]
 
+     # Handle empty input after NA removal
+     if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
+          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          return(NA_real_)
+     }
+
      n <- length(observed)
      if (length(estimated) != n || length(trials) != n || length(weights) != n) {
           stop("Lengths of observed, estimated, trials, and weights must all match.")
@@ -252,6 +264,12 @@ calc_log_likelihood_gamma <- function(observed,
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
+     # Handle empty input after NA removal
+     if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
+          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          return(NA_real_)
+     }
+
      n <- length(observed)
      if (length(estimated) != n || length(weights) != n) {
           stop("Lengths of observed, estimated, and weights must all match.")
@@ -320,33 +338,28 @@ calc_log_likelihood_negbin <- function(observed,
                                        weights = NULL,
                                        verbose = TRUE) {
 
-     if (is.null(weights)) {
-          weights <- rep(1, length(observed))
-     }
+     if (is.null(weights)) weights <- rep(1, length(observed))
 
      idx <- which(!is.na(observed) & !is.na(estimated) & !is.na(weights))
      observed  <- observed[idx]
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
+     # Handle empty input after NA removal
+     if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
+          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          return(NA_real_)
+     }
+
      n <- length(observed)
-     if (length(estimated) != n || length(weights) != n) {
-          stop("Lengths of observed, estimated, and weights must all match.")
-     }
-
-     if (any(weights < 0)) {
-          stop("All weights must be >= 0.")
-     }
-     if (sum(weights) == 0) {
-          stop("All weights are zero, cannot compute likelihood.")
-     }
-
-     if (any(observed < 0 | observed %% 1 != 0)) {
-          stop("observed must contain non-negative integer counts.")
-     }
+     if (length(estimated) != n || length(weights) != n) stop("Lengths of observed, estimated, and weights must all match.")
+     if (any(weights < 0)) stop("All weights must be >= 0.")
+     if (sum(weights) == 0) stop("All weights are zero, cannot compute likelihood.")
+     if (any(observed < 0 | observed %% 1 != 0)) stop("observed must contain non-negative integer counts.")
 
      # Estimate k if not supplied
      if (is.null(k)) {
+
           mu <- mean(observed)
           s2 <- var(observed)
 
@@ -361,10 +374,11 @@ calc_log_likelihood_negbin <- function(observed,
                     message(sprintf("Estimated k = %.2f (from Var = %.2f, Mean = %.2f)", k, s2, mu))
                }
           }
+
      } else {
-          if (verbose) {
-               message(sprintf("Using provided k = %.2f", k))
-          }
+
+          if (verbose) message(sprintf("Using provided k = %.2f", k))
+
      }
 
      # Use Poisson if k = Inf
@@ -436,6 +450,12 @@ calc_log_likelihood_normal <- function(observed,
      observed  <- observed[idx]
      estimated <- estimated[idx]
      weights   <- weights[idx]
+
+     # Handle empty input after NA removal
+     if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
+          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          return(NA_real_)
+     }
 
      n <- length(observed)
      if (length(estimated) != n || length(weights) != n) {
@@ -525,6 +545,12 @@ calc_log_likelihood_poisson <- function(observed,
      observed  <- observed[idx]
      estimated <- estimated[idx]
      weights   <- weights[idx]
+
+     # Handle empty input after NA removal
+     if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
+          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          return(NA_real_)
+     }
 
      n <- length(observed)
      if (length(estimated) != n || length(weights) != n) {
