@@ -11,6 +11,7 @@
 #' @return No return value
 #' @export
 #'
+
 install_dependencies <- function(force = FALSE) {
 
      cli::cli_h1("Installing MOSAIC Dependencies")
@@ -127,6 +128,7 @@ install_dependencies <- function(force = FALSE) {
           reticulate::conda_create(envname = paths$env,
                                    python_version = py_version,
                                    packages = conda_packages)
+
           if (length(pip_packages) > 0) {
                reticulate::conda_install(envname = paths$env,
                                          packages = pip_packages,
@@ -141,6 +143,7 @@ install_dependencies <- function(force = FALSE) {
                                          packages = conda_packages,
                                          pip = FALSE)
           }
+
           if (length(pip_packages) > 0) {
                reticulate::conda_install(envname = paths$env,
                                          packages = pip_packages,
@@ -152,8 +155,8 @@ install_dependencies <- function(force = FALSE) {
      # -----------------------------------------------------------------------
      # Verify that the expected Python executable exists.
      # -----------------------------------------------------------------------
-     py_exe <- file.path(paths$env, "bin", "python")
-     if (!file.exists(py_exe)) cli::cli_abort("Python executable not found at {py_exe}. The conda environment may not have been created properly.")
+
+     if (!file.exists(paths$exe)) cli::cli_abort("Python executable not found at {py_exe}. The conda environment may not have been created properly.")
 
 
      # -----------------------------------------------------------------------

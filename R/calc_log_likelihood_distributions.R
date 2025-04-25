@@ -345,6 +345,9 @@ calc_log_likelihood_negbin <- function(observed,
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
+     # Add cushion around 0 values: If estimated = 0 and observed > 0, negbin give -Inf
+     estimated[estimated <= 0] <- .Machine$double.eps
+
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
           if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
@@ -545,6 +548,9 @@ calc_log_likelihood_poisson <- function(observed,
      observed  <- observed[idx]
      estimated <- estimated[idx]
      weights   <- weights[idx]
+
+     # Add cushion around 0 values: If estimated = 0 and observed > 0, negbin give -Inf
+     estimated[estimated <= 0] <- .Machine$double.eps
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {

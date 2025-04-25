@@ -17,17 +17,30 @@ tmp <- tmp[tmp$j %in% j & tmp$t == date_start,]
 N_j <- tmp$parameter_value
 names(N_j) <- tmp$j
 sel <- match(j, names(N_j))
-N_j <- N_j[sel]
+N_j <- as.integer(N_j[sel])
 
 # Get number of susceptible individuals in each location
-S_j <- N_j - floor(N_j * 0.5)
+S_j <- N_j - as.integer(N_j * 0.5)
 
 # Get number of infected individuals in each location
 I_j <- N_j
 I_j[] <- 0
 I_j[1] <- 1
+I_j <- as.integer(I_j)
 
 R_j <- N_j - S_j - I_j
+
+E_j <- N_j
+E_j[] <- 0
+E_j <- as.integer(E_j)
+
+V1_j <- N_j
+V1_j[] <- 0
+V1_j <- as.integer(V1_j)
+
+V2_j <- N_j
+V2_j[] <- 0
+V2_j <- as.integer(V2_j)
 
 message("Get birth rate of each location (b_j)")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_b_birth_rate.csv'))
@@ -167,12 +180,13 @@ default_args <- list(
      date_start = date_start,
      date_stop = date_stop,
      location_name = j,
+     N_j_initial = N_j,
      S_j_initial = S_j,
-     E_j_initial = N_j * 0,
+     E_j_initial = E_j,
      I_j_initial = I_j,
      R_j_initial = R_j,
-     V1_j_initial = N_j * 0,
-     V2_j_initial = N_j * 0,
+     V1_j_initial = V1_j,
+     V2_j_initial = V2_j,
      b_jt = b_jt,
      d_jt = b_jt,
      nu_1_jt = nu_1_jt,
@@ -213,12 +227,10 @@ default_args <- list(
      decay_shape_2 = 1,
      reported_cases = mat_cases,
      reported_deaths = mat_deaths,
-     return = c("LL", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
+     return = c("LL", "N", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
 )
 
-default_config <- do.call(MOSAIC::make_LASER_config, default_args)
-
-
+default_config <- do.call(make_LASER_config, default_args)
 
 
 

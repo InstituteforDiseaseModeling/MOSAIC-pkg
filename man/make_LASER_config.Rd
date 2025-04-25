@@ -10,6 +10,7 @@ make_LASER_config(
   date_start = NULL,
   date_stop = NULL,
   location_name = NULL,
+  N_j_initial = NULL,
   S_j_initial = NULL,
   E_j_initial = NULL,
   I_j_initial = NULL,
@@ -56,6 +57,7 @@ make_LASER_config(
   decay_shape_2 = NULL,
   reported_cases = NULL,
   reported_deaths = NULL,
+  sigfigs = 4,
   return = NULL
 )
 }
@@ -76,6 +78,9 @@ it will be converted to a Date object.}
 
 \item{location_name}{A character vector giving the names of each metapopulation location.
 The order and names here must match those used in the initial population vectors.}
+
+\item{N_j_initial}{A named numeric or integer vector of length equal to \code{location_name} giving the total
+initial population size for each location. Note that total population size must be the sum of all model compartments.}
 
 \item{S_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
 of susceptible individuals for each location. Names must match location_name.}
@@ -203,10 +208,13 @@ nrow=length(location_name), ncol=length(t).
 \subsection{Outputs}{
 }}
 
+\item{sigfigs}{Integer; number of significant figures to round all numeric values to. Default is 4.}
+
 \item{return}{A character vector of model quantities to return after running the LASER model. Each element should
 be one of the following:
 \describe{
 \item{"LL"}{Log-likelihood of the fitted model.}
+\item{"N"}{Total population size.}
 \item{"S"}{Number of susceptible individuals.}
 \item{"E"}{Number of exposed (latent) individuals.}
 \item{"I"}{Number of infectious individuals.}
@@ -240,6 +248,7 @@ make_LASER_config(
      date_start = "2024-12-01",
      date_stop = "2024-12-31",
      location_name = c("Location A", "Location B"),
+     N_j_initial = c("Location A" = 1000, "Location B" = 1000),
      S_j_initial = c("Location A" = 900, "Location B" = 900),
      E_j_initial = c("Location A" = 0, "Location B" = 0),
      I_j_initial = c("Location A" = 50, "Location B" = 50),

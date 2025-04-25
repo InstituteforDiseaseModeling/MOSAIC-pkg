@@ -29,7 +29,7 @@
 #' @export
 #'
 
-get_default_config <- function(PATHS) {
+get_default_LASER_config <- function(PATHS) {
 
      path <- file.path(PATHS$ROOT,"MOSAIC-pkg", "inst", "extdata", "default_parameters.json")
      out <- jsonlite::fromJSON(path)
