@@ -91,6 +91,7 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  date_start <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  date_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  location_name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  N_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  S_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  E_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  I_j_initial <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -137,6 +138,7 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  decay_shape_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reported_cases <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reported_deaths <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  sigfigs <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  return <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -170,6 +172,11 @@ it will be converted to a Date object.</p></dd>
 <dt>location_name</dt>
 <dd><p>A character vector giving the names of each metapopulation location.
 The order and names here must match those used in the initial population vectors.</p></dd>
+
+
+<dt>N_j_initial</dt>
+<dd><p>A named numeric or integer vector of length equal to <code>location_name</code> giving the total
+initial population size for each location. Note that total population size must be the sum of all model compartments.</p></dd>
 
 
 <dt>S_j_initial</dt>
@@ -408,10 +415,17 @@ nrow=length(location_name), ncol=length(t).</p><div class="section">
 </div></dd>
 
 
+<dt>sigfigs</dt>
+<dd><p>Integer; number of significant figures to round all numeric values to. Default is 4.</p></dd>
+
+
 <dt>return</dt>
 <dd><p>A character vector of model quantities to return after running the LASER model. Each element should
 be one of the following:</p><dl><dt>"LL"</dt>
 <dd><p>Log-likelihood of the fitted model.</p></dd>
+
+<dt>"N"</dt>
+<dd><p>Total population size.</p></dd>
 
 <dt>"S"</dt>
 <dd><p>Number of susceptible individuals.</p></dd>
@@ -461,6 +475,7 @@ in the format determined by the file extension.</p>
 <span class="r-in"><span>     date_start <span class="op">=</span> <span class="st">"2024-12-01"</span>,</span></span>
 <span class="r-in"><span>     date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span></span>
 <span class="r-in"><span>     location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span>, <span class="st">"Location B"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>     N_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">1000</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     S_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">900</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">900</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     E_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">0</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>     I_j_initial <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Location A"</span> <span class="op">=</span> <span class="fl">50</span>, <span class="st">"Location B"</span> <span class="op">=</span> <span class="fl">50</span><span class="op">)</span>,</span></span>

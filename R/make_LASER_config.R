@@ -19,6 +19,8 @@
 #'        it will be converted to a Date object.
 #' @param location_name A character vector giving the names of each metapopulation location.
 #'        The order and names here must match those used in the initial population vectors.
+#' @param N_j_initial A named numeric or integer vector of length equal to \code{location_name} giving the total
+#' initial population size for each location. Note that total population size must be the sum of all model compartments.
 #' @param S_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of susceptible individuals for each location. Names must match location_name.
 #' @param E_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
@@ -103,6 +105,7 @@
 #'        be one of the following:
 #'        \describe{
 #'          \item{"LL"}{Log-likelihood of the fitted model.}
+#'          \item{"N"}{Total population size.}
 #'          \item{"S"}{Number of susceptible individuals.}
 #'          \item{"E"}{Number of exposed (latent) individuals.}
 #'          \item{"I"}{Number of infectious individuals.}
@@ -113,6 +116,8 @@
 #'          \item{"C"}{Estimated number of symptomatic cholera cases.}
 #'          \item{"D"}{Estimated number of cholera deaths.}
 #'        }
+#'
+#' @param sigfigs Integer; number of significant figures to round all numeric values to. Default is 4.
 #'
 #' @return Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
 #'         in the format determined by the file extension.
@@ -125,6 +130,7 @@
 #'      date_start = "2024-12-01",
 #'      date_stop = "2024-12-31",
 #'      location_name = c("Location A", "Location B"),
+#'      N_j_initial = c("Location A" = 1000, "Location B" = 1000),
 #'      S_j_initial = c("Location A" = 900, "Location B" = 900),
 #'      E_j_initial = c("Location A" = 0, "Location B" = 0),
 #'      I_j_initial = c("Location A" = 50, "Location B" = 50),
@@ -176,6 +182,8 @@
 #' }
 #'
 #' @export
+#'
+
 make_LASER_config <- function(output_file_path = NULL,
                               seed = NULL,
 
@@ -183,6 +191,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               date_start = NULL,
                               date_stop = NULL,
                               location_name = NULL,
+                              N_j_initial = NULL,
                               S_j_initial = NULL,
                               E_j_initial = NULL,
                               I_j_initial = NULL,
@@ -247,6 +256,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               reported_deaths = NULL,
 
                               # Outputs
+                              sigfigs = 4,
                               return = NULL
 ) {
 
@@ -281,6 +291,7 @@ make_LASER_config <- function(output_file_path = NULL,
           date_start        = date_start,
           date_stop         = date_stop,
           location_name     = location_name,
+          N_j_initial       = N_j_initial,
           S_j_initial       = S_j_initial,
           E_j_initial       = E_j_initial,
           I_j_initial       = I_j_initial,
@@ -351,33 +362,47 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("location_name must be a character vector.")
      }
 
+
      # Validate initial population vectors.
-     for (v in c("S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial")) {
+     for (v in c("N_j_initial", "S_j_initial", "E_j_initial",
+                 "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial")) {
 
           vec <- params[[v]]
 
-          # Convert numeric doubles to integer
-          if (is.numeric(vec) && !is.integer(vec)) {
-               vec <- as.integer(vec)
-               # If there were names before, keep them
-               names(vec) <- names(params[[v]])
+          # Allow numeric or integer, but require all entries are whole numbers ≥ 0
+          if (!is.numeric(vec) || any(vec < 0) || any(vec != floor(vec))) {
+               stop(v, " must be numeric and integer-valued (no fractions).", call. = FALSE)
           }
 
-          # Must match location length
+          # Must match number of locations
           if (length(vec) != length(location_name)) {
-               stop(v, " must be a vector of length equal to number of locations.")
+               stop(v, " must be a vector of length equal to number of locations.", call. = FALSE)
           }
 
-          # If the vector has names, check them; if not, skip that check
-          name_vec <- names(vec)
-          if (!is.null(name_vec) && any(name_vec != "")) {
-               # If the vector has names, require they match location_name exactly
-               if (!all(name_vec == location_name)) {
-                    stop(v, " names must match the provided location_name values.")
-               }
+          # If named, names must match location_name
+          if (!is.null(names(vec)) && !all(names(vec) == location_name)) {
+               stop(v, " names must match the provided location_name values.", call. = FALSE)
           }
 
-          params[[v]] <- vec
+          # finally coerce to integer
+          params[[v]] <- as.integer(vec)
+     }
+
+
+     # Check compartments sum to N_j_initial (allow small tolerance)
+     total_j <- params$S_j_initial +
+          params$E_j_initial +
+          params$I_j_initial +
+          params$R_j_initial +
+          params$V1_j_initial +
+          params$V2_j_initial
+
+     mismatch_idx <- which(abs(total_j - params$N_j_initial) > .Machine$double.eps^0.5)
+     if (length(mismatch_idx)) {
+          stop(
+               "For location(s): ", paste(params$location_name[mismatch_idx], collapse = ", "),
+               " the sum of S,E,I,R,V1,V2 does not match N_j_initial."
+          )
      }
 
      # Demographics validation.
@@ -551,7 +576,7 @@ make_LASER_config <- function(output_file_path = NULL,
      }
 
      # Validate return vector.
-     valid_return_keys <- c("LL", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
+     valid_return_keys <- c("LL", "N", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
      if (!is.character(return) || length(return) == 0) {
           stop("return must be a non-empty character vector.")
      }
@@ -586,29 +611,6 @@ make_LASER_config <- function(output_file_path = NULL,
           }
      }
 
-     # Round all numeric entries to four significant figures
-     for (nm in names(params)) {
-
-          val <- params[[nm]]
-
-          # If it's numeric:
-          if (is.numeric(val)) {
-
-               if (is.matrix(val) || length(dim(val)) > 1) {
-                    # For matrix or multi-dimensional array
-                    dims <- dim(val)                      # store dimensions
-                    val_flat <- as.numeric(val)           # flatten to vector
-                    val_flat <- signif(val_flat, 3)       # round
-                    val <- array(val_flat, dim = dims)    # reshape
-                    dimnames(val) <- dimnames(params[[nm]])  # preserve dimnames if desired
-                    params[[nm]] <- val
-
-               } else {
-                    # For simple numeric vector
-                    params[[nm]] <- signif(val, 3)
-               }
-          }
-     }
 
      if (!is.null(output_file_path)) {
           if (grepl("\\.json(\\.gz)?$", output_file_path, ignore.case = TRUE)) {

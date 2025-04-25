@@ -97,6 +97,7 @@ reference:
     contents:
       - default_config
       - get_default_config
+      - get_initial_compartment_values
       - get_model_likelihood
       - starts_with("calc_log_likelihood")
 

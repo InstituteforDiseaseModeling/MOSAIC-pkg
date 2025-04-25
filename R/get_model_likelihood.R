@@ -67,6 +67,7 @@ get_model_likelihood <- function(obs_cases, est_cases,
      ll_locations <- rep(NA_real_, n_locations)
 
      for (j in seq_len(n_locations)) {
+
           mean_cases <- mean(obs_cases[j, ], na.rm = TRUE)
           var_cases  <- var(obs_cases[j, ], na.rm = TRUE)
 
@@ -86,6 +87,7 @@ get_model_likelihood <- function(obs_cases, est_cases,
                if (verbose) message(sprintf("Location %d (deaths): all NA — skipping.", j))
                next
           }
+
           # Decide family for deaths
           family_deaths <- if (var_deaths / mean_deaths >= 1.5) "negbin" else "poisson"
 
