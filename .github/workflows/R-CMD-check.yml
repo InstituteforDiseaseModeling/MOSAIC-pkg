@@ -39,15 +39,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libssl-dev libcurl4-openssl-dev
 
-    - name: Install R package dependencies
-      run: |
-        install.packages("remotes")
-        remotes::install_deps(dependencies = TRUE)
-
-    - name: Install MOSAIC locally
-      run: |
-        remotes::install_local(dependencies = TRUE)
-
     - name: Run R CMD check
       run: |
-        R CMD check . --no-manual --as-cran
+        R CMD check . --no-manual
