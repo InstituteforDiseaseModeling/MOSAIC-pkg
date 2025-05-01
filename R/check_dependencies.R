@@ -108,22 +108,29 @@ check_dependencies <- function() {
 
           pkg_names <- unique(pkg_names)
           pkg_names <- pkg_names[!grepl("^python=", pkg_names)]
+
           sel <- grep("laser-cholera", pkg_names)
           if (length(sel) > 0) pkg_names[sel] <- "laser_cholera"
+
+          sel <- grep("laser-core", pkg_names)
+          if (length(sel) > 0) pkg_names[sel] <- "laser_core"
 
           for (pkg in pkg_names) {
 
                tryCatch({
+
                     module <- reticulate::import(pkg, delay_load = TRUE)
                     version <- module[["__version__"]]
                     cli::cli_alert_success("{pkg}: {version}")
+
                     if (pkg == "laser_cholera") {
-                         cli::cli_alert_info("LASER details:")
+                         cli::cli_alert_info("LASER built with:")
                          freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
                          laser_lines <- grep("laser", freeze, value = TRUE)
                          laser_lines <- paste0("   ", laser_lines)
                          cli::cli_text("{laser_lines}")
                     }
+
                }, error = function(e) {
                     cli::cli_alert_danger("{pkg} cannot be found in the Python environment.")
                })

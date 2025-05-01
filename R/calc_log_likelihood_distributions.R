@@ -575,11 +575,16 @@ calc_log_likelihood_poisson <- function(observed,
           stop("observed must contain non-negative integer counts for Poisson.")
      }
 
-     mu <- mean(observed)
-     s2 <- var(observed)
-     disp_ratio <- s2 / mu
-     if (disp_ratio > 1.5) {
-          warning(sprintf("Var/Mean = %.2f suggests overdispersion. Consider Negative Binomial.", disp_ratio))
+     if (n > 1) {
+
+          mu <- mean(observed)
+          s2 <- var(observed)
+          disp_ratio <- s2 / mu
+
+          if (disp_ratio > 1.5) {
+               warning(sprintf("Var/Mean = %.2f suggests overdispersion. Consider Negative Binomial.", disp_ratio))
+          }
+
      }
 
      ll_vec <- observed * log(estimated) - estimated - lgamma(observed + 1)

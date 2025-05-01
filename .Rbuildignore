@@ -3,6 +3,7 @@
 deprecated/
 data-raw/
 local/
+azure/
 model/
 src/
 docs/

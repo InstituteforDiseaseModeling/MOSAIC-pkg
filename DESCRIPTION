@@ -1,13 +1,17 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.0.1
-Date: 2024-09-06
+Version: 0.1.0
+Date: 2025-04-29
 Authors@R: c(
           person("John R", "Giles", 
                  email = "john.giles@gatesfoundation.org", 
                  role = c("aut", "cre"), 
-                 comment = c(ORCID = "0000-0002-0954-4093"))
+                 comment = c(ORCID = "0000-0002-0954-4093")),
+          person("Christopher W", "Lorton", 
+                 email = "christopher.lorton@gatesfoundation.org", 
+                 role = c("aut", "ctb"),
+                 comment = c(ORCID = "0000-0003-3092-029X"))
      )
 Description: Tools for preparing data and models for the MOSAIC framework. The MOSAIC framework 
      simulates the transmission dynamics of cholera in Sub-Saharan Africa and provides tools 
@@ -21,6 +25,7 @@ RoxygenNote: 7.3.1
 Imports:
   arrow,
   cli,
+  compiler,
   cowplot,
   countrycode,
   dplyr,
@@ -45,6 +50,7 @@ Imports:
   magrittr,
   minpack.lm,
   mobility,
+  parallel,
   patchwork,
   propvacc,
   raster,
@@ -66,6 +72,7 @@ Imports:
   yaml,
   hdf5r,
   R.utils,
+  RhpcBLASctl,
   reticulate,
   withr
 Depends: 

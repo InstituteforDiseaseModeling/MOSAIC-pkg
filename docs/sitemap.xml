@@ -349,6 +349,9 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_cholera_surveillance_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_climate_data.html</loc>
   </url>
   <url>
@@ -403,7 +406,13 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_OAG_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_SUPP_weekly_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_UN_demographics_data.html</loc>
@@ -416,6 +425,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_climate_data.html</loc>
@@ -449,6 +461,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.html</loc>

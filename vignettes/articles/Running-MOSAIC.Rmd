@@ -11,86 +11,24 @@ knitr::opts_chunk$set(
 
 
 ```{r run, eval=FALSE}
-if (!requireNamespace("MOSAIC", quietly = TRUE)) {
-     message("Installing package 'MOSAIC' from GitHub...")
-     if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
-     remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg")
-}
+
+if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+
+devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", dependencies = TRUE, force = TRUE)
 
 library(MOSAIC)
 
-packages <- c(
-     "arrow",
-     "cowplot",
-     "dplyr",
-     "glue",
-     "ggplot2",
-     "ggrepel",
-     "ggraph",
-     "grid",
-     "gridExtra",
-     "igraph",
-     "minpack.lm",
-     "mobility",    # GitHub: https://github.com/COVID-19-Mobility-Data-Network/mobility
-     "propvacc",    # GitHub: https://github.com/gilesjohnr/propvacc
-     "rnaturalearth",
-     "reshape2",
-     "RColorBrewer",
-     "shiny",
-     "shinyWidgets",
-     "viridis"
+lc <- reticulate::import("laser_cholera.metapop.model")
+params <- MOSAIC::default_config
+
+model <- lc$run_model(
+     quiet = FALSE,
+     paramfile = params
 )
 
-MOSAIC::load_or_install_packages(packages)
-
-set_root_directory("<root_directory_blocked>")
-PATHS <- MOSAIC::get_paths()
-
-set_openmeteo_api_key("<openmeteo_api_key_blocked>")
-```
-
-
-
-```{r, eval=FALSE}
-
-################################################################################
-# DATA PREPARATION: downloading and processing all data required for MOSAIC
-################################################################################
-
-
-
-
-
-
-################################################################################
-# MODEL INPUTS: all preliminary models of MOSAIC parameters and estimates of
-# prior distributions
-################################################################################
-
-
-
-
-
-
-################################################################################
-# PLOT FIGURES
-################################################################################
-
-
-
-
-
-################################################################################
-# RUNNING MOSAIC: Transmission model simulation, posterior parameter estimation
-################################################################################
-
-
-
-
-
-################################################################################
-# Scenarios and forecasts
-################################################################################
-
+names(model$params)
+names(model$patches)
 
 ```
+
+

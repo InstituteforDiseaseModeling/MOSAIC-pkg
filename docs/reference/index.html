@@ -16,7 +16,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -179,6 +179,21 @@
 
       <dl><dt>
           
+          <code><a href="process_cholera_surveillance_data.html">process_cholera_surveillance_data()</a></code> 
+        </dt>
+        <dd>Process Combined Weekly and Daily Cholera Surveillance Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_JHU_weekly_data.html">process_JHU_weekly_data()</a></code> 
+        </dt>
+        <dd>Process Weekly Cholera Data from JHU: Convert to MOSAIC Format</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_SUPP_weekly_data.html">process_SUPP_weekly_data()</a></code> 
+        </dt>
+        <dd>Process supplementary cholera outbreak data from raw SUPP directory</dd>
+      </dl><dl><dt>
+          
           <code><a href="process_WHO_annual_data.html">process_WHO_annual_data()</a></code> 
         </dt>
         <dd>Download, Process, and Save Historical Annual WHO Cholera Data for Africa</dd>
@@ -186,7 +201,7 @@
           
           <code><a href="process_WHO_weekly_data.html">process_WHO_weekly_data()</a></code> 
         </dt>
-        <dd>Process Weekly Cholera Data: Convert Country Names to ISO3 and Filter by WHO AFRO Region with Cutoff for Binary Cases</dd>
+        <dd>Process Weekly Cholera Data: Convert Country Names to ISO3 and Filter by WHO AFRO Region</dd>
       </dl><dl><dt>
           
           <code><a href="get_WHO_vaccination_data.html">get_WHO_vaccination_data()</a></code> 
@@ -331,7 +346,7 @@
         <dd>Default LASER Configuration</dd>
       </dl><dl><dt>
           
-          <code><a href="get_default_config.html">get_default_config()</a></code> 
+          <code><a href="get_default_LASER_config.html">get_default_LASER_config()</a></code> 
         </dt>
         <dd>Create Default LASER Configuration</dd>
       </dl><dl><dt>
@@ -343,7 +358,7 @@
           
           <code><a href="get_model_likelihood.html">get_model_likelihood()</a></code> 
         </dt>
-        <dd>Compute the total model likelihood over multiple locations and time steps, auto-selecting Poisson or NegBin for each location/outcome</dd>
+        <dd>Compute the total model likelihood</dd>
       </dl><dl><dt>
           
           <code><a href="calc_log_likelihood.html">calc_log_likelihood()</a></code> 
@@ -379,6 +394,11 @@
           <code><a href="calc_log_likelihood_poisson.html">calc_log_likelihood_poisson()</a></code> 
         </dt>
         <dd>Calculate log-likelihood for Poisson-distributed count data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="run_LASER_model.html">run_LASER_model()</a></code> 
+        </dt>
+        <dd>Run LASER Model Simulation</dd>
       </dl></div><div class="section level2">
       <h2 id="shapefiles-and-spatial-data-functions">Shapefiles and Spatial Data Functions<a class="anchor" aria-label="anchor" href="#shapefiles-and-spatial-data-functions"></a></h2>
       
@@ -671,14 +691,14 @@
         <dd>Plot Africa Map with Cholera Outbreak Countries</dd>
       </dl><dl><dt>
           
+          <code><a href="plot_cholera_surveillance_data.html">plot_cholera_surveillance_data()</a></code> 
+        </dt>
+        <dd>Plot Combined Cholera Surveillance Data</dd>
+      </dl><dl><dt>
+          
           <code><a href="plot_climate_data.html">plot_climate_data()</a></code> 
         </dt>
         <dd>Plot Weekly Climate Data for a Given Country and Save to File</dd>
-      </dl><dl><dt>
-          
-          <code><a href="plot_downscaled_cholera_data.html">plot_downscaled_cholera_data()</a></code> 
-        </dt>
-        <dd>Plot Downscaled Cholera Data</dd>
       </dl><dl><dt>
           
           <code><a href="plot_generation_time.html">plot_generation_time()</a></code> 
@@ -750,7 +770,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by John R Giles.</p>
+  <p>Developed by John R Giles, Christopher W Lorton.</p>
 </div>
 
 <div class="pkgdown-footer-right">
