@@ -42,7 +42,7 @@ make_LASER_config(
   a_2_j = NULL,
   b_1_j = NULL,
   b_2_j = NULL,
-  p = 365,
+  p = 365L,
   alpha_1 = NULL,
   alpha_2 = NULL,
   beta_j0_env = NULL,

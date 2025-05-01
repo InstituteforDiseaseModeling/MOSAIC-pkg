@@ -1,5 +1,4 @@
-#' Compute the total model likelihood over multiple locations and time steps,
-#' auto-selecting Poisson or NegBin for each location/outcome
+#' Compute the total model likelihood
 #'
 #' This function expects matrices of observed and estimated cases and deaths (size
 #' \code{n_locations} x \code{n_time_steps}), plus optional weight vectors for
@@ -100,6 +99,14 @@ get_model_likelihood <- function(obs_cases, est_cases,
                verbose   = FALSE
           )
 
+          ll_max_cases <- MOSAIC::calc_log_likelihood(
+               observed  = max(obs_cases[j, ], na.rm = TRUE),
+               estimated = max(est_cases[j, ], na.rm = TRUE),
+               family    = "poisson",
+               weights   = NULL,
+               verbose   = FALSE
+          )
+
           # Calculate log-likelihood for deaths
           ll_deaths <- MOSAIC::calc_log_likelihood(
                observed  = obs_deaths[j, ],
@@ -109,8 +116,16 @@ get_model_likelihood <- function(obs_cases, est_cases,
                verbose   = FALSE
           )
 
+          ll_max_deaths <- MOSAIC::calc_log_likelihood(
+               observed  = max(obs_deaths[j, ], na.rm = TRUE),
+               estimated = max(est_deaths[j, ], na.rm = TRUE),
+               family    = "poisson",
+               weights   = NULL,
+               verbose   = FALSE
+          )
+
           # Weighted sum for location j
-          ll_location_tmp <- weights_location[j] * (weight_cases * ll_cases + weight_deaths * ll_deaths)
+          ll_location_tmp <- weights_location[j] * (weight_cases * ll_cases + weight_cases * ll_max_cases + weight_deaths * ll_deaths + weight_deaths * ll_max_deaths)
           ll_locations[j] <- ll_location_tmp
 
           if (verbose) {

@@ -64,6 +64,9 @@ reference:
 
   - title: "Downloading and Processing Data: Cholera Incidence, Disease Dynamics, and Population Characteristics"
     contents:
+      - process_cholera_surveillance_data
+      - process_JHU_weekly_data
+      - process_SUPP_weekly_data
       - process_WHO_annual_data
       - process_WHO_weekly_data
       - get_WHO_vaccination_data
@@ -96,10 +99,11 @@ reference:
   - title: "Model calibration"
     contents:
       - default_config
-      - get_default_config
+      - get_default_LASER_config
       - get_initial_compartment_values
       - get_model_likelihood
       - starts_with("calc_log_likelihood")
+      - run_LASER_model
 
   - title: "Shapefiles and Spatial Data Functions"
     contents:
