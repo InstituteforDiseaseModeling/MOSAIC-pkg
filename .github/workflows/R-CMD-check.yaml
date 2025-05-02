@@ -62,20 +62,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Ensure we use TLS1.2 so SF will serve the file
+          # ensure TLS1.2 so SF serves the actual binary
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-          # 1) Use the /download URL so we get the raw EXE, not an HTML redirect page
-          $url = 'https://sourceforge.net/projects/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
-          Invoke-WebRequest -Uri $url -OutFile jags-installer.exe -UseBasicParsing
+          # 1) Download JAGS-4.3.2.exe (for R ≥ 4.2.0)
+          $jagsVersion   = '4.3.2'
+          $installerUrl  = "https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-$jagsVersion.exe"
+          $installerPath = "$PWD\jags-installer.exe"
+          (New-Object System.Net.WebClient).DownloadFile($installerUrl, $installerPath)
 
-          # 2) Run it completely silently
-          Start-Process -FilePath .\jags-installer.exe `
+          # 2) Run the installer silently
+          Start-Process -FilePath $installerPath `
             -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
             -NoNewWindow -Wait
 
-          # 3) Expose the bin dir on PATH so rjags can find the DLL
-          $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
+          # 3) Put the JAGS bin directory on the PATH
+          $jagsBin = "C:\Program Files\JAGS\JAGS-$jagsVersion\bin"
+          Write-Host "Adding $jagsBin to PATH"
           Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
