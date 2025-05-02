@@ -68,35 +68,24 @@ jobs:
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
-      - name: Install JAGS on Windows
+      - name: Bootstrap Chocolatey (if missing)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $jagsVersion   = '4.3.2'
-          $url            = "https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-$jagsVersion.exe"
-          Write-Host "Downloading JAGS $jagsVersion from $url"
+          # allow the install script to run
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          # ensure TLS1.2 for the download
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          # fetch & run the official Chocolatey installer
+          iex ((New-Object System.Net.WebClient).DownloadString(
+            'https://community.chocolatey.org/install.ps1'
+          ))
+          # confirm
+          choco --version
 
-          # 1) Fetch the installer (follow redirects + spoof UA)
-          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' `
-            -o jags-installer.exe $url
-
-          # 2) Sanity check (should be ≈12 MB)
-          $size = (Get-Item jags-installer.exe).Length
-          Write-Host "Downloaded installer size: $size bytes"
-          if ($size -lt 10MB) {
-            throw "Download failed (installer too small)."
-          }
-
-          # 3) Run silently
-          & .\jags-installer.exe /S
-
-          # 4) Expose the JAGS bin dir on PATH
-          $jagsBin = "C:\Program Files\JAGS\JAGS-$jagsVersion\bin"
-          if (-not (Test-Path $jagsBin)) {
-            throw "JAGS not found at expected path $jagsBin"
-          }
-          Write-Host "Adding $jagsBin to PATH"
-          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
+      - name: Install JAGS via Chocolatey
+        if: runner.os == 'Windows'
+        run: choco install jags -y
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
