@@ -97,12 +97,22 @@ jobs:
           miniforge-version: "latest"
 
 
-      - name: Install R package dependencies
+      - name: Install MOSAIC from GitHub on Windows
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Rscript.exe -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes')"
-          Rscript.exe -e "remotes::install_deps(dependencies = c('Depends','Imports'), upgrade = 'never')"
+          Rscript.exe -e "remotes::install_github(
+            repo         = Sys.getenv('GITHUB_REPOSITORY'),
+            ref          = 'main',
+            dependencies = FALSE,
+            upgrade      = 'never'
+          )"
+          Rscript.exe -e "library(MOSAIC)"
+
+
 
       - name: Install R package dependencies
         if: runner.os != 'Windows'
