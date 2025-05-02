@@ -77,6 +77,16 @@ jobs:
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
+      - name: Install Python 3.12 (arm64) on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install python@3.12
+          # ensure this python comes first
+          echo "$(brew --prefix python@3.12)/bin" >> $GITHUB_PATH
+          # tell reticulate to use it
+          echo "RETICULATE_PYTHON=$(brew --prefix python@3.12)/bin/python3" >> $GITHUB_ENV
+
       - name: Set up Miniforge (Conda)
         uses: conda-incubator/setup-miniconda@v2
         with:
