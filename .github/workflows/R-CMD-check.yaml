@@ -37,43 +37,45 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      # Install JAGS on system
-      - name: Install system deps on Linux (e.g. JAGS)
+      - name: Install system deps on Linux (e.g. JAGS, SSL, PROJ, GDAL)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             jags \
+            libssl-dev \
             libudunits2-dev \
             libproj-dev \
             libgeos-dev \
             libgdal-dev
 
-      - name: Install system deps on macOS (e.g. JAGS)
+      - name: Install system deps on macOS (e.g. JAGS + SSL + UDUNITS)
         if: runner.os == 'macOS'
         run: |
           brew update
           brew install \
             jags \
+            openssl@3 \
             udunits
 
+          # 1) Tell R where to find OpenSSL & UDUNITS at compile time
+          export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:\
+          $(brew --prefix udunits)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LDFLAGS="-L$(brew --prefix openssl@3)/lib \
+          -L$(brew --prefix udunits)/lib $LDFLAGS"
+          export CPPFLAGS="-I$(brew --prefix openssl@3)/include \
+          -I$(brew --prefix udunits)/include $CPPFLAGS"
+
+          # 2) Symlink JAGS into /usr/local so rjags can find it
           JAGS_PREFIX="$(brew --prefix jags)"
-          echo "Homebrew JAGS prefix: $JAGS_PREFIX"
-
-          # Symlink the shared library into /usr/local/lib
-          sudo mkdir -p /usr/local/lib
+          sudo mkdir -p /usr/local/lib /usr/local/include/JAGS /usr/local/lib/JAGS
           sudo ln -sfn "$JAGS_PREFIX/lib/libjags.4.dylib" /usr/local/lib/libjags.4.dylib
-
-          # Symlink the headers into /usr/local/include/JAGS
-          sudo mkdir -p /usr/local/include/JAGS
-          sudo ln -sfn "$JAGS_PREFIX/include/JAGS" /usr/local/include/JAGS
-
-          # Symlink the modules directory so rjags can find the modules
-          sudo mkdir -p /usr/local/lib/JAGS
-          sudo ln -sfn "$JAGS_PREFIX/lib/JAGS/modules-4" /usr/local/lib/JAGS/modules-4
+          sudo ln -sfn "$JAGS_PREFIX/include/JAGS"          /usr/local/include/JAGS
+          sudo ln -sfn "$JAGS_PREFIX/lib/JAGS/modules-4"    /usr/local/lib/JAGS/modules-4
 
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
+
 
       - name: Set up Miniforge (Conda)
         uses: conda-incubator/setup-miniconda@v2
