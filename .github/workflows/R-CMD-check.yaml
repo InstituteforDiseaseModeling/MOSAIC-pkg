@@ -41,10 +41,10 @@ jobs:
       # ─────────────── Start JAGS install ───────────
 
       - name: Install JAGS on Linux
-        if: matrix.config.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y jags libjags-dev
+          sudo apt-get install -y jags
 
       - name: Install JAGS on macOS
         if: runner.os == 'macOS'
@@ -55,8 +55,19 @@ jobs:
 
       - name: Install JAGS on Windows
         if: matrix.config.os == 'windows-latest'
+        shell: pwsh
         run: |
-          choco install jags -y
+          # 1) Download the JAGS 4.3.1 installer (R ≥ 4.2.0 needs 4.3.1)
+          $url = 'https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
+          Invoke-WebRequest -Uri $url -OutFile jags-installer.exe
+
+          # 2) Run it completely silently (Inno Setup flags)
+          Start-Process -FilePath .\jags-installer.exe `
+            -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
+            -NoNewWindow -Wait
+
+          # 3) Add JAGS bin to PATH for the rest of the job
+          Write-Host "C:\Program Files\JAGS\bin" >> $Env:GITHUB_PATH
 
       # ───────────── Stop JAGS install ──────────────
 
