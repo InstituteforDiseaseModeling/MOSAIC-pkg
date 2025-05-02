@@ -68,28 +68,23 @@ jobs:
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
-    - name: Install JAGS on Windows
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        # 1) Grab the real 26 MB installer from a known mirror
-        $url = 'https://netcologne.dl.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
-        Write-Host "Downloading JAGS from $url"
-        Invoke-WebRequest -Uri $url -OutFile jags-installer.exe -UseBasicParsing
+      - name: Install JAGS on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Grab the real 26 MB installer from a known mirror
+          $url = 'https://netcologne.dl.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
+          Write-Host "Downloading JAGS from $url"
+          Invoke-WebRequest -Uri $url -OutFile jags-installer.exe -UseBasicParsing
 
-        # 2) Sanity-check the download (~26 MB)
-        $size = (Get-Item jags-installer.exe).Length
-        Write-Host "Installer size: $size bytes"
-        if ($size -lt 20MB) { throw "Downloaded file too small—didn’t get the real installer." }
+          # Silent install
+          & .\jags-installer.exe /S
 
-        # 3) Silent install
-        & .\jags-installer.exe /S
-
-        # 4) Add the JAGS bin folder to PATH so rjags can load jags.dll
-        $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
-        if (-not (Test-Path $jagsBin)) { throw "JAGS not found at expected path $jagsBin" }
-        Write-Host "Adding $jagsBin to PATH"
-        Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
+          # Add the JAGS bin folder to PATH so rjags can load jags.dll
+          $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
+          if (-not (Test-Path $jagsBin)) { throw "JAGS not found at expected path $jagsBin" }
+          Write-Host "Adding $jagsBin to PATH"
+          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
