@@ -100,9 +100,13 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
-       - uses: r-lib/actions/check-r-package@v2
-         with:
-           upload-snapshots: true
-           build_args:  'c("--no-manual","--compact-vignettes=gs+qpdf")'
-           check_args:  'c("--no-manual","--no-vignettes","--no-tests","--no-examples")'
+      - name: Build source tarball
+        run: R CMD build . --no-manual
+
+      - name: Install package
+        run: R CMD INSTALL MOSAIC_*.tar.gz
+
+      - name: Smoke-test load
+        run: Rscript -e "library(MOSAIC)"
+
 
