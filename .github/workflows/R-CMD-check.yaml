@@ -47,10 +47,11 @@ jobs:
           sudo apt-get install -y jags libjags-dev
 
       - name: Install JAGS on macOS
-        if: matrix.config.os == 'macos-latest'
+        if: runner.os == 'macOS'
         run: |
           brew update
           brew install jags
+          brew link jags --force
 
       - name: Install JAGS on Windows
         if: matrix.config.os == 'windows-latest'
