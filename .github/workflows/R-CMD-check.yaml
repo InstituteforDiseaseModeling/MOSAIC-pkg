@@ -72,35 +72,29 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-            # ensure TLS1.2 so SourceForge serves the real EXE
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $url = 'https://downloads.sourceforge.net/project/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe'
+          Write-Host "Downloading JAGS installer from $url"
 
-            # download the binary (NativeHost UA avoids the HTML stub)
-            $url = 'https://sourceforge.net/projects/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
-            Invoke-WebRequest `
-              -Uri      $url `
-              -OutFile  jags-installer.exe `
-              -UseBasicParsing `
-              -UserAgent 'NativeHost'
+          # Use curl.exe to fetch the installer (follow redirects + spoof UA)
+          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' -o jags-installer.exe $url
 
-            # sanity‐check file size (~12 MB)
-            if ((Get-Item jags-installer.exe).Length -lt 10MB) {
-              throw "Downloaded JAGS installer is too small—something went wrong."
-            }
+          # Make sure it’s a big file (~12 MB)
+          $size = (Get-Item jags-installer.exe).Length
+          Write-Host "Installer size: $size bytes"
+          if ($size -lt 10MB) {
+            throw "Downloaded file is too small – installer didn’t fetch correctly."
+          }
 
-            # silent install
-            Start-Process `
-              -FilePath     .\jags-installer.exe `
-              -ArgumentList '/S' `
-              -NoNewWindow -Wait
+          # Run the installer silently
+          & .\jags-installer.exe /S
 
-            # expose the JAGS bin dir on PATH
-            $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
-            if (-not (Test-Path $jagsBin)) {
-              throw "JAGS not found at $jagsBin"
-            }
-            Write-Host "Adding $jagsBin to PATH"
-            Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
+          # Add JAGS bin to PATH for the rest of the job
+          $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
+          if (-not (Test-Path $jagsBin)) {
+            throw "JAGS not found at expected path $jagsBin"
+          }
+          Write-Host "Adding $jagsBin to PATH"
+          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
@@ -115,5 +109,3 @@ jobs:
 
       - name: Smoke-test load
         run: Rscript -e "library(MOSAIC)"
-
-
