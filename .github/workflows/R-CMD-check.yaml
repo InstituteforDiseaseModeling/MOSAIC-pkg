@@ -68,27 +68,19 @@ jobs:
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
-      - name: Install JAGS on Windows
+      - name: Set up Miniconda
         if: runner.os == 'Windows'
-        shell: pwsh
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-activate-base: false
+
+      - name: Install JAGS & r-rjags via conda
+        if: runner.os == 'Windows'
+        shell: bash
         run: |
-          $url = 'https://netcologne.dl.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
-          Write-Host "Downloading JAGS installer from $url"
-          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' `
-            -o jags-installer.exe $url
+          conda create -n jags-win -y -c conda-forge jags r-rjags
+          echo "$(conda info --base)/envs/jags-win/Library/bin" >> $GITHUB_PATH
 
-          Write-Host "Running JAGS installer (this can take ~30–60s)…"
-          & .\jags-installer.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
-
-          Write-Host "Installed JAGS directory tree:"
-          Get-ChildItem 'C:\Program Files\JAGS' -Recurse | ForEach-Object { Write-Host $_.FullName }
-
-          $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
-          if (-not (Test-Path $jagsBin)) {
-            throw "JAGS bin folder not found at expected path: $jagsBin"
-          }
-          Write-Host "Adding $jagsBin to PATH"
-          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
