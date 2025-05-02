@@ -13,4 +13,4 @@ dependencies:
   - tensorflow
   - pip:
     - laser-core==0.4.0
-    - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.7.2/laser_cholera-0.7.2-py3-none-any.whl
+    - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.7.3/laser_cholera-0.7.3-py3-none-any.whl
