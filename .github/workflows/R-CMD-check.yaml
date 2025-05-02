@@ -42,6 +42,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           auto-activate-base: true
+          miniconda-version: "latest"
 
       - name: Install JAGS & r-rjags via conda
         shell: bash
