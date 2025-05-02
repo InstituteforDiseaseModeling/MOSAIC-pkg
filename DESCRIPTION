@@ -58,6 +58,7 @@ Imports:
   propvacc,
   raster,
   reshape2,
+  rjags,
   rnaturalearth,
   sf,
   sp,
