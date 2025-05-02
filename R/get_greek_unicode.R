@@ -15,6 +15,7 @@
 #'          can be inserted directly into strings or titles, for example, in `ggplot2` plots.
 #'
 #' @examples
+#' \dontrun{
 #' # Get the Unicode for uppercase Alpha
 #' get_greek_unicode("alpha", TRUE)
 #'
@@ -26,6 +27,7 @@
 #'
 #' # Use in ggplot2 title
 #' ggplot() + labs(title = paste("Example with Greek letter", get_greek_unicode("Psi", TRUE)))
+#' }
 #'
 #' @seealso
 #' \code{\link{ggplot2}} for using the Unicode symbols in plot titles.
