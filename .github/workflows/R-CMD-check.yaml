@@ -47,7 +47,8 @@ jobs:
             libudunits2-dev \
             libproj-dev \
             libgeos-dev \
-            libgdal-dev
+            libgdal-dev \
+            python3-dev
 
       - name: Install system deps on macOS (e.g. JAGS + SSL + UDUNITS)
         if: runner.os == 'macOS'
@@ -75,7 +76,6 @@ jobs:
 
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
-
 
       - name: Set up Miniforge (Conda)
         uses: conda-incubator/setup-miniconda@v2
