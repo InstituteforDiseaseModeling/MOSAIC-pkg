@@ -19,7 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {os: windows-latest,   r: 'release'}
           - {os: macos-latest,   r: 'release'}
           - {os: ubuntu-latest,   r: 'release'}
 
@@ -97,51 +96,18 @@ jobs:
           miniforge-version: "latest"
 
 
-      - name: Install MOSAIC from GitHub on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          Rscript.exe -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes')"
-          Rscript.exe -e "remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", dependencies = TRUE, force = TRUE)"
-          Rscript.exe -e "library(MOSAIC)"
-
-
-
       - name: Install R package dependencies
-        if: runner.os != 'Windows'
         run: |
           Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
           Rscript -e 'remotes::install_deps(dependencies = c("Depends", "Imports"), upgrade = "never")'
 
-
-      - name: Build source tarball on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: R.exe CMD build . --no-manual
-
-      - name: Install MOSAIC from tarball on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: R.exe CMD INSTALL MOSAIC_*.tar.gz
-
-      - name: Smoke‐load MOSAIC on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Rscript.exe -e "library(MOSAIC)"
-
-
       - name: Build source tarball
-        if: runner.os != 'Windows'
         run: R CMD build . --no-manual
 
       - name: Install MOSAIC from tarball
-        if: runner.os != 'Windows'
         run: R CMD INSTALL MOSAIC_*.tar.gz
 
       - name: Smoke-load MOSAIC
-        if: runner.os != 'Windows'
         run: Rscript -e 'library(MOSAIC)'
 
 
@@ -149,17 +115,9 @@ jobs:
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          Rscript -e 'remotes::install_github(
-            repo       = Sys.getenv("GITHUB_REPOSITORY"),
-            ref        = "main",
-            dependencies = FALSE,
-            upgrade      = "never"
-          )'
+          Rscript -e 'remotes::install_github(repo = Sys.getenv("GITHUB_REPOSITORY"), dependencies = TRUE)'
           Rscript -e 'library(MOSAIC)'
 
-
-      - name: Clean old virtualenv
-        run: Rscript -e "if (reticulate::virtualenv_exists('r-mosaic')) reticulate::virtualenv_remove('r-mosaic')"
 
       - name: Install MOSAIC Python deps
         if: runner.os != 'macOS'
