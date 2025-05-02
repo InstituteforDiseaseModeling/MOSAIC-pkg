@@ -12,19 +12,18 @@ permissions: read-all
 jobs:
   R-CMD-check:
     runs-on: ${{ matrix.config.os }}
-
     name: ${{ matrix.config.os }} (${{ matrix.config.r }})
 
     strategy:
       fail-fast: false
       matrix:
         config:
-          - {os: windows-latest,   r: 'release'}
+          - {os: windows-latest, r: 'release'}
           - {os: macos-latest,   r: 'release'}
-          - {os: ubuntu-latest,   r: 'release'}
+          - {os: ubuntu-latest,  r: 'release'}
 
     env:
-      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_PAT:       ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
 
     steps:
@@ -34,11 +33,11 @@ jobs:
 
       - uses: r-lib/actions/setup-r@v2
         with:
-          r-version: ${{ matrix.config.r }}
-          http-user-agent: ${{ matrix.config.http-user-agent }}
-          use-public-rspm: true
+          r-version:         ${{ matrix.config.r }}
+          http-user-agent:   ${{ matrix.config.http-user-agent }}
+          use-public-rspm:   true
 
-
+      # ─── system deps on Linux ───
       - name: Install system deps on Linux (e.g. JAGS, SSL, PROJ, GDAL)
         if: runner.os == 'Linux'
         run: |
@@ -52,6 +51,7 @@ jobs:
             libgdal-dev \
             python3-dev
 
+      # ─── system deps on macOS ───
       - name: Install system deps on macOS (e.g. JAGS + SSL + UDUNITS)
         if: runner.os == 'macOS'
         run: |
@@ -61,42 +61,41 @@ jobs:
             openssl@3 \
             udunits
 
-          # 1) Tell R where to find OpenSSL & UDUNITS at compile time
+          # compile‐time flags for SSL & UDUNITS
           export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:\
-          $(brew --prefix udunits)/lib/pkgconfig:$PKG_CONFIG_PATH"
+$(brew --prefix udunits)/lib/pkgconfig:$PKG_CONFIG_PATH"
           export LDFLAGS="-L$(brew --prefix openssl@3)/lib \
-          -L$(brew --prefix udunits)/lib $LDFLAGS"
+-L$(brew --prefix udunits)/lib $LDFLAGS"
           export CPPFLAGS="-I$(brew --prefix openssl@3)/include \
-          -I$(brew --prefix udunits)/include $CPPFLAGS"
+-I$(brew --prefix udunits)/include $CPPFLAGS"
 
-          # 2) Symlink JAGS into /usr/local so rjags can find it
+          # symlink JAGS into /usr/local
           JAGS_PREFIX="$(brew --prefix jags)"
           sudo mkdir -p /usr/local/lib /usr/local/include/JAGS /usr/local/lib/JAGS
           sudo ln -sfn "$JAGS_PREFIX/lib/libjags.4.dylib" /usr/local/lib/libjags.4.dylib
           sudo ln -sfn "$JAGS_PREFIX/include/JAGS"          /usr/local/include/JAGS
           sudo ln -sfn "$JAGS_PREFIX/lib/JAGS/modules-4"    /usr/local/lib/JAGS/modules-4
 
-          # Sanity check
+          # sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
-
+      # ─── native Python for reticulate on macOS ───
       - name: Install Python 3.12 (arm64) on macOS
         if: runner.os == 'macOS'
         run: |
           brew update
           brew install python@3.12
-          # ensure this python comes first
           echo "$(brew --prefix python@3.12)/bin" >> $GITHUB_PATH
-          # tell reticulate to use it
           echo "RETICULATE_PYTHON=$(brew --prefix python@3.12)/bin/python3" >> $GITHUB_ENV
 
+      # ─── (unused by mac/Linux) Conda bootstrap ───
       - name: Set up Miniforge (Conda)
         uses: conda-incubator/setup-miniconda@v2
         with:
           auto-activate-base: false
           miniforge-version: "latest"
 
-
+      # ─── Windows: install directly from your GitHub repo ───
       - name: Install MOSAIC from GitHub on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -104,18 +103,24 @@ jobs:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Rscript.exe -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes')"
-          Rscript.exe -e "remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", dependencies = TRUE, force = TRUE)"
+          Rscript.exe -e "remotes::install_github(
+            'InstituteforDiseaseModeling/MOSAIC-pkg',
+            dependencies = TRUE,
+            force        = TRUE
+          )"
           Rscript.exe -e "library(MOSAIC)"
 
-
-
+      # ─── non-Windows: install all DESCRIPTION deps ───
       - name: Install R package dependencies
         if: runner.os != 'Windows'
         run: |
-          Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
-          Rscript -e 'remotes::install_deps(dependencies = c("Depends", "Imports"), upgrade = "never")'
+          Rscript -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes')"
+          Rscript -e "remotes::install_deps(
+            dependencies = c('Depends','Imports'),
+            upgrade      = 'never'
+          )"
 
-
+      # ─── Windows: build & install tarball ───
       - name: Build source tarball on Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -131,7 +136,7 @@ jobs:
         shell: pwsh
         run: Rscript.exe -e "library(MOSAIC)"
 
-
+      # ─── macOS/Linux: build & install tarball ───
       - name: Build source tarball
         if: runner.os != 'Windows'
         run: R CMD build . --no-manual
@@ -142,28 +147,49 @@ jobs:
 
       - name: Smoke-load MOSAIC
         if: runner.os != 'Windows'
-        run: Rscript -e 'library(MOSAIC)'
+        run: Rscript -e "library(MOSAIC)"
 
-
+      # ─── macOS/Linux: test remote install ───
       - name: Install MOSAIC from GitHub
+        if: runner.os != 'Windows'
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          Rscript -e 'remotes::install_github(
-            repo       = Sys.getenv("GITHUB_REPOSITORY"),
-            ref        = "main",
+          Rscript -e "remotes::install_github(
+            Sys.getenv('GITHUB_REPOSITORY'),
             dependencies = FALSE,
-            upgrade      = "never"
-          )'
-          Rscript -e 'library(MOSAIC)'
+            upgrade      = 'never'
+          )"
+          Rscript -e "library(MOSAIC)"
 
-
+      # ─── all OS: clean & test Python deps ───
       - name: Clean old virtualenv
         run: Rscript -e "if (reticulate::virtualenv_exists('r-mosaic')) reticulate::virtualenv_remove('r-mosaic')"
 
       - name: Install MOSAIC Python deps
         if: runner.os != 'macOS'
-        run: Rscript -e 'MOSAIC::install_dependencies(force=TRUE)'
+        run: Rscript -e "MOSAIC::install_dependencies(force=TRUE)"
 
       - name: Check MOSAIC Python deps
-        run: Rscript -e 'MOSAIC::check_dependencies()'
+        run: Rscript -e "MOSAIC::check_dependencies()"
+
+      # ─── final R CMD check ───
+
+      - name: Full R CMD check on macOS/Linux
+        if: runner.os != 'Windows'
+        uses: r-lib/actions/check-r-package@v2
+        with:
+          build_args: 'c("--no-manual")'
+          check_args: 'c("--no-multiarch")'
+
+      - name: Partial R CMD check on Windows (skip JAGS examples/tests/vignettes)
+        if: runner.os == 'Windows'
+        uses: r-lib/actions/check-r-package@v2
+        with:
+          build_args: 'c("--no-manual")'
+          check_args: 'c(
+            "--no-examples",
+            "--no-tests",
+            "--no-vignettes",
+            "--no-manual"
+          )'
