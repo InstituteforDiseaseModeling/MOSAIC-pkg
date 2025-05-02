@@ -78,30 +78,6 @@ jobs:
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
-      - name: Install JAGS on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $installer = Join-Path $Env:GITHUB_WORKSPACE 'inst\win\JAGS-4.3.1.exe'
-          if (-not (Test-Path $installer)) {
-            throw "Could not find JAGS installer at $installer"
-          }
-          Write-Host "Installing JAGS from $installer"
-
-          # Force the install into the exact path we expect
-          Start-Process -FilePath $installer `
-            -ArgumentList '/SILENT','/SP-','/SUPPRESSMSGBOXES','/NORESTART','/DIR=C:\Program Files\JAGS\JAGS-4.3.1' `
-            -NoNewWindow -Wait
-
-          # Now assert and expose the bin folder
-          $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
-          if (-not (Test-Path $jagsBin)) {
-            throw "JAGS not found at expected path $jagsBin"
-          }
-          Write-Host "Adding JAGS bin folder to PATH: $jagsBin"
-          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
-
-
       - name: Install Python 3.12 (arm64) on macOS
         if: runner.os == 'macOS'
         run: |
@@ -156,6 +132,7 @@ jobs:
           Rscript -e "if (reticulate::virtualenv_exists('r-mosaic')) reticulate::virtualenv_remove('r-mosaic')"
 
       - name: Install MOSAIC Python deps
+        if: runner.os != 'macOS'
         run: Rscript -e 'MOSAIC::install_dependencies(force=TRUE)'
 
       - name: Check MOSAIC Python deps
