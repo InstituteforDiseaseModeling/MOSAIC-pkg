@@ -95,11 +95,8 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
-          Rscript -e sprintf(
-            'remotes::install_github("%s", dependencies = FALSE, upgrade = "never")',
-            Sys.getenv("REPO")
-          )
+          Rscript -e "if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes')"
+          Rscript -e "remotes::install_github(Sys.getenv('REPO'), dependencies = FALSE, upgrade = 'never')"
 
       - name: Install MOSAIC Python deps
         run: Rscript -e 'MOSAIC::install_dependencies()'
