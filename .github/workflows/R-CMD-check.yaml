@@ -38,6 +38,8 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+
+     # Install system dependencies
       - name: Install system deps on Linux (e.g. JAGS, SSL, PROJ, GDAL)
         if: runner.os == 'Linux'
         run: |
@@ -78,6 +80,8 @@ jobs:
           # Sanity check
           ls -l /usr/local/lib/JAGS/modules-4
 
+
+      # Setup Python and Conda
       - name: Install Python 3.12 (arm64) on macOS
         if: runner.os == 'macOS'
         run: |
@@ -94,27 +98,43 @@ jobs:
           auto-activate-base: false
           miniforge-version: "latest"
 
+
       # Install R dependencies
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: pak
           extra-packages: any::rcmdcheck
 
+
       # Test local build
-      - name: Build source tarball
+      - name: Build source tarball (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: R CMD build . --no-manual
+
+      - name: Install MOSAIC from tarball (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: R CMD INSTALL MOSAIC_*.tar.gz
+
+      - name: Smoke-load MOSAIC
+        if: runner.os == 'Windows'
+        shell: bash
+        run: Rscript -e 'library(MOSAIC)'
+
 
       - name: Build source tarball
         if: runner.os != 'Windows'
         run: R CMD build . --no-manual
 
       - name: Install MOSAIC from tarball
+        if: runner.os != 'Windows'
         run: R CMD INSTALL MOSAIC_*.tar.gz
 
       - name: Smoke-load MOSAIC
+        if: runner.os != 'Windows'
         run: Rscript -e 'library(MOSAIC)'
+
 
       # Test remote install
       - name: Install remotes (if missing)
@@ -131,6 +151,7 @@ jobs:
             upgrade      = "never"
           )'
           Rscript -e 'library(MOSAIC)'
+
 
       # Test MOSAIC setup
       - name: Clean old virtualenv
