@@ -72,24 +72,26 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $url = 'https://downloads.sourceforge.net/project/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe'
-          Write-Host "Downloading JAGS installer from $url"
+          $jagsVersion   = '4.3.2'
+          $url            = "https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-$jagsVersion.exe"
+          Write-Host "Downloading JAGS $jagsVersion from $url"
 
-          # Use curl.exe to fetch the installer (follow redirects + spoof UA)
-          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' -o jags-installer.exe $url
+          # 1) Fetch the installer (follow redirects + spoof UA)
+          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' `
+            -o jags-installer.exe $url
 
-          # Make sure it’s a big file (~12 MB)
+          # 2) Sanity check (should be ≈12 MB)
           $size = (Get-Item jags-installer.exe).Length
-          Write-Host "Installer size: $size bytes"
+          Write-Host "Downloaded installer size: $size bytes"
           if ($size -lt 10MB) {
-            throw "Downloaded file is too small – installer didn’t fetch correctly."
+            throw "Download failed (installer too small)."
           }
 
-          # Run the installer silently
+          # 3) Run silently
           & .\jags-installer.exe /S
 
-          # Add JAGS bin to PATH for the rest of the job
-          $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
+          # 4) Expose the JAGS bin dir on PATH
+          $jagsBin = "C:\Program Files\JAGS\JAGS-$jagsVersion\bin"
           if (-not (Test-Path $jagsBin)) {
             throw "JAGS not found at expected path $jagsBin"
           }
