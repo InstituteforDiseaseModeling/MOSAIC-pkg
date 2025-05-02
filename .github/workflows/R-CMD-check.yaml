@@ -102,6 +102,12 @@ jobs:
 
       # Test local build
       - name: Build source tarball
+        if: runner.os == 'Windows'
+        shell: bash
+        run: R CMD build . --no-manual
+
+      - name: Build source tarball
+        if: runner.os != 'Windows'
         run: R CMD build . --no-manual
 
       - name: Install MOSAIC from tarball
