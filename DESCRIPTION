@@ -22,6 +22,9 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.1
+Remotes:
+  COVID-19-Mobility-Data-Network/mobility,
+  gilesjohnr/propvacc
 Imports:
   arrow,
   cli,
