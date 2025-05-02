@@ -90,7 +90,7 @@ jobs:
 
           # Force the install into the exact path we expect
           Start-Process -FilePath $installer `
-            -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/DIR=C:\Program Files\JAGS\JAGS-4.3.1' `
+            -ArgumentList '/SILENT','/SP-','/SUPPRESSMSGBOXES','/NORESTART','/DIR=C:\Program Files\JAGS\JAGS-4.3.1' `
             -NoNewWindow -Wait
 
           # Now assert and expose the bin folder
