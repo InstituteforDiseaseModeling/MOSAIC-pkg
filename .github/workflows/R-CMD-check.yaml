@@ -74,22 +74,18 @@ jobs:
         run: |
           $url = 'https://netcologne.dl.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
           Write-Host "Downloading JAGS installer from $url"
-          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' -o jags-installer.exe $url
+          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' `
+            -o jags-installer.exe $url
 
-          # Run the installer silently AND log to jags-install.log
-          Write-Host "Running JAGS installer (this can take a while)…"
-          & .\jags-installer.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG="jags-install.log"
-          $code = $LASTEXITCODE
-          Write-Host "Installer exited with code $code"
+          Write-Host "Running JAGS installer (this can take ~30–60s)…"
+          & .\jags-installer.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
 
-          # Show the end of the log so you can see what it did
-          Write-Host "--- tail of jags-install.log ---"
-          Get-Content jags-install.log -Tail 20
+          Write-Host "Installed JAGS directory tree:"
+          Get-ChildItem 'C:\Program Files\JAGS' -Recurse | ForEach-Object { Write-Host $_.FullName }
 
-          # Finally expose the bin folder
           $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
           if (-not (Test-Path $jagsBin)) {
-            throw "JAGS not found at expected path $jagsBin"
+            throw "JAGS bin folder not found at expected path: $jagsBin"
           }
           Write-Host "Adding $jagsBin to PATH"
           Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
