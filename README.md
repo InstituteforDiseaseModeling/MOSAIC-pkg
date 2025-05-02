@@ -1,3 +1,7 @@
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
 \
 
 # **MOSAIC**: The Metapopulation Outbreak Simulation with Agent-based Implementation for Cholera <a href="https://institutefordiseasemodeling.github.io/MOSAIC-docs/"><img src="man/figures/logo.png" align="right" height="130px" alt="MOSAIC website" /></a>
@@ -26,9 +30,9 @@ MOSAIC/               # Local parent directory to hold 3 repositories, root dire
 │       ├── output/   # Location of output from MOSAIC framework
 │       └── LAUNCH.R  # LAUNCH.R file runs data acquisition functions, a priori models, and runs MOSAIC
 └── MOSAIC-docs/      
-    ├── [Website]     # Documentation and model description: https://gilesjohnr.github.io/MOSAIC-docs/
-    ├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
-    └── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
+├── [Website]     # Documentation and model description: https://gilesjohnr.github.io/MOSAIC-docs/
+├── figures/      # Output images and figures from MOSAIC-pkg used in documentation
+└── tables/       # Output data and parameter values from MOSAIC-pkg used in documentation
 ```
 
 ## Contact 
