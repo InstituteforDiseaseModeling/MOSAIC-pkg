@@ -104,12 +104,7 @@ jobs:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           Rscript.exe -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes')"
-          Rscript.exe -e "remotes::install_github(
-            repo         = Sys.getenv('GITHUB_REPOSITORY'),
-            ref          = 'main',
-            dependencies = FALSE,
-            upgrade      = 'never'
-          )"
+          Rscript.exe -e "remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", dependencies = TRUE, force = TRUE)"
           Rscript.exe -e "library(MOSAIC)"
 
 
