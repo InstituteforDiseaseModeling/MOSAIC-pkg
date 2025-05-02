@@ -53,8 +53,8 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
+          packages: pak
           extra-packages: any::rcmdcheck
-          needs: check
 
       - name: Install MOSAIC locally
         run: |
