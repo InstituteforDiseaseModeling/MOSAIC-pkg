@@ -107,9 +107,9 @@ jobs:
           )'
           Rscript -e 'library(MOSAIC)'
 
-    # Test MOSAIC setup
-    - name: Install MOSAIC Python deps
-      run: Rscript -e 'MOSAIC::install_dependencies()'
+      # Test MOSAIC setup
+      - name: Install MOSAIC Python deps
+        run: Rscript -e 'MOSAIC::install_dependencies()'
 
-    - name: Check MOSAIC Python deps
-      run: Rscript -e 'MOSAIC::check_dependencies()'
+      - name: Check MOSAIC Python deps
+        run: Rscript -e 'MOSAIC::check_dependencies()'
