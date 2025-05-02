@@ -100,10 +100,13 @@ jobs:
 
 
       # Install R dependencies
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          packages: pak
-          extra-packages: any::rcmdcheck
+      - name: Install R package dependencies
+        run: |
+          Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
+          Rscript -e 'remotes::install_deps(
+            dependencies = c("Depends", "Imports"),
+            upgrade      = "never"
+          )'
 
 
       # Test local build
