@@ -38,8 +38,6 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      # ─────────────── Start JAGS install ───────────
-
       - name: Install JAGS on Linux
         if: runner.os == 'Linux'
         run: |
@@ -51,30 +49,31 @@ jobs:
         run: |
           brew update
           brew install jags
-          # force‐link into Homebrew prefix
-          brew link jags --force
-          # symlink the real .dylib into /usr/local/lib so rjags can find it
-          sudo mkdir -p /usr/local/lib
-          sudo ln -sfn "$(brew --prefix jags)/lib/libjags.4.dylib" /usr/local/lib/libjags.4.dylib
+          # find where Homebrew put it…
+          JAGS_PREFIX="$(brew --prefix jags)"
+          echo "JAGS installed in $JAGS_PREFIX"
+          # symlink the .dylib into /usr/local/lib so rjags can find it
+          sudo mkdir -p /usr/local/lib /usr/local/include/JAGS
+          sudo ln -sfn "$JAGS_PREFIX/lib/libjags.4.dylib" /usr/local/lib/libjags.4.dylib
+          # and headers (in case pkg-config is used)
+          sudo ln -sfn "$JAGS_PREFIX/include/JAGS" /usr/local/include/JAGS
 
       - name: Install JAGS on Windows
-        if: matrix.config.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # 1) Download the JAGS 4.3.1 installer from the SourceForge “download” endpoint
-          $url = 'https://sourceforge.net/projects/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
+          # ensure TLS1.2 so SourceForge will actually serve the binary
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $url = 'https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
+          # download the real installer, not an HTML page
           Invoke-WebRequest -Uri $url -OutFile jags-installer.exe -UseBasicParsing
-
-          # 2) Run it completely silently
-          Start-Process -FilePath .\jags-installer.exe `
+          # run it completely silently
+          Start-Process .\jags-installer.exe `
             -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
             -NoNewWindow -Wait
-
-          # 3) Add the JAGS bin folder to PATH so rjags can find the DLL
-          $jagsBin = Join-Path $Env:ProgramFiles 'JAGS\JAGS-4.3.1\bin'
-          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
-
-      # ───────────── Stop JAGS install ──────────────
+          # expose the bin dir on PATH for rjags to load the DLL
+          $jagspath = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
+          Write-Host $jagspath | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
