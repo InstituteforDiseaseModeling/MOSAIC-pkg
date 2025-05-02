@@ -61,17 +61,18 @@ jobs:
         if: matrix.config.os == 'windows-latest'
         shell: pwsh
         run: |
-          # 1) Download the JAGS 4.3.1 installer (R ≥ 4.2.0 needs 4.3.1)
-          $url = 'https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
-          Invoke-WebRequest -Uri $url -OutFile jags-installer.exe
+          # 1) Download the JAGS 4.3.1 installer from the SourceForge “download” endpoint
+          $url = 'https://sourceforge.net/projects/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
+          Invoke-WebRequest -Uri $url -OutFile jags-installer.exe -UseBasicParsing
 
-          # 2) Run it completely silently (Inno Setup flags)
+          # 2) Run it completely silently
           Start-Process -FilePath .\jags-installer.exe `
             -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
             -NoNewWindow -Wait
 
-          # 3) Add JAGS bin to PATH for the rest of the job
-          Write-Host "C:\Program Files\JAGS\bin" >> $Env:GITHUB_PATH
+          # 3) Add the JAGS bin folder to PATH so rjags can find the DLL
+          $jagsBin = Join-Path $Env:ProgramFiles 'JAGS\JAGS-4.3.1\bin'
+          Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       # ───────────── Stop JAGS install ──────────────
 
