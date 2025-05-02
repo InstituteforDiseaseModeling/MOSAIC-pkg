@@ -72,18 +72,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Grab the real 26 MB installer from a known mirror
           $url = 'https://netcologne.dl.sourceforge.net/project/mcmc-jags/JAGS/4.x/Windows/JAGS-4.3.1.exe'
           Write-Host "Downloading JAGS from $url"
-          Invoke-WebRequest -Uri $url -OutFile jags-installer.exe -UseBasicParsing
+          curl.exe -L -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' -o jags-installer.exe $url
 
-          # Silent install
-          & .\jags-installer.exe /S
+          Write-Host "Running JAGS installer in silent mode"
+          Start-Process -FilePath .\jags-installer.exe `
+            -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
+            -NoNewWindow -Wait
 
-          # Add the JAGS bin folder to PATH so rjags can load jags.dll
+          Write-Host "Installed JAGS directory structure:"
+          Get-ChildItem 'C:\Program Files\JAGS' -Recurse | Write-Host
+
           $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
-          if (-not (Test-Path $jagsBin)) { throw "JAGS not found at expected path $jagsBin" }
-          Write-Host "Adding $jagsBin to PATH"
+          if (-not (Test-Path $jagsBin)) {
+            throw "JAGS not found at expected path $jagsBin"
+          }
+          Write-Host "Adding $jagsBin to PATH for the rest of the job"
           Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
