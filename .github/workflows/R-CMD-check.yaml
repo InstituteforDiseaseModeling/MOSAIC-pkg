@@ -37,17 +37,21 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      - name: Install JAGS on Linux
+      - name: Install system deps on Linux (e.g. JAGS)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y jags
+          sudo apt-get install -y \
+            jags \
+            libudunits2-dev
 
-      - name: Install JAGS on macOS
+      - name: Install system deps on macOS (e.g. JAGS)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install jags
+          brew install \
+            jags \
+            udunits
 
           JAGS_PREFIX="$(brew --prefix jags)"
           echo "Homebrew JAGS prefix: $JAGS_PREFIX"
