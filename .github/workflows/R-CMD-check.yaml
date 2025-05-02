@@ -127,7 +127,12 @@ jobs:
 
       # Test MOSAIC setup
       - name: Install MOSAIC Python deps
+        if: runner.os == 'Linux'
         run: Rscript -e 'MOSAIC::install_dependencies(force=TRUE)'
+
+      - name: Install MOSAIC Python deps (under x86_64)
+        if: runner.os == 'macOS'
+        run: arch -x86_64 Rscript -e 'MOSAIC::install_dependencies(force=TRUE)'
 
       - name: Check MOSAIC Python deps
         run: Rscript -e 'MOSAIC::check_dependencies()'
