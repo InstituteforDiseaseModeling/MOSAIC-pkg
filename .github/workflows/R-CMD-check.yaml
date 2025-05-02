@@ -40,6 +40,27 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+      # ─────────────── Start JAGS install ───────────
+
+      - name: Install JAGS on Linux
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jags libjags-dev
+
+      - name: Install JAGS on macOS
+        if: matrix.config.os == 'macos-latest'
+        run: |
+          brew update
+          brew install jags
+
+      - name: Install JAGS on Windows
+        if: matrix.config.os == 'windows-latest'
+        run: |
+          choco install jags -y
+
+      # ───────────── Stop JAGS install ──────────────
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::rcmdcheck
