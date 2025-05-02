@@ -51,7 +51,11 @@ jobs:
         run: |
           brew update
           brew install jags
+          # force‐link into Homebrew prefix
           brew link jags --force
+          # symlink the real .dylib into /usr/local/lib so rjags can find it
+          sudo mkdir -p /usr/local/lib
+          sudo ln -sfn "$(brew --prefix jags)/lib/libjags.4.dylib" /usr/local/lib/libjags.4.dylib
 
       - name: Install JAGS on Windows
         if: matrix.config.os == 'windows-latest'
