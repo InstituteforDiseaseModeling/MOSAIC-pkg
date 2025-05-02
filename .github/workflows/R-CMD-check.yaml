@@ -39,7 +39,6 @@ jobs:
           use-public-rspm: true
 
 
-     # Install system dependencies
       - name: Install system deps on Linux (e.g. JAGS, SSL, PROJ, GDAL)
         if: runner.os == 'Linux'
         run: |
@@ -81,7 +80,6 @@ jobs:
           ls -l /usr/local/lib/JAGS/modules-4
 
 
-      # Setup Python and Conda
       - name: Install Python 3.12 (arm64) on macOS
         if: runner.os == 'macOS'
         run: |
@@ -99,31 +97,34 @@ jobs:
           miniforge-version: "latest"
 
 
-      # Install R dependencies
       - name: Install R package dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Rscript.exe -e "if (!requireNamespace('remotes', quietly=TRUE)) install.packages('remotes')"
+          Rscript.exe -e "remotes::install_deps(dependencies = c('Depends','Imports'), upgrade = 'never')"
+
+      - name: Install R package dependencies
+        if: runner.os != 'Windows'
         run: |
           Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
-          Rscript -e 'remotes::install_deps(
-            dependencies = c("Depends", "Imports"),
-            upgrade      = "never"
-          )'
+          Rscript -e 'remotes::install_deps(dependencies = c("Depends", "Imports"), upgrade = "never")'
 
 
-      # Test local build
-      - name: Build source tarball (Windows)
+      - name: Build source tarball on Windows
         if: runner.os == 'Windows'
-        shell: bash
-        run: R CMD build . --no-manual
+        shell: pwsh
+        run: R.exe CMD build . --no-manual
 
-      - name: Install MOSAIC from tarball (Windows)
+      - name: Install MOSAIC from tarball on Windows
         if: runner.os == 'Windows'
-        shell: bash
-        run: R CMD INSTALL MOSAIC_*.tar.gz
+        shell: pwsh
+        run: R.exe CMD INSTALL MOSAIC_*.tar.gz
 
-      - name: Smoke-load MOSAIC
+      - name: Smoke‐load MOSAIC on Windows
         if: runner.os == 'Windows'
-        shell: bash
-        run: Rscript -e 'library(MOSAIC)'
+        shell: pwsh
+        run: Rscript.exe -e "library(MOSAIC)"
 
 
       - name: Build source tarball
@@ -139,10 +140,6 @@ jobs:
         run: Rscript -e 'library(MOSAIC)'
 
 
-      # Test remote install
-      - name: Install remotes (if missing)
-        run: Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
-
       - name: Install MOSAIC from GitHub
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -156,10 +153,8 @@ jobs:
           Rscript -e 'library(MOSAIC)'
 
 
-      # Test MOSAIC setup
       - name: Clean old virtualenv
-        run: |
-          Rscript -e "if (reticulate::virtualenv_exists('r-mosaic')) reticulate::virtualenv_remove('r-mosaic')"
+        run: Rscript -e "if (reticulate::virtualenv_exists('r-mosaic')) reticulate::virtualenv_remove('r-mosaic')"
 
       - name: Install MOSAIC Python deps
         if: runner.os != 'macOS'
