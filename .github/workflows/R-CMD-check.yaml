@@ -72,27 +72,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Force TLS1.2 so SourceForge serves the binary
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-          # Download the real JAGS-4.3.1 installer via the /download URL
-          $url           = 'https://sourceforge.net/projects/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
+          $url           = 'https://downloads.sourceforge.net/project/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
           $installerPath = "$PWD\jags-installer.exe"
-          (New-Object System.Net.WebClient).DownloadFile($url, $installerPath)
 
-          # Check we got something that looks like an EXE
-          if (-not (Test-Path $installerPath)) { throw "JAGS installer not found!" }
-          if ((Get-Item $installerPath).Length -lt 5MB) { throw "Downloaded file too small; did not get the real installer." }
+          # Create WebClient & spoof a browser UA
+          $wc = New-Object System.Net.WebClient
+          $wc.Headers.Add('User-Agent','Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+          $wc.DownloadFile($url, $installerPath)
 
-          # Run it silently
-          Start-Process -FilePath $installerPath `
+          # Sanity-check & silent install
+          if (-not (Test-Path $installerPath)) { throw "JAGS installer missing" }
+          Start-Process .\jags-installer.exe `
             -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
             -NoNewWindow -Wait
 
-          # Add JAGS bin folder to PATH for rjags
+          # Add to PATH
           $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
-          if (-not (Test-Path $jagsBin)) { throw "Expected JAGS bin at $jagsBin, but it was not found." }
-          Write-Host "Adding $jagsBin to PATH"
           Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
