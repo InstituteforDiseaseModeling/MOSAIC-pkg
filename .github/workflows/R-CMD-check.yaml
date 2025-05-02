@@ -37,29 +37,69 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      - name: Set up Miniforge
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          auto-activate-base: false
-          miniforge-version: "latest"
-
-      - name: Create conda env with Python, JAGS & r-rjags
-        shell: bash
+      - name: Install JAGS on Linux
+        if: runner.os == 'Linux'
         run: |
-          conda create -n mosaic-py -y -c conda-forge python=3.12 jags r-rjags
-          prefix="$(conda info --base)/envs/mosaic-py"
-          echo "$prefix/bin" >> $GITHUB_PATH
-          echo "$prefix/lib" >> $GITHUB_PATH
+          sudo apt-get update
+          sudo apt-get install -y jags
+
+      - name: Install JAGS on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install jags
+
+          JAGS_PREFIX="$(brew --prefix jags)"
+          echo "Homebrew JAGS prefix: $JAGS_PREFIX"
+
+          # 1) Symlink the shared library into /usr/local/lib
+          sudo mkdir -p /usr/local/lib
+          sudo ln -sfn "$JAGS_PREFIX/lib/libjags.4.dylib" /usr/local/lib/libjags.4.dylib
+
+          # 2) Symlink the headers into /usr/local/include/JAGS
+          sudo mkdir -p /usr/local/include/JAGS
+          sudo ln -sfn "$JAGS_PREFIX/include/JAGS" /usr/local/include/JAGS
+
+          # 3) Symlink the modules directory so rjags can find the modules
+          sudo mkdir -p /usr/local/lib/JAGS
+          sudo ln -sfn "$JAGS_PREFIX/lib/JAGS/modules-4" /usr/local/lib/JAGS/modules-4
+
+          # Sanity check
+          ls -l /usr/local/lib/JAGS/modules-4
+
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: pak
           extra-packages: any::rcmdcheck
 
-      - name: Install MOSAIC locally
+      # Build a source tarball and install it
+      - name: Build source tarball
+        run: R CMD build . --no-manual
+
+      - name: Install MOSAIC from tarball
+        run: R CMD INSTALL MOSAIC_*.tar.gz
+
+      # Install the local checkout via remotes::install_local()
+      - name: Install MOSAIC locally via remotes
         run: |
           Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
-          Rscript -e 'remotes::install_local(dependencies = FALSE, upgrade = "never")'
+          Rscript -e 'remotes::install_local(
+            path         = ".",
+            dependencies = FALSE,
+            upgrade      = "never"
+          )'
+
+      # Install directly from GitHub via remotes::install_github()
+      - name: Install MOSAIC from GitHub
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
+          Rscript -e sprintf(
+            'remotes::install_github("%s", dependencies = FALSE, upgrade = "never")',
+            Sys.getenv("REPO")
+          )
 
       - name: Install MOSAIC Python deps
         run: Rscript -e 'MOSAIC::install_dependencies()'
