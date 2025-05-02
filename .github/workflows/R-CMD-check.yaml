@@ -72,23 +72,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          $url           = 'https://downloads.sourceforge.net/project/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
-          $installerPath = "$PWD\jags-installer.exe"
+          # 1) Download the real EXE via /download (curl.exe follows redirects)
+          $url = 'https://downloads.sourceforge.net/project/mcmc-jags/files/JAGS/4.x/Windows/JAGS-4.3.1.exe/download'
+          Write-Host "Fetching JAGS from $url"
+          curl.exe -L -o jags-installer.exe $url
 
-          # Create WebClient & spoof a browser UA
-          $wc = New-Object System.Net.WebClient
-          $wc.Headers.Add('User-Agent','Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-          $wc.DownloadFile($url, $installerPath)
+          # 2) Quick sanity check (should be ~12 MB)
+          $size = (Get-Item jags-installer.exe).Length
+          Write-Host "Installer size: $size bytes"
+          if ($size -lt 10MB) { throw "Downloaded file too small—didn't get the real installer!" }
 
-          # Sanity-check & silent install
-          if (-not (Test-Path $installerPath)) { throw "JAGS installer missing" }
-          Start-Process .\jags-installer.exe `
-            -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' `
-            -NoNewWindow -Wait
+          # 3) Run the installer silently (Inno Setup flags)
+          & .\jags-installer.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
-          # Add to PATH
+          # 4) Expose the JAGS bin dir on PATH so rjags can load the DLL
           $jagsBin = 'C:\Program Files\JAGS\JAGS-4.3.1\bin'
+          if (-not (Test-Path $jagsBin)) { throw "JAGS not found at $jagsBin" }
+          Write-Host "Adding $jagsBin to PATH"
           Write-Host $jagsBin | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8
 
       - uses: r-lib/actions/setup-r-dependencies@v2
