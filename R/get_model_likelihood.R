@@ -25,8 +25,12 @@
 #' and time steps, or \code{NA_real_} if all locations are skipped.
 #'
 #' @export
-get_model_likelihood <- function(obs_cases, est_cases,
-                                 obs_deaths, est_deaths,
+#'
+
+get_model_likelihood <- function(obs_cases,
+                                 est_cases,
+                                 obs_deaths,
+                                 est_deaths,
                                  weight_cases     = NULL,
                                  weight_deaths    = NULL,
                                  weights_location = NULL,
@@ -36,7 +40,7 @@ get_model_likelihood <- function(obs_cases, est_cases,
      # 1) Matrix dimension checks
      if (!is.matrix(obs_cases) || !is.matrix(est_cases) ||
          !is.matrix(obs_deaths) || !is.matrix(est_deaths)) {
-          stop("obs_* and est_* must be matrices.")
+          stop("all inputs must be matrices.")
      }
 
      n_locations  <- nrow(obs_cases)
@@ -45,7 +49,7 @@ get_model_likelihood <- function(obs_cases, est_cases,
      if (any(dim(est_cases)   != c(n_locations, n_time_steps)) ||
          any(dim(obs_deaths)  != c(n_locations, n_time_steps)) ||
          any(dim(est_deaths)  != c(n_locations, n_time_steps))) {
-          stop("All obs_* and est_* matrices must have the same dimensions (n_locations x n_time_steps).")
+          stop("All matrices must have the same dimensions (n_locations x n_time_steps).")
      }
 
      # 2) Default location/time weights
@@ -75,8 +79,17 @@ get_model_likelihood <- function(obs_cases, est_cases,
                if (verbose) message(sprintf("Location %d (cases): all NA — skipping.", j))
                next
           }
+
           # Decide family for cases
-          family_cases <- if (var_cases / mean_cases >= 1.5) "negbin" else "poisson"
+          family_cases <- if (mean_cases == 0) {
+               "poisson"
+          } else if (var_cases == mean_cases) {
+               "poisson"
+          } else if (var_cases / mean_cases >= 1.5) {
+               "negbin"
+          } else {
+               "poisson"
+          }
 
           mean_deaths <- mean(obs_deaths[j, ], na.rm = TRUE)
           var_deaths  <- var(obs_deaths[j, ], na.rm = TRUE)
@@ -87,8 +100,16 @@ get_model_likelihood <- function(obs_cases, est_cases,
                next
           }
 
-          # Decide family for deaths
-          family_deaths <- if (var_deaths / mean_deaths >= 1.5) "negbin" else "poisson"
+          # Decide family for cases
+          family_deaths <- if (mean_deaths == 0) {
+               "poisson"
+          } else if (var_deaths == mean_deaths) {
+               "poisson"
+          } else if (var_deaths / mean_deaths >= 1.5) {
+               "negbin"
+          } else {
+               "poisson"
+          }
 
           # Calculate log-likelihood for cases
           ll_cases <- MOSAIC::calc_log_likelihood(
@@ -125,7 +146,14 @@ get_model_likelihood <- function(obs_cases, est_cases,
           )
 
           # Weighted sum for location j
-          ll_location_tmp <- weights_location[j] * (weight_cases * ll_cases + weight_cases * ll_max_cases + weight_deaths * ll_deaths + weight_deaths * ll_max_deaths)
+          ll_location_tmp <-
+               weights_location[j] * (
+                    weight_cases * ll_cases +
+                         weight_cases * ll_max_cases +
+                         weight_deaths * ll_deaths +
+                         weight_deaths * ll_max_deaths
+               )
+
           ll_locations[j] <- ll_location_tmp
 
           if (verbose) {

@@ -35,4 +35,5 @@ a warning about possible overdispersion is issued.
 }
 \examples{
 calc_log_likelihood_poisson(c(2, 3, 4), c(2.2, 2.9, 4.1))
+
 }
