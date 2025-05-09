@@ -50,6 +50,10 @@ calc_log_likelihood_beta <- function(observed,
                                      weights = NULL,
                                      verbose = TRUE) {
 
+     if (length(observed) != length(estimated)) {
+          stop("Lengths of observed and estimated must match.")
+     }
+
      # Default weights if NULL
      if (is.null(weights)) {
           weights <- rep(1, length(observed))
@@ -173,6 +177,10 @@ calc_log_likelihood_binomial <- function(observed,
                                          weights = NULL,
                                          verbose = TRUE) {
 
+     if (length(observed) != length(estimated)) {
+          stop("Lengths of observed and estimated must match.")
+     }
+
      if (is.null(weights)) {
           weights <- rep(1, length(observed))
      }
@@ -253,6 +261,10 @@ calc_log_likelihood_gamma <- function(observed,
                                       estimated,
                                       weights = NULL,
                                       verbose = TRUE) {
+
+     if (length(observed) != length(estimated)) {
+          stop("Lengths of observed and estimated must match.")
+     }
 
      if (is.null(weights)) {
           weights <- rep(1, length(observed))
@@ -338,6 +350,10 @@ calc_log_likelihood_negbin <- function(observed,
                                        weights = NULL,
                                        verbose = TRUE) {
 
+     if (length(observed) != length(estimated)) {
+          stop("Lengths of observed and estimated must match.")
+     }
+
      if (is.null(weights)) weights <- rep(1, length(observed))
 
      idx <- which(!is.na(observed) & !is.na(estimated) & !is.na(weights))
@@ -363,8 +379,8 @@ calc_log_likelihood_negbin <- function(observed,
      # Estimate k if not supplied
      if (is.null(k)) {
 
-          mu <- mean(observed)
-          s2 <- var(observed)
+          mu <- mean(observed, na.rm = TRUE)
+          s2 <- var(observed, na.rm = TRUE)
 
           if (s2 <= mu) {
                if (verbose) {
@@ -442,6 +458,10 @@ calc_log_likelihood_normal <- function(observed,
                                        estimated,
                                        weights = NULL,
                                        verbose = TRUE) {
+
+     if (length(observed) != length(estimated)) {
+          stop("Lengths of observed and estimated must match.")
+     }
 
      # Default weights = all 1
      if (is.null(weights)) {
@@ -535,10 +555,16 @@ calc_log_likelihood_normal <- function(observed,
 #'
 #' @examples
 #' calc_log_likelihood_poisson(c(2, 3, 4), c(2.2, 2.9, 4.1))
+#'
+
 calc_log_likelihood_poisson <- function(observed,
                                         estimated,
                                         weights = NULL,
                                         verbose = TRUE) {
+
+     if (length(observed) != length(estimated)) {
+          stop("Lengths of observed and estimated must match.")
+     }
 
      if (is.null(weights)) {
           weights <- rep(1, length(observed))
@@ -576,16 +602,24 @@ calc_log_likelihood_poisson <- function(observed,
      }
 
      if (n > 1) {
+          mu <- mean(observed, na.rm = TRUE)
+          s2 <- var(observed, na.rm = TRUE)
 
-          mu <- mean(observed)
-          s2 <- var(observed)
-          disp_ratio <- s2 / mu
-
-          if (disp_ratio > 1.5) {
-               warning(sprintf("Var/Mean = %.2f suggests overdispersion. Consider Negative Binomial.", disp_ratio))
+          if (is.na(mu) || mu == 0) {
+               message("All observations are zero (or NA).")
+          } else {
+               disp_ratio <- s2 / mu
+               if (disp_ratio > 1.5) {
+                    warning(
+                         sprintf(
+                              "Var/Mean = %.2f suggests overdispersion. Consider Negative Binomial.",
+                              disp_ratio
+                         )
+                    )
+               }
           }
-
      }
+
 
      ll_vec <- observed * log(estimated) - estimated - lgamma(observed + 1)
      ll <- sum(weights * ll_vec)

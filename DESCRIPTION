@@ -86,4 +86,7 @@ Depends:
   grDevices,
   utils,
   methods
+Suggests: 
+  testthat (>= 3.0.0)  
 Config/Needs/website: rmarkdown
+Config/testthat/edition: 3
