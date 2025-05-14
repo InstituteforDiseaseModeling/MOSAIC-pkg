@@ -100,22 +100,6 @@
 #' @param reported_deaths Matrix of daily reported cholera deaths. Must be integer. NA allowed.
 #'        nrow=length(location_name), ncol=length(t).
 #'
-#' ## Outputs
-#' @param return A character vector of model quantities to return after running the LASER model. Each element should
-#'        be one of the following:
-#'        \describe{
-#'          \item{"LL"}{Log-likelihood of the fitted model.}
-#'          \item{"N"}{Total population size.}
-#'          \item{"S"}{Number of susceptible individuals.}
-#'          \item{"E"}{Number of exposed (latent) individuals.}
-#'          \item{"I"}{Number of infectious individuals.}
-#'          \item{"R"}{Number of recovered individuals.}
-#'          \item{"V1"}{Number of individuals with one dose of vaccine. Includes all V1 subcompartments.}
-#'          \item{"V2"}{Number of individuals with two doses of vaccine. Includes all V2 subcompartments.}
-#'          \item{"W"}{Environmental concentration of *V. cholerae*.}
-#'          \item{"C"}{Estimated number of symptomatic cholera cases.}
-#'          \item{"D"}{Estimated number of cholera deaths.}
-#'        }
 #'
 #' @param sigfigs Integer; number of significant figures to round all numeric values to. Default is 4.
 #'
@@ -176,8 +160,7 @@
 #'      decay_shape_1     = 1,
 #'      decay_shape_2     = 1,
 #'      reported_cases    = matrix(NA, nrow=2, ncol=366),
-#'      reported_deaths   = matrix(NA, nrow=2, ncol=366),
-#'      return = "LL"
+#'      reported_deaths   = matrix(NA, nrow=2, ncol=366)
 #' )
 #' }
 #'
@@ -256,8 +239,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               reported_deaths = NULL,
 
                               # Outputs
-                              sigfigs = 4,
-                              return = NULL
+                              sigfigs = 4
 ) {
 
      message('Validating parameter values...')
@@ -337,8 +319,7 @@ make_LASER_config <- function(output_file_path = NULL,
           decay_shape_1     = decay_shape_1,
           decay_shape_2     = decay_shape_2,
           reported_cases    = reported_cases,
-          reported_deaths   = reported_deaths,
-          return            = return
+          reported_deaths   = reported_deaths
      )
 
      # Check for NULL values.
@@ -573,17 +554,6 @@ make_LASER_config <- function(output_file_path = NULL,
      not_na_rd <- !is.na(reported_deaths)
      if (any(reported_deaths[not_na_rd] != floor(reported_deaths[not_na_rd]))) {
           stop("reported_deaths must be integer (NA allowed).")
-     }
-
-     # Validate return vector.
-     valid_return_keys <- c("LL", "N", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
-     if (!is.character(return) || length(return) == 0) {
-          stop("return must be a non-empty character vector.")
-     }
-     invalid <- setdiff(return, valid_return_keys)
-     if (length(invalid) > 0) {
-          stop("Invalid entries in return: ", paste(invalid, collapse = ", "),
-               ". Allowed values are: ", paste(valid_return_keys, collapse = ", "))
      }
 
      message("All parameters have passed config checks.")

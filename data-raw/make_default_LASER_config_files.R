@@ -226,11 +226,10 @@ default_args <- list(
      decay_shape_1 = 1,
      decay_shape_2 = 1,
      reported_cases = mat_cases,
-     reported_deaths = mat_deaths,
-     return = c("LL", "N", "S", "E", "I", "R", "V1", "V2", "W", "C", "D")
+     reported_deaths = mat_deaths
 )
 
-default_config <- do.call(make_LASER_config, default_args)
+config_default <- do.call(make_LASER_config, default_args)
 
 
 
@@ -245,7 +244,7 @@ file_paths <- list(
 # Loop over the file paths and call make_LASER_config() for each
 for (fp in file_paths) {
 
-     args <- default_config
+     args <- config_default
      args$output_file_path <- fp
      do.call(MOSAIC::make_LASER_config, args)
      rm(args)
@@ -254,7 +253,7 @@ for (fp in file_paths) {
 
 tmp_config <- jsonlite::fromJSON(file_paths[[1]])
 
-identical(default_config, tmp_config)
-all.equal(default_config, tmp_config, tolerance = 1e-8)
+identical(config_default, tmp_config)
+all.equal(config_default, tmp_config, tolerance = 1e-8)
 
-usethis::use_data(default_config, overwrite = TRUE)
+usethis::use_data(config_default, overwrite = TRUE)
