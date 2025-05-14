@@ -104,21 +104,19 @@ can be inserted directly into strings or titles, for example, in <code>ggplot2</
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Get the Unicode for uppercase Alpha</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span><span class="co"># Get the Unicode for uppercase Alpha</span></span></span>
 <span class="r-in"><span><span class="fu">get_greek_unicode</span><span class="op">(</span><span class="st">"alpha"</span>, <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Α"</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Get the Unicode for lowercase Omega</span></span></span>
 <span class="r-in"><span><span class="fu">get_greek_unicode</span><span class="op">(</span><span class="st">"omega"</span>, <span class="cn">FALSE</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "ω"</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Get the Unicode for uppercase Sigma</span></span></span>
 <span class="r-in"><span><span class="fu">get_greek_unicode</span><span class="op">(</span><span class="st">"sigma"</span>, <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Σ"</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Use in ggplot2 title</span></span></span>
 <span class="r-in"><span><span class="fu">ggplot</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span> <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Example with Greek letter"</span>, <span class="fu">get_greek_unicode</span><span class="op">(</span><span class="st">"Psi"</span>, <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in ggplot():</span> could not find function "ggplot"</span>
+<span class="r-in"><span><span class="op">}</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

@@ -96,10 +96,13 @@ reference:
       - est_immune_decay
       - est_symptomatic_prop
 
+  - title: "Model configuration examples"
+    contents:
+      - get_default_LASER_config
+      - starts_with("config_")
+
   - title: "Model calibration"
     contents:
-      - default_config
-      - get_default_LASER_config
       - get_initial_compartment_values
       - get_model_likelihood
       - starts_with("calc_log_likelihood")

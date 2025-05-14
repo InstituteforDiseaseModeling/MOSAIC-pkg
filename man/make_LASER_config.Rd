@@ -57,8 +57,7 @@ make_LASER_config(
   decay_shape_2 = NULL,
   reported_cases = NULL,
   reported_deaths = NULL,
-  sigfigs = 4,
-  return = NULL
+  sigfigs = 4
 )
 }
 \arguments{
@@ -204,27 +203,9 @@ the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.
 nrow=length(location_name), ncol=length(t).}
 
 \item{reported_deaths}{Matrix of daily reported cholera deaths. Must be integer. NA allowed.
-nrow=length(location_name), ncol=length(t).
-\subsection{Outputs}{
-}}
+nrow=length(location_name), ncol=length(t).}
 
 \item{sigfigs}{Integer; number of significant figures to round all numeric values to. Default is 4.}
-
-\item{return}{A character vector of model quantities to return after running the LASER model. Each element should
-be one of the following:
-\describe{
-\item{"LL"}{Log-likelihood of the fitted model.}
-\item{"N"}{Total population size.}
-\item{"S"}{Number of susceptible individuals.}
-\item{"E"}{Number of exposed (latent) individuals.}
-\item{"I"}{Number of infectious individuals.}
-\item{"R"}{Number of recovered individuals.}
-\item{"V1"}{Number of individuals with one dose of vaccine. Includes all V1 subcompartments.}
-\item{"V2"}{Number of individuals with two doses of vaccine. Includes all V2 subcompartments.}
-\item{"W"}{Environmental concentration of \emph{V. cholerae}.}
-\item{"C"}{Estimated number of symptomatic cholera cases.}
-\item{"D"}{Estimated number of cholera deaths.}
-}}
 }
 \value{
 Returns the validated list of parameters. If output_file_path is provided, the parameters are written to a file
@@ -294,8 +275,7 @@ make_LASER_config(
      decay_shape_1     = 1,
      decay_shape_2     = 1,
      reported_cases    = matrix(NA, nrow=2, ncol=366),
-     reported_deaths   = matrix(NA, nrow=2, ncol=366),
-     return = "LL"
+     reported_deaths   = matrix(NA, nrow=2, ncol=366)
 )
 }
 
