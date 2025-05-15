@@ -17,6 +17,9 @@
 library(MOSAIC)
 library(jsonlite)
 
+seed <- as.integer(999999999)
+set.seed(seed)
+
 # --------------------------- 1. Time & locations --------------------------- #
 
 date_start <- as.Date("2020-01-01")
@@ -29,7 +32,6 @@ t          <- seq.Date(date_start, date_stop, by = "day")
 
 j      <- c("FOO", "BAR", "BAZ")
 n_loc  <- length(j)
-set.seed(999999999)
 N_j    <- c(5000, 10000, 20000)           # total population per site
 names(N_j) <- j
 
@@ -84,14 +86,14 @@ theta_j <- setNames(rep(0.3, n_loc), j)
 
 # --------------------------- 7. Observed data ----------------------------- #
 
-mat_cases  <- matrix(0, n_loc, length(t), dimnames = list(j, t))
-mat_deaths <- matrix(0, n_loc, length(t), dimnames = list(j, t))
+mat_cases  <- matrix(NA, n_loc, length(t), dimnames = list(j, t))
+mat_deaths <- matrix(NA, n_loc, length(t), dimnames = list(j, t))
 
 # --------------------------- 8. Wrap into config -------------------------- #
 
 sim_args <- list(
      output_file_path = NULL,
-     seed             = 123,
+     seed             = seed,
      date_start       = date_start,
      date_stop        = date_stop,
      location_name    = j,
@@ -208,5 +210,5 @@ legend("topright", legend = j, col = seq_len(n_loc), lty = 1, lwd = 2, bty = "n"
 
 
 
-config_simulation_epidemic <- sim
+config_simulation_epidemic <- sim_config
 usethis::use_data(config_simulation_epidemic, overwrite = TRUE)
