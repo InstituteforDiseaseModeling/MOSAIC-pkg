@@ -3,7 +3,7 @@
 \docType{data}
 \name{config_default}
 \alias{config_default}
-\title{Default LASER Configuration (comprehensive)}
+\title{Default LASER Configuration}
 \format{
 A named \strong{list} created by \code{make_default_LASER_config()}, whose
 elements include:
