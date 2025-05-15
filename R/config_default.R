@@ -1,4 +1,4 @@
-#' Default LASER Configuration (comprehensive)
+#' Default LASER Configuration
 #'
 #' The **canonical** LASER parameter object shipped with MOSAIC.
 #' It contains default values for *all* model parameters, initial state
