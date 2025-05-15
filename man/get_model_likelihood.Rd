@@ -2,8 +2,7 @@
 % Please edit documentation in R/get_model_likelihood.R
 \name{get_model_likelihood}
 \alias{get_model_likelihood}
-\title{Compute the total model likelihood over multiple locations and time steps,
-auto-selecting Poisson or NegBin for each location/outcome}
+\title{Compute the total model likelihood}
 \usage{
 get_model_likelihood(
   obs_cases,
