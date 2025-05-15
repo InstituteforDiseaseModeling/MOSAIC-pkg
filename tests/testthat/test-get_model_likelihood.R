@@ -71,8 +71,10 @@ testthat::test_that("errors when weight vectors have incorrect lengths", {
 
 # 6. All NA skip returns NA
 testthat::test_that("all NA data returns NA", {
+
      obs_na <- matrix(NA_real_, nrow = 2, ncol = 3)
      est_na <- matrix(NA_real_, nrow = 2, ncol = 3)
+
      ll <- MOSAIC::get_model_likelihood(
           obs_cases  = obs_na,
           est_cases  = est_na,
@@ -80,6 +82,23 @@ testthat::test_that("all NA data returns NA", {
           est_deaths = est_na,
           verbose     = TRUE
      )
+     expect_true(is.na(ll))
+})
+
+# 6.5. Real values for estimated and all NA observed
+testthat::test_that("all-NA observed with real estimates returns NA", {
+
+     obs_na   <- matrix(NA_real_, nrow = 1, ncol = 2)
+     est_real <- matrix(c(1.2, 3.4),   nrow = 1, ncol = 2)
+
+     ll <- MOSAIC::get_model_likelihood(
+          obs_cases  = obs_na,
+          est_cases  = est_real,
+          obs_deaths = obs_na,
+          est_deaths = est_real,
+          verbose    = TRUE
+     )
+
      expect_true(is.na(ll))
 })
 
