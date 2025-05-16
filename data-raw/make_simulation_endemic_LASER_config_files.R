@@ -78,6 +78,7 @@ nu_1_jt <- nu_2_jt <- matrix(0, n_loc, T_len, dimnames = list(j, t))
 # --------------------------- 4. Transmission (human‑to‑human) ------------- #
 
 baseline_beta <- runif(n_loc, 0.25, 0.32)     # slightly lower than sim1
+baseline_beta <- c(0.3, 0.5, 0.4)*0.6
 amp_beta      <- 0.10                          # annual amplitude
 phase_shift   <- runif(n_loc, 0, 2 * pi)
 
@@ -95,7 +96,7 @@ latitude  <- c( 7.9465, -0.0236, -13.1339); names(latitude)  <- j
 
 mobility_omega <- 2e-5
 mobility_gamma <- 2
-tau_i          <- setNames(rep(0.08, n_loc), j)   # daily departure prob.
+tau_i          <- setNames(c(0.005, 0.002, 0.006), j)   # daily depart probability
 
 # --------------------------- 6. Environment & WASH ------------------------ #
 # ψ_{jt} combines an annual sine and a longer 4‑year sine. Values are capped
@@ -206,6 +207,8 @@ sim <- mpm$run_model(paramfile = sim_config)
 exp_cases  <- sim$patches$expected_cases
 exp_deaths <- sim$patches$disease_deaths
 
+sim_config$reported_cases <- t(exp_cases[-1,])
+sim_config$reported_deaths <- t(exp_deaths[-1,])
 
 # Convert to matrices ------------------------------------------------------ #
 

@@ -3,47 +3,47 @@
 \docType{data}
 \name{config_simulation_epidemic}
 \alias{config_simulation_epidemic}
-\title{LASER Configuration for an epidemic simulation}
+\title{Epidemic Simulation LASER Configuration}
 \format{
-A named \strong{list} with the full LASER parameter structure created by
-\code{\link[=make_LASER_config]{make_LASER_config()}}.  Elements include model constants
-(\code{phi_1}, \code{gamma_1}, …), time-dependent matrices (\code{b_jt}, \code{psi_jt}),
-initial state vectors (\code{S_j_initial}, \code{I_j_initial}, …), and placeholders
-for \code{reported_cases} / \code{reported_deaths}.
+A named \strong{list} identical in structure to
+\link{config_default} but much smaller.  Key elements include
+day-by-day matrices (\code{b_jt}, \code{psi_jt}, \code{mu_jt}, …), initial state vectors,
+and placeholder \code{reported_cases} / \code{reported_deaths}.
 }
 \usage{
 config_simulation_epidemic
 }
 \description{
-A \strong{toy, short-horizon} parameter set that generates a single-year
-cholera \strong{epidemic} across three small metapopulation patches.  The object
-is produced by \code{make_simulation_epidemic_LASER_config_files.R} and is meant
-for unit tests, vignettes, and examples that need a fast-running outbreak
-with clearly defined peaks.  All parameters and initial conditions are
-internally generated – no external input files are required.
+A \strong{toy one-year outbreak} parameter set for quick unit-tests and
+vignette examples.
+The object is created by \code{make_simulated_LASER_config_files.R} and saved in
+the package as \strong{\code{config_simulation_epidemic}}.
 }
 \details{
-\itemize{
-\item \strong{Time frame:} 1 January 2020 – 31 December 2020 (365 days).
-\item \strong{Locations:} “FOO”, “BAR”, “BAZ” with populations 5 k, 10 k, 20 k.
-\item \strong{Initial immunity/infection mix:} 50 \% susceptible, 20–30 \% first-dose
-vaccinated, a handful of seed infections in “FOO”.
-\item \strong{Seasonality:} Moderate amplitude (≈0.15) sine forcing of β produces a
-single pronounced epidemic wave in each site.
-\item \strong{Environment:} Flat suitability (\code{psi_jt = 0.7}), short environmental
-half-life (\code{decay_days_long = 90}).
+\tabular{ll}{
+   Aspect \tab Setting \cr
+   \strong{Time span} \tab 1 Jan 2020 – 31 Dec 2020 (365 days). \cr
+   \strong{Locations} \tab “FOO” (5 k), “BAR” (10 k), “BAZ” (20 k). \cr
+   \strong{Initial mix} \tab 50 \% susceptible, 20–30 \% first-dose vaccinated, 3 seeding infections in “FOO”. \cr
+   \strong{Transmission} \tab Baseline β fixed per site: \strong{0.30}, \strong{0.50}, \strong{0.40} with ±0.15 seasonal sine forcing. \cr
+   \strong{Mobility} \tab Daily departure probabilities τ\if{html}{\out{<sub>}}i\if{html}{\out{</sub>}} = 0.005, 0.002, 0.006. \cr
+   \strong{Environment} \tab Flat suitability (ψ = 0.7), short environmental half-life (decay_days_long = 90). \cr
+   \strong{Observed data} \tab \code{reported_cases} / \code{reported_deaths} matrices are filled with \strong{NA} (no real surveillance data). \cr
+   \strong{Seed} \tab \code{set.seed(999999999)} for full reproducibility. \cr
 }
 
-This configuration is small enough to simulate in a few hundred
-milliseconds yet still exercises all major LASER components, making it
-ideal for automated tests.
+
+These settings produce a single, clearly defined epidemic wave in each
+patch—especially pronounced in “BAR”, which has the highest baseline
+transmission (β = 0.50).  The configuration is small enough to run in
+fractions of a second yet exercises all major LASER components, making it
+ideal for automated tests and teaching materials.
 }
 \seealso{
 \itemize{
-\item \link{config_simulation_endemic} for a long-run endemic scenario.
-\item \link{config_default} for the comprehensive default configuration.
-\item \code{make_simulation_epidemic_LASER_config_files.R} for the script that
-creates this object.
+\item \link{config_simulation_endemic} – long-run endemic scenario.
+\item \link{config_default} – comprehensive default configuration.
+\item \code{make_simulated_LASER_config_files.R} – script that generates this object.
 }
 }
 \keyword{datasets}
