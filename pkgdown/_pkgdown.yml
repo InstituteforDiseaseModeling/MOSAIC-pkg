@@ -136,6 +136,8 @@ reference:
     contents:
       - check_overdispersion
       - calc_diffusion_matrix_pi
+      - calc_spatial_correlation
+      - calc_spatial_correlation_matrix
       - calc_affine_normalization
       - check_affine_normalization
       - downscale_weekly_values

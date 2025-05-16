@@ -115,6 +115,12 @@
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood_poisson.html</loc>
   </url>
   <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation_matrix.html</loc>
+  </url>
+  <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.html</loc>
   </url>
   <url>
@@ -392,6 +398,9 @@
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_shedding_rate.html</loc>
+  </url>
+  <url>
+    <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_spatial_correlation_heatmap.html</loc>
   </url>
   <url>
     <loc>institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suitability_and_cases.html</loc>
