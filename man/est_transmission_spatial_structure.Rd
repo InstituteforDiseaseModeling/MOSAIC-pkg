@@ -2,35 +2,51 @@
 % Please edit documentation in R/est_transmission_spatial_structure.R
 \name{est_transmission_spatial_structure}
 \alias{est_transmission_spatial_structure}
-\title{Estimate Spatial Transmission Structure with INLA}
+\title{Estimate spatial transmission structure using INLA}
 \usage{
 est_transmission_spatial_structure(PATHS, config)
 }
 \arguments{
-\item{PATHS}{List of file paths, including DATA_WORLD_BANK, DATA_ELEVATION, DATA_CLIMATE.}
-
-\item{config}{List of model configuration parameters, including:
+\item{PATHS}{A named list with at minimum:
 \describe{
-\item{date_start, date_stop}{Character or Date; analysis time window.}
-\item{location_name}{Character vector of ISO codes for sites.}
-\item{reported_cases}{Matrix of reported cases (sites × time).}
-\item{nu_1_jt, nu_2_jt}{Matrices of first/second-dose vaccinations (sites × time).}
-\item{phi_1, phi_2}{Numeric vaccine efficacy parameters.}
-\item{N_j_initial}{Numeric vector of initial population sizes.}
-\item{theta_j}{Numeric WASH covariate per site.}
-\item{tau_i}{Numeric travel probability per site.}
-\item{longitude, latitude}{Numeric vectors of site coordinates (projected).}
+\item{DATA_WORLD_BANK, DATA_ELEVATION, DATA_CLIMATE}{Character paths to
+covariate files.}
+\item{MODEL_INPUT}{Character path to the directory where the parameter
+CSV will be written.}
 }}
+
+\item{config}{A named list with elements…}
 }
 \value{
-A list with:
+A list with components
 \describe{
-\item{relative_multiplier}{Numeric vector of site-level multipliers \eqn{\exp(u_j)}.}
-\item{model}{Fitted INLA model object.}
-\item{inputs}{List containing mesh, data_list, A_list, and effects_list for reproducibility.}
+\item{relative_multiplier}{Numeric vector \eqn{\exp(u_j)}.}
+\item{model}{Fitted \code{INLA} object.}
+\item{inputs}{Internal objects (\code{mesh}, \code{data_list}, …).}
+\item{data}{Merged site-level data frame used in the fit.}
 }
 }
 \description{
-Prepares data and fits a negative-binomial spatial random-field model to estimate location-specific relative multipliers,
-incorporating PCA-derived covariates, an IID site effect, and the SPDE field.
+Prepare input data and fit a negative-binomial spatial random-field model
+(SPDE + IID site effect) to obtain location-specific multiplicative
+transmission modifiers.
+}
+\details{
+The response is total reported incidence aggregated over the analysis
+window. A log-offset of \eqn{\log(N_j \times T)} is applied, where
+\eqn{N_j} is site-level population and \eqn{T} the number of observation
+days.  The latent field is a Matérn SPDE (Lindgren et al., 2011).
+A CSV of the estimated multipliers is written to
+\code{file.path(PATHS$MODEL_INPUT, "param_beta_relative_multiplier.csv")}.
+}
+\examples{
+\dontrun{
+  paths  <- list(MODEL_INPUT = tempdir(), DATA_WORLD_BANK = "...", ...)
+  config <- MOSAIC::config_default[1:3]   # first three sites
+  res <- est_transmission_spatial_structure(paths, config)
+  head(res$relative_multiplier)
+}
+}
+\references{
+Lindgren, F., Rue, H. & Lindström, J. (2011). …
 }
