@@ -51,6 +51,8 @@ get_paths <- function(root=NULL) {
      PATHS$DATA_CLIMATE <- file.path(root, "MOSAIC-data/processed/climate")
      PATHS$DATA_ENSO <- file.path(root, "MOSAIC-data/processed/ENSO")
      PATHS$DATA_OAG <- file.path(root, "MOSAIC-data/processed/OAG")
+     PATHS$DATA_UNICEF <- file.path(root, "MOSAIC-data/processed/UNICEF")
+     PATHS$DATA_WORLD_BANK <- file.path(root, "MOSAIC-data/processed/world_bank")
      PATHS$DATA_WHO_ANNUAL <- file.path(root, "MOSAIC-data/processed/WHO/annual")
      PATHS$DATA_WHO_WEEKLY <- file.path(root, "MOSAIC-data/processed/WHO/weekly")
      PATHS$DATA_WHO_DAILY <- file.path(root, "MOSAIC-data/processed/WHO/daily")

@@ -35,10 +35,10 @@ locations.
 \emph{All three input objects must be arranged as} \verb{[ time steps , locations ]}
 (rows are the \emph{T} simulation steps; columns are the \emph{L} locations).
 
-Total infections at time \emph{t} in location \emph{\ell} are taken as
-\eqn{I_{t\ell}=I^{(\mathrm{sym})}_{t\ell}+I^{(\mathrm{asym})}_{t\ell}}; these
+Total infections at time \emph{t} in location \strong{l} are taken as
+\eqn{I_{t*l*}=I^{(\mathrm{sym})}_{t*l*}+I^{(\mathrm{asym})}_{t*l*}}; these
 are converted to prevalence by dividing by the matching population size
-\eqn{N_{t\ell}}.  Pair-wise correlations are then computed with
+\eqn{N_{t*l*}}.  Pair-wise correlations are then computed with
 \code{\link[=calc_spatial_correlation]{calc_spatial_correlation()}}.
 }
 \examples{
