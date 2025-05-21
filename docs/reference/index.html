@@ -16,7 +16,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -267,6 +267,41 @@
           <code><a href="get_vaccine_effectiveness_data.html">get_vaccine_effectiveness_data()</a></code> 
         </dt>
         <dd>Get Vaccine Effectiveness Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_ENSO_data.html">process_ENSO_data()</a></code> 
+        </dt>
+        <dd>Compile ENSO and DMI Data (Historical and Forecast)</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_UNICEF_malnutrition_data.html">process_UNICEF_malnutrition_data()</a></code> 
+        </dt>
+        <dd>Process UNICEF Child Malnutrition Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_WB_GDP_data.html">process_WB_GDP_data()</a></code> 
+        </dt>
+        <dd>Process World Bank GDP data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_WB_population_density_data.html">process_WB_population_density_data()</a></code> 
+        </dt>
+        <dd>Process World Bank Population Density Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_WB_poverty_ratio_data.html">process_WB_poverty_ratio_data()</a></code> 
+        </dt>
+        <dd>Process World Bank Poverty Ratio Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_WB_urban_population_data.html">process_WB_urban_population_data()</a></code> 
+        </dt>
+        <dd>Process World Bank Urban Population Proportion Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="process_climate_data.html">process_climate_data()</a></code> 
+        </dt>
+        <dd>Process and Aggregate Climate Data for Each Country</dd>
       </dl></div><div class="section level2">
       <h2 id="estimating-model-quantities">Estimating model quantities<a class="anchor" aria-label="anchor" href="#estimating-model-quantities"></a></h2>
       
@@ -328,6 +363,11 @@
           <code><a href="est_symptomatic_prop.html">est_symptomatic_prop()</a></code> 
         </dt>
         <dd>Estimate and Visualize Symptomatic Proportion Data</dd>
+      </dl><dl><dt>
+          
+          <code><a href="est_transmission_spatial_structure.html">est_transmission_spatial_structure()</a></code> 
+        </dt>
+        <dd>Estimate spatial transmission structure using INLA</dd>
       </dl></div><div class="section level2">
       <h2 id="model-configuration-examples">Model configuration examples<a class="anchor" aria-label="anchor" href="#model-configuration-examples"></a></h2>
       
@@ -353,12 +393,12 @@
           
           <code><a href="config_simulation_endemic.html">config_simulation_endemic</a></code> 
         </dt>
-        <dd>LASER Configuration for an endemic simulation</dd>
+        <dd>Endemic Simulation LASER Configuration</dd>
       </dl><dl><dt>
           
           <code><a href="config_simulation_epidemic.html">config_simulation_epidemic</a></code> 
         </dt>
-        <dd>LASER Configuration for an epidemic simulation</dd>
+        <dd>Epidemic Simulation LASER Configuration</dd>
       </dl></div><div class="section level2">
       <h2 id="model-calibration">Model calibration<a class="anchor" aria-label="anchor" href="#model-calibration"></a></h2>
       
@@ -555,6 +595,11 @@
         <dd>Compute Diffusion Matrix Based on Gravity Model</dd>
       </dl><dl><dt>
           
+          <code><a href="calc_spatial_hazard.html">calc_spatial_hazard()</a></code> 
+        </dt>
+        <dd>Calculate spatial importation hazard</dd>
+      </dl><dl><dt>
+          
           <code><a href="calc_spatial_correlation.html">calc_spatial_correlation()</a></code> 
         </dt>
         <dd>Calculate spatial correlation between two locations</dd>
@@ -593,6 +638,11 @@
           <code><a href="get_paths.html">get_paths()</a></code> 
         </dt>
         <dd>Generate Directory Paths for the MOSAIC Project</dd>
+      </dl><dl><dt>
+          
+          <code><a href="get_default_config.html">get_default_config()</a></code> 
+        </dt>
+        <dd>Create Default LASER Configuration</dd>
       </dl><dl><dt>
           
           <code><a href="get_ggplot_legend.html">get_ggplot_legend()</a></code> 
@@ -684,6 +734,11 @@
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code> 
         </dt>
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
+      </dl><dl><dt>
+          
+          <code><a href="run_spatial_transmission_shiny_app.html">run_spatial_transmission_shiny_app()</a></code> 
+        </dt>
+        <dd>Launch an interactive viewer for site-specific \(\beta_{\text{hum}}\)</dd>
       </dl></div><div class="section level2">
       <h2 id="plotting-functions">Plotting Functions<a class="anchor" aria-label="anchor" href="#plotting-functions"></a></h2>
       
@@ -775,6 +830,11 @@
           <code><a href="plot_spatial_correlation_heatmap.html">plot_spatial_correlation_heatmap()</a></code> 
         </dt>
         <dd>Heat-map of a spatial–correlation matrix (ggplot2)</dd>
+      </dl><dl><dt>
+          
+          <code><a href="plot_spatial_hazard.html">plot_spatial_hazard()</a></code> 
+        </dt>
+        <dd>Plot spatial importation hazard heatmap</dd>
       </dl><dl><dt>
           
           <code><a href="plot_suitability_and_cases.html">plot_suitability_and_cases()</a></code> 

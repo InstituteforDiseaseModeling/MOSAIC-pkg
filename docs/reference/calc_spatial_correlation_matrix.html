@@ -24,7 +24,7 @@ locations."><meta property="og:image" content="institutefordiseasemodeling.githu
     
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -112,10 +112,10 @@ be computed (all <code>NA</code>, zero variance, etc.) are returned as <code>NA_
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><em>All three input objects must be arranged as</em> <code>[ time steps , locations ]</code>
 (rows are the <em>T</em> simulation steps; columns are the <em>L</em> locations).</p>
-<p>Total infections at time <em>t</em> in location <em></em> are taken as
-\(I_{t\ell}=I^{(\mathrm{sym})}_{t\ell}+I^{(\mathrm{asym})}_{t\ell}\); these
+<p>Total infections at time <em>t</em> in location <strong>l</strong> are taken as
+\(I_{t*l*}=I^{(\mathrm{sym})}_{t*l*}+I^{(\mathrm{asym})}_{t*l*}\); these
 are converted to prevalence by dividing by the matching population size
-\(N_{t\ell}\).  Pair-wise correlations are then computed with
+\(N_{t*l*}\).  Pair-wise correlations are then computed with
 <code><a href="calc_spatial_correlation.html">calc_spatial_correlation()</a></code>.</p>
     </div>
     <div class="section level2">
