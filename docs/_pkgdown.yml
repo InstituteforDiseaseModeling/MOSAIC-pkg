@@ -82,6 +82,7 @@ reference:
       - get_suspected_cases
       - get_generation_time_distribution
       - get_vaccine_effectiveness_data
+      - starts_with("process_")
 
   - title: "Estimating model quantities"
     contents:
@@ -95,6 +96,7 @@ reference:
       - est_vaccine_effectiveness
       - est_immune_decay
       - est_symptomatic_prop
+      - est_transmission_spatial_structure
 
   - title: "Model configuration examples"
     contents:
@@ -136,6 +138,7 @@ reference:
     contents:
       - check_overdispersion
       - calc_diffusion_matrix_pi
+      - calc_spatial_hazard
       - calc_spatial_correlation
       - calc_spatial_correlation_matrix
       - calc_affine_normalization
@@ -144,6 +147,7 @@ reference:
       - downscale_weekly_cholera_data
       - load_or_install_packages
       - get_paths
+      - get_default_config
       - get_ggplot_legend
       - starts_with("make_")
       - set_root_directory
@@ -161,6 +165,7 @@ reference:
   - title: "Shiny Apps"
     contents:
       - run_WHO_annual_data_app
+      - run_spatial_transmission_shiny_app
 
   - title: "Plotting Functions"
     contents:

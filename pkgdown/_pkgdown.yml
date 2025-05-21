@@ -100,7 +100,6 @@ reference:
 
   - title: "Model configuration examples"
     contents:
-      - get_default_LASER_config
       - starts_with("config_")
 
   - title: "Model calibration"
@@ -147,7 +146,6 @@ reference:
       - downscale_weekly_cholera_data
       - load_or_install_packages
       - get_paths
-      - get_default_config
       - get_ggplot_legend
       - starts_with("make_")
       - set_root_directory
@@ -165,7 +163,7 @@ reference:
   - title: "Shiny Apps"
     contents:
       - run_WHO_annual_data_app
-      -
+      - run_spatial_transmission_shiny_app
 
   - title: "Plotting Functions"
     contents:
