@@ -1,3 +1,61 @@
+#' Launch an interactive viewer for site-specific \eqn{\beta_{\text{hum}}}
+#'
+#' Display a Shiny dashboard that lets you explore the **global** human-to-human
+#' transmission coefficient (\eqn{\beta_{\text{hum}}}) together with
+#' location-specific modifiers, incidence, population size and WASH covariates.
+#' The app is intended as a quick visual sanity-check of the output produced by
+#' [`est_transmission_spatial_structure()`] and is **not** meant for automated
+#' pipelines.
+#'
+#' @details
+#' The slider *Global Beta* sets a baseline value
+#' \eqn{\beta_{\text{hum}}^{\ast}}, while the slider *Variance Expansion
+#' Factor* applies an exponent \eqn{\kappa} to each relative multiplier
+#' \eqn{m_j}, producing the site-specific coefficient
+#' \deqn{\beta_{\text{hum},j} = \beta_{\text{hum}}^{\ast} \, m_j^{\kappa}.}
+#'
+#' The main panel is organised as a 4 × 2 layout created with **patchwork**:
+#' \describe{
+#'   \item{Top row}{A histogram of the current \eqn{\beta_{\text{hum},j}}
+#'     values; the dashed red line marks \eqn{\beta_{\text{hum}}^{\ast}}.}
+#'   \item{Bottom row}{Four aligned strip plots, all ordered by
+#'     \eqn{\beta_{\text{hum},j}}:
+#'     \enumerate{
+#'       \item Relative multipliers \eqn{m_j};
+#'       \item Site-specific \eqn{\beta_{\text{hum},j}};
+#'       \item Incidence per population (\eqn{I_j / N_j});
+#'       \item WASH covariate value.}}
+#' }
+#'
+#' @param mod A list produced by [`est_transmission_spatial_structure()`],
+#'   containing at least
+#'   \code{relative_multiplier}, \code{data}, and the columns
+#'   \code{iso_code}, \code{incidence_total}, \code{population_size},
+#'   \code{WASH} inside \code{mod$data}.
+#'
+#' @return (Invisibly) the `shiny.appobj` returned by
+#'   [\link[shiny]{shinyApp}]—the function is called for its side effect of
+#'   launching a Shiny app in the default browser or RStudio viewer.
+#'
+#' @section Side Effects:
+#' Opens a Shiny window and blocks the R session while the app is running.
+#'
+#' @import shiny
+#' @import ggplot2
+#' @import patchwork
+#'
+#' @examples
+#' \dontrun{
+#'   paths  <- list(MODEL_INPUT = tempdir())
+#'   config <- MOSAIC::config_default[1:3]          # toy example
+#'   fit    <- est_transmission_spatial_structure(paths, config)
+#'
+#'   ## Launch the interactive viewer (stop the app to regain the prompt):
+#'   run_spatial_transmission_shiny_app(fit)
+#' }
+#' @export
+#'
+
 run_spatial_transmission_shiny_app <- function(mod) {
      library(shiny)
      library(ggplot2)
