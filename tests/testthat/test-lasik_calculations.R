@@ -1,7 +1,8 @@
 library(reticulate)
-mpm <- reticulate::import("laser_cholera.metapop.model")
+mpm      <- reticulate::import("laser_cholera.metapop.model")
+PATHS    <- MOSAIC::get_paths()
 filename <- file.path(PATHS$ROOT, "inst", "extdata", "default_parameters.json")
-model <- mpm$run_model(paramfile = filename)
+model    <- mpm$run_model(paramfile = filename)
 baseline <- jsonlite::fromJSON(filename)
 
 # Check human-human seasonality computation
@@ -20,8 +21,8 @@ testthat::test_that("beta_j_seasonality matches", {
      #           + params.b_2_j[None, :] * np.sin(4 * np.pi * t / params.p)[:, None]
      #      )
      # )
-
-     expect_equal(model$patches$beta_j_seasonality)
+     expected <- NULL # ¡TODO!
+     expect_equal(expected, model$patches$beta_j_seasonality)
 })
 
 # Check environmental seasonality computation
@@ -31,7 +32,8 @@ testthat::test_that("beta_env matches", {
      # psi_bar = params.psi_jt.mean(axis=0, keepdims=True)
      # model.patches.beta_env = params.beta_j0_env.T * (1.0 + (params.psi_jt - psi_bar) / psi_bar)
 
-     expect_equal(model$patches$beta_env)
+     expected <- NULL # ¡TODO!
+     expect_equal(expected, model$patches$beta_env)
 })
 
 # Check environmental decay computation
@@ -46,7 +48,8 @@ testthat::test_that("delta_jt matches", {
      #      beta_b = params.decay_shape_2,
      # ) = 1.0 / fast + beta.cdf(suitability, beta_a, beta_b) * (1.0 / slow - 1.0 / fast)
 
-     expect_equal(model$patches$delta_jt)
+     expected <- NULL # ¡TODO!
+     expect_equal(expected, model$patches$delta_jt)
 })
 
 # Check OCV first dose schedule
@@ -99,6 +102,7 @@ testthat::test_that("pi_ij calculations match", {
           gamma = baseline$mobility_gamma
      )
 
+     actual <- model$patches$pi_ij
      percentage <- 100 * abs(expected - actual) / expected
 
      testthat::expect_lt(max(percentage, na.rm = TRUE), 1.0)
@@ -122,9 +126,9 @@ testthat::test_that("log likelihood calculations match", {
 # LASIK values in model.patches.spatial_hazard
 testthat::test_that("spatial hazard calculations match", {
 
-     p <- baseline$p
-     T <- dim(model$people$S)[1] - 1
-     t <- (0:T-1 %% p) + 1
+     p      <- baseline$p
+     nticks <- dim(model$people$S)[1] - 1
+     t      <- ((0:(nticks-1)) %% p) + 1
 
      # Compute the seasonal component as a t x J matrix
      seasonal_component <- outer(t, baseline$a_1_j, function(t, a) a * cos(2 * pi * t / p)) +
@@ -134,16 +138,16 @@ testthat::test_that("spatial hazard calculations match", {
 
      # Multiply baseline and add 1 — beta_j0_hum should be J-length vector
      beta <- t(t(1 + seasonal_component) * baseline$beta_j0_hum)
-     expected <- calc_spatial_hazard(
+     expected <- MOSAIC::calc_spatial_hazard(
           beta,
           baseline$tau_i,
           t(model$patches$pi_ij),
-          model$patches$N,
-          model$people$S,
-          model$people$V1_sus,
-          model$people$V2_sus,
-          I1 = model$people$Isym,
-          I2 = model$people$Iasym,
+          model$patches$N[-1,],
+          model$people$S[-1,],
+          model$people$V1sus[-1,],
+          model$people$V2sus[-1,],
+          I1 = model$people$Isym[-1,],
+          I2 = model$people$Iasym[-1,],
           time_names = NULL,
           location_names = NULL
      )
@@ -154,12 +158,15 @@ testthat::test_that("spatial hazard calculations match", {
 # Check coupling computation
 # LASIK values in model.patches.coupling
 testthat::test_that("coupling calculations match", {
-     expect_equal(model$patches$coupling)
+     expected <- NULL # ¡TODO!
+     expect_equal(expected, model$patches$coupling)
 })
 
 # TODO: reproductive number
+testthat::test_that("reproductive number calculations match", {})
+
 # TODO: r-effective
+testthat::test_that("r_effective calculations match", {})
 
-# TODO: edge cases -
-
+# TODO? edge cases -
 # Check birth and death rates (TBD)
