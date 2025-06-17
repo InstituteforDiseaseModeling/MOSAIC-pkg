@@ -187,6 +187,9 @@ testthat::test_that("r_effective calculations match", {})
 
 # TODO? edge cases -
 # Check birth and death rates (TBD)
+<<<<<<< HEAD
 
 # TODO? population trends -
 # Check that total population tracks expected population sizes from UN WPP data
+=======
+>>>>>>> refs/remotes/origin/main
