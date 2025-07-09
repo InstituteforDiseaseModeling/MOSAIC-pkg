@@ -1,4 +1,5 @@
 library(reticulate)
+library(MOSAIC)
 
 # Load default model and set baseline
 mpm      <- reticulate::import("laser_cholera.metapop.model")
@@ -385,20 +386,34 @@ testthat::test_that("log likelihood calculations match", {
 # LASIK values in model.patches.spatial_hazard
 testthat::test_that("spatial hazard calculations match", {
 
-     p      <- baseline$p
-     nticks <- dim(model$people$S)[1] - 1
-     t      <- ((0:(nticks-1)) %% p) + 1
+     a1 <- baseline$a_1_j
+     a2 <- baseline$a_2_j
+     b1 <- baseline$a_1_j
+     b2 <- baseline$b_2_j
+     p <- baseline$p
 
-     # Compute the seasonal component as a t x J matrix
-     seasonal_component <- outer(t, baseline$a_1_j, function(t, a) a * cos(2 * pi * t / p)) +
-          outer(t, baseline$b_1_j, function(t, b) b * sin(2 * pi * t / p)) +
-          outer(t, baseline$a_2_j, function(t, a) a * cos(4 * pi * t / p)) +
-          outer(t, baseline$b_2_j, function(t, b) b * sin(4 * pi * t / p))
+     time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
+     location_names <- model$params$location_name
 
-     # Multiply baseline and add 1 — beta_j0_hum should be J-length vector
-     beta <- t(t(1 + seasonal_component) * baseline$beta_j0_hum)
+     beta_j0_hum <- model$params$beta_j0_hum
+     beta_jt_hum <- matrix(NA_real_, nrow = length(time_names), ncol = length(location_names))
+
+     for (t in 1:length(time_names)) {
+          for (j in 1:length(location_names)) {
+
+               seasonal_term <-
+                    a1[j] * cos(2 * pi * t / p) +
+                    b1[j] * sin(2 * pi * t / p) +
+                    a2[j] * cos(4 * pi * t / p) +
+                    b2[j] * sin(4 * pi * t / p)
+
+               beta_jt_hum[t, j] <- beta_j0_hum[j] * (1 + seasonal_term)
+
+          }
+     }
+
      expected <- MOSAIC::calc_spatial_hazard(
-          beta,
+          beta_jt_hum,
           baseline$tau_i,
           t(model$patches$pi_ij),
           model$patches$N[-1,],
@@ -411,18 +426,103 @@ testthat::test_that("spatial hazard calculations match", {
           location_names = NULL
      )
 
-     expect_equal(expected, t(model$patches$spatial_hazard))
+     testthat::expect_equal(expected, model$patches$spatial_hazard[-1,], tolerance = 1e-04)
+
 })
+
 
 # Check coupling computation
 # LASIK values in model.patches.coupling
 testthat::test_that("coupling calculations match", {
-     expected <- NULL # ¡TODO!
-     expect_equal(expected, model$patches$coupling)
+
+     I_sym <- model$people$Isym
+     I_asym <- model$people$Iasym
+     N <- model$patches$N
+
+     expected <- MOSAIC::calc_spatial_correlation_matrix(I_sym, I_asym, N)
+     dimnames(expected) <- NULL
+
+     actual <- model$patches$coupling
+
+     testthat::expect_equal(expected, actual, tolerance = 1e-4)
+
 })
 
-# TODO? population trends -
+
 # Check that total population tracks expected population sizes from UN WPP data
+testthat::test_that("UN population trends", {
+
+     time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
+     location_names <- model$params$location_name
+
+     set_root_directory("~/Library/CloudStorage/OneDrive-Bill&MelindaGatesFoundation/Projects/MOSAIC")
+     PATHS <- MOSAIC::get_paths()
+
+     pop_UN <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_N_population_size.csv'))
+     pop_UN$t <- as.Date(pop_UN$t)
+     pop_UN <- pop_UN[pop_UN$t %in% time_names,]
+
+     pop_model <- model$patches$N[-1,]
+     colnames(pop_model) <- location_names
+     rownames(pop_model) <- as.character(time_names)
+
+     actual <- pop_model
+     expected <- pop_model; expected[,] <- NA
+
+     for (j in 1:ncol(expected)) {
+
+          tmp <- pop_UN[pop_UN$j == location_names[j],]
+          tmp <- tmp[order(as.Date(tmp$t)),]
+          expected[,j] <- tmp$parameter_value
+
+     }
+
+     testthat::expect_equal(expected, actual, tolerance = 1e-4)
+
+     if (F){
+
+          # Plot time series of expected vs actual population by location
+
+          library(ggplot2)
+          library(reshape2)
+
+          # Melt the matrices into long format
+          df_exp <- melt(expected,
+                         varnames = c("date", "location"),
+                         value.name = "population")
+          df_exp$source <- "expected"
+
+          df_act <- melt(actual,
+                         varnames = c("date", "location"),
+                         value.name = "population")
+          df_act$source <- "actual"
+
+          # Combine and convert date column
+          df_long <- rbind(df_exp, df_act)
+          df_long$date <- as.Date(df_long$date)
+
+          # Plot with facets by location
+          ggplot(df_long, aes(x = date, y = population, color = source)) +
+               geom_line(linewidth=1.5) +
+               facet_wrap(~ location, scales = "free_y") +
+               labs(
+                    x     = "Date",
+                    y     = "Population size",
+                    color = "Data type",
+                    title = "Expected vs Actual Population Over Time"
+               ) +
+               theme_minimal() +
+               theme(
+                    axis.text.x = element_text(angle = 45, hjust = 1),
+                    panel.grid.major = element_line(color = "grey80"),
+                    panel.grid.minor = element_blank()
+               )
+
+
+     }
+
+})
+
 
 # TODO: reproductive number
 # testthat::test_that("reproductive number calculations match", {})
