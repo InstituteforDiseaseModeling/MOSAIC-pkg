@@ -40,7 +40,7 @@ testthat::test_that("beta_j_seasonality matches", {
 
      testthat::expect_equal(beta_jt_hum_expected, beta_jt_hum_model)
 
-     if (F) {
+     if (T) {
 
           library(ggplot2)
           library(grid)  # for unit()
@@ -123,7 +123,7 @@ testthat::test_that("beta_env matches", {
      testthat::expect_equal(beta_jt_env_expected, beta_jt_env_model, tolerance = 1e-06)
 
 
-     if(F) {
+     if(T) {
 
           library(ggplot2)
           library(grid)  # for unit()
@@ -183,24 +183,8 @@ testthat::test_that("beta_env matches", {
 
 })
 
+
 # Check environmental decay computation
-# LASIK values in model.patches.delta_jt
-testthat::test_that("delta_jt matches", {
-
-     # model.patches.delta_jt = map_suitability_to_decay(
-     #      decay_days_short = params.decay_days_short,
-     #      decay_days_long = params.decay_days_long,
-     #      suitability = params.psi_jt,
-     #      decay_shape_1 = params.decay_shape_1,
-     #      decay_shape_2 = params.decay_shape_2,
-     # ) = 1.0 / decay_days_short + beta.cdf(suitability, decay_shape_1, decay_shape_2) * (1.0 / decay_days_long - 1.0 / decay_days_short)
-
-     expected <- NULL # ¡TODO!
-     expect_equal(expected, model$patches$delta_jt)
-
-})
-
-
 testthat::test_that("delta_jt matches", {
 
      # grab the pieces from baseline
@@ -318,6 +302,7 @@ testthat::test_that("OCV dose two doses match", {
      testthat::expect_true(good)
 })
 
+
 # Check pi_ij matrix
 # LASIK values in model.patches.pi_ij
 testthat::test_that("pi_ij calculations match", {
@@ -326,11 +311,17 @@ testthat::test_that("pi_ij calculations match", {
      # calculates _planar_ distance, not spherical. As a result, distances in
      # D will not match the distances used in the LASIK Python code which
      # calculates distances on a sphere using the Haversine formula
-     D <- mobility::get_distance_matrix(
+
+     # Added get_distance_matrix to MOSAIC. Method='spherical' gives haversine formula
+     # for spherical distance. Original mobility function reproduced by method='planar'.
+
+     D <- MOSAIC::get_distance_matrix(
           x = baseline$longitude,
           y = baseline$latitude,
-          id = baseline$location_name
-     ) * 111.35
+          id = baseline$location_name,
+          method = 'spherical'
+     )
+
      expected <- MOSAIC::calc_diffusion_matrix_pi(
           D = D,
           N = baseline$N_j_initial,
@@ -339,10 +330,42 @@ testthat::test_that("pi_ij calculations match", {
      )
 
      actual <- model$patches$pi_ij
-     percentage <- 100 * abs(expected - actual) / expected
+     diag(actual) <- NA
 
-     testthat::expect_lt(max(percentage, na.rm = TRUE), 1.0)
+     testthat::expect_equal(expected, actual, tolerance = 1e-04)
+
+     if (F) {
+
+          library(ggplot2)
+          library(reshape2)
+
+          df_exp <- melt(expected,
+                         varnames = c("origin", "destination"),
+                         value.name = "value")
+          df_exp$matrix <- "expected"
+
+          df_act <- melt(actual,
+                         varnames = c("origin", "destination"),
+                         value.name = "value")
+          df_act$matrix <- "actual"
+
+          df_long <- rbind(df_exp, df_act)
+
+          ggplot(df_long, aes(x = destination, y = origin, fill = value)) +
+               geom_tile() +
+               facet_wrap(~ matrix, ncol = 2) +
+               scale_fill_gradient(low = "white", high = "steelblue") +
+               labs(x = NULL, y = NULL, fill = "Value") +
+               theme_minimal() +
+               theme(
+                    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+                    panel.grid = element_blank()
+               )
+
+     }
+
 })
+
 
 # Check log_likelihood computation
 # LASIK value in model.log_likelihood
@@ -398,15 +421,13 @@ testthat::test_that("coupling calculations match", {
      expect_equal(expected, model$patches$coupling)
 })
 
-# TODO: reproductive number
-testthat::test_that("reproductive number calculations match", {})
-
-# TODO: r-effective
-testthat::test_that("r_effective calculations match", {})
-
-# TODO? edge cases -
-# Check birth and death rates (TBD)
-
 # TODO? population trends -
 # Check that total population tracks expected population sizes from UN WPP data
+
+# TODO: reproductive number
+# testthat::test_that("reproductive number calculations match", {})
+
+# TODO: r-effective
+# testthat::test_that("r_effective calculations match", {})
+
 
