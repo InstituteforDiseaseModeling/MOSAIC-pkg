@@ -188,7 +188,7 @@ default_args <- list(
      V1_j_initial = V1_j,
      V2_j_initial = V2_j,
      b_jt = b_jt,
-     d_jt = b_jt,
+     d_jt = d_jt,
      nu_1_jt = nu_1_jt,
      nu_2_jt = nu_2_jt,
      phi_1 = 0.64,
