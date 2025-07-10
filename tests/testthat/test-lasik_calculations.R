@@ -14,14 +14,14 @@ testthat::test_that("beta_j_seasonality matches", {
      time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
      location_names <- model$params$location_name
 
-     beta_j0_hum <- model$params$beta_j0_hum
+     beta_j0_hum <- baseline$beta_j0_hum
      beta_jt_hum_model <- model$patches$beta_jt_human
      beta_jt_hum_expected <- matrix(NA_real_, nrow = length(time_names), ncol = length(location_names))
 
      # Baseline Fourier seasonality terms
      a1 <- baseline$a_1_j
      a2 <- baseline$a_2_j
-     b1 <- baseline$a_1_j
+     b1 <- baseline$b_1_j
      b2 <- baseline$b_2_j
      p <- baseline$p
 
@@ -388,7 +388,7 @@ testthat::test_that("spatial hazard calculations match", {
 
      a1 <- baseline$a_1_j
      a2 <- baseline$a_2_j
-     b1 <- baseline$a_1_j
+     b1 <- baseline$b_1_j
      b2 <- baseline$b_2_j
      p <- baseline$p
 
