@@ -13,12 +13,12 @@ baseline <- jsonlite::fromJSON(filename)
 # LASIK values in model.patches.beta_j_seasonality
 testthat::test_that("beta_j_seasonality matches", {
 
-     time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
-     location_names <- model$params$location_name
+     time_names <- seq(as.Date(baseline$date_start), as.Date(baseline$date_stop), 1)
+     location_names <- baseline$location_name
 
      beta_j0_hum <- baseline$beta_j0_hum
-     beta_jt_hum_model <- model$patches$beta_jt_human
-     beta_jt_hum_expected <- matrix(NA_real_, nrow = length(time_names), ncol = length(location_names))
+     beta_jt_hum_model <- model$results$beta_jt_human
+     beta_jt_hum_expected <- matrix(NA_real_, nrow = length(location_names), ncol = length(time_names))
 
      # Baseline Fourier seasonality terms
      a1 <- baseline$a_1_j
@@ -36,12 +36,14 @@ testthat::test_that("beta_j_seasonality matches", {
                     a2[j] * cos(4 * pi * t / p) +
                     b2[j] * sin(4 * pi * t / p)
 
-               beta_jt_hum_expected[t, j] <- beta_j0_hum[j] * (1 + seasonal_term)
+               beta_jt_hum_expected[j, t] <- beta_j0_hum[j] * (1 + seasonal_term)
 
           }
      }
 
+
      testthat::expect_equal(beta_jt_hum_expected, beta_jt_hum_model, tolerance = 1e-04)
+
 
      if (plot_diagnostics) {
 
@@ -104,20 +106,19 @@ testthat::test_that("beta_j_seasonality matches", {
 # LASIK values in model.patches.beta_env
 testthat::test_that("beta_env matches", {
 
-     beta_jt_env_model <- model$patches$beta_jt_env
+     beta_jt_env_model <- model$results$beta_jt_env
 
      # pull out the raw psi_jt matrix and beta0_env vector from the baseline JSON
      Psi       <- baseline$psi_jt            # dim: (time × locations)
      beta0_env <- baseline$beta_j0_env       # length = # locations
      psi_bar   <- rowMeans(Psi) # compute the time‐mean for each location
 
-     # build expected exactly as LASIK does:
-     beta_jt_env_expected <- matrix(NA_real_, nrow = ncol(Psi), ncol = nrow(Psi))
+     beta_jt_env_expected <- matrix(NA_real_, nrow = nrow(Psi), ncol = ncol(Psi))
 
      for (t in 1:ncol(Psi)) {
           for (j in 1:nrow(Psi)) {
 
-               beta_jt_env_expected[t, j] <- beta0_env[j] * (1 + (Psi[j, t] - psi_bar[j]) / psi_bar[j])
+               beta_jt_env_expected[j, t] <- beta0_env[j] * (1 + (Psi[j, t] - psi_bar[j]) / psi_bar[j])
 
           }
      }
@@ -132,12 +133,12 @@ testthat::test_that("beta_env matches", {
           library(grid)  # for unit()
 
           # build date and location vectors
-          dates          <- seq(as.Date(model$params$date_start),
-                                as.Date(model$params$date_stop), by = "day")
-          location_names <- model$params$location_name
+          dates          <- seq(as.Date(baseline$date_start),
+                                as.Date(baseline$date_stop), by = "day")
+          location_names <- baseline$location_name
 
           # grab model vs expected matrices
-          beta_model    <- model$patches$beta_jt_env
+          beta_model    <- model$results$beta_jt_env
           beta_expected <- beta_jt_env_expected
 
           # long‐form data.frames without any temp T
@@ -197,13 +198,13 @@ testthat::test_that("delta_jt matches", {
      decay_shape_1   <- baseline$decay_shape_1       # vector, length = # locations
      decay_shape_2   <- baseline$decay_shape_2       # vector, length = # locations
 
-     delta_jt_model <- model$patches$delta_jt
-     delta_jt_expected <- matrix(NA_real_, nrow = ncol(psi), ncol = nrow(psi))
+     delta_jt_model <- model$results$delta_jt
+     delta_jt_expected <- matrix(NA_real_, nrow = nrow(psi), ncol = ncol(psi))
 
      for (t in 1:ncol(psi)) {
           for (j in 1:nrow(psi)) {
 
-               delta_jt_expected[t, j] <-
+               delta_jt_expected[j, t] <-
                     1 / ( decay_days_short + pbeta(psi[j, t], decay_shape_1, decay_shape_2) * (decay_days_long - decay_days_short) )
 
           }
@@ -217,14 +218,14 @@ testthat::test_that("delta_jt matches", {
           library(grid)  # for unit()
 
           # 1. pull out model vs expected
-          model_mat    <- model$patches$delta_jt
+          model_mat    <- model$results$delta_jt
           expected_mat <- delta_jt_expected  # make sure this is the same dims: nrow=time, ncol=locations
 
           # 2. build date & location vectors
-          dates     <- seq(as.Date(model$params$date_start),
-                           as.Date(model$params$date_stop),
+          dates     <- seq(as.Date(baseline$date_start),
+                           as.Date(baseline$date_stop),
                            by = "day")
-          locations <- model$params$location_name
+          locations <- baseline$location_name
 
           # 3. reshape into long form (base R)
           df_model <- data.frame(
@@ -279,11 +280,11 @@ testthat::test_that("delta_jt matches", {
 # LASIK values in model.patches.dose_one_doses and model.patches.dose_two_doses
 testthat::test_that("OCV dose one doses match", {
 
-     # At a minimum, params$nu_1_jt != 0 where model$patches$dose_one_doses != 0
+     # At a minimum, params$nu_1_jt != 0 where model$results$dose_one_doses != 0
      # The converse _might_ not be true if there are no susceptibles to dose.
 
      # Transpose Python data from [time, patch] to [patch, time]
-     sim_non_zero <- t(model$patches$dose_one_doses) != 0
+     sim_non_zero <- model$results$dose_one_doses != 0
      input_values <- baseline$nu_1_jt[sim_non_zero]
      good <- all(input_values != 0)
 
@@ -294,11 +295,11 @@ testthat::test_that("OCV dose one doses match", {
 # LASIK values in model.patches.dose_one_doses and model.patches.dose_two_doses
 testthat::test_that("OCV dose two doses match", {
 
-     # At a minimum, params$nu_2_jt != 0 where model$patches$dose_two_doses != 0
+     # At a minimum, params$nu_2_jt != 0 where model$results$dose_two_doses != 0
      # The converse _might_ not be true if there are no susceptibles to dose.
 
      # Transpose Python data from [time, patch] to [patch, time]
-     sim_non_zero <- t(model$patches$dose_two_doses) != 0
+     sim_non_zero <- model$results$dose_two_doses != 0
      input_values <- baseline$nu_2_jt[sim_non_zero]
      good <- all(input_values != 0)
 
@@ -332,7 +333,7 @@ testthat::test_that("pi_ij calculations match", {
           gamma = baseline$mobility_gamma
      )
 
-     actual <- model$patches$pi_ij
+     actual <- model$results$pi_ij
      diag(actual) <- NA
 
      testthat::expect_equal(expected, actual, tolerance = 1e-04)
@@ -376,9 +377,9 @@ testthat::test_that("log likelihood calculations match", {
      # TODO - try several different points in parameter space
      expected <- MOSAIC::get_model_likelihood(
           obs_cases=baseline$reported_cases,
-          est_cases=t(model$patches$incidence[-1,]),
+          est_cases=t(model$results$incidence),
           obs_deaths=baseline$reported_deaths,
-          est_deaths=t(model$patches$disease_deaths[-1,]))
+          est_deaths=t(model$results$disease_deaths))
      diff <- abs((expected - model$log_likelihood) / expected)
 
      testthat::expect_lt(diff, 0.01)
@@ -394,11 +395,11 @@ testthat::test_that("spatial hazard calculations", {
      b2 <- baseline$b_2_j
      p <- baseline$p
 
-     time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
-     location_names <- model$params$location_name
+     time_names <- seq(as.Date(baseline$date_start), as.Date(baseline$date_stop), 1)
+     location_names <- baseline$location_name
 
-     beta_j0_hum <- model$params$beta_j0_hum
-     beta_jt_hum <- matrix(NA_real_, nrow = length(time_names), ncol = length(location_names))
+     beta_j0_hum <- baseline$beta_j0_hum
+     beta_jt_hum <- matrix(NA_real_, nrow = length(location_names), ncol = length(time_names))
 
      for (t in 1:length(time_names)) {
           for (j in 1:length(location_names)) {
@@ -409,7 +410,7 @@ testthat::test_that("spatial hazard calculations", {
                     a2[j] * cos(4 * pi * t / p) +
                     b2[j] * sin(4 * pi * t / p)
 
-               beta_jt_hum[t, j] <- beta_j0_hum[j] * (1 + seasonal_term)
+               beta_jt_hum[j, t] <- beta_j0_hum[j] * (1 + seasonal_term)
 
           }
      }
@@ -417,18 +418,18 @@ testthat::test_that("spatial hazard calculations", {
      expected <- MOSAIC::calc_spatial_hazard(
           beta_jt_hum,
           baseline$tau_i,
-          t(model$patches$pi_ij),
-          model$patches$N[-1,],
-          model$people$S[-1,],
-          model$people$V1sus[-1,],
-          model$people$V2sus[-1,],
-          I1 = model$people$Isym[-1,],
-          I2 = model$people$Iasym[-1,],
+          model$results$pi_ij,
+          model$results$N,
+          model$results$S,
+          model$results$V1sus,
+          model$results$V2sus,
+          I1 = model$results$Isym,
+          I2 = model$results$Iasym,
           time_names = NULL,
           location_names = NULL
      )
 
-     testthat::expect_equal(expected, model$patches$spatial_hazard[-1,], tolerance = 1e-04)
+     testthat::expect_equal(expected, model$results$spatial_hazard, tolerance = 1e-04)
 
 })
 
@@ -437,14 +438,14 @@ testthat::test_that("spatial hazard calculations", {
 # LASIK values in model.patches.coupling
 testthat::test_that("spatial coupling calculations", {
 
-     I_sym <- model$people$Isym
-     I_asym <- model$people$Iasym
-     N <- model$patches$N
+     I_sym <- model$results$Isym
+     I_asym <- model$results$Iasym
+     N <- model$results$N
 
      expected <- MOSAIC::calc_spatial_correlation_matrix(I_sym, I_asym, N)
      dimnames(expected) <- NULL
 
-     actual <- model$patches$coupling
+     actual <- model$results$coupling
 
      testthat::expect_equal(expected, actual, tolerance = 1e-4)
 
@@ -454,14 +455,14 @@ testthat::test_that("spatial coupling calculations", {
 # Check that total population tracks expected population sizes from UN WPP data
 testthat::test_that("UN population trends", {
 
-     time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
-     location_names <- model$params$location_name
+     time_names <- seq(as.Date(baseline$date_start), as.Date(baseline$date_stop), 1)
+     location_names <- baseline$location_name
 
      pop_UN <- read.csv(file.path(getwd(), 'model/input/param_N_population_size.csv'))
      pop_UN$t <- as.Date(pop_UN$t)
      pop_UN <- pop_UN[pop_UN$t %in% time_names & pop_UN$j %in% location_names,]
 
-     pop_model <- model$patches$N[-1,]
+     pop_model <- model$results$N
      colnames(pop_model) <- location_names
      rownames(pop_model) <- as.character(time_names)
 
