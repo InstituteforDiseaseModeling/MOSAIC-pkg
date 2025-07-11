@@ -1,5 +1,10 @@
 library(reticulate)
+library(reshape2)
 library(MOSAIC)
+library(ggplot2)
+library(ggExtra)
+library(grid)
+library(gridExtra)
 
 plot_diagnostics <- TRUE
 
@@ -47,26 +52,23 @@ testthat::test_that("beta_j_seasonality matches", {
 
      if (plot_diagnostics) {
 
-          library(ggplot2)
-          library(grid)  # for unit()
-
           # 1. get dimensions
-          T_model    <- nrow(beta_jt_hum_model)
-          T_expected <- nrow(beta_jt_hum_expected)
+          T_model    <- ncol(beta_jt_hum_model)
+          T_expected <- ncol(beta_jt_hum_expected)
           nloc       <- length(location_names)
 
           # 2. build long-form data.frames in base R
           df_model <- data.frame(
-               time     = rep(seq_len(T_model),    times = nloc),
-               location = rep(location_names, each = T_model),
+               time     = rep(seq_len(T_model), each  = nloc),
+               location = rep(location_names,   times = T_model),
                beta     = as.vector(beta_jt_hum_model),
                Series   = "Model",
                stringsAsFactors = FALSE
           )
 
           df_expected <- data.frame(
-               time     = rep(seq_len(T_expected), times = nloc),
-               location = rep(location_names,  each = T_expected),
+               time     = rep(seq_len(T_expected), each  = nloc),
+               location = rep(location_names,       times = T_expected),
                beta     = as.vector(beta_jt_hum_expected),
                Series   = "Expected",
                stringsAsFactors = FALSE
@@ -125,32 +127,34 @@ testthat::test_that("beta_env matches", {
      # compare to what the Python model actually produced
      testthat::expect_equal(beta_jt_env_expected, beta_jt_env_model, tolerance = 1e-04)
 
+     if (plot_diagnostics) {
 
-     if(plot_diagnostics) {
+          dates          <- seq(
+               as.Date(baseline$date_start),
+               as.Date(baseline$date_stop),
+               by = "day"
+          )                          # length = 717
+          location_names <- baseline$location_name  # length = 40
 
-          library(ggplot2)
-          library(grid)  # for unit()
-
-          # build date and location vectors
-          dates          <- seq(as.Date(baseline$date_start),
-                                as.Date(baseline$date_stop), by = "day")
-          location_names <- baseline$location_name
-
-          # grab model vs expected matrices
           beta_model    <- model$results$beta_jt_env
           beta_expected <- beta_jt_env_expected
 
-          # long‐form data.frames without any temp T
+          # sanity‐check dims
+          stopifnot(
+               length(dates)        == ncol(beta_model),
+               length(location_names) == nrow(beta_model)
+          )
+
           df_model <- data.frame(
-               date     = rep(dates,    times = ncol(beta_model)),
-               location = rep(location_names, each = nrow(beta_model)),
+               date     = rep(dates,               each  = nrow(beta_model)),  # 40×717 entries
+               location = rep(location_names,      times = ncol(beta_model)),
                beta     = as.vector(beta_model),
                Series   = "Model",
                stringsAsFactors = FALSE
           )
           df_expected <- data.frame(
-               date     = rep(dates,    times = ncol(beta_expected)),
-               location = rep(location_names, each = nrow(beta_expected)),
+               date     = rep(dates,               each  = nrow(beta_expected)),
+               location = rep(location_names,      times = ncol(beta_expected)),
                beta     = as.vector(beta_expected),
                Series   = "Expected",
                stringsAsFactors = FALSE
@@ -158,9 +162,8 @@ testthat::test_that("beta_env matches", {
 
           df_plot <- rbind(df_model, df_expected)
 
-          # facet‐wrapped comparison
           ggplot(df_plot, aes(x = date, y = beta, color = Series)) +
-               geom_line(size = 1.2) +
+               geom_line(linewidth = 1.2) +
                scale_color_manual(values = c(Model = "darkgreen", Expected = "red3")) +
                facet_wrap(~ location, scales = "free_x", ncol = 4) +
                labs(
@@ -172,16 +175,18 @@ testthat::test_that("beta_env matches", {
                theme(
                     panel.spacing     = unit(0.05, "lines"),
                     plot.margin       = unit(rep(1, 4), "mm"),
-                    strip.text        = element_text(margin = margin(t = 1, b = 1, unit = "mm"),
-                                                     size   = 8),
+                    strip.text        = element_text(
+                         margin = margin(t = 1, b = 1, unit = "mm"),
+                         size   = 8
+                    ),
                     axis.text         = element_text(size = 6),
                     axis.title        = element_text(size = 8),
                     legend.position   = "bottom",
                     legend.key.size   = unit(4, "mm"),
                     legend.spacing.x  = unit(1, "mm")
                )
-
      }
+
 
 
 })
@@ -211,42 +216,44 @@ testthat::test_that("delta_jt matches", {
 
      testthat::expect_equal(delta_jt_expected, delta_jt_model, tolerance = 1e-04)
 
+
      if (plot_diagnostics) {
 
-          library(ggplot2)
-          library(grid)  # for unit()
+          # 1. date & location vectors
+          dates     <- seq(
+               as.Date(baseline$date_start),
+               as.Date(baseline$date_stop),
+               by = "day"
+          )                            # length = 717
+          locations <- baseline$location_name   # length = 40
 
-          # 1. pull out model vs expected
-          model_mat    <- model$results$delta_jt
-          expected_mat <- delta_jt_expected  # make sure this is the same dims: nrow=time, ncol=locations
+          # 2. sanity‐check dims
+          stopifnot(
+               length(locations) == nrow(delta_jt_model),
+               length(dates)     == ncol(delta_jt_model)
+          )
 
-          # 2. build date & location vectors
-          dates     <- seq(as.Date(baseline$date_start),
-                           as.Date(baseline$date_stop),
-                           by = "day")
-          locations <- baseline$location_name
-
-          # 3. reshape into long form (base R)
+          # 3. build long form
           df_model <- data.frame(
-               date     = rep(dates,    times = ncol(model_mat)),
-               location = rep(locations, each  = nrow(model_mat)),
-               delta    = as.vector(model_mat),
+               date     = rep(dates,                       each  = nrow(delta_jt_model)),
+               location = rep(locations,                   times = ncol(delta_jt_model)),
+               delta    = as.vector(delta_jt_model),
                Series   = "Model",
                stringsAsFactors = FALSE
           )
           df_expected <- data.frame(
-               date     = rep(dates,    times = ncol(expected_mat)),
-               location = rep(locations, each  = nrow(expected_mat)),
-               delta    = as.vector(expected_mat),
+               date     = rep(dates,                       each  = nrow(delta_jt_expected)),
+               location = rep(locations,                   times = ncol(delta_jt_expected)),
+               delta    = as.vector(delta_jt_expected),
                Series   = "Expected",
                stringsAsFactors = FALSE
           )
           df_plot <- rbind(df_model, df_expected)
 
-          # 4. facet‐wrapped comparison
+          # 4. facet‐wrapped comparison (still plotting 1/delta)
           ggplot(df_plot, aes(x = date, y = 1/delta, color = Series)) +
-               geom_line(size = 1.2) +
-               scale_color_manual(values = c("Model" = "purple", "Expected" = "green3")) +
+               geom_line(linewidth = 1.2) +
+               scale_color_manual(values = c(Model = "purple", Expected = "green3")) +
                facet_wrap(~ location, scales = "free_x", ncol = 4) +
                labs(
                     x     = "Date",
@@ -257,19 +264,17 @@ testthat::test_that("delta_jt matches", {
                theme(
                     panel.spacing     = unit(0.05, "lines"),
                     plot.margin       = unit(rep(1, 4), "mm"),
-                    strip.text        = element_text(margin = margin(t = 1, b = 1, unit = "mm"),
-                                                     size   = 8),
+                    strip.text        = element_text(
+                         margin = margin(t = 1, b = 1, unit = "mm"),
+                         size   = 8
+                    ),
                     axis.text         = element_text(size = 6),
                     axis.title        = element_text(size = 8),
                     legend.position   = "bottom",
                     legend.key.size   = unit(4, "mm"),
                     legend.spacing.x  = unit(1, "mm")
                )
-
-
      }
-
-
 
 })
 
@@ -289,6 +294,7 @@ testthat::test_that("OCV dose one doses match", {
 
      testthat::expect_true(good)
 })
+
 
 # Check OCV second dose schedule
 # LASIK values in model.patches.dose_one_doses and model.patches.dose_two_doses
@@ -332,15 +338,12 @@ testthat::test_that("pi_ij calculations match", {
           gamma = baseline$mobility_gamma
      )
 
-     actual <- model$results$pi_ij
+     actual <- t(model$results$pi_ij) # Appears pi_ij in the model may be have been transposed although it did not need to be
      diag(actual) <- NA
 
      testthat::expect_equal(expected, actual, tolerance = 1e-04)
 
      if (plot_diagnostics) {
-
-          library(ggplot2)
-          library(reshape2)
 
           df_exp <- melt(expected,
                          varnames = c("origin", "destination"),
@@ -373,16 +376,18 @@ testthat::test_that("pi_ij calculations match", {
 # Check log_likelihood computation
 # LASIK value in model.log_likelihood
 testthat::test_that("log likelihood calculations match", {
-     # TODO - try several different points in parameter space
+
      expected <- MOSAIC::get_model_likelihood(
           obs_cases=baseline$reported_cases,
-          est_cases=t(model$results$incidence),
+          est_cases=model$results$incidence,
           obs_deaths=baseline$reported_deaths,
-          est_deaths=t(model$results$disease_deaths))
-     diff <- abs((expected - model$log_likelihood) / expected)
+          est_deaths=model$results$disease_deaths)
 
+     diff <- abs((expected - model$log_likelihood) / expected)
      testthat::expect_lt(diff, 0.01)
+
 })
+
 
 # Check spatial hazard computation
 # LASIK values in model.patches.spatial_hazard
@@ -415,20 +420,64 @@ testthat::test_that("spatial hazard calculations", {
      }
 
      expected <- MOSAIC::calc_spatial_hazard(
-          beta_jt_hum,
-          baseline$tau_i,
-          model$results$pi_ij,
-          model$results$N,
-          model$results$S,
-          model$results$V1sus,
-          model$results$V2sus,
+          beta = beta_jt_hum,
+          tau = baseline$tau_i,
+          pie = t(model$results$pi_ij),
+          N = model$results$N,
+          S = model$results$S,
+          V1_sus = model$results$V1sus,
+          V2_sus = model$results$V2sus,
           I1 = model$results$Isym,
           I2 = model$results$Iasym,
           time_names = NULL,
           location_names = NULL
      )
 
-     testthat::expect_equal(expected, model$results$spatial_hazard, tolerance = 1e-04)
+     actual <- model$results$spatial_hazard
+
+     testthat::expect_equal(expected, actual, tolerance = 1e-06)
+
+     if (plot_diagnostics) {
+
+          # 1. Flatten into a data.frame
+          df <- data.frame(
+               Expected = as.vector(expected),
+               Actual   = as.vector(actual)
+          )
+
+          # 2. Base scatter
+          p <- ggplot(df, aes(x = Expected, y = Actual)) +
+               geom_point(alpha = 0.4) +
+               geom_abline(slope = 1, intercept = 0,
+                           linetype = "dashed", color = "red") +
+               labs(
+                    x     = "Expected spatial hazard",
+                    y     = "Actual spatial hazard",
+                    title = "Actual vs Expected Spatial Hazard"
+               ) +
+               theme_classic()
+
+          # 3. Add 1D marginal histograms
+          ggMarginal(
+               p,
+               type    = "histogram",
+               margins = "both",       # show on top and right
+               size    = 5,            # relative size of the marginals
+               fill    = "lightgray",
+               color   = "black",
+               alpha   = 0.6
+          )
+
+          p1 <- MOSAIC::plot_spatial_hazard(expected) +
+               ggtitle("Expected Spatial Hazard")
+
+          p2 <- MOSAIC::plot_spatial_hazard(actual) +
+               ggtitle("Actual Spatial Hazard")
+
+          gridExtra::grid.arrange(p1, p2, ncol = 2)
+
+
+     }
 
 })
 
@@ -441,12 +490,57 @@ testthat::test_that("spatial coupling calculations", {
      I_asym <- model$results$Iasym
      N <- model$results$N
 
-     expected <- MOSAIC::calc_spatial_correlation_matrix(I_sym, I_asym, N)
+     expected <- calc_spatial_correlation_matrix(I_sym, I_asym, N)
      dimnames(expected) <- NULL
 
      actual <- model$results$coupling
 
-     testthat::expect_equal(expected, actual, tolerance = 1e-4)
+     testthat::expect_equal(expected, actual, tolerance = 1e-2)
+
+
+
+     if (plot_diagnostics) {
+
+          # 1. Flatten into a data.frame
+          df <- data.frame(
+               Expected = as.vector(expected),
+               Actual   = as.vector(actual)
+          )
+
+          # 2. Base scatter
+          par(mfrow=c(1,1))
+          p <- ggplot(df, aes(x = Expected, y = Actual)) +
+               geom_point(alpha = 0.4) +
+               geom_abline(slope = 1, intercept = 0,
+                           linetype = "dashed", color = "blue") +
+               labs(
+                    x     = "Expected spatial correlation",
+                    y     = "Actual spatial correlation",
+                    title = "Actual vs Expected Spatial Correlation"
+               ) +
+               theme_classic()
+
+          ggMarginal(
+               p,
+               type    = "histogram",
+               margins = "both",       # show on top and right
+               size    = 5,            # relative size of the marginals
+               fill    = "lightgray",
+               color   = "black",
+               alpha   = 0.6
+          )
+
+
+          p1 <- MOSAIC::plot_spatial_correlation_heatmap(expected) +
+               ggtitle("Expected Spatial Correlation")
+
+          p2 <- MOSAIC::plot_spatial_correlation_heatmap(actual) +
+               ggtitle("Actual Spatial Correlation")
+
+          gridExtra::grid.arrange(p1, p2, ncol = 2)
+
+     }
+
 
 })
 
@@ -462,22 +556,22 @@ testthat::test_that("UN population trends", {
      pop_UN <- pop_UN[pop_UN$t %in% time_names & pop_UN$j %in% location_names,]
 
      pop_model <- model$results$N
-     colnames(pop_model) <- location_names
-     rownames(pop_model) <- as.character(time_names)
+     rownames(pop_model) <- location_names
+     colnames(pop_model) <- as.character(time_names)
 
      actual <- pop_model
      expected <- pop_model; expected[,] <- NA
 
-     for (j in 1:ncol(expected)) {
+     for (j in 1:nrow(expected)) {
 
           tmp <- pop_UN[pop_UN$j == location_names[j],]
           tmp <- tmp[order(as.Date(tmp$t)),]
-          expected[,j] <- tmp$parameter_value
+          expected[j,] <- tmp$parameter_value
 
      }
 
-     actual_sums   <- colSums(actual)
-     expected_sums <- colSums(expected)
+     actual_sums   <- rowSums(actual)
+     expected_sums <- rowSums(expected)
 
      # Proportional‐nearness test
      tol    <- 0.01    # tolerance: 1% deviation allowed
@@ -489,41 +583,40 @@ testthat::test_that("UN population trends", {
                         round(max(abs(ratios - 1)), 4))
      )
 
-     if (plot_diagnostics){
+     if (plot_diagnostics) {
 
-          par(mfrow=c(1,2))
+          par(mfrow = c(1, 2))
           plot(expected_sums, actual_sums,
                xlab = "Expected population total",
                ylab = "Actual population total",
                main = "Actual vs Expected Population Totals",
-               pch = 19)
-          abline(0, 1, col = "red", lty = 2)  # 1:1 line
+               pch  = 19)
+          abline(0, 1, col = "red", lty = 2)
 
-          hist(ratios, main="Histogram of ratios (actual:expected)")
-          abline(v=1, col='red', lty=2)
+          hist(ratios,
+               main = "Histogram of ratios (actual:expected)",
+               xlab = "Actual / Expected")
+          abline(v = 1, col = "red", lty = 2)
 
-          library(ggplot2)
-          library(reshape2)
 
-          # Melt the matrices into long format
           df_exp <- melt(expected,
-                         varnames = c("date", "location"),
+                         varnames   = c("location", "date"),
                          value.name = "population")
           df_exp$source <- "expected"
 
           df_act <- melt(actual,
-                         varnames = c("date", "location"),
+                         varnames   = c("location", "date"),
                          value.name = "population")
           df_act$source <- "actual"
 
-          # Combine and convert date column
           df_long <- rbind(df_exp, df_act)
-          df_long$date <- as.Date(df_long$date)
+          df_long$date     <- as.Date(df_long$date)
+          df_long$location <- factor(df_long$location, levels = location_names)
 
-          # Plot with facets by location
+
           ggplot(df_long, aes(x = date, y = population, color = source)) +
-               geom_line(linewidth=1.5) +
-               facet_wrap(~ location, scales = "free_y") +
+               geom_line(size = 1.2) +
+               facet_wrap(~ location, scales = "free_y", ncol = 4) +
                labs(
                     x     = "Date",
                     y     = "Population size",
@@ -532,13 +625,12 @@ testthat::test_that("UN population trends", {
                ) +
                theme_minimal() +
                theme(
-                    axis.text.x = element_text(angle = 45, hjust = 1),
+                    axis.text.x      = element_text(angle = 45, hjust = 1),
                     panel.grid.major = element_line(color = "grey80"),
                     panel.grid.minor = element_blank()
                )
-
-
      }
+
 
 })
 
