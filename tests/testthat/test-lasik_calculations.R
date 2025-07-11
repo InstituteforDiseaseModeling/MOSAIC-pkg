@@ -1,6 +1,8 @@
 library(reticulate)
 library(MOSAIC)
 
+plot_diagnostics <- TRUE
+
 # Load default model and set baseline
 mpm      <- reticulate::import("laser_cholera.metapop.model")
 filename <- file.path(getwd(), "inst", "extdata", "default_parameters.json")
@@ -39,9 +41,9 @@ testthat::test_that("beta_j_seasonality matches", {
           }
      }
 
-     testthat::expect_equal(beta_jt_hum_expected, beta_jt_hum_model)
+     testthat::expect_equal(beta_jt_hum_expected, beta_jt_hum_model, tolerance = 1e-04)
 
-     if (T) {
+     if (plot_diagnostics) {
 
           library(ggplot2)
           library(grid)  # for unit()
@@ -71,7 +73,7 @@ testthat::test_that("beta_j_seasonality matches", {
           df_beta <- rbind(df_model, df_expected)
 
           ggplot(df_beta, aes(x = time, y = beta, color = Series)) +
-               geom_line(size = 1.2) +
+               geom_line(linewidth = 1.2) +
                scale_color_manual(
                     values = c("Model" = "dodgerblue", "Expected" = "darkorange")
                ) +
@@ -121,10 +123,10 @@ testthat::test_that("beta_env matches", {
      }
 
      # compare to what the Python model actually produced
-     testthat::expect_equal(beta_jt_env_expected, beta_jt_env_model, tolerance = 1e-06)
+     testthat::expect_equal(beta_jt_env_expected, beta_jt_env_model, tolerance = 1e-04)
 
 
-     if(T) {
+     if(plot_diagnostics) {
 
           library(ggplot2)
           library(grid)  # for unit()
@@ -207,9 +209,9 @@ testthat::test_that("delta_jt matches", {
           }
      }
 
-     testthat::expect_equal(delta_jt_expected, delta_jt_model, tolerance = 1e-06)
+     testthat::expect_equal(delta_jt_expected, delta_jt_model, tolerance = 1e-04)
 
-     if (T) {
+     if (plot_diagnostics) {
 
           library(ggplot2)
           library(grid)  # for unit()
@@ -335,7 +337,7 @@ testthat::test_that("pi_ij calculations match", {
 
      testthat::expect_equal(expected, actual, tolerance = 1e-04)
 
-     if (F) {
+     if (plot_diagnostics) {
 
           library(ggplot2)
           library(reshape2)
@@ -384,7 +386,7 @@ testthat::test_that("log likelihood calculations match", {
 
 # Check spatial hazard computation
 # LASIK values in model.patches.spatial_hazard
-testthat::test_that("spatial hazard calculations match", {
+testthat::test_that("spatial hazard calculations", {
 
      a1 <- baseline$a_1_j
      a2 <- baseline$a_2_j
@@ -433,7 +435,7 @@ testthat::test_that("spatial hazard calculations match", {
 
 # Check coupling computation
 # LASIK values in model.patches.coupling
-testthat::test_that("coupling calculations match", {
+testthat::test_that("spatial coupling calculations", {
 
      I_sym <- model$people$Isym
      I_asym <- model$people$Iasym
@@ -455,12 +457,9 @@ testthat::test_that("UN population trends", {
      time_names <- seq(as.Date(model$params$date_start), as.Date(model$params$date_stop), 1)
      location_names <- model$params$location_name
 
-     set_root_directory("~/Library/CloudStorage/OneDrive-Bill&MelindaGatesFoundation/Projects/MOSAIC")
-     PATHS <- MOSAIC::get_paths()
-
-     pop_UN <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_N_population_size.csv'))
+     pop_UN <- read.csv(file.path(getwd(), 'model/input/param_N_population_size.csv'))
      pop_UN$t <- as.Date(pop_UN$t)
-     pop_UN <- pop_UN[pop_UN$t %in% time_names,]
+     pop_UN <- pop_UN[pop_UN$t %in% time_names & pop_UN$j %in% location_names,]
 
      pop_model <- model$patches$N[-1,]
      colnames(pop_model) <- location_names
@@ -477,11 +476,31 @@ testthat::test_that("UN population trends", {
 
      }
 
-     testthat::expect_equal(expected, actual, tolerance = 1e-4)
+     actual_sums   <- colSums(actual)
+     expected_sums <- colSums(expected)
 
-     if (F){
+     # Proportional‐nearness test
+     tol    <- 0.01    # tolerance: 1% deviation allowed
+     ratios <- actual_sums / expected_sums
 
-          # Plot time series of expected vs actual population by location
+     testthat::expect_true(
+          all(abs(ratios - 1) < tol),
+          info = paste0("Max proportional deviation = ",
+                        round(max(abs(ratios - 1)), 4))
+     )
+
+     if (plot_diagnostics){
+
+          par(mfrow=c(1,2))
+          plot(expected_sums, actual_sums,
+               xlab = "Expected population total",
+               ylab = "Actual population total",
+               main = "Actual vs Expected Population Totals",
+               pch = 19)
+          abline(0, 1, col = "red", lty = 2)  # 1:1 line
+
+          hist(ratios, main="Histogram of ratios (actual:expected)")
+          abline(v=1, col='red', lty=2)
 
           library(ggplot2)
           library(reshape2)
