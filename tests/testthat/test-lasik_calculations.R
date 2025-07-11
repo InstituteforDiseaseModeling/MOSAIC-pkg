@@ -97,7 +97,6 @@ testthat::test_that("beta_j_seasonality matches", {
                )
      }
 
-
 })
 
 # Check environmental seasonality computation
