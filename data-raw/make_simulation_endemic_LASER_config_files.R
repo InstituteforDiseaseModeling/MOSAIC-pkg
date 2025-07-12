@@ -51,10 +51,10 @@ names(N_j) <- j
 
 # --------------------------- 2. Initial states ---------------------------- #
 
-S_j_prop <- 0.25
+S_j_prop <- 0.1
 V1_j_prop <- 0.30
 E_j_prop  <- 0
-I_j_prop  <- 0.005        # seed infections
+I_j_prop  <- 0.00125        # seed infections
 R_j_prop  <- 1 - (S_j_prop + V1_j_prop + E_j_prop + I_j_prop)
 
 S_j <- as.integer(N_j * S_j_prop)
@@ -79,7 +79,7 @@ nu_1_jt <- nu_2_jt <- matrix(0, n_loc, T_len, dimnames = list(j, t))
 
 baseline_beta <- runif(n_loc, 0.25, 0.32)     # slightly lower than sim1
 baseline_beta <- c(0.3, 0.5, 0.4)*0.6
-amp_beta      <- 0.10                          # annual amplitude
+amp_beta      <- 0.2                         # annual amplitude
 phase_shift   <- runif(n_loc, 0, 2 * pi)
 
 p <- 365                                       # annual Fourier period (days)
@@ -94,8 +94,8 @@ a_2_j <- b_2_j <- rep(0, n_loc)
 longitude <- c(-1.0232, 45.9062, 27.8493); names(longitude) <- j
 latitude  <- c( 7.9465, -0.0236, -13.1339); names(latitude)  <- j
 
-mobility_omega <- 2e-5
-mobility_gamma <- 2
+mobility_omega <- 2e-6
+mobility_gamma <- 1.7
 tau_i          <- setNames(c(0.005, 0.002, 0.006), j)   # daily depart probability
 
 # --------------------------- 6. Environment & WASH ------------------------ #
@@ -106,7 +106,7 @@ psi_jt <- matrix(NA_real_, n_loc, T_len, dimnames = list(j, t))
 for (idx in seq_len(n_loc)) {
      annual     <- 0.25 * sin(2 * pi * seq_len(T_len) / 365 + phase_shift[idx])
      quad_year  <- 0.15 * sin(2 * pi * seq_len(T_len) / (365 * 4) + phase_shift[idx]/2)
-     psi_raw    <- 0.55 + annual + quad_year       # baseline 0.55
+     psi_raw    <- 0.45 + annual + quad_year       # baseline 0.55
      psi_jt[idx, ] <- pmax(0, pmin(1, psi_raw))
 }
 
@@ -160,16 +160,16 @@ sim_args <- list(
      p                = p,
      alpha_1          = 0.90,      # slightly lower protection → faster loss
      alpha_2          = 0.90,
-     beta_j0_env      = baseline_beta * 0.6,  # stronger env. contribution
+     beta_j0_env      = baseline_beta * 0.5,  # stronger env. contribution
      theta_j          = theta_j,
      psi_jt           = psi_jt,
      zeta_1           = 7.5,
      zeta_2           = 2.5,
      kappa            = 1e5,
-     decay_days_short = 5,         # short burst
-     decay_days_long  = 500,       # vibrios can persist ≈ 1 yr in water
+     decay_days_short = 1,         # short burst
+     decay_days_long  = 90,       # vibrios can persist ≈ 1 yr in water
      decay_shape_1    = 1,
-     decay_shape_2    = 3,         # Linear/concave response to suiutability
+     decay_shape_2    = 1,         # Linear/concave response to suitability
      reported_cases   = mat_cases,
      reported_deaths  = mat_deaths
 )

@@ -7,51 +7,39 @@
 calc_spatial_correlation_matrix(I_sym, I_asym, N)
 }
 \arguments{
-\item{I_sym}{Numeric \strong{matrix} (\emph{T × L}).  Symptomatic infections.}
+\item{I_sym}{Numeric \strong{matrix} (J × T).  Symptomatic infections.}
 
-\item{I_asym}{Numeric \strong{matrix} (\emph{T × L}).  Asymptomatic infections.
-Must have identical dimensions to \code{I_sym}.}
+\item{I_asym}{Numeric \strong{matrix} (J × T).  Asymptomatic infections.
+Must have the same dimensions as \code{I_sym}.}
 
 \item{N}{Population sizes. Accepts
 \itemize{
-\item a single scalar (same for every row & column),
-\item a length-\emph{L} vector (different per location, constant in time), \strong{or}
-\item a full \emph{T × L} matrix (time-varying populations).
+\item a single scalar (same for every j & t),
+\item a length-\emph{J} vector (different per location, constant in time), \strong{or}
+\item a full \emph{J × T} matrix (time‑varying populations).
 }}
 }
 \value{
-An \emph{L × L} symmetric numeric matrix whose \((i,j)\) entry is
-\eqn{\mathcal{C}_{ij}}; diagonal elements are set to 1.  Pairs that cannot
-be computed (all \code{NA}, zero variance, etc.) are returned as \code{NA_real_}.
+A \strong{J × J} symmetric numeric matrix whose \((i,j)\) entry is
+\eqn{\mathcal{C}_{ij}}; diagonal elements are set to 1.
+Pairs that cannot be computed (all \code{NA}, zero variance, etc.) are \code{NA_real_}.
 }
 \description{
 Given LASER simulation outputs, this function constructs the
-\eqn{L \times L} matrix
-\eqn{\mathbf C = \bigl[\mathcal{C}_{ij}\bigr]} of Pearson
+\eqn{J \times J} matrix
+\eqn{\mathbf C = [\mathcal{C}_{ij}]} of Pearson
 spatial–correlation coefficients (Keeling & Rohani 2002) for every pair of
 locations.
 }
 \details{
-\emph{All three input objects must be arranged as} \verb{[ time steps , locations ]}
-(rows are the \emph{T} simulation steps; columns are the \emph{L} locations).
+\emph{All three input objects must be arranged as} \strong{\link[=locations \\(J\\) × time \\(T\\)]{locations \(J\) × time \(T\)}}
+(rows are the \emph{J} locations; columns are the \emph{T} time steps).
 
-Total infections at time \emph{t} in location \strong{l} are taken as
-\eqn{I_{t*l*}=I^{(\mathrm{sym})}_{t*l*}+I^{(\mathrm{asym})}_{t*l*}}; these
+Total infections at time \emph{t} in location \emph{j} are taken as
+\eqn{I_{jt} = I^{(\mathrm{sym})}_{jt} + I^{(\mathrm{asym})}_{jt}}; these
 are converted to prevalence by dividing by the matching population size
-\eqn{N_{t*l*}}.  Pair-wise correlations are then computed with
+\eqn{N_{jt}}.  Pair-wise correlations are then computed with
 \code{\link[=calc_spatial_correlation]{calc_spatial_correlation()}}.
-}
-\examples{
-# Toy LASER-style arrays: 10 time steps, 3 locations
-I_sym  <- matrix(c(1,1,0,0,1,1,1,2,2,1,
-                   0,0,0,0,0,0,0,0,0,0,
-                   0,0,0,0,0,0,0,0,0,0),
-                 nrow = 10, byrow = FALSE)
-I_asym <- 0.3 * I_sym                      # 30 \% asymptomatic
-N      <- c(100, 120, 80)                  # constant by location
-
-calc_spatial_correlation_matrix(I_sym, I_asym, N)
-
 }
 \seealso{
 \code{\link{calc_spatial_correlation}}
