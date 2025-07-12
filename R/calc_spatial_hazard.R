@@ -102,51 +102,52 @@ calc_spatial_hazard <- function(
 
      # Validate dimensions
      if (!is.matrix(S)) stop("`S` must be a matrix T x J.")
-     Tt <- nrow(S); J <- ncol(S)
+     Tt <- ncol(S); J <- nrow(S)
 
      # Validate name args
      if (!is.null(time_names) && length(time_names) != Tt) stop("`time_names` must have length T.")
      if (!is.null(location_names) && length(location_names) != J) stop("`location_names` must have length J.")
 
      # Validate other inputs
-     if (!is.matrix(beta)    || any(dim(beta)    != c(Tt, J))) stop("`beta` must be a matrix T x J.")
+     if (!is.matrix(beta)    || any(dim(beta)    != c(J, Tt))) stop("`beta` must be a matrix T x J.")
      if (!is.numeric(tau)    || length(tau)      != J)        stop("`tau` must be a vector of length J.")
      if (!is.matrix(pie)     || any(dim(pie)     != c(J, J))) stop("`pie` must be a matrix J x J.")
-     if (!is.matrix(N)       || any(dim(N)       != c(Tt, J))) stop("`N` must be a matrix T x J.")
-     if (!is.matrix(V1_sus)  || any(dim(V1_sus)  != c(Tt, J))) stop("`V1_sus` must be a matrix T x J.")
-     if (!is.matrix(V2_sus)  || any(dim(V2_sus)  != c(Tt, J))) stop("`V2_sus` must be a matrix T x J.")
-     if (!is.matrix(I1)      || any(dim(I1)      != c(Tt, J))) stop("`I1` must be a matrix T x J.")
-     if (!is.matrix(I2)      || any(dim(I2)      != c(Tt, J))) stop("`I2` must be a matrix T x J.")
+     if (!is.matrix(N)       || any(dim(N)       != c(J, Tt))) stop("`N` must be a matrix T x J.")
+     if (!is.matrix(V1_sus)  || any(dim(V1_sus)  != c(J, Tt))) stop("`V1_sus` must be a matrix T x J.")
+     if (!is.matrix(V2_sus)  || any(dim(V2_sus)  != c(J, Tt))) stop("`V2_sus` must be a matrix T x J.")
+     if (!is.matrix(I1)      || any(dim(I1)      != c(J, Tt))) stop("`I1` must be a matrix T x J.")
+     if (!is.matrix(I2)      || any(dim(I2)      != c(J, Tt))) stop("`I2` must be a matrix T x J.")
 
      # Remove self-mobility
      if (sum(diag(pie)) != 0) diag(pie) <- 0
 
-     H <- matrix(NA_real_, nrow = Tt, ncol = J)
+     H <- matrix(NA_real_, ncol = Tt, nrow = J)
 
      # Loop over times and destinations
-     for (t in seq_len(Tt)) {
-          for (j in seq_len(J)) {
+
+     for (j in seq_len(J)) {
+          for (t in seq_len(Tt)) {
 
                # Total local susceptibles including waned vaccinated
-               sus_j <- (1 - tau[j]) * (S[t, j] + V1_sus[t, j] + V2_sus[t, j])
+               sus_j <- (1 - tau[j]) * (S[j, t] + V1_sus[j, t] + V2_sus[j, t])
 
                # Probability of local susceptible
-               x_j <- sus_j / N[t, j]
+               x_j <- sus_j / N[j, t]
 
                # Total local and non-local infected
-               tot_inf <- ((1 - tau[j]) * (I1[t, j] + I2[t, j]))
+               tot_inf <- ((1 - tau[j]) * (I1[j, t] + I2[j, t]))
                for (i in seq_len(J)) {
-                    if (i != j) tot_inf <- tot_inf + (tau[i] * pie[i, j] * (I1[t, i] + I2[t, i]))
+                    if (i != j) tot_inf <- tot_inf + (tau[i] * pie[i, j] * (I1[i, t] + I2[i, t]))
                }
 
                # Total local and non-local population size
-               tot_pop <- sum(N[t, ])
+               tot_pop <- sum(N[,t])
 
                # Probability of local and non-local infectious from all origins
                y_bar <- tot_inf / tot_pop
 
                # Spatial hazard from Bjornstad & Grenfell 2008
-               H[t, j] <- ( beta[t, j] * sus_j * (1 - exp(-x_j * y_bar)) ) / ( 1 + beta[t, j] * sus_j )
+               H[j, t] <- ( beta[j, t] * sus_j * (1 - exp(-x_j * y_bar)) ) / ( 1 + beta[j, t] * sus_j )
 
           }
      }

@@ -2,16 +2,22 @@
 % Please edit documentation in R/plot_spatial_hazard.R
 \name{plot_spatial_hazard}
 \alias{plot_spatial_hazard}
-\title{Plot spatial importation hazard heatmap}
+\title{Plot spatial importation hazard}
 \usage{
 plot_spatial_hazard(H)
 }
 \arguments{
-\item{H}{Numeric matrix of spatial importation hazards (output from \code{calc_spatial_hazard}), with rows as time steps and columns as locations. Row names should be dates in "YYYY-MM-DD" format for proper date parsing.}
+\item{H}{Numeric matrix of spatial importation hazards (output from \code{calc_spatial_hazard}),
+with \strong{rows} = locations and \strong{columns} = time steps.  Column names should be dates
+in "YYYY-MM-DD" format for proper date parsing; row names will be used as location labels.}
 }
 \value{
 Invisibly returns a ggplot object displaying the heatmap.
+
+Invisibly returns a ggplot object displaying the heatmap.
 }
 \description{
+Generates a heatmap of spatial importation hazards over time and across locations using ggplot2.
+
 Generates a heatmap of spatial importation hazards over time and across locations using ggplot2.
 }

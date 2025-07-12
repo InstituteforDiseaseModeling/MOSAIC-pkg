@@ -254,6 +254,6 @@ for (fp in file_paths) {
 tmp_config <- jsonlite::fromJSON(file_paths[[1]])
 
 identical(config_default, tmp_config)
-all.equal(config_default, tmp_config, tolerance = 1e-8)
+all.equal(config_default, tmp_config)
 
 usethis::use_data(config_default, overwrite = TRUE)

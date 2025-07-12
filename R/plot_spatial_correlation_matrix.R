@@ -7,6 +7,8 @@
 #'
 #' @return A **ggplot** object (rendered automatically in interactive sessions).
 #' @export
+#'
+
 plot_spatial_correlation_heatmap <- function(C) {
 
      if (!is.matrix(C))

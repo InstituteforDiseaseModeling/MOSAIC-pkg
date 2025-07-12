@@ -498,7 +498,6 @@ testthat::test_that("spatial coupling calculations", {
      testthat::expect_equal(expected, actual, tolerance = 1e-2)
 
 
-
      if (plot_diagnostics) {
 
           # 1. Flatten into a data.frame
