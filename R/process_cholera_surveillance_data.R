@@ -27,7 +27,7 @@
 #'   \item Saves the combined weekly data to
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
 #'   \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
-#'     dropping days with both NA, and carries over the \code{source}.
+#'     preserving square structure (keeping days with NA), and carries over the \code{source}.
 #'   \item Saves the combined daily data to
 #'     \code{PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv}.
 #' }
@@ -196,7 +196,7 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
           dd <- MOSAIC::downscale_weekly_values(df_iso$date_start, df_iso$deaths, integer = TRUE)
           names(dd)[2] <- "deaths"
           df_day <- merge(dc, dd, by = "date", all = TRUE)
-          df_day <- subset(df_day, !(is.na(cases) & is.na(deaths)))
+          # Keep all days to maintain square structure (do not remove NA days)
           data.frame(
                country  = MOSAIC::convert_iso_to_country(df_iso$iso_code[1]),
                iso_code = df_iso$iso_code[1],
@@ -210,6 +210,20 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
           )
      })
      daily_all <- do.call(rbind, daily_list)
+     
+     # Log daily data structure
+     daily_date_range <- range(as.Date(daily_all$date), na.rm = TRUE)
+     daily_days <- as.numeric(diff(daily_date_range)) + 1
+     daily_countries <- length(unique(daily_all$iso_code))
+     daily_reported <- sum(!is.na(daily_all$cases))
+     daily_missing <- sum(is.na(daily_all$cases))
+     
+     message(sprintf("Created truly square daily data structure: %d total observations (%d countries × %d days)", 
+                     nrow(daily_all), daily_countries, daily_days))
+     message(sprintf("  - %d reported daily observations (%.1f%%)", 
+                     daily_reported, 100 * daily_reported / nrow(daily_all)))
+     message(sprintf("  - %d missing daily observations (%.1f%%)", 
+                     daily_missing, 100 * daily_missing / nrow(daily_all)))
 
      # save combined daily
      daily_out <- file.path(PATHS$DATA_CHOLERA_DAILY,
