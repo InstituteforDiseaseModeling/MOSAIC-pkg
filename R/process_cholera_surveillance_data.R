@@ -1,10 +1,10 @@
-#' Process Combined Weekly and Daily Cholera Surveillance Data with Square Data Structure
+#' Process Combined Weekly and Daily Cholera Surveillance Data with Truly Square Data Structure
 #'
 #' This function reads the processed weekly cholera data from WHO, JHU, and supplemental (SUPP) sources,
 #' labels each record by its source, combines them (removing duplicate country–week entries according to
-#' the specified source preference), creates a square data structure with all country-week combinations,
-#' and downscales the combined weekly totals to a daily time series using \code{MOSAIC::downscale_weekly_values} 
-#' with integer allocation.
+#' the specified source preference), creates a truly square data structure with all country-week combinations
+#' from min to max date across the entire dataset, and downscales the combined weekly totals to a daily time series 
+#' using \code{MOSAIC::downscale_weekly_values} with integer allocation.
 #'
 #' @param PATHS A list of file paths. Must include:
 #' \itemize{
@@ -23,7 +23,7 @@
 #'   \item Cleans rows with missing key grouping fields (iso_code, year, week).
 #'   \item Harmonizes columns by keeping only those present in all three dataframes.
 #'   \item Deduplicates by \code{iso_code}, \code{year}, \code{week}, choosing rows from \code{keep_source}.
-#'   \item Creates square data structure with all country-week combinations (missing data = NA).
+#'   \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 #'   \item Saves the combined weekly data to
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
 #'   \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
@@ -113,21 +113,38 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
              else "No duplicate weekly entries found")
      
      # Create square data structure by filling missing country-week combinations
-     message("Creating square data structure...")
+     message("Creating square data structure across entire dataset...")
      
-     # Get all unique countries and time periods from the data
+     # Get all unique countries from the data
      all_countries <- unique(dedup$iso_code)
-     all_years <- unique(dedup$year)
-     all_weeks <- unique(dedup$week)
      
-     # Create complete grid of all country-week combinations
-     # Only for year-week combinations that actually exist in the data
-     existing_time_periods <- unique(dedup[, c("year", "week", "date_start", "date_stop", "month")])
+     # Create complete weekly sequence from min to max date across entire dataset
+     min_date <- min(as.Date(dedup$date_start), na.rm = TRUE)
+     max_date <- max(as.Date(dedup$date_start), na.rm = TRUE)
      
-     # Generate all possible country-time combinations
+     # Generate all Monday dates (week starts) from min to max
+     all_monday_dates <- seq(
+          from = min_date,
+          to = max_date,
+          by = "week"
+     )
+     
+     # Create complete time periods data frame
+     complete_time_periods <- data.frame(
+          date_start = all_monday_dates,
+          date_stop = all_monday_dates + 6,  # Sunday = Monday + 6 days
+          stringsAsFactors = FALSE
+     )
+     
+     # Add year, week, and month information
+     complete_time_periods$year <- as.integer(format(complete_time_periods$date_start, "%Y"))
+     complete_time_periods$week <- as.integer(format(complete_time_periods$date_start, "%V"))
+     complete_time_periods$month <- as.integer(format(complete_time_periods$date_start, "%m"))
+     
+     # Generate all possible country-time combinations (truly square)
      square_grid <- merge(
           data.frame(iso_code = all_countries, stringsAsFactors = FALSE),
-          existing_time_periods,
+          complete_time_periods,
           all = TRUE
      )
      
@@ -135,6 +152,10 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
      square_grid$country <- MOSAIC::convert_iso_to_country(square_grid$iso_code)
      
      # Merge with actual data to preserve reported values
+     # Convert date columns to same format for proper merging
+     dedup$date_start <- as.Date(dedup$date_start)
+     dedup$date_stop <- as.Date(dedup$date_stop)
+     
      wk <- merge(
           square_grid,
           dedup,
@@ -150,10 +171,16 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
      # Sort by country and date for clean output
      wk <- wk[order(wk$iso_code, wk$year, wk$week), ]
      
-     message(sprintf("Created square data structure: %d total observations (%d reported, %d missing)", 
+     message(sprintf("Created truly square data structure: %d total observations (%d countries × %d weeks)", 
                      nrow(wk), 
+                     length(all_countries), 
+                     length(all_monday_dates)))
+     message(sprintf("  - %d reported observations (%.1f%%)", 
                      sum(!is.na(wk$cases)), 
-                     sum(is.na(wk$cases))))
+                     100 * sum(!is.na(wk$cases)) / nrow(wk)))
+     message(sprintf("  - %d missing observations (%.1f%%)", 
+                     sum(is.na(wk$cases)), 
+                     100 * sum(is.na(wk$cases)) / nrow(wk)))
 
      # save combined weekly
      weekly_out <- file.path(PATHS$DATA_CHOLERA_WEEKLY,
