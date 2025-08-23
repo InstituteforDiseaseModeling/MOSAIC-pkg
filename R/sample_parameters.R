@@ -733,37 +733,41 @@ create_sampling_args <- function(pattern = "all",
                        "sample_gamma_1", "sample_gamma_2",
                        "sample_epsilon", "sample_rho", 
                        "sample_sigma", "sample_iota")
-    all_params <- lapply(names(all_params), function(n) {
+    param_names <- names(all_params)
+    all_params <- lapply(param_names, function(n) {
       n %in% disease_params
     })
-    names(all_params) <- names(all_params)
+    names(all_params) <- param_names
     
   } else if (pattern == "transmission_only") {
     # Only transmission parameters
     trans_params <- c("sample_beta_j0_env", "sample_beta_j0_hum",
                      "sample_alpha_1", "sample_alpha_2")
-    all_params <- lapply(names(all_params), function(n) {
+    param_names <- names(all_params)
+    all_params <- lapply(param_names, function(n) {
       n %in% trans_params
     })
-    names(all_params) <- names(all_params)
+    names(all_params) <- param_names
     
   } else if (pattern == "mobility_only") {
     # Only mobility parameters
     mobility_params <- c("sample_mobility_omega", "sample_mobility_gamma",
                         "sample_tau_i")
-    all_params <- lapply(names(all_params), function(n) {
+    param_names <- names(all_params)
+    all_params <- lapply(param_names, function(n) {
       n %in% mobility_params
     })
-    names(all_params) <- names(all_params)
+    names(all_params) <- param_names
     
   } else if (pattern == "spatial_only") {
     # Only spatial parameters
     spatial_params <- c("sample_zeta_1", "sample_zeta_2", 
                        "sample_kappa", "sample_tau_i")
-    all_params <- lapply(names(all_params), function(n) {
+    param_names <- names(all_params)
+    all_params <- lapply(param_names, function(n) {
       n %in% spatial_params
     })
-    names(all_params) <- names(all_params)
+    names(all_params) <- param_names
     
   } else {
     stop("Unknown pattern: ", pattern, 
