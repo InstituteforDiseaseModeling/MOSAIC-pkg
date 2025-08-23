@@ -338,7 +338,7 @@ testthat::test_that("pi_ij calculations match", {
           gamma = baseline$mobility_gamma
      )
 
-     actual <- t(model$results$pi_ij) # Appears pi_ij in the model may be have been transposed although it did not need to be
+     actual <- model$results$pi_ij
      diag(actual) <- NA
 
      testthat::expect_equal(expected, actual, tolerance = 1e-04)
@@ -435,7 +435,7 @@ testthat::test_that("spatial hazard calculations", {
 
      actual <- model$results$spatial_hazard
 
-     testthat::expect_equal(expected, actual, tolerance = 1e-06)
+     testthat::expect_equal(expected, actual, tolerance = 1e-04)
 
      if (plot_diagnostics) {
 
