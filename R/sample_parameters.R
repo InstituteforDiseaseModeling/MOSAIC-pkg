@@ -298,13 +298,30 @@ load_priors_safely <- function(priors, PATHS, verbose) {
 #' @noRd
 load_config_safely <- function(config, verbose) {
   if (is.null(config)) {
-    if (verbose) cat("Loading MOSAIC::config_default as template...\n")
-    
-    if (!requireNamespace("MOSAIC", quietly = TRUE)) {
-      stop("MOSAIC package not found. Please install or load it, or provide config explicitly.")
+    # Try to load from MOSAIC package data first
+    if (requireNamespace("MOSAIC", quietly = TRUE) && 
+        exists("config_default", where = "package:MOSAIC")) {
+      if (verbose) cat("Loading MOSAIC::config_default from package data...\n")
+      config <- MOSAIC::config_default
+    } else {
+      # Fall back to loading from JSON file
+      config_file <- "inst/extdata/default_parameters.json"
+      
+      if (!file.exists(config_file)) {
+        # Try alternate location (when running from within package)
+        config_file <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
+      }
+      
+      if (!file.exists(config_file) || config_file == "") {
+        stop("config not found. Please either:\n",
+             "1. Ensure MOSAIC package is installed with config_default data object, or\n",
+             "2. Ensure inst/extdata/default_parameters.json exists, or\n",
+             "3. Provide config explicitly as an argument")
+      }
+      
+      if (verbose) cat("Loading config from:", config_file, "\n")
+      config <- jsonlite::fromJSON(config_file)
     }
-    
-    config <- MOSAIC::config_default
   }
   
   if (!is.list(config)) {
