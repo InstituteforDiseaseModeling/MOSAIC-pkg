@@ -84,7 +84,7 @@ est_demographic_rates <- function(PATHS, date_start, date_stop, smooth_method) {
 
      # Load the necessary packages and data
      message("Loading processed UN World Prospects demographic data")
-     path <- file.path(PATHS$DATA_PROCESSED, glue("demographics/UN_world_population_prospects_1967_2100.csv"))
+     path <- file.path(PATHS$DATA_PROCESSED, "demographics/UN_world_population_prospects_annual.csv")
      d <- read.csv(path, stringsAsFactors = FALSE)
 
      d <- d[d$year %in% years,]
