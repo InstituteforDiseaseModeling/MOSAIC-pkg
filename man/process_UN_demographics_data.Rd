@@ -15,20 +15,24 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 }}
 }
 \value{
-The function does not return a value. It processes the UN demographic data and saves the aggregated results as a CSV file in the specified directory.
+The function does not return a value. It processes the UN demographic data and saves both
+annual and daily interpolated results as CSV files in the specified directory.
 }
 \description{
 This function processes demographic data from the UN World Population Prospects for African countries.
-It loads available data, gets total population, birth rates, and death rates, and saves the processed data as a CSV file.
+It loads available data, gets total population, birth rates, and death rates, and saves the processed
+data as both annual and daily CSV files. The daily data is created through linear interpolation.
 }
 \details{
 The function performs the following steps:
 \enumerate{
-\item Loads raw demographic data from a CSV file.
-\item Gets the population, birth rate, and death rate per day for each country.
-\item Saves the processed data as a CSV file in the processed data directory.
+\item Loads raw demographic data from CSV files.
+\item Merges population, birth rate, and death rate data.
+\item Saves the annual data as \code{UN_world_population_prospects_annual.csv}.
+\item Creates daily interpolated data using linear interpolation between annual values.
+\item Saves the daily data as \code{UN_world_population_prospects_daily.csv}.
 }
-The processed data file will be saved in the \verb{PATHS$DATA_PROCESSED/demographics/} directory, with a filename that includes the year range of the available data.
+The processed data files will be saved in the \verb{PATHS$DATA_PROCESSED/demographics/} directory.
 
 Data Source: \href{https://population.un.org/wpp/}{United Nations World Population Prospects}
 }
