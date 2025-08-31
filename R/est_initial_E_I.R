@@ -16,9 +16,6 @@
 #' @param n_samples Number of Monte Carlo samples (default 1000).
 #' @param t0 Target date for estimation (default from `config$date_start`).
 #' @param lookback_days Days of surveillance data to use (default 21).
-#' @param include_asymptomatic_in_I Logical; if `TRUE`, the I compartment includes
-#'   both symptomatic and asymptomatic infectious individuals. If `FALSE`, I counts
-#'   symptomatic infectious individuals only. Default `TRUE` for backward compatibility.
 #' @param verbose Print progress messages (default TRUE).
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
@@ -29,7 +26,7 @@
 #' @return A list with two main components:
 #' \describe{
 #'   \item{metadata}{List containing estimation details: description, version, date, t0,
-#'     lookback_days, n_samples, method, and include_asymptomatic_in_I.}
+#'     lookback_days, n_samples, and method.}
 #'   \item{parameters_location}{List with `prop_E_initial` and `prop_I_initial`, each containing:
 #'     \itemize{
 #'       \item parameter_name: Parameter identifier
@@ -49,7 +46,6 @@
 #' results <- est_initial_E_I(
 #'   PATHS, priors, config,
 #'   n_samples = 1000,
-#'   include_asymptomatic_in_I = FALSE,
 #'   variance_increase_pct = 100  # Double the variance for less constrained priors
 #' )
 #' }
@@ -57,7 +53,6 @@
 #' @export
 est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                             t0 = NULL, lookback_days = 21,
-                            include_asymptomatic_in_I = TRUE,
                             verbose = TRUE, parallel = FALSE,
                             variance_increase_pct = 50) {
 
@@ -227,8 +222,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                t0 = t0,
                lookback_days = lookback_days,
                n_samples = n_samples,
-               method = "surveillance_backcalculation",
-               include_asymptomatic_in_I = include_asymptomatic_in_I
+               method = "surveillance_backcalculation"
           ),
           parameters_location = list(
                prop_E_initial = list(
@@ -261,7 +255,6 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           cat(sprintf("Found surveillance data for %d/%d countries\n",
                       length(countries_with_data), length(location_codes)))
           cat(sprintf("Number of Monte Carlo samples: %d\n", n_samples))
-          cat(sprintf("I includes asymptomatic: %s\n", include_asymptomatic_in_I))
           cat("\n")
      }
 
@@ -356,7 +349,6 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                               iota = iota_i,
                               gamma_1 = gamma_1_i,
                               gamma_2 = gamma_2_i,
-                              include_asymptomatic_in_I = include_asymptomatic_in_I,
                               verbose = FALSE
                          )
                          c(E = ei_results$E, I = ei_results$I)
@@ -405,7 +397,6 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                               iota = iota_i,
                               gamma_1 = gamma_1_i,
                               gamma_2 = gamma_2_i,
-                              include_asymptomatic_in_I = include_asymptomatic_in_I,
                               verbose = FALSE
                          )
                          E_samples[i] <- ei_results$E
@@ -534,7 +525,6 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #' @param iota Incubation rate (1/incubation period, must be positive)
 #' @param gamma_1 Symptomatic recovery rate (must be positive)
 #' @param gamma_2 Asymptomatic recovery rate (must be positive)
-#' @param include_asymptomatic_in_I Logical; if TRUE, I includes asymptomatic infectious individuals (default TRUE)
 #' @param verbose Print detailed progress (default FALSE)
 #'
 #' @return A list with two components:
@@ -569,7 +559,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 #' @export
 est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days = 60,
                                      sigma, rho, chi, tau_r, iota, gamma_1, gamma_2,
-                                     include_asymptomatic_in_I = TRUE, verbose = FALSE) {
+                                     verbose = FALSE) {
   
   # ---- Parameter validation ----
   if (length(cases) != length(dates)) stop("cases and dates must have same length")
