@@ -106,116 +106,56 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           })
      }
 
-     # ---- Helper: fit Beta from samples (proportions) ----
+     # ---- Helper: Simple Beta fitting from samples (proportions) ----
      fit_beta_from_samples <- function(x, label = "") {
-          x <- x[!is.na(x)]
-
+          x <- x[!is.na(x) & x > 0 & x < 1]
+          
           if (length(x) < 2) {
-               if (verbose) cat("  Insufficient data for", label, "- using default near-zero\n")
-               # Use less constrained defaults with variance inflation
-               variance_multiplier <- 1 + (variance_increase_pct / 100)
-               precision <- max(10, 1000 / variance_multiplier)
-               default_mean <- 1e-4  # Slightly higher than original
-               shape1 <- default_mean * precision
-               shape2 <- (1 - default_mean) * precision
+               if (verbose) cat("  Insufficient data for", label, "- using default\n")
+               return(list(shape1 = 1, shape2 = 999, method = "insufficient_data"))
+          }
+          
+          if (var(x) == 0) {
+               mean_val <- mean(x)
+               precision <- 1000
                return(list(
-                    shape1 = max(0.01, shape1),
-                    shape2 = max(0.01, shape2),
-                    mean = default_mean,
-                    variance = (default_mean * (1 - default_mean)) / (precision + 1),
-                    method = "default_insufficient_data_inflated"
+                    shape1 = mean_val * precision,
+                    shape2 = (1 - mean_val) * precision,
+                    method = "constant_value"
                ))
           }
-
-          if (sd(x) == 0 || all(x == x[1])) {
-               const_val <- x[1]
-               if (const_val <= 0 || const_val >= 1) const_val <- 1e-4
-               # Apply variance inflation to precision
-               variance_multiplier <- 1 + (variance_increase_pct / 100)
-               precision <- max(10, 1000 / variance_multiplier)
-               shape1 <- const_val * precision
-               shape2 <- (1 - const_val) * precision
-               return(list(
-                    shape1 = max(0.01, shape1),
-                    shape2 = max(0.01, shape2),
-                    mean = const_val,
-                    variance = (const_val * (1 - const_val)) / (precision + 1),
-                    method = "constant_value_inflated"
-               ))
-          }
-
-          x_adj <- x
-          x_adj[x_adj <= 0] <- 1e-10
-          x_adj[x_adj >= 1] <- 1 - 1e-10
-          x_mean <- mean(x_adj)
-          x_var  <- var(x_adj)
-
-          # Apply variance inflation
-          variance_multiplier <- 1 + (variance_increase_pct / 100)
-          x_var_inflated <- x_var * variance_multiplier
-
-          if (x_var_inflated < 1e-10) {
-               # Reduce precision to increase variance
-               precision <- max(10, 1000 / variance_multiplier)
-               shape1 <- x_mean * precision
-               shape2 <- (1 - x_mean) * precision
-               return(list(
-                    shape1 = max(0.01, shape1),
-                    shape2 = max(0.01, shape2),
-                    mean = x_mean,
-                    variance = x_var_inflated,
-                    method = "low_variance_inflated"
-               ))
-          }
-
-          common_factor <- x_mean * (1 - x_mean) / x_var_inflated - 1
-          if (common_factor <= 0) {
+          
+          # Standard method of moments
+          mu <- mean(x)
+          v <- var(x)
+          precision <- (mu * (1 - mu) / v) - 1
+          
+          if (precision <= 0) {
                if (verbose) cat("  High variance for", label, "- using robust fallback\n")
-               q25 <- quantile(x_adj, 0.25)
-               q75 <- quantile(x_adj, 0.75)
-               med <- median(x_adj)
-               if (q75 > q25 && med > 0 && med < 1) {
-                    # Reduce precision to increase variance
-                    base_precision <- max(2, 10 / variance_multiplier)
-                    shape1 <- max(0.1, med * base_precision)
-                    shape2 <- max(0.1, (1 - med) * base_precision)
-               } else {
-                    shape1 <- max(0.01, 1.0 / variance_multiplier)
-                    shape2 <- max(0.01, 999.99 / variance_multiplier)
-               }
-               return(list(
-                    shape1 = shape1,
-                    shape2 = shape2,
-                    mean   = x_mean,
-                    variance = x_var_inflated,
-                    method = "robust_fallback_inflated"
-               ))
-          } else {
-               shape1 <- x_mean * common_factor
-               shape2 <- (1 - x_mean) * common_factor
-               return(list(
-                    shape1 = max(0.01, shape1),
-                    shape2 = max(0.01, shape2),
-                    mean = x_mean,
-                    variance = x_var_inflated,
-                    method = "method_of_moments_inflated"
-               ))
+               precision <- 10  # Fallback precision
           }
+          
+          return(list(
+               shape1 = max(0.01, mu * precision),
+               shape2 = max(0.01, (1 - mu) * precision),
+               method = "method_of_moments"
+          ))
      }
 
-     # ---- Helper: create inflated default Beta parameters ----
-     create_default_beta <- function(mean_val, label = "") {
-          variance_multiplier <- 1 + (variance_increase_pct / 100)
-          precision <- max(10, 100 / variance_multiplier)
-          shape1 <- mean_val * precision
-          shape2 <- (1 - mean_val) * precision
-          list(
-               shape1 = max(0.01, shape1),
-               shape2 = max(0.01, shape2), 
-               mean = mean_val,
-               variance = (mean_val * (1 - mean_val)) / (precision + 1),
-               method = paste0("inflated_default_", label)
-          )
+     # ---- Helper: Post-processing variance inflation for Beta distributions ----
+     inflate_beta_variance <- function(beta_params, inflation_factor) {
+          if (inflation_factor <= 1) return(beta_params)
+          
+          mean_val <- beta_params$shape1 / (beta_params$shape1 + beta_params$shape2)
+          old_precision <- beta_params$shape1 + beta_params$shape2
+          new_precision <- max(2, old_precision / inflation_factor)  # Floor at 2
+          
+          beta_params$shape1 <- mean_val * new_precision
+          beta_params$shape2 <- (1 - mean_val) * new_precision
+          beta_params$variance <- (mean_val * (1 - mean_val)) / (new_precision + 1)
+          beta_params$method <- paste0(beta_params$method, "_variance_inflated")
+          
+          return(beta_params)
      }
 
      # ---- Helper: consistent location prior or default ----
@@ -336,7 +276,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                if (!has_data) {
                     if (verbose) cat("no data, using default priors\n")
 
-                    E_default <- create_default_beta(1e-4, "E_no_data")
+                    E_default <- list(shape1 = 1, shape2 = 9999, method = "no_data_default")
                     E_default$metadata <- list(
                          data_available = FALSE, total_cases = 0,
                          mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -344,7 +284,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     )
                     results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_default
                     
-                    I_default <- create_default_beta(5e-5, "I_no_data")
+                    I_default <- list(shape1 = 0.5, shape2 = 9999.5, method = "no_data_default")
                     I_default$metadata <- list(
                          data_available = FALSE, total_cases = 0,
                          mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -484,10 +424,10 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                I_beta <- fit_beta_from_samples(I_prop, paste0("I_", loc))
 
                if (is.null(E_beta)) {
-                    E_beta <- create_default_beta(1e-4, "E_fitting_failed")
+                    E_beta <- list(shape1 = 1, shape2 = 9999, method = "fitting_failed")
                }
                if (is.null(I_beta)) {
-                    I_beta <- create_default_beta(5e-5, "I_fitting_failed")
+                    I_beta <- list(shape1 = 0.5, shape2 = 9999.5, method = "fitting_failed")
                }
 
                E_beta$metadata <- list(
@@ -519,7 +459,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           }, error = function(e) {
                warning(sprintf("Error processing %s: %s", loc, e$message))
                if (verbose) cat(sprintf("error: %s\n", e$message))
-               E_error <- create_default_beta(1e-4, "E_error")
+               E_error <- list(shape1 = 1, shape2 = 9999, method = "error_fallback")
                E_error$metadata <- list(
                     data_available = FALSE, total_cases = 0,
                     mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -527,7 +467,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                )
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_error
                
-               I_error <- create_default_beta(5e-5, "I_error")
+               I_error <- list(shape1 = 0.5, shape2 = 9999.5, method = "error_fallback")
                I_error$metadata <- list(
                     data_available = FALSE, total_cases = 0,
                     mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -535,6 +475,31 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                )
                results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_error
           })
+     }
+
+     # ---- Apply variance inflation to all Beta parameters (single point of control) ----
+     if (variance_increase_pct > 0) {
+          inflation_factor <- 1 + (variance_increase_pct / 100)
+          if (verbose) cat(sprintf("\nApplying %.0f%% variance inflation (factor=%.2f)\n", 
+                                   variance_increase_pct, inflation_factor))
+          
+          for (loc in names(results$parameters_location$prop_E_initial$parameters$location)) {
+               # Inflate E compartment variance
+               E_params <- results$parameters_location$prop_E_initial$parameters$location[[loc]]
+               E_params <- inflate_beta_variance(E_params, inflation_factor)
+               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_params
+               
+               # Inflate I compartment variance  
+               I_params <- results$parameters_location$prop_I_initial$parameters$location[[loc]]
+               I_params <- inflate_beta_variance(I_params, inflation_factor)
+               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_params
+               
+               if (verbose) {
+                    cat(sprintf("  %s: E=Beta(%.3f,%.3f), I=Beta(%.3f,%.3f)\n", 
+                                loc, E_params$shape1, E_params$shape2,
+                                I_params$shape1, I_params$shape2))
+               }
+          }
      }
 
      if (verbose) {
