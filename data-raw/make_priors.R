@@ -1,6 +1,15 @@
 library(MOSAIC)
 library(jsonlite)
 
+# Enhanced make_priors.R with flexible Beta fitting for E/I compartments
+# 
+# Key changes:
+# - est_initial_E_I now uses enhanced flexible Beta fitting with left-skewed defaults
+# - Prior method: "left_skewed" for biological realism
+# - Expansion factor: 4.0 for wide scenario exploration
+# - Conservatism bias: 0.3 for moderate zero-bias in production
+# - Other functions (est_initial_R, est_initial_S, est_initial_V1_V2) still use old variance_inflation
+
 # Set up paths - critical for finding input files
 # Set root to parent directory containing all MOSAIC repos
 MOSAIC::set_root_directory("~/MOSAIC")
@@ -16,7 +25,7 @@ j <- MOSAIC::iso_codes_mosaic
 
 priors_default <- list(
      metadata = list(
-          version = "3.0.0",
+          version = "5.0.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -29,45 +38,52 @@ priors_default <- list(
 #----------------------------------------
 
 # alpha_1 - Population mixing within metapops
+# Assuming close to 1 on mixing param. Not because we believe pops at country level are that well-mixed,
+# but trying to enable faster epidemic growth rates
+beta_fit_alpha_1 <- fit_beta_from_ci(mode_val = 0.5, ci_lower = 0.2, ci_upper = 0.8)
+
 priors_default$parameters_global$alpha_1 <- list(
      parameter_name = "alpha_1",
      distribution = "beta",
-     parameters = list(shape1 = 1.1, shape2 = 1.1)
+     parameters = list(shape1 = beta_fit_alpha_1$shape1, shape2 = beta_fit_alpha_1$shape2)
 )
 
 # alpha_2 - Degree of frequency driven transmission
+# assuming more frequency dependent transmission with wide uncertainty
+beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.33, ci_upper = 0.99)
+
 priors_default$parameters_global$alpha_2 <- list(
      parameter_name = "alpha_2",
      distribution = "beta",
-     parameters = list(shape1 = 1.1, shape2 = 1.1)
+     parameters = list(shape1 = beta_fit_alpha_2$shape1, shape2 = beta_fit_alpha_2$shape2)
 )
 
 # decay_days_long - Maximum V. cholerae survival time
 priors_default$parameters_global$decay_days_long <- list(
      parameter_name = "decay_days_long",
      distribution = "uniform",
-     parameters = list(min = 30, max = 180)
+     parameters = list(min = 30, max = 150)
 )
 
 # decay_days_short - Minimum V. cholerae survival time
 priors_default$parameters_global$decay_days_short <- list(
      parameter_name = "decay_days_short",
      distribution = "uniform",
-     parameters = list(min = 1, max = 28)
+     parameters = list(min = 0.01, max = 30)
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation
 priors_default$parameters_global$decay_shape_1 <- list(
      parameter_name = "decay_shape_1",
      distribution = "uniform",
-     parameters = list(min = 0.5, max = 5.0)
+     parameters = list(min = 0.01, max = 10.0)
 )
 
 # decay_shape_2 - Second shape parameter of Beta distribution for V. cholerae decay rate transformation
 priors_default$parameters_global$decay_shape_2 <- list(
      parameter_name = "decay_shape_2",
      distribution = "uniform",
-     parameters = list(min = 0.5, max = 5.0)
+     parameters = list(min = 0.01, max = 10.0)
 )
 
 # epsilon - Natural immunity waning rate
@@ -77,7 +93,7 @@ priors_default$parameters_global$epsilon <- list(
      parameters = list(mean = 3.9e-4, sd = 2.0e-4)  # sd derived from 95% CI [1.7e-4, 1.03e-3]
 )
 
-variance_inflation_epsilon <- 1.5
+variance_inflation_epsilon <- 2
 
 priors_default$parameters_global$epsilon$parameters$sd <-
      priors_default$parameters_global$epsilon$parameters$sd * variance_inflation_epsilon
@@ -92,7 +108,7 @@ priors_default$parameters_global$gamma_1 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/10),  # log of median rate: 1/10 per day = 10 days shedding
-          sdlog = 0.6          # uncertainty allowing 7-14 day range
+          sdlog = 0.8          # uncertainty allowing 7-14 day range
      )
 )
 
@@ -107,7 +123,7 @@ priors_default$parameters_global$gamma_2 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/2),   # log of median rate: 1/2 per day = 2 days shedding
-          sdlog = 0.7           # uncertainty allowing 1-3 day range
+          sdlog = 0.8           # uncertainty allowing 1-3 day range
      )
 )
 
@@ -123,7 +139,7 @@ priors_default$parameters_global$iota <- list(
      parameters = list(meanlog = -0.337, sdlog = 0.4)  # Wider distribution
 )
 
-variance_inflation_iota <- 1.5
+variance_inflation_iota <- 6
 
 priors_default$parameters_global$iota$parameters$sd <-
      priors_default$parameters_global$iota$parameters$sd * variance_inflation_iota
@@ -136,7 +152,7 @@ priors_default$parameters_global$iota$parameters$sd <-
 priors_default$parameters_global$kappa <- list(
      parameter_name = "kappa",
      distribution = "uniform",
-     parameters = list(min = 10^3, max = 10^9)
+     parameters = list(min = 10^5, max = 10^10)
 )
 
 
@@ -201,7 +217,7 @@ get_vaccine_param <- function(var_name, param_name) {
 # omega_1 - Vaccine waning rate (one dose)
 # Based on Xu et al. (2024) meta-regression, fitted using est_vaccine_effectiveness()
 # Fit gamma distribution from confidence intervals with uncertainty inflation
-uncertainty_inflation <- 0.1  # Increase CI width by 20%
+uncertainty_inflation <- 0.25  # Increase CI width by 20%
 
 omega_1_mean <- get_vaccine_param("omega_1", "mean")
 omega_1_low <- get_vaccine_param("omega_1", "low")
@@ -292,7 +308,7 @@ priors_default$parameters_global$omega_2 <- list(
 )
 
 
-uncertainty_inflation <- 0.2  # Increase CI width by 20%
+uncertainty_inflation <- 0.4  # Increase CI width by 20%
 
 # phi_1 - Initial vaccine effectiveness (one dose)
 # Based on Xu et al. (2024), fitted using est_vaccine_effectiveness()
@@ -437,14 +453,14 @@ priors_default$parameters_global$sigma <- list(
 priors_default$parameters_global$zeta_1 <- list(
      parameter_name = "zeta_1",
      distribution = "uniform",
-     parameters = list(min = 1e4, max = 1e8)
+     parameters = list(min = 1e5, max = 1e10)
 )
 
 # zeta_2 - Asymptomatic shedding rate
 priors_default$parameters_global$zeta_2 <- list(
      parameter_name = "zeta_2",
      distribution = "uniform",
-     parameters = list(min = 0.01, max = 1e3)
+     parameters = list(min = 100, max = 1e5)
 )
 
 
@@ -452,37 +468,79 @@ priors_default$parameters_global$zeta_2 <- list(
 # Location specific parameters in alphabetical order
 #---------------------------------------------------
 
-# beta_j0_env - Environmental transmission rate
-# Gamma distribution with increased uncertainty: Shape = 0.5, Rate = 10000
-# Mean = 0.00005, Standard deviation = 0.000071 (allows for more variability)
-priors_default$parameters_location$beta_j0_env <- list(
-     parameter_name = "beta_j0_env",
-     description = "Environmental base transmission rate",
-     distribution = "gamma",
+# beta_j0_tot - Total base transmission rate (human + environmental)
+# Lognormal prior on the log scale; median set near current combined mean (~1.5e-4)
+# and wide uncertainty to allow multi-fold variation across locations.
+#   meanlog = log(1.5e-4), sdlog = 0.9  ->  ~95% prior ≈ median * exp(±1.96*0.9) ≈ ×(1/5.8 to 5.8)
+# Used with p_beta to derive components:
+#   beta_j0_hum = p_beta * beta_j0_tot
+#   beta_j0_env = (1 - p_beta) * beta_j0_tot
+# Option (Gamma alternative with similar breadth; mean = 1.5e-4):
+#   shape = 2, rate = shape/mean = 2 / 1.5e-4 ≈ 13333.33  (CV ≈ 0.71)
+
+priors_default$parameters_location$beta_j0_tot <- list(
+     parameter_name = "beta_j0_tot",
+     description    = "Total base transmission rate (human + environmental)",
+     distribution   = "lognormal",
+     parameters     = list(
+          location = list()
+     )
+)
+
+for (iso in j) {
+
+     priors_default$parameters_location$beta_j0_tot$parameters$location[[iso]] <- list(
+          meanlog = log(1e-6),
+          sdlog   = 2.5
+     )
+
+     # --- Alternative (Gamma) ---
+     # To use a Gamma prior instead of Lognormal, uncomment and comment out the block above:
+     # priors_default$parameters_location$beta_j0_tot$parameters$location[[iso]] <- list(
+     #      shape = 2,
+     #      rate  = 2 / 1.5e-4
+     # )
+}
+
+
+# p_beta - Proportion of human-to-human vs environmental transmission
+# Beta distribution with a weak bias toward human transmission ≈ 2× environmental.
+# Center at p_beta ≈ 2/3 with light concentration:
+#   shape1 = 2.25, shape2 = 1.125  -> Mean ≈ 0.667, SD ≈ 0.226
+# Option for 1:1 (neutral) ratio:
+#   shape1 = 1.5, shape2 = 1.5      -> Mean = 0.5,   SD = 0.25
+# Used to derive: beta_j0_hum = p_beta * beta_j0_total; beta_j0_env = (1 - p_beta) * beta_j0_total
+
+ # Default: weak 2:1 bias toward human transmission
+beta_fit_p_beta <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.1, ci_upper = 0.9)
+
+
+priors_default$parameters_location$p_beta <- list(
+     parameter_name = "p_beta",
+     description = "Proportion of total base transmission that is human-to-human (0–1)",
+     distribution = "beta",
      parameters = list(
           location = list()
      )
 )
 
 for (iso in j) {
-     priors_default$parameters_location$beta_j0_env$parameters$location[[iso]] <- list(shape = 1, rate = 10000)
+
+     priors_default$parameters_location$p_beta$parameters$location[[iso]] <- list(shape1 = beta_fit_p_beta$shape1, shape2 = beta_fit_p_beta$shape2)
+
 }
 
-# beta_j0_hum - Human-to-human transmission rate
-# Gamma distribution with increased uncertainty: Shape = 0.8, Rate = 8000
-# Mean = 0.0001, Standard deviation = 0.000112 (higher than environmental, more uncertain)
-priors_default$parameters_location$beta_j0_hum <- list(
-     parameter_name = "beta_j0_hum",
-     description = "Human-to-human base transmission rate",
-     distribution = "gamma",
-     parameters = list(
-          location = list()
-     )
-)
 
-for (iso in j) {
-     priors_default$parameters_location$beta_j0_hum$parameters$location[[iso]] <- list(shape = 1, rate = 8000)
-}
+
+
+
+
+
+
+
+
+
+
 
 # tau_i - Country-level travel probabilities
 # Beta distribution with parameters loaded from param_tau_departure.csv
@@ -597,7 +655,7 @@ priors_default$parameters_location$theta_j <- list(
      )
 )
 
-theta_uncertainty_one_sided <- 0.1
+theta_uncertainty_one_sided <- 0.2
 
 # Load WASH estimates
 wash_param_file <- file.path(PATHS$MODEL_INPUT, "param_theta_WASH.csv")
@@ -658,7 +716,7 @@ if (file.exists(wash_param_file)) {
 # Values < 1 increase uncertainty (wider distributions)
 # Values > 1 decrease uncertainty (narrower distributions)
 # Value = 1 keeps original uncertainty from file
-seasonality_uncertainty_factor <- 0.75  # Default: use original uncertainty from file
+seasonality_uncertainty_factor <- 0.95  # Default: use original uncertainty from file
 
 # Load seasonal dynamics parameters
 seasonal_param_file <- file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv")
@@ -858,7 +916,7 @@ initial_conditions_V1_V2 <- est_initial_V1_V2(
      config = config_default,  # Use all locations from config_default
      n_samples = 1000,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
-     variance_inflation = 2,   # Triple variance for increased uncertainty
+     variance_inflation = 3,   # Triple variance for increased uncertainty (still supported)
      parallel = TRUE,           # Enable parallel processing for efficiency
      verbose = TRUE            # Quiet mode for cleaner output
 )
@@ -921,7 +979,7 @@ if (T) {
 
      cat("Estimating initial E/I compartments from recent surveillance data...\n")
 
-     # Run estimation for all locations
+     # Run estimation for all locations using enhanced flexible Beta fitting
      initial_conditions_E_I <- est_initial_E_I(
           PATHS = PATHS,
           priors = priors_default,  # Use the priors being built in this script
@@ -929,7 +987,9 @@ if (T) {
           n_samples = 1000,         # Production-quality uncertainty quantification
           t0 = date_start,         # Use date_start from config_default
           lookback_days = 14,      # Default lookback window
-          variance_inflation = 5,   # Triple variance for increased uncertainty
+          prior_method = "left_skewed",    # Biologically motivated default
+          expansion_factor = 4.0,          # Wide CIs for scenario exploration
+          conservatism_bias = 0.3,         # Moderate bias toward zero for production
           verbose = TRUE,          # Verbose output for monitoring
           parallel = TRUE          # Can enable for faster processing
      )
@@ -999,6 +1059,7 @@ cat("Estimating initial R compartment from historical cholera surveillance data.
 # Note: Removed source() to use the updated package function with new variance inflation method
 
 # Run estimation for all locations using temporal disaggregation
+# NOTE: est_initial_R still uses the old variance_inflation parameter
 initial_conditions_R <- est_initial_R(
      PATHS = PATHS,
      priors = priors_default,  # Use the priors being built in this script
@@ -1006,7 +1067,7 @@ initial_conditions_R <- est_initial_R(
      n_samples = 1000,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
      disaggregate = TRUE,      # Use Fourier disaggregation for better accuracy
-     variance_inflation = 5,
+     variance_inflation = 10,  # Higher inflation for wider uncertainty (old parameter)
      verbose = TRUE,          # Verbose output for monitoring
      parallel = TRUE           # Enable parallel processing for faster computation
 )
@@ -1068,19 +1129,20 @@ cat("Estimating initial S compartment using constrained residual method...\n")
 # Use est_initial_S() with all other compartments already estimated
 # This ensures S + V1 + V2 + E + I + R = 1 mathematically
 
-# Note that this distribution for the S compartment is not directly ssampled from in the sample_paramters() function.
+# Note that this distribution for the S compartment is not directly sampled from in the sample_parameters() function.
 # The value for S is still determined as the remainder: (S = N - (V1 + V2 + E + I + R)), but its implied prior is effectively
 # the same as what is sampled below in the est_initial_S function
 
+# NOTE: est_initial_S still uses the old variance_inflation parameter
 initial_conditions_S <- est_initial_S(
      PATHS = PATHS,
      priors = priors_default,  # Use priors with all other compartments estimated
      config = config_default,  # Use all locations from config_default
      n_samples = 1000,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
-     variance_inflation = 0,   # Double variance for increased uncertainty
+     variance_inflation = 0,   # No inflation for S (constrained residual, old parameter)
      verbose = TRUE,          # Verbose output for monitoring
-     min_S_proportion = 0.001   # Minimum 1% susceptible for biological realism
+     min_S_proportion = 0.001   # Minimum 0.1% susceptible for biological realism
 )
 
 cat(sprintf("  Completed S estimation for %d locations\n",
