@@ -20,8 +20,9 @@
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
 #'   available cores. Note: Not supported on Windows.
-#' @param variance_increase_pct Percentage increase in variance for fitted Beta distributions (default 50).
-#'   Higher values create less constrained priors, lower values create tighter priors.
+#' @param variance_inflation Proportional adjustment to expand confidence intervals (default 0 = no inflation).
+#'   Applied as (1-variance_inflation) to lower CI and (1+variance_inflation) to upper CI.
+#'   For example, 0.2 expands CI by 20% in each direction. Must be between -0.5 and 0.5.
 #'
 #' @return A list with two main components:
 #' \describe{
@@ -46,7 +47,7 @@
 #' results <- est_initial_E_I(
 #'   PATHS, priors, config,
 #'   n_samples = 1000,
-#'   variance_increase_pct = 100  # Double the variance for less constrained priors
+#'   variance_inflation = 0.2  # Expand CI by 20% for less constrained priors
 #' )
 #' }
 #'
@@ -54,7 +55,7 @@
 est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                             t0 = NULL, lookback_days = 21,
                             verbose = TRUE, parallel = FALSE,
-                            variance_increase_pct = 50) {
+                            variance_inflation = 0) {
 
      # ---- Parameter validation ----
      if (n_samples <= 0) stop("n_samples must be positive")
@@ -62,7 +63,9 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      if (!is.list(PATHS)) stop("PATHS must be a list")
      if (!is.list(priors)) stop("priors must be a list")
      if (!is.list(config)) stop("config must be a list")
-     if (variance_increase_pct < 0) stop("variance_increase_pct must be non-negative")
+     if (variance_inflation < -0.5 || variance_inflation > 0.5) {
+          warning("variance_inflation is high")
+     }
 
      # ---- Helper: sample from prior ----
      sample_from_prior <- function(prior, param_name, verbose = FALSE) {
@@ -104,12 +107,12 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      # ---- Helper: Simple Beta fitting from samples (proportions) ----
      fit_beta_from_samples <- function(x, label = "") {
           x <- x[!is.na(x) & x > 0 & x < 1]
-          
+
           if (length(x) < 2) {
                if (verbose) cat("  Insufficient data for", label, "- using default\n")
                return(list(shape1 = 1, shape2 = 999, method = "insufficient_data"))
           }
-          
+
           if (var(x) == 0) {
                mean_val <- mean(x)
                precision <- 1000
@@ -119,17 +122,17 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     method = "constant_value"
                ))
           }
-          
+
           # Standard method of moments
           mu <- mean(x)
           v <- var(x)
           precision <- (mu * (1 - mu) / v) - 1
-          
+
           if (precision <= 0) {
                if (verbose) cat("  High variance for", label, "- using robust fallback\n")
                precision <- 10  # Fallback precision
           }
-          
+
           return(list(
                shape1 = max(0.01, mu * precision),
                shape2 = max(0.01, (1 - mu) * precision),
@@ -137,21 +140,58 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           ))
      }
 
-     # ---- Helper: Post-processing variance inflation for Beta distributions ----
-     inflate_beta_variance <- function(beta_params, inflation_factor) {
-          if (inflation_factor <= 1) return(beta_params)
-          
-          mean_val <- beta_params$shape1 / (beta_params$shape1 + beta_params$shape2)
-          old_precision <- beta_params$shape1 + beta_params$shape2
-          new_precision <- max(2, old_precision / inflation_factor)  # Floor at 2
-          
-          beta_params$shape1 <- mean_val * new_precision
-          beta_params$shape2 <- (1 - mean_val) * new_precision
-          beta_params$variance <- (mean_val * (1 - mean_val)) / (new_precision + 1)
-          beta_params$method <- paste0(beta_params$method, "_variance_inflated")
-          
-          return(beta_params)
+     # ---- Helper: Beta fitting with variance inflation using CI expansion ----
+     fit_beta_with_variance_inflation <- function(samples, variance_inflation, label = "") {
+          # Remove invalid samples
+          valid_samples <- samples[!is.na(samples) & samples > 0 & samples < 1]
+
+          if (length(valid_samples) < 2) {
+               if (verbose) cat("  Insufficient data for", label, "- using default\n")
+               return(list(shape1 = 1, shape2 = 999, method = "insufficient_data"))
+          }
+
+          # Calculate sample statistics
+          sample_mean <- mean(valid_samples)
+          sample_quantiles <- quantile(valid_samples, c(0.025, 0.975))
+          ci_lower <- sample_quantiles[1]
+          ci_upper <- sample_quantiles[2]
+
+          # Apply variance inflation using the new pattern
+          ci_lower <- pmax(1e-10, ci_lower*(1-variance_inflation))
+          ci_upper <- pmin(0.999, ci_upper*(1+variance_inflation))
+
+          # Use fit_beta_from_ci with sample_mean as mode_val (as requested)
+          tryCatch({
+               beta_fit <- fit_beta_from_ci(
+                    mode_val = sample_mean,
+                    ci_lower = ci_lower,
+                    ci_upper = ci_upper,
+                    method = "moment_matching"
+               )
+
+               return(list(
+                    shape1 = beta_fit$shape1,
+                    shape2 = beta_fit$shape2,
+                    method = paste0("ci_expansion_",
+                                  if(variance_inflation != 0) "inflated" else "no_inflation")
+               ))
+
+          }, error = function(e) {
+               if (verbose) cat("  CI-based fitting failed for", label, "- using fallback\n")
+
+               # Simple fallback using method of moments
+               sample_var <- var(valid_samples)
+               precision <- (sample_mean * (1 - sample_mean) / sample_var) - 1
+               precision <- max(2.1, precision)  # Minimum for valid Beta
+
+               return(list(
+                    shape1 = max(0.01, sample_mean * precision),
+                    shape2 = max(0.01, (1 - sample_mean) * precision),
+                    method = "fallback_method_of_moments"
+               ))
+          })
      }
+
 
      # ---- Helper: consistent location prior or default ----
      # Uses consistent defaults across sequential/parallel branches.
@@ -266,6 +306,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                loc_surv <- surveillance_window[surveillance_window$iso_code == loc, ]
                has_data <- loc %in% countries_with_data && nrow(loc_surv) > 0
 
+
                if (!has_data) {
                     if (verbose) cat("no data, using default priors\n")
 
@@ -276,7 +317,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          message = "No surveillance data in lookback window"
                     )
                     results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_default
-                    
+
                     I_default <- list(shape1 = 0.5, shape2 = 9999.5, method = "no_data_default")
                     I_default$metadata <- list(
                          data_available = FALSE, total_cases = 0,
@@ -307,6 +348,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                E_samples <- numeric(n_samples)
                I_samples <- numeric(n_samples)
 
+
                # -------- Parallel branch --------
                if (parallel && n_samples >= 100) {
                     if (verbose) cat(sprintf("  Using parallel processing with %d cores\n",
@@ -316,8 +358,12 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          iota_i    <- sample_from_prior(priors$parameters_global$iota,    "iota")
                          gamma_1_i <- sample_from_prior(priors$parameters_global$gamma_1, "gamma_1")
                          gamma_2_i <- sample_from_prior(priors$parameters_global$gamma_2, "gamma_2")
-                         rho_i <- draw_loc_or_default(priors, "rho", loc, default = 0.775, verbose = FALSE)
-                         chi_i <- draw_loc_or_default(priors, "chi", loc, default = 0.625, verbose = FALSE)
+
+                         #---------------------------------------------------------------------------------
+                         # Temporary manual patch until observation process updated in LASER model
+                         rho_i <- runif(1, min = 0.05, max = 0.30)  # Reporting rate: 5-30%
+                         chi_i <- runif(1, min = 0.50, max = 0.75)  # Diagnostic accuracy: 50-75%
+                         #---------------------------------------------------------------------------------
 
                          # Reporting delay ~ Gamma(2, 0.5) => mean 4, sd ≈ 2.8
                          tau_r_i <- rgamma(1, shape = 2, rate = 0.5)
@@ -366,8 +412,9 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          iota_i    <- sample_from_prior(priors$parameters_global$iota,    "iota")
                          gamma_1_i <- sample_from_prior(priors$parameters_global$gamma_1, "gamma_1")
                          gamma_2_i <- sample_from_prior(priors$parameters_global$gamma_2, "gamma_2")
-                         rho_i <- draw_loc_or_default(priors, "rho", loc, default = 0.775, verbose = FALSE)
-                         chi_i <- draw_loc_or_default(priors, "chi", loc, default = 0.625, verbose = FALSE)
+                         # Temporary manual patch until observation process updated in LASER model
+                         rho_i <- runif(1, min = 0.05, max = 0.30)  # Reporting rate: 5-30%
+                         chi_i <- runif(1, min = 0.50, max = 0.75)  # Diagnostic accuracy: 50-75%
 
                          tau_r_i <- rgamma(1, shape = 2, rate = 0.5)
 
@@ -410,9 +457,17 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                E_prop <- E_samples / population_t0
                I_prop <- I_samples / population_t0
 
-               # Fit Beta
-               E_beta <- fit_beta_from_samples(E_prop, paste0("E_", loc))
-               I_beta <- fit_beta_from_samples(I_prop, paste0("I_", loc))
+               # Apply new variance inflation method with CI expansion and fit_beta_from_ci
+               E_beta <- fit_beta_with_variance_inflation(
+                    samples = E_prop,
+                    variance_inflation = variance_inflation,
+                    label = paste0("E_", loc)
+               )
+               I_beta <- fit_beta_with_variance_inflation(
+                    samples = I_prop,
+                    variance_inflation = variance_inflation,
+                    label = paste0("I_", loc)
+               )
 
                if (is.null(E_beta)) {
                     E_beta <- list(shape1 = 1, shape2 = 9999, method = "fitting_failed")
@@ -441,12 +496,6 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_beta
                results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_beta
 
-               if (verbose) {
-                    cat(sprintf("E: Beta(%.3f, %.3f) mean=%.1e, I: Beta(%.3f, %.3f) mean=%.1e\n",
-                                E_beta$shape1, E_beta$shape2, E_beta$mean,
-                                I_beta$shape1, I_beta$shape2, I_beta$mean))
-               }
-
           }, error = function(e) {
                warning(sprintf("Error processing %s: %s", loc, e$message))
                if (verbose) cat(sprintf("error: %s\n", e$message))
@@ -457,7 +506,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     message = sprintf("Error during processing: %s", e$message)
                )
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_error
-               
+
                I_error <- list(shape1 = 0.5, shape2 = 9999.5, method = "error_fallback")
                I_error$metadata <- list(
                     data_available = FALSE, total_cases = 0,
@@ -466,37 +515,61 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                )
                results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_error
           })
+
      }
 
-     # ---- Apply variance inflation to all Beta parameters (single point of control) ----
-     if (variance_increase_pct > 0) {
-          inflation_factor <- 1 + (variance_increase_pct / 100)
-          if (verbose) cat(sprintf("\nApplying %.0f%% variance inflation (factor=%.2f)\n", 
-                                   variance_increase_pct, inflation_factor))
-          
-          for (loc in names(results$parameters_location$prop_E_initial$parameters$location)) {
-               # Inflate E compartment variance
-               E_params <- results$parameters_location$prop_E_initial$parameters$location[[loc]]
-               E_params <- inflate_beta_variance(E_params, inflation_factor)
-               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_params
-               
-               # Inflate I compartment variance  
-               I_params <- results$parameters_location$prop_I_initial$parameters$location[[loc]]
-               I_params <- inflate_beta_variance(I_params, inflation_factor)
-               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_params
-               
-               if (verbose) {
-                    cat(sprintf("  %s: E=Beta(%.3f,%.3f), I=Beta(%.3f,%.3f)\n", 
-                                loc, E_params$shape1, E_params$shape2,
-                                I_params$shape1, I_params$shape2))
-               }
-          }
-     }
+     # Note: Variance inflation is applied during fitting via CI expansion
 
      if (verbose) {
           cat("\n=== Estimation Complete ===\n")
           cat(sprintf("Successfully processed %d locations\n",
                       length(results$parameters_location$prop_E_initial$parameters$location)))
+
+          # Comprehensive results table
+          cat("\n=== Final E/I Prior Distribution Summary ===\n")
+          cat(sprintf("%-4s %-20s %-15s %-12s %-20s %-15s %-12s\n",
+                      "LOC", "E_Beta(shape1,shape2)", "E_Mean_Count", "E_95%_CI",
+                      "I_Beta(shape1,shape2)", "I_Mean_Count", "I_95%_CI"))
+          cat(paste(rep("-", 110), collapse=""), "\n")
+
+          for (loc in names(results$parameters_location$prop_E_initial$parameters$location)) {
+               E_result <- results$parameters_location$prop_E_initial$parameters$location[[loc]]
+               I_result <- results$parameters_location$prop_I_initial$parameters$location[[loc]]
+
+               # Calculate 95% CI for E compartment counts
+               if (!is.null(E_result$metadata$mean_count) && E_result$metadata$mean_count > 0) {
+                    E_mean <- E_result$metadata$mean_count
+                    E_sd <- E_result$metadata$sd_count
+                    E_ci_low <- max(0, E_mean - 1.96 * E_sd)
+                    E_ci_high <- E_mean + 1.96 * E_sd
+                    E_ci_str <- sprintf("(%.0f-%.0f)", E_ci_low, E_ci_high)
+                    E_mean_str <- sprintf("%.0f", E_mean)
+               } else {
+                    E_ci_str <- "(-)"
+                    E_mean_str <- "0"
+               }
+
+               # Calculate 95% CI for I compartment counts
+               if (!is.null(I_result$metadata$mean_count) && I_result$metadata$mean_count > 0) {
+                    I_mean <- I_result$metadata$mean_count
+                    I_sd <- I_result$metadata$sd_count
+                    I_ci_low <- max(0, I_mean - 1.96 * I_sd)
+                    I_ci_high <- I_mean + 1.96 * I_sd
+                    I_ci_str <- sprintf("(%.0f-%.0f)", I_ci_low, I_ci_high)
+                    I_mean_str <- sprintf("%.0f", I_mean)
+               } else {
+                    I_ci_str <- "(-)"
+                    I_mean_str <- "0"
+               }
+
+               E_beta_str <- sprintf("(%.2f,%.2f)", E_result$shape1, E_result$shape2)
+               I_beta_str <- sprintf("(%.2f,%.2f)", I_result$shape1, I_result$shape2)
+
+               cat(sprintf("%-4s %-20s %-15s %-20s %-20s %-15s %-20s\n",
+                           loc, E_beta_str, E_mean_str, E_ci_str,
+                           I_beta_str, I_mean_str, I_ci_str))
+          }
+          cat("\nNote: CIs based on Monte Carlo sample statistics (mean ± 1.96×SD)\n")
      }
 
      return(results)
@@ -560,7 +633,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days = 60,
                                      sigma, rho, chi, tau_r, iota, gamma_1, gamma_2,
                                      verbose = FALSE) {
-  
+
   # ---- Parameter validation ----
   if (length(cases) != length(dates)) stop("cases and dates must have same length")
   if (length(cases) == 0) stop("cases and dates cannot be empty")
@@ -573,7 +646,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   if (iota <= 0) stop("iota must be positive")
   if (gamma_1 <= 0) stop("gamma_1 must be positive")
   if (gamma_2 <= 0) stop("gamma_2 must be positive")
-  
+
   # Convert dates to Date class if needed
   if (!inherits(dates, "Date")) {
     tryCatch({
@@ -582,7 +655,7 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
       stop("dates must be convertible to Date class")
     })
   }
-  
+
   if (!inherits(t0, "Date")) {
     tryCatch({
       t0 <- as.Date(t0)
@@ -590,62 +663,60 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
       stop("t0 must be convertible to Date class")
     })
   }
-  
+
   # ---- Filter surveillance data to lookback window ----
   lookback_start <- t0 - lookback_days
   lookback_end <- t0 - 1
-  
+
   # Filter cases within lookback window
   in_window <- dates >= lookback_start & dates <= lookback_end
   cases_filtered <- cases[in_window]
   dates_filtered <- dates[in_window]
-  
+
   if (verbose) {
-    cat(sprintf("  Lookback window: %s to %s (%d days)\n", 
+    cat(sprintf("  Lookback window: %s to %s (%d days)\n",
                 lookback_start, lookback_end, lookback_days))
-    cat(sprintf("  Cases in window: %d (total: %.0f)\n", 
+    cat(sprintf("  Cases in window: %d (total: %.0f)\n",
                 length(cases_filtered), sum(cases_filtered, na.rm = TRUE)))
   }
-  
+
   # ---- Handle no-data case ----
   if (length(cases_filtered) == 0 || sum(cases_filtered, na.rm = TRUE) == 0) {
     if (verbose) cat("  No cases in lookback window, returning E=0, I=0\n")
     return(list(E = 0, I = 0))
   }
-  
+
   # ---- Back-calculation: reported cases -> true infections ----
   # True infections = (reported cases × chi) / (rho × sigma)
   total_cases <- sum(cases_filtered, na.rm = TRUE)
   multiplier <- chi / (rho * sigma)
   total_infections <- total_cases * multiplier
-  
+
   if (verbose) {
     cat(sprintf("  Surveillance multiplier: chi/(rho×sigma) = %.1f\n", multiplier))
-    cat(sprintf("  Total infections: %.0f cases × %.1f = %.0f\n", 
+    cat(sprintf("  Total infections: %.0f cases × %.1f = %.0f\n",
                 total_cases, multiplier, total_infections))
   }
-  
-  # ---- Account for reporting delay and distribute infections over time ----
-  # Simple approach: distribute infections uniformly over lookback period
-  # accounting for tau_r delay
-  daily_infections <- total_infections / lookback_days
-  
+
+  # ---- Account for reporting delay ----
+  # Each day contributes based on its actual case count, not averaged
+
   # ---- Estimate current E and I compartments ----
   # E: Exposed individuals who will become infectious
   # I: Currently infectious individuals
-  
+
   E_total <- 0
   I_total <- 0
-  
+
   # For each day in the lookback period, calculate contribution to current E/I
   for (i in 1:length(dates_filtered)) {
     days_since_infection <- as.numeric(t0 - dates_filtered[i] - tau_r)
-    
+
     if (days_since_infection <= 0) next  # Future infections
-    
+
     # Proportion still in E (not yet infectious)
     prob_in_E <- exp(-iota * days_since_infection)
-    
+
     # Proportion in I (infectious but not yet recovered)
     # Assumes exponential progression through I compartment
     if (days_since_infection > 1/iota) {
@@ -655,17 +726,17 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
     } else {
       prob_in_I <- 0
     }
-    
+
     # Add contributions from this day's infections
-    daily_inf <- ifelse(is.na(cases_filtered[i]), 0, cases_filtered[i] * multiplier / lookback_days)
+    daily_inf <- ifelse(is.na(cases_filtered[i]), 0, cases_filtered[i] * multiplier)
     E_total <- E_total + daily_inf * prob_in_E
     I_total <- I_total + daily_inf * prob_in_I
   }
-  
+
   # ---- Numerical stability and bounds checking ----
   E_total <- max(0, round(E_total))
   I_total <- max(0, round(I_total))
-  
+
   # Check for unrealistic estimates
   if (E_total > 0.02 * population) {
     warning(sprintf("E estimate (%.0f) exceeds 2%% of population (%.0f)", E_total, population))
@@ -673,12 +744,12 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   if (I_total > 0.02 * population) {
     warning(sprintf("I estimate (%.0f) exceeds 2%% of population (%.0f)", I_total, population))
   }
-  
+
   if (verbose) {
     cat(sprintf("  Final estimates: E=%.0f, I=%.0f\n", E_total, I_total))
-    cat(sprintf("  As proportion of population: E=%.4f%%, I=%.4f%%\n", 
+    cat(sprintf("  As proportion of population: E=%.4f%%, I=%.4f%%\n",
                 100*E_total/population, 100*I_total/population))
   }
-  
+
   return(list(E = E_total, I = I_total))
 }
