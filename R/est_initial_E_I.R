@@ -20,9 +20,18 @@
 #' @param parallel Enable parallel processing for Monte Carlo sampling when
 #'   `n_samples >= 100` (default FALSE). Uses `parallel::mclapply()` with all
 #'   available cores. Note: Not supported on Windows.
-#' @param variance_inflation Proportional adjustment to expand confidence intervals (default 0 = no inflation).
-#'   Applied as (1-variance_inflation) to lower CI and (1+variance_inflation) to upper CI.
-#'   For example, 0.2 expands CI by 20% in each direction. Must be between -0.5 and 0.5.
+#' @param prior_method Method for creating Beta priors (default "left_skewed"):
+#'   - "left_skewed": Naturally biased toward lower E/I values (recommended)
+#'   - "expanded_ci": Wide confidence intervals for broad exploration  
+#'   - "conservative": Bias toward zero for cautious estimates
+#'   - "wide_uniform": Nearly uniform for maximum exploration
+#'   - "adaptive": Auto-select method based on sample characteristics
+#' @param expansion_factor Factor for confidence interval expansion (default 2.5).
+#'   Values > 1.0 create wider priors. Recommended range: 1.5-4.0.
+#' @param conservatism_bias Strength of bias toward zero (default 0.2). 
+#'   Range 0.0-0.5 where higher values create stronger bias toward lower E/I values.
+#' @param variance_inflation DEPRECATED. Use prior_method, expansion_factor, and conservatism_bias instead.
+#'   If provided, will be converted to equivalent expansion_factor for backward compatibility.
 #'
 #' @return A list with two main components:
 #' \describe{
@@ -47,7 +56,9 @@
 #' results <- est_initial_E_I(
 #'   PATHS, priors, config,
 #'   n_samples = 1000,
-#'   variance_inflation = 0.2  # Expand CI by 20% for less constrained priors
+#'   prior_method = "left_skewed",    # Biologically motivated default
+#'   expansion_factor = 2.5,          # Wide CIs for scenario exploration  
+#'   conservatism_bias = 0.2          # Moderate bias toward zero
 #' )
 #' }
 #'
@@ -55,7 +66,10 @@
 est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                             t0 = NULL, lookback_days = 21,
                             verbose = TRUE, parallel = FALSE,
-                            variance_inflation = 0) {
+                            prior_method = "left_skewed",
+                            expansion_factor = 2.5,
+                            conservatism_bias = 0.2,
+                            variance_inflation = NULL) {
 
      # ---- Parameter validation ----
      if (n_samples <= 0) stop("n_samples must be positive")
@@ -63,8 +77,25 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      if (!is.list(PATHS)) stop("PATHS must be a list")
      if (!is.list(priors)) stop("priors must be a list")
      if (!is.list(config)) stop("config must be a list")
-     if (variance_inflation < -0.5 || variance_inflation > 0.5) {
-          warning("variance_inflation is high")
+     
+     # Validate new parameters
+     valid_methods <- c("left_skewed", "expanded_ci", "conservative", "wide_uniform", "adaptive")
+     if (!prior_method %in% valid_methods) {
+          stop("prior_method must be one of: ", paste(valid_methods, collapse = ", "))
+     }
+     if (expansion_factor < 1.0) stop("expansion_factor must be >= 1.0")
+     if (conservatism_bias < 0 || conservatism_bias > 0.5) {
+          stop("conservatism_bias must be between 0.0 and 0.5")
+     }
+     
+     # Handle deprecated variance_inflation parameter
+     if (!is.null(variance_inflation)) {
+          warning("variance_inflation is deprecated. Use expansion_factor instead.")
+          if (variance_inflation < -0.5 || variance_inflation > 0.5) {
+               warning("variance_inflation is outside recommended range")
+          }
+          # Convert to expansion_factor for backward compatibility
+          expansion_factor <- 1.0 + abs(variance_inflation) * 2
      }
 
      # ---- Helper: sample from prior ----
@@ -140,53 +171,47 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           ))
      }
 
-     # ---- Helper: Beta fitting with variance inflation using CI expansion ----
-     fit_beta_with_variance_inflation <- function(samples, variance_inflation, label = "") {
+     # ---- Helper: Enhanced Beta fitting with flexible prior creation ----
+     fit_beta_flexible_wrapper <- function(samples, prior_method, expansion_factor, conservatism_bias, label = "") {
           # Remove invalid samples
           valid_samples <- samples[!is.na(samples) & samples > 0 & samples < 1]
 
           if (length(valid_samples) < 2) {
                if (verbose) cat("  Insufficient data for", label, "- using default\n")
-               return(list(shape1 = 1, shape2 = 999, method = "insufficient_data"))
+               return(list(shape1 = 1.02, shape2 = 999, method = "insufficient_data"))
           }
 
-          # Calculate sample statistics
-          sample_mean <- mean(valid_samples)
-          sample_quantiles <- quantile(valid_samples, c(0.025, 0.975))
-          ci_lower <- sample_quantiles[1]
-          ci_upper <- sample_quantiles[2]
-
-          # Apply variance inflation using the new pattern
-          ci_lower <- pmax(1e-10, ci_lower*(1-variance_inflation))
-          ci_upper <- pmin(0.999, ci_upper*(1+variance_inflation))
-
-          # Use fit_beta_from_ci with sample_mean as mode_val (as requested)
+          # Use the new flexible Beta fitting
           tryCatch({
-               beta_fit <- fit_beta_from_ci(
-                    mode_val = sample_mean,
-                    ci_lower = ci_lower,
-                    ci_upper = ci_upper,
-                    method = "moment_matching"
+               beta_fit <- fit_beta_flexible(
+                    samples = valid_samples,
+                    method = prior_method,
+                    expansion_factor = expansion_factor,
+                    conservatism_bias = conservatism_bias,
+                    min_precision = 4.0,
+                    max_precision = 100.0,
+                    target_percentile = 0.25,  # For left-skewed: use 25th percentile as mode
+                    verbose = FALSE
                )
-
+               
                return(list(
                     shape1 = beta_fit$shape1,
                     shape2 = beta_fit$shape2,
-                    method = paste0("ci_expansion_",
-                                  if(variance_inflation != 0) "inflated" else "no_inflation")
+                    method = paste0("flexible_", beta_fit$method)
                ))
-
+               
           }, error = function(e) {
-               if (verbose) cat("  CI-based fitting failed for", label, "- using fallback\n")
-
+               if (verbose) cat("  Flexible fitting failed for", label, "- using fallback\n")
+               
                # Simple fallback using method of moments
+               sample_mean <- mean(valid_samples)
                sample_var <- var(valid_samples)
                precision <- (sample_mean * (1 - sample_mean) / sample_var) - 1
-               precision <- max(2.1, precision)  # Minimum for valid Beta
-
+               precision <- max(4.0, precision)  # Minimum for valid Beta
+               
                return(list(
-                    shape1 = max(0.01, sample_mean * precision),
-                    shape2 = max(0.01, (1 - sample_mean) * precision),
+                    shape1 = max(1.02, sample_mean * precision),
+                    shape2 = max(1.02, (1 - sample_mean) * precision),
                     method = "fallback_method_of_moments"
                ))
           })
@@ -295,6 +320,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           cat(sprintf("Found surveillance data for %d/%d countries\n",
                       length(countries_with_data), length(location_codes)))
           cat(sprintf("Number of Monte Carlo samples: %d\n", n_samples))
+          cat(sprintf("Prior method: %s (expansion_factor=%.1f, conservatism_bias=%.1f)\n",
+                      prior_method, expansion_factor, conservatism_bias))
           cat("\n")
      }
 
@@ -310,7 +337,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                if (!has_data) {
                     if (verbose) cat("no data, using default priors\n")
 
-                    E_default <- list(shape1 = 1, shape2 = 9999, method = "no_data_default")
+                    E_default <- list(shape1 = 1.02, shape2 = 9999, method = "no_data_default")
                     E_default$metadata <- list(
                          data_available = FALSE, total_cases = 0,
                          mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -318,7 +345,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     )
                     results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_default
 
-                    I_default <- list(shape1 = 0.5, shape2 = 9999.5, method = "no_data_default")
+                    I_default <- list(shape1 = 1.02, shape2 = 9999, method = "no_data_default")
                     I_default$metadata <- list(
                          data_available = FALSE, total_cases = 0,
                          mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -457,23 +484,27 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                E_prop <- E_samples / population_t0
                I_prop <- I_samples / population_t0
 
-               # Apply new variance inflation method with CI expansion and fit_beta_from_ci
-               E_beta <- fit_beta_with_variance_inflation(
+               # Apply new flexible Beta fitting method
+               E_beta <- fit_beta_flexible_wrapper(
                     samples = E_prop,
-                    variance_inflation = variance_inflation,
+                    prior_method = prior_method,
+                    expansion_factor = expansion_factor,
+                    conservatism_bias = conservatism_bias,
                     label = paste0("E_", loc)
                )
-               I_beta <- fit_beta_with_variance_inflation(
+               I_beta <- fit_beta_flexible_wrapper(
                     samples = I_prop,
-                    variance_inflation = variance_inflation,
+                    prior_method = prior_method,
+                    expansion_factor = expansion_factor,
+                    conservatism_bias = conservatism_bias,
                     label = paste0("I_", loc)
                )
 
                if (is.null(E_beta)) {
-                    E_beta <- list(shape1 = 1, shape2 = 9999, method = "fitting_failed")
+                    E_beta <- list(shape1 = 1.02, shape2 = 9999, method = "fitting_failed")
                }
                if (is.null(I_beta)) {
-                    I_beta <- list(shape1 = 0.5, shape2 = 9999.5, method = "fitting_failed")
+                    I_beta <- list(shape1 = 1.02, shape2 = 9999, method = "fitting_failed")
                }
 
                E_beta$metadata <- list(
@@ -499,7 +530,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           }, error = function(e) {
                warning(sprintf("Error processing %s: %s", loc, e$message))
                if (verbose) cat(sprintf("error: %s\n", e$message))
-               E_error <- list(shape1 = 1, shape2 = 9999, method = "error_fallback")
+               E_error <- list(shape1 = 1.02, shape2 = 9999, method = "error_fallback")
                E_error$metadata <- list(
                     data_available = FALSE, total_cases = 0,
                     mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -507,7 +538,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                )
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_error
 
-               I_error <- list(shape1 = 0.5, shape2 = 9999.5, method = "error_fallback")
+               I_error <- list(shape1 = 1.02, shape2 = 9999, method = "error_fallback")
                I_error$metadata <- list(
                     data_available = FALSE, total_cases = 0,
                     mean_count = 0, sd_count = 0, n_samples = n_samples,
@@ -518,7 +549,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 
      }
 
-     # Note: Variance inflation is applied during fitting via CI expansion
+     # Note: Enhanced flexible Beta fitting is applied with biologically-motivated left-skewed priors
 
      if (verbose) {
           cat("\n=== Estimation Complete ===\n")
