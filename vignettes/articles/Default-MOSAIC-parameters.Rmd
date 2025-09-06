@@ -19,7 +19,7 @@ path_to_yaml_file <- file.path(tempdir(), 'parameters.yaml')
 
 make_param_yaml(
           output_file_path = path_to_yaml_file,
-          date_start = "2023-01-01",
+          date_start = "2023-03-01",
           date_stop = "2024-12-31",
           location_id = seq_along(MOSAIC::iso_codes_mosaic),
           location_name = c("Location A", "Location B"),

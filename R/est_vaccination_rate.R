@@ -11,12 +11,12 @@
 #' @param date_start The start date for the vaccination data range (in "YYYY-MM-DD" format). Defaults to the earliest date in the data.
 #' @param date_stop The stop date for the vaccination data range (in "YYYY-MM-DD" format). Defaults to the latest date in the data.
 #' @param max_rate_per_day The maximum vaccination rate per day used to redistribute doses. Default is 100,000 doses/day.
-#' @param data_source The source of the vaccination data. Must be one of \code{"WHO"} or \code{"GTFCC"}.
+#' @param data_source The source of the vaccination data. Must be one of \code{"WHO"}, \code{"GTFCC"}, or \code{"BOTH"}. When \code{"BOTH"} is specified, the function uses combined data from both sources with GTFCC prioritized and unique WHO campaigns added.
 #'
 #' @return This function does not return an R object but saves the following files to the directory specified in \code{PATHS$MODEL_INPUT}:
 #' \itemize{
-#'   \item A redistributed vaccination data file named \code{"data_vaccinations_<data_source>_redistributed.csv"}.
-#'   \item A parameter data frame for the vaccination rate (nu) named \code{"param_nu_vaccination_rate.csv"}.
+#'   \item A redistributed vaccination data file named \code{"data_vaccinations_<suffix>_redistributed.csv"} where suffix is WHO, GTFCC, or GTFCC_WHO.
+#'   \item A parameter data frame for the vaccination rate (nu) named \code{"param_nu_vaccination_rate_<suffix>.csv"}.
 #' }
 #'
 #' @details
@@ -68,11 +68,25 @@ est_vaccination_rate <- function(PATHS,
 
      } else if (data_source == "GTFCC") {
 
-          message("Loading processed GFTCC vaccination data")
+          message("Loading processed GTFCC vaccination data")
+          data_path <- file.path(PATHS$MODEL_INPUT, "data_vaccinations_GTFCC.csv")
+          vaccination_data <- read.csv(data_path, stringsAsFactors = FALSE)
+
+     } else if (data_source == "BOTH") {
+
+          message("Loading combined GTFCC+WHO vaccination data")
+          # Check if combined file exists, if not create it
+          combined_path <- file.path(PATHS$MODEL_INPUT, "data_vaccinations_GTFCC_WHO.csv")
+          if (!file.exists(combined_path)) {
+               message("Combined data not found, creating it now...")
+               combine_vaccination_data(PATHS)
+          }
+          data_path <- combined_path
+          vaccination_data <- read.csv(data_path, stringsAsFactors = FALSE)
 
      } else {
 
-          stop("data_source must be either 'WHO' or 'GTFCC")
+          stop("data_source must be one of: 'WHO', 'GTFCC', or 'BOTH'")
 
      }
 
@@ -258,8 +272,10 @@ est_vaccination_rate <- function(PATHS,
 
 
      # Save redistributed vaccination data to CSV
-     data_path <- file.path(PATHS$MODEL_INPUT, glue::glue("data_vaccinations_{data_source}_redistributed.csv"))
-     write.csv(vaccination_data, data_path, row.names = FALSE)
+     # Use appropriate suffix for combined data
+     suffix <- ifelse(data_source == "BOTH", "GTFCC_WHO", data_source)
+     data_path <- file.path(PATHS$MODEL_INPUT, glue::glue("data_vaccinations_{suffix}_redistributed.csv"))
+     write.csv(redistributed_data, data_path, row.names = FALSE)
      message(paste("Redistributed vaccination data saved to:", data_path))
 
 
@@ -275,7 +291,7 @@ est_vaccination_rate <- function(PATHS,
      )
 
      # Save parameter data frame to CSV
-     param_path <- file.path(PATHS$MODEL_INPUT, "param_nu_vaccination_rate.csv")
+     param_path <- file.path(PATHS$MODEL_INPUT, glue::glue("param_nu_vaccination_rate_{suffix}.csv"))
      write.csv(param_df, param_path, row.names = FALSE)
      message(paste("Parameter data frame for vaccination rate (nu) saved to:", param_path))
 

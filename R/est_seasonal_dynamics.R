@@ -11,6 +11,7 @@
 #' @param clustering_method The clustering method to use (e.g., "kmeans", "ward.D2", etc.).
 #' @param k Number of clusters for grouping countries by seasonality.
 #' @param exclude_iso_codes Optional character vector of ISO codes to exclude from clustering and neighbor matching.
+#' @param data_sources Character vector of data sources to include. Default is c('WHO', 'JHU', 'SUPP').
 #'
 #' @return Saves daily fitted values and parameter estimates to CSV.
 #' @export
@@ -22,7 +23,8 @@ est_seasonal_dynamics <- function(PATHS,
                                   min_obs = 30,
                                   clustering_method,
                                   k,
-                                  exclude_iso_codes = NULL) {
+                                  exclude_iso_codes = NULL,
+                                  data_sources = c('WHO', 'JHU', 'SUPP')) {
 
      requireNamespace("dplyr")
      requireNamespace("minpack.lm")
@@ -30,9 +32,19 @@ est_seasonal_dynamics <- function(PATHS,
      requireNamespace("sf")
      requireNamespace("arrow")
 
-     # Read weekly cholera case data.
+     # Read weekly cholera case data from combined surveillance data.
      iso_codes <- MOSAIC::iso_codes_mosaic
-     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv"), stringsAsFactors = FALSE)
+     cholera_data <- utils::read.csv(file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_surveillance_weekly_combined.csv"), stringsAsFactors = FALSE)
+     
+     # Filter by data sources if specified
+     if (!is.null(data_sources) && length(data_sources) > 0) {
+          # Include rows where source is in data_sources OR source is NA (for missing data rows)
+          cholera_data <- cholera_data[is.na(cholera_data$source) | cholera_data$source %in% data_sources, ]
+     }
+     
+     # Remove rows with NA cases (these are placeholder rows with no actual data)
+     cholera_data <- cholera_data[!is.na(cholera_data$cases), ]
+
      cholera_data <- cholera_data[cholera_data$date_start >= date_start & cholera_data$date_stop < date_stop, ]
      n_obs <- table(cholera_data$iso_code)
      iso_codes_with_data <- names(n_obs[n_obs >= min_obs])

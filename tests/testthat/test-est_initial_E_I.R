@@ -238,15 +238,16 @@ test_that("est_initial_E_I wrapper function works with mock data", {
     expect_type(tcd_I, "list")
     expect_true("shape1" %in% names(tcd_E))
     expect_true("shape2" %in% names(tcd_E))
-    expect_true("mean" %in% names(tcd_E))
-    expect_true("variance" %in% names(tcd_E))
     expect_true("metadata" %in% names(tcd_E))
     
     # Check values are reasonable
     expect_true(tcd_E$shape1 > 0)
     expect_true(tcd_E$shape2 > 0)
-    expect_true(tcd_E$mean >= 0 && tcd_E$mean <= 1)
-    expect_true(tcd_I$mean >= 0 && tcd_I$mean <= 1)
+    # Check that mean can be calculated from Beta parameters
+    E_mean <- tcd_E$shape1 / (tcd_E$shape1 + tcd_E$shape2)
+    I_mean <- tcd_I$shape1 / (tcd_I$shape1 + tcd_I$shape2)
+    expect_true(E_mean >= 0 && E_mean <= 1)
+    expect_true(I_mean >= 0 && I_mean <= 1)
   })
 })
 
@@ -316,7 +317,7 @@ test_that("est_initial_E_I handles missing data gracefully", {
     
     # Should still return structure but with default near-zero values
     tcd_E <- result$parameters_location$prop_E_initial$parameters$location$TCD
-    expect_equal(tcd_E$shape1, 1.02)
+    expect_equal(tcd_E$shape1, 1.0)  # Reverted default
     expect_equal(tcd_E$shape2, 9999)
     expect_false(tcd_E$metadata$data_available)
   })

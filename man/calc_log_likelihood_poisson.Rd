@@ -8,6 +8,7 @@ calc_log_likelihood_poisson(
   observed,
   estimated,
   weights = NULL,
+  zero_buffer = TRUE,
   verbose = TRUE
 )
 }
@@ -18,6 +19,10 @@ calc_log_likelihood_poisson(
 
 \item{weights}{Optional numeric vector of non-negative weights, same length as \code{observed}.
 Default is \code{NULL}, which sets all weights to 1.}
+
+\item{zero_buffer}{Logical; if \code{TRUE} (default), rounds observed values to integers and
+adds small buffer to avoid zero estimates. If \code{FALSE}, enforces
+strict integer requirements.}
 
 \item{verbose}{Logical; if \code{TRUE}, prints diagnostics and total log-likelihood.}
 }

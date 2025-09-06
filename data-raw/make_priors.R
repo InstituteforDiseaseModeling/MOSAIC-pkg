@@ -1,14 +1,13 @@
 library(MOSAIC)
 library(jsonlite)
 
-# Enhanced make_priors.R with flexible Beta fitting for E/I compartments
-# 
+# make_priors.R with reverted Beta fitting approach for E/I compartments
+#
 # Key changes:
-# - est_initial_E_I now uses enhanced flexible Beta fitting with left-skewed defaults
-# - Prior method: "left_skewed" for biological realism
-# - Expansion factor: 4.0 for wide scenario exploration
-# - Conservatism bias: 0.3 for moderate zero-bias in production
-# - Other functions (est_initial_R, est_initial_S, est_initial_V1_V2) still use old variance_inflation
+# - est_initial_E_I now uses fit_beta_from_ci with custom CI bounds for wider exploration
+# - CI bounds: ci_lower = 1e-6, ci_upper = mean_val * ci_upper_inflation_factor
+# - ci_upper_inflation_factor: default = 2 for wider scenario exploration
+# - Other functions (est_initial_R, est_initial_S, est_initial_V1_V2) still use variance_inflation
 
 # Set up paths - critical for finding input files
 # Set root to parent directory containing all MOSAIC repos
@@ -25,7 +24,7 @@ j <- MOSAIC::iso_codes_mosaic
 
 priors_default <- list(
      metadata = list(
-          version = "5.0.0",
+          version = "6.1.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -40,7 +39,12 @@ priors_default <- list(
 # alpha_1 - Population mixing within metapops
 # Assuming close to 1 on mixing param. Not because we believe pops at country level are that well-mixed,
 # but trying to enable faster epidemic growth rates
-beta_fit_alpha_1 <- fit_beta_from_ci(mode_val = 0.5, ci_lower = 0.2, ci_upper = 0.8)
+
+# Assumption: set to theoretic max to enable faster epidemic growth rates
+#beta_fit_alpha_1 <- fit_beta_from_ci(mode_val = 0.95, ci_lower = 0.25, ci_upper = 0.99)
+
+# Assumption: Low level mixing at country scale
+beta_fit_alpha_1 <- fit_beta_from_ci(mode_val = 0.25, ci_lower = 0.05, ci_upper = 0.5)
 
 priors_default$parameters_global$alpha_1 <- list(
      parameter_name = "alpha_1",
@@ -50,7 +54,16 @@ priors_default$parameters_global$alpha_1 <- list(
 
 # alpha_2 - Degree of frequency driven transmission
 # assuming more frequency dependent transmission with wide uncertainty
-beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.33, ci_upper = 0.99)
+
+# Assumption: Tranmsmission more frequency dependent
+#beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.4, ci_upper = 0.8)
+
+# Assumption: Transmission more density dependent
+beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.25, ci_lower = 0.1, ci_upper = 0.5)
+
+# Assumption: set to theoretic max within possibility of departure from default full frequency dependence
+#beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.95, ci_lower = 0.25, ci_upper = 0.99)
+
 
 priors_default$parameters_global$alpha_2 <- list(
      parameter_name = "alpha_2",
@@ -76,14 +89,14 @@ priors_default$parameters_global$decay_days_short <- list(
 priors_default$parameters_global$decay_shape_1 <- list(
      parameter_name = "decay_shape_1",
      distribution = "uniform",
-     parameters = list(min = 0.01, max = 10.0)
+     parameters = list(min = 0.5, max = 5.0)
 )
 
 # decay_shape_2 - Second shape parameter of Beta distribution for V. cholerae decay rate transformation
 priors_default$parameters_global$decay_shape_2 <- list(
      parameter_name = "decay_shape_2",
      distribution = "uniform",
-     parameters = list(min = 0.01, max = 10.0)
+     parameters = list(min = 0.5, max = 5.0)
 )
 
 # epsilon - Natural immunity waning rate
@@ -139,7 +152,7 @@ priors_default$parameters_global$iota <- list(
      parameters = list(meanlog = -0.337, sdlog = 0.4)  # Wider distribution
 )
 
-variance_inflation_iota <- 6
+variance_inflation_iota <- 2
 
 priors_default$parameters_global$iota$parameters$sd <-
      priors_default$parameters_global$iota$parameters$sd * variance_inflation_iota
@@ -217,7 +230,7 @@ get_vaccine_param <- function(var_name, param_name) {
 # omega_1 - Vaccine waning rate (one dose)
 # Based on Xu et al. (2024) meta-regression, fitted using est_vaccine_effectiveness()
 # Fit gamma distribution from confidence intervals with uncertainty inflation
-uncertainty_inflation <- 0.25  # Increase CI width by 20%
+uncertainty_inflation <- 0.1  # Increase CI width by 20%
 
 omega_1_mean <- get_vaccine_param("omega_1", "mean")
 omega_1_low <- get_vaccine_param("omega_1", "low")
@@ -308,7 +321,7 @@ priors_default$parameters_global$omega_2 <- list(
 )
 
 
-uncertainty_inflation <- 0.4  # Increase CI width by 20%
+uncertainty_inflation <- 0.2  # Increase CI width by 20%
 
 # phi_1 - Initial vaccine effectiveness (one dose)
 # Based on Xu et al. (2024), fitted using est_vaccine_effectiveness()
@@ -469,37 +482,49 @@ priors_default$parameters_global$zeta_2 <- list(
 #---------------------------------------------------
 
 # beta_j0_tot - Total base transmission rate (human + environmental)
-# Lognormal prior on the log scale; median set near current combined mean (~1.5e-4)
-# and wide uncertainty to allow multi-fold variation across locations.
-#   meanlog = log(1.5e-4), sdlog = 0.9  ->  ~95% prior ≈ median * exp(±1.96*0.9) ≈ ×(1/5.8 to 5.8)
+# Gompertz prior fitted to handle near-zero transmission rates with right-skewed uncertainty
+# Mode set at 1e-7 (very low baseline transmission) with wide 95% CI allowing for variation
+# The Gompertz distribution better captures the highly skewed nature of transmission rates,
+# which are typically very small but can occasionally be orders of magnitude larger
 # Used with p_beta to derive components:
 #   beta_j0_hum = p_beta * beta_j0_tot
 #   beta_j0_env = (1 - p_beta) * beta_j0_tot
-# Option (Gamma alternative with similar breadth; mean = 1.5e-4):
-#   shape = 2, rate = shape/mean = 2 / 1.5e-4 ≈ 13333.33  (CV ≈ 0.71)
+
+# Fit Gompertz distribution for beta_j0_tot
+# Mode at 1e-7 with very wide uncertainty to capture rare high transmission scenarios
+# CI spans from near-zero to 1e-3 (allowing 4 orders of magnitude variation)
+beta_j0_tot_fit <- fit_gompertz_from_ci(
+     mode_val = 1e-6,        # Very low baseline transmission rate
+     ci_lower = 1e-8,        # Near-zero lower bound
+     ci_upper = 1e-5,        # Upper bound allows for higher transmission scenarios
+     probs = c(0.025, 0.975),
+     verbose = TRUE
+)
 
 priors_default$parameters_location$beta_j0_tot <- list(
      parameter_name = "beta_j0_tot",
      description    = "Total base transmission rate (human + environmental)",
-     distribution   = "lognormal",
+     distribution   = "gompertz",
      parameters     = list(
           location = list()
+     ),
+     fitting_info = list(
+          mode = 1e-6,
+          ci_lower = 1e-8,
+          ci_upper = 1e-5,
+          fitted_b = beta_j0_tot_fit$b,
+          fitted_eta = beta_j0_tot_fit$eta,
+          fitted_mean = beta_j0_tot_fit$fitted_mean
      )
 )
 
 for (iso in j) {
-
+     # Use the same Gompertz parameters for all locations
+     # Location-specific variation will come through sampling
      priors_default$parameters_location$beta_j0_tot$parameters$location[[iso]] <- list(
-          meanlog = log(1e-6),
-          sdlog   = 2.5
+          b = beta_j0_tot_fit$b,
+          eta = beta_j0_tot_fit$eta
      )
-
-     # --- Alternative (Gamma) ---
-     # To use a Gamma prior instead of Lognormal, uncomment and comment out the block above:
-     # priors_default$parameters_location$beta_j0_tot$parameters$location[[iso]] <- list(
-     #      shape = 2,
-     #      rate  = 2 / 1.5e-4
-     # )
 }
 
 
@@ -511,8 +536,11 @@ for (iso in j) {
 #   shape1 = 1.5, shape2 = 1.5      -> Mean = 0.5,   SD = 0.25
 # Used to derive: beta_j0_hum = p_beta * beta_j0_total; beta_j0_env = (1 - p_beta) * beta_j0_total
 
- # Default: weak 2:1 bias toward human transmission
-beta_fit_p_beta <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.1, ci_upper = 0.9)
+# Assumption: weak 2:1 bias toward human transmission
+#beta_fit_p_beta <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.33, ci_upper = 0.9)
+
+# Assumption: more environmentally driven 1:2 up to 1:10
+beta_fit_p_beta <- fit_beta_from_ci(mode_val = 0.33, ci_lower = 0.1, ci_upper = 0.5)
 
 
 priors_default$parameters_location$p_beta <- list(
@@ -655,7 +683,7 @@ priors_default$parameters_location$theta_j <- list(
      )
 )
 
-theta_uncertainty_one_sided <- 0.2
+theta_uncertainty_one_sided <- 0.1
 
 # Load WASH estimates
 wash_param_file <- file.path(PATHS$MODEL_INPUT, "param_theta_WASH.csv")
@@ -914,9 +942,9 @@ initial_conditions_V1_V2 <- est_initial_V1_V2(
      PATHS = PATHS,
      priors = priors_default,  # Use the priors being built in this script
      config = config_default,  # Use all locations from config_default
-     n_samples = 1000,         # Production-quality uncertainty quantification
+     n_samples = 100,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
-     variance_inflation = 3,   # Triple variance for increased uncertainty (still supported)
+     variance_inflation = 0.5,   # Triple variance for increased uncertainty (still supported)
      parallel = TRUE,           # Enable parallel processing for efficiency
      verbose = TRUE            # Quiet mode for cleaner output
 )
@@ -979,17 +1007,15 @@ if (T) {
 
      cat("Estimating initial E/I compartments from recent surveillance data...\n")
 
-     # Run estimation for all locations using enhanced flexible Beta fitting
+     # Run estimation for all locations using variance inflation approach
      initial_conditions_E_I <- est_initial_E_I(
           PATHS = PATHS,
           priors = priors_default,  # Use the priors being built in this script
           config = config_default,  # Use all locations from config_default
-          n_samples = 1000,         # Production-quality uncertainty quantification
+          n_samples = 100,         # Production-quality uncertainty quantification
           t0 = date_start,         # Use date_start from config_default
-          lookback_days = 14,      # Default lookback window
-          prior_method = "left_skewed",    # Biologically motivated default
-          expansion_factor = 4.0,          # Wide CIs for scenario exploration
-          conservatism_bias = 0.3,         # Moderate bias toward zero for production
+          lookback_days = 10,      # Default lookback window
+          variance_inflation = 100, # Higher inflation for wider uncertainty
           verbose = TRUE,          # Verbose output for monitoring
           parallel = TRUE          # Can enable for faster processing
      )
@@ -1064,10 +1090,10 @@ initial_conditions_R <- est_initial_R(
      PATHS = PATHS,
      priors = priors_default,  # Use the priors being built in this script
      config = config_default,  # Use all locations from config_default
-     n_samples = 1000,         # Production-quality uncertainty quantification
+     n_samples = 100,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
      disaggregate = TRUE,      # Use Fourier disaggregation for better accuracy
-     variance_inflation = 10,  # Higher inflation for wider uncertainty (old parameter)
+     variance_inflation = 8,  # Higher inflation for wider uncertainty (old parameter)
      verbose = TRUE,          # Verbose output for monitoring
      parallel = TRUE           # Enable parallel processing for faster computation
 )
@@ -1138,7 +1164,7 @@ initial_conditions_S <- est_initial_S(
      PATHS = PATHS,
      priors = priors_default,  # Use priors with all other compartments estimated
      config = config_default,  # Use all locations from config_default
-     n_samples = 1000,         # Production-quality uncertainty quantification
+     n_samples = 100,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
      variance_inflation = 0,   # No inflation for S (constrained residual, old parameter)
      verbose = TRUE,          # Verbose output for monitoring
@@ -1245,7 +1271,7 @@ if (n_updated_S > 0) {
 # Save to file and add to MOSAIC R package
 #-----------------------------------------
 
-fp <- file.path(getwd(), 'inst/extdata/priors_default.json')
+fp <- file.path(PATHS$ROOT, 'MOSAIC-pkg/inst/extdata/priors_default.json')
 
 # save to file
 jsonlite::write_json(priors_default, fp, pretty = TRUE, auto_unbox = TRUE)

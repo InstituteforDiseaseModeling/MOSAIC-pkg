@@ -24,6 +24,15 @@
 #'     \item \code{k} (for \code{\link{calc_log_likelihood_negbin}})
 #'     \item \code{verbose} (common to all distributions)
 #'   }
+#' Dispatcher for multiple distribution log-likelihood functions
+#' ...
+#' @param ... Additional arguments passed to the underlying distribution function:
+#'   \itemize{
+#'     \item \code{mean_precision} (for \code{\link{calc_log_likelihood_beta}})
+#'     \item \code{trials} (for \code{\link{calc_log_likelihood_binomial}})
+#'     \item \code{k}, \code{k_min} (for \code{\link{calc_log_likelihood_negbin}})
+#'     \item \code{verbose} (common to all distributions)
+#'   }
 #'
 #' @details
 #' Based on the value of \code{family}, this function internally calls:

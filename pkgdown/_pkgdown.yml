@@ -105,7 +105,7 @@ reference:
   - title: "Model calibration"
     contents:
       - get_initial_compartment_values
-      - get_model_likelihood
+      - calc_model_likelihood
       - starts_with("calc_log_likelihood")
       - run_LASER_model
 

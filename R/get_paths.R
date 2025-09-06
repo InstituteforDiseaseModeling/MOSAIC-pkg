@@ -68,6 +68,7 @@ get_paths <- function(root=NULL) {
      PATHS$DATA_IMMUNITY <- file.path(root, "MOSAIC-data/processed/immunity")
      PATHS$DATA_SUSPECTED <- file.path(root, "MOSAIC-data/processed/suspected_cases")
      PATHS$DATA_VACCINE_EFFECTIVENESS <- file.path(root, "MOSAIC-data/processed/vaccine_effectiveness")
+     PATHS$DATA_GTFCC_VACCINATION <- file.path(root, "MOSAIC-data/processed/GTFCC/vaccination")
      PATHS$MODEL_INPUT <- file.path(root, "MOSAIC-pkg/model/input")
      PATHS$MODEL_OUTPUT <- file.path(root, "MOSAIC-pkg/model/output")
      PATHS$DOCS_FIGURES <- file.path(root, "MOSAIC-docs/figures")

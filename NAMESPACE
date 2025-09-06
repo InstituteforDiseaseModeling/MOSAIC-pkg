@@ -1,7 +1,8 @@
 exportPattern("^[[:alpha:]]+")
 importFrom("grDevices", "dev.off", "png")
 importFrom("methods", "as")
-importFrom("stats", "ave", "df", "predict", "reorder")
+importFrom("stats", "ave", "df", "predict", "reorder", 
+           "rbeta", "rgamma", "rlnorm", "rnorm", "runif")
 importFrom("utils", "download.file", "head", "read.csv", "read.table",
            "setTxtProgressBar", "txtProgressBar", "write.csv")
 importFrom("ggplot2", "ggplot", "aes", "geom_line", "geom_hline", "geom_vline",
@@ -15,7 +16,7 @@ importFrom("ggplot2", "xlab", "ylab", "element_text", "geom_text", "guides",
 importFrom("sf", "st_read", "st_as_sf", "st_centroid", "st_coordinates",
            "st_transform", "st_bbox", "st_geometry", "st_intersection",
            "st_make_grid", "st_crs")
-importFrom("dplyr", "mutate", "select", "arrange", "left_join", "rename", "bind_rows")
+importFrom("dplyr", "mutate", "select", "arrange", "left_join", "rename", "bind_rows", "all_of")
 importFrom("tidyr", "pivot_longer")
 importFrom("jsonlite", "fromJSON")
 importFrom("reshape2", "melt")

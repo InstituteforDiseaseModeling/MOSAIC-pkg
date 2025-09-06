@@ -1,5 +1,21 @@
 "variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
-"omega","Waning rate of vaccine derived immunity","point",NA,NA,NA,"mean",0.000568010078163538
-"phi","Initial vaccine effectiveness","point",NA,NA,NA,"mean",0.641193308748988
-"phi","Initial vaccine effectiveness","beta",NA,NA,NA,"shape1",4.57105628588219
-"phi","Initial vaccine effectiveness","beta",NA,NA,NA,"shape2",2.40976179405494
+"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"low",0.001107077507982
+"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"mean",0.000704553428201577
+"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"high",0.000470567608445188
+"omega_1","Vaccine waning rate (one dose)","gamma",NA,NA,NA,"shape",28.2292938497691
+"omega_1","Vaccine waning rate (one dose)","gamma",NA,NA,NA,"rate",38647.5925882212
+"phi_1","Initial vaccine effectiveness (one dose)","point",NA,NA,NA,"low",0.752825658586156
+"phi_1","Initial vaccine effectiveness (one dose)","point",NA,NA,NA,"mean",0.787634986346873
+"phi_1","Initial vaccine effectiveness (one dose)","point",NA,NA,NA,"high",0.82244431410759
+"phi_1","Initial vaccine effectiveness (one dose)","beta",NA,NA,NA,"shape1",433.549391466723
+"phi_1","Initial vaccine effectiveness (one dose)","beta",NA,NA,NA,"shape2",117.6255423093
+"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"low",0.000991955550432413
+"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"mean",0.000337310944771655
+"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"high",9.83796924023721e-05
+"omega_2","Vaccine waning rate (two dose)","gamma",NA,NA,NA,"shape",3.28307260444933
+"omega_2","Vaccine waning rate (two dose)","gamma",NA,NA,NA,"rate",6768.45100888994
+"phi_2","Initial vaccine effectiveness (two dose)","point",NA,NA,NA,"low",0.739385849814447
+"phi_2","Initial vaccine effectiveness (two dose)","point",NA,NA,NA,"mean",0.768746673734596
+"phi_2","Initial vaccine effectiveness (two dose)","point",NA,NA,NA,"high",0.798107497654745
+"phi_2","Initial vaccine effectiveness (two dose)","beta",NA,NA,NA,"shape1",632.823324971446
+"phi_2","Initial vaccine effectiveness (two dose)","beta",NA,NA,NA,"shape2",191.064231175013

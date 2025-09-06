@@ -26,13 +26,13 @@ est_vaccination_rate(
 
 \item{max_rate_per_day}{The maximum vaccination rate per day used to redistribute doses. Default is 100,000 doses/day.}
 
-\item{data_source}{The source of the vaccination data. Must be one of \code{"WHO"} or \code{"GTFCC"}.}
+\item{data_source}{The source of the vaccination data. Must be one of \code{"WHO"}, \code{"GTFCC"}, or \code{"BOTH"}. When \code{"BOTH"} is specified, the function uses combined data from both sources with GTFCC prioritized and unique WHO campaigns added.}
 }
 \value{
 This function does not return an R object but saves the following files to the directory specified in \code{PATHS$MODEL_INPUT}:
 \itemize{
-\item A redistributed vaccination data file named \code{"data_vaccinations_<data_source>_redistributed.csv"}.
-\item A parameter data frame for the vaccination rate (nu) named \code{"param_nu_vaccination_rate.csv"}.
+\item A redistributed vaccination data file named \code{"data_vaccinations_<suffix>_redistributed.csv"} where suffix is WHO, GTFCC, or GTFCC_WHO.
+\item A parameter data frame for the vaccination rate (nu) named \code{"param_nu_vaccination_rate_<suffix>.csv"}.
 }
 }
 \description{
