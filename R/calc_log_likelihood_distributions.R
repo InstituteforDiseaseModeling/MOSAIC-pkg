@@ -318,35 +318,47 @@ calc_log_likelihood_gamma <- function(observed,
 }
 
 
+
+
 ###############################################################################
-## calc_log_likelihood_negbin.R
+## calc_log_likelihood_negbin.R  (patched: adds k_min)
 ###############################################################################
 
 #' Calculate log-likelihood for Negative Binomial-distributed count data
 #'
-#' Computes the total log-likelihood for count data under the Negative Binomial distribution,
-#' using the gamma-function formulation. Each observation can be weighted.
+#' Computes the total log-likelihood for count data under the Negative Binomial
+#' distribution, using the gamma-function formulation. Each observation can be
+#' weighted.
 #'
 #' @param observed Integer vector of observed non-negative counts (e.g., cases, deaths).
 #' @param estimated Numeric vector of expected values from the model (same length as \code{observed}).
 #' @param k Numeric scalar; dispersion parameter. If \code{NULL}, it is estimated via method of moments.
+#' @param k_min Numeric scalar; minimum dispersion floor applied when \code{k} is finite
+#'   (either supplied or estimated). Default \code{3}. If \code{k = Inf} (Poisson limit),
+#'   no flooring is applied.
 #' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
 #'                Default is \code{NULL}, which sets all weights to 1.
-#' @param verbose Logical; if \code{TRUE}, prints diagnostics including estimated dispersion and total log-likelihood.
+#' @param verbose Logical; if \code{TRUE}, prints diagnostics including the (floored) dispersion and total log-likelihood.
 #'
 #' @details
-#' Weighted log-likelihood is summed across all observations. Overdispersion is accounted for by \eqn{k}.
+#' If \code{k} is not supplied, it is estimated as \eqn{k = \bar x^2 / (s^2 - \bar x)} from
+#' \code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
+#' If \code{s^2 \le \bar x}, the function uses the Poisson limit (\code{k = Inf}).
 #'
 #' @return A scalar representing the total log-likelihood (numeric).
 #' @export
 #'
 #' @examples
+#' # Default k_min = 3
 #' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
+#' # Provide k but allow flooring if too small
+#' calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
 #'
 
 calc_log_likelihood_negbin <- function(observed,
                                        estimated,
-                                       k = NULL,
+                                       k       = NULL,
+                                       k_min   = 3,
                                        weights = NULL,
                                        verbose = TRUE) {
 
@@ -356,57 +368,55 @@ calc_log_likelihood_negbin <- function(observed,
 
      if (is.null(weights)) weights <- rep(1, length(observed))
 
+     # Keep only finite observed/estimated/weights
      idx <- which(!is.na(observed) & !is.na(estimated) & !is.na(weights))
      observed  <- observed[idx]
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
-     # Add cushion around 0 values: If estimated = 0 and observed > 0, negbin give -Inf
+     # Cushion for zero/negative predictions
      estimated[estimated <= 0] <- .Machine$double.eps
 
-     # Handle empty input after NA removal
+     # Handle empty after filtering
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
           if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
           return(NA_real_)
      }
 
      n <- length(observed)
-     if (length(estimated) != n || length(weights) != n) stop("Lengths of observed, estimated, and weights must all match.")
+     if (length(estimated) != n || length(weights) != n) {
+          stop("Lengths of observed, estimated, and weights must all match.")
+     }
      if (any(weights < 0)) stop("All weights must be >= 0.")
      if (sum(weights) == 0) stop("All weights are zero, cannot compute likelihood.")
      if (any(observed < 0 | observed %% 1 != 0)) stop("observed must contain non-negative integer counts.")
 
      # Estimate k if not supplied
      if (is.null(k)) {
-
           mu <- mean(observed, na.rm = TRUE)
-          s2 <- var(observed, na.rm = TRUE)
-
-          if (s2 <= mu) {
-               if (verbose) {
-                    message(sprintf("Var = %.2f <= Mean = %.2f: defaulting to Poisson (k = Inf)", s2, mu))
-               }
+          s2 <- var(observed,  na.rm = TRUE)
+          if (!is.finite(mu) || !is.finite(s2) || mu <= 0 || s2 <= mu) {
                k <- Inf
+               if (verbose) message(sprintf("Var = %.2f <= Mean = %.2f: using Poisson (k = Inf)", s2, mu))
           } else {
                k <- mu^2 / (s2 - mu)
-               if (verbose) {
-                    message(sprintf("Estimated k = %.2f (from Var = %.2f, Mean = %.2f)", k, s2, mu))
-               }
+               if (verbose) message(sprintf("Estimated k = %.3f (from Var = %.3f, Mean = %.3f)", k, s2, mu))
           }
-
      } else {
-
-          if (verbose) message(sprintf("Using provided k = %.2f", k))
-
+          if (verbose) message(sprintf("Using provided k = %.3f", k))
      }
 
-     # Use Poisson if k = Inf
+     # Apply minimum k floor when k is finite
+     if (is.finite(k) && k < k_min) {
+          if (verbose) message(sprintf("k = %.3f < k_min = %.3f; using k_min.", k, k_min))
+          k <- k_min
+     }
+
+     # Compute weighted log-likelihood
      if (is.infinite(k)) {
+          # Poisson limit
           ll_vec <- observed * log(estimated) - estimated - lgamma(observed + 1)
      } else {
-          if (k < 1.5 && verbose) {
-               warning(sprintf("k = %.2f indicates near-Poisson dispersion.", k))
-          }
           ll_vec <- lgamma(observed + k) - lgamma(k) - lgamma(observed + 1) +
                k * log(k / (k + estimated)) +
                observed * log(estimated / (k + estimated))
@@ -415,11 +425,15 @@ calc_log_likelihood_negbin <- function(observed,
      ll <- sum(weights * ll_vec)
 
      if (verbose) {
-          message(sprintf("Negative Binomial log-likelihood: %.2f", ll))
+          msg_k <- if (is.infinite(k)) "Inf (Poisson)" else sprintf("%.3f", k)
+          message(sprintf("Negative Binomial log-likelihood (k=%s): %.2f", msg_k, ll))
      }
 
      return(ll)
 }
+
+
+
 
 
 ###############################################################################
@@ -543,6 +557,9 @@ calc_log_likelihood_normal <- function(observed,
 #' @param estimated Numeric vector of expected values from the model (same length as \code{observed}).
 #' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
 #'                Default is \code{NULL}, which sets all weights to 1.
+#' @param zero_buffer Logical; if \code{TRUE} (default), rounds observed values to integers and
+#'                    adds small buffer to avoid zero estimates. If \code{FALSE}, enforces
+#'                    strict integer requirements.
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics and total log-likelihood.
 #'
 #' @details
@@ -560,6 +577,7 @@ calc_log_likelihood_normal <- function(observed,
 calc_log_likelihood_poisson <- function(observed,
                                         estimated,
                                         weights = NULL,
+                                        zero_buffer = TRUE,
                                         verbose = TRUE) {
 
      if (length(observed) != length(estimated)) {
@@ -575,7 +593,17 @@ calc_log_likelihood_poisson <- function(observed,
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
-     # Add cushion around 0 values: If estimated = 0 and observed > 0, negbin give -Inf
+     # No cushion for Poisson - zero predictions should be properly penalized
+     # If any estimated = 0 and corresponding observed > 0, return -Inf
+     if (any(estimated <= 0 & observed > 0)) {
+          if (verbose) {
+               n_bad <- sum(estimated <= 0 & observed > 0)
+               message(sprintf("Poisson: %d cases with zero predictions but positive observations - returning -Inf", n_bad))
+          }
+          return(-Inf)
+     }
+
+     # For cases where estimated = 0 and observed = 0, set estimated to small positive value
      estimated[estimated <= 0] <- .Machine$double.eps
 
      # Handle empty input after NA removal
@@ -597,8 +625,15 @@ calc_log_likelihood_poisson <- function(observed,
           stop("All weights are zero, cannot compute likelihood.")
      }
 
-     if (any(observed < 0 | observed %% 1 != 0)) {
-          stop("observed must contain non-negative integer counts for Poisson.")
+     # Apply zero buffer if requested
+     if (zero_buffer) {
+          # Round observed to integers and add small buffer to avoid zeros
+          observed <- round(observed)
+          estimated <- pmax(estimated, 1e-10)  # Avoid zero estimates
+     } else {
+          if (any(observed < 0 | observed %% 1 != 0)) {
+               stop("observed must contain non-negative integer counts for Poisson.")
+          }
      }
 
      if (n > 1) {

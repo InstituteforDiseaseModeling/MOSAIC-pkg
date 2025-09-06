@@ -13,28 +13,42 @@ calc_log_likelihood_negbin(
 )
 }
 \arguments{
-\item{observed}{Integer vector of observed non-negative counts (e.g., cases, deaths).}
+\item{observed}{Integer vector of observed non-negative counts.}
 
-\item{estimated}{Numeric vector of expected values from the model (same length as \code{observed}).}
+\item{estimated}{Numeric vector of expected values (same length as \code{observed}).}
 
-\item{k}{Numeric scalar; dispersion parameter. If \code{NULL}, it is estimated via method of moments.}
+\item{k}{Optional numeric scalar size (dispersion) parameter. If \code{NULL}
+(default), it is estimated by a \emph{weighted} method of moments.
+When estimated, a lower bound \code{k_min} is applied.}
 
-\item{weights}{Optional numeric vector of non-negative weights, same length as \code{observed}.
-Default is \code{NULL}, which sets all weights to 1.}
+\item{weights}{Optional numeric vector of non-negative weights (default all 1s).}
 
-\item{verbose}{Logical; if \code{TRUE}, prints diagnostics including estimated dispersion and total log-likelihood.}
+\item{verbose}{Logical; if \code{TRUE}, prints diagnostics. Default \code{TRUE}.}
 }
 \value{
-A scalar representing the total log-likelihood (numeric).
+Scalar numeric log-likelihood (may be \code{-Inf} on hard violations).
 }
 \description{
-Computes the total log-likelihood for count data under the Negative Binomial distribution,
-using the gamma-function formulation. Each observation can be weighted.
+Computes the total (weighted) log-likelihood for count data under the
+Negative Binomial (NB) model using a gamma-function formulation. If
+the weighted variance is \eqn{\le} the weighted mean, the function
+falls back to the Poisson limit (\eqn{k = \infty}). To prevent
+pathological ultra-heavy tails, a lower bound \code{k_min} is applied
+(configurable via \code{options(MOSAIC.negbin_k_min = 3)}).
 }
 \details{
-Weighted log-likelihood is summed across all observations. Overdispersion is accounted for by \eqn{k}.
+Weighted moments use \eqn{\mu = \sum w_i y_i / \sum w_i} and
+\eqn{\mathrm{Var}_w = \sum w_i (y_i - \mu)^2 / \sum w_i}. The implied NB size
+is \eqn{k = \mu^2 / (\mathrm{Var}_w - \mu)} when \eqn{\mathrm{Var}_w > \mu}.
+If \eqn{\mathrm{Var}_w \le \mu}, the Poisson limit is used.
+
+If any \code{estimated <= 0} where \code{observed > 0}, the function
+returns \code{-Inf} (hard penalty). Pairs where \code{observed = 0} and
+\code{estimated <= 0} are nudged to a tiny positive mean to avoid \code{log(0)}.
 }
 \examples{
-calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
-
+set.seed(1)
+y <- rnbinom(52, size = 5, mu = 20)
+mu <- rep(20, 52)
+calc_log_likelihood_negbin(y, mu, verbose = FALSE)
 }

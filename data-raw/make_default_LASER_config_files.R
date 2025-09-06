@@ -1,10 +1,13 @@
 library(MOSAIC)
 
-#PATHS <- MOSAIC::get_paths(root="path-to-root-dir")
-#default_args <- MOSAIC::get_default_LASER_config(PATHS)
+# Set up paths - critical for finding input files
+# Set root to parent directory containing all MOSAIC repos
+MOSAIC::set_root_directory("/Users/johngiles/MOSAIC")
+PATHS <- MOSAIC::get_paths()
 
-date_start <- as.Date("2023-01-01")
-date_stop <- as.Date("2024-12-17")
+# Use 2023-2025 dates to match WHO surveillance data
+date_start <- as.Date("2023-02-01")
+date_stop <- as.Date("2025-08-01")
 
 message("Set simulation time steps and locations")
 t <- seq.Date(date_start, date_stop, by = "day")
@@ -64,10 +67,47 @@ d_jt <- d_jt[sel,]
 sel <- match(t, colnames(d_jt))
 d_jt <- d_jt[,sel]
 
-# Stealing dimensions from demographics to define IFR
-# Note the matrix allow for time-varying IFR but we leave this constant for now
-mu_jt <- d_jt
-mu_jt[,] <- 0.01
+# Populate mu_jt from hierarchical CFR estimates
+# Check if param_mu_disease_mortality.csv exists
+cfr_file <- file.path(PATHS$MODEL_INPUT, "param_mu_disease_mortality.csv")
+if (file.exists(cfr_file)) {
+     # Read CFR estimates
+     cfr_df <- read.csv(cfr_file)
+     cfr_point <- cfr_df[cfr_df$parameter_distribution == "point", ]
+
+     # Get years from simulation period
+     sim_years <- seq(as.numeric(format(date_start, "%Y")),
+                      as.numeric(format(date_stop, "%Y")))
+
+     # Calculate global mean as fallback (only for simulation years)
+     cfr_subset <- cfr_point[cfr_point$t %in% sim_years, ]
+     global_mean_cfr <- mean(cfr_subset$parameter_value, na.rm = TRUE)
+
+     # Create mu_jt matrix with same dimensions as d_jt
+     mu_jt <- d_jt
+
+     # Fill matrix with yearly CFR values
+     for (i in seq_along(j)) {
+          for (day_idx in seq_along(t)) {
+               year <- as.numeric(format(as.Date(t[day_idx]), "%Y"))
+               cfr_values <- cfr_point$parameter_value[cfr_point$j == j[i] & cfr_point$t == year]
+
+               # Handle multiple values by taking the mean, or use global mean if empty/NA
+               if (length(cfr_values) > 0 && !all(is.na(cfr_values))) {
+                    mu_jt[i, day_idx] <- mean(cfr_values, na.rm = TRUE)
+               } else {
+                    mu_jt[i, day_idx] <- global_mean_cfr
+               }
+          }
+     }
+
+     message("mu_jt populated from CFR hierarchical model estimates")
+} else {
+     # Fallback to default if file doesn't exist
+     mu_jt <- d_jt
+     mu_jt[,] <- 0.01
+     warning("param_mu_disease_mortality.csv not found. Using default CFR of 0.01")
+}
 
 #####
 # Vaccination rate needs work
@@ -75,7 +115,22 @@ mu_jt[,] <- 0.01
 #####
 
 message("Add vaccination rate over time for each location (nu_jt)")
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate.csv'))
+# Try to load the WHO vaccination rate file (for backward compatibility)
+# or the GTFCC_WHO combined file if available
+if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC_WHO.csv'))) {
+     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC_WHO.csv'))
+     message("Using combined GTFCC+WHO vaccination data")
+} else if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_WHO.csv'))) {
+     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_WHO.csv'))
+     message("Using WHO vaccination data")
+} else if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC.csv'))) {
+     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC.csv'))
+     message("Using GTFCC vaccination data")
+} else {
+     # Fall back to legacy filename if it exists
+     tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate.csv'))
+     warning("Using legacy vaccination rate file without source suffix")
+}
 tmp$t <- as.Date(tmp$t)
 tmp <- tmp[tmp$j %in% j,]
 tmp <- tmp[tmp$t >= date_start & tmp$t <= date_stop,]
@@ -138,8 +193,49 @@ sel <- match(j, tmp$j)
 theta_j <- tmp$parameter_value[sel]
 names(theta_j) <- tmp$j[sel]
 
+message("Calculate transmission parameters from beta_j0_tot and p_beta")
+
+# Set default values for beta_j0_tot and p_beta
+# These match the priors in make_priors.R
+beta_j0_tot_default <- 1e-6  # Total transmission rate (matching prior mode)
+p_beta_default <- 0.33        # Proportion human transmission (matching prior mode)
+
+# Create vectors for all locations
+beta_j0_tot <- rep(beta_j0_tot_default, length(j))
+p_beta <- rep(p_beta_default, length(j))
+
+# Calculate derived parameters
+beta_j0_hum <- p_beta * beta_j0_tot        # Human transmission component
+beta_j0_env <- (1 - p_beta) * beta_j0_tot  # Environmental transmission component
+
+# Add names for clarity
+names(beta_j0_tot) <- j
+names(p_beta) <- j
+names(beta_j0_hum) <- j
+names(beta_j0_env) <- j
+
+# Print summary for verification
+message(sprintf("  beta_j0_tot = %.2e (total transmission rate)", beta_j0_tot_default))
+message(sprintf("  p_beta = %.2f (%.0f%% human, %.0f%% environmental)",
+                p_beta_default, p_beta_default * 100, (1 - p_beta_default) * 100))
+message(sprintf("  beta_j0_hum = %.2e (human component)", beta_j0_hum[1]))
+message(sprintf("  beta_j0_env = %.2e (environmental component)", beta_j0_env[1]))
+
+
+
+
 message("Get environmental suitability (psi) for each location")
-tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
+# Use extended file if date range goes beyond Feb 2025
+if (date_stop > as.Date("2025-02-02")) {
+  if (file.exists(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day_extended.csv'))) {
+    tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day_extended.csv'))
+  } else {
+    tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
+  }
+} else {
+  tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
+}
+tmp$date <- as.Date(tmp$date)
 tmp <- tmp[tmp$iso_code %in% j,]
 tmp <- tmp[tmp$date >= date_start & tmp$date <= date_stop,]
 psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "pred_smooth")
@@ -191,52 +287,72 @@ default_args <- list(
      d_jt = d_jt,
      nu_1_jt = nu_1_jt,
      nu_2_jt = nu_2_jt,
-     phi_1 = 0.64,
-     phi_2 = 0.85,
-     omega_1 = 0.0006,
-     omega_2 = 0.0004,
+     phi_1 = 0.787,
+     phi_2 = 0.768,
+     omega_1 = 0.00073,
+     omega_2 = 0.000485,
      iota = 1/1.4,
      gamma_1 = 0.2,
      gamma_2 = 0.1,
      epsilon = 0.0003,
      mu_jt = mu_jt,
      rho = 0.52,
-     sigma = 0.24,
+     sigma = 0.25,
      longitude         = longitude,
      latitude          = latitude,
      mobility_omega    = mobility_omega,
      mobility_gamma    = mobility_gamma,
      tau_i             = tau_i,
-     beta_j0_hum = rep(0.00625, length(j)),
+     beta_j0_tot = beta_j0_tot,      # Total transmission rate (optional, but included when available)
+    p_beta = p_beta,                # Proportion of human transmission (optional, but included when available)
+    beta_j0_hum = beta_j0_hum,      # Human transmission component (calculated from beta_j0_tot * p_beta)
      a_1_j = a1,
      a_2_j = a2,
      b_1_j = b1,
      b_2_j = b2,
      p     = 365,
-     alpha_1 = 0.95,
-     alpha_2 = 0.95,
-     beta_j0_env = rep(0.0125, length(j)),
+     alpha_1 = 0.975,
+     alpha_2 = 0.33,
+     beta_j0_env = beta_j0_env,      # UPDATED: Now calculated from beta_j0_tot * (1 - p_beta)
      theta_j = theta_j,
      psi_jt = psi_jt,
      zeta_1 = 7.5,
      zeta_2 = 2.5,
-     kappa = 10^5,
+     kappa = 10^6,
      decay_days_short = 3,
-     decay_days_long = 90,
-     decay_shape_1 = 1,
-     decay_shape_2 = 1,
+     decay_days_long = 120,
+     decay_shape_1 = 5,
+     decay_shape_2 = 2.5,
      reported_cases = mat_cases,
      reported_deaths = mat_deaths
 )
 
 config_default <- do.call(make_LASER_config, default_args)
 
+# Validate transmission parameter relationships
+# Note: Using the original vectors since beta_j0_tot and p_beta are not in config
+validation_tol <- 1e-10
+for (i in 1:length(j)) {
+    total_check <- config_default$beta_j0_hum[i] + config_default$beta_j0_env[i]
+    if (abs(total_check - beta_j0_tot[i]) > validation_tol) {
+        warning(sprintf("Transmission parameter inconsistency for %s: hum + env != tot", j[i]))
+    }
+
+    prop_check <- config_default$beta_j0_hum[i] / beta_j0_tot[i]
+    if (abs(prop_check - p_beta[i]) > validation_tol) {
+        warning(sprintf("Transmission parameter inconsistency for %s: hum/tot != p_beta", j[i]))
+    }
+}
+message("Transmission parameter validation complete")
 
 
-# Define output file paths for all seven formats
+
+# Define output file paths using PATHS
+# The inst/extdata directory is in the MOSAIC-pkg directory
+pkg_dir <- file.path(PATHS$ROOT, "MOSAIC-pkg")
 file_paths <- list(
-     file.path(getwd(), 'inst/extdata/default_parameters.json'),
-     file.path(getwd(), 'inst/extdata/default_parameters.json.gz')
+     file.path(pkg_dir, 'inst/extdata/default_parameters.json'),
+     file.path(pkg_dir, 'inst/extdata/default_parameters.json.gz')
 )
 
 

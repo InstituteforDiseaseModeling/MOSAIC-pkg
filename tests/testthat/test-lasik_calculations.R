@@ -377,7 +377,7 @@ testthat::test_that("pi_ij calculations match", {
 # LASIK value in model.log_likelihood
 testthat::test_that("log likelihood calculations match", {
 
-     expected <- MOSAIC::get_model_likelihood(
+     expected <- MOSAIC::calc_model_likelihood(
           obs_cases=baseline$reported_cases,
           est_cases=model$results$incidence,
           obs_deaths=baseline$reported_deaths,

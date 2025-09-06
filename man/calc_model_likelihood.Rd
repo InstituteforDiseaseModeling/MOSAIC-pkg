@@ -2,7 +2,7 @@
 % Please edit documentation in R/calc_model_likelihood.R
 \name{calc_model_likelihood}
 \alias{calc_model_likelihood}
-\title{Compute the total model likelihood}
+\title{Compute the total model likelihood (Balanced design)}
 \usage{
 calc_model_likelihood(
   obs_cases,
@@ -13,41 +13,123 @@ calc_model_likelihood(
   weight_deaths = NULL,
   weights_location = NULL,
   weights_time = NULL,
-  verbose = FALSE
+  zero_buffer = TRUE,
+  verbose = FALSE,
+  add_max_terms = FALSE,
+  add_peak_timing = TRUE,
+  add_peak_magnitude = TRUE,
+  add_cumulative_total = TRUE,
+  add_growth_rate = FALSE,
+  add_duration = FALSE,
+  add_wis = FALSE,
+  weight_peak_timing = 0.5,
+  weight_peak_magnitude = 0.5,
+  weight_cumulative_total = 0.3,
+  weight_growth_rate = 0.2,
+  weight_duration = 0.2,
+  weight_wis = 0.8,
+  peak_method = c("smooth", "simple"),
+  sigma_peak_time = 2,
+  sigma_peak_log = 0.5,
+  growth_method = c("derivative", "threshold"),
+  growth_aggregation = c("mean", "median", "max"),
+  smooth_window = 7,
+  sigma_r = 0.2,
+  duration_method = c("epidemic_periods", "main_wave", "above_baseline"),
+  duration_aggregation = c("mean", "total", "max"),
+  sigma_duration_log = 0.3,
+  wis_quantiles = c(0.0275, 0.25, 0.5, 0.75, 0.975),
+  cumulative_timepoints = c(0.25, 0.5, 0.75, 1),
+  enable_guardrails = TRUE,
+  floor_likelihood = -999999999,
+  guardrail_verbose = FALSE,
+  cumulative_over_ratio = 25,
+  cumulative_under_ratio = 0.04,
+  min_cumulative_for_check = 100,
+  negative_correlation_threshold = -0.1,
+  max_cases_per_timestep = 1e+06,
+  max_deaths_per_timestep = 1e+05
 )
 }
 \arguments{
-\item{obs_cases}{Matrix of observed cases, \code{n_locations} x \code{n_time_steps}.}
+\item{obs_cases, est_cases}{Matrices \code{n_locations x n_time_steps} of observed
+and estimated cases.}
 
-\item{est_cases}{Matrix of estimated cases, same dimension as \code{obs_cases}.}
+\item{obs_deaths, est_deaths}{Matrices \code{n_locations x n_time_steps} of observed
+and estimated deaths.}
 
-\item{obs_deaths}{Matrix of observed deaths, \code{n_locations} x \code{n_time_steps}.}
+\item{weight_cases, weight_deaths}{Optional scalar weights for case/death blocks.
+Default 1.}
 
-\item{est_deaths}{Matrix of estimated deaths, same dimension as \code{obs_deaths}.}
+\item{weights_location}{Optional length-\code{n_locations} non-negative weights.}
 
-\item{weight_cases}{Numeric scalar (or \code{NULL}), default \code{NULL} which sets to 1 internally.}
+\item{weights_time}{Optional length-\code{n_time_steps} non-negative weights.}
 
-\item{weight_deaths}{Numeric scalar (or \code{NULL}), default \code{NULL} which sets to 1 internally.}
+\item{zero_buffer}{Kept for backward compatibility (not used by the NB core).}
 
-\item{weights_location}{Optional numeric vector of length \code{n_locations}, or \code{NULL}.
-If \code{NULL}, all locations are weighted equally.}
+\item{verbose}{Logical; if \code{TRUE}, prints component summaries per location.}
 
-\item{weights_time}{Optional numeric vector of length \code{n_time_steps}, or \code{NULL}.
-If \code{NULL}, all time steps are weighted equally.}
+\item{add_max_terms}{Logical; legacy max Poisson terms. Default \code{FALSE}.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints summary messages. Default is \code{FALSE}.}
+\item{add_peak_timing, add_peak_magnitude, add_cumulative_total}{Logical; default \code{TRUE}.}
+
+\item{add_growth_rate, add_duration, add_wis}{Logical; default \code{FALSE}.}
+
+\item{weight_peak_timing, weight_peak_magnitude, weight_cumulative_total}{Component weights. Defaults \code{0.5, 0.5, 0.3}.}
+
+\item{weight_growth_rate, weight_duration, weight_wis}{Component weights for optional terms.}
+
+\item{peak_method}{\code{"smooth"} (3-pt moving average) or \code{"simple"}.}
+
+\item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{2}.}
+
+\item{sigma_peak_log}{SD on log-scale for peak magnitude; default \code{0.5}.}
+
+\item{growth_method, growth_aggregation, smooth_window, sigma_r}{Controls if growth is used.}
+
+\item{duration_method, duration_aggregation, sigma_duration_log}{Controls if duration is used.}
+
+\item{wis_quantiles}{Quantiles for WIS if enabled.}
+
+\item{cumulative_timepoints}{Fractions for cumulative progression; default \code{c(0.25,0.5,0.75,1)}.}
+
+\item{enable_guardrails}{Logical; default \code{TRUE}.}
+
+\item{floor_likelihood}{Numeric; hard floor returned on violations. Default \code{-1e8}.}
+
+\item{guardrail_verbose}{Logical; print guardrail reasons.}
+
+\item{cumulative_over_ratio, cumulative_under_ratio}{Cumulative ratio bounds (default \code{25}, \code{0.04}).}
+
+\item{min_cumulative_for_check}{Minimum observed total to apply ratio checks; default \code{100}.}
+
+\item{negative_correlation_threshold}{Correlation floor; default \code{-0.1}.}
+
+\item{max_cases_per_timestep, max_deaths_per_timestep}{Hard per‑timestep caps; defaults \code{1e6}, \code{1e5}.}
 }
 \value{
-A single numeric value giving the total log-likelihood across all locations
-and time steps, or \code{NA_real_} if all locations are skipped.
+Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.
+May be \code{NA_real_} if all locations contribute nothing.
 }
 \description{
-This function expects matrices of observed and estimated cases and deaths (size
-\code{n_locations} x \code{n_time_steps}), plus optional weight vectors for
-locations and time steps (\code{weights_location} and \code{weights_time}).
-It automatically selects Poisson or Negative Binomial for each location and outcome
-based on whether \code{Var(observed) / Mean(observed) >= 1.5}. If the ratio is below
-1.5, it uses Poisson; otherwise it uses NegBin. Then it multiplies
-the cases log-likelihood by \code{weight_cases} and the deaths log-likelihood by
-\code{weight_deaths} for additional flexibility in balancing the two outcomes.
+A simplified, robust wrapper for scoring model fits in MOSAIC.
+The core is a Negative Binomial (NB) time‑series log‑likelihood per
+location and outcome (cases, deaths) with a weighted MoM dispersion
+estimate and a small \code{k_min} floor (see
+\code{\link{calc_log_likelihood_negbin}}).
+}
+\details{
+By default, three light "shape" terms are included with modest weights:
+(1) peak timing (Normal on peak index difference),
+(2) peak magnitude (log‑Normal on ratios), and
+(3) cumulative progression (NB at a few cumulative fractions).
+
+Minimal inline guardrails floor the score on egregious fits (cumulative
+over/under prediction, per‑timestep caps, negative correlation, and
+zero‑prediction mismatches). Duration, growth, maxima, and WIS are kept
+but OFF by default to reduce complexity.
+}
+\examples{
+# Minimal example:
+# ll <- calc_model_likelihood(obs_cases, est_cases, obs_deaths, est_deaths)
 }

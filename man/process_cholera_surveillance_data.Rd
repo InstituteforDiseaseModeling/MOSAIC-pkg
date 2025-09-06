@@ -2,7 +2,7 @@
 % Please edit documentation in R/process_cholera_surveillance_data.R
 \name{process_cholera_surveillance_data}
 \alias{process_cholera_surveillance_data}
-\title{Process Combined Weekly and Daily Cholera Surveillance Data}
+\title{Process Combined Weekly and Daily Cholera Surveillance Data with Truly Square Data Structure}
 \usage{
 process_cholera_surveillance_data(PATHS, keep_source = c("WHO", "JHU", "SUPP"))
 }
@@ -23,13 +23,14 @@ occur across sources, the entry from \code{keep_source} will be used preferentia
 Invisibly returns \code{NULL}. Side effects:
 \itemize{
 \item Reads weekly CSVs from all three sources and adds a \code{source} column.
-\item Cleans rows with all NA or missing key grouping fields.
+\item Cleans rows with missing key grouping fields (iso_code, year, week).
 \item Harmonizes columns by keeping only those present in all three dataframes.
 \item Deduplicates by \code{iso_code}, \code{year}, \code{week}, choosing rows from \code{keep_source}.
+\item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
 \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
-dropping days with both NA, and carries over the \code{source}.
+preserving square structure (keeping days with NA), and carries over the \code{source}.
 \item Saves the combined daily data to
 \code{PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv}.
 }
@@ -37,6 +38,7 @@ dropping days with both NA, and carries over the \code{source}.
 \description{
 This function reads the processed weekly cholera data from WHO, JHU, and supplemental (SUPP) sources,
 labels each record by its source, combines them (removing duplicate country–week entries according to
-the specified source preference), saves the combined weekly dataset, and downscales the combined weekly
-totals to a daily time series using \code{MOSAIC::downscale_weekly_values} with integer allocation.
+the specified source preference), creates a truly square data structure with all country-week combinations
+from min to max date across the entire dataset, and downscales the combined weekly totals to a daily time series
+using \code{MOSAIC::downscale_weekly_values} with integer allocation.
 }

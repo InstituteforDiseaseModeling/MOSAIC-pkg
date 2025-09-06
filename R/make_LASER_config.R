@@ -68,7 +68,12 @@
 #' @param tau_i Departure probability for each origin location (numeric vector of length(location_name) in [0, 1]).
 #'
 #' ## Force of Infection (human-to-human)
+#' @param beta_j0_tot Total baseline transmission rate (human + environmental). Optional numeric vector of 
+#'        length(location_name). If provided with p_beta, used to derive beta_j0_hum and beta_j0_env.
+#' @param p_beta Proportion of total transmission that is human-to-human (0-1). Optional numeric vector of
+#'        length(location_name). If provided with beta_j0_tot, used to derive beta_j0_hum and beta_j0_env.
 #' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_name)).
+#'        If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * p_beta.
 #' @param a_1_j Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
 #' @param a_2_j Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
@@ -79,6 +84,7 @@
 #'
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
+#'        If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * (1 - p_beta).
 #' @param theta_j Proportion with adequate WASH (numeric vector of length(location_name) in [0, 1]).
 #' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_name) and columns
 #'        equal to the daily sequence from date_start to date_stop).
@@ -213,6 +219,8 @@ make_LASER_config <- function(output_file_path = NULL,
                               tau_i = NULL,
 
                               # Force of Infection (human-to-human)
+                              beta_j0_tot = NULL,
+                              p_beta = NULL,
                               beta_j0_hum = NULL,
                               a_1_j = NULL,
                               a_2_j = NULL,
@@ -239,7 +247,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               reported_deaths = NULL,
 
                               # Outputs
-                              sigfigs = 4
+                              sigfigs = 8
 ) {
 
      message('Validating parameter values...')
@@ -322,7 +330,15 @@ make_LASER_config <- function(output_file_path = NULL,
           reported_deaths   = reported_deaths
      )
 
-     # Check for NULL values.
+     # Add optional parameters if they are not NULL
+     if (!is.null(beta_j0_tot)) {
+          params$beta_j0_tot <- beta_j0_tot
+     }
+     if (!is.null(p_beta)) {
+          params$p_beta <- p_beta
+     }
+     
+     # Check for NULL values in required parameters
      null_fields <- names(params)[sapply(params, is.null)]
      if (length(null_fields) > 0) {
           stop("The following parameters are NULL and must be provided: ", paste(null_fields, collapse = ", "))
@@ -428,10 +444,6 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(gamma_2) || gamma_2 < 0) {
           stop("gamma_2 must be a numeric scalar greater than or equal to zero.")
      }
-     # Check that the recovery rate for severe infection is faster than for mild infection.
-     if (gamma_1 <= gamma_2) {
-          stop("gamma_1 must be greater than gamma_2, as the recovery rate for severe infection should be faster than for mild infection.")
-     }
 
      if (!is.numeric(epsilon) || epsilon < 0) {
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
@@ -455,6 +467,43 @@ make_LASER_config <- function(output_file_path = NULL,
      }
 
      # Force of Infection (human-to-human).
+     
+     # Validate beta_j0_tot and p_beta if provided (they are optional)
+     if (!is.null(beta_j0_tot)) {
+          if (!is.numeric(beta_j0_tot) || any(beta_j0_tot < 0) || length(beta_j0_tot) != length(location_name)) {
+               stop("beta_j0_tot must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
+          }
+     }
+     
+     if (!is.null(p_beta)) {
+          if (!is.numeric(p_beta) || any(p_beta < 0 | p_beta > 1) || length(p_beta) != length(location_name)) {
+               stop("p_beta must be a numeric vector of length equal to location_name with values between 0 and 1.")
+          }
+     }
+     
+     # If both beta_j0_tot and p_beta are provided, validate the mathematical relationship
+     if (!is.null(beta_j0_tot) && !is.null(p_beta)) {
+          # Check beta_j0_hum relationship
+          expected_hum <- p_beta * beta_j0_tot
+          tolerance <- 1e-10
+          if (any(abs(beta_j0_hum - expected_hum) > tolerance)) {
+               warning("beta_j0_hum does not match p_beta * beta_j0_tot. Expected values will be used for validation.")
+          }
+          
+          # Check beta_j0_env relationship  
+          expected_env <- (1 - p_beta) * beta_j0_tot
+          if (any(abs(beta_j0_env - expected_env) > tolerance)) {
+               warning("beta_j0_env does not match (1 - p_beta) * beta_j0_tot. Expected values will be used for validation.")
+          }
+          
+          # Check total consistency
+          total_check <- beta_j0_hum + beta_j0_env
+          if (any(abs(total_check - beta_j0_tot) > tolerance)) {
+               warning("beta_j0_hum + beta_j0_env does not equal beta_j0_tot. Please check transmission parameter values.")
+          }
+     }
+     
+     # beta_j0_hum and beta_j0_env are always required
      if (!is.numeric(beta_j0_hum) || any(beta_j0_hum < 0) || length(beta_j0_hum) != length(location_name)) {
           stop("beta_j0_hum must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
      }

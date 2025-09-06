@@ -44,9 +44,8 @@
 #'
 
 est_transmission_spatial_structure <- function(PATHS, config) {
-     if (missing(config) || is.null(config)) {
-          config <- MOSAIC::config_default
-     }
+
+     if (missing(config) || is.null(config)) config <- MOSAIC::config_default
 
      # Time window and site metadata
      date_start <- as.Date(config$date_start)
@@ -62,6 +61,7 @@ est_transmission_spatial_structure <- function(PATHS, config) {
      inc[reporting_rate == 0] <- NA
      prop_V1 <- (rowSums(config$nu_1_jt, na.rm = TRUE) * config$phi_1) / config$N_j_initial
      prop_V2 <- (rowSums(config$nu_2_jt, na.rm = TRUE) * config$phi_2) / config$N_j_initial
+
      df_config <- data.frame(
           iso_code        = config$location_name,
           longitude       = config$longitude,
@@ -76,6 +76,7 @@ est_transmission_spatial_structure <- function(PATHS, config) {
           prob_travel     = config$tau_i,
           stringsAsFactors=FALSE
      )
+
      df_config$incidence_total[df_config$reporting_rate == 0] <- NA
 
      # Socioeconomic and climate data loading omitted for brevity (same as before)

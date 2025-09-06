@@ -64,7 +64,7 @@
 #' climate_model <- "MRI_AGCM3_2_S"
 #'
 #' # Set the date range and API key
-#' date_start <- "2023-01-01"
+#' date_start <- "2023-03-01"
 #' date_stop <- "2030-12-31"
 #' api_key <- "your_api_key_here"
 #'

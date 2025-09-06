@@ -1,0 +1,5023 @@
+{
+  "metadata": {
+    "version": "6.1.0",
+    "date": "2025-09-05",
+    "description": "Default informative prior distributions for MOSAIC model parameters",
+    "initial_conditions": {
+      "V1_V2": {
+        "estimated_date": "2025-09-05",
+        "method": "est_initial_V1_V2",
+        "n_samples": 100,
+        "t0": "2023-02-01",
+        "n_locations_processed": 40,
+        "locations_processed": ["AGO", "BDI", "BEN", "BFA", "BWA", "CAF", "CIV", "CMR", "COD", "COG", "ERI", "ETH", "GAB", "GHA", "GIN", "GMB", "GNB", "GNQ", "KEN", "LBR", "MLI", "MOZ", "MRT", "MWI", "NAM", "NER", "NGA", "RWA", "SEN", "SLE", "SOM", "SSD", "SWZ", "TCD", "TGO", "TZA", "UGA", "ZAF", "ZMB", "ZWE"],
+        "priors_used": {
+          "omega_1": "omega_1",
+          "omega_2": "omega_2",
+          "phi_1": "phi_1",
+          "phi_2": "phi_2"
+        },
+        "summary": {
+          "total_V1": 39978757.244,
+          "total_V2": 0,
+          "locations_with_V1": 16,
+          "locations_with_V2": 0
+        }
+      },
+      "E_I": {
+        "description": "Initial E and I compartment estimates from surveillance data",
+        "version": "1.1.0",
+        "date": "2025-09-05",
+        "t0": "2023-02-01",
+        "lookback_days": 10,
+        "n_samples": 100,
+        "method": "surveillance_backcalculation"
+      },
+      "R": {
+        "estimated_date": "2025-09-05",
+        "method": "est_initial_R",
+        "n_samples": 100,
+        "t0": "2023-02-01",
+        "disaggregate": true,
+        "n_locations_processed": 40,
+        "locations_processed": ["AGO", "BDI", "BEN", "BFA", "BWA", "CAF", "CIV", "CMR", "COD", "COG", "ERI", "ETH", "GAB", "GHA", "GIN", "GMB", "GNB", "GNQ", "KEN", "LBR", "MLI", "MOZ", "MRT", "MWI", "NAM", "NER", "NGA", "RWA", "SEN", "SLE", "SOM", "SSD", "SWZ", "TCD", "TGO", "TZA", "UGA", "ZAF", "ZMB", "ZWE"],
+        "priors_used": {
+          "epsilon": "epsilon",
+          "sigma": "sigma",
+          "rho": "rho",
+          "chi": "chi",
+          "iota": "iota",
+          "gamma_1": "gamma_1",
+          "gamma_2": "gamma_2"
+        }
+      },
+      "S": {
+        "estimated_date": "2025-09-05",
+        "method": "constrained_residual",
+        "constraint": "S + V1 + V2 + E + I + R = 1",
+        "n_samples": 100,
+        "t0": "2023-02-01",
+        "min_S_proportion": 0.001,
+        "n_locations_processed": 40,
+        "locations_processed": ["AGO", "BDI", "BEN", "BFA", "BWA", "CAF", "CIV", "CMR", "COD", "COG", "ERI", "ETH", "GAB", "GHA", "GIN", "GMB", "GNB", "GNQ", "KEN", "LBR", "MLI", "MOZ", "MRT", "MWI", "NAM", "NER", "NGA", "RWA", "SEN", "SLE", "SOM", "SSD", "SWZ", "TCD", "TGO", "TZA", "UGA", "ZAF", "ZMB", "ZWE"],
+        "compartments_used": ["V1", "V2", "E", "I", "R"]
+      }
+    }
+  },
+  "parameters_global": {
+    "alpha_1": {
+      "parameter_name": "alpha_1",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 4.1883,
+        "shape2": 10.5648
+      }
+    },
+    "alpha_2": {
+      "parameter_name": "alpha_2",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 5.2344,
+        "shape2": 13.7031
+      }
+    },
+    "decay_days_long": {
+      "parameter_name": "decay_days_long",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 30,
+        "max": 150
+      }
+    },
+    "decay_days_short": {
+      "parameter_name": "decay_days_short",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 0.01,
+        "max": 30
+      }
+    },
+    "decay_shape_1": {
+      "parameter_name": "decay_shape_1",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 0.5,
+        "max": 5
+      }
+    },
+    "decay_shape_2": {
+      "parameter_name": "decay_shape_2",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 0.5,
+        "max": 5
+      }
+    },
+    "epsilon": {
+      "parameter_name": "epsilon",
+      "distribution": "lognormal",
+      "parameters": {
+        "mean": 0.0004,
+        "sd": 0.0004
+      }
+    },
+    "gamma_1": {
+      "parameter_name": "gamma_1",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": -2.3026,
+        "sdlog": 0.8
+      }
+    },
+    "gamma_2": {
+      "parameter_name": "gamma_2",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": -0.6931,
+        "sdlog": 0.8
+      }
+    },
+    "iota": {
+      "parameter_name": "iota",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": -0.337,
+        "sdlog": 0.4,
+        "sd": 0.8
+      }
+    },
+    "kappa": {
+      "parameter_name": "kappa",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 100000,
+        "max": 10000000000
+      }
+    },
+    "mobility_gamma": {
+      "parameter_name": "mobility_gamma",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 3.7212,
+        "rate": 2
+      }
+    },
+    "mobility_omega": {
+      "parameter_name": "mobility_omega",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 2.2251,
+        "rate": 2
+      }
+    },
+    "omega_1": {
+      "parameter_name": "omega_1",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 19.6037,
+        "rate": 26404.9191
+      }
+    },
+    "omega_2": {
+      "parameter_name": "omega_2",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 2.2841,
+        "rate": 3806.801
+      }
+    },
+    "phi_1": {
+      "parameter_name": "phi_1",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 11.8721,
+        "shape2": 3.9314
+      }
+    },
+    "phi_2": {
+      "parameter_name": "phi_2",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 14.0333,
+        "shape2": 4.9207
+      }
+    },
+    "rho": {
+      "parameter_name": "rho",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 5.4299,
+        "shape2": 5.009
+      }
+    },
+    "sigma": {
+      "parameter_name": "sigma",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 4.3,
+        "shape2": 13.51
+      }
+    },
+    "zeta_1": {
+      "parameter_name": "zeta_1",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 100000,
+        "max": 10000000000
+      }
+    },
+    "zeta_2": {
+      "parameter_name": "zeta_2",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 100,
+        "max": 100000
+      }
+    }
+  },
+  "parameters_location": {
+    "beta_j0_tot": {
+      "parameter_name": "beta_j0_tot",
+      "description": "Total base transmission rate (human + environmental)",
+      "distribution": "gompertz",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "BDI": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "BEN": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "BFA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "BWA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "CAF": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "CIV": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "CMR": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "COD": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "COG": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "ERI": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "ETH": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "GAB": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "GHA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "GIN": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "GMB": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "GNB": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "GNQ": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "KEN": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "LBR": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "MLI": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "MOZ": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "MRT": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "MWI": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "NAM": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "NER": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "NGA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "RWA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "SEN": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "SLE": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "SOM": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "SSD": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "SWZ": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "TCD": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "TGO": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "TZA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "UGA": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "ZAF": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "ZMB": {
+            "b": 606.2812,
+            "eta": 606.6489
+          },
+          "ZWE": {
+            "b": 606.2812,
+            "eta": 606.6489
+          }
+        }
+      },
+      "fitting_info": {
+        "mode": 1e-06,
+        "ci_lower": 1e-08,
+        "ci_upper": 1e-05,
+        "fitted_b": 606.2812,
+        "fitted_eta": 606.6489,
+        "fitted_mean": 2.7144e-06
+      }
+    },
+    "p_beta": {
+      "parameter_name": "p_beta",
+      "description": "Proportion of total base transmission that is human-to-human (0–1)",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "BDI": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "BEN": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "BFA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "BWA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "CAF": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "CIV": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "CMR": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "COD": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "COG": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "ERI": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "ETH": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "GAB": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "GHA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "GIN": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "GMB": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "GNB": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "GNQ": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "KEN": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "LBR": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "MLI": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "MOZ": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "MRT": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "MWI": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "NAM": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "NER": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "NGA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "RWA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "SEN": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "SLE": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "SOM": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "SSD": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "SWZ": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "TCD": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "TGO": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "TZA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "UGA": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "ZAF": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "ZMB": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          },
+          "ZWE": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          }
+        }
+      }
+    },
+    "tau_i": {
+      "parameter_name": "tau_i",
+      "description": "Country-level travel probabilities",
+      "distribution": "beta",
+      "uncertainty_factor": 0.001,
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 0.6418,
+            "shape2": 30605.0807,
+            "original_shape1": 641.8064,
+            "original_shape2": 30605080.7188,
+            "uncertainty_adjusted": true
+          },
+          "BDI": {
+            "shape1": 0.1871,
+            "shape2": 11514.9511,
+            "original_shape1": 187.1097,
+            "original_shape2": 11514951.1341,
+            "uncertainty_adjusted": true
+          },
+          "BEN": {
+            "shape1": 0.7066,
+            "shape2": 11723.2411,
+            "original_shape1": 706.6292,
+            "original_shape2": 11723241.1337,
+            "uncertainty_adjusted": true
+          },
+          "BFA": {
+            "shape1": 0.3101,
+            "shape2": 18195.9247,
+            "original_shape1": 310.0909,
+            "original_shape2": 18195924.6938,
+            "uncertainty_adjusted": true
+          },
+          "BWA": {
+            "shape1": 0.5475,
+            "shape2": 2200.9671,
+            "original_shape1": 547.5356,
+            "original_shape2": 2200967.1281,
+            "uncertainty_adjusted": true
+          },
+          "CAF": {
+            "shape1": 0.1416,
+            "shape2": 4866.8851,
+            "original_shape1": 141.5712,
+            "original_shape2": 4866885.1014,
+            "uncertainty_adjusted": true
+          },
+          "CIV": {
+            "shape1": 1.1492,
+            "shape2": 28291.6785,
+            "original_shape1": 1149.1534,
+            "original_shape2": 28291678.528,
+            "uncertainty_adjusted": true
+          },
+          "CMR": {
+            "shape1": 0.8697,
+            "shape2": 23921.7792,
+            "original_shape1": 869.6774,
+            "original_shape2": 23921779.1738,
+            "uncertainty_adjusted": true
+          },
+          "COD": {
+            "shape1": 0.4252,
+            "shape2": 87771.8807,
+            "original_shape1": 425.151,
+            "original_shape2": 87771880.6775,
+            "uncertainty_adjusted": true
+          },
+          "COG": {
+            "shape1": 0.448,
+            "shape2": 5039.8373,
+            "original_shape1": 447.9536,
+            "original_shape2": 5039837.3402,
+            "uncertainty_adjusted": true
+          },
+          "ERI": {
+            "shape1": 0.0203,
+            "shape2": 3209.7984,
+            "original_shape1": 20.2574,
+            "original_shape2": 3209798.4106,
+            "uncertainty_adjusted": true
+          },
+          "ETH": {
+            "shape1": 0.9244,
+            "shape2": 116982.615,
+            "original_shape1": 924.3608,
+            "original_shape2": 116982614.978,
+            "uncertainty_adjusted": true
+          },
+          "GAB": {
+            "shape1": 0.6336,
+            "shape2": 2299.4794,
+            "original_shape1": 633.5803,
+            "original_shape2": 2299479.3785,
+            "uncertainty_adjusted": true
+          },
+          "GHA": {
+            "shape1": 1.2198,
+            "shape2": 31921.5912,
+            "original_shape1": 1219.8274,
+            "original_shape2": 31921591.2135,
+            "uncertainty_adjusted": true
+          },
+          "GIN": {
+            "shape1": 0.331,
+            "shape2": 12083.3702,
+            "original_shape1": 330.9808,
+            "original_shape2": 12083370.1933,
+            "uncertainty_adjusted": true
+          },
+          "GMB": {
+            "shape1": 0.2093,
+            "shape2": 2305.2483,
+            "original_shape1": 209.2577,
+            "original_shape2": 2305248.3391,
+            "uncertainty_adjusted": true
+          },
+          "GNB": {
+            "shape1": 0.0618,
+            "shape2": 1815.6945,
+            "original_shape1": 61.8463,
+            "original_shape2": 1815694.4537,
+            "uncertainty_adjusted": true
+          },
+          "GNQ": {
+            "shape1": 0.1974,
+            "shape2": 1489.8947,
+            "original_shape1": 197.367,
+            "original_shape2": 1489894.7137,
+            "uncertainty_adjusted": true
+          },
+          "KEN": {
+            "shape1": 2.5128,
+            "shape2": 51640.9929,
+            "original_shape1": 2512.8026,
+            "original_shape2": 51640992.9332,
+            "uncertainty_adjusted": true
+          },
+          "LBR": {
+            "shape1": 0.1002,
+            "shape2": 4483.698,
+            "original_shape1": 100.1836,
+            "original_shape2": 4483698.0452,
+            "uncertainty_adjusted": true
+          },
+          "MLI": {
+            "shape1": 0.5336,
+            "shape2": 20537.1754,
+            "original_shape1": 533.6367,
+            "original_shape2": 20537175.3504,
+            "uncertainty_adjusted": true
+          },
+          "MOZ": {
+            "shape1": 0.5092,
+            "shape2": 25453.1634,
+            "original_shape1": 509.1859,
+            "original_shape2": 25453163.4124,
+            "uncertainty_adjusted": true
+          },
+          "MRT": {
+            "shape1": 0.1247,
+            "shape2": 4245.0652,
+            "original_shape1": 124.745,
+            "original_shape2": 4245065.189,
+            "uncertainty_adjusted": true
+          },
+          "MWI": {
+            "shape1": 0.5269,
+            "shape2": 17611.7382,
+            "original_shape1": 526.8908,
+            "original_shape2": 17611738.2004,
+            "uncertainty_adjusted": true
+          },
+          "NAM": {
+            "shape1": 1.1016,
+            "shape2": 2500.9844,
+            "original_shape1": 1101.5947,
+            "original_shape2": 2500984.3796,
+            "uncertainty_adjusted": true
+          },
+          "NER": {
+            "shape1": 0.1666,
+            "shape2": 19723.0928,
+            "original_shape1": 166.6171,
+            "original_shape2": 19723092.8045,
+            "uncertainty_adjusted": true
+          },
+          "NGA": {
+            "shape1": 1.3665,
+            "shape2": 191933.8854,
+            "original_shape1": 1366.4646,
+            "original_shape2": 191933885.3623,
+            "uncertainty_adjusted": true
+          },
+          "RWA": {
+            "shape1": 0.5759,
+            "shape2": 12261.2508,
+            "original_shape1": 575.883,
+            "original_shape2": 12261250.7826,
+            "uncertainty_adjusted": true
+          },
+          "SEN": {
+            "shape1": 1.0354,
+            "shape2": 15359.37,
+            "original_shape1": 1035.387,
+            "original_shape2": 15359369.9858,
+            "uncertainty_adjusted": true
+          },
+          "SLE": {
+            "shape1": 0.1328,
+            "shape2": 7281.9764,
+            "original_shape1": 132.7947,
+            "original_shape2": 7281976.3552,
+            "uncertainty_adjusted": true
+          },
+          "SOM": {
+            "shape1": 0.2102,
+            "shape2": 14949.5723,
+            "original_shape1": 210.1591,
+            "original_shape2": 14949572.2747,
+            "uncertainty_adjusted": true
+          },
+          "SSD": {
+            "shape1": 0.2851,
+            "shape2": 11324.6956,
+            "original_shape1": 285.1403,
+            "original_shape2": 11324695.6065,
+            "uncertainty_adjusted": true
+          },
+          "SWZ": {
+            "shape1": 0.0607,
+            "shape2": 1157.4269,
+            "original_shape1": 60.699,
+            "original_shape2": 1157426.9163,
+            "uncertainty_adjusted": true
+          },
+          "TCD": {
+            "shape1": 0.2094,
+            "shape2": 16931.8875,
+            "original_shape1": 209.4363,
+            "original_shape2": 16931887.4846,
+            "uncertainty_adjusted": true
+          },
+          "TGO": {
+            "shape1": 0.246,
+            "shape2": 8131.8126,
+            "original_shape1": 246.0054,
+            "original_shape2": 8131812.6254,
+            "uncertainty_adjusted": true
+          },
+          "TZA": {
+            "shape1": 1.1996,
+            "shape2": 54628.109,
+            "original_shape1": 1199.5929,
+            "original_shape2": 54628109.0165,
+            "uncertainty_adjusted": true
+          },
+          "UGA": {
+            "shape1": 1.0766,
+            "shape2": 42785.7017,
+            "original_shape1": 1076.6056,
+            "original_shape2": 42785701.7427,
+            "uncertainty_adjusted": true
+          },
+          "ZAF": {
+            "shape1": 5.6571,
+            "shape2": 61019.3392,
+            "original_shape1": 5657.1211,
+            "original_shape2": 61019339.1575,
+            "uncertainty_adjusted": true
+          },
+          "ZMB": {
+            "shape1": 0.9601,
+            "shape2": 16984.3086,
+            "original_shape1": 960.1426,
+            "original_shape2": 16984308.6028,
+            "uncertainty_adjusted": true
+          },
+          "ZWE": {
+            "shape1": 1.186,
+            "shape2": 13947.001,
+            "original_shape1": 1185.9762,
+            "original_shape2": 13947001.0165,
+            "uncertainty_adjusted": true
+          }
+        }
+      }
+    },
+    "theta_j": {
+      "parameter_name": "theta_j",
+      "description": "WASH coverage index (proportion with adequate WASH)",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 54.5466,
+            "shape2": 42.9902,
+            "point_estimate": 0.5605
+          },
+          "BDI": {
+            "shape1": 56.62,
+            "shape2": 22.0508,
+            "point_estimate": 0.7254
+          },
+          "BEN": {
+            "shape1": 58.2528,
+            "shape2": 30.8454,
+            "point_estimate": 0.6573
+          },
+          "BFA": {
+            "shape1": 56.8767,
+            "shape2": 37.9841,
+            "point_estimate": 0.6017
+          },
+          "BWA": {
+            "shape1": 58.0215,
+            "shape2": 26.9309,
+            "point_estimate": 0.6874
+          },
+          "CAF": {
+            "shape1": 57.4784,
+            "shape2": 36.0242,
+            "point_estimate": 0.6172
+          },
+          "CIV": {
+            "shape1": 57.7892,
+            "shape2": 25.6879,
+            "point_estimate": 0.697
+          },
+          "CMR": {
+            "shape1": 57.6298,
+            "shape2": 25.017,
+            "point_estimate": 0.7022
+          },
+          "COD": {
+            "shape1": 57.8215,
+            "shape2": 34.5408,
+            "point_estimate": 0.6288
+          },
+          "COG": {
+            "shape1": 57.422,
+            "shape2": 36.2342,
+            "point_estimate": 0.6156
+          },
+          "ERI": {
+            "shape1": 57.3684,
+            "shape2": 24.088,
+            "point_estimate": 0.7094
+          },
+          "ETH": {
+            "shape1": 57.9058,
+            "shape2": 34.0944,
+            "point_estimate": 0.6323
+          },
+          "GAB": {
+            "shape1": 54.4113,
+            "shape2": 18.1255,
+            "point_estimate": 0.7572
+          },
+          "GHA": {
+            "shape1": 57.912,
+            "shape2": 34.0598,
+            "point_estimate": 0.6326
+          },
+          "GIN": {
+            "shape1": 57.7043,
+            "shape2": 35.0963,
+            "point_estimate": 0.6245
+          },
+          "GMB": {
+            "shape1": 46.3425,
+            "shape2": 10.691,
+            "point_estimate": 0.8239
+          },
+          "GNB": {
+            "shape1": 58.1382,
+            "shape2": 27.8101,
+            "point_estimate": 0.6806
+          },
+          "GNQ": {
+            "shape1": 57.933,
+            "shape2": 26.4051,
+            "point_estimate": 0.6915
+          },
+          "KEN": {
+            "shape1": 56.0526,
+            "shape2": 40.0597,
+            "point_estimate": 0.585
+          },
+          "LBR": {
+            "shape1": 46.6976,
+            "shape2": 52.0015,
+            "point_estimate": 0.4726
+          },
+          "MLI": {
+            "shape1": 57.3789,
+            "shape2": 24.1223,
+            "point_estimate": 0.7092
+          },
+          "MOZ": {
+            "shape1": 58.189,
+            "shape2": 31.9375,
+            "point_estimate": 0.6489
+          },
+          "MRT": {
+            "shape1": 55.3305,
+            "shape2": 19.5336,
+            "point_estimate": 0.7456
+          },
+          "MWI": {
+            "shape1": 58.2268,
+            "shape2": 28.8478,
+            "point_estimate": 0.6727
+          },
+          "NAM": {
+            "shape1": 51.0529,
+            "shape2": 14.3042,
+            "point_estimate": 0.79
+          },
+          "NER": {
+            "shape1": 58.0198,
+            "shape2": 26.9195,
+            "point_estimate": 0.6875
+          },
+          "NGA": {
+            "shape1": 53.3872,
+            "shape2": 44.8197,
+            "point_estimate": 0.5445
+          },
+          "RWA": {
+            "shape1": 57.9269,
+            "shape2": 26.3712,
+            "point_estimate": 0.6917
+          },
+          "SEN": {
+            "shape1": 49.4533,
+            "shape2": 12.9158,
+            "point_estimate": 0.8026
+          },
+          "SLE": {
+            "shape1": 52.6284,
+            "shape2": 45.8832,
+            "point_estimate": 0.5349
+          },
+          "SOM": {
+            "shape1": 57.7382,
+            "shape2": 34.9422,
+            "point_estimate": 0.6257
+          },
+          "SSD": {
+            "shape1": 46.2603,
+            "shape2": 52.3432,
+            "point_estimate": 0.4685
+          },
+          "SWZ": {
+            "shape1": 57.1301,
+            "shape2": 23.3623,
+            "point_estimate": 0.7151
+          },
+          "TCD": {
+            "shape1": 55.3972,
+            "shape2": 41.4352,
+            "point_estimate": 0.5736
+          },
+          "TGO": {
+            "shape1": 54.1392,
+            "shape2": 43.6657,
+            "point_estimate": 0.5547
+          },
+          "TZA": {
+            "shape1": 58.2648,
+            "shape2": 30.1779,
+            "point_estimate": 0.6625
+          },
+          "UGA": {
+            "shape1": 57.7659,
+            "shape2": 34.8122,
+            "point_estimate": 0.6267
+          },
+          "ZAF": {
+            "shape1": 35.2752,
+            "shape2": 4.2534,
+            "point_estimate": 0.9133
+          },
+          "ZMB": {
+            "shape1": 57.7972,
+            "shape2": 34.6613,
+            "point_estimate": 0.6279
+          },
+          "ZWE": {
+            "shape1": 58.2646,
+            "shape2": 30.2302,
+            "point_estimate": 0.6621
+          }
+        }
+      }
+    },
+    "a1": {
+      "parameter_name": "a1",
+      "description": "Seasonality Fourier coefficient a1 (cases)",
+      "distribution": "normal",
+      "uncertainty_factor": 0.95,
+      "parameters": {
+        "location": {
+          "AGO": {
+            "mean": -0.2413,
+            "sd": 0.1073,
+            "original_se": 0.1046,
+            "uncertainty_adjusted": true
+          },
+          "BDI": {
+            "mean": -0.3744,
+            "sd": 0.0488,
+            "original_se": 0.0476,
+            "uncertainty_adjusted": true
+          },
+          "BEN": {
+            "mean": 0.1671,
+            "sd": 0.0943,
+            "original_se": 0.092,
+            "uncertainty_adjusted": true
+          },
+          "BFA": {
+            "mean": -1.666,
+            "sd": 0.2296,
+            "original_se": 0.2238,
+            "uncertainty_adjusted": true
+          },
+          "BWA": {
+            "mean": 1.3949,
+            "sd": 0.1306,
+            "original_se": 0.1273,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Zambia"
+          },
+          "CAF": {
+            "mean": -1.6198,
+            "sd": 0.2109,
+            "original_se": 0.2055,
+            "uncertainty_adjusted": true
+          },
+          "CIV": {
+            "mean": 1.1178,
+            "sd": 0.1694,
+            "original_se": 0.1651,
+            "uncertainty_adjusted": true
+          },
+          "CMR": {
+            "mean": -0.4731,
+            "sd": 0.056,
+            "original_se": 0.0546,
+            "uncertainty_adjusted": true
+          },
+          "COD": {
+            "mean": 0.0678,
+            "sd": 0.0225,
+            "original_se": 0.0219,
+            "uncertainty_adjusted": true
+          },
+          "COG": {
+            "mean": -1.0557,
+            "sd": 0.2851,
+            "original_se": 0.2779,
+            "uncertainty_adjusted": true
+          },
+          "ERI": {
+            "mean": -0.7714,
+            "sd": 0.09,
+            "original_se": 0.0878,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Niger"
+          },
+          "ETH": {
+            "mean": -0.4042,
+            "sd": 0.039,
+            "original_se": 0.038,
+            "uncertainty_adjusted": true
+          },
+          "GAB": {
+            "mean": -0.7931,
+            "sd": 0.9681,
+            "original_se": 0.9436,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Rwanda"
+          },
+          "GHA": {
+            "mean": -0.076,
+            "sd": 0.1126,
+            "original_se": 0.1098,
+            "uncertainty_adjusted": true
+          },
+          "GIN": {
+            "mean": -1.0953,
+            "sd": 0.1626,
+            "original_se": 0.1585,
+            "uncertainty_adjusted": true
+          },
+          "GMB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true,
+            "inferred_from": "Senegal"
+          },
+          "GNB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "GNQ": {
+            "mean": -0.3291,
+            "sd": 0.0493,
+            "original_se": 0.048,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Somalia"
+          },
+          "KEN": {
+            "mean": 0.1084,
+            "sd": 0.0617,
+            "original_se": 0.0601,
+            "uncertainty_adjusted": true
+          },
+          "LBR": {
+            "mean": 0.0668,
+            "sd": 0.0494,
+            "original_se": 0.0481,
+            "uncertainty_adjusted": true
+          },
+          "MLI": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MOZ": {
+            "mean": 0.3767,
+            "sd": 0.0873,
+            "original_se": 0.0851,
+            "uncertainty_adjusted": true
+          },
+          "MRT": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MWI": {
+            "mean": 1.2559,
+            "sd": 0.1389,
+            "original_se": 0.1354,
+            "uncertainty_adjusted": true
+          },
+          "NAM": {
+            "mean": 18.4605,
+            "sd": 3.1826,
+            "original_se": 3.1021,
+            "uncertainty_adjusted": true
+          },
+          "NER": {
+            "mean": -0.7714,
+            "sd": 0.09,
+            "original_se": 0.0878,
+            "uncertainty_adjusted": true
+          },
+          "NGA": {
+            "mean": -0.7556,
+            "sd": 0.0554,
+            "original_se": 0.054,
+            "uncertainty_adjusted": true
+          },
+          "RWA": {
+            "mean": -0.7931,
+            "sd": 0.9681,
+            "original_se": 0.9436,
+            "uncertainty_adjusted": true
+          },
+          "SEN": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "SLE": {
+            "mean": -0.9034,
+            "sd": 0.1287,
+            "original_se": 0.1254,
+            "uncertainty_adjusted": true
+          },
+          "SOM": {
+            "mean": -0.3291,
+            "sd": 0.0493,
+            "original_se": 0.048,
+            "uncertainty_adjusted": true
+          },
+          "SSD": {
+            "mean": 0.1208,
+            "sd": 0.076,
+            "original_se": 0.0741,
+            "uncertainty_adjusted": true
+          },
+          "SWZ": {
+            "mean": -0.2413,
+            "sd": 0.1073,
+            "original_se": 0.1046,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "TCD": {
+            "mean": -0.1806,
+            "sd": 0.1392,
+            "original_se": 0.1356,
+            "uncertainty_adjusted": true
+          },
+          "TGO": {
+            "mean": 1.2171,
+            "sd": 0.1276,
+            "original_se": 0.1244,
+            "uncertainty_adjusted": true
+          },
+          "TZA": {
+            "mean": 0.6048,
+            "sd": 0.0394,
+            "original_se": 0.0384,
+            "uncertainty_adjusted": true
+          },
+          "UGA": {
+            "mean": 0.2964,
+            "sd": 0.1231,
+            "original_se": 0.12,
+            "uncertainty_adjusted": true
+          },
+          "ZAF": {
+            "mean": -0.2413,
+            "sd": 0.1073,
+            "original_se": 0.1046,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "ZMB": {
+            "mean": 1.3949,
+            "sd": 0.1306,
+            "original_se": 0.1273,
+            "uncertainty_adjusted": true
+          },
+          "ZWE": {
+            "mean": 0.6908,
+            "sd": 0.0804,
+            "original_se": 0.0784,
+            "uncertainty_adjusted": true
+          }
+        }
+      }
+    },
+    "a2": {
+      "parameter_name": "a2",
+      "description": "Seasonality Fourier coefficient a2 (cases)",
+      "distribution": "normal",
+      "uncertainty_factor": 0.95,
+      "parameters": {
+        "location": {
+          "AGO": {
+            "mean": -0.2962,
+            "sd": 0.1075,
+            "original_se": 0.1048,
+            "uncertainty_adjusted": true
+          },
+          "BDI": {
+            "mean": -0.3725,
+            "sd": 0.0492,
+            "original_se": 0.048,
+            "uncertainty_adjusted": true
+          },
+          "BEN": {
+            "mean": -0.576,
+            "sd": 0.094,
+            "original_se": 0.0916,
+            "uncertainty_adjusted": true
+          },
+          "BFA": {
+            "mean": 0.907,
+            "sd": 0.2321,
+            "original_se": 0.2262,
+            "uncertainty_adjusted": true
+          },
+          "BWA": {
+            "mean": 0.7183,
+            "sd": 0.1309,
+            "original_se": 0.1276,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Zambia"
+          },
+          "CAF": {
+            "mean": 0.618,
+            "sd": 0.2132,
+            "original_se": 0.2078,
+            "uncertainty_adjusted": true
+          },
+          "CIV": {
+            "mean": 0.7013,
+            "sd": 0.1697,
+            "original_se": 0.1654,
+            "uncertainty_adjusted": true
+          },
+          "CMR": {
+            "mean": -0.3703,
+            "sd": 0.056,
+            "original_se": 0.0546,
+            "uncertainty_adjusted": true
+          },
+          "COD": {
+            "mean": -0.1002,
+            "sd": 0.0226,
+            "original_se": 0.022,
+            "uncertainty_adjusted": true
+          },
+          "COG": {
+            "mean": 0.4709,
+            "sd": 0.2884,
+            "original_se": 0.2811,
+            "uncertainty_adjusted": true
+          },
+          "ERI": {
+            "mean": -0.6166,
+            "sd": 0.0905,
+            "original_se": 0.0882,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Niger"
+          },
+          "ETH": {
+            "mean": -0.3023,
+            "sd": 0.0391,
+            "original_se": 0.0381,
+            "uncertainty_adjusted": true
+          },
+          "GAB": {
+            "mean": -1.5151,
+            "sd": 0.9053,
+            "original_se": 0.8823,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Rwanda"
+          },
+          "GHA": {
+            "mean": -0.5689,
+            "sd": 0.1112,
+            "original_se": 0.1084,
+            "uncertainty_adjusted": true
+          },
+          "GIN": {
+            "mean": -0.22,
+            "sd": 0.1628,
+            "original_se": 0.1587,
+            "uncertainty_adjusted": true
+          },
+          "GMB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true,
+            "inferred_from": "Senegal"
+          },
+          "GNB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "GNQ": {
+            "mean": -0.2589,
+            "sd": 0.0494,
+            "original_se": 0.0482,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Somalia"
+          },
+          "KEN": {
+            "mean": 0.0309,
+            "sd": 0.0622,
+            "original_se": 0.0606,
+            "uncertainty_adjusted": true
+          },
+          "LBR": {
+            "mean": -0.381,
+            "sd": 0.05,
+            "original_se": 0.0487,
+            "uncertainty_adjusted": true
+          },
+          "MLI": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MOZ": {
+            "mean": -0.7575,
+            "sd": 0.0874,
+            "original_se": 0.0852,
+            "uncertainty_adjusted": true
+          },
+          "MRT": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MWI": {
+            "mean": 0.4328,
+            "sd": 0.1382,
+            "original_se": 0.1347,
+            "uncertainty_adjusted": true
+          },
+          "NAM": {
+            "mean": 15.4709,
+            "sd": 2.2548,
+            "original_se": 2.1977,
+            "uncertainty_adjusted": true
+          },
+          "NER": {
+            "mean": -0.6166,
+            "sd": 0.0905,
+            "original_se": 0.0882,
+            "uncertainty_adjusted": true
+          },
+          "NGA": {
+            "mean": -0.2328,
+            "sd": 0.0556,
+            "original_se": 0.0542,
+            "uncertainty_adjusted": true
+          },
+          "RWA": {
+            "mean": -1.5151,
+            "sd": 0.9053,
+            "original_se": 0.8823,
+            "uncertainty_adjusted": true
+          },
+          "SEN": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "SLE": {
+            "mean": -0.255,
+            "sd": 0.1288,
+            "original_se": 0.1255,
+            "uncertainty_adjusted": true
+          },
+          "SOM": {
+            "mean": -0.2589,
+            "sd": 0.0494,
+            "original_se": 0.0482,
+            "uncertainty_adjusted": true
+          },
+          "SSD": {
+            "mean": 0.3457,
+            "sd": 0.0755,
+            "original_se": 0.0736,
+            "uncertainty_adjusted": true
+          },
+          "SWZ": {
+            "mean": -0.2962,
+            "sd": 0.1075,
+            "original_se": 0.1048,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "TCD": {
+            "mean": -1.3465,
+            "sd": 0.1409,
+            "original_se": 0.1373,
+            "uncertainty_adjusted": true
+          },
+          "TGO": {
+            "mean": 0.0671,
+            "sd": 0.1288,
+            "original_se": 0.1255,
+            "uncertainty_adjusted": true
+          },
+          "TZA": {
+            "mean": -0.0895,
+            "sd": 0.0397,
+            "original_se": 0.0387,
+            "uncertainty_adjusted": true
+          },
+          "UGA": {
+            "mean": -0.2569,
+            "sd": 0.1228,
+            "original_se": 0.1197,
+            "uncertainty_adjusted": true
+          },
+          "ZAF": {
+            "mean": -0.2962,
+            "sd": 0.1075,
+            "original_se": 0.1048,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "ZMB": {
+            "mean": 0.7183,
+            "sd": 0.1309,
+            "original_se": 0.1276,
+            "uncertainty_adjusted": true
+          },
+          "ZWE": {
+            "mean": -0.1023,
+            "sd": 0.0805,
+            "original_se": 0.0784,
+            "uncertainty_adjusted": true
+          }
+        }
+      }
+    },
+    "b1": {
+      "parameter_name": "b1",
+      "description": "Seasonality Fourier coefficient b1 (cases)",
+      "distribution": "normal",
+      "uncertainty_factor": 0.95,
+      "parameters": {
+        "location": {
+          "AGO": {
+            "mean": 1.2441,
+            "sd": 0.1069,
+            "original_se": 0.1042,
+            "uncertainty_adjusted": true
+          },
+          "BDI": {
+            "mean": -0.3134,
+            "sd": 0.0499,
+            "original_se": 0.0486,
+            "uncertainty_adjusted": true
+          },
+          "BEN": {
+            "mean": -1.2889,
+            "sd": 0.093,
+            "original_se": 0.0906,
+            "uncertainty_adjusted": true
+          },
+          "BFA": {
+            "mean": -0.7698,
+            "sd": 0.2317,
+            "original_se": 0.2258,
+            "uncertainty_adjusted": true
+          },
+          "BWA": {
+            "mean": 0.6839,
+            "sd": 0.13,
+            "original_se": 0.1267,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Zambia"
+          },
+          "CAF": {
+            "mean": -1.1594,
+            "sd": 0.2128,
+            "original_se": 0.2074,
+            "uncertainty_adjusted": true
+          },
+          "CIV": {
+            "mean": 0.5454,
+            "sd": 0.1685,
+            "original_se": 0.1642,
+            "uncertainty_adjusted": true
+          },
+          "CMR": {
+            "mean": 0.0297,
+            "sd": 0.0557,
+            "original_se": 0.0542,
+            "uncertainty_adjusted": true
+          },
+          "COD": {
+            "mean": -0.0801,
+            "sd": 0.0225,
+            "original_se": 0.0219,
+            "uncertainty_adjusted": true
+          },
+          "COG": {
+            "mean": -0.7625,
+            "sd": 0.2875,
+            "original_se": 0.2803,
+            "uncertainty_adjusted": true
+          },
+          "ERI": {
+            "mean": -1.2564,
+            "sd": 0.0904,
+            "original_se": 0.0881,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Niger"
+          },
+          "ETH": {
+            "mean": 0.0783,
+            "sd": 0.039,
+            "original_se": 0.038,
+            "uncertainty_adjusted": true
+          },
+          "GAB": {
+            "mean": -1.1273,
+            "sd": 0.8697,
+            "original_se": 0.8477,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Rwanda"
+          },
+          "GHA": {
+            "mean": -1.3597,
+            "sd": 0.1091,
+            "original_se": 0.1063,
+            "uncertainty_adjusted": true
+          },
+          "GIN": {
+            "mean": -1.2221,
+            "sd": 0.1613,
+            "original_se": 0.1572,
+            "uncertainty_adjusted": true
+          },
+          "GMB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true,
+            "inferred_from": "Senegal"
+          },
+          "GNB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "GNQ": {
+            "mean": 0.7795,
+            "sd": 0.0503,
+            "original_se": 0.0491,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Somalia"
+          },
+          "KEN": {
+            "mean": 0.5949,
+            "sd": 0.0622,
+            "original_se": 0.0606,
+            "uncertainty_adjusted": true
+          },
+          "LBR": {
+            "mean": 0.302,
+            "sd": 0.05,
+            "original_se": 0.0487,
+            "uncertainty_adjusted": true
+          },
+          "MLI": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MOZ": {
+            "mean": 1.1565,
+            "sd": 0.0877,
+            "original_se": 0.0854,
+            "uncertainty_adjusted": true
+          },
+          "MRT": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MWI": {
+            "mean": 0.9563,
+            "sd": 0.138,
+            "original_se": 0.1345,
+            "uncertainty_adjusted": true
+          },
+          "NAM": {
+            "mean": 17.2779,
+            "sd": 2.2419,
+            "original_se": 2.1851,
+            "uncertainty_adjusted": true
+          },
+          "NER": {
+            "mean": -1.2564,
+            "sd": 0.0904,
+            "original_se": 0.0881,
+            "uncertainty_adjusted": true
+          },
+          "NGA": {
+            "mean": -0.6677,
+            "sd": 0.0555,
+            "original_se": 0.0541,
+            "uncertainty_adjusted": true
+          },
+          "RWA": {
+            "mean": -1.1273,
+            "sd": 0.8697,
+            "original_se": 0.8477,
+            "uncertainty_adjusted": true
+          },
+          "SEN": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "SLE": {
+            "mean": -1.1414,
+            "sd": 0.1275,
+            "original_se": 0.1242,
+            "uncertainty_adjusted": true
+          },
+          "SOM": {
+            "mean": 0.7795,
+            "sd": 0.0503,
+            "original_se": 0.0491,
+            "uncertainty_adjusted": true
+          },
+          "SSD": {
+            "mean": 0.7385,
+            "sd": 0.0745,
+            "original_se": 0.0726,
+            "uncertainty_adjusted": true
+          },
+          "SWZ": {
+            "mean": 1.2441,
+            "sd": 0.1069,
+            "original_se": 0.1042,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "TCD": {
+            "mean": -1.8269,
+            "sd": 0.1407,
+            "original_se": 0.1371,
+            "uncertainty_adjusted": true
+          },
+          "TGO": {
+            "mean": -0.7652,
+            "sd": 0.1285,
+            "original_se": 0.1252,
+            "uncertainty_adjusted": true
+          },
+          "TZA": {
+            "mean": -0.4566,
+            "sd": 0.0394,
+            "original_se": 0.0384,
+            "uncertainty_adjusted": true
+          },
+          "UGA": {
+            "mean": 0.8492,
+            "sd": 0.1211,
+            "original_se": 0.118,
+            "uncertainty_adjusted": true
+          },
+          "ZAF": {
+            "mean": 1.2441,
+            "sd": 0.1069,
+            "original_se": 0.1042,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "ZMB": {
+            "mean": 0.6839,
+            "sd": 0.13,
+            "original_se": 0.1267,
+            "uncertainty_adjusted": true
+          },
+          "ZWE": {
+            "mean": -0.0849,
+            "sd": 0.0793,
+            "original_se": 0.0773,
+            "uncertainty_adjusted": true
+          }
+        }
+      }
+    },
+    "b2": {
+      "parameter_name": "b2",
+      "description": "Seasonality Fourier coefficient b2 (cases)",
+      "distribution": "normal",
+      "uncertainty_factor": 0.95,
+      "parameters": {
+        "location": {
+          "AGO": {
+            "mean": -0.2734,
+            "sd": 0.1066,
+            "original_se": 0.1039,
+            "uncertainty_adjusted": true
+          },
+          "BDI": {
+            "mean": 0.0263,
+            "sd": 0.0495,
+            "original_se": 0.0483,
+            "uncertainty_adjusted": true
+          },
+          "BEN": {
+            "mean": -0.361,
+            "sd": 0.0933,
+            "original_se": 0.091,
+            "uncertainty_adjusted": true
+          },
+          "BFA": {
+            "mean": 0.8615,
+            "sd": 0.2292,
+            "original_se": 0.2234,
+            "uncertainty_adjusted": true
+          },
+          "BWA": {
+            "mean": 0.7134,
+            "sd": 0.1297,
+            "original_se": 0.1264,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Zambia"
+          },
+          "CAF": {
+            "mean": 1.6958,
+            "sd": 0.2105,
+            "original_se": 0.2052,
+            "uncertainty_adjusted": true
+          },
+          "CIV": {
+            "mean": 0.7317,
+            "sd": 0.1682,
+            "original_se": 0.1639,
+            "uncertainty_adjusted": true
+          },
+          "CMR": {
+            "mean": 0.1344,
+            "sd": 0.0557,
+            "original_se": 0.0542,
+            "uncertainty_adjusted": true
+          },
+          "COD": {
+            "mean": 0.0012,
+            "sd": 0.0224,
+            "original_se": 0.0218,
+            "uncertainty_adjusted": true
+          },
+          "COG": {
+            "mean": 1.072,
+            "sd": 0.2842,
+            "original_se": 0.277,
+            "uncertainty_adjusted": true
+          },
+          "ERI": {
+            "mean": 0.8217,
+            "sd": 0.0899,
+            "original_se": 0.0877,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Niger"
+          },
+          "ETH": {
+            "mean": 0.239,
+            "sd": 0.0389,
+            "original_se": 0.0379,
+            "uncertainty_adjusted": true
+          },
+          "GAB": {
+            "mean": -0.5137,
+            "sd": 0.3563,
+            "original_se": 0.3473,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Rwanda"
+          },
+          "GHA": {
+            "mean": 0.4058,
+            "sd": 0.1105,
+            "original_se": 0.1077,
+            "uncertainty_adjusted": true
+          },
+          "GIN": {
+            "mean": 1.4337,
+            "sd": 0.1611,
+            "original_se": 0.157,
+            "uncertainty_adjusted": true
+          },
+          "GMB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true,
+            "inferred_from": "Senegal"
+          },
+          "GNB": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "GNQ": {
+            "mean": -0.2338,
+            "sd": 0.0502,
+            "original_se": 0.0489,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Somalia"
+          },
+          "KEN": {
+            "mean": -0.2026,
+            "sd": 0.0617,
+            "original_se": 0.0602,
+            "uncertainty_adjusted": true
+          },
+          "LBR": {
+            "mean": -0.162,
+            "sd": 0.0494,
+            "original_se": 0.0482,
+            "uncertainty_adjusted": true
+          },
+          "MLI": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MOZ": {
+            "mean": 0.0876,
+            "sd": 0.0875,
+            "original_se": 0.0853,
+            "uncertainty_adjusted": true
+          },
+          "MRT": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "MWI": {
+            "mean": 1.1071,
+            "sd": 0.1387,
+            "original_se": 0.1352,
+            "uncertainty_adjusted": true
+          },
+          "NAM": {
+            "mean": 0.1247,
+            "sd": 1.0578,
+            "original_se": 1.031,
+            "uncertainty_adjusted": true
+          },
+          "NER": {
+            "mean": 0.8217,
+            "sd": 0.0899,
+            "original_se": 0.0877,
+            "uncertainty_adjusted": true
+          },
+          "NGA": {
+            "mean": 0.4086,
+            "sd": 0.0553,
+            "original_se": 0.0539,
+            "uncertainty_adjusted": true
+          },
+          "RWA": {
+            "mean": -0.5137,
+            "sd": 0.3563,
+            "original_se": 0.3473,
+            "uncertainty_adjusted": true
+          },
+          "SEN": {
+            "mean": "NA",
+            "sd": "NA",
+            "original_se": "NA",
+            "uncertainty_adjusted": true
+          },
+          "SLE": {
+            "mean": 1.3389,
+            "sd": 0.1274,
+            "original_se": 0.1242,
+            "uncertainty_adjusted": true
+          },
+          "SOM": {
+            "mean": -0.2338,
+            "sd": 0.0502,
+            "original_se": 0.0489,
+            "uncertainty_adjusted": true
+          },
+          "SSD": {
+            "mean": -0.1747,
+            "sd": 0.0748,
+            "original_se": 0.0729,
+            "uncertainty_adjusted": true
+          },
+          "SWZ": {
+            "mean": -0.2734,
+            "sd": 0.1066,
+            "original_se": 0.1039,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "TCD": {
+            "mean": 0.2079,
+            "sd": 0.139,
+            "original_se": 0.1354,
+            "uncertainty_adjusted": true
+          },
+          "TGO": {
+            "mean": -0.4854,
+            "sd": 0.1272,
+            "original_se": 0.124,
+            "uncertainty_adjusted": true
+          },
+          "TZA": {
+            "mean": -0.1029,
+            "sd": 0.0391,
+            "original_se": 0.0381,
+            "uncertainty_adjusted": true
+          },
+          "UGA": {
+            "mean": 0.7206,
+            "sd": 0.1213,
+            "original_se": 0.1183,
+            "uncertainty_adjusted": true
+          },
+          "ZAF": {
+            "mean": -0.2734,
+            "sd": 0.1066,
+            "original_se": 0.1039,
+            "uncertainty_adjusted": true,
+            "inferred_from": "Angola"
+          },
+          "ZMB": {
+            "mean": 0.7134,
+            "sd": 0.1297,
+            "original_se": 0.1264,
+            "uncertainty_adjusted": true
+          },
+          "ZWE": {
+            "mean": 0.1027,
+            "sd": 0.0792,
+            "original_se": 0.0772,
+            "uncertainty_adjusted": true
+          }
+        }
+      }
+    },
+    "prop_V1_initial": {
+      "parameter_name": "prop_V1_initial",
+      "description": "Initial proportion in one-dose vaccine (V1) compartment",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "BDI": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "BEN": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "BFA": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "BWA": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "CAF": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "CIV": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "CMR": {
+            "shape1": 6.0175,
+            "shape2": 27.2816,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.1603,
+              "ci_lower": 0.108,
+              "ci_upper": 0.2093,
+              "t0": "2023-02-01",
+              "population_at_t0": 28068612.137,
+              "count_mean": 4499584.9417,
+              "count_ci": [3032669.4277, 5874364.644],
+              "variance_inflation": 0.5
+            }
+          },
+          "COD": {
+            "shape1": 5.2463,
+            "shape2": 75.9332,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0536,
+              "ci_lower": 0.0285,
+              "ci_upper": 0.0795,
+              "t0": "2023-02-01",
+              "population_at_t0": 104395445.1301,
+              "count_mean": 5598657.1326,
+              "count_ci": [2979380.7086, 8296821.4714],
+              "variance_inflation": 0.5
+            }
+          },
+          "COG": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "ERI": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "ETH": {
+            "shape1": 6.3925,
+            "shape2": 135.3289,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0386,
+              "ci_lower": 0.0211,
+              "ci_upper": 0.0521,
+              "t0": "2023-02-01",
+              "population_at_t0": 127332484.2603,
+              "count_mean": 4914334.3969,
+              "count_ci": [2688467.4379, 6632894.4352],
+              "variance_inflation": 0.5
+            }
+          },
+          "GAB": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "GHA": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "GIN": {
+            "shape1": 11.2526,
+            "shape2": 6308.9422,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0016,
+              "ci_lower": 0.0005,
+              "ci_upper": 0.0035,
+              "t0": "2023-02-01",
+              "population_at_t0": 14261496.3562,
+              "count_mean": 23142.3031,
+              "count_ci": [6897.706, 50459.3554],
+              "variance_inflation": 0.5
+            }
+          },
+          "GMB": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "GNB": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "GNQ": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "KEN": {
+            "shape1": 9.1176,
+            "shape2": 272.8127,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.029,
+              "ci_lower": 0.0198,
+              "ci_upper": 0.0342,
+              "t0": "2023-02-01",
+              "population_at_t0": 54892478.3904,
+              "count_mean": 1591806.0241,
+              "count_ci": [1089555.9537, 1876818.0169],
+              "variance_inflation": 0.5
+            }
+          },
+          "LBR": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "MLI": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "MOZ": {
+            "shape1": 5.5235,
+            "shape2": 140.2358,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0315,
+              "ci_lower": 0.0165,
+              "ci_upper": 0.0461,
+              "t0": "2023-02-01",
+              "population_at_t0": 33232866.5753,
+              "count_mean": 1045706.7226,
+              "count_ci": [549287.3148, 1531817.7171],
+              "variance_inflation": 0.5
+            }
+          },
+          "MRT": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "MWI": {
+            "shape1": 5.855,
+            "shape2": 19.5854,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.2071,
+              "ci_lower": 0.1426,
+              "ci_upper": 0.2645,
+              "t0": "2023-02-01",
+              "population_at_t0": 20884309.4178,
+              "count_mean": 4325595.2436,
+              "count_ci": [2977798.2148, 5522956.5108],
+              "variance_inflation": 0.5
+            }
+          },
+          "NAM": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "NER": {
+            "shape1": 7.2353,
+            "shape2": 63.3197,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.091,
+              "ci_lower": 0.066,
+              "ci_upper": 0.1163,
+              "t0": "2023-02-01",
+              "population_at_t0": 25811417.411,
+              "count_mean": 2347646.0711,
+              "count_ci": [1703323.0422, 3001236.2122],
+              "variance_inflation": 0.5
+            }
+          },
+          "NGA": {
+            "shape1": 6.9042,
+            "shape2": 231.0796,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.025,
+              "ci_lower": 0.0147,
+              "ci_upper": 0.0331,
+              "t0": "2023-02-01",
+              "population_at_t0": 225938267.1233,
+              "count_mean": 5652829.5922,
+              "count_ci": [3327904.9148, 7481124.0906],
+              "variance_inflation": 0.5
+            }
+          },
+          "RWA": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "SEN": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "SLE": {
+            "shape1": 4.2434,
+            "shape2": 158.1556,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0202,
+              "ci_lower": 0.01,
+              "ci_upper": 0.0349,
+              "t0": "2023-02-01",
+              "population_at_t0": 8385016.589,
+              "count_mean": 169551.4247,
+              "count_ci": [84073.7426, 292643.0054],
+              "variance_inflation": 0.5
+            }
+          },
+          "SOM": {
+            "shape1": 6.1437,
+            "shape2": 30.624,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.1479,
+              "ci_lower": 0.104,
+              "ci_upper": 0.1947,
+              "t0": "2023-02-01",
+              "population_at_t0": 18129826.7808,
+              "count_mean": 2682220.3619,
+              "count_ci": [1885156.6625, 3529479.5006],
+              "variance_inflation": 0.5
+            }
+          },
+          "SSD": {
+            "shape1": 3.3474,
+            "shape2": 19.0184,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.1153,
+              "ci_lower": 0.0471,
+              "ci_upper": 0.2038,
+              "t0": "2023-02-01",
+              "population_at_t0": 11293430.2329,
+              "count_mean": 1301698.4988,
+              "count_ci": [531943.0081, 2301712.0717],
+              "variance_inflation": 0.5
+            }
+          },
+          "SWZ": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "TCD": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "TGO": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "TZA": {
+            "shape1": 9.9581,
+            "shape2": 1763.498,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0051,
+              "ci_lower": 0.0029,
+              "ci_upper": 0.0077,
+              "t0": "2023-02-01",
+              "population_at_t0": 65834406.9795,
+              "count_mean": 332920.4372,
+              "count_ci": [191096.6538, 507119.8903],
+              "variance_inflation": 0.5
+            }
+          },
+          "UGA": {
+            "shape1": 6.0743,
+            "shape2": 179.9847,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0276,
+              "ci_lower": 0.016,
+              "ci_upper": 0.039,
+              "t0": "2023-02-01",
+              "population_at_t0": 48104321.226,
+              "count_mean": 1326178.121,
+              "count_ci": [770967.5747, 1873771.969],
+              "variance_inflation": 0.5
+            }
+          },
+          "ZAF": {
+            "shape1": 0.5,
+            "shape2": 49.5
+          },
+          "ZMB": {
+            "shape1": 4.6928,
+            "shape2": 20.8921,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.1566,
+              "ci_lower": 0.0992,
+              "ci_upper": 0.2297,
+              "t0": "2023-02-01",
+              "population_at_t0": 20489296.3699,
+              "count_mean": 3208097.8589,
+              "count_ci": [2032535.9779, 4707415.7708],
+              "variance_inflation": 0.5
+            }
+          },
+          "ZWE": {
+            "shape1": 4.7716,
+            "shape2": 61.0689,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0591,
+              "ci_lower": 0.0337,
+              "ci_upper": 0.0928,
+              "t0": "2023-02-01",
+              "population_at_t0": 16229136.8425,
+              "count_mean": 958788.1135,
+              "count_ci": [546854.2571, 1506659.3185],
+              "variance_inflation": 0.5
+            }
+          }
+        }
+      }
+    },
+    "prop_V2_initial": {
+      "parameter_name": "prop_V2_initial",
+      "description": "Initial proportion in two-dose vaccine (V2) compartment",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "BDI": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "BEN": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "BFA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "BWA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "CAF": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "CIV": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "CMR": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "COD": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "COG": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "ERI": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "ETH": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "GAB": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "GHA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "GIN": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "GMB": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "GNB": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "GNQ": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "KEN": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "LBR": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "MLI": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "MOZ": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "MRT": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "MWI": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "NAM": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "NER": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "NGA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "RWA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "SEN": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "SLE": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "SOM": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "SSD": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "SWZ": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "TCD": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "TGO": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "TZA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "UGA": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "ZAF": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "ZMB": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          },
+          "ZWE": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          }
+        }
+      }
+    },
+    "prop_E_initial": {
+      "parameter_name": "prop_E_initial",
+      "description": "Initial proportion in exposed (E) compartment",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "BDI": {
+            "shape1": 3.3371,
+            "shape2": 344756.112,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 24,
+              "mean_count": 85.35,
+              "sd_count": 87.7352,
+              "n_samples": 100,
+              "message": "Processed with 24 surveillance cases"
+            }
+          },
+          "BEN": {
+            "shape1": 43.5528,
+            "shape2": 114291721.3702,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 1,
+              "mean_count": 3.64,
+              "sd_count": 5.1434,
+              "n_samples": 100,
+              "message": "Processed with 1 surveillance cases"
+            }
+          },
+          "BFA": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "BWA": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "CAF": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "CIV": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "CMR": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "COD": {
+            "shape1": 1.5687,
+            "shape2": 20417.6519,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 850,
+              "mean_count": 2704.34,
+              "sd_count": 2764.237,
+              "n_samples": 100,
+              "message": "Processed with 850 surveillance cases"
+            }
+          },
+          "COG": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ERI": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ETH": {
+            "shape1": 7.6204,
+            "shape2": 2766443.3688,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 80,
+              "mean_count": 292.53,
+              "sd_count": 309.5894,
+              "n_samples": 100,
+              "message": "Processed with 80 surveillance cases"
+            }
+          },
+          "GAB": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "GHA": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "GIN": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "GMB": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "GNB": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "GNQ": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "KEN": {
+            "shape1": 1.9734,
+            "shape2": 59808.8264,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 300,
+              "mean_count": 857.66,
+              "sd_count": 1041.6227,
+              "n_samples": 100,
+              "message": "Processed with 300 surveillance cases"
+            }
+          },
+          "LBR": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "MLI": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "MOZ": {
+            "shape1": 1.1632,
+            "shape2": 1683.8977,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 986,
+              "mean_count": 3060.53,
+              "sd_count": 2875.4631,
+              "n_samples": 100,
+              "message": "Processed with 986 surveillance cases"
+            }
+          },
+          "MRT": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "MWI": {
+            "shape1": 1.018,
+            "shape2": 22.7513,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 6517,
+              "mean_count": 15372.48,
+              "sd_count": 14264.1995,
+              "n_samples": 100,
+              "message": "Processed with 6517 surveillance cases"
+            }
+          },
+          "NAM": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "NER": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "NGA": {
+            "shape1": 4.3322,
+            "shape2": 700832.0322,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 315,
+              "mean_count": 1009.79,
+              "sd_count": 989.3293,
+              "n_samples": 100,
+              "message": "Processed with 315 surveillance cases"
+            }
+          },
+          "RWA": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "SEN": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "SLE": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "SOM": {
+            "shape1": 1.321,
+            "shape2": 6506.0836,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 288,
+              "mean_count": 849.79,
+              "sd_count": 809.8532,
+              "n_samples": 100,
+              "message": "Processed with 288 surveillance cases"
+            }
+          },
+          "SSD": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "SWZ": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "TCD": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "TGO": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "TZA": {
+            "shape1": 114.2698,
+            "shape2": 809815025.7712,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 2,
+              "mean_count": 6.63,
+              "sd_count": 9.2765,
+              "n_samples": 100,
+              "message": "Processed with 2 surveillance cases"
+            }
+          },
+          "UGA": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ZAF": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ZMB": {
+            "shape1": 5.2393,
+            "shape2": 1134344.495,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 25,
+              "mean_count": 73.51,
+              "sd_count": 91.0238,
+              "n_samples": 100,
+              "message": "Processed with 25 surveillance cases"
+            }
+          },
+          "ZWE": {
+            "shape1": 1,
+            "shape2": 9999,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          }
+        }
+      }
+    },
+    "prop_I_initial": {
+      "parameter_name": "prop_I_initial",
+      "description": "Initial proportion in infected (I) compartment",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "BDI": {
+            "shape1": 2.7678,
+            "shape2": 197250.4912,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 24,
+              "mean_count": 106.77,
+              "sd_count": 110.5015,
+              "n_samples": 100,
+              "message": "Processed with 24 surveillance cases"
+            }
+          },
+          "BEN": {
+            "shape1": 20.5685,
+            "shape2": 24169822.7712,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 1,
+              "mean_count": 7.35,
+              "sd_count": 10.5413,
+              "n_samples": 100,
+              "message": "Processed with 1 surveillance cases"
+            }
+          },
+          "BFA": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "BWA": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "CAF": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "CIV": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "CMR": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "COD": {
+            "shape1": 1.4345,
+            "shape2": 11919.664,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 850,
+              "mean_count": 3501.24,
+              "sd_count": 3323.397,
+              "n_samples": 100,
+              "message": "Processed with 850 surveillance cases"
+            }
+          },
+          "COG": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ERI": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ETH": {
+            "shape1": 5.9,
+            "shape2": 1515492.0234,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 80,
+              "mean_count": 387,
+              "sd_count": 395.1006,
+              "n_samples": 100,
+              "message": "Processed with 80 surveillance cases"
+            }
+          },
+          "GAB": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "GHA": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "GIN": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "GMB": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "GNB": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "GNQ": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "KEN": {
+            "shape1": 1.6119,
+            "shape2": 23634.4319,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 300,
+              "mean_count": 1335.89,
+              "sd_count": 1727.9753,
+              "n_samples": 100,
+              "message": "Processed with 300 surveillance cases"
+            }
+          },
+          "LBR": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "MLI": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "MOZ": {
+            "shape1": 1.1162,
+            "shape2": 855.4582,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 986,
+              "mean_count": 3930.08,
+              "sd_count": 3478.1576,
+              "n_samples": 100,
+              "message": "Processed with 986 surveillance cases"
+            }
+          },
+          "MRT": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "MWI": {
+            "shape1": 1.0136,
+            "shape2": 8.5905,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 6517,
+              "mean_count": 30373.92,
+              "sd_count": 51338.123,
+              "n_samples": 100,
+              "message": "Processed with 6517 surveillance cases"
+            }
+          },
+          "NAM": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "NER": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "NGA": {
+            "shape1": 3.2721,
+            "shape2": 325832.2754,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 315,
+              "mean_count": 1449.44,
+              "sd_count": 1572.0398,
+              "n_samples": 100,
+              "message": "Processed with 315 surveillance cases"
+            }
+          },
+          "RWA": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "SEN": {
+            "shape1": 1,
+            "shape2": 999,
+            "method": "insufficient_data",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "Processed with 0 surveillance cases"
+            }
+          },
+          "SLE": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "SOM": {
+            "shape1": 1.1999,
+            "shape2": 2526.2818,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 288,
+              "mean_count": 1306,
+              "sd_count": 1561.2893,
+              "n_samples": 100,
+              "message": "Processed with 288 surveillance cases"
+            }
+          },
+          "SSD": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "SWZ": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "TCD": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "TGO": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "TZA": {
+            "shape1": 55.1832,
+            "shape2": 185304694.8312,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 2,
+              "mean_count": 13.09,
+              "sd_count": 17.275,
+              "n_samples": 100,
+              "message": "Processed with 2 surveillance cases"
+            }
+          },
+          "UGA": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ZAF": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          },
+          "ZMB": {
+            "shape1": 5.1102,
+            "shape2": 1066308.3074,
+            "method": "variance_inflation",
+            "metadata": {
+              "data_available": true,
+              "total_cases": 25,
+              "mean_count": 71.87,
+              "sd_count": 99.6409,
+              "n_samples": 100,
+              "message": "Processed with 25 surveillance cases"
+            }
+          },
+          "ZWE": {
+            "shape1": 0.5,
+            "shape2": 9999.5,
+            "method": "no_data_default",
+            "metadata": {
+              "data_available": false,
+              "total_cases": 0,
+              "mean_count": 0,
+              "sd_count": 0,
+              "n_samples": 100,
+              "message": "No surveillance data in lookback window"
+            }
+          }
+        }
+      }
+    },
+    "prop_R_initial": {
+      "parameter_name": "prop_R_initial",
+      "description": "Initial proportion in recovered/immune (R) compartment",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 1.0275,
+            "shape2": 1.0725,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0328,
+              "ci_lower": 0.0006,
+              "ci_upper": 0.132,
+              "t0": "2023-02-01",
+              "population_at_t0": 36291737.3699,
+              "count_mean": 1190983.1341,
+              "count_ci": [20882.7822, 4789980.5505],
+              "variance_inflation": 8
+            }
+          },
+          "BDI": {
+            "shape1": 1.0148,
+            "shape2": 1.0852,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0156,
+              "ci_lower": 0.0003,
+              "ci_upper": 0.0682,
+              "t0": "2023-02-01",
+              "population_at_t0": 13538071.9658,
+              "count_mean": 211155.8248,
+              "count_ci": [4341.9445, 922996.8308],
+              "variance_inflation": 8
+            }
+          },
+          "BEN": {
+            "shape1": 1.0265,
+            "shape2": 2.0171,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0142,
+              "ci_lower": 0.0016,
+              "ci_upper": 0.0525,
+              "t0": "2023-02-01",
+              "population_at_t0": 13966568.4726,
+              "count_mean": 197734.4081,
+              "count_ci": [22658.6826, 732939.1796],
+              "variance_inflation": 8
+            }
+          },
+          "BFA": {
+            "shape1": 1.056,
+            "shape2": 46.781,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0012,
+              "ci_lower": 4.9859e-06,
+              "ci_upper": 0.0063,
+              "t0": "2023-02-01",
+              "population_at_t0": 22813418.1233,
+              "count_mean": 27529.4317,
+              "count_ci": [113.7456, 144361.4163],
+              "variance_inflation": 8
+            }
+          },
+          "BWA": {
+            "shape1": 3.6214,
+            "shape2": 32679.6837,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0001,
+              "ci_lower": 3.6562e-07,
+              "ci_upper": 0.0002,
+              "t0": "2023-02-01",
+              "population_at_t0": 2463661.0753,
+              "count_mean": 197.6097,
+              "count_ci": [0.9008, 602.624],
+              "variance_inflation": 8
+            }
+          },
+          "CAF": {
+            "shape1": 1.1304,
+            "shape2": 128.1673,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.001,
+              "ci_lower": 1.414e-06,
+              "ci_upper": 0.0039,
+              "t0": "2023-02-01",
+              "population_at_t0": 5130072.1438,
+              "count_mean": 5254.1598,
+              "count_ci": [7.2538, 19874.2233],
+              "variance_inflation": 8
+            }
+          },
+          "CIV": {
+            "shape1": 1.042,
+            "shape2": 10.8637,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0039,
+              "ci_lower": 0,
+              "ci_upper": 0.0167,
+              "t0": "2023-02-01",
+              "population_at_t0": 30848947.6986,
+              "count_mean": 121116.2639,
+              "count_ci": [757.3654, 515119.6454],
+              "variance_inflation": 8
+            }
+          },
+          "CMR": {
+            "shape1": 1.0277,
+            "shape2": 1.0723,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0309,
+              "ci_lower": 0.0101,
+              "ci_upper": 0.0828,
+              "t0": "2023-02-01",
+              "population_at_t0": 28068612.137,
+              "count_mean": 867875.508,
+              "count_ci": [284124.9219, 2322711.1539],
+              "variance_inflation": 8
+            }
+          },
+          "COD": {
+            "shape1": 1.0456,
+            "shape2": 1.0544,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0576,
+              "ci_lower": 0.0038,
+              "ci_upper": 0.152,
+              "t0": "2023-02-01",
+              "population_at_t0": 104395445.1301,
+              "count_mean": 6016448.6954,
+              "count_ci": [400012.1914, 15867151.12],
+              "variance_inflation": 8
+            }
+          },
+          "COG": {
+            "shape1": 1.0192,
+            "shape2": 1.0808,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0206,
+              "ci_lower": 0.0001,
+              "ci_upper": 0.0738,
+              "t0": "2023-02-01",
+              "population_at_t0": 6122153.0822,
+              "count_mean": 126182.3786,
+              "count_ci": [389.7101, 451673.2109],
+              "variance_inflation": 8
+            }
+          },
+          "ERI": {
+            "shape1": 1.5642,
+            "shape2": 2363.4185,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0002,
+              "ci_lower": 1.4542e-07,
+              "ci_upper": 0.0009,
+              "t0": "2023-02-01",
+              "population_at_t0": 3445344.637,
+              "count_mean": 822.584,
+              "count_ci": [0.501, 3132.2901],
+              "variance_inflation": 8
+            }
+          },
+          "ETH": {
+            "shape1": 1.051,
+            "shape2": 5.3442,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0099,
+              "ci_lower": 0.0008,
+              "ci_upper": 0.0306,
+              "t0": "2023-02-01",
+              "population_at_t0": 127332484.2603,
+              "count_mean": 1255704.7668,
+              "count_ci": [99070.2727, 3899325.6736],
+              "variance_inflation": 8
+            }
+          },
+          "GAB": {
+            "shape1": 1.0688,
+            "shape2": 49.576,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0014,
+              "ci_lower": 1.2269e-07,
+              "ci_upper": 0.0062,
+              "t0": "2023-02-01",
+              "population_at_t0": 2462579.6644,
+              "count_mean": 3448.8071,
+              "count_ci": [0.3021, 15153.47],
+              "variance_inflation": 8
+            }
+          },
+          "GHA": {
+            "shape1": 1.0241,
+            "shape2": 1.0759,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.027,
+              "ci_lower": 0.0008,
+              "ci_upper": 0.0881,
+              "t0": "2023-02-01",
+              "population_at_t0": 33525409.0685,
+              "count_mean": 905250.0034,
+              "count_ci": [26137.1144, 2953882.1986],
+              "variance_inflation": 8
+            }
+          },
+          "GIN": {
+            "shape1": 1.0188,
+            "shape2": 1.0812,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0205,
+              "ci_lower": 0,
+              "ci_upper": 0.0813,
+              "t0": "2023-02-01",
+              "population_at_t0": 14261496.3562,
+              "count_mean": 292237.8186,
+              "count_ci": [687.6592, 1159360.2309],
+              "variance_inflation": 8
+            }
+          },
+          "GMB": {
+            "shape1": 1.281,
+            "shape2": 600.0343,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0005,
+              "ci_lower": 1.9541e-07,
+              "ci_upper": 0.0018,
+              "t0": "2023-02-01",
+              "population_at_t0": 2672622.6918,
+              "count_mean": 1252.9792,
+              "count_ci": [0.5223, 4815.7153],
+              "variance_inflation": 8
+            }
+          },
+          "GNB": {
+            "shape1": 1.1529,
+            "shape2": 1.2385,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.2267,
+              "ci_lower": 0.0037,
+              "ci_upper": 0.7774,
+              "t0": "2023-02-01",
+              "population_at_t0": 2133691.0548,
+              "count_mean": 483607.1552,
+              "count_ci": [7819.93, 1658664.9775],
+              "variance_inflation": 8
+            }
+          },
+          "GNQ": {
+            "shape1": 1.0174,
+            "shape2": 1.0826,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0192,
+              "ci_lower": 4.7099e-06,
+              "ci_upper": 0.0883,
+              "t0": "2023-02-01",
+              "population_at_t0": 1829465.1644,
+              "count_mean": 35204.3793,
+              "count_ci": [8.6166, 161562.2744],
+              "variance_inflation": 8
+            }
+          },
+          "KEN": {
+            "shape1": 1.0539,
+            "shape2": 3.7286,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0152,
+              "ci_lower": 0.0017,
+              "ci_upper": 0.0402,
+              "t0": "2023-02-01",
+              "population_at_t0": 54892478.3904,
+              "count_mean": 832342.64,
+              "count_ci": [94156.6762, 2207962.5925],
+              "variance_inflation": 8
+            }
+          },
+          "LBR": {
+            "shape1": 1.0564,
+            "shape2": 1.0436,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0743,
+              "ci_lower": 0.0011,
+              "ci_upper": 0.2752,
+              "t0": "2023-02-01",
+              "population_at_t0": 5443824.0137,
+              "count_mean": 404298.1766,
+              "count_ci": [5942.1019, 1498178.7146],
+              "variance_inflation": 8
+            }
+          },
+          "MLI": {
+            "shape1": 1.0381,
+            "shape2": 8.1412,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0048,
+              "ci_lower": 0,
+              "ci_upper": 0.0209,
+              "t0": "2023-02-01",
+              "population_at_t0": 23482899.7603,
+              "count_mean": 112105.1987,
+              "count_ci": [682.1688, 491923.9058],
+              "variance_inflation": 8
+            }
+          },
+          "MOZ": {
+            "shape1": 1.0479,
+            "shape2": 1.0521,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.061,
+              "ci_lower": 0.0051,
+              "ci_upper": 0.2159,
+              "t0": "2023-02-01",
+              "population_at_t0": 33232866.5753,
+              "count_mean": 2027339.3473,
+              "count_ci": [168916.3061, 7173711.6788],
+              "variance_inflation": 8
+            }
+          },
+          "MRT": {
+            "shape1": 1.0306,
+            "shape2": 3.1134,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0103,
+              "ci_lower": 7.9242e-07,
+              "ci_upper": 0.0412,
+              "t0": "2023-02-01",
+              "population_at_t0": 4962111.089,
+              "count_mean": 51289.0665,
+              "count_ci": [3.9321, 204541.5609],
+              "variance_inflation": 8
+            }
+          },
+          "MWI": {
+            "shape1": 1.0343,
+            "shape2": 1.0657,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0409,
+              "ci_lower": 0.0098,
+              "ci_upper": 0.1019,
+              "t0": "2023-02-01",
+              "population_at_t0": 20884309.4178,
+              "count_mean": 853892.3288,
+              "count_ci": [205585.104, 2128916.1035],
+              "variance_inflation": 8
+            }
+          },
+          "NAM": {
+            "shape1": 1.0439,
+            "shape2": 4.1825,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0109,
+              "ci_lower": 0.0001,
+              "ci_upper": 0.0357,
+              "t0": "2023-02-01",
+              "population_at_t0": 2932917.2603,
+              "count_mean": 32073.3088,
+              "count_ci": [410.7358, 104780.6804],
+              "variance_inflation": 8
+            }
+          },
+          "NER": {
+            "shape1": 1.0512,
+            "shape2": 3.8716,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0138,
+              "ci_lower": 0.0024,
+              "ci_upper": 0.0388,
+              "t0": "2023-02-01",
+              "population_at_t0": 25811417.411,
+              "count_mean": 357151.6422,
+              "count_ci": [61355.9202, 1001302.8166],
+              "variance_inflation": 8
+            }
+          },
+          "NGA": {
+            "shape1": 1.0228,
+            "shape2": 1.0772,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0254,
+              "ci_lower": 0.0054,
+              "ci_upper": 0.0884,
+              "t0": "2023-02-01",
+              "population_at_t0": 225938267.1233,
+              "count_mean": 5747199.7011,
+              "count_ci": [1217284.4599, 19980597.2363],
+              "variance_inflation": 8
+            }
+          },
+          "RWA": {
+            "shape1": 1.0556,
+            "shape2": 13.9484,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.004,
+              "ci_lower": 0.0001,
+              "ci_upper": 0.0141,
+              "t0": "2023-02-01",
+              "population_at_t0": 13829769.5137,
+              "count_mean": 55846.5662,
+              "count_ci": [1509.3188, 194511.4347],
+              "variance_inflation": 8
+            }
+          },
+          "SEN": {
+            "shape1": 1.0161,
+            "shape2": 1.1113,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0164,
+              "ci_lower": 6.8913e-07,
+              "ci_upper": 0.0658,
+              "t0": "2023-02-01",
+              "population_at_t0": 17902311.6507,
+              "count_mean": 294078.4799,
+              "count_ci": [12.337, 1177678.2319],
+              "variance_inflation": 8
+            }
+          },
+          "SLE": {
+            "shape1": 1.0329,
+            "shape2": 1.0671,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.04,
+              "ci_lower": 0.0003,
+              "ci_upper": 0.1523,
+              "t0": "2023-02-01",
+              "population_at_t0": 8385016.589,
+              "count_mean": 335007.8032,
+              "count_ci": [2122.1445, 1277306.3154],
+              "variance_inflation": 8
+            }
+          },
+          "SOM": {
+            "shape1": 1.1555,
+            "shape2": 1.2495,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.2291,
+              "ci_lower": 0.0273,
+              "ci_upper": 0.9136,
+              "t0": "2023-02-01",
+              "population_at_t0": 18129826.7808,
+              "count_mean": 4153203.8713,
+              "count_ci": [495428.743, 16562828.0124],
+              "variance_inflation": 8
+            }
+          },
+          "SSD": {
+            "shape1": 1.0326,
+            "shape2": 1.0674,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0385,
+              "ci_lower": 0.0034,
+              "ci_upper": 0.1006,
+              "t0": "2023-02-01",
+              "population_at_t0": 11293430.2329,
+              "count_mean": 434739.8244,
+              "count_ci": [38264.9573, 1135804.3296],
+              "variance_inflation": 8
+            }
+          },
+          "SWZ": {
+            "shape1": 1.0253,
+            "shape2": 1.0747,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.03,
+              "ci_lower": 5.17e-06,
+              "ci_upper": 0.1116,
+              "t0": "2023-02-01",
+              "population_at_t0": 1225743.1918,
+              "count_mean": 36796.2375,
+              "count_ci": [6.3371, 136786.6851],
+              "variance_inflation": 8
+            }
+          },
+          "TCD": {
+            "shape1": 1.023,
+            "shape2": 1.077,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0268,
+              "ci_lower": 0.0006,
+              "ci_upper": 0.1067,
+              "t0": "2023-02-01",
+              "population_at_t0": 18964098.863,
+              "count_mean": 508979.6311,
+              "count_ci": [11226.3494, 2023981.9104],
+              "variance_inflation": 8
+            }
+          },
+          "TGO": {
+            "shape1": 1.0513,
+            "shape2": 7.8081,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0067,
+              "ci_lower": 0.0001,
+              "ci_upper": 0.0227,
+              "t0": "2023-02-01",
+              "population_at_t0": 9216146.1301,
+              "count_mean": 61899.6964,
+              "count_ci": [1089.0402, 209559.4659],
+              "variance_inflation": 8
+            }
+          },
+          "TZA": {
+            "shape1": 1.0167,
+            "shape2": 1.0833,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0177,
+              "ci_lower": 0.0008,
+              "ci_upper": 0.0695,
+              "t0": "2023-02-01",
+              "population_at_t0": 65834406.9795,
+              "count_mean": 1166082.7781,
+              "count_ci": [50813.0945, 4574512.7581],
+              "variance_inflation": 8
+            }
+          },
+          "UGA": {
+            "shape1": 1.0244,
+            "shape2": 2.1688,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0121,
+              "ci_lower": 0.0002,
+              "ci_upper": 0.0497,
+              "t0": "2023-02-01",
+              "population_at_t0": 48104321.226,
+              "count_mean": 579845.4581,
+              "count_ci": [11510.1725, 2392775.2464],
+              "variance_inflation": 8
+            }
+          },
+          "ZAF": {
+            "shape1": 1.0173,
+            "shape2": 1.4423,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0132,
+              "ci_lower": 0,
+              "ci_upper": 0.0588,
+              "t0": "2023-02-01",
+              "population_at_t0": 62869654.6644,
+              "count_mean": 829712.9395,
+              "count_ci": [952.1405, 3698963.4315],
+              "variance_inflation": 8
+            }
+          },
+          "ZMB": {
+            "shape1": 1.0221,
+            "shape2": 1.0779,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0249,
+              "ci_lower": 0.0011,
+              "ci_upper": 0.0918,
+              "t0": "2023-02-01",
+              "population_at_t0": 20489296.3699,
+              "count_mean": 509943.4066,
+              "count_ci": [23484.6527, 1880039.5281],
+              "variance_inflation": 8
+            }
+          },
+          "ZWE": {
+            "shape1": 1.0592,
+            "shape2": 1.0408,
+            "metadata": {
+              "estimated_from_data": true,
+              "mean": 0.0789,
+              "ci_lower": 0.0006,
+              "ci_upper": 0.3786,
+              "t0": "2023-02-01",
+              "population_at_t0": 16229136.8425,
+              "count_mean": 1279787.9374,
+              "count_ci": [10429.3384, 6144876.6036],
+              "variance_inflation": 8
+            }
+          }
+        }
+      }
+    },
+    "prop_S_initial": {
+      "parameter_name": "prop_S_initial",
+      "description": "Initial proportion in susceptible (S) compartment from constrained residual",
+      "distribution": "beta",
+      "parameters": {
+        "location": {
+          "AGO": {
+            "shape1": 2.0024,
+            "shape2": 1.9539,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.5124,
+              "ci_lower": 0.0454,
+              "ci_upper": 0.9416,
+              "constraint_violations": 1,
+              "constraint_violation_rate": 0.01,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 1.0% constraint violations"
+            }
+          },
+          "BDI": {
+            "shape1": 1.8654,
+            "shape2": 1.9413,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.479,
+              "ci_lower": 0.0352,
+              "ci_upper": 0.9462,
+              "constraint_violations": 2,
+              "constraint_violation_rate": 0.02,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 2.0% constraint violations"
+            }
+          },
+          "BEN": {
+            "shape1": 3.0941,
+            "shape2": 2.2442,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.6273,
+              "ci_lower": 0.1921,
+              "ci_upper": 0.9753,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "BFA": {
+            "shape1": 55.5195,
+            "shape2": 3.4052,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9577,
+              "ci_lower": 0.877,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "BWA": {
+            "shape1": 209.3222,
+            "shape2": 4.945,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9814,
+              "ci_lower": 0.9503,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "CAF": {
+            "shape1": 129.732,
+            "shape2": 4.6645,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9723,
+              "ci_lower": 0.9295,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "CIV": {
+            "shape1": 18.5216,
+            "shape2": 2.9334,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9006,
+              "ci_lower": 0.7137,
+              "ci_upper": 0.9861,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "CMR": {
+            "shape1": 2.0733,
+            "shape2": 2.726,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.3834,
+              "ci_lower": 0.001,
+              "ci_upper": 0.8227,
+              "constraint_violations": 15,
+              "constraint_violation_rate": 0.15,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 15.0% constraint violations"
+            }
+          },
+          "COD": {
+            "shape1": 1.9591,
+            "shape2": 2.2487,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4344,
+              "ci_lower": 0.001,
+              "ci_upper": 0.8563,
+              "constraint_violations": 6,
+              "constraint_violation_rate": 0.06,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 6.0% constraint violations"
+            }
+          },
+          "COG": {
+            "shape1": 1.8122,
+            "shape2": 1.8629,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4849,
+              "ci_lower": 0.0227,
+              "ci_upper": 0.9407,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "ERI": {
+            "shape1": 123.0573,
+            "shape2": 3.5549,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9795,
+              "ci_lower": 0.9347,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "ETH": {
+            "shape1": 13.824,
+            "shape2": 3.9458,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.8132,
+              "ci_lower": 0.5774,
+              "ci_upper": 0.9537,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "GAB": {
+            "shape1": 101.8301,
+            "shape2": 4.2962,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9683,
+              "ci_lower": 0.9173,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "GHA": {
+            "shape1": 1.8279,
+            "shape2": 1.8826,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.484,
+              "ci_lower": 0.0321,
+              "ci_upper": 0.9518,
+              "constraint_violations": 1,
+              "constraint_violation_rate": 0.01,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 1.0% constraint violations"
+            }
+          },
+          "GIN": {
+            "shape1": 1.6745,
+            "shape2": 1.6374,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.5142,
+              "ci_lower": 0.0132,
+              "ci_upper": 0.9738,
+              "constraint_violations": 1,
+              "constraint_violation_rate": 0.01,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 1.0% constraint violations"
+            }
+          },
+          "GMB": {
+            "shape1": 145.005,
+            "shape2": 3.6985,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9816,
+              "ci_lower": 0.9416,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "GNB": {
+            "shape1": 1.7909,
+            "shape2": 1.804,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4959,
+              "ci_lower": 0.0329,
+              "ci_upper": 0.9625,
+              "constraint_violations": 2,
+              "constraint_violation_rate": 0.02,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 2.0% constraint violations"
+            }
+          },
+          "GNQ": {
+            "shape1": 1.8736,
+            "shape2": 1.816,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.517,
+              "ci_lower": 0.0242,
+              "ci_upper": 0.9458,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "KEN": {
+            "shape1": 6.8041,
+            "shape2": 3.1383,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.7308,
+              "ci_lower": 0.3989,
+              "ci_upper": 0.9543,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "LBR": {
+            "shape1": 1.8118,
+            "shape2": 1.6971,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.538,
+              "ci_lower": 0.02,
+              "ci_upper": 0.9615,
+              "constraint_violations": 2,
+              "constraint_violation_rate": 0.02,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 2.0% constraint violations"
+            }
+          },
+          "MLI": {
+            "shape1": 9.5679,
+            "shape2": 2.2792,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.8701,
+              "ci_lower": 0.58,
+              "ci_upper": 0.988,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "MOZ": {
+            "shape1": 1.9252,
+            "shape2": 2.2338,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4285,
+              "ci_lower": 0.001,
+              "ci_upper": 0.8803,
+              "constraint_violations": 4,
+              "constraint_violation_rate": 0.04,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 4.0% constraint violations"
+            }
+          },
+          "MRT": {
+            "shape1": 5.5969,
+            "shape2": 2.5535,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.7474,
+              "ci_lower": 0.3775,
+              "ci_upper": 0.9773,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "MWI": {
+            "shape1": 1.7355,
+            "shape2": 3.6533,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.217,
+              "ci_lower": 0.001,
+              "ci_upper": 0.6997,
+              "constraint_violations": 32,
+              "constraint_violation_rate": 0.32,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 32.0% constraint violations"
+            }
+          },
+          "NAM": {
+            "shape1": 5.9378,
+            "shape2": 2.2406,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.7992,
+              "ci_lower": 0.4145,
+              "ci_upper": 0.9778,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "NER": {
+            "shape1": 5.2547,
+            "shape2": 3.1344,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.6659,
+              "ci_lower": 0.2674,
+              "ci_upper": 0.899,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "NGA": {
+            "shape1": 1.7651,
+            "shape2": 1.9705,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4408,
+              "ci_lower": 0.0036,
+              "ci_upper": 0.9224,
+              "constraint_violations": 3,
+              "constraint_violation_rate": 0.03,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 3.0% constraint violations"
+            }
+          },
+          "RWA": {
+            "shape1": 23.2839,
+            "shape2": 2.8528,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.9232,
+              "ci_lower": 0.7637,
+              "ci_upper": 0.9864,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "SEN": {
+            "shape1": 1.7326,
+            "shape2": 1.6921,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.5142,
+              "ci_lower": 0.0028,
+              "ci_upper": 0.951,
+              "constraint_violations": 2,
+              "constraint_violation_rate": 0.02,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 2.0% constraint violations"
+            }
+          },
+          "SLE": {
+            "shape1": 1.6875,
+            "shape2": 1.8282,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4536,
+              "ci_lower": 0.0016,
+              "ci_upper": 0.9428,
+              "constraint_violations": 3,
+              "constraint_violation_rate": 0.03,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 3.0% constraint violations"
+            }
+          },
+          "SOM": {
+            "shape1": 2.2549,
+            "shape2": 3.6589,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.3206,
+              "ci_lower": 0.001,
+              "ci_upper": 0.732,
+              "constraint_violations": 19,
+              "constraint_violation_rate": 0.19,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 19.0% constraint violations"
+            }
+          },
+          "SSD": {
+            "shape1": 1.9016,
+            "shape2": 2.5417,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.369,
+              "ci_lower": 0.001,
+              "ci_upper": 0.8463,
+              "constraint_violations": 14,
+              "constraint_violation_rate": 0.14,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 14.0% constraint violations"
+            }
+          },
+          "SWZ": {
+            "shape1": 1.9281,
+            "shape2": 1.7837,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.5422,
+              "ci_lower": 0.0521,
+              "ci_upper": 0.9734,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "TCD": {
+            "shape1": 1.7647,
+            "shape2": 1.8299,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4796,
+              "ci_lower": 0.0174,
+              "ci_upper": 0.9491,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "TGO": {
+            "shape1": 11.538,
+            "shape2": 2.6166,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.867,
+              "ci_lower": 0.615,
+              "ci_upper": 0.99,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "TZA": {
+            "shape1": 1.8119,
+            "shape2": 1.8476,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4893,
+              "ci_lower": 0.0416,
+              "ci_upper": 0.9656,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "UGA": {
+            "shape1": 3.0173,
+            "shape2": 2.2812,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.6116,
+              "ci_lower": 0.1507,
+              "ci_upper": 0.9408,
+              "constraint_violations": 1,
+              "constraint_violation_rate": 0.01,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 1.0% constraint violations"
+            }
+          },
+          "ZAF": {
+            "shape1": 2.6159,
+            "shape2": 2.1624,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.5816,
+              "ci_lower": 0.0997,
+              "ci_upper": 0.9298,
+              "constraint_violations": 0,
+              "constraint_violation_rate": 0,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 0.0% constraint violations"
+            }
+          },
+          "ZMB": {
+            "shape1": 1.7303,
+            "shape2": 2.3384,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.353,
+              "ci_lower": 0.001,
+              "ci_upper": 0.8732,
+              "constraint_violations": 18,
+              "constraint_violation_rate": 0.18,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 18.0% constraint violations"
+            }
+          },
+          "ZWE": {
+            "shape1": 2.0133,
+            "shape2": 2.403,
+            "method": "ci_expansion_constrained_residual",
+            "metadata": {
+              "estimated_from_constraints": true,
+              "mean": 0.4194,
+              "ci_lower": 0.001,
+              "ci_upper": 0.858,
+              "constraint_violations": 8,
+              "constraint_violation_rate": 0.08,
+              "t0": "2023-02-01",
+              "n_samples": 100,
+              "min_S_proportion": 0.001,
+              "variance_inflation": 0,
+              "message": "Estimated from 100 samples with 8.0% constraint violations"
+            }
+          }
+        }
+      }
+    }
+  }
+}

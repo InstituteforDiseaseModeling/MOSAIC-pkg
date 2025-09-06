@@ -210,18 +210,22 @@ est_vaccine_effectiveness <- function(PATHS) {
 
      # Calculate gamma distribution parameters for omega_1 and omega_2
 
+     # Note: omega is inversely related to effectiveness
+     # High effectiveness (hi) → Low omega (slower decay)
+     # Low effectiveness (lo) → High omega (faster decay)
+     # So we need to swap the CI bounds for omega
      omega_1_fit <- fit_gamma_from_ci(
           mode_val = fit_one_dose$mean['omega'],
-          ci_lower = fit_one_dose$hi['omega'],
-          ci_upper = fit_one_dose$lo['omega'],
+          ci_lower = fit_one_dose$hi['omega'],  # hi effectiveness = low omega
+          ci_upper = fit_one_dose$lo['omega'],  # lo effectiveness = high omega
           method = "moment_matching",
           verbose = FALSE
      )
 
      omega_2_fit <- fit_gamma_from_ci(
           mode_val = fit_two_dose$mean['omega'],
-          ci_lower = fit_two_dose$hi['omega'],
-          ci_upper = fit_two_dose$lo['omega'],
+          ci_lower = fit_two_dose$hi['omega'],  # hi effectiveness = low omega
+          ci_upper = fit_two_dose$lo['omega'],  # lo effectiveness = high omega
           method = "moment_matching",
           verbose = FALSE
      )
@@ -233,7 +237,8 @@ est_vaccine_effectiveness <- function(PATHS) {
                                      'gamma', 'gamma'),
           parameter_name = c('low', 'mean', 'high',
                              'shape', 'rate'),
-          parameter_value = c(fit_one_dose$lo[2], fit_one_dose$mean[2], fit_one_dose$hi[2],
+          # Note: omega CI is inverted relative to effectiveness
+          parameter_value = c(fit_one_dose$hi[2], fit_one_dose$mean[2], fit_one_dose$lo[2],
                               omega_1_fit$shape, omega_1_fit$rate)
      )
 
@@ -244,7 +249,8 @@ est_vaccine_effectiveness <- function(PATHS) {
                                      'gamma', 'gamma'),
           parameter_name = c('low', 'mean', 'high',
                              'shape', 'rate'),
-          parameter_value = c(fit_two_dose$lo[2], fit_two_dose$mean[2], fit_two_dose$hi[2],
+          # Note: omega CI is inverted relative to effectiveness
+          parameter_value = c(fit_two_dose$hi[2], fit_two_dose$mean[2], fit_two_dose$lo[2],
                               omega_2_fit$shape, omega_2_fit$rate)
      )
 

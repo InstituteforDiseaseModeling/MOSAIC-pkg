@@ -7,15 +7,18 @@
 #' and respects operational constraints including vaccination coverage ceilings and
 #' minimum inter-dose intervals.
 #'
-#' @param doses_ts A data frame containing vaccination history with columns:
-#' \describe{
-#'   \item{date}{Date of vaccine administration (Date or character that can be coerced to Date)}
-#'   \item{doses}{Number of doses administered on that date (numeric, positive)}
-#' }
+#' @param dates A vector of dates when doses were administered (Date or character that can be coerced to Date).
+#'        Must be the same length as doses.
+#' @param doses A numeric vector of doses administered on each date. Must be positive values.
+#'        Must be the same length as dates.
 #' @param t0 The target date for which to estimate V1 and V2 compartments (Date object).
 #'        Only vaccination events on or before this date are considered.
-#' @param N Total population size for the location (numeric, positive). Used to calculate
-#'        the vaccination ceiling. Can be NA if ceiling constraint is not needed.
+#' @param N Population size(s) for the location. Can be:
+#'        \itemize{
+#'          \item A single numeric value for constant population
+#'          \item A numeric vector (same length as dates) for time-varying population
+#'          \item NA if ceiling constraint is not needed
+#'        }
 #' @param vacc_ceiling_frac Maximum fraction of population that can receive first doses
 #'        (numeric between 0 and 1). Default is 0.6 (60% coverage ceiling).
 #' @param omega1 Waning rate for one-dose protection (numeric, positive). Units are 1/days.
@@ -30,6 +33,10 @@
 #'        Numeric between 0 and 1. Default is 1.0 (100% effectiveness).
 #' @param phi2 Vaccine effectiveness for two-dose regimen (proportion developing protection).
 #'        Numeric between 0 and 1. Default is 1.0 (100% effectiveness).
+#' @param allocation_logic Character string specifying second dose allocation method when
+#'        ceiling is reached. Either "FIFO" (First-In-First-Out, oldest cohorts first) or
+#'        "LIFO" (Last-In-First-Out, newest eligible cohorts first). Default is "FIFO" for
+#'        backward compatibility. LIFO is more realistic for actual campaigns.
 #'
 #' @return A named numeric vector with two elements:
 #' \describe{
@@ -46,15 +53,24 @@
 #' - Second doses decrement V1 and increment V2 (individuals move between compartments)
 #'
 #' \strong{Constraint Enforcement:}
-#' - Vaccination ceiling: First doses cannot exceed \code{vacc_ceiling_frac * N}
+#' - Vaccination ceiling: First doses cannot exceed \code{vacc_ceiling_frac * N[i]} at each time point
 #' - Inter-dose interval: Second doses only from cohorts at least \code{min_interdose_days} old
 #' - No same-day second doses (enforced by inter-dose interval)
+#' - Time-varying population: When N is a vector, ceiling adapts to population at each vaccination date
 #'
 #' \strong{Allocation Priority:}
 #' 1. If V1 at ceiling, prioritize second doses from eligible cohorts
 #' 2. Allocate first doses up to remaining ceiling capacity
 #' 3. Use any remaining doses for additional second doses if possible
 #' 4. Excess doses beyond all constraints are effectively lost
+#'
+#' \strong{Second Dose Allocation Logic (when ceiling reached):}
+#' \itemize{
+#'   \item FIFO: Allocates to oldest eligible cohorts first (traditional approach)
+#'   \item LIFO: Allocates to newest eligible cohorts first (more realistic)
+#' }
+#' LIFO is recommended as it better reflects real campaign behavior where recent
+#' vaccinees are more accessible for follow-up doses.
 #'
 #' \strong{Waning Immunity:}
 #' Final V1 and V2 estimates account for exponential decay of protection:
@@ -69,17 +85,16 @@
 #' @examples
 #' \dontrun{
 #' # Create sample vaccination data
-#' doses_df <- data.frame(
-#'   date = seq.Date(from = as.Date("2023-01-01"),
+#' dates <- seq.Date(from = as.Date("2023-01-01"),
 #'                   to = as.Date("2023-12-31"),
-#'                   by = "month"),
-#'   doses = c(50000, 45000, 40000, 35000, 30000, 25000,
+#'                   by = "month")
+#' doses <- c(50000, 45000, 40000, 35000, 30000, 25000,
 #'            20000, 15000, 10000, 5000, 3000, 2000)
-#' )
 #'
-#' # Estimate V1 and V2 on January 1, 2024
-#' v_compartments <- est_initial_V1_V2_location(
-#'   doses_ts = doses_df,
+#' # Example 1: Constant population
+#' v_const <- est_initial_V1_V2_location(
+#'   dates = dates,
+#'   doses = doses,
 #'   t0 = as.Date("2024-01-01"),
 #'   N = 1000000,
 #'   vacc_ceiling_frac = 0.6,
@@ -88,12 +103,27 @@
 #'   t_lag = 14,
 #'   min_interdose_days = 40,
 #'   phi1 = 0.65,  # 65% one-dose effectiveness
-#'   phi2 = 0.85   # 85% two-dose effectiveness
+#'   phi2 = 0.85,  # 85% two-dose effectiveness
+#'   allocation_logic = "FIFO"  # Default
 #' )
 #'
-#' print(v_compartments)
+#' # Example 2: Time-varying population (e.g., 1% annual growth)
+#' N_vec <- 1000000 * (1.01 ^ (0:11/12))  # Monthly growth
+#' v_varying <- est_initial_V1_V2_location(
+#'   dates = dates,
+#'   doses = doses,
+#'   t0 = as.Date("2024-01-01"),
+#'   N = N_vec,
+#'   allocation_logic = "LIFO"  # Recent cohorts get second doses first
+#' )
+#'
+#' print(v_const)
 #' # V1      V2
-#' # 80246   67074  # Lower than vaccinated due to effectiveness
+#' # 80246   67074  
+#' 
+#' print(v_varying) 
+#' # V1      V2
+#' # 65432   67074  # May differ due to population changes
 #' }
 #'
 #' @references
@@ -107,7 +137,8 @@
 #' @importFrom utils head tail
 #' @export
 
-est_initial_V1_V2_location <- function(doses_ts,
+est_initial_V1_V2_location <- function(dates,
+                                      doses,
                                       t0,
                                       N = NA,
                                       vacc_ceiling_frac = 0.6,
@@ -116,15 +147,24 @@ est_initial_V1_V2_location <- function(doses_ts,
                                       t_lag = 14L,
                                       min_interdose_days = 40L,
                                       phi1 = 1.0,
-                                      phi2 = 1.0) {
+                                      phi2 = 1.0,
+                                      allocation_logic = "FIFO") {
   
   # Input validation
   if (!inherits(t0, "Date")) {
     stop("t0 must be a Date object")
   }
   
-  if (!is.data.frame(doses_ts) || !all(c("date", "doses") %in% names(doses_ts))) {
-    stop("doses_ts must be a data.frame with columns: date, doses")
+  if (!is.numeric(doses) || any(!is.finite(doses)) || any(doses < 0)) {
+    stop("doses must be a numeric vector with non-negative finite values")
+  }
+  
+  if (length(dates) != length(doses)) {
+    stop("dates and doses must have the same length")
+  }
+  
+  if (length(dates) == 0) {
+    return(c(V1 = 0, V2 = 0))
   }
   
   if (!is.numeric(omega1) || length(omega1) != 1L || !is.finite(omega1) || omega1 <= 0) {
@@ -156,17 +196,51 @@ est_initial_V1_V2_location <- function(doses_ts,
     stop("phi2 must be a single numeric value between 0 and 1")
   }
   
+  if (!is.character(allocation_logic) || length(allocation_logic) != 1L || 
+      !(allocation_logic %in% c("FIFO", "LIFO"))) {
+    stop("allocation_logic must be either 'FIFO' or 'LIFO'")
+  }
+  
+  # Validate N parameter
+  if (!all(is.na(N))) {
+    if (!is.numeric(N)) {
+      stop("N must be numeric (scalar or vector) or NA")
+    }
+    if (length(N) == 1) {
+      # Scalar N - replicate to match dates length
+      if (!is.finite(N) || N <= 0) {
+        stop("N must be positive when provided as scalar")
+      }
+      N_vec <- rep(N, length(dates))
+    } else if (length(N) == length(dates)) {
+      # Vector N - validate all values
+      if (any(!is.finite(N)) || any(N <= 0)) {
+        stop("All N values must be positive and finite")
+      }
+      N_vec <- N
+    } else {
+      stop("N must be a scalar or have the same length as dates")
+    }
+  } else {
+    # NA - no ceiling constraint
+    N_vec <- rep(NA_real_, length(dates))
+  }
+  
   # Prepare and clean dose data
   doses_clean <- data.frame(
-    date = as.Date(doses_ts$date),
-    doses = as.numeric(doses_ts$doses)
+    date = as.Date(dates),
+    doses = as.numeric(doses),
+    population = N_vec,
+    stringsAsFactors = FALSE
   )
   
   # Filter to valid records on or before t0
-  doses_clean <- doses_clean[!is.na(doses_clean$date) & 
-                            doses_clean$date <= t0 &
-                            !is.na(doses_clean$doses) & 
-                            doses_clean$doses > 0, , drop = FALSE]
+  valid_idx <- !is.na(doses_clean$date) & 
+               doses_clean$date <= t0 &
+               !is.na(doses_clean$doses) & 
+               doses_clean$doses > 0
+  
+  doses_clean <- doses_clean[valid_idx, , drop = FALSE]
   
   # Return zero compartments if no valid vaccination data
   if (nrow(doses_clean) == 0L) {
@@ -175,12 +249,6 @@ est_initial_V1_V2_location <- function(doses_ts,
   
   # Sort by date for chronological processing
   doses_clean <- doses_clean[order(doses_clean$date), , drop = FALSE]
-  
-  # Calculate vaccination ceiling if population provided
-  N_cap <- NA_real_
-  if (is.numeric(N) && length(N) == 1L && is.finite(N) && N > 0) {
-    N_cap <- vacc_ceiling_frac * N
-  }
   
   # Initialize cohort tracking data frames
   first_cohorts <- data.frame(
@@ -212,12 +280,18 @@ est_initial_V1_V2_location <- function(doses_ts,
       return(0)
     }
     
-    # Sort by date for FIFO processing
-    eligible_idx <- eligible_idx[order(first_cohorts$date_first[eligible_idx])]
+    # Sort by date according to allocation logic
+    if (allocation_logic == "FIFO") {
+      # FIFO: Oldest cohorts first (ascending order)
+      eligible_idx <- eligible_idx[order(first_cohorts$date_first[eligible_idx])]
+    } else {
+      # LIFO: Newest cohorts first (descending order)
+      eligible_idx <- eligible_idx[order(first_cohorts$date_first[eligible_idx], decreasing = TRUE)]
+    }
     
     doses_allocated <- 0
     
-    # Allocate second doses from oldest eligible cohorts first
+    # Allocate second doses from selected cohorts (oldest for FIFO, newest for LIFO)
     for (idx in eligible_idx) {
       if (doses_allocated >= doses_needed) {
         break
@@ -251,6 +325,14 @@ est_initial_V1_V2_location <- function(doses_ts,
   for (i in seq_len(nrow(doses_clean))) {
     current_date <- doses_clean$date[i]
     doses_available <- doses_clean$doses[i]
+    current_N <- doses_clean$population[i]
+    
+    # Calculate ceiling for this time point
+    if (is.finite(current_N) && current_N > 0) {
+      N_cap <- vacc_ceiling_frac * current_N
+    } else {
+      N_cap <- NA_real_
+    }
     
     if (!is.finite(N_cap)) {
       # No ceiling constraint: all doses become first doses

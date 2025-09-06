@@ -1,0 +1,160 @@
+"year","country","request_number","status","context","decision_date","doses_requested","doses_approved","doses_shipped","campaign_date","id","iso_code","delay"
+2014,"South Sudan",201401,"Pending","Outbreak response",NA,322900,NA,188000,2014-07-01,171,"SSD",NA
+2014,"Ethiopia",201402,"Pending","Outbreak response",NA,278700,NA,278700,2014-07-01,59,"ETH",NA
+2014,"Ethiopia",201405,"Pending","Outbreak response",NA,64300,NA,64300,2014-07-01,58,"ETH",NA
+2015,"Malawi",201501,"Approved","Outbreak response",2015-03-11,210000,210000,210000,2015-03-23,92,"MWI",12
+2015,"South Sudan",201503,"Approved","Outbreak response",2015-05-12,146700,146700,146700,2015-05-26,168,"SSD",14
+2015,"Tanzania",201504,"Approved","Outbreak response",2015-05-22,164600,164600,164600,2015-05-27,194,"TZA",5
+2015,"South Sudan",201505,"Approved","Outbreak response",2015-06-18,67100,67100,67100,2015-06-11,167,"SSD",-7
+2015,"Tanzania",201507,"Approved","Outbreak response",2015-06-26,164600,254600,254600,2015-07-07,193,"TZA",11
+2015,"South Sudan",201509,"Approved","Outbreak response",2015-07-10,639500,270300,270300,2015-07-23,166,"SSD",13
+2015,"South Sudan",201510,"Approved","Outbreak response",2015-07-23,66800,66800,66800,2015-08-06,165,"SSD",14
+2015,"Cameroon",201511,"Approved","Outbreak response",2015-07-28,116300,116300,116400,2015-08-08,24,"CMR",11
+2016,"Niger",201601,"Approved","Outbreak response",2016-01-14,195100,195100,195200,2016-01-26,116,"NER",12
+2016,"Malawi",201602,"Approved","Outbreak response",2016-01-25,160000,160000,160000,2016-02-09,90,"MWI",15
+2016,"Malawi",201603,"Approved","Outbreak response",2016-02-24,40000,40000,40000,2016-03-08,89,"MWI",13
+2016,"Zambia",201604,"Approved","Outbreak response",2016-03-28,598100,598100,598200,2016-04-07,211,"ZMB",10
+2016,"South Sudan",201605,"Approved","Outbreak response",2016-04-01,72400,72400,72400,2016-04-25,164,"SSD",24
+2016,"Mozambique",201606,"Approved","Outbreak response",2016-08-11,425500,425500,425500,2016-09-12,106,"MOZ",32
+2016,"Zambia",201608,"Approved","Outbreak response",2016-08-15,293700,293700,293700,2016-08-25,210,"ZMB",10
+2016,"Democratic Republic of Congo",201609,"Approved","Outbreak response",2016-09-02,680700,680700,680800,2016-09-13,40,"COD",11
+2016,"Democratic Republic of Congo",201611,"Approved","Outbreak response",2016-10-10,70000,70000,70000,2016-10-21,39,"COD",11
+2017,"South Sudan",201701,"Approved","Outbreak response",2017-02-18,304100,69000,69100,2017-02-22,162,"SSD",4
+2017,"South Sudan",201702,"Approved","Outbreak response",2017-03-07,475000,475000,475000,2017-03-15,161,"SSD",8
+2017,"Somalia",201703,"Approved","Outbreak response",2017-04-05,264600,264600,718200,2017-05-15,138,"SOM",40
+2017,"Somalia",201703,"Approved","Outbreak response",2017-04-05,988000,907200,453600,2017-05-15,139,"SOM",40
+2017,"Mozambique",201704,"Approved","Outbreak response",2017-04-05,709100,709100,709100,2017-04-28,105,"MOZ",23
+2017,"Malawi",201705,"Approved","Outbreak response",2017-04-05,120000,120000,120000,2017-04-21,86,"MWI",16
+2017,"Sierra Leone",201709,"Approved","Outbreak response",2017-08-29,1e+06,1e+06,1e+06,2017-09-07,132,"SLE",9
+2017,"Nigeria",201711,"Approved","Outbreak response",2017-09-06,915000,915000,915000,2017-09-15,127,"NGA",9
+2017,"Nigeria",201714,"Approved","Outbreak response",2017-10-30,896900,896900,896900,2017-11-30,126,"NGA",31
+2018,"Nigeria",201804,"Approved","Outbreak response",2018-04-12,1200000,1200000,1200000,2018-04-25,124,"NGA",13
+2018,"Nigeria",201805,"Approved","Outbreak response",2018-05-04,291000,252900,252900,2018-05-14,123,"NGA",10
+2018,"Nigeria",201807,"Approved","Outbreak response",2018-06-13,757600,757600,757700,2018-06-22,122,"NGA",9
+2018,"South Sudan",201808,"Approved","Outbreak response",2018-06-18,105900,96300,96300,2018-07-04,160,"SSD",16
+2018,"Zimbabwe",201811,"Approved","Outbreak response",2018-09-27,2800000,2800000,2763400,2018-09-26,215,"ZWE",-1
+2018,"Niger",201812,"Approved","Outbreak response",2018-10-03,2300000,317300,317400,2018-10-11,115,"NER",8
+2019,"Mozambique",201901,"Approved","Outbreak response",2019-03-22,885000,885000,849500,2019-07-07,103,"MOZ",107
+2019,"Mozambique",201901,"Approved","Outbreak response",2019-03-22,885000,885000,885000,2019-04-02,104,"MOZ",11
+2019,"Zimbabwe",201902,"Approved","Outbreak response",2019-04-03,975600,975600,975600,2019-04-14,214,"ZWE",11
+2019,"Cameroon",201903,"Approved","Outbreak response",2020-09-19,NA,1100000,691200,2019-09-30,21,"CMR",-355
+2019,"Cameroon",201903,"Approved","Outbreak response",2019-04-15,1300000,1300000,1297600,2019-05-31,22,"CMR",46
+2019,"Democratic Republic of Congo",201905,"Approved","Outbreak response",2019-04-15,2100000,1700000,1670400,2019-04-24,37,"COD",9
+2019,"Zambia",201906,"Approved","Outbreak response",2019-04-23,131800,111200,111200,2019-07-03,206,"ZMB",71
+2019,"Zambia",201906,"Approved","Outbreak response",2019-04-23,136800,136800,136800,2019-04-30,207,"ZMB",7
+2019,"Mozambique",201908,"Approved","Outbreak response",2019-05-02,1900000,519000,519000,2019-05-12,102,"MOZ",10
+2019,"Ethiopia",201909,"Approved","Outbreak response",2019-05-10,817700,778800,778700,2019-05-17,57,"ETH",7
+2019,"Democratic Republic of Congo",201914,"Approved","Outbreak response",2019-10-28,961700,961700,961700,2019-11-14,36,"COD",17
+2019,"South Sudan",201918,"Approved","Outbreak response",2019-12-05,508800,508800,254400,2019-12-17,158,"SSD",12
+2019,"Cameroon",201919,"Approved","Outbreak response",2020-01-08,10000,10000,10100,2020-02-27,19,"CMR",50
+2019,"Cameroon",201919,"Approved","Outbreak response",2019-12-09,67700,67700,67700,2019-12-17,20,"CMR",8
+2020,"Mozambique",202002,"Approved","Outbreak response",2020-03-12,976800,733400,733500,2020-03-27,101,"MOZ",15
+2020,"Democratic Republic of Congo",202003,"Approved","Outbreak response",2020-05-22,2100000,2100000,2100000,2020-06-07,33,"COD",16
+2020,"Uganda",202004,"Approved","Outbreak response",2020-06-02,157700,157700,157700,2020-06-07,195,"UGA",5
+2020,"Ethiopia",202005,"Approved","Outbreak response",2020-11-19,4900000,3400000,3300000,2020-12-28,56,"ETH",39
+2021,"Ethiopia",202101,"Approved","Outbreak response",2021-03-05,5500000,2400000,2400000,2021-03-18,55,"ETH",13
+2021,"Ethiopia",202102,"Approved","Outbreak response",2021-05-13,4e+06,4e+06,2e+06,2021-05-22,54,"ETH",9
+2021,"Nigeria",202103,"Approved","Outbreak response",2021-07-08,1600000,1600000,1600000,2021-07-16,121,"NGA",8
+2021,"Niger",202105,"Approved","Outbreak response",2021-09-10,4e+06,4e+06,4e+06,2021-10-18,114,"NER",38
+2021,"Nigeria",202106,"Approved","Outbreak response",2021-09-14,3600000,3600000,3600000,2021-10-04,120,"NGA",20
+2021,"Ethiopia",202108,"Approved","Outbreak response",2021-11-04,2100000,2100000,2e+06,2021-11-18,53,"ETH",14
+2021,"Cameroon",202109,"Approved","Outbreak response",2021-12-28,409500,409500,409600,2022-01-18,18,"CMR",21
+2022,"Cameroon",202201,"Approved","Outbreak response",2022-02-17,1700000,1700000,1684200,2022-03-08,17,"CMR",19
+2022,"Malawi",202202,"Approved","Outbreak response",2022-03-17,3900000,3900000,1900000,2022-04-07,85,"MWI",21
+2022,"Somalia",202204,"Approved","Outbreak response",2022-04-26,1900000,1900000,1869000,2022-05-29,136,"SOM",33
+2022,"Cameroon",202210,"Approved","Outbreak response",2022-07-07,4300000,4300000,2100000,2022-07-14,16,"CMR",7
+2022,"Malawi",202213,"Approved","Outbreak response",2022-10-20,2900000,2900000,2900000,2022-11-07,84,"MWI",18
+2022,"Somalia",202215,"Approved","Outbreak response",2022-11-10,2e+06,995900,995900,2022-11-25,135,"SOM",15
+2022,"Cameroon",202217,"Approved","Outbreak response",2022-11-15,4400000,1600000,1600000,2022-11-29,15,"CMR",14
+2022,"Ethiopia",202220,"Approved","Outbreak response",2022-12-02,2e+06,86900,86900,2022-12-15,52,"ETH",13
+2022,"Kenya",202221,"Approved","Outbreak response",2022-12-09,7600000,2200000,2243000,2022-12-29,78,"KEN",20
+2022,"Democratic Republic of Congo",202223,"Approved","Outbreak response",2022-12-22,728300,364100,364100,2023-01-04,32,"COD",13
+2023,"Mozambique",202302,"Approved","Outbreak response",2023-02-01,719200,719200,719200,2023-02-15,100,"MOZ",14
+2023,"Malawi",202303,"Approved","Outbreak response",2023-03-30,6300000,1400000,1400000,2023-04-14,83,"MWI",15
+2023,"Mozambique",202304,"Approved","Outbreak response",2023-03-09,1600000,1400000,1400000,2023-03-23,99,"MOZ",14
+2023,"Mozambique",202307,"Approved","Outbreak response",2023-03-21,410600,410600,410600,2023-03-30,98,"MOZ",9
+2023,"Ethiopia",202308,"Approved","Outbreak response",2023-03-29,1300000,1900000,1900000,2023-04-07,51,"ETH",9
+2023,"Zambia",202309,"Approved","Outbreak response",2023-04-18,5100000,628200,628300,2023-05-08,204,"ZMB",20
+2023,"Kenya",202310,"Approved","Outbreak response",2023-06-08,9900000,1500000,1578000,2023-06-29,77,"KEN",21
+2023,"Cameroon",202311,"Approved","Outbreak response",2023-06-08,4200000,1800000,1800000,2023-06-19,14,"CMR",11
+2023,"Somalia",202312,"Approved","Outbreak response",2023-06-15,590800,590800,590800,2023-06-26,134,"SOM",11
+2023,"Ethiopia",202313,"Approved","Outbreak response",2023-07-09,5900000,2200000,2200000,2023-07-20,50,"ETH",11
+2023,"Kenya",202314,"Approved","Outbreak response",2023-07-06,1900000,175600,175600,2023-07-19,76,"KEN",13
+2023,"Ethiopia",202315,"Approved","Outbreak response",2023-08-03,1900000,1900000,1900000,2023-08-12,49,"ETH",9
+2023,"Mozambique",202316,"Approved","Outbreak response",2023-09-15,924500,513799,513799,2023-09-29,97,"MOZ",14
+2023,"Ethiopia",202317,"Approved","Outbreak response",2023-10-17,2e+06,862400,862400,2023-10-27,48,"ETH",10
+2023,"Democratic Republic of Congo",202318,"Approved","Outbreak response",2023-10-02,5e+06,5e+06,5e+06,2023-10-11,31,"COD",9
+2023,"Ethiopia",202319,"Approved","Outbreak response",2023-10-04,1500000,1500000,1500000,2023-10-20,47,"ETH",16
+2023,"Mozambique",202322,"Approved","Outbreak response",2023-12-04,2400000,2300000,2300000,2023-12-29,96,"MOZ",25
+2023,"Ethiopia",202323,"Approved","Outbreak response",2024-01-17,1800000,766200,288000,2024-02-17,46,"ETH",31
+2023,"Ethiopia",202324,"Approved","Outbreak response",2023-12-04,2100000,1200000,1200000,2023-12-16,45,"ETH",12
+2023,"Zambia",202326,"Approved","Outbreak response",2023-12-28,3500000,1700000,1701100,2024-01-12,203,"ZMB",15
+2023,"Zimbabwe",202327,"Approved","Outbreak response",2024-01-11,2400000,2300000,2300000,2024-01-25,213,"ZWE",14
+2024,"Somalia",202402,"Approved","Outbreak response",2024-02-01,1900000,1400000,1400000,2024-03-30,133,"SOM",58
+2024,"Zambia",202403,"Approved","Outbreak response",2024-02-07,3600000,2200000,2200000,2024-04-05,202,"ZMB",58
+2024,"Ethiopia",202407,"Approved","Outbreak response",2024-06-25,2600000,1700000,1700000,2024-07-04,44,"ETH",9
+2024,"Mozambique",202408,"Approved","Outbreak response",2024-06-19,107500,107500,107500,2024-07-15,95,"MOZ",26
+2024,"Zimbabwe",202409,"Approved","Outbreak response",2024-06-24,2100000,213600,213600,2024-07-06,212,"ZWE",12
+2024,"Nigeria",202410,"Approved","Outbreak response",2024-07-10,6100000,4500000,4500000,2024-07-21,118,"NGA",11
+2024,"Niger",202416,"Approved","Outbreak response",2024-09-27,1100000,1100000,1100000,2024-10-16,113,"NER",19
+2024,"Ethiopia",202417,"Approved","Outbreak response",2024-10-03,2e+06,2e+06,1265000,2024-10-21,43,"ETH",18
+2024,"Ghana",202421,"Approved","Outbreak response",2024-11-08,158500,158500,158500,2024-11-22,65,"GHA",14
+2024,"Niger",202422,"Approved","Outbreak response",2024-11-08,775900,79800,79800,2024-11-27,112,"NER",19
+2024,"South Sudan",202423,"Approved","Outbreak response",2024-11-08,151200,151200,151200,2024-11-30,157,"SSD",22
+2024,"South Sudan",202425,"Approved","Outbreak response",2024-11-22,130900,130900,131000,2024-12-03,156,"SSD",11
+2024,"Ghana",202426,"Approved","Outbreak response",2024-11-26,623600,623600,623600,2024-12-06,64,"GHA",10
+2024,"South Sudan",202427,"Approved","Outbreak response",2024-12-06,1100000,1100000,1100000,2024-12-29,155,"SSD",23
+2024,"Mozambique",202428,"Approved","Outbreak response",2024-12-04,199700,199700,2e+05,2024-12-20,94,"MOZ",16
+2024,"Malawi",202430,"Approved","Outbreak response",2024-12-16,978200,720200,720200,2025-01-03,82,"MWI",18
+2024,"South Sudan",202432,"Approved","Outbreak response",2024-12-20,1100000,1100000,1100000,2025-01-10,154,"SSD",21
+2024,"South Sudan",202433,"Approved","Outbreak response",2025-01-06,96200,96200,96200,2025-01-14,152,"SSD",8
+2024,"South Sudan",202433,"Approved","Outbreak response",2024-12-23,738700,225200,225200,2025-01-09,153,"SSD",17
+2025,"Democratic Republic of Congo",202502,"Approved","Outbreak response",2025-01-09,1500000,979100,979200,2025-01-24,30,"COD",15
+2025,"South Sudan",202503,"Approved","Outbreak response",2025-01-09,258300,258300,258300,2025-01-21,151,"SSD",12
+2025,"South Sudan",202504,"Approved","Outbreak response",2025-01-10,1200000,1200000,1200000,2025-01-28,150,"SSD",18
+2025,"Angola",202506,"Approved","Outbreak response",2025-01-15,948500,948500,948500,2025-01-27,3,"AGO",12
+2025,"Ghana",202507,"Approved","Outbreak response",2025-01-27,301000,301000,301000,2025-02-06,63,"GHA",10
+2025,"Ghana",202508,"Approved","Outbreak response",2025-02-04,85600,85600,85600,2025-02-09,62,"GHA",5
+2025,"Democratic Republic of Congo",202510,"Approved","Outbreak response",2025-02-07,1900000,1900000,1900000,2025-02-17,29,"COD",10
+2025,"South Sudan",202511,"Approved","Outbreak response",2025-02-10,2300000,1100000,1100000,2025-02-26,149,"SSD",16
+2025,"Ghana",202512,"Approved","Outbreak response",2025-02-13,74800,74800,74800,2025-02-20,61,"GHA",7
+2025,"South Sudan",202513,"Approved","Outbreak response",2025-02-19,306000,306000,306000,2025-03-04,148,"SSD",13
+2025,"Angola",202514,"Approved","Outbreak response",2025-02-27,700500,700500,700400,2025-03-17,2,"AGO",18
+2025,"Ethiopia",202516,"Approved","Outbreak response",2025-03-04,1e+06,1e+06,1e+06,2025-03-12,42,"ETH",8
+2025,"South Sudan",202517,"Approved","Outbreak response",2025-03-05,1700000,1700000,1700000,2025-03-18,147,"SSD",13
+2025,"Ghana",202518,"Approved","Outbreak response",2025-03-11,542000,542000,534500,2025-03-23,60,"GHA",12
+2025,"Mozambique",202519,"Approved","Outbreak response",2025-04-11,2400000,2400000,2400000,2025-05-07,93,"MOZ",26
+2025,"South Sudan",202522,"Approved","Outbreak response",2025-05-16,961700,639700,278400,2025-05-27,146,"SSD",11
+2025,"Democratic Republic of Congo",202523,"Approved","Outbreak response",2025-05-16,3e+06,3e+06,2e+06,2025-05-27,28,"COD",11
+2025,"South Sudan",202524,"Approved","Outbreak response",2025-05-22,842800,842800,842900,2025-06-10,145,"SSD",19
+2025,"Angola",202525,"Approved","Outbreak response",2025-06-09,2e+06,2e+06,2e+06,2025-06-23,1,"AGO",14
+2025,"South Sudan",202527,"Approved","Outbreak response",2025-06-10,512900,409900,410000,2025-06-27,144,"SSD",17
+2025,"South Sudan",202529,"Approved","Outbreak response",2025-07-01,620000,620000,499800,2025-07-16,143,"SSD",15
+2025,"Nigeria",202532,"Approved","Outbreak response",2025-07-22,1200000,1200000,940400,2025-07-30,117,"NGA",8
+2025,"South Sudan",202533,"Approved","Outbreak response",2025-07-31,452000,452000,4e+05,2025-08-12,142,"SSD",12
+2025,"Democratic Republic of Congo",202534,"Approved","Outbreak response",2025-07-24,3700000,3700000,3700000,2025-08-08,27,"COD",15
+2025,"Côte d’Ivoire",202535,"Approved","Outbreak response",2025-07-30,76300,76300,76300,2025-08-12,75,"CIV",13
+2017,"Cameroon",NA,"Approved","Outbreak response",2017-03-02,278600,278600,278600,2017-05-01,23,"CMR",60
+2020,"Democratic Republic of Congo",NA,"Approved","Outbreak response",2021-08-12,NA,1300000,1300000,2021-08-30,34,"COD",18
+2020,"Democratic Republic of Congo",NA,"Approved","Outbreak response",2020-06-23,5500000,5500000,5400000,2020-11-28,35,"COD",158
+2018,"Democratic Republic of Congo",NA,"Approved","Outbreak response",2018-11-02,2500000,2500000,2400000,2018-11-14,38,"COD",12
+2014,"Democratic Republic of Congo",NA,"Pending","Outbreak response",NA,120000,NA,120000,2014-07-01,41,"COD",NA
+2014,"Guinea",NA,"Pending","Outbreak response",NA,284700,NA,284700,2014-07-01,66,"GIN",NA
+2017,"Malawi",NA,"Approved","Outbreak response",2020-01-15,0,676000,664400,2020-11-06,87,"MWI",296
+2017,"Malawi",NA,"Approved","Outbreak response",2017-04-07,3200000,3200000,3243800,2017-08-25,88,"MWI",140
+2016,"Malawi",NA,"Approved","Outbreak response",2016-10-19,180000,180000,180000,2016-10-25,91,"MWI",6
+2022,"Nigeria",NA,"Approved","Outbreak response",2022-02-14,1e+07,1e+07,1e+06,2022-06-03,119,"NGA",109
+2018,"Nigeria",NA,"Approved","Outbreak response",2018-10-22,5400000,5400000,5400000,2018-11-11,125,"NGA",20
+2018,"Somalia",NA,"Approved","Outbreak response",2018-10-12,1300000,1300000,1287800,2019-01-21,137,"SOM",101
+2017,"Somalia",NA,"Approved","Outbreak response",2017-12-15,386600,386600,386700,2018-01-08,140,"SOM",24
+2016,"Somalia",NA,"Approved","Outbreak response",2016-12-19,953200,953200,929600,2017-02-22,141,"SOM",65
+2019,"South Sudan",NA,"Approved","Outbreak response",2019-03-27,2900000,2900000,1957700,2019-10-31,159,"SSD",218
+2017,"South Sudan",NA,"Approved","Outbreak response",2017-07-12,2100000,2100000,2100000,2017-07-17,163,"SSD",5
+2014,"South Sudan",NA,"Pending","Outbreak response",NA,50000,NA,50000,2014-07-01,169,"SSD",NA
+2014,"South Sudan",NA,"Pending","Outbreak response",NA,64000,NA,64000,2014-07-01,170,"SSD",NA
+2019,"Tanzania",NA,"Approved","Outbreak response",2020-10-08,655800,655800,655800,2021-02-03,192,"TZA",118
+2018,"Uganda",NA,"Pending","Outbreak response",NA,NA,NA,2e+06,2020-09-07,196,"UGA",NA
+2018,"Uganda",NA,"Approved","Outbreak response",2018-03-07,3400000,3400000,2076100,2018-04-12,197,"UGA",36
+2020,"Zambia",NA,"Approved","Outbreak response",2020-06-22,NA,5800000,5800000,2020-10-01,205,"ZMB",101
+2017,"Zambia",NA,"Approved","Outbreak response",2017-12-15,0,667100,667100,2018-03-28,208,"ZMB",103
+2017,"Zambia",NA,"Approved","Outbreak response",2017-12-15,4099999,2100000,2100000,2018-01-06,209,"ZMB",22

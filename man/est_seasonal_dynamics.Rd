@@ -11,7 +11,8 @@ est_seasonal_dynamics(
   min_obs = 30,
   clustering_method,
   k,
-  exclude_iso_codes = NULL
+  exclude_iso_codes = NULL,
+  data_sources = c("WHO", "JHU", "SUPP")
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ est_seasonal_dynamics(
 \item{k}{Number of clusters for grouping countries by seasonality.}
 
 \item{exclude_iso_codes}{Optional character vector of ISO codes to exclude from clustering and neighbor matching.}
+
+\item{data_sources}{Character vector of data sources to include. Default is c('WHO', 'JHU', 'SUPP').}
 }
 \value{
 Saves daily fitted values and parameter estimates to CSV.
