@@ -8,47 +8,44 @@ calc_log_likelihood_negbin(
   observed,
   estimated,
   k = NULL,
+  k_min = 3,
   weights = NULL,
   verbose = TRUE
 )
 }
 \arguments{
-\item{observed}{Integer vector of observed non-negative counts.}
+\item{observed}{Integer vector of observed non-negative counts (e.g., cases, deaths).}
 
-\item{estimated}{Numeric vector of expected values (same length as \code{observed}).}
+\item{estimated}{Numeric vector of expected values from the model (same length as \code{observed}).}
 
-\item{k}{Optional numeric scalar size (dispersion) parameter. If \code{NULL}
-(default), it is estimated by a \emph{weighted} method of moments.
-When estimated, a lower bound \code{k_min} is applied.}
+\item{k}{Numeric scalar; dispersion parameter. If \code{NULL}, it is estimated via method of moments.}
 
-\item{weights}{Optional numeric vector of non-negative weights (default all 1s).}
+\item{k_min}{Numeric scalar; minimum dispersion floor applied when \code{k} is finite
+(either supplied or estimated). Default \code{3}. If \code{k = Inf} (Poisson limit),
+no flooring is applied.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints diagnostics. Default \code{TRUE}.}
+\item{weights}{Optional numeric vector of non-negative weights, same length as \code{observed}.
+Default is \code{NULL}, which sets all weights to 1.}
+
+\item{verbose}{Logical; if \code{TRUE}, prints diagnostics including the (floored) dispersion and total log-likelihood.}
 }
 \value{
-Scalar numeric log-likelihood (may be \code{-Inf} on hard violations).
+A scalar representing the total log-likelihood (numeric).
 }
 \description{
-Computes the total (weighted) log-likelihood for count data under the
-Negative Binomial (NB) model using a gamma-function formulation. If
-the weighted variance is \eqn{\le} the weighted mean, the function
-falls back to the Poisson limit (\eqn{k = \infty}). To prevent
-pathological ultra-heavy tails, a lower bound \code{k_min} is applied
-(configurable via \code{options(MOSAIC.negbin_k_min = 3)}).
+Computes the total log-likelihood for count data under the Negative Binomial
+distribution, using the gamma-function formulation. Each observation can be
+weighted.
 }
 \details{
-Weighted moments use \eqn{\mu = \sum w_i y_i / \sum w_i} and
-\eqn{\mathrm{Var}_w = \sum w_i (y_i - \mu)^2 / \sum w_i}. The implied NB size
-is \eqn{k = \mu^2 / (\mathrm{Var}_w - \mu)} when \eqn{\mathrm{Var}_w > \mu}.
-If \eqn{\mathrm{Var}_w \le \mu}, the Poisson limit is used.
-
-If any \code{estimated <= 0} where \code{observed > 0}, the function
-returns \code{-Inf} (hard penalty). Pairs where \code{observed = 0} and
-\code{estimated <= 0} are nudged to a tiny positive mean to avoid \code{log(0)}.
+If \code{k} is not supplied, it is estimated as \eqn{k = \bar x^2 / (s^2 - \bar x)} from
+\code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
+If \code{s^2 \le \bar x}, the function uses the Poisson limit (\code{k = Inf}).
 }
 \examples{
-set.seed(1)
-y <- rnbinom(52, size = 5, mu = 20)
-mu <- rep(20, 52)
-calc_log_likelihood_negbin(y, mu, verbose = FALSE)
+# Default k_min = 3
+calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5))
+# Provide k but allow flooring if too small
+calc_log_likelihood_negbin(c(0, 5, 9), c(3, 4, 5), k = 1.2)
+
 }

@@ -140,16 +140,6 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         cat("\n")
     }
 
-    # Helper function to sample from prior with fallback
-    sample_from_prior_safe <- function(prior_params, param_name, default_params) {
-        if (is.null(prior_params) || is.na(prior_params$shape1) || is.na(prior_params$shape2)) {
-            # Use default parameters
-            return(rbeta(1, default_params$shape1, default_params$shape2))
-        } else {
-            # Use estimated parameters
-            return(rbeta(1, prior_params$shape1, prior_params$shape2))
-        }
-    }
 
     # Helper function to fit Beta with variance inflation for S compartment
     fit_beta_with_variance_inflation_S <- function(samples, variance_inflation, label = "") {
@@ -233,11 +223,11 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         R_params <- priors$parameters_location$prop_R_initial$parameters$location[[loc]]
 
         # Check if we have any estimated compartments for this location
-        has_estimates <- (!is.null(V1_params) && !is.na(V1_params$shape1)) ||
-                        (!is.null(V2_params) && !is.na(V2_params$shape1)) ||
-                        (!is.null(E_params) && !is.na(E_params$shape1)) ||
-                        (!is.null(I_params) && !is.na(I_params$shape1)) ||
-                        (!is.null(R_params) && !is.na(R_params$shape1))
+        has_estimates <- (!is.null(V1_params) && !is.null(V1_params$shape1) && !is.na(V1_params$shape1)) ||
+                        (!is.null(V2_params) && !is.null(V2_params$shape1) && !is.na(V2_params$shape1)) ||
+                        (!is.null(E_params) && !is.null(E_params$shape1) && !is.na(E_params$shape1)) ||
+                        (!is.null(I_params) && !is.null(I_params$shape1) && !is.na(I_params$shape1)) ||
+                        (!is.null(R_params) && !is.null(R_params$shape1) && !is.na(R_params$shape1))
 
         if (!has_estimates) {
             # No estimates available - use independent S prior
@@ -258,17 +248,35 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
             next
         }
 
+        # Create proper prior structures (using estimates or defaults)
+        # Helper to build beta prior with fallback
+        build_prior <- function(params, default) {
+            if (!is.null(params) && !is.null(params$shape1) && !is.null(params$shape2) && 
+                !is.na(params$shape1) && !is.na(params$shape2)) {
+                list(distribution = "beta", parameters = list(shape1 = params$shape1, shape2 = params$shape2))
+            } else {
+                list(distribution = "beta", parameters = list(shape1 = default$shape1, shape2 = default$shape2))
+            }
+        }
+        
+        # Build priors once before the loop
+        V1_prior <- build_prior(V1_params, defaults$V1)
+        V2_prior <- build_prior(V2_params, defaults$V2)
+        E_prior <- build_prior(E_params, defaults$E)
+        I_prior <- build_prior(I_params, defaults$I)
+        R_prior <- build_prior(R_params, defaults$R)
+        
         # Monte Carlo sampling with constraint enforcement
         S_samples <- numeric(n_samples)
         constraint_violations <- 0
 
         for (j in 1:n_samples) {
-            # Sample from each compartment (using estimates or defaults)
-            V1_j <- sample_from_prior_safe(V1_params, "V1", defaults$V1)
-            V2_j <- sample_from_prior_safe(V2_params, "V2", defaults$V2)
-            E_j <- sample_from_prior_safe(E_params, "E", defaults$E)
-            I_j <- sample_from_prior_safe(I_params, "I", defaults$I)
-            R_j <- sample_from_prior_safe(R_params, "R", defaults$R)
+            # Sample from each compartment using unified sample_from_prior
+            V1_j <- sample_from_prior(n = 1, prior = V1_prior, verbose = FALSE)
+            V2_j <- sample_from_prior(n = 1, prior = V2_prior, verbose = FALSE)
+            E_j <- sample_from_prior(n = 1, prior = E_prior, verbose = FALSE)
+            I_j <- sample_from_prior(n = 1, prior = I_prior, verbose = FALSE)
+            R_j <- sample_from_prior(n = 1, prior = R_prior, verbose = FALSE)
 
             # Calculate sum of other compartments
             other_sum <- V1_j + V2_j + E_j + I_j + R_j

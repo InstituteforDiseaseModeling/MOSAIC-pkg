@@ -374,8 +374,8 @@ calc_log_likelihood_negbin <- function(observed,
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
-     # Cushion for zero/negative predictions
-     estimated[estimated <= 0] <- .Machine$double.eps
+     # Handle zero/negative predictions with proportional penalty (Option 3)
+     # Do NOT automatically adjust to eps - handle case-by-case in loop below
 
      # Handle empty after filtering
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
@@ -412,14 +412,32 @@ calc_log_likelihood_negbin <- function(observed,
           k <- k_min
      }
 
-     # Compute weighted log-likelihood
-     if (is.infinite(k)) {
-          # Poisson limit
-          ll_vec <- observed * log(estimated) - estimated - lgamma(observed + 1)
-     } else {
-          ll_vec <- lgamma(observed + k) - lgamma(k) - lgamma(observed + 1) +
-               k * log(k / (k + estimated)) +
-               observed * log(estimated / (k + estimated))
+     # Compute weighted log-likelihood with proportional penalty for zero predictions
+     ll_vec <- numeric(length(observed))
+     
+     for (i in seq_along(observed)) {
+          # Option 3: Proportional penalty for impossible predictions
+          if (estimated[i] <= 0 && observed[i] > 0) {
+               # Penalty scales with magnitude of failure
+               ll_vec[i] <- -observed[i] * log(1e6)  # -13.8 per observed unit
+               if (verbose && i == 1) {  # Report first occurrence
+                    message(sprintf("NegBin: Applying proportional penalty for zero prediction (obs=%d)", observed[i]))
+               }
+          } else if (estimated[i] <= 0 && observed[i] == 0) {
+               # Perfect match when both are zero
+               ll_vec[i] <- 0
+          } else {
+               # Normal NegBin calculation
+               est_safe <- max(estimated[i], .Machine$double.eps)
+               if (is.infinite(k)) {
+                    # Poisson limit
+                    ll_vec[i] <- observed[i] * log(est_safe) - est_safe - lgamma(observed[i] + 1)
+               } else {
+                    ll_vec[i] <- lgamma(observed[i] + k) - lgamma(k) - lgamma(observed[i] + 1) +
+                         k * log(k / (k + est_safe)) +
+                         observed[i] * log(est_safe / (k + est_safe))
+               }
+          }
      }
 
      ll <- sum(weights * ll_vec)
@@ -593,18 +611,8 @@ calc_log_likelihood_poisson <- function(observed,
      estimated <- estimated[idx]
      weights   <- weights[idx]
 
-     # No cushion for Poisson - zero predictions should be properly penalized
-     # If any estimated = 0 and corresponding observed > 0, return -Inf
-     if (any(estimated <= 0 & observed > 0)) {
-          if (verbose) {
-               n_bad <- sum(estimated <= 0 & observed > 0)
-               message(sprintf("Poisson: %d cases with zero predictions but positive observations - returning -Inf", n_bad))
-          }
-          return(-Inf)
-     }
-
-     # For cases where estimated = 0 and observed = 0, set estimated to small positive value
-     estimated[estimated <= 0] <- .Machine$double.eps
+     # Handle zero/negative predictions with proportional penalty (Option 3)
+     # Do NOT automatically return -Inf - handle case-by-case in loop below
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
@@ -656,7 +664,26 @@ calc_log_likelihood_poisson <- function(observed,
      }
 
 
-     ll_vec <- observed * log(estimated) - estimated - lgamma(observed + 1)
+     # Compute Poisson log-likelihood with proportional penalty for zero predictions
+     ll_vec <- numeric(length(observed))
+     
+     for (i in seq_along(observed)) {
+          # Option 3: Proportional penalty for impossible predictions
+          if (estimated[i] <= 0 && observed[i] > 0) {
+               # Penalty scales with magnitude of failure
+               ll_vec[i] <- -observed[i] * log(1e6)  # -13.8 per observed unit
+               if (verbose && i == 1) {  # Report first occurrence
+                    message(sprintf("Poisson: Applying proportional penalty for zero prediction (obs=%d)", observed[i]))
+               }
+          } else if (estimated[i] <= 0 && observed[i] == 0) {
+               # Perfect match when both are zero
+               ll_vec[i] <- 0
+          } else {
+               # Normal Poisson calculation
+               est_safe <- max(estimated[i], 1e-10)
+               ll_vec[i] <- dpois(observed[i], est_safe, log = TRUE)
+          }
+     }
      ll <- sum(weights * ll_vec)
 
      if (verbose) {

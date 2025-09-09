@@ -1,8 +1,8 @@
 #' Estimate Initial E and I Compartments from Surveillance Data
 #'
 #' This function estimates the initial number of individuals in the Exposed (E) and
-#' Infected (I) compartments at model start time using recent surveillance data.
-#' It uses a Monte Carlo approach to sample from prior distributions and quantify uncertainty.
+#' Infected (I) compartments at model start time using recent surveillance data
+#' through a Monte Carlo simulation approach.
 #'
 #' The method back-calculates true infections from reported cases using the surveillance
 #' cascade, accounts for reporting delays, and estimates E/I compartments based on
@@ -67,88 +67,16 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           warning("variance_inflation too low - should be > 1.1 for meaningful variance")
      }
 
-     # ---- Helper: sample from prior ----
-     sample_from_prior <- function(prior, param_name, verbose = FALSE) {
-          if (is.null(prior)) {
-               if (verbose) cat("  Prior for", param_name, "is NULL\n")
-               return(NA)
-          }
-          tryCatch({
-               if (prior$distribution == "beta") {
-                    rbeta(1, prior$parameters$shape1, prior$parameters$shape2)
-               } else if (prior$distribution == "gamma") {
-                    rgamma(1, shape = prior$parameters$shape, rate = prior$parameters$rate)
-               } else if (prior$distribution == "lognormal") {
-                    if (!is.null(prior$parameters$meanlog) && !is.null(prior$parameters$sdlog)) {
-                         rlnorm(1, prior$parameters$meanlog, prior$parameters$sdlog)
-                    } else if (!is.null(prior$parameters$mean) && !is.null(prior$parameters$sd)) {
-                         m <- prior$parameters$mean
-                         s <- prior$parameters$sd
-                         cv2 <- (s/m)^2
-                         sdlog <- sqrt(log(1 + cv2))
-                         meanlog <- log(m) - sdlog^2/2
-                         rlnorm(1, meanlog, sdlog)
-                    } else {
-                         stop("Lognormal prior missing required parameters")
-                    }
-               } else if (prior$distribution == "uniform") {
-                    runif(1, prior$parameters$min, prior$parameters$max)
-               } else if (prior$distribution == "normal") {
-                    rnorm(1, prior$parameters$mean, prior$parameters$sd)
-               } else {
-                    stop("Unknown distribution type: ", prior$distribution)
-               }
-          }, error = function(e) {
-               if (verbose) cat("  Error sampling", param_name, ":", e$message, "\n")
-               return(NA)
-          })
-     }
-
-     # ---- Helper: Simple Beta fitting from samples (proportions) ----
-     fit_beta_from_samples <- function(x, label = "") {
-          x <- x[!is.na(x) & x > 0 & x < 1]
-
-          if (length(x) < 2) {
-               if (verbose) cat("  Insufficient data for", label, "- using default\n")
-               return(list(shape1 = 1, shape2 = 999, method = "insufficient_data"))
-          }
-
-          if (var(x) == 0) {
-               mean_val <- mean(x)
-               precision <- 1000
-               return(list(
-                    shape1 = mean_val * precision,
-                    shape2 = (1 - mean_val) * precision,
-                    method = "constant_value"
-               ))
-          }
-
-          # Standard method of moments
-          mu <- mean(x)
-          v <- var(x)
-          precision <- (mu * (1 - mu) / v) - 1
-
-          if (precision <= 0) {
-               if (verbose) cat("  High variance for", label, "- using robust fallback\n")
-               precision <- 10  # Fallback precision
-          }
-
-          return(list(
-               shape1 = max(0.01, mu * precision),
-               shape2 = max(0.01, (1 - mu) * precision),
-               method = "method_of_moments"
-          ))
-     }
-
-
-
      # ---- Helper: consistent location prior or default ----
      # Uses consistent defaults across sequential/parallel branches.
      draw_loc_or_default <- function(priors, name, loc, default, verbose = FALSE) {
           loc_prior <- tryCatch(priors$parameters_location[[name]]$parameters$location[[loc]],
                                 error = function(e) NULL)
           if (!is.null(loc_prior)) {
-               return(sample_from_prior(loc_prior, paste0(name, "_", loc), verbose))
+               # With simplified sample_from_prior, just pass n and prior
+               result <- sample_from_prior(n = 1, prior = loc_prior, verbose = verbose)
+               if (is.na(result)) return(default)
+               return(result)
           }
           if (verbose) cat("  Using default for", name, "at", loc, "=", default, "\n")
           default
@@ -211,7 +139,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                t0 = t0,
                lookback_days = lookback_days,
                n_samples = n_samples,
-               method = "surveillance_backcalculation"
+               method = "monte_carlo_backcalculation"
           ),
           parameters_location = list(
                prop_E_initial = list(
@@ -238,18 +166,19 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 
      if (verbose) {
           cat("\n=== Estimating Initial E and I Compartments ===\n")
+          cat(sprintf("Method: Monte Carlo simulation\n"))
           cat(sprintf("Target date (t0): %s\n", t0))
           cat(sprintf("Lookback window: %s to %s (%d days)\n",
                       start_date, end_date, lookback_days))
-          cat(sprintf("Found surveillance data for %d/%d countries\n",
-                      length(countries_with_data), length(location_codes)))
           cat(sprintf("Number of Monte Carlo samples: %d\n", n_samples))
           cat(sprintf("CI bounds: variance_inflation=%.1f\n",
                       variance_inflation))
+          cat(sprintf("Found surveillance data for %d/%d countries\n",
+                      length(countries_with_data), length(location_codes)))
           cat("\n")
      }
 
-     # ---- Per-location processing ----
+     # ---- Monte Carlo method: Per-location processing ----
      for (loc in location_codes) {
           if (verbose) cat(sprintf("Processing %s... ", loc))
 
@@ -305,19 +234,22 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     if (verbose) cat(sprintf("  Using parallel processing with %d cores\n",
                                              parallel::detectCores()))
                     mc_function <- function(i) {
-                         sigma_i   <- sample_from_prior(priors$parameters_global$sigma,   "sigma")
-                         iota_i    <- sample_from_prior(priors$parameters_global$iota,    "iota")
-                         gamma_1_i <- sample_from_prior(priors$parameters_global$gamma_1, "gamma_1")
-                         gamma_2_i <- sample_from_prior(priors$parameters_global$gamma_2, "gamma_2")
+                         sigma_i   <- sample_from_prior(n = 1, prior = priors$parameters_global$sigma, verbose = FALSE)
+                         iota_i    <- sample_from_prior(n = 1, prior = priors$parameters_global$iota, verbose = FALSE)
+                         gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = FALSE)
+                         gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
 
                          #---------------------------------------------------------------------------------
                          # Temporary manual patch until observation process updated in LASER model
-                         rho_i <- runif(1, min = 0.05, max = 0.30)  # Reporting rate: 5-30%
-                         chi_i <- runif(1, min = 0.50, max = 0.75)  # Diagnostic accuracy: 50-75%
+                         # TODO: Create proper priors for these parameters when LASER model is updated
+                         rho_prior <- list(distribution = "uniform", parameters = list(min = 0.05, max = 0.30))
+                         chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
+                         tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
+                         
+                         rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)  # Reporting rate: 5-30%
+                         chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)  # Diagnostic accuracy: 50-75%
+                         tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)  # Reporting delay ~ mean 4, sd ≈ 2.8
                          #---------------------------------------------------------------------------------
-
-                         # Reporting delay ~ Gamma(2, 0.5) => mean 4, sd ≈ 2.8
-                         tau_r_i <- rgamma(1, shape = 2, rate = 0.5)
 
                          # Bounds & fallbacks
                          if (is.na(sigma_i)   || sigma_i <= 0 || sigma_i > 1) sigma_i   <- 0.35
@@ -359,15 +291,20 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                } else {
                     # -------- Sequential branch --------
                     for (i in 1:n_samples) {
-                         sigma_i   <- sample_from_prior(priors$parameters_global$sigma,   "sigma")
-                         iota_i    <- sample_from_prior(priors$parameters_global$iota,    "iota")
-                         gamma_1_i <- sample_from_prior(priors$parameters_global$gamma_1, "gamma_1")
-                         gamma_2_i <- sample_from_prior(priors$parameters_global$gamma_2, "gamma_2")
+                         sigma_i   <- sample_from_prior(n = 1, prior = priors$parameters_global$sigma, verbose = FALSE)
+                         iota_i    <- sample_from_prior(n = 1, prior = priors$parameters_global$iota, verbose = FALSE)
+                         gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = FALSE)
+                         gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
+                         
                          # Temporary manual patch until observation process updated in LASER model
-                         rho_i <- runif(1, min = 0.05, max = 0.30)  # Reporting rate: 5-30%
-                         chi_i <- runif(1, min = 0.50, max = 0.75)  # Diagnostic accuracy: 50-75%
-
-                         tau_r_i <- rgamma(1, shape = 2, rate = 0.5)
+                         # TODO: Create proper priors for these parameters when LASER model is updated
+                         rho_prior <- list(distribution = "uniform", parameters = list(min = 0.05, max = 0.30))
+                         chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
+                         tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
+                         
+                         rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)
+                         chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)
+                         tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)
 
                          if (is.na(sigma_i)   || sigma_i <= 0 || sigma_i > 1) sigma_i   <- 0.35
                          if (is.na(rho_i)     || rho_i <= 0   || rho_i > 1)   rho_i     <- 0.775
@@ -460,42 +397,81 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     I_beta <- list(shape1 = 0.5, shape2 = 9999.5, method = "fitting_failed")
                }
 
-               E_beta$metadata <- list(
-                    data_available = TRUE,
-                    total_cases = total_cases,
-                    mean_count = mean(E_samples),
-                    sd_count = sd(E_samples),
-                    n_samples = n_samples,
-                    message = sprintf("Processed with %d surveillance cases", total_cases)
+               # Format results with consistent structure
+               E_result <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = E_beta$shape1,
+                         shape2 = E_beta$shape2
+                    ),
+                    metadata = list(
+                         data_available = TRUE,
+                         total_cases = total_cases,
+                         mean_count = mean(E_samples),
+                         sd_count = sd(E_samples),
+                         n_samples = n_samples,
+                         method = E_beta$method,
+                         message = sprintf("Processed with %d surveillance cases", total_cases)
+                    )
                )
-               I_beta$metadata <- list(
-                    data_available = TRUE,
-                    total_cases = total_cases,
-                    mean_count = mean(I_samples),
-                    sd_count = sd(I_samples),
-                    n_samples = n_samples,
-                    message = sprintf("Processed with %d surveillance cases", total_cases)
+               
+               I_result <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = I_beta$shape1,
+                         shape2 = I_beta$shape2
+                    ),
+                    metadata = list(
+                         data_available = TRUE,
+                         total_cases = total_cases,
+                         mean_count = mean(I_samples),
+                         sd_count = sd(I_samples),
+                         n_samples = n_samples,
+                         method = I_beta$method,
+                         message = sprintf("Processed with %d surveillance cases", total_cases)
+                    )
                )
 
-               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_beta
-               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_beta
+               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_result
+               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_result
 
           }, error = function(e) {
                warning(sprintf("Error processing %s: %s", loc, e$message))
                if (verbose) cat(sprintf("error: %s\n", e$message))
-               E_error <- list(shape1 = 1, shape2 = 9999, method = "error_fallback")
-               E_error$metadata <- list(
-                    data_available = FALSE, total_cases = 0,
-                    mean_count = 0, sd_count = 0, n_samples = n_samples,
-                    message = sprintf("Error during processing: %s", e$message)
+               
+               E_error <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = 1,
+                         shape2 = 9999
+                    ),
+                    metadata = list(
+                         data_available = FALSE,
+                         total_cases = 0,
+                         mean_count = 0,
+                         sd_count = 0,
+                         n_samples = n_samples,
+                         method = "error_fallback",
+                         message = sprintf("Error during processing: %s", e$message)
+                    )
                )
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_error
 
-               I_error <- list(shape1 = 0.5, shape2 = 9999.5, method = "error_fallback")
-               I_error$metadata <- list(
-                    data_available = FALSE, total_cases = 0,
-                    mean_count = 0, sd_count = 0, n_samples = n_samples,
-                    message = sprintf("Error during processing: %s", e$message)
+               I_error <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = 0.5,
+                         shape2 = 9999.5
+                    ),
+                    metadata = list(
+                         data_available = FALSE,
+                         total_cases = 0,
+                         mean_count = 0,
+                         sd_count = 0,
+                         n_samples = n_samples,
+                         method = "error_fallback",
+                         message = sprintf("Error during processing: %s", e$message)
+                    )
                )
                results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_error
           })
@@ -505,7 +481,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      # Note: Beta fitting uses fit_beta_from_ci with custom CI bounds for wider exploration
 
      if (verbose) {
-          cat("\n=== Estimation Complete ===\n")
+          cat("\n=== Monte Carlo Estimation Complete ===\n")
           cat(sprintf("Successfully processed %d locations\n",
                       length(results$parameters_location$prop_E_initial$parameters$location)))
 
@@ -546,8 +522,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     I_mean_str <- "0"
                }
 
-               E_beta_str <- sprintf("(%.2f,%.2f)", E_result$shape1, E_result$shape2)
-               I_beta_str <- sprintf("(%.2f,%.2f)", I_result$shape1, I_result$shape2)
+               E_beta_str <- sprintf("(%.2f,%.2f)", E_result$parameters$shape1, E_result$parameters$shape2)
+               I_beta_str <- sprintf("(%.2f,%.2f)", I_result$parameters$shape1, I_result$parameters$shape2)
 
                cat(sprintf("%-4s %-20s %-15s %-20s %-20s %-15s %-20s\n",
                            loc, E_beta_str, E_mean_str, E_ci_str,

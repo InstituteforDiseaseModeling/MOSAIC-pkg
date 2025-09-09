@@ -110,7 +110,8 @@ get_location_config <- function(config = NULL, iso) {
           "tau_i", "theta_j",
           "beta_j0_hum", "beta_j0_env",
           "beta_j0_tot", "p_beta",  # Added: handle new transmission parameters
-          "a_1_j", "a_2_j", "b_1_j", "b_2_j"
+          "a_1_j", "a_2_j", "b_1_j", "b_2_j",
+          "mu_j", "mu_j_slope"  # Added: handle location-specific CFR parameters
      )
 
      for (l in location_params) {

@@ -22,28 +22,32 @@ names(N_j) <- tmp$j
 sel <- match(j, names(N_j))
 N_j <- as.integer(N_j[sel])
 
-# Get number of susceptible individuals in each location
-S_j <- N_j - as.integer(N_j * 0.5)
-
 # Get number of infected individuals in each location
-I_j <- N_j
-I_j[] <- 0
-I_j[1] <- 1
+# New default: 100 infected per location for better epidemic seeding
+I_j <- rep(100, length(N_j))
 I_j <- as.integer(I_j)
 
-R_j <- N_j - S_j - I_j
-
-E_j <- N_j
-E_j[] <- 0
+# Get number of exposed individuals in each location
+# Set to zero for simple method compatibility
+E_j <- rep(0, length(N_j))
 E_j <- as.integer(E_j)
 
-V1_j <- N_j
-V1_j[] <- 0
+# Get number of susceptible individuals in each location
+# Adjusted to account for 100 infected
+S_j <- N_j - as.integer(N_j * 0.5) - I_j
+S_j <- pmax(S_j, 1)  # Ensure at least 1 susceptible
+
+# Vaccination compartments - set to zero by default
+V1_j <- rep(0, length(N_j))
 V1_j <- as.integer(V1_j)
 
-V2_j <- N_j
-V2_j[] <- 0
+V2_j <- rep(0, length(N_j))
 V2_j <- as.integer(V2_j)
+
+# Calculate recovered to balance the equation
+# R = N - (S + E + I + V1 + V2)
+R_j <- N_j - S_j - E_j - I_j - V1_j - V2_j
+R_j <- pmax(R_j, 0)  # Ensure non-negative
 
 message("Get birth rate of each location (b_j)")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_b_birth_rate.csv'))
@@ -108,6 +112,17 @@ if (file.exists(cfr_file)) {
      mu_jt[,] <- 0.01
      warning("param_mu_disease_mortality.csv not found. Using default CFR of 0.01")
 }
+
+# Extract mu_j from mu_jt (location-specific baseline CFR)
+# Use the mean value across time for each location
+mu_j <- rowMeans(mu_jt, na.rm = TRUE)
+names(mu_j) <- j
+
+# Initialize mu_j_slope to 0 (no temporal trend by default)
+mu_j_slope <- rep(0, length(j))
+names(mu_j_slope) <- j
+
+message("Created mu_j and mu_j_slope parameters from mu_jt")
 
 #####
 # Vaccination rate needs work
@@ -296,6 +311,8 @@ default_args <- list(
      gamma_2 = 0.1,
      epsilon = 0.0003,
      mu_jt = mu_jt,
+     mu_j = mu_j,
+     mu_j_slope = mu_j_slope,
      rho = 0.52,
      sigma = 0.25,
      longitude         = longitude,

@@ -58,8 +58,8 @@ sample statistics)
 }
 \description{
 This function estimates the initial number of individuals in the Exposed (E) and
-Infected (I) compartments at model start time using recent surveillance data.
-It uses a Monte Carlo approach to sample from prior distributions and quantify uncertainty.
+Infected (I) compartments at model start time using recent surveillance data
+through a Monte Carlo simulation approach.
 }
 \details{
 The method back-calculates true infections from reported cases using the surveillance

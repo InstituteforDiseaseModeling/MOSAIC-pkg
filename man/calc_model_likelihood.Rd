@@ -2,7 +2,7 @@
 % Please edit documentation in R/calc_model_likelihood.R
 \name{calc_model_likelihood}
 \alias{calc_model_likelihood}
-\title{Compute the total model likelihood (Balanced design)}
+\title{Compute the total model likelihood (Simplified)}
 \usage{
 calc_model_likelihood(
   obs_cases,
@@ -13,42 +13,33 @@ calc_model_likelihood(
   weight_deaths = NULL,
   weights_location = NULL,
   weights_time = NULL,
+  nb_k_min = 3,
   zero_buffer = TRUE,
   verbose = FALSE,
-  add_max_terms = FALSE,
+  add_max_terms = TRUE,
   add_peak_timing = TRUE,
   add_peak_magnitude = TRUE,
   add_cumulative_total = TRUE,
-  add_growth_rate = FALSE,
-  add_duration = FALSE,
-  add_wis = FALSE,
+  add_wis = TRUE,
   weight_peak_timing = 0.5,
   weight_peak_magnitude = 0.5,
   weight_cumulative_total = 0.3,
-  weight_growth_rate = 0.2,
-  weight_duration = 0.2,
   weight_wis = 0.8,
   peak_method = c("smooth", "simple"),
   sigma_peak_time = 2,
   sigma_peak_log = 0.5,
-  growth_method = c("derivative", "threshold"),
-  growth_aggregation = c("mean", "median", "max"),
-  smooth_window = 7,
-  sigma_r = 0.2,
-  duration_method = c("epidemic_periods", "main_wave", "above_baseline"),
-  duration_aggregation = c("mean", "total", "max"),
-  sigma_duration_log = 0.3,
   wis_quantiles = c(0.0275, 0.25, 0.5, 0.75, 0.975),
   cumulative_timepoints = c(0.25, 0.5, 0.75, 1),
   enable_guardrails = TRUE,
   floor_likelihood = -999999999,
   guardrail_verbose = FALSE,
-  cumulative_over_ratio = 25,
-  cumulative_under_ratio = 0.04,
+  cumulative_over_ratio = 10,
+  cumulative_under_ratio = 0.1,
   min_cumulative_for_check = 100,
-  negative_correlation_threshold = -0.1,
-  max_cases_per_timestep = 1e+06,
-  max_deaths_per_timestep = 1e+05
+  negative_correlation_threshold = 0,
+  max_timestep_ratio = 100,
+  min_timestep_ratio = 0.01,
+  min_obs_for_ratio = 1
 )
 }
 \arguments{
@@ -65,6 +56,9 @@ Default 1.}
 
 \item{weights_time}{Optional length-\code{n_time_steps} non-negative weights.}
 
+\item{nb_k_min}{Numeric; minimum NB dispersion floor used for the core NB likelihood
+and WIS quantiles. Default \code{3}.}
+
 \item{zero_buffer}{Kept for backward compatibility (not used by the NB core).}
 
 \item{verbose}{Logical; if \code{TRUE}, prints component summaries per location.}
@@ -73,11 +67,11 @@ Default 1.}
 
 \item{add_peak_timing, add_peak_magnitude, add_cumulative_total}{Logical; default \code{TRUE}.}
 
-\item{add_growth_rate, add_duration, add_wis}{Logical; default \code{FALSE}.}
+\item{add_wis}{Logical; default \code{FALSE}.}
 
 \item{weight_peak_timing, weight_peak_magnitude, weight_cumulative_total}{Component weights. Defaults \code{0.5, 0.5, 0.3}.}
 
-\item{weight_growth_rate, weight_duration, weight_wis}{Component weights for optional terms.}
+\item{weight_wis}{Component weight for optional WIS term.}
 
 \item{peak_method}{\code{"smooth"} (3-pt moving average) or \code{"simple"}.}
 
@@ -85,27 +79,27 @@ Default 1.}
 
 \item{sigma_peak_log}{SD on log-scale for peak magnitude; default \code{0.5}.}
 
-\item{growth_method, growth_aggregation, smooth_window, sigma_r}{Controls if growth is used.}
-
-\item{duration_method, duration_aggregation, sigma_duration_log}{Controls if duration is used.}
-
 \item{wis_quantiles}{Quantiles for WIS if enabled.}
 
 \item{cumulative_timepoints}{Fractions for cumulative progression; default \code{c(0.25,0.5,0.75,1)}.}
 
 \item{enable_guardrails}{Logical; default \code{TRUE}.}
 
-\item{floor_likelihood}{Numeric; hard floor returned on violations. Default \code{-1e8}.}
+\item{floor_likelihood}{Numeric; hard floor returned on violations. Default \code{-999999999}.}
 
 \item{guardrail_verbose}{Logical; print guardrail reasons.}
 
-\item{cumulative_over_ratio, cumulative_under_ratio}{Cumulative ratio bounds (default \code{25}, \code{0.04}).}
+\item{cumulative_over_ratio, cumulative_under_ratio}{Cumulative ratio bounds (default \code{10}, \code{0.1}).}
 
 \item{min_cumulative_for_check}{Minimum observed total to apply ratio checks; default \code{100}.}
 
-\item{negative_correlation_threshold}{Correlation floor; default \code{-0.1}.}
+\item{negative_correlation_threshold}{Correlation floor; default \code{0} (requires positive correlation).}
 
-\item{max_cases_per_timestep, max_deaths_per_timestep}{Hard per‑timestep caps; defaults \code{1e6}, \code{1e5}.}
+\item{max_timestep_ratio}{Maximum ratio of estimated to observed per timestep (default \code{100}).}
+
+\item{min_timestep_ratio}{Minimum ratio of estimated to observed per timestep (default \code{0.01}).}
+
+\item{min_obs_for_ratio}{Minimum observed value to apply ratio checks (default \code{1}).}
 }
 \value{
 Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.
@@ -113,23 +107,17 @@ May be \code{NA_real_} if all locations contribute nothing.
 }
 \description{
 A simplified, robust wrapper for scoring model fits in MOSAIC.
-The core is a Negative Binomial (NB) time‑series log‑likelihood per
+The core is a Negative Binomial (NB) time-series log-likelihood per
 location and outcome (cases, deaths) with a weighted MoM dispersion
-estimate and a small \code{k_min} floor (see
-\code{\link{calc_log_likelihood_negbin}}).
+estimate and a small \code{k_min} floor.
 }
 \details{
-By default, three light "shape" terms are included with modest weights:
+By default, three "shape" terms are included with modest weights:
 (1) peak timing (Normal on peak index difference),
-(2) peak magnitude (log‑Normal on ratios), and
+(2) peak magnitude (log-Normal on ratios), and
 (3) cumulative progression (NB at a few cumulative fractions).
 
 Minimal inline guardrails floor the score on egregious fits (cumulative
-over/under prediction, per‑timestep caps, negative correlation, and
-zero‑prediction mismatches). Duration, growth, maxima, and WIS are kept
-but OFF by default to reduce complexity.
-}
-\examples{
-# Minimal example:
-# ll <- calc_model_likelihood(obs_cases, est_cases, obs_deaths, est_deaths)
+over/under prediction, per-timestep caps, and negative correlation).
+Optional max terms and WIS are kept but OFF by default.
 }

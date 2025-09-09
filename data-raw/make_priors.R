@@ -881,7 +881,7 @@ for (iso in j) {
 
 # prop_E_initial - Initial proportion exposed
 # Beta(0.01, 9999.99): mean = 0.0001% (1 per million)
-# Near-zero during inter-epidemic periods, short incubation keeps it small
+# Set to essentially zero for simple method compatibility
 priors_default$parameters_location$prop_E_initial <- list(
      parameter_name = "prop_E_initial",
      description = "Initial proportion in exposed (E) compartment",
@@ -892,12 +892,13 @@ priors_default$parameters_location$prop_E_initial <- list(
 )
 
 for (iso in j) {
-     priors_default$parameters_location$prop_E_initial$parameters$location[[iso]] <- list(shape1 = 0.01, shape2 = 9999.99)
+     priors_default$parameters_location$prop_E_initial$parameters$location[[iso]] <- list(shape1 = 0.01, shape2 = 99999.99)
 }
 
 # prop_I_initial - Initial proportion infected
-# Beta(0.01, 9999.99): mean = 0.0001% (1 per million)
-# Even during outbreaks rarely exceeds 0.05% of population
+# Default: mean of 100 infected individuals per location
+# Beta(1, b) where b chosen to give mean = 100/population
+# This provides better epidemic seeding than near-zero defaults
 priors_default$parameters_location$prop_I_initial <- list(
      parameter_name = "prop_I_initial",
      description = "Initial proportion in infected (I) compartment",
@@ -907,8 +908,65 @@ priors_default$parameters_location$prop_I_initial <- list(
      )
 )
 
-for (iso in j) {
-     priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(shape1 = 0.01, shape2 = 9999.99)
+# Load population data to calculate location-specific proportions
+pop_file <- file.path(PATHS$DATA_DEMOGRAPHICS, "UN_world_population_prospects_daily.csv")
+if (file.exists(pop_file)) {
+     population_data <- read.csv(pop_file, stringsAsFactors = FALSE)
+     population_data$date <- as.Date(population_data$date)
+
+     for (iso in j) {
+          # Get population at model start date
+          pop_loc <- population_data[population_data$iso_code == iso, ]
+          if (nrow(pop_loc) > 0) {
+               time_diffs <- abs(as.numeric(difftime(pop_loc$date, date_start, units = "days")))
+               closest_idx <- which.min(time_diffs)
+               population <- pop_loc$total_population[closest_idx]
+
+               if (!is.na(population) && population > 0) {
+                    # Calculate proportion for 100 infected
+                    target_infected <- 100
+                    mean_prop <- target_infected / population
+
+                    # Beta(1, b) where mean = 1/(1+b)
+                    # Solve for b: mean_prop = 1/(1+b) => b = (1/mean_prop) - 1
+                    shape2_val <- max(2, (1 / mean_prop) - 1)  # Ensure b >= 2 for stability
+
+                    priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
+                         shape1 = 1,
+                         shape2 = shape2_val,
+                         expected_count = target_infected,
+                         population_used = population
+                    )
+               } else {
+                    # Fallback if population invalid
+                    priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
+                         shape1 = 1,
+                         shape2 = 9999,
+                         expected_count = 100,
+                         population_used = 1000000  # Assume 1M default
+                    )
+               }
+          } else {
+               # Fallback if no population data
+               priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
+                    shape1 = 1,
+                    shape2 = 9999,
+                    expected_count = 100,
+                    population_used = 1000000  # Assume 1M default
+               )
+          }
+     }
+} else {
+     # Fallback if population file doesn't exist
+     warning("Population file not found. Using default I compartment priors.")
+     for (iso in j) {
+          priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
+               shape1 = 1,
+               shape2 = 9999,
+               expected_count = 100,
+               population_used = 1000000  # Assume 1M default
+          )
+     }
 }
 
 # prop_R_initial - Initial proportion recovered/immune
@@ -1003,7 +1061,7 @@ cat("  V1/V2 initial condition priors successfully added to priors_default\n\n")
 # for the Infection compartments (E and I)
 #--------------------------------------------------------------
 
-if (T) {
+if (F) {
 
      cat("Estimating initial E/I compartments from recent surveillance data...\n")
 
@@ -1093,7 +1151,7 @@ initial_conditions_R <- est_initial_R(
      n_samples = 100,         # Production-quality uncertainty quantification
      t0 = date_start,         # Use date_start from config_default
      disaggregate = TRUE,      # Use Fourier disaggregation for better accuracy
-     variance_inflation = 8,  # Higher inflation for wider uncertainty (old parameter)
+     variance_inflation = 2,  # Higher inflation for wider uncertainty (old parameter)
      verbose = TRUE,          # Verbose output for monitoring
      parallel = TRUE           # Enable parallel processing for faster computation
 )
@@ -1266,6 +1324,219 @@ if (n_updated_S > 0) {
           cat("\n")
      }
 }
+
+#--------------------------------------------------------------
+# Add mu_j priors from disease mortality data
+#--------------------------------------------------------------
+
+cat("Adding mu_j priors from disease mortality parameters...\n")
+
+mu_variance_inflation_percent <- 0.2
+
+# Load disease mortality parameter data
+mu_file <- file.path(PATHS$MODEL_INPUT, "param_mu_disease_mortality.csv")
+if (file.exists(mu_file)) {
+     mu_data <- read.csv(mu_file, stringsAsFactors = FALSE)
+
+     # Calculate location-specific priors from Beta parameters
+     # We'll use data from recent years (2020-2025) for more current estimates
+     recent_years <- 2021:2025
+     mu_recent <- mu_data[mu_data$t %in% recent_years, ]
+
+     # Initialize mu_j prior structure
+     priors_default$parameters_location$mu_j <- list(
+          parameter_name = "mu_j",
+          description = "Base disease mortality rate (case fatality ratio) per location",
+          distribution = "gamma",
+          parameters = list(
+               location = list()
+          )
+     )
+
+     n_mu_j_added <- 0
+
+     # Calculate statistics for each location
+     for (loc in j) {
+          loc_data <- mu_recent[mu_recent$j == loc, ]
+
+          if (nrow(loc_data) > 0) {
+               # Get mean values
+               mean_data <- loc_data[loc_data$parameter_name == "mean", ]
+
+               if (nrow(mean_data) > 0) {
+                    # Get Beta parameters for CI calculation
+                    shape1_data <- loc_data[loc_data$parameter_name == "shape1", ]
+                    shape2_data <- loc_data[loc_data$parameter_name == "shape2", ]
+
+                    # Calculate mean CFR across recent years
+                    mean_cfr <- mean(mean_data$parameter_value, na.rm = TRUE)
+
+                    # Calculate approximate CI from Beta parameters
+                    ci_lower_vals <- c()
+                    ci_upper_vals <- c()
+
+                    for (year in recent_years) {
+                         s1_row <- shape1_data[shape1_data$t == year, ]
+                         s2_row <- shape2_data[shape2_data$t == year, ]
+
+                         if (nrow(s1_row) > 0 && nrow(s2_row) > 0) {
+                              s1 <- s1_row$parameter_value[1]
+                              s2 <- s2_row$parameter_value[1]
+
+                              if (!is.na(s1) && !is.na(s2) && s1 > 0 && s2 > 0) {
+                                   ci_lower_vals <- c(ci_lower_vals, qbeta(0.025, s1, s2))
+                                   ci_upper_vals <- c(ci_upper_vals, qbeta(0.975, s1, s2))
+                              }
+                         }
+                    }
+
+                    # Use mean of CIs across years
+                    ci_lower <- mean(ci_lower_vals, na.rm = TRUE)
+                    ci_upper <- mean(ci_upper_vals, na.rm = TRUE)
+
+                    # Handle edge cases
+                    if (is.na(mean_cfr) || mean_cfr <= 0) {
+                         mean_cfr <- 0.02  # Default 2% CFR
+                         ci_lower <- 0.005
+                         ci_upper <- 0.08
+                    }
+
+                    # Ensure bounds are reasonable
+                    ci_lower <- max(ci_lower*(1-mu_variance_inflation_percent), 0.001)  # Minimum 0.1% CFR
+                    ci_upper <- min(ci_upper*(1+mu_variance_inflation_percent), 0.5)    # Maximum 50% CFR
+                    mean_cfr <- max(min(mean_cfr, 0.4), 0.002)  # Keep mean in reasonable range
+
+                    # Try to fit gamma distribution
+                    tryCatch({
+                         gamma_fit <- MOSAIC::fit_gamma_from_ci(
+                              mode_val = mean_cfr,
+                              ci_lower = ci_lower,
+                              ci_upper = ci_upper,
+                              method = "optimization",
+                              verbose = FALSE
+                         )
+
+                         priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
+                              shape = gamma_fit$shape,
+                              rate = gamma_fit$rate
+                         )
+
+                         n_mu_j_added <- n_mu_j_added + 1
+
+                    }, error = function(e) {
+                         # Fallback to simple moment matching
+                         var_cfr <- ((ci_upper - ci_lower) / 4)^2  # Approximate variance
+                         shape <- mean_cfr^2 / var_cfr
+                         rate <- mean_cfr / var_cfr
+
+                         # Ensure reasonable parameters
+                         shape <- max(shape, 1.5)
+                         rate <- max(rate, 10)
+
+                         priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
+                              shape = shape,
+                              rate = rate
+                         )
+
+                         n_mu_j_added <- n_mu_j_added + 1
+                    })
+               }
+          }
+
+          # Add default if location not found
+          if (is.null(priors_default$parameters_location$mu_j$parameters$location[[loc]])) {
+               # Default gamma parameters for ~2% CFR
+               priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
+                    shape = 2,
+                    rate = 100
+               )
+               n_mu_j_added <- n_mu_j_added + 1
+          }
+     }
+
+     cat(sprintf("  Added mu_j priors for %d locations\n", n_mu_j_added))
+
+     # Calculate summary statistics
+     all_shapes <- sapply(priors_default$parameters_location$mu_j$parameters$location, function(x) x$shape)
+     all_rates <- sapply(priors_default$parameters_location$mu_j$parameters$location, function(x) x$rate)
+     all_means <- all_shapes / all_rates
+
+     cat(sprintf("  Shape range: [%.2f, %.2f]\n", min(all_shapes), max(all_shapes)))
+     cat(sprintf("  Rate range: [%.2f, %.2f]\n", min(all_rates), max(all_rates)))
+     cat(sprintf("  Mean CFR range: [%.1f%%, %.1f%%]\n", min(all_means)*100, max(all_means)*100))
+     cat(sprintf("  Median CFR: %.2f%%\n", median(all_means)*100))
+
+} else {
+     warning("Disease mortality parameter file not found. Using default mu_j priors.")
+
+     # Add default gamma priors for all locations
+     priors_default$parameters_location$mu_j <- list(
+          parameter_name = "mu_j",
+          description = "Base disease mortality rate (case fatality ratio) per location",
+          distribution = "gamma",
+          parameters = list(
+               location = list()
+          )
+     )
+
+     for (loc in j) {
+          # Default gamma parameters for ~2% CFR
+          priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
+               shape = 2,
+               rate = 100
+          )
+     }
+}
+
+cat("  mu_j priors successfully added to priors_default\n\n")
+
+#-----------------------------------------
+# Ensure all location endpoints have distribution slot
+# This makes the prior structure consistent for simplified sample_from_prior()
+#-----------------------------------------
+
+cat("Ensuring consistent prior structure for all location endpoints...\n")
+
+# Process each location parameter
+for (param_name in names(priors_default$parameters_location)) {
+     param <- priors_default$parameters_location[[param_name]]
+
+     # Skip if no locations defined
+     if (is.null(param$parameters$location)) next
+
+     # Get the distribution type from parent level
+     dist_type <- param$distribution
+
+     if (is.null(dist_type)) {
+          warning(sprintf("No distribution type for parameter %s", param_name))
+          next
+     }
+
+     # Process each location
+     n_updated <- 0
+     for (loc in names(param$parameters$location)) {
+          loc_prior <- param$parameters$location[[loc]]
+
+          # Check if it already has distribution slot
+          if (!is.null(loc_prior$distribution)) {
+               # Already has distribution, skip
+               next
+          }
+
+          # Add distribution slot to location endpoint
+          priors_default$parameters_location[[param_name]]$parameters$location[[loc]] <- list(
+               distribution = dist_type,
+               parameters = loc_prior
+          )
+          n_updated <- n_updated + 1
+     }
+
+     if (n_updated > 0) {
+          cat(sprintf("  Updated %d locations for %s\n", n_updated, param_name))
+     }
+}
+
+cat("Prior structure consistency ensured.\n\n")
 
 #-----------------------------------------
 # Save to file and add to MOSAIC R package

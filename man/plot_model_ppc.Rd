@@ -2,85 +2,87 @@
 % Please edit documentation in R/plot_model_ppc.R
 \name{plot_model_ppc}
 \alias{plot_model_ppc}
-\title{Plot Best Model Replications}
+\title{Plot Posterior Predictive Check Results}
 \usage{
 plot_model_ppc(
   ppc_results,
-  output_dir,
+  output_dir = "ppc_plots",
   location_names = NULL,
-  location_codes = NULL,
   time_labels = NULL,
-  credible_intervals = c(0.5, 0.8, 0.95),
-  max_predictions = 20,
-  plot_width = 16,
-  plot_height = 14,
+  plot_types = c("timeseries", "diagnostics"),
+  credible_levels = c(0.5, 0.8, 0.95),
+  max_traces = 30,
+  save_plots = TRUE,
+  plot_format = c("pdf", "png", "both"),
+  width = 12,
+  height = 8,
   verbose = TRUE
 )
 }
 \arguments{
-\item{ppc_results}{List returned by \code{\link[=calc_model_ppc]{calc_model_ppc()}}. Must contain
-\code{observed}, \code{predictions}, \code{summary_stats}, and \code{best_model}.}
+\item{ppc_results}{Object of class "mosaic_ppc" from calc_model_ppc()}
 
-\item{output_dir}{Character string specifying directory where plots should be saved.
-Directory will be created if it doesn't exist.}
+\item{output_dir}{Character. Directory for saving plots. Created if doesn't exist.}
 
-\item{location_names}{Optional character vector of location names for labeling.
-If NULL, uses generic location indices.}
+\item{location_names}{Character vector. Names for locations (default: auto-generated)}
 
-\item{location_codes}{Optional character vector of location codes (e.g., "ETH")
-for file naming. If NULL, uses \code{location_names} or indices (sanitized).}
+\item{time_labels}{Character/Date vector. Labels for time axis (default: indices)}
 
-\item{time_labels}{Optional character/Date vector for time axis labels.
-If NULL, uses sequential time indices.}
+\item{plot_types}{Character vector. Types of plots to generate:
+"timeseries", "diagnostics", "density", "coverage" (default: c("timeseries", "diagnostics"))}
 
-\item{credible_intervals}{Numeric vector of credible interval levels to display
-(default c(0.5, 0.8, 0.95)). Values must be in (0,1).}
+\item{credible_levels}{Numeric vector. Credible interval levels (default: c(0.5, 0.8, 0.95))}
 
-\item{max_predictions}{Integer. Max number of individual replication traces
-to show in time series (default 20) to reduce clutter.}
+\item{max_traces}{Integer. Maximum individual traces to show (default: 30)}
 
-\item{plot_width}{Numeric. Width of saved plots in inches (default 16).}
+\item{save_plots}{Logical. Save plots to files (default: TRUE)}
 
-\item{plot_height}{Numeric. Height of saved plots in inches (default 14).}
+\item{plot_format}{Character. File format: "pdf", "png", "both" (default: "pdf")}
 
-\item{verbose}{Logical. Whether to print progress messages (default TRUE).}
+\item{width}{Numeric. Plot width in inches (default: 12)}
+
+\item{height}{Numeric. Plot height in inches (default: 8)}
+
+\item{verbose}{Logical. Print progress messages (default: TRUE)}
 }
 \value{
-Invisibly returns a list of ggplot objects for each location:
-\itemize{
-\item \code{[location]_timeseries}: Time series plots (cases and deaths)
-\item \code{[location]_diagnostics}: Diagnostic plots (distributions, scatter, Q-Q, residuals)
-}
+Invisibly returns a list of ggplot objects organized by location and type
 }
 \description{
-Creates diagnostic plots for best model replication results, comparing
-observed data with multiple replications of the \strong{single best-fitting model}
-to assess model adequacy and show stochastic variability.
+Creates diagnostic plots comparing observed data with posterior predictive
+samples from the best-fitting model. Generates time series plots with
+credible intervals and diagnostic plots for model assessment.
 }
 \details{
-\strong{Time series} show observed points, mean prediction, and layered credible-interval ribbons
-computed \strong{only from replications of the best model}. Individual replicate traces (up to
-\code{max_predictions}) visualize stochastic variability.
+Generates comprehensive visualization of posterior predictive checks:
 
-\strong{Diagnostics} compare empirical distributions and residual patterns for the best model.
+\strong{Time Series Plots}: Show observed data points, posterior mean, credible intervals,
+and sample trajectories from the predictive distribution.
+
+\strong{Diagnostic Plots}: Include density comparisons, Q-Q plots, residual analysis,
+and scatter plots of observed vs predicted.
+
+\strong{Coverage Plots}: Show empirical coverage of credible intervals across locations.
+
+\strong{Density Plots}: Compare distributions of observed and predicted values.
 }
 \examples{
 \dontrun{
-best_model_plots <- plot_model_ppc(
-  ppc_results = ppc_results,
-  output_dir = "best_model_validation",
-  location_names = c("Region A", "Region B"),
-  credible_intervals = c(0.5, 0.8, 0.95)
+# Generate PPC results
+ppc <- calc_model_ppc(results, schema, config_base = config, PATHS = paths)
+
+# Create all plots
+plots <- plot_model_ppc(
+  ppc_results = ppc,
+  output_dir = "ppc_plots",
+  plot_types = c("timeseries", "diagnostics")
 )
-print(best_model_plots$ETH_timeseries)
-print(best_model_plots$ETH_diagnostics)
+
+# Access specific plot
+print(plots$location_1$timeseries)
 }
 
 }
 \seealso{
-\code{\link[=calc_model_ppc]{calc_model_ppc()}}, \code{\link[=plot_model_fit]{plot_model_fit()}}
-
-Other model-validation: 
-\code{\link{calc_model_ppc}()}
+\code{\link[=calc_model_ppc]{calc_model_ppc()}}, \code{\link[=calc_ppc_diagnostics]{calc_ppc_diagnostics()}}
 }
-\concept{model-validation}

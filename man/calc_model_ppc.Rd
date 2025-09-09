@@ -2,107 +2,98 @@
 % Please edit documentation in R/calc_model_ppc.R
 \name{calc_model_ppc}
 \alias{calc_model_ppc}
-\title{Calculate Best Model Predictive Check Samples}
+\title{Calculate Posterior Predictive Checks for Best Model}
 \usage{
 calc_model_ppc(
   results,
-  col_ll,
-  col_params,
-  col_seed,
-  param_names = NULL,
-  posterior_weights = NULL,
-  n_posterior_samples = 100,
-  n_replications = 50,
+  schema = NULL,
+  n_replications = 100,
+  method = c("statistical", "simulation"),
   config_base,
-  priors_base,
   PATHS,
+  overdispersion = NULL,
   parallel = TRUE,
   n_cores = 4,
   verbose = TRUE
 )
 }
 \arguments{
-\item{results}{Data frame containing calibration results with parameter columns,
-likelihood values, and importance weights from posterior analysis.}
+\item{results}{Data frame or matrix containing calibration results with columns
+for likelihood and parameters}
 
-\item{col_ll}{Integer. Column index for log-likelihood values.}
+\item{schema}{Optional calibration_results_schema object from create_results_schema().
+If NULL, will attempt to detect structure from results.}
 
-\item{col_params}{Integer vector. Column indices for model parameters.}
+\item{n_replications}{Integer. Number of predictive samples to generate (default 100)}
 
-\item{col_seed}{Integer. Column index for random seeds (for reproducibility).}
+\item{method}{Character. Method for generating samples: "simulation" (re-run model)
+or "statistical" (resample from distributions)}
 
-\item{param_names}{Optional character vector of parameter names corresponding to col_params.
-If NULL, will use column names from results or generate generic names.}
+\item{config_base}{Base configuration list containing model settings and observed data}
 
-\item{posterior_weights}{Numeric vector of posterior importance weights.
-Currently unused but kept for backward compatibility.}
+\item{PATHS}{List of file paths from get_paths()}
 
-\item{n_posterior_samples}{Integer. DEPRECATED: Ignored (only the single best model is used).}
+\item{overdispersion}{Numeric. Overdispersion parameter for statistical resampling.
+If NULL, will estimate from residuals (default NULL)}
 
-\item{n_replications}{Integer. Number of replications of the best model
-to capture stochastic variability (default 50).}
+\item{parallel}{Logical. Use parallel processing for simulation method (default TRUE)}
 
-\item{config_base}{Base LASER configuration list (from get_location_config).}
+\item{n_cores}{Integer. Number of cores for parallel execution (default 4)}
 
-\item{priors_base}{Prior distributions list (from get_location_priors).}
-
-\item{PATHS}{List of file paths (from get_paths).}
-
-\item{parallel}{Logical. Whether to run simulations in parallel (default TRUE).}
-
-\item{n_cores}{Integer. Number of cores for parallel execution (default 4).}
-
-\item{verbose}{Logical. Whether to print progress messages (default TRUE).}
+\item{verbose}{Logical. Print progress messages (default TRUE)}
 }
 \value{
-A list containing:
+A list of class "mosaic_ppc" containing:
 \itemize{
-\item \code{observed}: List with \code{cases} and \code{deaths} matrices
-\item \code{predictions}: List of predicted \code{cases}/\code{deaths} for each replication
-\item \code{summary_stats}: Aggregated prediction statistics (mean, median, 2.5\\%/97.5\\% quantiles, sd)
-\item \code{best_model}: Information about the best model used (index, sim_id, seed, likelihood, parameters)
-\item \code{diagnostics}: Runtime and replication information
+\item \code{observed}: List with observed \code{cases} and \code{deaths} matrices
+\item \code{predicted}: Array of predictions \link{n_reps, n_locations, n_time} for cases and deaths
+\item \code{best_model}: Information about the best model (index, likelihood, parameters)
+\item \code{method}: Method used for generating samples
+\item \code{diagnostics}: Runtime and diagnostic information
 }
 }
 \description{
-Generates predictive samples by identifying the single best-fitting model
-(highest log-likelihood) and re-running it multiple times with different
-random seeds to capture stochastic variability. This enables model validation
-through comparison of observed data with predictions from the best model.
+Generates posterior predictive samples from the single best-fitting model
+(highest log-likelihood) to assess model adequacy. Supports both simulation-based
+(re-running model) and statistical resampling approaches.
 }
 \details{
-This function implements best model predictive checking:
-\enumerate{
-\item Identifies the single model with highest log-likelihood
-\item Re-runs that model multiple times with different random seeds
-\item Captures stochastic variability of the best-fitting model
-\item Returns structured results for visualization and diagnostic checking
-}
+This function implements posterior predictive checking for the single best model:
 
-The predictive distribution represents what the best model predicts
-we should observe, accounting for stochastic noise. Systematic discrepancies
-between observed and predicted data indicate model misspecification.
+\strong{Simulation Method}: Re-runs the best model multiple times with different random
+seeds to capture stochastic variability. More accurate but computationally intensive.
+
+\strong{Statistical Method}: Samples from negative binomial distributions centered on
+the best model's predictions. Much faster but requires appropriate overdispersion
+parameter.
+
+The function automatically identifies the best model based on maximum likelihood
+and generates replicate samples to assess model fit quality.
 }
 \examples{
 \dontrun{
-ppc_results <- calc_model_ppc(
+# Using schema (recommended)
+schema <- create_results_schema(config_base)
+ppc <- calc_model_ppc(
   results = calibration_results,
-  col_ll = which(names(calibration_results) == "likelihood"),
-  col_params = param_cols,
-  col_seed = which(names(calibration_results) == "seed"),
-  param_names = names(calibration_results)[param_cols],
-  n_replications = 50,
+  schema = schema,
+  n_replications = 100,
+  method = "statistical",
   config_base = config_base,
-  priors_base = priors_base,
+  PATHS = PATHS
+)
+
+# Without schema (auto-detect)
+ppc <- calc_model_ppc(
+  results = calibration_results,
+  n_replications = 50,
+  method = "simulation",
+  config_base = config_base,
   PATHS = PATHS
 )
 }
 
 }
 \seealso{
-\code{\link[=plot_model_ppc]{plot_model_ppc()}}, \code{\link[=calc_model_posterior_distributions]{calc_model_posterior_distributions()}}
-
-Other model-validation: 
-\code{\link{plot_model_ppc}()}
+\code{\link[=plot_model_ppc]{plot_model_ppc()}}, \code{\link[=calc_ppc_diagnostics]{calc_ppc_diagnostics()}}
 }
-\concept{model-validation}

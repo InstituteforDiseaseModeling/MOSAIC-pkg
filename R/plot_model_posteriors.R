@@ -203,7 +203,8 @@ plot_model_posteriors <- function(results,
     "beta_j0_tot", "p_beta",                        # Transmission rates (primary)
     "tau_i", "theta_j",                             # Mobility rate and WASH
     "a_1_j", "a_2_j", "b_1_j", "b_2_j",            # Seasonal parameters
-    "a1", "a2", "b1", "b2"                         # Alternative seasonal names
+    "a1", "a2", "b1", "b2",                        # Alternative seasonal names
+    "mu_j"                                          # Case fatality ratio
   )
   
   # Prepare data for plotting
@@ -281,6 +282,7 @@ plot_model_posteriors <- function(results,
       param_base = gsub("_[A-Z]{3}$", "", parameter),
       param_type = dplyr::case_when(
         parameter %in% exclude_cols ~ "Exclude",  # Explicitly exclude non-parameters first
+        param_base %in% exclude_cols ~ "Exclude",  # Also check base name without location suffix
         parameter %in% global_params ~ "Global",
         param_base %in% location_params_base ~ "Location-Specific",
         grepl("_[A-Z]{3}$", parameter) ~ "Location-Specific",
@@ -295,6 +297,7 @@ plot_model_posteriors <- function(results,
         grepl("^(decay_|vaccine)", parameter) ~ "6_Immunity & Vaccine",
         grepl("^(mobility_|tau_)", parameter) ~ "7_Mobility",
         grepl("^theta", parameter) ~ "8_WASH",
+        grepl("^mu_j", parameter) ~ "2_Epidemiological",  # CFR is epidemiological
         TRUE ~ "9_Other"
       )
     )
@@ -626,7 +629,24 @@ plot_model_posteriors <- function(results,
           
           # Combine transmission plots in 2x2 grid (matching priors layout)
           if (length(transmission_plots) > 0) {
-            transmission_combined <- cowplot::plot_grid(plotlist = transmission_plots, ncol = 2, nrow = 2)
+            # Order transmission parameters to match priors plot: tot, p_beta, hum, env
+            ordered_param_names <- c("beta_j0_tot", "p_beta", "beta_j0_hum", "beta_j0_env")
+            ordered_plots <- list()
+            
+            for (param_name in ordered_param_names) {
+              if (!is.null(transmission_plots[[param_name]])) {
+                ordered_plots[[param_name]] <- transmission_plots[[param_name]]
+              }
+            }
+            
+            # Add any remaining transmission parameters not in the standard order
+            for (param_name in names(transmission_plots)) {
+              if (!param_name %in% ordered_param_names) {
+                ordered_plots[[param_name]] <- transmission_plots[[param_name]]
+              }
+            }
+            
+            transmission_combined <- cowplot::plot_grid(plotlist = ordered_plots, ncol = 2, nrow = 2)
             transmission_heading <- cowplot::ggdraw() +
               cowplot::draw_label("Transmission Parameters", fontface = 'bold', size = 14, x = 0.5, y = 0.5)
             
@@ -652,6 +672,7 @@ plot_model_posteriors <- function(results,
               "a2" = "Seasonality: Cosine 2", 
               "b1" = "Seasonality: Sine 1",
               "b2" = "Seasonality: Sine 2",
+              "mu_j" = "Case Fatality Ratio (μ_j)",
               param_clean
             )
             
