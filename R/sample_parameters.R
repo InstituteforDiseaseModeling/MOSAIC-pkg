@@ -137,50 +137,13 @@ sample_parameters <- function(
   # Set seed for reproducibility
   set.seed(seed)
 
-  # Load PATHS if not provided
-  PATHS <- load_paths_safely(PATHS, verbose)
+  # Load required objects if not provided
+  PATHS <- load_object_safely("PATHS", PATHS, verbose)
+  priors <- load_object_safely("priors", priors, verbose, PATHS)
+  config <- load_object_safely("config", config, verbose)
 
-  # Load priors if not provided
-  priors <- load_priors_safely(priors, PATHS, verbose)
-
-  # Load config template if not provided
-  config <- load_config_safely(config, verbose)
-
-  # Create sampling flags list for cleaner internal handling
-  sampling_flags <- list(
-    # Global parameters
-    alpha_1 = sample_alpha_1,
-    alpha_2 = sample_alpha_2,
-    decay_days_long = sample_decay_days_long,
-    decay_days_short = sample_decay_days_short,
-    decay_shape_1 = sample_decay_shape_1,
-    decay_shape_2 = sample_decay_shape_2,
-    epsilon = sample_epsilon,
-    gamma_1 = sample_gamma_1,
-    gamma_2 = sample_gamma_2,
-    iota = sample_iota,
-    kappa = sample_kappa,
-    mobility_gamma = sample_mobility_gamma,
-    mobility_omega = sample_mobility_omega,
-    omega_1 = sample_omega_1,
-    omega_2 = sample_omega_2,
-    phi_1 = sample_phi_1,
-    phi_2 = sample_phi_2,
-    rho = sample_rho,
-    sigma = sample_sigma,
-    zeta_1 = sample_zeta_1,
-    zeta_2 = sample_zeta_2,
-    # Location parameters
-    beta_j0_tot = sample_beta_j0_tot,
-    p_beta = sample_p_beta,
-    tau_i = sample_tau_i,
-    theta_j = sample_theta_j,
-    a1 = sample_a1,
-    a2 = sample_a2,
-    b1 = sample_b1,
-    b2 = sample_b2,
-    mu_j = sample_mu_j
-  )
+  # Extract sampling flags from function arguments
+  sampling_flags <- extract_sampling_flags(environment())
 
   # Create a copy of config to modify
   config_sampled <- config
@@ -262,190 +225,130 @@ sample_parameters <- function(
   return(config_sampled)
 }
 
-#' Helper function to load PATHS safely
+#' Extract sampling flags from function environment
 #' @noRd
-load_paths_safely <- function(PATHS, verbose) {
-  if (is.null(PATHS)) {
-    if (verbose) cat("Getting PATHS using get_paths()...\n")
+extract_sampling_flags <- function(env) {
+  # Get all objects from the environment
+  all_vars <- ls(env)
+  
+  # Filter to only sample_* variables
+  sample_vars <- grep("^sample_", all_vars, value = TRUE)
+  
+  # Exclude sample_initial_conditions as it's handled separately
+  sample_vars <- setdiff(sample_vars, "sample_initial_conditions")
+  
+  # Create list with cleaned names
+  flags <- lapply(sample_vars, function(var) {
+    get(var, envir = env)
+  })
+  
+  # Clean names (remove "sample_" prefix)
+  names(flags) <- gsub("^sample_", "", sample_vars)
+  
+  return(flags)
+}
 
+#' Unified loader for required objects
+#' @noRd
+load_object_safely <- function(object_name, obj, verbose, PATHS = NULL) {
+  
+  if (!is.null(obj)) {
+    # Object provided, validate and return
+    if (object_name == "PATHS" && !is.list(obj)) {
+      stop("PATHS must be a list")
+    } else if (object_name == "priors") {
+      if (!is.list(obj)) stop("priors must be a list")
+      if (!all(c("parameters_global", "parameters_location") %in% names(obj))) {
+        stop("priors must contain 'parameters_global' and 'parameters_location' elements")
+      }
+    } else if (object_name == "config") {
+      if (!is.list(obj)) stop("config must be a list")
+      if (!"location_name" %in% names(obj)) {
+        stop("config must contain 'location_name' element")
+      }
+    }
+    return(obj)
+  }
+  
+  # Object not provided, need to load
+  if (object_name == "PATHS") {
+    if (verbose) cat("Getting PATHS using get_paths()...\n")
     tryCatch({
-      PATHS <- get_paths()
+      return(get_paths())
     }, error = function(e) {
       stop("Failed to get PATHS: ", e$message,
            "\nPlease provide PATHS explicitly or ensure set_root_directory() has been called.")
     })
-  }
-
-  if (!is.list(PATHS)) {
-    stop("PATHS must be a list")
-  }
-
-  return(PATHS)
-}
-
-#' Helper function to load priors safely
-#' @noRd
-load_priors_safely <- function(priors, PATHS, verbose) {
-  if (is.null(priors)) {
-    # Try to load from MOSAIC package data first
+    
+  } else if (object_name == "priors") {
+    # Try package data first
     if (requireNamespace("MOSAIC", quietly = TRUE) &&
         exists("priors_default", where = "package:MOSAIC")) {
       if (verbose) cat("Loading MOSAIC::priors_default from package data...\n")
-      priors <- MOSAIC::priors_default
-    } else {
-      # Fall back to loading from JSON file
-      priors_file <- file.path(
-        dirname(dirname(PATHS$MODEL_INPUT)),
-        "inst/extdata/priors.json"
-      )
-
-      if (!file.exists(priors_file)) {
-        # Try alternate location
-        priors_file <- "inst/extdata/priors.json"
-      }
-
-      if (!file.exists(priors_file)) {
-        stop("priors not found. Please either:\n",
-             "1. Rebuild the package after running make_priors.R to include priors data object, or\n",
-             "2. Ensure inst/extdata/priors.json exists, or\n",
-             "3. Provide priors explicitly as an argument")
-      }
-
-      if (verbose) cat("Loading priors from:", priors_file, "\n")
-      priors <- jsonlite::fromJSON(priors_file)
+      return(MOSAIC::priors_default)
     }
-  }
-
-  if (!is.list(priors)) {
-    stop("priors must be a list")
-  }
-
-  if (!all(c("parameters_global", "parameters_location") %in% names(priors))) {
-    stop("priors must contain 'parameters_global' and 'parameters_location' elements")
-  }
-
-  return(priors)
-}
-
-#' Helper function to load config safely
-#' @noRd
-load_config_safely <- function(config, verbose) {
-  if (is.null(config)) {
-    # Try to load from MOSAIC package data first
+    stop("priors not found. Please provide priors explicitly or ensure package data is available.")
+    
+  } else if (object_name == "config") {
+    # Try package data first
     if (requireNamespace("MOSAIC", quietly = TRUE) &&
         exists("config_default", where = "package:MOSAIC")) {
       if (verbose) cat("Loading MOSAIC::config_default from package data...\n")
-      config <- MOSAIC::config_default
-    } else {
-      # Fall back to loading from JSON file
-      config_file <- "inst/extdata/default_parameters.json"
-
-      if (!file.exists(config_file)) {
-        # Try alternate location (when running from within package)
-        config_file <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
-      }
-
-      if (!file.exists(config_file) || config_file == "") {
-        stop("config not found. Please either:\n",
-             "1. Ensure MOSAIC package is installed with config_default data object, or\n",
-             "2. Ensure inst/extdata/default_parameters.json exists, or\n",
-             "3. Provide config explicitly as an argument")
-      }
-
-      if (verbose) cat("Loading config from:", config_file, "\n")
-      config <- jsonlite::fromJSON(config_file)
+      return(MOSAIC::config_default)
     }
+    # Fall back to JSON
+    config_file <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
+    if (file.exists(config_file) && config_file != "") {
+      if (verbose) cat("Loading config from:", config_file, "\n")
+      return(jsonlite::fromJSON(config_file))
+    }
+    stop("config not found. Please provide config explicitly or ensure package data is available.")
   }
-
-  if (!is.list(config)) {
-    stop("config must be a list")
-  }
-
-  if (!"location_name" %in% names(config)) {
-    stop("config must contain 'location_name' element")
-  }
-
-  return(config)
+  
+  stop("Unknown object type: ", object_name)
 }
 
-# Removed sample_from_distribution and validate_sampled_value
-# Now using sample_from_prior from sample_from_prior.R for all distribution sampling
+# Removed old loading functions - now using unified load_object_safely()
 
 #' Format value for verbose output
 #' @noRd
-format_verbose_value <- function(value, max_length = 50) {
-  if (is.null(value)) {
-    return("NULL")
-  }
-
-  # For single values
+format_verbose_value <- function(value) {
+  if (is.null(value)) return("NULL")
   if (length(value) == 1) {
-    if (is.na(value)) {
-      return("NA")
-    } else if (is.numeric(value)) {
-      # Format based on magnitude
-      if (abs(value) >= 0.01 && abs(value) <= 10000) {
-        return(format(round(value, 4), scientific = FALSE))
-      } else {
-        return(format(value, scientific = TRUE, digits = 3))
-      }
-    } else {
-      return(as.character(value))
+    if (is.na(value)) return("NA")
+    if (!is.numeric(value)) return(as.character(value))
+    # Auto-format single numeric
+    if (abs(value) >= 0.01 && abs(value) <= 10000) {
+      return(format(round(value, 4), scientific = FALSE))
     }
+    return(format(value, scientific = TRUE, digits = 3))
   }
+  
+  # Vector formatting
+  n <- length(value)
+  if (n <= 4) {
+    formatted <- format_numeric_vector(value)
+    return(paste0("[", paste(formatted, collapse = ", "), "]"))
+  }
+  
+  # Show first 3 and last for long vectors
+  first <- format_numeric_vector(value[1:3])
+  last <- format_numeric_vector(value[n])
+  return(paste0("[", paste(first, collapse = ", "), 
+                ", ... (n=", n, "), ", last, "]"))
+}
 
-  # For vectors
-  if (length(value) <= 4) {
-    # Show all values if 4 or fewer
-    formatted <- sapply(value, function(v) {
-      if (is.numeric(v) && !is.na(v)) {
-        if (abs(v) >= 0.01 && abs(v) <= 10000) {
-          format(round(v, 4), scientific = FALSE)
-        } else {
-          format(v, scientific = TRUE, digits = 3)
-        }
-      } else if (is.na(v)) {
-        "NA"
-      } else {
-        as.character(v)
-      }
-    })
-    return(paste("[", paste(formatted, collapse = ", "), "]", sep = ""))
-  } else {
-    # Show first 3 and last value with ellipsis
-    first_three <- value[1:3]
-    last_one <- value[length(value)]
-
-    formatted_first <- sapply(first_three, function(v) {
-      if (is.numeric(v) && !is.na(v)) {
-        if (abs(v) >= 0.01 && abs(v) <= 10000) {
-          format(round(v, 4), scientific = FALSE)
-        } else {
-          format(v, scientific = TRUE, digits = 3)
-        }
-      } else if (is.na(v)) {
-        "NA"
-      } else {
-        as.character(v)
-      }
-    })
-
-    formatted_last <- if (is.numeric(last_one) && !is.na(last_one)) {
-      if (abs(last_one) >= 0.01 && abs(last_one) <= 10000) {
-        format(round(last_one, 4), scientific = FALSE)
-      } else {
-        format(last_one, scientific = TRUE, digits = 3)
-      }
-    } else if (is.na(last_one)) {
-      "NA"
-    } else {
-      as.character(last_one)
+#' Helper to format numeric vectors consistently
+#' @noRd
+format_numeric_vector <- function(vals) {
+  sapply(vals, function(v) {
+    if (is.na(v)) return("NA")
+    if (!is.numeric(v)) return(as.character(v))
+    if (abs(v) >= 0.01 && abs(v) <= 10000) {
+      return(format(round(v, 4), scientific = FALSE))
     }
-
-    return(paste("[", paste(formatted_first, collapse = ", "),
-                 ", ... (n=", length(value), "), ",
-                 formatted_last, "]", sep = ""))
-  }
+    format(v, scientific = TRUE, digits = 3)
+  })
 }
 
 #' Sample global parameters implementation
@@ -637,9 +540,20 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 #' @noRd
 sample_initial_conditions_impl <- function(config_sampled, location_params,
                                           locations, verbose) {
-
   if (verbose) cat("\nProcessing initial conditions...\n")
+  
+  # Sample proportions for each compartment
+  sampled_props <- sample_ic_proportions(location_params, locations, verbose)
+  
+  # Normalize and convert to counts
+  config_sampled <- props_to_counts(config_sampled, sampled_props, locations, verbose)
+  
+  return(config_sampled)
+}
 
+#' Sample initial condition proportions
+#' @noRd
+sample_ic_proportions <- function(location_params, locations, verbose) {
   n_locations <- length(locations)
 
   # Define IC compartments - NOTE: S is calculated as residual, not sampled
@@ -936,93 +850,119 @@ sample_initial_conditions_impl <- function(config_sampled, location_params,
 #'
 #' @export
 validate_sampled_config <- function(config_sampled, verbose = TRUE) {
-
+  
+  # Define validation schema
+  schema <- list(
+    global = list(
+      params = c("phi_1", "phi_2", "omega_1", "omega_2", "iota",
+                "gamma_1", "gamma_2", "epsilon", "rho", "sigma",
+                "mobility_omega", "mobility_gamma", "zeta_1", "zeta_2",
+                "kappa", "alpha_1", "alpha_2", "decay_days_long", 
+                "decay_days_short", "decay_shape_1", "decay_shape_2"),
+      type = "scalar"
+    ),
+    location = list(
+      params = c("beta_j0_env", "beta_j0_hum", "tau_i", "theta_j",
+                "a_1_j", "a_2_j", "b_1_j", "b_2_j"),
+      type = "vector"
+    ),
+    bounds = list(
+      beta_j0_tot = c(0, Inf, FALSE),  # min, max, inclusive_min
+      p_beta = c(0, 1, TRUE),
+      beta_j0_hum = c(0, Inf, FALSE),
+      beta_j0_env = c(0, Inf, FALSE)
+    )
+  )
+  
   valid <- TRUE
-
-  # Check global parameters
-  required_global <- c(
-    "phi_1", "phi_2", "omega_1", "omega_2", "iota",
-    "gamma_1", "gamma_2", "epsilon", "rho", "sigma",
-    "mobility_omega", "mobility_gamma", "zeta_1", "zeta_2",
-    "kappa", "alpha_1", "alpha_2",
-    "decay_days_long", "decay_days_short",
-    "decay_shape_1", "decay_shape_2"
-  )
-
-  for (param in required_global) {
-    if (!(param %in% names(config_sampled))) {
-      if (verbose) cat("  ⚠ Missing global parameter:", param, "\n")
-      valid <- FALSE
-    } else if (is.na(config_sampled[[param]]) ||
-               is.null(config_sampled[[param]]) ||
-               is.infinite(config_sampled[[param]])) {
-      if (verbose) cat("  ⚠ Invalid value for global parameter:", param,
-                      "=", config_sampled[[param]], "\n")
-      valid <- FALSE
-    }
-  }
-
-  # Check location-specific parameters
   n_locations <- length(config_sampled$location_name)
-
-  required_location <- c(
-    "beta_j0_env", "beta_j0_hum", "tau_i", "theta_j",
-    "a_1_j", "a_2_j", "b_1_j", "b_2_j"
-  )
-
-  for (param in required_location) {
-    if (!(param %in% names(config_sampled))) {
-      if (verbose) cat("  ⚠ Missing location parameter:", param, "\n")
-      valid <- FALSE
-    } else if (length(config_sampled[[param]]) != n_locations) {
-      if (verbose) cat("  ⚠ Wrong length for location parameter:", param,
-                      "(expected", n_locations, "got",
-                      length(config_sampled[[param]]), ")\n")
-      valid <- FALSE
-    } else if (any(is.na(config_sampled[[param]]) |
-                   is.infinite(config_sampled[[param]]))) {
-      if (verbose) cat("  ⚠ Invalid values in location parameter:", param, "\n")
+  
+  # Validate using schema
+  for (param in schema$global$params) {
+    issue <- validate_parameter(config_sampled, param, "scalar", n_locations)
+    if (!is.null(issue)) {
+      if (verbose) cat("  ⚠", issue, "\n")
       valid <- FALSE
     }
   }
-
-  # Validate new transmission parameters if present
-  if ("beta_j0_tot" %in% names(config_sampled)) {
-    if (any(config_sampled$beta_j0_tot <= 0, na.rm = TRUE)) {
-      if (verbose) cat("  ⚠ beta_j0_tot contains non-positive values\n")
+  
+  for (param in schema$location$params) {
+    issue <- validate_parameter(config_sampled, param, "vector", n_locations)
+    if (!is.null(issue)) {
+      if (verbose) cat("  ⚠", issue, "\n")
       valid <- FALSE
     }
   }
-
-  if ("p_beta" %in% names(config_sampled)) {
-    if (any(config_sampled$p_beta < 0 | config_sampled$p_beta > 1, na.rm = TRUE)) {
-      if (verbose) cat("  ⚠ p_beta contains values outside [0,1]\n")
-      valid <- FALSE
+  
+  # Check bounds for special parameters
+  for (param in names(schema$bounds)) {
+    if (param %in% names(config_sampled)) {
+      bounds <- schema$bounds[[param]]
+      vals <- config_sampled[[param]]
+      if (bounds[3]) {  # inclusive min
+        if (any(vals < bounds[1] | vals > bounds[2], na.rm = TRUE)) {
+          if (verbose) cat("  ⚠", param, "contains values outside [", 
+                          bounds[1], ",", bounds[2], "]\n")
+          valid <- FALSE
+        }
+      } else {  # exclusive min
+        if (any(vals <= bounds[1] | vals > bounds[2], na.rm = TRUE)) {
+          if (verbose) cat("  ⚠", param, "contains non-positive values\n")
+          valid <- FALSE
+        }
+      }
     }
   }
-
-  # Validate derived beta values
-  if ("beta_j0_hum" %in% names(config_sampled)) {
-    if (any(config_sampled$beta_j0_hum <= 0, na.rm = TRUE)) {
-      if (verbose) cat("  ⚠ Derived beta_j0_hum contains non-positive values\n")
-      valid <- FALSE
-    }
+  
+  if (verbose) {
+    cat(ifelse(valid, "  ✓ Config validation passed!\n", 
+               "  ✗ Config validation failed - see warnings above\n"))
   }
-
-  if ("beta_j0_env" %in% names(config_sampled)) {
-    if (any(config_sampled$beta_j0_env <= 0, na.rm = TRUE)) {
-      if (verbose) cat("  ⚠ Derived beta_j0_env contains non-positive values\n")
-      valid <- FALSE
-    }
-  }
-
-  if (valid && verbose) {
-    cat("  ✓ Config validation passed!\n")
-  } else if (!valid && verbose) {
-    cat("  ✗ Config validation failed - see warnings above\n")
-  }
-
+  
   return(valid)
+}
+
+#' Helper to validate a single parameter
+#' @noRd
+validate_parameter <- function(config, param, type, n_locations) {
+  if (!(param %in% names(config))) {
+    return(paste("Missing", ifelse(type == "scalar", "global", "location"), 
+                 "parameter:", param))
+  }
+  
+  val <- config[[param]]
+  
+  if (type == "scalar") {
+    if (is.na(val) || is.null(val) || is.infinite(val)) {
+      return(paste("Invalid value for", param, "=", val))
+    }
+  } else {  # vector
+    if (length(val) != n_locations) {
+      return(paste("Wrong length for", param, 
+                  "(expected", n_locations, "got", length(val), ")"))
+    }
+    if (any(is.na(val) | is.infinite(val))) {
+      return(paste("Invalid values in", param))
+    }
+  }
+  
+  return(NULL)  # No issues
+}
+
+#' Get all sampling parameters with defaults
+#' @noRd
+get_all_sampling_params <- function() {
+  # Extract from function formals
+  formals_list <- formals(sample_parameters)
+  
+  # Filter to only sample_* parameters
+  sample_params <- names(formals_list)[grep("^sample_", names(formals_list))]
+  
+  # Create list with all TRUE values
+  params <- as.list(rep(TRUE, length(sample_params)))
+  names(params) <- sample_params
+  
+  return(params)
 }
 
 #' Create Sampling Arguments for Common Patterns
@@ -1071,43 +1011,8 @@ create_sampling_args <- function(pattern = "all",
     stop("seed must be provided and numeric")
   }
 
-  # Define all parameters with default values
-  all_params <- list(
-    # Global parameters
-    sample_alpha_1 = TRUE,
-    sample_alpha_2 = TRUE,
-    sample_decay_days_long = TRUE,
-    sample_decay_days_short = TRUE,
-    sample_decay_shape_1 = TRUE,
-    sample_decay_shape_2 = TRUE,
-    sample_epsilon = TRUE,
-    sample_gamma_1 = TRUE,
-    sample_gamma_2 = TRUE,
-    sample_iota = TRUE,
-    sample_kappa = TRUE,
-    sample_mobility_gamma = TRUE,
-    sample_mobility_omega = TRUE,
-    sample_omega_1 = TRUE,
-    sample_omega_2 = TRUE,
-    sample_phi_1 = TRUE,
-    sample_phi_2 = TRUE,
-    sample_rho = TRUE,
-    sample_sigma = TRUE,
-    sample_zeta_1 = TRUE,
-    sample_zeta_2 = TRUE,
-    # Location parameters
-    sample_beta_j0_tot = TRUE,
-    sample_p_beta = TRUE,
-    sample_tau_i = TRUE,
-    sample_theta_j = TRUE,
-    sample_a1 = TRUE,
-    sample_a2 = TRUE,
-    sample_b1 = TRUE,
-    sample_b2 = TRUE,
-    sample_mu_j = TRUE,
-    # Initial conditions
-    sample_initial_conditions = TRUE
-  )
+  # Get all sampling parameters using function formals
+  all_params <- get_all_sampling_params()
 
   # Apply pattern
   if (pattern == "all") {
