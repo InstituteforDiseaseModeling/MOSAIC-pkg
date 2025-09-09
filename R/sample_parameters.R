@@ -138,9 +138,20 @@ sample_parameters <- function(
   set.seed(seed)
 
   # Load required objects if not provided
-  PATHS <- load_object_safely("PATHS", PATHS, verbose)
-  priors <- load_object_safely("priors", priors, verbose, PATHS)
-  config <- load_object_safely("config", config, verbose)
+  if (is.null(PATHS)) {
+    if (verbose) cat("Getting PATHS using get_paths()...\n")
+    PATHS <- get_paths()
+  }
+  
+  if (is.null(priors)) {
+    if (verbose) cat("Loading MOSAIC::priors_default from package data...\n")
+    priors <- MOSAIC::priors_default
+  }
+  
+  if (is.null(config)) {
+    if (verbose) cat("Loading MOSAIC::config_default from package data...\n")
+    config <- MOSAIC::config_default
+  }
 
   # Extract sampling flags from function arguments
   sampling_flags <- extract_sampling_flags(environment())
@@ -248,67 +259,7 @@ extract_sampling_flags <- function(env) {
   return(flags)
 }
 
-#' Unified loader for required objects
-#' @noRd
-load_object_safely <- function(object_name, obj, verbose, PATHS = NULL) {
-  
-  if (!is.null(obj)) {
-    # Object provided, validate and return
-    if (object_name == "PATHS" && !is.list(obj)) {
-      stop("PATHS must be a list")
-    } else if (object_name == "priors") {
-      if (!is.list(obj)) stop("priors must be a list")
-      if (!all(c("parameters_global", "parameters_location") %in% names(obj))) {
-        stop("priors must contain 'parameters_global' and 'parameters_location' elements")
-      }
-    } else if (object_name == "config") {
-      if (!is.list(obj)) stop("config must be a list")
-      if (!"location_name" %in% names(obj)) {
-        stop("config must contain 'location_name' element")
-      }
-    }
-    return(obj)
-  }
-  
-  # Object not provided, need to load
-  if (object_name == "PATHS") {
-    if (verbose) cat("Getting PATHS using get_paths()...\n")
-    tryCatch({
-      return(get_paths())
-    }, error = function(e) {
-      stop("Failed to get PATHS: ", e$message,
-           "\nPlease provide PATHS explicitly or ensure set_root_directory() has been called.")
-    })
-    
-  } else if (object_name == "priors") {
-    # Try package data first
-    if (requireNamespace("MOSAIC", quietly = TRUE) &&
-        exists("priors_default", where = "package:MOSAIC")) {
-      if (verbose) cat("Loading MOSAIC::priors_default from package data...\n")
-      return(MOSAIC::priors_default)
-    }
-    stop("priors not found. Please provide priors explicitly or ensure package data is available.")
-    
-  } else if (object_name == "config") {
-    # Try package data first
-    if (requireNamespace("MOSAIC", quietly = TRUE) &&
-        exists("config_default", where = "package:MOSAIC")) {
-      if (verbose) cat("Loading MOSAIC::config_default from package data...\n")
-      return(MOSAIC::config_default)
-    }
-    # Fall back to JSON
-    config_file <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
-    if (file.exists(config_file) && config_file != "") {
-      if (verbose) cat("Loading config from:", config_file, "\n")
-      return(jsonlite::fromJSON(config_file))
-    }
-    stop("config not found. Please provide config explicitly or ensure package data is available.")
-  }
-  
-  stop("Unknown object type: ", object_name)
-}
-
-# Removed old loading functions - now using unified load_object_safely()
+# Removed unnecessary loading functions - objects are loaded directly in main function
 
 #' Format value for verbose output
 #' @noRd
