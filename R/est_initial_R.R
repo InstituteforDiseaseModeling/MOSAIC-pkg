@@ -75,60 +75,6 @@ est_initial_R <- function(
      # Initialize results storage
      results_list <- list()
 
-     # Helper function to sample from prior distributions
-     sample_from_prior <- function(prior, param_name = "unknown") {
-          if (is.null(prior)) {
-               if (verbose) cat("  Warning: Prior is NULL for", param_name, "\n")
-               return(NA)
-          }
-
-          if (is.na(prior$distribution)) {
-               if (verbose) cat("  Warning: Distribution is NA for", param_name, "\n")
-               return(NA)
-          }
-
-          tryCatch({
-               if (prior$distribution == "beta") {
-                    rbeta(1, prior$parameters$shape1, prior$parameters$shape2)
-               } else if (prior$distribution == "gamma") {
-                    rgamma(1, prior$parameters$shape, prior$parameters$rate)
-               } else if (prior$distribution == "lognormal") {
-                    # Check which parameterization is used
-                    if (!is.null(prior$parameters$meanlog) && !is.null(prior$parameters$sdlog)) {
-                         # Standard lognormal parameterization
-                         rlnorm(1, prior$parameters$meanlog, prior$parameters$sdlog)
-                    } else if (!is.null(prior$parameters$mean) && !is.null(prior$parameters$sd)) {
-                         # Convert mean/sd to meanlog/sdlog for lognormal
-                         # For a lognormal, if X ~ LogNormal(μ, σ²), then:
-                         # E[X] = exp(μ + σ²/2) and Var[X] = (exp(σ²) - 1) * exp(2μ + σ²)
-                         # We need to solve for μ and σ given mean and sd
-                         m <- prior$parameters$mean
-                         s <- prior$parameters$sd
-                         # Using method of moments
-                         cv2 <- (s/m)^2  # squared coefficient of variation
-                         sdlog <- sqrt(log(1 + cv2))
-                         meanlog <- log(m) - sdlog^2/2
-                         rlnorm(1, meanlog, sdlog)
-                    } else {
-                         stop("Lognormal prior missing required parameters (meanlog/sdlog or mean/sd)")
-                    }
-               } else if (prior$distribution == "uniform") {
-                    runif(1, prior$parameters$min, prior$parameters$max)
-               } else if (prior$distribution == "normal") {
-                    rnorm(1, prior$parameters$mean, prior$parameters$sd)
-               } else {
-                    stop("Unknown distribution type: ", prior$distribution)
-               }
-          }, error = function(e) {
-               if (verbose) {
-                    cat("  Error sampling", param_name, ":", e$message, "\n")
-                    cat("    Distribution:", prior$distribution, "\n")
-                    cat("    Parameters:", paste(names(prior$parameters), "=", unlist(prior$parameters), collapse=", "), "\n")
-               }
-               return(NA)
-          })
-     }
-
      # Get location codes from config
      location_codes <- config$location_name
      if (is.null(location_codes)) {
@@ -240,21 +186,21 @@ est_initial_R <- function(
           # Monte Carlo loop with full uncertainty propagation
           for (i in 1:n_samples) {
                # Sample epidemiological parameters
-               epsilon_i <- sample_from_prior(priors$parameters_global$epsilon, "epsilon")
-               sigma_i <- sample_from_prior(priors$parameters_global$sigma, "sigma")
-               iota_i <- sample_from_prior(priors$parameters_global$iota, "iota")
-               gamma_1_i <- sample_from_prior(priors$parameters_global$gamma_1, "gamma_1")
-               gamma_2_i <- sample_from_prior(priors$parameters_global$gamma_2, "gamma_2")
+               epsilon_i <- sample_from_prior(n = 1, prior = priors$parameters_global$epsilon, verbose = verbose)
+               sigma_i <- sample_from_prior(n = 1, prior = priors$parameters_global$sigma, verbose = verbose)
+               iota_i <- sample_from_prior(n = 1, prior = priors$parameters_global$iota, verbose = verbose)
+               gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = verbose)
+               gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = verbose)
 
                # Sample location-specific surveillance parameters
                if (!is.null(priors$parameters_location$rho$parameters$location[[loc]])) {
-                    rho_i <- sample_from_prior(priors$parameters_location$rho$parameters$location[[loc]], paste0("rho_", loc))
+                    rho_i <- sample_from_prior(n = 1, prior = priors$parameters_location$rho$parameters$location[[loc]], verbose = verbose)
                } else {
                     rho_i <- 0.1  # Default reporting rate
                }
 
                if (!is.null(priors$parameters_location$chi$parameters$location[[loc]])) {
-                    chi_i <- sample_from_prior(priors$parameters_location$chi$parameters$location[[loc]], paste0("chi_", loc))
+                    chi_i <- sample_from_prior(n = 1, prior = priors$parameters_location$chi$parameters$location[[loc]], verbose = verbose)
                } else {
                     chi_i <- 0.5  # Default diagnostic positivity
                }
@@ -270,10 +216,10 @@ est_initial_R <- function(
 
                if (disaggregate && !is.null(fourier_priors)) {
                     # Sample Fourier seasonality parameters
-                    a1_i <- sample_from_prior(fourier_priors$a1, paste0("a1_", loc))
-                    b1_i <- sample_from_prior(fourier_priors$b1, paste0("b1_", loc))
-                    a2_i <- sample_from_prior(fourier_priors$a2, paste0("a2_", loc))
-                    b2_i <- sample_from_prior(fourier_priors$b2, paste0("b2_", loc))
+                    a1_i <- sample_from_prior(n = 1, prior = fourier_priors$a1, verbose = verbose)
+                    b1_i <- sample_from_prior(n = 1, prior = fourier_priors$b1, verbose = verbose)
+                    a2_i <- sample_from_prior(n = 1, prior = fourier_priors$a2, verbose = verbose)
+                    b2_i <- sample_from_prior(n = 1, prior = fourier_priors$b2, verbose = verbose)
 
                     # Use defaults if sampling failed
                     if (is.na(a1_i)) a1_i <- 0

@@ -38,6 +38,7 @@ sample_parameters(
   sample_a2 = TRUE,
   sample_b1 = TRUE,
   sample_b2 = TRUE,
+  sample_mu_j = TRUE,
   sample_initial_conditions = TRUE,
   verbose = TRUE
 )
@@ -108,6 +109,8 @@ sample_parameters(
 \item{sample_b1}{Sample b1 parameter (seasonality). Default TRUE.}
 
 \item{sample_b2}{Sample b2 parameter (seasonality). Default TRUE.}
+
+\item{sample_mu_j}{Sample mu_j parameter (location-specific case fatality ratio). Default TRUE.}
 
 \item{sample_initial_conditions}{Sample initial condition proportions for all compartments. Default TRUE.}
 

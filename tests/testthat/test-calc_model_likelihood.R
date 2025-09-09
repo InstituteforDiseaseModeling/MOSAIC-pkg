@@ -15,13 +15,12 @@ testthat::test_that("zero data returns finite log-likelihood", {
           est_cases     = est_zero,
           obs_deaths    = obs_zero,
           est_deaths    = est_zero,
-          add_activity = FALSE,  # Disable activity term for this test
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE
      )
      expect_true(is.finite(ll))  # Zero data is a valid perfect match, not "no information"
-     expect_true(abs(ll) < 1e-10)  # Should be very close to zero (perfect log-likelihood)
+     expect_equal(ll, 0, tolerance = 1e-10)  # Should be very close to zero (perfect log-likelihood)
 })
 
 # 2. Weight scaling: non-default weight_cases and weight_deaths still yields finite for zero data
@@ -33,13 +32,12 @@ testthat::test_that("weights do not affect zero-data result", {
           est_deaths    = est_zero,
           weight_cases  = 2,
           weight_deaths = 3,
-          add_activity = FALSE,  # Disable activity term for this test
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE
      )
      expect_true(is.finite(ll))  # Still finite regardless of weights
-     expect_true(abs(ll) < 1e-10)  # Should be very close to zero
+     expect_equal(ll, 0, tolerance = 1e-10)  # Should be very close to zero
 })
 
 # 3. Dimension errors: non-matrix inputs
@@ -95,7 +93,6 @@ testthat::test_that("all NA data returns finite", {
           est_cases  = est_na,
           obs_deaths = obs_na,
           est_deaths = est_na,
-          add_activity = FALSE,  # Disable activity term for this test
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
@@ -116,7 +113,6 @@ testthat::test_that("all-NA observed with real estimates returns finite", {
           est_cases  = est_real,
           obs_deaths = obs_na,
           est_deaths = est_real,
-          add_activity = FALSE,  # Disable activity term for this test
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
@@ -130,8 +126,8 @@ testthat::test_that("all-NA observed with real estimates returns finite", {
 # 7. Real likelihood calculation - test with only core terms
 testthat::test_that("correct log-likelihood for simple non-zero data with core terms only", {
 
-     obs <- matrix(c(1, 1), nrow = 1, ncol = 2)
-     est <- matrix(c(1, 1), nrow = 1, ncol = 2)
+     obs <- matrix(c(1, 1, 1), nrow = 1, ncol = 3)
+     est <- matrix(c(1, 1, 1), nrow = 1, ncol = 3)
 
      ll <- MOSAIC::calc_model_likelihood(
           obs_cases  = obs,
@@ -142,17 +138,14 @@ testthat::test_that("correct log-likelihood for simple non-zero data with core t
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
-          add_wis = FALSE,
-          add_activity = FALSE   # Disable activity term to test core only
+          add_wis = FALSE
      )
 
-     # ll_cases = sum(dpois(1,1,log=TRUE)*2) = -2
+     # ll_cases = sum(dpois(1,1,log=TRUE)*3) = -3
      # ll_max_cases = dpois(1,1,log=TRUE) = -1
-     # total = 2*(ll_cases + ll_max_cases) = 2*(-2 + -1) = -6
+     # total = 2*(ll_cases + ll_max_cases) = 2*(-3 + -1) = -8
 
-     expect_equal(ll, -6)
+     expect_equal(ll, -8)
 })
 
 # ============================================================================
@@ -184,8 +177,6 @@ testthat::test_that("peak timing term works correctly", {
           add_peak_timing = TRUE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      
@@ -202,8 +193,6 @@ testthat::test_that("peak timing term works correctly", {
           add_peak_timing = TRUE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      
@@ -236,8 +225,6 @@ testthat::test_that("peak magnitude term works correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      
@@ -254,8 +241,6 @@ testthat::test_that("peak magnitude term works correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      
@@ -286,8 +271,6 @@ testthat::test_that("progressive cumulative total term works correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = TRUE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE,
           cumulative_timepoints = c(0.25, 0.5, 0.75, 1.0)
      )
@@ -302,8 +285,6 @@ testthat::test_that("progressive cumulative total term works correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = TRUE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE,
           cumulative_timepoints = c(0.33, 0.67, 1.0)
      )
@@ -323,8 +304,6 @@ testthat::test_that("progressive cumulative total term works correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = TRUE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      
@@ -332,73 +311,9 @@ testthat::test_that("progressive cumulative total term works correctly", {
      expect_true(ll_default > ll_bad_cumulative)
 })
 
-# 11. Test growth rate term
-testthat::test_that("growth rate term handles various patterns", {
-     set.seed(123)
-     n_loc <- 2
-     n_time <- 52
-     
-     # Create exponential growth pattern
-     obs_cases <- matrix(1, n_loc, n_time)
-     obs_cases[1, 10:20] <- round(exp(seq(1, 3, length.out = 11)))
-     est_cases <- matrix(1, n_loc, n_time)
-     est_cases[1, 10:20] <- round(exp(seq(1, 3, length.out = 11)))  # Same growth
-     
-     obs_deaths <- matrix(0, n_loc, n_time)
-     est_deaths <- matrix(0, n_loc, n_time)
-     
-     # Test with growth rate term using derivative method
-     ll_growth <- MOSAIC::calc_model_likelihood(
-          obs_cases = obs_cases,
-          est_cases = est_cases,
-          obs_deaths = obs_deaths,
-          est_deaths = est_deaths,
-          add_max_terms = FALSE,
-          add_peak_timing = FALSE,
-          add_peak_magnitude = FALSE,
-          add_cumulative_total = FALSE,
-          add_growth_rate = TRUE,
-          add_duration = FALSE,
-          add_wis = FALSE,
-          growth_method = "derivative"
-     )
-     
-     expect_true(is.finite(ll_growth) || is.na(ll_growth))  # May be NA if no growth periods detected
-})
+# Test 11 removed - growth rate term has been removed from the function
 
-# 12. Test duration term
-testthat::test_that("duration term calculates epidemic length correctly", {
-     set.seed(123)
-     n_loc <- 2
-     n_time <- 52
-     
-     # Create epidemic with clear duration
-     obs_cases <- matrix(1, n_loc, n_time)
-     obs_cases[1, 10:30] <- 20  # 21-week epidemic
-     est_cases <- matrix(1, n_loc, n_time)
-     est_cases[1, 10:30] <- 20  # Same duration
-     
-     obs_deaths <- matrix(0, n_loc, n_time)
-     est_deaths <- matrix(0, n_loc, n_time)
-     
-     # Test with duration term using main_wave method
-     ll_duration <- MOSAIC::calc_model_likelihood(
-          obs_cases = obs_cases,
-          est_cases = est_cases,
-          obs_deaths = obs_deaths,
-          est_deaths = est_deaths,
-          add_max_terms = FALSE,
-          add_peak_timing = FALSE,
-          add_peak_magnitude = FALSE,
-          add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = TRUE,
-          add_wis = FALSE,
-          duration_method = "main_wave"
-     )
-     
-     expect_true(is.finite(ll_duration) || is.na(ll_duration))
-})
+# Test 12 removed - duration term has been removed from the function
 
 # 13. Test WIS term
 testthat::test_that("WIS term penalizes uncertainty correctly", {
@@ -421,8 +336,6 @@ testthat::test_that("WIS term penalizes uncertainty correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = TRUE,
           wis_quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975)
      )
@@ -439,8 +352,6 @@ testthat::test_that("WIS term penalizes uncertainty correctly", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      
@@ -465,7 +376,7 @@ testthat::test_that("all terms work together without conflict", {
      obs_deaths <- round(obs_cases * 0.1)
      est_deaths <- round(est_cases * 0.1)
      
-     # Test with all terms enabled
+     # Test with all remaining terms enabled
      ll_all <- MOSAIC::calc_model_likelihood(
           obs_cases = obs_cases,
           est_cases = est_cases,
@@ -475,8 +386,6 @@ testthat::test_that("all terms work together without conflict", {
           add_peak_timing = TRUE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = TRUE,
-          add_growth_rate = TRUE,
-          add_duration = TRUE,
           add_wis = TRUE,
           verbose = FALSE
      )
@@ -493,8 +402,6 @@ testthat::test_that("all terms work together without conflict", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_growth_rate = FALSE,
-          add_duration = FALSE,
           add_wis = FALSE
      )
      

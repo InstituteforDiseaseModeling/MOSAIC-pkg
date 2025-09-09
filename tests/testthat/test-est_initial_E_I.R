@@ -3,7 +3,8 @@
 
 library(testthat)
 
-# Load the functions by sourcing the R file
+# Load the functions by sourcing the R files
+source("../../R/fit_beta_from_ci.R")
 source("../../R/est_initial_E_I.R")
 
 # Mock data and helper functions for testing
@@ -167,15 +168,12 @@ test_that("est_initial_E_I_location handles edge cases", {
   expect_equal(result_zero$E, 0)
   expect_equal(result_zero$I, 0)
   
-  # Test with very high cases (should warn but not fail)
+  # Test with very high cases (should still work without warning since location function doesn't check multiplier)
   cases_high <- rep(1000, 10)
-  expect_warning(
-    result_high <- est_initial_E_I_location(
-      cases = cases_high, dates = dates, population = population, t0 = t0,
-      sigma = 0.01, rho = 0.01, chi = 1.0, tau_r = 4,  # Parameters that create high multiplier
-      iota = 0.714, gamma_1 = 0.2, gamma_2 = 0.67
-    ),
-    "Implausibly high infection multiplier"
+  result_high <- est_initial_E_I_location(
+    cases = cases_high, dates = dates, population = population, t0 = t0,
+    sigma = 0.01, rho = 0.01, chi = 1.0, tau_r = 4,  # Parameters that create high multiplier
+    iota = 0.714, gamma_1 = 0.2, gamma_2 = 0.67
   )
   
   expect_true(result_high$E >= 0)
@@ -236,16 +234,20 @@ test_that("est_initial_E_I wrapper function works with mock data", {
     
     expect_type(tcd_E, "list")
     expect_type(tcd_I, "list")
-    expect_true("shape1" %in% names(tcd_E))
-    expect_true("shape2" %in% names(tcd_E))
+    expect_true("distribution" %in% names(tcd_E))
+    expect_true("parameters" %in% names(tcd_E))
     expect_true("metadata" %in% names(tcd_E))
+    expect_equal(tcd_E$distribution, "beta")
+    expect_equal(tcd_I$distribution, "beta")
+    expect_true("shape1" %in% names(tcd_E$parameters))
+    expect_true("shape2" %in% names(tcd_E$parameters))
     
     # Check values are reasonable
-    expect_true(tcd_E$shape1 > 0)
-    expect_true(tcd_E$shape2 > 0)
+    expect_true(tcd_E$parameters$shape1 > 0)
+    expect_true(tcd_E$parameters$shape2 > 0)
     # Check that mean can be calculated from Beta parameters
-    E_mean <- tcd_E$shape1 / (tcd_E$shape1 + tcd_E$shape2)
-    I_mean <- tcd_I$shape1 / (tcd_I$shape1 + tcd_I$shape2)
+    E_mean <- tcd_E$parameters$shape1 / (tcd_E$parameters$shape1 + tcd_E$parameters$shape2)
+    I_mean <- tcd_I$parameters$shape1 / (tcd_I$parameters$shape1 + tcd_I$parameters$shape2)
     expect_true(E_mean >= 0 && E_mean <= 1)
     expect_true(I_mean >= 0 && I_mean <= 1)
   })

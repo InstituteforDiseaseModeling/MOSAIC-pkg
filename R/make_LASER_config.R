@@ -55,6 +55,11 @@
 #' @param epsilon Waning immunity rate (numeric >= 0).
 #' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 #'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
+#'        If mu_j is provided, mu_jt will be generated from mu_j and mu_j_slope.
+#' @param mu_j A numeric vector of location-specific baseline case fatality ratios. Optional. If provided
+#'        with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in [0, 1].
+#' @param mu_j_slope A numeric vector of location-specific temporal slopes for case fatality ratio.
+#'        Optional. Default is 0 (no temporal trend). Length must equal length(location_name).
 #'
 #' ## Observation Processes
 #' @param rho Proportion of true infections (numeric in [0, 1]).
@@ -206,6 +211,8 @@ make_LASER_config <- function(output_file_path = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
                               mu_jt = NULL,
+                              mu_j = NULL,
+                              mu_j_slope = NULL,
 
                               # Observation Processes
                               rho = NULL,
@@ -301,6 +308,8 @@ make_LASER_config <- function(output_file_path = NULL,
           gamma_2           = gamma_2,
           epsilon           = epsilon,
           mu_jt             = mu_jt,
+          mu_j              = mu_j,
+          mu_j_slope        = mu_j_slope,
           rho               = rho,
           sigma             = sigma,
           longitude         = longitude,
@@ -447,6 +456,42 @@ make_LASER_config <- function(output_file_path = NULL,
 
      if (!is.numeric(epsilon) || epsilon < 0) {
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
+     }
+
+     # Handle mu_j and mu_j_slope if provided
+     if (!is.null(mu_j)) {
+          # Validate mu_j
+          if (!is.numeric(mu_j) || length(mu_j) != length(location_name)) {
+               stop("mu_j must be a numeric vector with length equal to location_name.")
+          }
+          if (any(mu_j < 0 | mu_j > 1)) {
+               stop("All values in mu_j must be between 0 and 1.")
+          }
+          
+          # Initialize mu_j_slope if not provided
+          if (is.null(mu_j_slope)) {
+               mu_j_slope <- rep(0, length(location_name))
+          }
+          
+          # Validate mu_j_slope
+          if (!is.numeric(mu_j_slope) || length(mu_j_slope) != length(location_name)) {
+               stop("mu_j_slope must be a numeric vector with length equal to location_name.")
+          }
+          
+          # Generate mu_jt from mu_j and mu_j_slope
+          n_days <- length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))
+          mu_jt <- matrix(NA, nrow = length(location_name), ncol = n_days)
+          
+          for (j in 1:length(location_name)) {
+               # Create time-varying mu with optional slope
+               # mu_jt[j,t] = mu_j[j] + mu_j_slope[j] * (t - 1) / n_days
+               # This creates a linear trend from mu_j[j] at t=1 to mu_j[j] + mu_j_slope[j] at t=n_days
+               time_factor <- (seq_len(n_days) - 1) / max(1, n_days - 1)
+               mu_jt[j, ] <- mu_j[j] + mu_j_slope[j] * time_factor
+               
+               # Ensure values stay within [0, 1]
+               mu_jt[j, ] <- pmax(0, pmin(1, mu_jt[j, ]))
+          }
      }
 
      # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1].

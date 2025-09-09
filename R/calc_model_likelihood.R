@@ -2,28 +2,22 @@
 ## calc_model_likelihood.R  (Balanced design; NB uses weighted k with k_min)
 ###############################################################################
 
-#' Compute the total model likelihood (Balanced design)
+#' Compute the total model likelihood (Simplified)
 #'
 #' A simplified, robust wrapper for scoring model fits in MOSAIC.
 #' The core is a Negative Binomial (NB) time-series log-likelihood per
 #' location and outcome (cases, deaths) with a weighted MoM dispersion
-#' estimate and a small \code{k_min} floor (see
-#' \code{\link{calc_log_likelihood_negbin}}).
+#' estimate and a small \code{k_min} floor.
 #'
-#' By default, three light "shape" terms are included with modest weights:
+#' By default, three "shape" terms are included with modest weights:
 #' (1) peak timing (Normal on peak index difference),
 #' (2) peak magnitude (log-Normal on ratios), and
 #' (3) cumulative progression (NB at a few cumulative fractions).
 #'
 #' Minimal inline guardrails floor the score on egregious fits (cumulative
-#' over/under prediction, per-timestep caps, negative correlation, and
-#' zero-prediction mismatches). Duration, growth, maxima, and WIS are kept
-#' but OFF by default to reduce complexity.
+#' over/under prediction, per-timestep caps, and negative correlation).
+#' Optional max terms and WIS are kept but OFF by default.
 #'
-#' Additionally, an optional **activity** component can be included: a small
-#' Bernoulli log-likelihood on whether each week is nonzero, using the model-
-#' implied nonzero probability under Poisson/NB. This sharply penalizes flat,
-#' near-zero trajectories when observations are frequently nonzero.
 #'
 #' @param obs_cases,est_cases Matrices \code{n_locations x n_time_steps} of observed
 #'   and estimated cases.
@@ -40,20 +34,15 @@
 #'
 #' @param add_max_terms Logical; legacy max Poisson terms. Default \code{FALSE}.
 #' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{TRUE}.
-#' @param add_growth_rate,add_duration,add_wis Logical; default \code{FALSE}.
-#' @param add_activity Logical; include Bernoulli nonzero "activity" term. Default \code{TRUE}.
+#' @param add_wis Logical; default \code{FALSE}.
 #'
 #' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total
 #'   Component weights. Defaults \code{0.5, 0.5, 0.3}.
-#' @param weight_growth_rate,weight_duration,weight_wis Component weights for optional terms.
-#' @param weight_activity Component weight for activity term. Default \code{0.6}.
+#' @param weight_wis Component weight for optional WIS term.
 #'
 #' @param peak_method \code{"smooth"} (3-pt moving average) or \code{"simple"}.
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{2}.
 #' @param sigma_peak_log SD on log-scale for peak magnitude; default \code{0.5}.
-#'
-#' @param growth_method,growth_aggregation,smooth_window,sigma_r Controls if growth is used.
-#' @param duration_method,duration_aggregation,sigma_duration_log Controls if duration is used.
 #'
 #' @param wis_quantiles Quantiles for WIS if enabled.
 #' @param cumulative_timepoints Fractions for cumulative progression; default \code{c(0.25,0.5,0.75,1)}.
@@ -61,13 +50,12 @@
 #' @param enable_guardrails Logical; default \code{TRUE}.
 #' @param floor_likelihood Numeric; hard floor returned on violations. Default \code{-999999999}.
 #' @param guardrail_verbose Logical; print guardrail reasons.
-#' @param cumulative_over_ratio,cumulative_under_ratio Cumulative ratio bounds (default \code{25}, \code{0.04}).
+#' @param cumulative_over_ratio,cumulative_under_ratio Cumulative ratio bounds (default \code{10}, \code{0.1}).
 #' @param min_cumulative_for_check Minimum observed total to apply ratio checks; default \code{100}.
-#' @param max_cases_per_timestep,max_deaths_per_timestep Hard per-timestep caps; defaults \code{1e6}, \code{1e5}.
-#' @param negative_correlation_threshold Correlation floor; default \code{-0.1}.
-#'
-#' @param activity_obs_threshold Integer; counts \code{>=} this are "active" (default 1).
-#' @param activity_eps Small clamp for probabilities in activity term (default \code{1e-12}).
+#' @param max_timestep_ratio Maximum ratio of estimated to observed per timestep (default \code{100}).
+#' @param min_timestep_ratio Minimum ratio of estimated to observed per timestep (default \code{0.01}).
+#' @param min_obs_for_ratio Minimum observed value to apply ratio checks (default \code{1}).
+#' @param negative_correlation_threshold Correlation floor; default \code{0} (requires positive correlation).
 #'
 #' @return Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.
 #'   May be \code{NA_real_} if all locations contribute nothing.
@@ -84,35 +72,20 @@ calc_model_likelihood <- function(obs_cases,
                                   zero_buffer      = TRUE,   # kept for compatibility
                                   verbose          = FALSE,
                                   # ---- toggles (Balanced defaults) ----
-                                  add_max_terms         = FALSE,
+                                  add_max_terms         = TRUE,
                                   add_peak_timing       = TRUE,
                                   add_peak_magnitude    = TRUE,
                                   add_cumulative_total  = TRUE,
-                                  add_growth_rate       = FALSE,
-                                  add_duration          = FALSE,
-                                  add_wis               = FALSE,
-                                  add_activity          = TRUE,
+                                  add_wis               = TRUE,
                                   # ---- component weights ----
                                   weight_peak_timing       = 0.5,
                                   weight_peak_magnitude    = 0.5,
                                   weight_cumulative_total  = 0.3,
-                                  weight_growth_rate       = 0.2,
-                                  weight_duration          = 0.2,
                                   weight_wis               = 0.8,
-                                  weight_activity          = 0.6,
                                   # ---- peak controls ----
                                   peak_method      = c("smooth", "simple"),
                                   sigma_peak_time  = 2,
                                   sigma_peak_log   = 0.5,
-                                  # ---- growth controls (optional) ----
-                                  growth_method      = c("derivative", "threshold"),
-                                  growth_aggregation = c("mean","median","max"),
-                                  smooth_window      = 7,
-                                  sigma_r            = 0.2,
-                                  # ---- duration controls (optional) ----
-                                  duration_method      = c("epidemic_periods","main_wave","above_baseline"),
-                                  duration_aggregation = c("mean","total","max"),
-                                  sigma_duration_log   = 0.3,
                                   # ---- WIS (optional) ----
                                   wis_quantiles      = c(0.0275, 0.25, 0.5, 0.75, 0.975),
                                   # ---- cumulative progression ----
@@ -121,20 +94,23 @@ calc_model_likelihood <- function(obs_cases,
                                   enable_guardrails = TRUE,
                                   floor_likelihood = -999999999,
                                   guardrail_verbose = FALSE,
-                                  cumulative_over_ratio = 25,
-                                  cumulative_under_ratio = 0.04,
+                                  cumulative_over_ratio = 10,
+                                  cumulative_under_ratio = 0.1,
                                   min_cumulative_for_check = 100,
-                                  negative_correlation_threshold = -0.1,
-                                  max_cases_per_timestep = 1e6,
-                                  max_deaths_per_timestep = 1e5,
-                                  # ---- activity controls ----
-                                  activity_obs_threshold = 1L,
-                                  activity_eps           = 1e-12)
+                                  negative_correlation_threshold = 0,
+                                  max_timestep_ratio = 100,
+                                  min_timestep_ratio = 0.01,
+                                  min_obs_for_ratio = 1)
 {
      # --- basic checks ---
      if (!is.matrix(obs_cases) || !is.matrix(est_cases) ||
          !is.matrix(obs_deaths) || !is.matrix(est_deaths)) {
           stop("all inputs must be matrices.")
+     }
+
+     # Validation: Check for negative estimated values
+     if (any(est_cases < 0, na.rm = TRUE) || any(est_deaths < 0, na.rm = TRUE)) {
+          stop("Estimated values must be non-negative.")
      }
 
      n_locations  <- nrow(obs_cases)
@@ -157,17 +133,36 @@ calc_model_likelihood <- function(obs_cases,
      if (sum(weights_location) == 0 || sum(weights_time) == 0) stop("weights_location and weights_time must not all be zero.")
 
      peak_method        <- match.arg(peak_method)
-     growth_method      <- match.arg(growth_method)
-     growth_aggregation <- match.arg(growth_aggregation)
-     duration_method    <- match.arg(duration_method)
-     duration_aggregation <- match.arg(duration_aggregation)
 
      # --- inline guardrails ---
      if (enable_guardrails) {
 
-          if (any(est_cases > max_cases_per_timestep,  na.rm = TRUE) ||
-              any(est_deaths > max_deaths_per_timestep, na.rm = TRUE)) {
-               if (guardrail_verbose) message("Guardrail: est exceeds per-timestep caps.")
+          # Vectorized per-timestep ratio checks
+          # Check cases
+          ratio_cases <- est_cases / obs_cases
+          valid_cases <- is.finite(ratio_cases) & obs_cases >= min_obs_for_ratio
+          bad_cases <- which(valid_cases & (ratio_cases > max_timestep_ratio | ratio_cases < min_timestep_ratio),
+                            arr.ind = TRUE)
+          if (nrow(bad_cases) > 0) {
+               if (guardrail_verbose) {
+                    first <- bad_cases[1,]
+                    message(sprintf("Guardrail: timestep ratio violation at location %d, time %d (cases ratio=%.2f)",
+                                  first[1], first[2], ratio_cases[first[1], first[2]]))
+               }
+               return(floor_likelihood)
+          }
+
+          # Check deaths
+          ratio_deaths <- est_deaths / obs_deaths
+          valid_deaths <- is.finite(ratio_deaths) & obs_deaths >= min_obs_for_ratio
+          bad_deaths <- which(valid_deaths & (ratio_deaths > max_timestep_ratio | ratio_deaths < min_timestep_ratio),
+                             arr.ind = TRUE)
+          if (nrow(bad_deaths) > 0) {
+               if (guardrail_verbose) {
+                    first <- bad_deaths[1,]
+                    message(sprintf("Guardrail: timestep ratio violation at location %d, time %d (deaths ratio=%.2f)",
+                                  first[1], first[2], ratio_deaths[first[1], first[2]]))
+               }
                return(floor_likelihood)
           }
 
@@ -178,7 +173,7 @@ calc_model_likelihood <- function(obs_cases,
 
           check_ratio <- function(o, e) {
                ok <- is.finite(o) & is.finite(e) & (o >= min_cumulative_for_check)
-               r  <- rep(1, length(o)); r[ok] <- e[ok] / pmax(o[ok], 1e-12)
+               r  <- rep(1, length(o)); r[ok] <- e[ok] / o[ok]  # Removed unnecessary pmax
                any(r >= cumulative_over_ratio | r <= cumulative_under_ratio)
           }
           if (check_ratio(obs_cases_tot, est_cases_tot) ||
@@ -191,17 +186,17 @@ calc_model_likelihood <- function(obs_cases,
           for (j in seq_len(n_locations)) {
                fin_c <- is.finite(obs_cases[j, ]) & is.finite(est_cases[j, ])
                fin_d <- is.finite(obs_deaths[j, ]) & is.finite(est_deaths[j, ])
-               if (sum(fin_c) >= 4) {
+               if (sum(fin_c) >= 10) {  # Increased from 4 to 10 for reliable correlation
                     cc <- suppressWarnings(stats::cor(obs_cases[j, fin_c], est_cases[j, fin_c]))
                     if (is.finite(cc) && cc < negative_correlation_threshold) {
-                         if (guardrail_verbose) message("Guardrail: strongly negative correlation (cases).")
+                         if (guardrail_verbose) message(sprintf("Guardrail: negative correlation (cases) at location %d: %.3f", j, cc))
                          return(floor_likelihood)
                     }
                }
-               if (sum(fin_d) >= 4) {
+               if (sum(fin_d) >= 10) {  # Increased from 4 to 10 for reliable correlation
                     cd <- suppressWarnings(stats::cor(obs_deaths[j, fin_d], est_deaths[j, fin_d]))
                     if (is.finite(cd) && cd < negative_correlation_threshold) {
-                         if (guardrail_verbose) message("Guardrail: strongly negative correlation (deaths).")
+                         if (guardrail_verbose) message(sprintf("Guardrail: negative correlation (deaths) at location %d: %.3f", j, cd))
                          return(floor_likelihood)
                     }
                }
@@ -216,8 +211,10 @@ calc_model_likelihood <- function(obs_cases,
           obs_c <- obs_cases[j, ]; est_c <- est_cases[j, ]
           obs_d <- obs_deaths[j, ]; est_d <- est_deaths[j, ]
 
-          have_cases  <- any(is.finite(obs_c))
-          have_deaths <- any(is.finite(obs_d))
+          # Require minimum observations for meaningful likelihood
+          min_obs_for_likelihood <- 3
+          have_cases  <- sum(is.finite(obs_c)) >= min_obs_for_likelihood
+          have_deaths <- sum(is.finite(obs_d)) >= min_obs_for_likelihood
 
           # Weighted NB dispersion (k) with floor; Poisson limit if Inf
           k_c <- if (have_cases)  nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min) else Inf
@@ -272,60 +269,13 @@ calc_model_likelihood <- function(obs_cases,
                }
           }
 
-          # Cumulative progression
+          # Cumulative progression (using data-driven k)
           ll_cum_tot_c <- ll_cum_tot_d <- 0
           if (add_cumulative_total) {
-               if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints)
-               if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints)
+               if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c)
+               if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d)
           }
 
-          # Optional: growth
-          ll_growth_c <- ll_growth_d <- 0
-          if (add_growth_rate) {
-               if (have_cases) {
-                    periods_o <- if (growth_method == "derivative")
-                         identify_growth_derivative(obs_c, smooth_window = smooth_window) else {
-                              epi <- identify_epidemic_periods(obs_c); mapply(c, as.list(epi$starts), as.list(epi$ends), SIMPLIFY = FALSE)
-                         }
-                    periods_e <- if (growth_method == "derivative")
-                         identify_growth_derivative(est_c, smooth_window = smooth_window) else {
-                              epi <- identify_epidemic_periods(est_c); mapply(c, as.list(epi$starts), as.list(epi$ends), SIMPLIFY = FALSE)
-                         }
-                    r_obs <- growth_rate_from_periods(obs_c, periods_o, agg = growth_aggregation)
-                    r_est <- growth_rate_from_periods(est_c, periods_e, agg = growth_aggregation)
-                    if (is.finite(r_obs) && is.finite(r_est)) ll_growth_c <- stats::dnorm(r_est - r_obs, 0, sigma_r, log = TRUE)
-               }
-               if (have_deaths) {
-                    periods_o <- if (growth_method == "derivative")
-                         identify_growth_derivative(obs_d, smooth_window = smooth_window) else {
-                              epi <- identify_epidemic_periods(obs_d); mapply(c, as.list(epi$starts), as.list(epi$ends), SIMPLIFY = FALSE)
-                         }
-                    periods_e <- if (growth_method == "derivative")
-                         identify_growth_derivative(est_d, smooth_window = smooth_window) else {
-                              epi <- identify_epidemic_periods(est_d); mapply(c, as.list(epi$starts), as.list(epi$ends), SIMPLIFY = FALSE)
-                         }
-                    r_obs <- growth_rate_from_periods(obs_d, periods_o, agg = growth_aggregation)
-                    r_est <- growth_rate_from_periods(est_d, periods_e, agg = growth_aggregation)
-                    if (is.finite(r_obs) && is.finite(r_est)) ll_growth_d <- stats::dnorm(r_est - r_obs, 0, sigma_r, log = TRUE)
-               }
-          }
-
-          # Optional: duration
-          ll_duration_c <- ll_duration_d <- 0
-          if (add_duration) {
-               if (have_cases) {
-                    d_obs <- duration_stat(obs_c, method = duration_method, aggregation = duration_aggregation)
-                    d_est <- duration_stat(est_c, method = duration_method, aggregation = duration_aggregation)
-                    if (is.finite(d_obs) && is.finite(d_est) && d_obs > 0 && d_est > 0)
-                         ll_duration_c <- stats::dnorm(log(d_est) - log(d_obs), 0, sigma_duration_log, log = TRUE)
-               }
-               if (have_deaths) {
-                    d_obs <- duration_stat(obs_d, method = duration_method, aggregation = duration_aggregation)
-                    d_est <- duration_stat(est_d, method = duration_method, aggregation = duration_aggregation)
-                    if (is.finite(d_obs) && is.finite(d_est) && d_obs > 0 && d_est > 0)
-                         ll_duration_d <- stats::dnorm(log(d_est) - log(d_obs), 0, sigma_duration_log, log = TRUE)
-               }
-          }
 
           # Legacy max terms
           ll_max_cases <- ll_max_deaths <- 0
@@ -347,18 +297,6 @@ calc_model_likelihood <- function(obs_cases,
                }
           }
 
-          # Activity (optional)
-          ll_activity_c <- ll_activity_d <- 0
-          if (add_activity) {
-               if (have_cases)  ll_activity_c <- ll_activity_bernoulli(
-                    obs_vec = obs_c, mu_vec = est_c, k = k_c, w_time = weights_time,
-                    obs_threshold = activity_obs_threshold, eps = activity_eps
-               )
-               if (have_deaths) ll_activity_d <- ll_activity_bernoulli(
-                    obs_vec = obs_d, mu_vec = est_d, k = k_d, w_time = weights_time,
-                    obs_threshold = activity_obs_threshold, eps = activity_eps
-               )
-          }
 
           # Assemble location total
           ll_loc_core <-
@@ -372,25 +310,16 @@ calc_model_likelihood <- function(obs_cases,
           ll_loc_cum <-
                weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
-          ll_loc_dyn <-
-               weight_growth_rate * (weight_cases * ll_growth_c + weight_deaths * ll_growth_d) +
-               weight_duration    * (weight_cases * ll_duration_c + weight_deaths * ll_duration_d)
-
           ll_loc_wis <- (weight_cases * ll_wis_cases) + (weight_deaths * ll_wis_deaths)
-
-          ll_loc_activity <-
-               weight_activity * (weight_cases * ll_activity_c + weight_deaths * ll_activity_d)
 
           ll_loc_total <- ll_loc_core
           if (add_peak_timing || add_peak_magnitude) ll_loc_total <- ll_loc_total + ll_loc_peaks
           if (add_cumulative_total)                  ll_loc_total <- ll_loc_total + ll_loc_cum
-          if (add_growth_rate || add_duration)       ll_loc_total <- ll_loc_total + ll_loc_dyn
           if (add_wis)                               ll_loc_total <- ll_loc_total + ll_loc_wis
-          if (add_activity)                          ll_loc_total <- ll_loc_total + ll_loc_activity
 
           if (!is.finite(ll_loc_total)) {
                if (guardrail_verbose) message(sprintf("Non-finite LL at location %d; applying per-location penalty.", j))
-               ll_locations[j] <- weights_location[j] * (-1e6)  # or another large negative penalty
+               ll_locations[j] <- weights_location[j] * (-1e9)  # large negative penalty
                next
           }
 
@@ -398,13 +327,11 @@ calc_model_likelihood <- function(obs_cases,
 
           if (verbose) {
                message(sprintf(
-                    "Location %d: core=%.2f | peaks=%.2f | cum=%.2f | dyn=%.2f | wis=%.2f | act=%.2f -> weighted=%.2f",
+                    "Location %d: core=%.2f | peaks=%.2f | cum=%.2f | wis=%.2f -> weighted=%.2f",
                     j, ll_loc_core,
                     if ((add_peak_timing || add_peak_magnitude)) ll_loc_peaks else 0,
                     if (add_cumulative_total) ll_loc_cum else 0,
-                    if ((add_growth_rate || add_duration)) ll_loc_dyn else 0,
                     if (add_wis) ll_loc_wis else 0,
-                    if (add_activity) ll_loc_activity else 0,
                     weights_location[j] * ll_loc_total
                ))
           }
@@ -445,22 +372,31 @@ peak_index <- function(x, method = "smooth") {
      safe_which_max(as.numeric(xs))
 }
 peak_value <- function(x, method = "smooth") {
-     if (method == "simple" || length(x) < 3L) {
+     result <- if (method == "simple" || length(x) < 3L) {
           suppressWarnings(max(x, na.rm = TRUE))
      } else {
           xs <- stats::filter(ifelse(is.finite(x), x, 0), rep(1/3, 3), sides = 2)
           suppressWarnings(max(xs, na.rm = TRUE))
      }
+     # Fix: Return NA instead of -Inf when all values are NA/non-finite
+     if (is.infinite(result)) return(NA_real_)
+     result
 }
 
 # Robust cumulative NB progression
 ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
-                                         per_tp_ll_floor = -1e6) {
+                                         k_data = NULL,
+                                         per_tp_ll_floor = -1e9) {
      n <- length(obs_vec)
      vals <- numeric(0L)
-     cum_k <- getOption("MOSAIC.cumulative_k", 10)
+     # Use data-driven k if provided, otherwise fall back to option/default
+     cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
+          k_data
+     } else {
+          getOption("MOSAIC.cumulative_k", 10)
+     }
      for (tp in timepoints) {
           end_idx <- max(1L, floor(n * tp))
           o_cum <- sum(obs_vec[1:end_idx], na.rm = TRUE)
@@ -476,93 +412,6 @@ ll_cumulative_progressive_nb <- function(obs_vec,
      mean(vals)
 }
 
-# Growth & duration helpers
-identify_growth_derivative <- function(x, smooth_window = 5, min_derivative = 0.1, min_duration = 3) {
-     if (length(x) < 4L) return(list())
-     x_clean <- ifelse(is.finite(x), x, 0)
-     effective_window <- min(smooth_window, length(x_clean))
-     xs <- if (effective_window > 1L && length(x_clean) >= effective_window) {
-          stats::filter(x_clean, rep(1/effective_window, effective_window), sides = 2)
-     } else x_clean
-     d <- diff(xs)
-     periods <- list(); in_g <- FALSE; start <- NA_integer_
-     for (i in seq_along(d)) {
-          if (is.finite(d[i]) && d[i] > min_derivative) {
-               if (!in_g) { in_g <- TRUE; start <- i }
-          } else if (in_g) {
-               len <- i - start
-               if (len >= min_duration) periods[[length(periods) + 1L]] <- c(start, i - 1L)
-               in_g <- FALSE
-          }
-     }
-     if (in_g) {
-          len <- length(d) - start + 1L
-          if (len >= min_duration) periods[[length(periods) + 1L]] <- c(start, length(d))
-     }
-     periods
-}
-growth_rate_from_periods <- function(x, periods, agg = "mean") {
-     if (length(periods) == 0L) return(NA_real_)
-     rates <- numeric(0)
-     for (p in periods) {
-          s_d <- p[1]; e_d <- p[2]
-          s_x <- max(1L, s_d); e_x <- min(length(x), e_d + 1L)
-          if (e_x - s_x + 1L < 2L) next
-          seg <- x[s_x:e_x]
-          keep <- is.finite(seg) & seg > 0
-          if (sum(keep) < 2L) next
-          t  <- seq_len(sum(keep)); yc <- log(seg[keep])
-          fit <- try(stats::lm(yc ~ t), silent = TRUE)
-          if (!inherits(fit, "try-error")) {
-               r <- stats::coef(fit)[2]
-               if (is.finite(r) && r > 0) rates <- c(rates, as.numeric(r))
-          }
-     }
-     if (length(rates) == 0L) return(NA_real_)
-     switch(agg, mean = mean(rates), median = stats::median(rates), max = max(rates))
-}
-identify_epidemic_periods <- function(x, baseline_window = 8, threshold_multiplier = 2) {
-     n <- length(x)
-     if (n <= baseline_window) return(list(starts = integer(0), ends = integer(0)))
-     base  <- rep(NA_real_, n)
-     for (i in (baseline_window + 1L):n) base[i] <- mean(x[(i - baseline_window):(i - 1L)], na.rm = TRUE)
-     thr   <- base * threshold_multiplier
-     above <- is.finite(x) & is.finite(thr) & (x > thr)
-     above2 <- above
-     if (n >= 2L) for (i in 2:n) above2[i] <- above[i] & above[i - 1L]
-     r <- rle(above2)
-     ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1L
-     epi_starts <- starts[r$values]; epi_ends <- ends[r$values]
-     epi_starts <- pmax(epi_starts, baseline_window + 1L); epi_ends[epi_ends > n] <- n
-     list(starts = as.integer(epi_starts), ends = as.integer(epi_ends))
-}
-duration_stat <- function(x, method = "epidemic_periods", aggregation = "mean") {
-     if (method == "epidemic_periods") {
-          epi <- identify_epidemic_periods(x); if (length(epi$starts) == 0) return(0)
-          d <- mapply(function(s,e) e - s + 1L, epi$starts, epi$ends)
-          switch(aggregation, mean = mean(d), total = sum(d), max = max(d))
-     } else if (method == "main_wave") {
-          tot <- sum(x, na.rm = TRUE); if (!is.finite(tot) || tot <= 0) return(0L)
-          target <- tot * 0.8; n <- length(x); best <- n
-          for (s in seq_len(n)) {
-               csum <- 0
-               for (e in seq.int(s, n)) {
-                    csum <- csum + ifelse(is.finite(x[e]), x[e], 0)
-                    if (csum >= target) { best <- min(best, e - s + 1L); break }
-               }
-          }
-          best
-     } else {
-          n <- length(x); cnt <- 0L
-          baseline_window <- 8; threshold_multiplier <- 2
-          for (i in (baseline_window + 1L):n) {
-               base <- mean(x[(i - baseline_window):(i-1L)], na.rm = TRUE)
-               thr  <- base * threshold_multiplier
-               if (is.finite(x[i]) && x[i] > thr) cnt <- cnt + 1L
-          }
-          cnt
-     }
-}
 
 # Legacy max-term Poisson
 max_ll_poisson <- function(obs_vec, est_vec) {
@@ -630,48 +479,3 @@ nb_size_from_obs_weighted <- function(x, w, k_min = 3, k_max = 1e5) {
      k
 }
 
-# Bernoulli log-likelihood for "activity" (nonzero weeks)
-#' @keywords internal
-ll_activity_bernoulli <- function(obs_vec, mu_vec, k, w_time,
-                                  obs_threshold = 1L, eps = 1e-12) {
-     # activity indicator
-     z <- as.integer(pmax(obs_vec, 0) >= obs_threshold)
-
-     # model-implied P(active) with improved numerical stability
-     mu <- pmax(mu_vec, eps)
-     if (is.infinite(k)) {
-          # Poisson case: P(Y > 0) = 1 - exp(-mu)
-          p1 <- 1 - exp(-mu)
-     } else {
-          # NB: P(Y=0) = (k/(k+mu))^k  => P(active)=1 - P0
-          # For numerical stability, avoid very large or small k/(k+mu) ratios
-          ratio <- k / (k + mu)
-          # Clamp ratio to avoid numerical overflow/underflow in power calculation
-          ratio <- pmin(pmax(ratio, 1e-10), 1 - 1e-10)
-          p1 <- 1 - ratio^k
-     }
-     
-     # Improved probability clamping with more reasonable bounds
-     # Instead of machine epsilon, use bounds that avoid extreme log values
-     min_prob <- 0.001   # log(0.001) ≈ -6.9, reasonable penalty
-     max_prob <- 0.999   # log1p(-0.999) ≈ -6.9, reasonable penalty
-     p1 <- pmin(pmax(p1, min_prob), max_prob)
-
-     # mask weights on bad entries
-     w <- w_time
-     bad <- !is.finite(z) | !is.finite(p1)
-     if (any(bad)) w[bad] <- 0
-
-     sw <- sum(w)
-     if (sw <= 0) return(0)
-
-     # log-likelihood sum with additional safeguards
-     log_p1 <- log(p1)
-     log1_minus_p1 <- log1p(-p1)
-     
-     # Additional check for extreme values
-     log_p1[!is.finite(log_p1)] <- log(min_prob)
-     log1_minus_p1[!is.finite(log1_minus_p1)] <- log(1 - max_prob)
-     
-     sum(w * (z * log_p1 + (1 - z) * log1_minus_p1))
-}

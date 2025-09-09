@@ -181,38 +181,11 @@ est_initial_V1_V2 <- function(PATHS,
     v2_results <- numeric(n_samples)
 
     for (i in 1:n_samples) {
-      # Sample from priors
-      if (omega1_prior$distribution == "gamma") {
-        omega1_sample <- rgamma(1,
-                               shape = omega1_prior$parameters$shape,
-                               rate = omega1_prior$parameters$rate)
-      } else {
-        stop("Unsupported distribution for omega_1: ", omega1_prior$distribution)
-      }
-
-      if (omega2_prior$distribution == "gamma") {
-        omega2_sample <- rgamma(1,
-                               shape = omega2_prior$parameters$shape,
-                               rate = omega2_prior$parameters$rate)
-      } else {
-        stop("Unsupported distribution for omega_2: ", omega2_prior$distribution)
-      }
-
-      if (phi1_prior$distribution == "beta") {
-        phi1_sample <- rbeta(1,
-                            shape1 = phi1_prior$parameters$shape1,
-                            shape2 = phi1_prior$parameters$shape2)
-      } else {
-        stop("Unsupported distribution for phi_1: ", phi1_prior$distribution)
-      }
-
-      if (phi2_prior$distribution == "beta") {
-        phi2_sample <- rbeta(1,
-                            shape1 = phi2_prior$parameters$shape1,
-                            shape2 = phi2_prior$parameters$shape2)
-      } else {
-        stop("Unsupported distribution for phi_2: ", phi2_prior$distribution)
-      }
+      # Sample from priors using unified sample_from_prior function
+      omega1_sample <- sample_from_prior(n = 1, prior = omega1_prior, verbose = FALSE)
+      omega2_sample <- sample_from_prior(n = 1, prior = omega2_prior, verbose = FALSE)
+      phi1_sample <- sample_from_prior(n = 1, prior = phi1_prior, verbose = FALSE)
+      phi2_sample <- sample_from_prior(n = 1, prior = phi2_prior, verbose = FALSE)
 
       # Run estimation with sampled parameters
       # Use N_at_t0 which was already calculated above

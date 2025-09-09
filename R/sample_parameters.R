@@ -39,6 +39,7 @@
 #' @param sample_a2 Sample a2 parameter (seasonality). Default TRUE.
 #' @param sample_b1 Sample b1 parameter (seasonality). Default TRUE.
 #' @param sample_b2 Sample b2 parameter (seasonality). Default TRUE.
+#' @param sample_mu_j Sample mu_j parameter (location-specific case fatality ratio). Default TRUE.
 #'
 #' @param sample_initial_conditions Sample initial condition proportions for all compartments. Default TRUE.
 #'
@@ -98,7 +99,7 @@ sample_parameters <- function(
   sample_zeta_1 = TRUE,
   sample_zeta_2 = TRUE,
 
-  # Location-specific parameter sampling controls (8 parameters)
+  # Location-specific parameter sampling controls (9 parameters)
   sample_beta_j0_tot = TRUE,
   sample_p_beta = TRUE,
   sample_tau_i = TRUE,
@@ -107,6 +108,7 @@ sample_parameters <- function(
   sample_a2 = TRUE,
   sample_b1 = TRUE,
   sample_b2 = TRUE,
+  sample_mu_j = TRUE,
 
   # Initial conditions sampling control
   sample_initial_conditions = TRUE,
@@ -176,7 +178,8 @@ sample_parameters <- function(
     a1 = sample_a1,
     a2 = sample_a2,
     b1 = sample_b1,
-    b2 = sample_b2
+    b2 = sample_b2,
+    mu_j = sample_mu_j
   )
 
   # Create a copy of config to modify
@@ -365,119 +368,8 @@ load_config_safely <- function(config, verbose) {
   return(config)
 }
 
-#' Sample from a distribution with error handling
-#' @noRd
-sample_from_distribution <- function(dist_info, param_name = "unknown") {
-
-  if (!is.list(dist_info) || !"distribution" %in% names(dist_info)) {
-    stop("Invalid distribution info for parameter: ", param_name)
-  }
-
-  dist_type <- dist_info$distribution
-  params <- dist_info$parameters
-
-  tryCatch({
-
-    if (dist_type == "beta") {
-      if (!all(c("shape1", "shape2") %in% names(params))) {
-        stop("Beta distribution requires shape1 and shape2 parameters")
-      }
-      value <- rbeta(1, params$shape1, params$shape2)
-
-    } else if (dist_type == "gamma") {
-      if (!all(c("shape", "rate") %in% names(params))) {
-        stop("Gamma distribution requires shape and rate parameters")
-      }
-      value <- rgamma(1, shape = params$shape, rate = params$rate)
-
-    } else if (dist_type == "lognormal") {
-      # Handle both parameterizations
-      if (!is.null(params$meanlog) && !is.null(params$sdlog)) {
-        value <- rlnorm(1, meanlog = params$meanlog, sdlog = params$sdlog)
-      } else if (!is.null(params$mean) && !is.null(params$sd)) {
-        # Validate to prevent division by zero
-        if (params$mean <= 0) {
-          stop("Lognormal mean must be positive")
-        }
-        # Convert from mean/sd of the lognormal to meanlog/sdlog
-        cv <- params$sd / params$mean
-        sdlog <- sqrt(log(1 + cv^2))
-        meanlog <- log(params$mean) - sdlog^2/2
-        value <- rlnorm(1, meanlog = meanlog, sdlog = sdlog)
-      } else {
-        stop("Lognormal distribution requires either meanlog/sdlog or mean/sd parameters")
-      }
-
-    } else if (dist_type == "normal") {
-      if (!all(c("mean", "sd") %in% names(params))) {
-        stop("Normal distribution requires mean and sd parameters")
-      }
-      value <- rnorm(1, mean = params$mean, sd = params$sd)
-
-    } else if (dist_type == "uniform") {
-      if (!all(c("min", "max") %in% names(params))) {
-        stop("Uniform distribution requires min and max parameters")
-      }
-      if (params$min >= params$max) {
-        stop("Uniform distribution requires min < max")
-      }
-      value <- runif(1, min = params$min, max = params$max)
-
-    } else if (dist_type == "gompertz") {
-      if (!all(c("b", "eta") %in% names(params))) {
-        stop("Gompertz distribution requires b and eta parameters")
-      }
-      if (params$b <= 0) {
-        stop("Gompertz distribution requires b > 0")
-      }
-      if (params$eta <= 0) {
-        stop("Gompertz distribution requires eta > 0")
-      }
-      # Use the rgompertz function from fit_gompertz_from_ci.R
-      value <- rgompertz(1, b = params$b, eta = params$eta)
-
-    } else {
-      stop("Unknown distribution type: ", dist_type)
-    }
-
-    # Validate sampled value
-    value <- validate_sampled_value(value, param_name, dist_type)
-
-    return(value)
-
-  }, error = function(e) {
-    stop("Failed to sample parameter '", param_name, "': ", e$message)
-  })
-}
-
-#' Validate a sampled value
-#' @noRd
-validate_sampled_value <- function(value, param_name, distribution) {
-
-  # Check for NA/NaN/Inf
-  if (is.na(value) || is.nan(value) || is.infinite(value)) {
-    stop("Invalid value sampled for parameter '", param_name, "': ", value)
-  }
-
-  # Distribution-specific bounds checking
-  if (distribution == "beta" && (value < 0 || value > 1)) {
-    stop("Beta parameter '", param_name, "' out of bounds [0,1]: ", value)
-  }
-
-  if (distribution == "gamma" && value < 0) {
-    stop("Gamma parameter '", param_name, "' must be non-negative: ", value)
-  }
-
-  if (distribution == "lognormal" && value <= 0) {
-    stop("Lognormal parameter '", param_name, "' must be positive: ", value)
-  }
-
-  if (distribution == "gompertz" && value < 0) {
-    stop("Gompertz parameter '", param_name, "' must be non-negative: ", value)
-  }
-
-  return(value)
-}
+# Removed sample_from_distribution and validate_sampled_value
+# Now using sample_from_prior from sample_from_prior.R for all distribution sampling
 
 #' Format value for verbose output
 #' @noRd
@@ -488,7 +380,9 @@ format_verbose_value <- function(value, max_length = 50) {
 
   # For single values
   if (length(value) == 1) {
-    if (is.numeric(value)) {
+    if (is.na(value)) {
+      return("NA")
+    } else if (is.numeric(value)) {
       # Format based on magnitude
       if (abs(value) >= 0.01 && abs(value) <= 10000) {
         return(format(round(value, 4), scientific = FALSE))
@@ -504,12 +398,14 @@ format_verbose_value <- function(value, max_length = 50) {
   if (length(value) <= 4) {
     # Show all values if 4 or fewer
     formatted <- sapply(value, function(v) {
-      if (is.numeric(v)) {
+      if (is.numeric(v) && !is.na(v)) {
         if (abs(v) >= 0.01 && abs(v) <= 10000) {
           format(round(v, 4), scientific = FALSE)
         } else {
           format(v, scientific = TRUE, digits = 3)
         }
+      } else if (is.na(v)) {
+        "NA"
       } else {
         as.character(v)
       }
@@ -521,23 +417,27 @@ format_verbose_value <- function(value, max_length = 50) {
     last_one <- value[length(value)]
 
     formatted_first <- sapply(first_three, function(v) {
-      if (is.numeric(v)) {
+      if (is.numeric(v) && !is.na(v)) {
         if (abs(v) >= 0.01 && abs(v) <= 10000) {
           format(round(v, 4), scientific = FALSE)
         } else {
           format(v, scientific = TRUE, digits = 3)
         }
+      } else if (is.na(v)) {
+        "NA"
       } else {
         as.character(v)
       }
     })
 
-    formatted_last <- if (is.numeric(last_one)) {
+    formatted_last <- if (is.numeric(last_one) && !is.na(last_one)) {
       if (abs(last_one) >= 0.01 && abs(last_one) <= 10000) {
         format(round(last_one, 4), scientific = FALSE)
       } else {
         format(last_one, scientific = TRUE, digits = 3)
       }
+    } else if (is.na(last_one)) {
+      "NA"
     } else {
       as.character(last_one)
     }
@@ -564,9 +464,10 @@ sample_global_parameters_impl <- function(config_sampled, global_params,
     if (is.null(should_sample)) should_sample <- TRUE
 
     if (should_sample) {
-      sampled_value <- sample_from_distribution(
-        global_params[[param_name]],
-        param_name
+      sampled_value <- sample_from_prior(
+        n = 1,
+        prior = global_params[[param_name]],
+        verbose = FALSE
       )
 
       config_sampled[[param_name]] <- sampled_value
@@ -634,14 +535,17 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
         # Get distribution info for this location
         if (!is.null(param_info$parameters$location[[iso]])) {
 
-          dist_info <- list(
-            distribution = param_info$distribution,
-            parameters = param_info$parameters$location[[iso]]
-          )
+          # The location-specific prior already has the correct structure
+          # with distribution and parameters slots
+          dist_info <- param_info$parameters$location[[iso]]
 
           tryCatch({
-            sampled_values[i] <- sample_from_distribution(dist_info,
-                                                         paste0(param_name, "_", iso))
+            sampled_value <- sample_from_prior(
+              n = 1,
+              prior = dist_info,
+              verbose = FALSE
+            )
+            sampled_values[i] <- sampled_value
           }, error = function(e) {
             warning("Failed to sample ", param_name, " for location ", iso, ": ", e$message)
             sampled_values[i] <- NA
@@ -773,15 +677,22 @@ sample_initial_conditions_impl <- function(config_sampled, location_params,
         # Get distribution info for this location
         if (!is.null(param_info$parameters$location[[iso]])) {
 
-          dist_info <- list(
-            distribution = param_info$distribution,
-            parameters = param_info$parameters$location[[iso]]
-          )
+          # The location-specific prior already has the correct structure
+          # with distribution and parameters slots
+          dist_info <- param_info$parameters$location[[iso]]
 
-          sampled_props[j, comp] <- sample_from_distribution(
-            dist_info,
-            paste0(param_name, "_", iso)
-          )
+          sampled_value <- tryCatch({
+            sample_from_prior(
+              n = 1,
+              prior = dist_info,
+              verbose = FALSE
+            )
+          }, error = function(e) {
+            warning("Failed to sample ", param_name, " for location ", iso, 
+                   ": ", e$message)
+            NA
+          })
+          sampled_props[j, comp] <- sampled_value
 
           sampled_values[j] <- sampled_props[j, comp]
 
@@ -807,8 +718,9 @@ sample_initial_conditions_impl <- function(config_sampled, location_params,
   min_nonzero_prop <- Inf
   for (j in seq_along(locations)) {
     for (comp in ic_compartments_sample) {
-      if (sampled_props[j, comp] > 0) {
-        min_nonzero_prop <- min(min_nonzero_prop, sampled_props[j, comp])
+      prop_val <- sampled_props[j, comp]
+      if (!is.na(prop_val) && prop_val > 0) {
+        min_nonzero_prop <- min(min_nonzero_prop, prop_val)
       }
     }
   }
@@ -878,15 +790,24 @@ sample_initial_conditions_impl <- function(config_sampled, location_params,
     for (j in seq_along(N_j)) {
 
       # Calculate exact count with full precision
-      exact_count <- sampled_props[j, comp] * N_j[j]
-
-      # Round to nearest integer
-      counts[j] <- round(exact_count)
-
-      # Ensure we don't completely lose very small but non-zero compartments
-      # If the proportion was non-zero but rounds to 0, set to 1
-      if (counts[j] == 0 && sampled_props[j, comp] > 0 && exact_count >= 0.5) {
-        counts[j] <- 1
+      prop_val <- sampled_props[j, comp]
+      
+      # Handle NA values
+      if (is.na(prop_val)) {
+        warning("NA proportion for compartment ", comp, " in location ", j, 
+                ". Setting to 0.")
+        counts[j] <- 0
+      } else {
+        exact_count <- prop_val * N_j[j]
+        
+        # Round to nearest integer
+        counts[j] <- round(exact_count)
+        
+        # Ensure we don't completely lose very small but non-zero compartments
+        # If the proportion was non-zero but rounds to 0, set to 1
+        if (counts[j] == 0 && prop_val > 0 && exact_count >= 0.5) {
+          counts[j] <- 1
+        }
       }
     }
 
@@ -1183,6 +1104,7 @@ create_sampling_args <- function(pattern = "all",
     sample_a2 = TRUE,
     sample_b1 = TRUE,
     sample_b2 = TRUE,
+    sample_mu_j = TRUE,
     # Initial conditions
     sample_initial_conditions = TRUE
   )

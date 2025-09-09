@@ -30,6 +30,8 @@ make_LASER_config(
   gamma_2 = NULL,
   epsilon = NULL,
   mu_jt = NULL,
+  mu_j = NULL,
+  mu_j_slope = NULL,
   rho = NULL,
   sigma = NULL,
   longitude = NULL,
@@ -135,6 +137,13 @@ sequence from date_start to date_stop.
 
 \item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
+If mu_j is provided, mu_jt will be generated from mu_j and mu_j_slope.}
+
+\item{mu_j}{A numeric vector of location-specific baseline case fatality ratios. Optional. If provided
+with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in \link{0, 1}.}
+
+\item{mu_j_slope}{A numeric vector of location-specific temporal slopes for case fatality ratio.
+Optional. Default is 0 (no temporal trend). Length must equal length(location_name).
 \subsection{Observation Processes}{
 }}
 

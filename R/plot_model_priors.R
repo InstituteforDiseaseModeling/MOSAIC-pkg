@@ -99,7 +99,7 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
         # Handle both parameter naming conventions: (meanlog, sdlog) and (mean, sd)
         meanlog_val <- NULL
         sdlog_val <- NULL
-        
+
         if (!is.null(param$parameters$meanlog) && !is.null(param$parameters$sdlog)) {
           # Standard R lognormal parameterization
           meanlog_val <- param$parameters$meanlog
@@ -116,7 +116,7 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
             sdlog_val <- sqrt(log(1 + sigma^2 / mu^2))
           }
         }
-        
+
         if (!is.null(meanlog_val) && !is.null(sdlog_val)) {
           x_max <- qlnorm(0.99, meanlog_val, sdlog_val)
           x <- seq(0, x_max, length.out = 1000)
@@ -159,8 +159,8 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
 
         # Create individual plot
         p <- ggplot(plot_data, aes(x = x, y = y)) +
-          geom_area(fill = "#457b9d", alpha = 0.3) +
-          geom_line(color = "#457b9d", linewidth = 1) +
+          geom_area(fill = "#457b9d", alpha = 0.4) +
+          geom_line(color = "#457b9d", linewidth = 0.7) +
           theme_minimal() +
           theme(
             plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
@@ -179,9 +179,9 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
     }
 
     if (length(plot_list) > 0) {
-      # Determine grid layout
+      # Determine grid layout (3 columns to match posteriors)
       n_plots <- length(plot_list)
-      ncol <- min(4, n_plots)
+      ncol <- min(3, n_plots)
       nrow <- ceiling(n_plots / ncol)
 
       # Combine plots using cowplot
@@ -210,12 +210,12 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
       p_global <- cowplot::plot_grid(title, p_global,
                                      ncol = 1, rel_heights = c(0.08, 0.92))
 
-      # Add common axis labels
-      p_global <- cowplot::add_sub(p_global, "Value", size = 12, vjust = 0)
+      # Add common axis labels with better spacing
+      p_global <- cowplot::add_sub(p_global, "Value", size = 12, vjust = -1)
       p_global <- cowplot::ggdraw(p_global) +
-        cowplot::draw_label("Density", x = 0.02, y = 0.5, angle = 90, size = 12)
+        cowplot::draw_label("Density", x = 0.01, y = 0.5, angle = 90, size = 12)
 
-      ggsave(file.path(output_dir, "priors_global.pdf"), p_global, width = 12, height = 10)
+      ggsave(file.path(output_dir, "priors_global.pdf"), p_global, width = 12, height = 14)
       plots$global <- p_global
       cat("  Saved: priors_global.pdf\n")
     }
@@ -293,9 +293,13 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
       # -----------------------------------------------------------------------
       for (param_name in ic_params) {
         if (!is.null(priors$parameters_location[[param_name]])) {
-          loc_param <- priors$parameters_location[[param_name]]$parameters$location[[iso]]
-
-          if (!is.null(loc_param) && !is.null(loc_param$shape1) && !is.null(loc_param$shape2)) {
+          loc_param_raw <- priors$parameters_location[[param_name]]$parameters$location[[iso]]
+          
+          if (!is.null(loc_param_raw)) {
+            # Handle both old and new structures
+            loc_param <- if (!is.null(loc_param_raw$parameters)) loc_param_raw$parameters else loc_param_raw
+            
+            if (!is.null(loc_param$shape1) && !is.null(loc_param$shape2)) {
             compartment_label <- compartment_labels[param_name]
             plot_color <- param_colors[param_name]
 
@@ -380,6 +384,7 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
               )
 
             ic_plot_list[[param_name]] <- p
+            }
           }
         }
       }
@@ -392,27 +397,38 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
 
       # Total transmission rate (beta_j0_tot)
       if (!is.null(priors$parameters_location$beta_j0_tot)) {
-        tot_params <- priors$parameters_location$beta_j0_tot$parameters$location[[iso]]
+        tot_params_raw <- priors$parameters_location$beta_j0_tot$parameters$location[[iso]]
         
-        # Determine distribution type
-        dist_type <- ifelse(!is.null(priors$parameters_location$beta_j0_tot$distribution),
-                            priors$parameters_location$beta_j0_tot$distribution,
-                            "lognormal")  # Default to lognormal if not specified
-        
-        if (!is.null(tot_params)) {
+        # Handle both old (direct) and new (nested) parameter structures
+        if (!is.null(tot_params_raw)) {
+          # Check if parameters are nested under 'parameters' field (new structure)
+          if (!is.null(tot_params_raw$parameters)) {
+            tot_params <- tot_params_raw$parameters
+            # Distribution type from location level if available, otherwise from parent
+            dist_type <- ifelse(!is.null(tot_params_raw$distribution),
+                               tot_params_raw$distribution,
+                               priors$parameters_location$beta_j0_tot$distribution)
+          } else {
+            # Old structure - parameters at top level
+            tot_params <- tot_params_raw
+            dist_type <- ifelse(!is.null(priors$parameters_location$beta_j0_tot$distribution),
+                               priors$parameters_location$beta_j0_tot$distribution,
+                               "lognormal")
+          }
+          
           if (dist_type == "gompertz" && !is.null(tot_params$b) && !is.null(tot_params$eta)) {
             # Handle Gompertz distribution
             x_max <- qgompertz(0.99, b = tot_params$b, eta = tot_params$eta)
             x <- seq(0, x_max, length.out = 1000)
             y <- dgompertz(x, b = tot_params$b, eta = tot_params$eta)
-            
+
             # Calculate statistics (use sampling for mean/median since closed forms are complex)
             set.seed(123)
             samples <- rgompertz(10000, b = tot_params$b, eta = tot_params$eta)
             median_val <- median(samples)
             mean_val <- mean(samples)
             mode_val <- (1 / tot_params$b) * log(tot_params$eta / tot_params$b)
-            
+
             transmission_plot_list$beta_tot <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
               geom_area(fill = "#457b9d", alpha = 0.3) +
               geom_line(color = "#457b9d", linewidth = 1.2) +
@@ -424,17 +440,17 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
                    subtitle = sprintf("Gompertz(b=%.1f, η=%.1f)\nMode: %.2e, Median: %.2e",
                                     tot_params$b, tot_params$eta, mode_val, median_val),
                    x = "Rate", y = "Density")
-            
+
           } else if (dist_type == "lognormal" && !is.null(tot_params$meanlog) && !is.null(tot_params$sdlog)) {
             # Handle Lognormal distribution (original code)
             x_max <- qlnorm(0.99, tot_params$meanlog, tot_params$sdlog)
             x <- seq(0, x_max, length.out = 1000)
             y <- dlnorm(x, tot_params$meanlog, tot_params$sdlog)
-            
+
             # Calculate median and mean
             median_val <- exp(tot_params$meanlog)
             mean_val <- exp(tot_params$meanlog + tot_params$sdlog^2/2)
-            
+
             transmission_plot_list$beta_tot <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
               geom_area(fill = "#457b9d", alpha = 0.3) +
               geom_line(color = "#457b9d", linewidth = 1.2) +
@@ -451,8 +467,12 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
 
       # Proportion of human-to-human transmission (p_beta)
       if (!is.null(priors$parameters_location$p_beta)) {
-        p_params <- priors$parameters_location$p_beta$parameters$location[[iso]]
-        if (!is.null(p_params) && !is.null(p_params$shape1) && !is.null(p_params$shape2)) {
+        p_params_raw <- priors$parameters_location$p_beta$parameters$location[[iso]]
+        if (!is.null(p_params_raw)) {
+          # Handle both old and new structures
+          p_params <- if (!is.null(p_params_raw$parameters)) p_params_raw$parameters else p_params_raw
+          
+          if (!is.null(p_params$shape1) && !is.null(p_params$shape2)) {
           x <- seq(0, 1, length.out = 1000)
           y <- dbeta(x, p_params$shape1, p_params$shape2)
 
@@ -468,6 +488,7 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
                  subtitle = sprintf("Beta(%.2f, %.2f)\nMean: %.3f",
                                   p_params$shape1, p_params$shape2, mean_val),
                  x = "Proportion", y = "Density")
+          }
         }
       }
 
@@ -475,14 +496,18 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
       if (!is.null(priors$parameters_location$beta_j0_tot) &&
           !is.null(priors$parameters_location$p_beta)) {
 
-        tot_params <- priors$parameters_location$beta_j0_tot$parameters$location[[iso]]
-        p_params <- priors$parameters_location$p_beta$parameters$location[[iso]]
+        tot_params_raw <- priors$parameters_location$beta_j0_tot$parameters$location[[iso]]
+        p_params_raw <- priors$parameters_location$p_beta$parameters$location[[iso]]
+        
+        # Handle both old and new structures
+        tot_params <- if (!is.null(tot_params_raw$parameters)) tot_params_raw$parameters else tot_params_raw
+        p_params <- if (!is.null(p_params_raw$parameters)) p_params_raw$parameters else p_params_raw
 
         if (!is.null(tot_params) && !is.null(p_params)) {
           # Sample from the priors to get derived distributions
           n_samples <- 10000
           beta_tot_samples <- NULL  # Initialize to NULL
-          
+
           # Handle different distribution types for beta_j0_tot
           if (!is.null(priors$parameters_location$beta_j0_tot$distribution)) {
             dist_type <- priors$parameters_location$beta_j0_tot$distribution
@@ -505,21 +530,21 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
             }
           } else {
             # Fallback: assume lognormal if distribution type not specified
-            if (!is.null(tot_params$meanlog) && !is.null(tot_params$sdlog) && 
+            if (!is.null(tot_params$meanlog) && !is.null(tot_params$sdlog) &&
                 is.numeric(tot_params$meanlog) && is.numeric(tot_params$sdlog)) {
               beta_tot_samples <- rlnorm(n_samples, tot_params$meanlog, tot_params$sdlog)
             } else {
               warning("Distribution type not specified and lognormal parameters not found or invalid")
             }
           }
-          
+
           # Only proceed if we have valid beta_tot_samples
           if (is.null(beta_tot_samples) || all(is.na(beta_tot_samples))) {
             # Skip derived distributions if beta_tot_samples couldn't be generated
             # Do nothing - just skip this section
           } else if (!is.null(p_params$shape1) && !is.null(p_params$shape2)) {
             p_beta_samples <- rbeta(n_samples, p_params$shape1, p_params$shape2)
-            
+
             # Derive the transmission components
             beta_hum_derived <- beta_tot_samples * p_beta_samples
             beta_env_derived <- beta_tot_samples * (1 - p_beta_samples)
@@ -592,62 +617,124 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
 
       # Travel probability
       if (!is.null(priors$parameters_location$tau_i)) {
-        tau_params <- priors$parameters_location$tau_i$parameters$location[[iso]]
-        if (!is.null(tau_params) && !is.null(tau_params$shape1) && !is.null(tau_params$shape2)) {
-          x <- seq(0, 1, length.out = 1000)
-          y <- dbeta(x, tau_params$shape1, tau_params$shape2)
-
-          # Focus on relevant range for highly skewed distributions
-          if (tau_params$shape2 > 10000) {
-            mean_val <- tau_params$shape1 / (tau_params$shape1 + tau_params$shape2)
-            x_max <- min(1, mean_val * 100)
-            x <- seq(0, x_max, length.out = 1000)
-            y <- dbeta(x, tau_params$shape1, tau_params$shape2)
+        tau_params_raw <- priors$parameters_location$tau_i$parameters$location[[iso]]
+        if (!is.null(tau_params_raw)) {
+          # Extract parameters from nested structure
+          tau_params <- NULL
+          if (!is.null(tau_params_raw$parameters)) {
+            tau_params <- tau_params_raw$parameters
+          } else {
+            tau_params <- tau_params_raw  # Fallback for old structure
           }
+          
+          if (!is.null(tau_params) && !is.null(tau_params$shape1) && !is.null(tau_params$shape2)) {
+            x <- seq(0, 1, length.out = 1000)
+            y <- dbeta(x, tau_params$shape1, tau_params$shape2)
 
-          param_plot_list$tau <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
-            geom_area(fill = "#457b9d", alpha = 0.3) +
-            geom_line(color = "#457b9d", linewidth = 1.2) +
-            theme_minimal() +
-            scale_x_continuous(labels = scales::scientific) +
-            labs(title = "Travel Probability",
-                 subtitle = sprintf("Beta(%.2f, %.2f)", tau_params$shape1, tau_params$shape2),
-                 x = "Probability", y = "Density")
+            # Focus on relevant range for highly skewed distributions
+            if (tau_params$shape2 > 10000) {
+              mean_val <- tau_params$shape1 / (tau_params$shape1 + tau_params$shape2)
+              x_max <- min(1, mean_val * 100)
+              x <- seq(0, x_max, length.out = 1000)
+              y <- dbeta(x, tau_params$shape1, tau_params$shape2)
+            }
+
+            param_plot_list$tau <- ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
+              geom_area(fill = "#457b9d", alpha = 0.3) +
+              geom_line(color = "#457b9d", linewidth = 1.2) +
+              theme_minimal() +
+              scale_x_continuous(labels = scales::scientific) +
+              labs(title = "Travel Probability",
+                   subtitle = sprintf("Beta(%.2f, %.2f)", tau_params$shape1, tau_params$shape2),
+                   x = "Probability", y = "Density")
+          }
         }
       }
 
       # WASH coverage (theta_j)
       if (!is.null(priors$parameters_location$theta_j)) {
-        theta_params <- priors$parameters_location$theta_j$parameters$location[[iso]]
-        if (!is.null(theta_params) && !is.null(theta_params$shape1) && !is.null(theta_params$shape2)) {
-          x <- seq(0, 1, length.out = 1000)
-          y <- dbeta(x, theta_params$shape1, theta_params$shape2)
-
-          # Calculate mean and point estimate
-          mean_val <- theta_params$shape1 / (theta_params$shape1 + theta_params$shape2)
-
-          # Create subtitle with point estimate if available
-          subtitle_str <- sprintf("Beta(%.2f, %.2f)", theta_params$shape1, theta_params$shape2)
-          if (!is.null(theta_params$point_estimate)) {
-            subtitle_str <- paste0(subtitle_str, sprintf("\nPoint est: %.3f, Mean: %.3f",
-                                                        theta_params$point_estimate, mean_val))
+        theta_params_raw <- priors$parameters_location$theta_j$parameters$location[[iso]]
+        if (!is.null(theta_params_raw)) {
+          # Extract parameters from nested structure
+          theta_params <- NULL
+          if (!is.null(theta_params_raw$parameters)) {
+            theta_params <- theta_params_raw$parameters
           } else {
-            subtitle_str <- paste0(subtitle_str, sprintf("\nMean: %.3f", mean_val))
+            theta_params <- theta_params_raw  # Fallback for old structure
           }
+          
+          if (!is.null(theta_params) && !is.null(theta_params$shape1) && !is.null(theta_params$shape2)) {
+            x <- seq(0, 1, length.out = 1000)
+            y <- dbeta(x, theta_params$shape1, theta_params$shape2)
 
-          plot_data <- data.frame(x = x, y = y)
+            # Calculate mean and point estimate
+            mean_val <- theta_params$shape1 / (theta_params$shape1 + theta_params$shape2)
 
-          param_plot_list$theta_j <- ggplot(plot_data, aes(x = x, y = y)) +
-            geom_area(fill = "#457b9d", alpha = 0.3) +  # Light blue for WASH
-            geom_line(color = "#457b9d", linewidth = 1.2) +
-            geom_vline(xintercept = mean_val, linetype = "dashed",
-                      color = "gray50", alpha = 0.7) +
-            theme_minimal() +
-            scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
-            labs(title = "WASH Coverage (θ_j)",
-                 subtitle = subtitle_str,
-                 x = "Coverage Proportion", y = "Density") +
-            theme(plot.subtitle = element_text(size = 9))
+            # Create subtitle with point estimate if available
+            subtitle_str <- sprintf("Beta(%.2f, %.2f)", theta_params$shape1, theta_params$shape2)
+            if (!is.null(theta_params$point_estimate)) {
+              subtitle_str <- paste0(subtitle_str, sprintf("\nPoint est: %.3f, Mean: %.3f",
+                                                          theta_params$point_estimate, mean_val))
+            } else {
+              subtitle_str <- paste0(subtitle_str, sprintf("\nMean: %.3f", mean_val))
+            }
+
+            plot_data <- data.frame(x = x, y = y)
+
+            param_plot_list$theta_j <- ggplot(plot_data, aes(x = x, y = y)) +
+              geom_area(fill = "#457b9d", alpha = 0.3) +  # Light blue for WASH
+              geom_line(color = "#457b9d", linewidth = 1.2) +
+              geom_vline(xintercept = mean_val, linetype = "dashed",
+                        color = "gray50", alpha = 0.7) +
+              theme_minimal() +
+              scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+              labs(title = "WASH Coverage (θ_j)",
+                   subtitle = subtitle_str,
+                   x = "Coverage Proportion", y = "Density") +
+              theme(plot.subtitle = element_text(size = 9))
+          }
+        }
+      }
+
+      # Case Fatality Ratio (mu_j)
+      if (!is.null(priors$parameters_location$mu_j)) {
+        mu_params_raw <- priors$parameters_location$mu_j$parameters$location[[iso]]
+        if (!is.null(mu_params_raw)) {
+          # Extract parameters from nested structure
+          mu_params <- NULL
+          if (!is.null(mu_params_raw$parameters)) {
+            mu_params <- mu_params_raw$parameters
+          } else {
+            mu_params <- mu_params_raw  # Fallback for old structure
+          }
+          
+          if (!is.null(mu_params) && !is.null(mu_params$shape) && !is.null(mu_params$rate)) {
+            # Gamma distribution for mu_j
+            x_max <- qgamma(0.99, mu_params$shape, mu_params$rate)
+            x <- seq(0, x_max, length.out = 1000)
+            y <- dgamma(x, mu_params$shape, mu_params$rate)
+
+            # Calculate mean
+            mean_val <- mu_params$shape / mu_params$rate
+
+            # Create subtitle
+            subtitle_str <- sprintf("Gamma(%.1f, %.1f)\nMean: %.3f (%.2f%%)",
+                                   mu_params$shape, mu_params$rate,
+                                   mean_val, mean_val * 100)
+
+            plot_data <- data.frame(x = x, y = y)
+
+            param_plot_list$mu_j <- ggplot(plot_data, aes(x = x, y = y)) +
+              geom_area(fill = "#457b9d", alpha = 0.3) +
+              geom_line(color = "#457b9d", linewidth = 1.2) +
+              geom_vline(xintercept = mean_val, linetype = "dashed",
+                        color = "gray50", alpha = 0.7) +
+              theme_minimal() +
+              labs(title = "Case Fatality Ratio (μ_j)",
+                   subtitle = subtitle_str,
+                   x = "CFR", y = "Density") +
+              theme(plot.subtitle = element_text(size = 9))
+          }
         }
       }
 
@@ -670,10 +757,10 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
             cowplot::draw_label("Initial Conditions",
                                fontface = 'bold', size = 14, x = 0.5, y = 0.5, hjust = 0.5)
 
-          # Add common axis labels for IC plot
-          ic_combined <- cowplot::add_sub(ic_combined, "Proportion of Population", size = 10, vjust = 0)
+          # Add common axis labels for IC plot with better spacing
+          ic_combined <- cowplot::add_sub(ic_combined, "Proportion of Population", size = 10, vjust = -1)
           ic_combined <- cowplot::ggdraw(ic_combined) +
-            cowplot::draw_label("Density", x = 0.02, y = 0.5, angle = 90, size = 10)
+            cowplot::draw_label("Density", x = 0.01, y = 0.5, angle = 90, size = 10)
         }
 
         # Create transmission parameters grid (2x2 for the 4 transmission plots)
@@ -798,10 +885,11 @@ plot_model_priors <- function(PATHS = NULL, priors = NULL, config = NULL, output
 
         # Calculate appropriate height based on content
         # Base height accounts for title, IC section, transmission section, and footer
-        plot_height <- 16  # Increased base height for better proportions
+        plot_height <- 18  # Increased base height for better proportions and spacing
         if (!is.null(param_combined)) {
           plot_height <- plot_height + (n_rows - 1) * 3  # Add extra height for additional parameter rows
         }
+        plot_height <- min(plot_height, 24)  # Cap at reasonable maximum
 
         tryCatch({
           ggsave(filename, p_combined_final, width = 14, height = plot_height)
