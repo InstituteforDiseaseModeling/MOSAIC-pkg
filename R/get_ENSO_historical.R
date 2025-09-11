@@ -22,13 +22,14 @@
 #' @export
 get_ENSO_historical <- function() {
 
-     message("NOTE: Historical ENSO data downloaded from: https://psl.noaa.gov/gcos_wgsp/Timeseries/Data")
+     message("NOTE: Historical ENSO data downloaded from: https://psl.noaa.gov/data/correlation/")
 
-     # URLs for historical Niño3, Niño3.4, and Niño4 datasets from NOAA
+     # URLs for historical Niño3, Niño3.4, and Niño4 anomaly datasets from NOAA
+     # Using ERSSTv5 anomaly data from 1948-present (matches forecast data units)
      urls <- list(
-          ENSO3 = "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/nino3.long.anom.data",
-          ENSO34 = "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/nino34.long.anom.data",
-          ENSO4 = "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/nino4.long.anom.data"
+          ENSO3 = "https://psl.noaa.gov/data/correlation/nina3.anom.data",
+          ENSO34 = "https://psl.noaa.gov/data/correlation/nina34.anom.data", 
+          ENSO4 = "https://psl.noaa.gov/data/correlation/nina4.anom.data"
      )
 
      # Helper function to download and process each dataset

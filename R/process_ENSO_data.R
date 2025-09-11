@@ -1,6 +1,6 @@
 #' Compile ENSO and DMI Data (Historical and Forecast)
 #'
-#' This function compiles historical and forecast data for DMI and ENSO (Niño3, Niño3.4, and Niño4) into a single data frame. The data is filtered to only include years from a specified `year_start` onwards. The function also allows for disaggregation of monthly data into daily or weekly values using either linear interpolation or spline interpolation.
+#' This function compiles historical and forecast data for DMI and ENSO (Niño3, Niño3.4, and Niño4) into a single data frame. The data is filtered to only include years from a specified `year_start` onwards. The function also allows for disaggregation of monthly data into daily or weekly values using either linear interpolation or spline interpolation. When historical and forecast data overlap for the same dates, historical data takes precedence.
 #'
 #' @param year_start An integer representing the start year for filtering the data. Only data from this year onward will be included in the compiled data. The value must be greater than or equal to 1870.
 #' @param frequency A character string specifying the time resolution of the output data. Valid options are "daily", "weekly", or "monthly".
@@ -18,6 +18,13 @@
 #'   \item \code{doy}: The day of the year (only for "daily" frequency).
 #'   \item \code{date_start}: Start date for the week or month.
 #'   \item \code{date_stop}: End date for the week or month.
+#' }
+#'
+#' @details The function automatically handles overlapping data between historical and forecast sources:
+#' \itemize{
+#'   \item When the same date exists in both historical and forecast data, historical data is preferred
+#'   \item The function reports any overlaps found, including the date range and number of overlapping months
+#'   \item Data source tracking is added internally but not included in the final output
 #' }
 #'
 #' @importFrom zoo na.approx na.spline
@@ -64,6 +71,12 @@ process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method =
      enso_historical <- get_ENSO_historical()
      enso_forecast <- get_ENSO_forecast()
 
+     # Add source labels to track data origin
+     dmi_historical$data_source <- "historical"
+     dmi_forecast$data_source <- "forecast" 
+     enso_historical$data_source <- "historical"
+     enso_forecast$data_source <- "forecast"
+
      # Combine the historical and forecast data for DMI and ENSO
      compiled_df <- base::rbind(
           dmi_historical,
@@ -80,6 +93,42 @@ process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method =
 
      # Ensure dates are valid
      compiled_df <- compiled_df[!base::is.na(compiled_df$date), ]
+
+     # Handle overlapping data: prefer historical over forecast
+     # Sort by date, variable, and source (historical first, then forecast)
+     # Create a sort order where historical = 1, forecast = 2
+     sort_priority <- ifelse(compiled_df$data_source == "historical", 1, 2)
+     compiled_df <- compiled_df[base::order(compiled_df$date, compiled_df$variable, sort_priority), ]
+     
+     # Check for and report overlaps
+     duplicated_entries <- compiled_df[base::duplicated(compiled_df[, c("date", "variable")]) | 
+                                      base::duplicated(compiled_df[, c("date", "variable")], fromLast = TRUE), ]
+     
+     if (nrow(duplicated_entries) > 0) {
+          # Count overlaps by variable
+          overlap_summary <- stats::aggregate(duplicated_entries$date, 
+                                           by = list(variable = duplicated_entries$variable), 
+                                           FUN = function(x) length(unique(x)))
+          
+          message("Found overlapping data between historical and forecast:")
+          for (i in 1:nrow(overlap_summary)) {
+               var_name <- overlap_summary$variable[i]
+               overlap_count <- overlap_summary$x[i]
+               
+               # Get date range of overlaps for this variable
+               var_overlaps <- duplicated_entries[duplicated_entries$variable == var_name, ]
+               date_range <- range(var_overlaps$date)
+               
+               message(sprintf("  %s: %d months (%s to %s)", 
+                              var_name, overlap_count, 
+                              format(date_range[1], "%Y-%m"), 
+                              format(date_range[2], "%Y-%m")))
+          }
+          message("Historical data will be kept for overlapping periods.")
+     }
+     
+     # Remove duplicates, keeping first occurrence (historical over forecast due to sorting)
+     compiled_df <- compiled_df[!base::duplicated(compiled_df[, c("date", "variable")]), ]
 
      # Get the full sequence of dates from year_start to the present for each variable
      start_date <- as.Date(paste0(year_start, "-01-01"))
