@@ -1,11 +1,22 @@
 #' Plot Predicted Suitability for All Countries
 #'
 #' This function generates a facet plot of predicted environmental suitability for all countries
-#' over time, with shaded regions indicating cholera outbreaks.
+#' over time, with shaded regions indicating cholera outbreaks. Requires that est_suitability() 
+#' has been run first to generate the necessary prediction files.
 #'
 #' @param PATHS A list of paths to the directories where data is stored and plots will be saved.
+#'   Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for saving plots).
 #'
-#' @return A facet plot of predicted environmental suitability for all countries.
+#' @return A facet plot of predicted environmental suitability for all countries, filtered to 
+#'   years >= 2021. The plot includes smoothed suitability predictions and shaded regions 
+#'   indicating periods with cholera cases.
+#'   
+#' @details The function merges data from two files created by est_suitability():
+#'   \itemize{
+#'     \item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
+#'     \item data_psi_suitability.csv - Contains country names and outbreak indicators
+#'   }
+#'   
 #' @export
 
 plot_suitability_by_country <- function(PATHS) {
@@ -14,8 +25,54 @@ plot_suitability_by_country <- function(PATHS) {
      requireNamespace('ggplot2')
      requireNamespace('glue')
 
-     # Load prediction data (generated from est_suitability function)
-     d_all <- read.csv(file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv"), stringsAsFactors = FALSE)
+     # Load prediction data with smoothed predictions (generated from est_suitability function)
+     pred_weekly_file <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_week.csv")
+     data_main_file <- file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv")
+     
+     if (!file.exists(pred_weekly_file)) {
+          stop(glue::glue("Prediction file not found: {pred_weekly_file}. Please run est_suitability(PATHS) first."))
+     }
+     
+     if (!file.exists(data_main_file)) {
+          stop(glue::glue("Main data file not found: {data_main_file}. Please run est_suitability(PATHS) first."))
+     }
+     
+     # Load prediction data with smoothed values
+     d_pred <- read.csv(pred_weekly_file, stringsAsFactors = FALSE)
+     
+     # Load main data file to get additional columns (country, cases_binary, year, etc.)
+     d_main <- read.csv(data_main_file, stringsAsFactors = FALSE)
+     
+     # Merge to get all needed columns
+     # First, create matching keys
+     d_pred$date_start <- as.Date(d_pred$date_start)
+     d_main$date_start <- as.Date(d_main$date_start)
+     
+     # Merge on iso_code, week, and date_start for exact matches
+     d_all <- merge(d_pred, 
+                    d_main[c("iso_code", "week", "date_start", "country", "cases_binary", "year")], 
+                    by = c("iso_code", "week", "date_start"), 
+                    all.x = TRUE)
+     
+     # For prediction periods that don't have main data, fill in missing columns
+     # Extract year from date_start if missing
+     d_all$year[is.na(d_all$year)] <- as.numeric(format(d_all$date_start[is.na(d_all$year)], "%Y"))
+     
+     # Set cases_binary to 0 for prediction-only periods (assumes no outbreaks in future predictions)
+     d_all$cases_binary[is.na(d_all$cases_binary)] <- 0
+     
+     # Fill in country names for missing entries using first available country name per iso_code
+     country_lookup <- d_all[!is.na(d_all$country), c("iso_code", "country")]
+     country_lookup <- country_lookup[!duplicated(country_lookup$iso_code), ]
+     
+     for (iso in unique(d_all$iso_code[is.na(d_all$country)])) {
+          if (iso %in% country_lookup$iso_code) {
+               d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- country_lookup$country[country_lookup$iso_code == iso]
+          } else {
+               # Fallback to iso_code if no country name available
+               d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- iso
+          }
+     }
 
 
      # Define the professional color palette
