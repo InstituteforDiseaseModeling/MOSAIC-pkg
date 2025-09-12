@@ -2,11 +2,21 @@
 #'
 #' This function plots the reported cholera cases and predicted environmental suitability
 #' for a specific country over time, with shaded regions indicating cholera outbreaks.
+#' Requires that est_suitability() has been run first to generate prediction files.
 #'
 #' @param PATHS A list of paths to the directories where data is stored and plots will be saved.
-#' @param plot_iso_code The ISO code of the country to plot.
+#'   Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for saving plots).
+#' @param plot_iso_code The ISO code of the country to plot (e.g., "AGO", "CMR").
 #'
-#' @return A combined plot of reported cholera cases and predicted environmental suitability.
+#' @return A combined plot showing both cholera case bars and smoothed suitability predictions
+#'   for the specified country, filtered to years >= 2021.
+#'   
+#' @details The function merges data from two files created by est_suitability():
+#'   \itemize{
+#'     \item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
+#'     \item data_psi_suitability.csv - Contains case counts and outbreak indicators
+#'   }
+#'   
 #' @export
 
 plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
@@ -16,8 +26,55 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      requireNamespace('patchwork')
      requireNamespace('glue')
 
-     # Load prediction data
-     d_all <- read.csv(file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv"), stringsAsFactors = FALSE)
+     # Load prediction data with smoothed predictions (generated from est_suitability function)
+     pred_weekly_file <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_week.csv")
+     data_main_file <- file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv")
+     
+     if (!file.exists(pred_weekly_file)) {
+          stop(glue::glue("Prediction file not found: {pred_weekly_file}. Please run est_suitability(PATHS) first."))
+     }
+     
+     if (!file.exists(data_main_file)) {
+          stop(glue::glue("Main data file not found: {data_main_file}. Please run est_suitability(PATHS) first."))
+     }
+     
+     # Load prediction data with smoothed values
+     d_pred <- read.csv(pred_weekly_file, stringsAsFactors = FALSE)
+     
+     # Load main data file to get additional columns (country, cases_binary, year, etc.)
+     d_main <- read.csv(data_main_file, stringsAsFactors = FALSE)
+     
+     # Merge to get all needed columns
+     # First, create matching keys
+     d_pred$date_start <- as.Date(d_pred$date_start)
+     d_main$date_start <- as.Date(d_main$date_start)
+     
+     # Merge on iso_code, week, and date_start for exact matches
+     d_all <- merge(d_pred, 
+                    d_main[c("iso_code", "week", "date_start", "country", "cases_binary", "year", "cases_weekly")], 
+                    by = c("iso_code", "week", "date_start"), 
+                    all.x = TRUE)
+     
+     # For prediction periods that don't have main data, fill in missing columns
+     # Extract year from date_start if missing
+     d_all$year[is.na(d_all$year)] <- as.numeric(format(d_all$date_start[is.na(d_all$year)], "%Y"))
+     
+     # Set cases_binary to 0 for prediction-only periods
+     d_all$cases_binary[is.na(d_all$cases_binary)] <- 0
+     d_all$cases_weekly[is.na(d_all$cases_weekly)] <- 0
+     
+     # Fill in country names for missing entries
+     country_lookup <- d_all[!is.na(d_all$country), c("iso_code", "country")]
+     country_lookup <- country_lookup[!duplicated(country_lookup$iso_code), ]
+     
+     for (iso in unique(d_all$iso_code[is.na(d_all$country)])) {
+          if (iso %in% country_lookup$iso_code) {
+               d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- country_lookup$country[country_lookup$iso_code == iso]
+          } else {
+               # Fallback to iso_code if no country name available
+               d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- iso
+          }
+     }
 
 
      # Define the professional color palette
@@ -26,8 +83,7 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      color_pred <- "#ff7f0e"    # Orange for predicted values
      color_actual <- "black"    # Black for actual predictions
 
-     # Convert date columns to Date format
-     d_all$date_start <- as.Date(d_all$date_start)
+     # Convert date_stop to Date format (date_start already converted during merge)
      d_all$date_stop <- as.Date(d_all$date_stop)
 
      # Filter data for the specific country and time range (>= 2021)

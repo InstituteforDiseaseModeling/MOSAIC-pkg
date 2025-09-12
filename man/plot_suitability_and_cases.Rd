@@ -7,14 +7,24 @@
 plot_suitability_and_cases(PATHS, plot_iso_code)
 }
 \arguments{
-\item{PATHS}{A list of paths to the directories where data is stored and plots will be saved.}
+\item{PATHS}{A list of paths to the directories where data is stored and plots will be saved.
+Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for saving plots).}
 
-\item{plot_iso_code}{The ISO code of the country to plot.}
+\item{plot_iso_code}{The ISO code of the country to plot (e.g., "AGO", "CMR").}
 }
 \value{
-A combined plot of reported cholera cases and predicted environmental suitability.
+A combined plot showing both cholera case bars and smoothed suitability predictions
+for the specified country, filtered to years >= 2021.
 }
 \description{
 This function plots the reported cholera cases and predicted environmental suitability
 for a specific country over time, with shaded regions indicating cholera outbreaks.
+Requires that est_suitability() has been run first to generate prediction files.
+}
+\details{
+The function merges data from two files created by est_suitability():
+\itemize{
+\item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
+\item data_psi_suitability.csv - Contains case counts and outbreak indicators
+}
 }
