@@ -183,9 +183,9 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
           )
 
      # Combine the bar plot and line plot using patchwork
-     p_combined <- (bar_plot / line_plot) + plot_layout(heights = c(1, 2)) +
-          plot_annotation(title = glue::glue("Reported Cholera Cases and Predicted Environmental Suitability (\u03A8) for {plot_country_name} ({plot_iso_code})")) &
-          theme(plot.title = element_text(hjust = 0.5))
+     p_combined <- (bar_plot / line_plot) + patchwork::plot_layout(heights = c(1, 2)) +
+          patchwork::plot_annotation(title = glue::glue("Reported Cholera Cases and Predicted Environmental Suitability (\u03A8) for {plot_country_name} ({plot_iso_code})")) &
+          ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
 
      print(p_combined)
 
