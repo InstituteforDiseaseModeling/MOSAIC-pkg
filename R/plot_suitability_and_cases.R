@@ -51,7 +51,7 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      
      # Check what columns are available in the main data file
      required_cols <- c("iso_code", "week", "date_start", "cases_binary", "year")
-     optional_cols <- c("country", "cases_weekly")
+     optional_cols <- c("country", "cases_weekly", "cases", "weekly_cases", "cholera_cases")
      
      available_cols <- colnames(d_main)
      cols_to_merge <- intersect(c(required_cols, optional_cols), available_cols)
@@ -74,12 +74,32 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      # Set cases_binary to 0 for prediction-only periods
      d_all$cases_binary[is.na(d_all$cases_binary)] <- 0
      
-     # Handle cases_weekly column (may not exist in all datasets)
-     if ("cases_weekly" %in% colnames(d_all)) {
-          d_all$cases_weekly[is.na(d_all$cases_weekly)] <- 0
+     # Handle case count columns (different datasets may use different column names)
+     case_column_options <- c("cases", "cases_weekly", "weekly_cases", "cholera_cases")
+     case_column <- NULL
+     
+     # Find the first available case column
+     for (col in case_column_options) {
+          if (col %in% colnames(d_all)) {
+               case_column <- col
+               break
+          }
+     }
+     
+     # Ensure we have a cases column for plotting
+     if (!is.null(case_column)) {
+          # Use the existing column and clean it up
+          d_all$cases <- d_all[[case_column]]
+          d_all$cases[is.na(d_all$cases)] <- 0
      } else {
-          # Create cases_weekly column if it doesn't exist (set to 0 for all)
-          d_all$cases_weekly <- 0
+          # Create a cases column with zeros if none found
+          message("Warning: No case count column found. Creating cases column with zeros.")
+          d_all$cases <- 0
+     }
+     
+     # Ensure cases_weekly exists for backwards compatibility
+     if (!"cases_weekly" %in% colnames(d_all)) {
+          d_all$cases_weekly <- d_all$cases
      }
      
      # Handle country column (may not exist in all datasets)
