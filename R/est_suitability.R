@@ -164,7 +164,7 @@ est_suitability <- function(PATHS,
      message(glue::glue("  Prediction: {pred_date_start} to {pred_date_stop} ({as.numeric(pred_date_stop - pred_date_start)} days)"))
 
      message("Adding covariates...")
-     covariates <- c(
+     covariates_all <- c(
           "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
           "wind_speed_10m_mean", "wind_speed_10m_max", "cloud_cover_mean",
           "shortwave_radiation_sum", "relative_humidity_2m_mean",
@@ -172,9 +172,22 @@ est_suitability <- function(PATHS,
           "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
           "precipitation_sum", "snowfall_sum", "pressure_msl_mean",
           "soil_moisture_0_to_10cm_mean", "et0_fao_evapotranspiration_sum",
-          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation"#,
-          #"year", "month", "week"
+          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation"
      )
+     
+     # Filter to only covariates that actually exist in the data
+     covariates <- covariates_all[covariates_all %in% colnames(d_all)]
+     missing_covariates <- setdiff(covariates_all, covariates)
+     
+     if (length(missing_covariates) > 0) {
+          message(glue::glue("Note: Missing covariates in dataset: {paste(missing_covariates, collapse=', ')}"))
+     }
+     
+     message(glue::glue("Using {length(covariates)} available covariates: {paste(covariates, collapse=', ')}"))
+     
+     if (length(covariates) < 10) {
+          stop(glue::glue("Insufficient covariates available ({length(covariates)}). Need at least 10 environmental variables for meaningful suitability modeling."))
+     }
 
      # ============================================================================
      # Data completeness validation
