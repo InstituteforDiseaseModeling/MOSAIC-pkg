@@ -7,12 +7,23 @@
 plot_suitability_by_country(PATHS)
 }
 \arguments{
-\item{PATHS}{A list of paths to the directories where data is stored and plots will be saved.}
+\item{PATHS}{A list of paths to the directories where data is stored and plots will be saved.
+Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for saving plots).}
 }
 \value{
-A facet plot of predicted environmental suitability for all countries.
+A facet plot of predicted environmental suitability for all countries, filtered to
+years >= 2021. The plot includes smoothed suitability predictions and shaded regions
+indicating periods with cholera cases.
 }
 \description{
 This function generates a facet plot of predicted environmental suitability for all countries
-over time, with shaded regions indicating cholera outbreaks.
+over time, with shaded regions indicating cholera outbreaks. Requires that est_suitability()
+has been run first to generate the necessary prediction files.
+}
+\details{
+The function merges data from two files created by est_suitability():
+\itemize{
+\item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
+\item data_psi_suitability.csv - Contains country names and outbreak indicators
+}
 }
