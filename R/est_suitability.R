@@ -13,6 +13,11 @@
 #'   \item \strong{MODEL_INPUT}: Path to save the processed model inputs and outputs.
 #'   \item \strong{DOCS_FIGURES}: Path to save the generated plots.
 #' }
+#' @param include_lagged_covariates Logical. Whether to include 1-7 day lagged versions of environmental covariates (default FALSE).
+#' @param fit_date_start Date string or NULL. Start date for model fitting period. If NULL, auto-detects from first cholera case data.
+#' @param fit_date_stop Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.  
+#' @param pred_date_start Date string or NULL. Start date for prediction period. If NULL, uses fit_date_start.
+#' @param pred_date_stop Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.
 #'
 #' @return This function processes climate and cholera case data, fits an LSTM model, makes predictions on
 #'         environmental suitability (psi), and saves both the predictions and covariate data. It also
@@ -49,8 +54,18 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Assuming PATHS is defined and points to the correct data directories:
+#' # Basic usage with auto-detected date ranges
 #' est_suitability(PATHS)
+#' 
+#' # Historical validation: fit on 2010-2020, predict on 2021-2023  
+#' est_suitability(PATHS, 
+#'                 fit_date_start = "2010-01-01", 
+#'                 fit_date_stop = "2020-12-31",
+#'                 pred_date_start = "2021-01-01", 
+#'                 pred_date_stop = "2023-12-31")
+#' 
+#' # Include lagged environmental variables
+#' est_suitability(PATHS, include_lagged_covariates = TRUE)
 #' }
 #'
 #' @note
@@ -61,7 +76,14 @@
 #' \code{\link[keras]{layer_lstm}}, \code{\link[keras]{fit}}, \code{\link[ggplot2]{ggplot}}
 #'
 
-est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
+est_suitability <- function(PATHS, 
+                           include_lagged_covariates = FALSE,
+                           # Fitting period (training data)
+                           fit_date_start = NULL, 
+                           fit_date_stop = NULL,
+                           # Prediction period (inference)
+                           pred_date_start = NULL, 
+                           pred_date_stop = NULL) {
 
      require(keras3)
      require(tidyr)
@@ -80,6 +102,70 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
 
      if (53 %in% d_all$week) stop("week index is out of bounds")
 
+     message("Determining date ranges for fitting and prediction...")
+     
+     # ============================================================================
+     # Date range auto-detection and validation
+     # ============================================================================
+     
+     # Auto-detect fitting date range
+     if (is.null(fit_date_start)) {
+          # Find first date with actual cholera case data
+          fit_date_start <- min(d_all$date_start[!is.na(d_all$cases_binary)], na.rm = TRUE)
+          message(glue::glue("Auto-detected cholera data start: {fit_date_start}"))
+     } else {
+          fit_date_start <- as.Date(fit_date_start)
+          message(glue::glue("Using specified fit_date_start: {fit_date_start}"))
+     }
+     
+     if (is.null(fit_date_stop)) {
+          # Find last date with both cholera cases AND complete ENSO data for fitting
+          enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
+          complete_cases <- d_all[!is.na(d_all$cases_binary), ]
+          enso_complete <- complete_cases[complete.cases(complete_cases[enso_cols]), ]
+          if (nrow(enso_complete) > 0) {
+               fit_date_stop <- max(enso_complete$date_stop, na.rm = TRUE)
+               message(glue::glue("Auto-detected fitting end (cholera + ENSO): {fit_date_stop}"))
+          } else {
+               stop("No periods found with both cholera case data and complete ENSO data")
+          }
+     } else {
+          fit_date_stop <- as.Date(fit_date_stop)
+          message(glue::glue("Using specified fit_date_stop: {fit_date_stop}"))
+     }
+     
+     # Auto-detect prediction date range
+     if (is.null(pred_date_start)) {
+          pred_date_start <- fit_date_start
+          message(glue::glue("Using fit_date_start for prediction start: {pred_date_start}"))
+     } else {
+          pred_date_start <- as.Date(pred_date_start)
+          message(glue::glue("Using specified pred_date_start: {pred_date_start}"))
+     }
+     
+     if (is.null(pred_date_stop)) {
+          # Extend to full ENSO data availability for prediction
+          enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
+          enso_complete <- d_all[complete.cases(d_all[enso_cols]), ]
+          if (nrow(enso_complete) > 0) {
+               pred_date_stop <- max(enso_complete$date_stop, na.rm = TRUE)
+               message(glue::glue("Auto-detected prediction end (ENSO availability): {pred_date_stop}"))
+          } else {
+               stop("No periods found with complete ENSO data for prediction")
+          }
+     } else {
+          pred_date_stop <- as.Date(pred_date_stop)
+          message(glue::glue("Using specified pred_date_stop: {pred_date_stop}"))
+     }
+     
+     # Validate date ranges
+     if (fit_date_start >= fit_date_stop) stop("fit_date_start must be before fit_date_stop")
+     if (pred_date_start >= pred_date_stop) stop("pred_date_start must be before pred_date_stop")
+     
+     message(glue::glue("Final date ranges:"))
+     message(glue::glue("  Fitting: {fit_date_start} to {fit_date_stop} ({as.numeric(fit_date_stop - fit_date_start)} days)"))
+     message(glue::glue("  Prediction: {pred_date_start} to {pred_date_stop} ({as.numeric(pred_date_stop - pred_date_start)} days)"))
+
      message("Adding covariates...")
      covariates <- c(
           "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
@@ -93,62 +179,167 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
           #"year", "month", "week"
      )
 
-     X_all <- d_all[, colnames(d_all) %in% covariates]
-     sel <- complete.cases(X_all)
-     d_all <- d_all[sel,]
-     X_all <- X_all[sel,]
-
-     d <- d_all[!is.na(d_all$cases_binary),]
-     y <- d$cases_binary
-     X <- d[,colnames(d_all) %in% covariates]
-
-     sel <- complete.cases(X)
-     d <- d[sel,]
-     y <- y[sel]
-     X <- X[sel,]
-
-     # Step 3: Standardize the features (covariates)
-     if (include_lagged_covariates) {
-
-          X_all_lagged <- MOSAIC::make_lagged_data(X_all, lags=1:7)
-          X_lagged <- MOSAIC::make_lagged_data(X, lags=1:7)
-
-          X_all_scaled <- scale(X_all_lagged)
-          X_scaled <- scale(X_lagged)
-
-
-     } else {
-
-          X_all_scaled <- scale(X_all)
-          X_scaled <- scale(X)
-
+     # ============================================================================
+     # Data completeness validation
+     # ============================================================================
+     
+     # Create separate datasets for fitting and prediction
+     message("Creating fitting and prediction datasets...")
+     d_fit <- d_all[d_all$date_start >= fit_date_start & d_all$date_stop <= fit_date_stop, ]
+     d_pred <- d_all[d_all$date_start >= pred_date_start & d_all$date_stop <= pred_date_stop, ]
+     
+     message(glue::glue("Dataset sizes: fitting={nrow(d_fit)}, prediction={nrow(d_pred)}"))
+     
+     # Validate fitting dataset completeness
+     message("Validating predictor completeness in fitting period...")
+     
+     fit_covariate_completeness <- sapply(covariates, function(var) {
+          if (var %in% colnames(d_fit)) {
+               sum(!is.na(d_fit[[var]])) / nrow(d_fit)
+          } else {
+               0
+          }
+     })
+     
+     incomplete_vars <- names(fit_covariate_completeness)[fit_covariate_completeness < 0.95]
+     if (length(incomplete_vars) > 0) {
+          warning(glue::glue("Covariates with <95% completeness in fitting period: {paste(incomplete_vars, collapse=', ')}"))
+          for (var in incomplete_vars) {
+               pct <- round(fit_covariate_completeness[var] * 100, 1)
+               message(glue::glue("  {var}: {pct}% complete"))
+          }
+     }
+     
+     # Check for countries with poor covariate completeness in fitting period
+     if (nrow(d_fit) > 0) {
+          fit_country_completeness <- d_fit %>%
+               dplyr::group_by(iso_code) %>%
+               dplyr::summarise(
+                    n_obs = dplyr::n(),
+                    n_complete = sum(complete.cases(dplyr::select(dplyr::cur_data(), dplyr::all_of(covariates)))),
+                    completeness = n_complete / n_obs,
+                    .groups = 'drop'
+               ) %>%
+               dplyr::filter(completeness < 0.90)
+          
+          if (nrow(fit_country_completeness) > 0) {
+               warning(glue::glue("Countries with <90% covariate completeness in fitting period: {paste(fit_country_completeness$iso_code, collapse=', ')}"))
+          }
+     }
+     
+     # Overall fitting completeness check
+     fit_overall_completeness <- sum(complete.cases(d_fit[covariates])) / nrow(d_fit)
+     message(glue::glue("Fitting period covariate completeness: {round(fit_overall_completeness * 100, 1)}%"))
+     
+     if (fit_overall_completeness < 0.80) {
+          stop(glue::glue("Insufficient data completeness ({round(fit_overall_completeness*100,1)}%) in fitting period {fit_date_start} to {fit_date_stop}. Consider adjusting date ranges or addressing missing data."))
+     }
+     
+     # Check prediction period completeness (warning only)
+     message("Validating predictor completeness in prediction period...")
+     pred_overall_completeness <- sum(complete.cases(d_pred[covariates])) / nrow(d_pred)
+     message(glue::glue("Prediction period covariate completeness: {round(pred_overall_completeness * 100, 1)}%"))
+     
+     if (pred_overall_completeness < 0.80) {
+          warning(glue::glue("Low data completeness ({round(pred_overall_completeness*100,1)}%) in prediction period {pred_date_start} to {pred_date_stop}. Predictions may be less reliable."))
      }
 
-     # Step 4: Reshape the data for RNN
-     timesteps <- 2  # If using 2 time steps
-     n_features <- ncol(X_scaled)  # Number of features
+     # ============================================================================
+     # Prepare fitting and prediction datasets
+     # ============================================================================
+     
+     message("Preparing datasets with complete cases...")
+     
+     # Process fitting dataset (for model training)
+     X_fit_all <- d_fit[, colnames(d_fit) %in% covariates]
+     sel_fit <- complete.cases(X_fit_all)
+     d_fit <- d_fit[sel_fit, ]
+     X_fit_all <- X_fit_all[sel_fit, ]
+     
+     # Extract training data (only cases with known binary outcomes)
+     d_train <- d_fit[!is.na(d_fit$cases_binary), ]
+     y_train <- d_train$cases_binary
+     X_train <- d_train[, colnames(d_train) %in% covariates]
+     
+     sel_train <- complete.cases(X_train)
+     d_train <- d_train[sel_train, ]
+     y_train <- y_train[sel_train]
+     X_train <- X_train[sel_train, ]
+     
+     # Process prediction dataset (full period)
+     X_pred_all <- d_pred[, colnames(d_pred) %in% covariates]
+     sel_pred <- complete.cases(X_pred_all)
+     d_pred <- d_pred[sel_pred, ]
+     X_pred_all <- X_pred_all[sel_pred, ]
+     
+     message(glue::glue("Training samples: {nrow(X_train)} (from fitting period)"))
+     message(glue::glue("Prediction samples: {nrow(X_pred_all)} (full prediction period)"))
+     
+     if (nrow(X_train) < 100) {
+          stop(glue::glue("Insufficient training data ({nrow(X_train)} samples). Consider expanding fit_date_start/fit_date_stop or addressing missing data."))
+     }
 
-     # Create a 3D array for LSTM: (samples, timesteps, features)
-     X_all_reshaped <- array(X_all_scaled, dim = c(nrow(X_all_scaled), timesteps, n_features))
-     X_reshaped <- array(X_scaled, dim = c(nrow(X_scaled), timesteps, n_features))
+     # ============================================================================
+     # Feature scaling and lagged variables
+     # ============================================================================
+     
+     message("Standardizing features...")
+     if (include_lagged_covariates) {
+          
+          X_train_lagged <- MOSAIC::make_lagged_data(X_train, lags=1:7)
+          X_pred_all_lagged <- MOSAIC::make_lagged_data(X_pred_all, lags=1:7)
+          
+          # Fit scaler on training data only
+          X_train_scaled <- scale(X_train_lagged)
+          
+          # Apply same scaling to prediction data
+          scaler_center <- attr(X_train_scaled, "scaled:center")
+          scaler_scale <- attr(X_train_scaled, "scaled:scale")
+          X_pred_all_scaled <- scale(X_pred_all_lagged, center = scaler_center, scale = scaler_scale)
+          
+     } else {
+          
+          # Fit scaler on training data only
+          X_train_scaled <- scale(X_train)
+          
+          # Apply same scaling to prediction data
+          scaler_center <- attr(X_train_scaled, "scaled:center")
+          scaler_scale <- attr(X_train_scaled, "scaled:scale")
+          X_pred_all_scaled <- scale(X_pred_all, center = scaler_center, scale = scaler_scale)
+          
+     }
 
-     # Step 5: Split the data into training and testing sets
+     # ============================================================================
+     # Reshape data for LSTM and create train/test split
+     # ============================================================================
+     
+     timesteps <- 2  # Using 2 time steps for LSTM
+     n_features <- ncol(X_train_scaled)
+     
+     message(glue::glue("Reshaping data: {n_features} features, {timesteps} timesteps"))
+     
+     # Create 3D arrays for LSTM: (samples, timesteps, features)
+     X_train_reshaped <- array(X_train_scaled, dim = c(nrow(X_train_scaled), timesteps, n_features))
+     X_pred_all_reshaped <- array(X_pred_all_scaled, dim = c(nrow(X_pred_all_scaled), timesteps, n_features))
+     
+     # Split training data into train/validation
      set.seed(99)
-     train_indices <- sample(1:nrow(X_reshaped), 0.8 * nrow(X_reshaped))
-     X_train <- X_reshaped[train_indices, , ]
-     y_train <- y[train_indices]
-     X_test <- X_reshaped[-train_indices, , ]
-     y_test <- y[-train_indices]
+     train_indices <- sample(1:nrow(X_train_reshaped), 0.8 * nrow(X_train_reshaped))
+     
+     X_train_model <- X_train_reshaped[train_indices, , ]
+     y_train_model <- y_train[train_indices]
+     X_val_model <- X_train_reshaped[-train_indices, , ]
+     y_val_model <- y_train[-train_indices]
 
      # Reshape target to 2D: (samples, 1)
-     y_train_array <- array(y_train, dim = c(length(y_train), 1))
-     y_test_array <- array(y_test, dim = c(length(y_test), 1))
+     y_train_model_array <- array(y_train_model, dim = c(length(y_train_model), 1))
+     y_val_model_array <- array(y_val_model, dim = c(length(y_val_model), 1))
 
-     # Display total number of samples and number of positive samples in training and test sets
-     cat('Number of samples in training set:', dim(X_train)[1], '\n')
-     cat('Number of positive samples in training set:', sum(y_train == 1), '\n')
-     cat('Number of samples in test set:', dim(X_test)[1], '\n')
-     cat('Number of positive samples in test set:', sum(y_test == 1), '\n')
+     # Display dataset statistics
+     message(glue::glue('Training samples: {dim(X_train_model)[1]} ({sum(y_train_model == 1)} positive)'))
+     message(glue::glue('Validation samples: {dim(X_val_model)[1]} ({sum(y_val_model == 1)} positive)'))
+     message(glue::glue('Total fitting samples: {nrow(X_train_reshaped)} (from {fit_date_start} to {fit_date_stop})'))
+     message(glue::glue('Prediction samples: {nrow(X_pred_all_reshaped)} (from {pred_date_start} to {pred_date_stop})'))
 
 
 
@@ -181,21 +372,21 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
      print(model)
 
      message("Training LSTM model...")
-     # Step 7: Train the model
+     # Train the model using the training subset
      history <- fit(model,
-          X_train,
-          y_train_array,
+          X_train_model,
+          y_train_model_array,
           epochs = 200,
           batch_size = 1024,
-          validation_split = 0.2,
+          validation_data = list(X_val_model, y_val_model_array),  # Use explicit validation data
           callbacks = list(callback_early_stopping(patience = 10))  # Early stopping for stability
      )
 
-     # Step 8: Evaluate the model
-     message("Calculating overall model fit...")
-     score <- evaluate(model, X_test, y_test_array)
-     cat('Test loss:', score$loss, '\n')
-     cat('Test accuracy:', score$acc, '\n')
+     # Evaluate the model on validation set
+     message("Calculating model performance...")
+     score <- evaluate(model, X_val_model, y_val_model_array)
+     message(glue::glue('Validation loss: {round(score$loss, 4)}'))
+     message(glue::glue('Validation accuracy: {round(score$acc, 4)}'))
 
 
 
@@ -208,14 +399,9 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
           val_accuracy = history$metrics$val_accuracy
      )
 
-     # Step 8: Evaluate the model and get final test loss and accuracy
-     message("Calculating overall model fit...")
-     score <- evaluate(model, X_test, y_test_array)
+     # Get final model performance metrics
      final_loss <- score$loss
      final_accuracy <- score$acc
-
-     cat('Test loss:', final_loss, '\n')
-     cat('Test accuracy:', final_accuracy, '\n')
 
 
 
@@ -266,19 +452,29 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
 
 
 
-     message("Predicting response values...")
-     # Step 9: Make predictions on all data
-     d$pred <- predict(model, X_reshaped)
-     d_all$pred <- predict(model, X_all_reshaped)
+     message("Generating predictions...")
+     
+     # ============================================================================
+     # Generate predictions for all periods
+     # ============================================================================
+     
+     # Predict on training data (for model validation)
+     d_train$pred <- predict(model, X_train_reshaped)
+     
+     # Predict on full prediction dataset
+     d_pred$pred <- predict(model, X_pred_all_reshaped)
 
 
-     # Step 10: Ensure all year-week combinations are present, then smooth predictions by country
+     # ============================================================================
+     # Temporal smoothing of predictions
+     # ============================================================================
+     
      message("Smoothing time series predictions on weekly time scale...")
-     d_all <- d_all %>%
-          group_by(iso_code) %>%
+     d_pred_smooth <- d_pred %>%
+          dplyr::group_by(iso_code) %>%
           # Create a complete dataset for each country with all year-week combinations
           tidyr::complete(year, week, fill = list(pred = NA)) %>%
-          mutate(
+          dplyr::mutate(
                # Create ISO week string
                iso_week = paste0(year, "-W", sprintf("%02d", week)),  # ISO week format (e.g., "2021-W01")
 
@@ -286,20 +482,20 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
                date_start = ISOweek::ISOweek2date(paste(iso_week, "-1", sep = "")),  # Monday of the week
                date_stop = ISOweek::ISOweek2date(paste(iso_week, "-7", sep = ""))    # Sunday of the week
           ) %>%
-          arrange(iso_code, date_start) %>%
+          dplyr::arrange(iso_code, date_start) %>%
           # Remove rows where pred is NA before applying LOESS to avoid errors
-          filter(!is.na(pred)) %>%
-          mutate(
+          dplyr::filter(!is.na(pred)) %>%
+          dplyr::mutate(
                pred_smooth = inv_logit(stats::predict(loess(logit(pred) ~ as.numeric(date_start), span = 0.01)))
           ) %>%
-          ungroup()
+          dplyr::ungroup()
 
 
-     if (53 %in% d_all$week) stop("week index is out of bounds")
+     if (53 %in% d_pred_smooth$week) stop("week index is out of bounds")
 
      message("Smoothing time series predictions on daily time scale...")
 
-     d_pred_weekly <- as.data.frame(d_all[,c('iso_code', 'week', 'date_start', 'date_stop', 'pred', 'pred_smooth')])
+     d_pred_weekly <- as.data.frame(d_pred_smooth[,c('iso_code', 'week', 'date_start', 'date_stop', 'pred', 'pred_smooth')])
 
      split_data <- split(d_pred_weekly, d_pred_weekly$iso_code)
 
@@ -362,9 +558,33 @@ est_suitability <- function(PATHS, include_lagged_covariates=FALSE) {
      write.csv(d_pred_daily, path, row.names = FALSE)
      message("Predictions saved to: ", path)
 
-     # Save observed data
+     # Save observed data and metadata
+     d_all_output <- rbind(
+          cbind(d_train[, !colnames(d_train) %in% c("pred")], data_type = "training"),
+          cbind(d_pred[, !colnames(d_pred) %in% c("pred")], data_type = "prediction")
+     )
      path <- file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv")
-     write.csv(d_all, path, row.names = FALSE)
-     message("Predictions and all covariates saved to: ", path)
+     write.csv(d_all_output, path, row.names = FALSE)
+     message("All covariates and metadata saved to: ", path)
+     
+     # Save model configuration and date ranges
+     config_info <- list(
+          fit_date_start = as.character(fit_date_start),
+          fit_date_stop = as.character(fit_date_stop),
+          pred_date_start = as.character(pred_date_start),
+          pred_date_stop = as.character(pred_date_stop),
+          n_training_samples = nrow(d_train),
+          n_prediction_samples = nrow(d_pred),
+          model_performance = list(
+               validation_loss = final_loss,
+               validation_accuracy = final_accuracy
+          ),
+          covariates = covariates,
+          include_lagged_covariates = include_lagged_covariates
+     )
+     
+     config_path <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
+     jsonlite::write_json(config_info, config_path, pretty = TRUE, auto_unbox = TRUE)
+     message("Model configuration saved to: ", config_path)
 
 }
