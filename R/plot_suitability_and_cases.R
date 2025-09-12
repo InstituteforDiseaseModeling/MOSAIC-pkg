@@ -49,9 +49,21 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      d_pred$date_start <- as.Date(d_pred$date_start)
      d_main$date_start <- as.Date(d_main$date_start)
      
+     # Check what columns are available in the main data file
+     required_cols <- c("iso_code", "week", "date_start", "cases_binary", "year")
+     optional_cols <- c("country", "cases_weekly")
+     
+     available_cols <- colnames(d_main)
+     cols_to_merge <- intersect(c(required_cols, optional_cols), available_cols)
+     missing_required <- setdiff(required_cols, available_cols)
+     
+     if (length(missing_required) > 0) {
+          stop(glue::glue("Required columns missing from main data file: {paste(missing_required, collapse=', ')}"))
+     }
+     
      # Merge on iso_code, week, and date_start for exact matches
      d_all <- merge(d_pred, 
-                    d_main[c("iso_code", "week", "date_start", "country", "cases_binary", "year", "cases_weekly")], 
+                    d_main[cols_to_merge], 
                     by = c("iso_code", "week", "date_start"), 
                     all.x = TRUE)
      
@@ -61,19 +73,32 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      
      # Set cases_binary to 0 for prediction-only periods
      d_all$cases_binary[is.na(d_all$cases_binary)] <- 0
-     d_all$cases_weekly[is.na(d_all$cases_weekly)] <- 0
      
-     # Fill in country names for missing entries
-     country_lookup <- d_all[!is.na(d_all$country), c("iso_code", "country")]
-     country_lookup <- country_lookup[!duplicated(country_lookup$iso_code), ]
+     # Handle cases_weekly column (may not exist in all datasets)
+     if ("cases_weekly" %in% colnames(d_all)) {
+          d_all$cases_weekly[is.na(d_all$cases_weekly)] <- 0
+     } else {
+          # Create cases_weekly column if it doesn't exist (set to 0 for all)
+          d_all$cases_weekly <- 0
+     }
      
-     for (iso in unique(d_all$iso_code[is.na(d_all$country)])) {
-          if (iso %in% country_lookup$iso_code) {
-               d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- country_lookup$country[country_lookup$iso_code == iso]
-          } else {
-               # Fallback to iso_code if no country name available
-               d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- iso
+     # Handle country column (may not exist in all datasets)
+     if ("country" %in% colnames(d_all)) {
+          # Fill in country names for missing entries using existing data
+          country_lookup <- d_all[!is.na(d_all$country), c("iso_code", "country")]
+          country_lookup <- country_lookup[!duplicated(country_lookup$iso_code), ]
+          
+          for (iso in unique(d_all$iso_code[is.na(d_all$country)])) {
+               if (iso %in% country_lookup$iso_code) {
+                    d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- country_lookup$country[country_lookup$iso_code == iso]
+               } else {
+                    # Fallback to iso_code if no country name available
+                    d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- iso
+               }
           }
+     } else {
+          # Create country column using iso_code as fallback
+          d_all$country <- d_all$iso_code
      }
 
 
