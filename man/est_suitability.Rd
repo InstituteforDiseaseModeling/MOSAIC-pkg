@@ -6,7 +6,6 @@
 \usage{
 est_suitability(
   PATHS,
-  include_lagged_covariates = FALSE,
   fit_date_start = NULL,
   fit_date_stop = NULL,
   pred_date_start = NULL,
@@ -21,8 +20,6 @@ est_suitability(
 \item \strong{MODEL_INPUT}: Path to save the processed model inputs and outputs.
 \item \strong{DOCS_FIGURES}: Path to save the generated plots.
 }}
-
-\item{include_lagged_covariates}{Logical. Whether to include 1-7 day lagged versions of environmental covariates (default FALSE).}
 
 \item{fit_date_start}{Date string or NULL. Start date for model fitting period. If NULL, auto-detects from first cholera case data.}
 
@@ -40,22 +37,23 @@ specified directory.
 }
 \description{
 This function loads climate data, ENSO data, and weekly cholera cases data to estimate the environmental
-suitability for cholera transmission based on various environmental factors. It uses lagged climate
-covariates, scales them, and then fits an LSTM-based RNN model to predict cholera outbreaks. The model
-is trained using past cholera case data and climate conditions, and predictions are made for environmental
+suitability for cholera transmission based on various environmental factors. It scales the climate
+covariates and then fits an LSTM-based RNN model to predict cholera outbreaks. The model is trained
+using past cholera case data and climate conditions, and predictions are made for environmental
 suitability (psi) based on the climate covariates.
 }
 \details{
 The function performs the following steps:
 \itemize{
 \item Loads processed climate and cholera data.
-\item Creates lagged versions of relevant climate variables (e.g., temperature, precipitation, ENSO data).
-\item Scales the climate covariates.
-\item Splits the data into training and test sets.
+\item Determines appropriate date ranges for fitting and prediction based on data availability.
+\item Validates data completeness within specified date ranges.
+\item Scales the climate covariates using training data statistics.
+\item Splits the training data into training and validation sets.
 \item Builds an LSTM-based recurrent neural network (RNN) model for predicting cholera outbreaks.
-\item Trains the model on the training set and evaluates its performance on the test set.
-\item Makes predictions on both the test set and the full dataset.
-\item Saves the predictions, covariate data, and model fit plots to the specified directories.
+\item Trains the model on the training set and evaluates performance on the validation set.
+\item Makes predictions on the full prediction period dataset.
+\item Applies temporal smoothing to predictions and saves results to specified directories.
 }
 }
 \note{
@@ -74,8 +72,6 @@ est_suitability(PATHS,
                 pred_date_start = "2021-01-01", 
                 pred_date_stop = "2023-12-31")
 
-# Include lagged environmental variables
-est_suitability(PATHS, include_lagged_covariates = TRUE)
 }
 
 }
