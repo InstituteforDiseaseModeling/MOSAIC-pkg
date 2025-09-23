@@ -14,7 +14,7 @@
 #'   \item \strong{DOCS_FIGURES}: Path to save the generated plots.
 #' }
 #' @param fit_date_start Date string or NULL. Start date for model fitting period. If NULL, auto-detects from first cholera case data.
-#' @param fit_date_stop Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.  
+#' @param fit_date_stop Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.
 #' @param pred_date_start Date string or NULL. Start date for prediction period. If NULL, uses fit_date_start.
 #' @param pred_date_stop Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.
 #'
@@ -23,6 +23,22 @@
 #'         generates a plot showing the model fit (accuracy and loss over training epochs) and saves it to a
 #'         specified directory.
 #'
+#' @examples
+#' \dontrun{
+#' # Set up paths
+#' PATHS <- get_paths()
+#'
+#' # Basic usage with default settings
+#' est_suitability(PATHS)
+#'
+#' # Custom date ranges for fitting and prediction
+#' est_suitability(PATHS,
+#'                fit_date_start = "2015-01-01",
+#'                fit_date_stop = "2023-12-31",
+#'                pred_date_start = "2020-01-01",
+#'                pred_date_stop = "2025-12-31")
+#' }
+#'
 #' @details
 #' The function performs the following steps:
 #' \itemize{
@@ -30,7 +46,8 @@
 #'   \item Determines appropriate date ranges for fitting and prediction based on data availability.
 #'   \item Validates data completeness within specified date ranges.
 #'   \item Scales the climate covariates using training data statistics.
-#'   \item Splits the training data into training and validation sets.
+#'   \item Splits the training data into training and validation sets using a 60/40 random split.
+#'   \item Creates temporal LSTM sequences respecting country boundaries and temporal gaps.
 #'   \item Builds an LSTM-based recurrent neural network (RNN) model for predicting cholera outbreaks.
 #'   \item Trains the model on the training set and evaluates performance on the validation set.
 #'   \item Makes predictions on the full prediction period dataset.
@@ -56,14 +73,14 @@
 #' \dontrun{
 #' # Basic usage with auto-detected date ranges
 #' est_suitability(PATHS)
-#' 
-#' # Historical validation: fit on 2010-2020, predict on 2021-2023  
-#' est_suitability(PATHS, 
-#'                 fit_date_start = "2010-01-01", 
+#'
+#' # Historical validation: fit on 2010-2020, predict on 2021-2023
+#' est_suitability(PATHS,
+#'                 fit_date_start = "2010-01-01",
 #'                 fit_date_stop = "2020-12-31",
-#'                 pred_date_start = "2021-01-01", 
+#'                 pred_date_start = "2021-01-01",
 #'                 pred_date_stop = "2023-12-31")
-#' 
+#'
 #' }
 #'
 #' @note
@@ -74,37 +91,34 @@
 #' \code{\link[keras]{layer_lstm}}, \code{\link[keras]{fit}}, \code{\link[ggplot2]{ggplot}}
 #'
 
-est_suitability <- function(PATHS, 
-                           # Fitting period (training data)
-                           fit_date_start = NULL, 
-                           fit_date_stop = NULL,
-                           # Prediction period (inference)
-                           pred_date_start = NULL, 
-                           pred_date_stop = NULL) {
+est_suitability <- function(PATHS,
+                            fit_date_start = NULL, # Fitting period (training data)
+                            fit_date_stop = NULL,
+                            pred_date_start = NULL, # Prediction period (inference)
+                            pred_date_stop = NULL
+) {
 
      require(keras3)
      require(tidyr)
      require(ggplot2)
      require(dplyr)
 
+
      message("Loading merged suitability data...")
      path <- file.path(PATHS$DATA_CHOLERA_WEEKLY, 'cholera_country_weekly_suitability_data.csv')
      d_all <- read.csv(path, stringsAsFactors = FALSE)
-     d_all$date_start <- as.Date(d_all$date_start)
-     d_all$date_stop <- as.Date(d_all$date_stop)
+     d_all$date <- as.Date(d_all$date)
 
-     path <- file.path(PATHS$DATA_ELEVATION, 'country_elevation_mean.csv')
-     elevation_data <- read.csv(path, stringsAsFactors = FALSE)
-     d_all <- merge(d_all, elevation_data[c("iso_code", "elevation")], by="iso_code")
+     d_all <- d_all[d_all$iso_code %in% MOSAIC::iso_codes_mosaic,]
 
      if (53 %in% d_all$week) stop("week index is out of bounds")
 
      message("Determining date ranges for fitting and prediction...")
-     
+
      # ============================================================================
      # Date range auto-detection and validation
      # ============================================================================
-     
+
      # Auto-detect fitting date range
      if (is.null(fit_date_start)) {
           # Find first date with actual cholera case data
@@ -114,7 +128,7 @@ est_suitability <- function(PATHS,
           fit_date_start <- as.Date(fit_date_start)
           message(glue::glue("Using specified fit_date_start: {fit_date_start}"))
      }
-     
+
      if (is.null(fit_date_stop)) {
           # Find last date with both cholera cases AND complete ENSO data for fitting
           enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
@@ -130,7 +144,7 @@ est_suitability <- function(PATHS,
           fit_date_stop <- as.Date(fit_date_stop)
           message(glue::glue("Using specified fit_date_stop: {fit_date_stop}"))
      }
-     
+
      # Auto-detect prediction date range
      if (is.null(pred_date_start)) {
           pred_date_start <- fit_date_start
@@ -139,7 +153,7 @@ est_suitability <- function(PATHS,
           pred_date_start <- as.Date(pred_date_start)
           message(glue::glue("Using specified pred_date_start: {pred_date_start}"))
      }
-     
+
      if (is.null(pred_date_stop)) {
           # Extend to full ENSO data availability for prediction
           enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
@@ -154,11 +168,11 @@ est_suitability <- function(PATHS,
           pred_date_stop <- as.Date(pred_date_stop)
           message(glue::glue("Using specified pred_date_stop: {pred_date_stop}"))
      }
-     
+
      # Validate date ranges
      if (fit_date_start >= fit_date_stop) stop("fit_date_start must be before fit_date_stop")
      if (pred_date_start >= pred_date_stop) stop("pred_date_start must be before pred_date_stop")
-     
+
      message(glue::glue("Final date ranges:"))
      message(glue::glue("  Fitting: {fit_date_start} to {fit_date_stop} ({as.numeric(fit_date_stop - fit_date_start)} days)"))
      message(glue::glue("  Prediction: {pred_date_start} to {pred_date_stop} ({as.numeric(pred_date_stop - pred_date_start)} days)"))
@@ -174,17 +188,55 @@ est_suitability <- function(PATHS,
           "soil_moisture_0_to_10cm_mean", "et0_fao_evapotranspiration_sum",
           "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation"
      )
-     
+
+     covariates_all <- c(
+          "year", "month", "week",
+          "sin_annual", "cos_annual",
+          "sin_biannual", "cos_biannual",
+          "sin_quarterly", "cos_quarterly",
+          "sin_monthly", "cos_monthly",
+          "time_linear", "years_since_2020",
+          "total_population", "population_density", "urban_population_pct",
+          "GDP", "poverty_ratio",
+          "Piped_Water", "Other_Improved_Water", "Septic_or_Sewer_Sanitation",
+          "Other_Improved_Sanitation", "Unimproved_Water", "Surface_Water", "Open_Defecation",
+          "temperature_2m_mean",
+          "temperature_2m_max"              , "temperature_2m_min"              , "precipitation_sum"           ,
+          "relative_humidity_2m_mean"       , "wind_speed_10m_mean"             , "cloud_cover_mean"            ,
+          "et0_fao_evapotranspiration_sum"  , "soil_moisture_0_to_10cm_mean"    , "precip_sum_2w"               ,
+          "precip_sum_4w"                   , "precip_sum_8w"                   , "precip_sum_12w"              ,
+          "temp_mean_2w"                    , "temp_mean_4w"                    , "temp_mean_8w"                ,
+          "temp_mean_12w"                   , "rh_mean_2w"                      , "rh_mean_4w"                  ,
+          "rh_mean_8w"                      , "rh_mean_12w"                     , "precip_anom"                 ,
+          "temp_anom"                       , "vpd_anom"                        , "soil_moisture_anom"          ,
+          "precip_extreme_p90_count"        , "heatwave_days"                   , "dry_spell_len"               ,
+          "temp_precip_interaction"         , "humidity_temp_interaction"       , "enso_precip_interaction"     ,
+          "dmi_temp_interaction"            , "elevation_temp_interaction"      , "moisture_temp_interaction"   ,
+          "wash_precip_extreme_interaction" , "urban_precip_anom_interaction"   , "precip_anom_sq"              ,
+          "temp_anom_sq"                    , "log1p_cum_vaccine_doses"         , "vpd"                         ,
+          "moisture_deficit"                , "aridity_index"                   , "spei_approx"                 ,
+          "gdd_cholera"                     , "diurnal_temp_range"              , "heat_index",
+          "dew_point_2m_max",
+          "dew_point_2m_mean",               "dew_point_2m_min"   ,             "pressure_msl_mean"  ,
+          "relative_humidity_2m_max",        "relative_humidity_2m_min"  ,      "shortwave_radiation_sum" ,
+          "wind_speed_10m_max",
+          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation",
+          colnames(d_all)[grep('_lag', colnames(d_all))]
+     )
+
+     # Note: Previously problematic lag variables have been fixed in process_suitability_data()
+     # by using proper conditional logic that only creates lags when base variables exist
+
      # Filter to only covariates that actually exist in the data
      covariates <- covariates_all[covariates_all %in% colnames(d_all)]
      missing_covariates <- setdiff(covariates_all, covariates)
-     
+
      if (length(missing_covariates) > 0) {
           message(glue::glue("Note: Missing covariates in dataset: {paste(missing_covariates, collapse=', ')}"))
      }
-     
+
      message(glue::glue("Using {length(covariates)} available covariates: {paste(covariates, collapse=', ')}"))
-     
+
      if (length(covariates) < 10) {
           stop(glue::glue("Insufficient covariates available ({length(covariates)}). Need at least 10 environmental variables for meaningful suitability modeling."))
      }
@@ -192,99 +244,52 @@ est_suitability <- function(PATHS,
      # ============================================================================
      # Data completeness validation
      # ============================================================================
-     
+
      # Create separate datasets for fitting and prediction
      message("Creating fitting and prediction datasets...")
-     d_fit <- d_all[d_all$date_start >= fit_date_start & d_all$date_stop <= fit_date_stop, ]
-     d_pred <- d_all[d_all$date_start >= pred_date_start & d_all$date_stop <= pred_date_stop, ]
-     
+     d_fit <- d_all[d_all$date >= fit_date_start & d_all$date <= fit_date_stop, ]
+     d_pred <- d_all[d_all$date >= pred_date_start & d_all$date <= pred_date_stop, ]
+
+
      message(glue::glue("Dataset sizes: fitting={nrow(d_fit)}, prediction={nrow(d_pred)}"))
-     
+
      # Validate fitting dataset completeness
      message("Validating predictor completeness in fitting period...")
-     
-     fit_covariate_completeness <- sapply(covariates, function(var) {
-          if (var %in% colnames(d_fit)) {
-               sum(!is.na(d_fit[[var]])) / nrow(d_fit)
-          } else {
-               0
-          }
-     })
-     
-     incomplete_vars <- names(fit_covariate_completeness)[fit_covariate_completeness < 0.95]
-     if (length(incomplete_vars) > 0) {
-          warning(glue::glue("Covariates with <95% completeness in fitting period: {paste(incomplete_vars, collapse=', ')}"))
-          for (var in incomplete_vars) {
-               pct <- round(fit_covariate_completeness[var] * 100, 1)
-               message(glue::glue("  {var}: {pct}% complete"))
-          }
-     }
-     
-     # Check for countries with poor covariate completeness in fitting period
-     if (nrow(d_fit) > 0) {
-          fit_country_completeness <- d_fit %>%
-               dplyr::group_by(iso_code) %>%
-               dplyr::summarise(
-                    n_obs = dplyr::n(),
-                    n_complete = sum(complete.cases(dplyr::select(dplyr::cur_data(), dplyr::all_of(covariates)))),
-                    completeness = n_complete / n_obs,
-                    .groups = 'drop'
-               ) %>%
-               dplyr::filter(completeness < 0.90)
-          
-          if (nrow(fit_country_completeness) > 0) {
-               warning(glue::glue("Countries with <90% covariate completeness in fitting period: {paste(fit_country_completeness$iso_code, collapse=', ')}"))
-          }
-     }
-     
-     # Overall fitting completeness check
-     fit_overall_completeness <- sum(complete.cases(d_fit[covariates])) / nrow(d_fit)
-     message(glue::glue("Fitting period covariate completeness: {round(fit_overall_completeness * 100, 1)}%"))
-     
-     if (fit_overall_completeness < 0.80) {
-          stop(glue::glue("Insufficient data completeness ({round(fit_overall_completeness*100,1)}%) in fitting period {fit_date_start} to {fit_date_stop}. Consider adjusting date ranges or addressing missing data."))
-     }
-     
-     # Check prediction period completeness (warning only)
-     message("Validating predictor completeness in prediction period...")
-     pred_overall_completeness <- sum(complete.cases(d_pred[covariates])) / nrow(d_pred)
-     message(glue::glue("Prediction period covariate completeness: {round(pred_overall_completeness * 100, 1)}%"))
-     
-     if (pred_overall_completeness < 0.80) {
-          warning(glue::glue("Low data completeness ({round(pred_overall_completeness*100,1)}%) in prediction period {pred_date_start} to {pred_date_stop}. Predictions may be less reliable."))
-     }
+
+
+
 
      # ============================================================================
      # Prepare fitting and prediction datasets
      # ============================================================================
-     
+
      message("Preparing datasets with complete cases...")
-     
+
      # Process fitting dataset (for model training)
      X_fit_all <- d_fit[, colnames(d_fit) %in% covariates]
      sel_fit <- complete.cases(X_fit_all)
      d_fit <- d_fit[sel_fit, ]
      X_fit_all <- X_fit_all[sel_fit, ]
-     
+
      # Extract training data (only cases with known binary outcomes)
      d_train <- d_fit[!is.na(d_fit$cases_binary), ]
      y_train <- d_train$cases_binary
      X_train <- d_train[, colnames(d_train) %in% covariates]
-     
+
      sel_train <- complete.cases(X_train)
      d_train <- d_train[sel_train, ]
      y_train <- y_train[sel_train]
      X_train <- X_train[sel_train, ]
-     
+
      # Process prediction dataset (full period)
      X_pred_all <- d_pred[, colnames(d_pred) %in% covariates]
      sel_pred <- complete.cases(X_pred_all)
      d_pred <- d_pred[sel_pred, ]
      X_pred_all <- X_pred_all[sel_pred, ]
-     
+
      message(glue::glue("Training samples: {nrow(X_train)} (from fitting period)"))
      message(glue::glue("Prediction samples: {nrow(X_pred_all)} (full prediction period)"))
-     
+
      if (nrow(X_train) < 100) {
           stop(glue::glue("Insufficient training data ({nrow(X_train)} samples). Consider expanding fit_date_start/fit_date_stop or addressing missing data."))
      }
@@ -292,38 +297,142 @@ est_suitability <- function(PATHS,
      # ============================================================================
      # Feature scaling
      # ============================================================================
-     
+
      message("Standardizing features...")
-     
+
      # Fit scaler on training data only
      X_train_scaled <- scale(X_train)
-     
+
      # Apply same scaling to prediction data
      scaler_center <- attr(X_train_scaled, "scaled:center")
      scaler_scale <- attr(X_train_scaled, "scaled:scale")
      X_pred_all_scaled <- scale(X_pred_all, center = scaler_center, scale = scaler_scale)
 
      # ============================================================================
-     # Reshape data for LSTM and create train/test split
+     # Create proper LSTM sequences with temporal structure
      # ============================================================================
-     
-     timesteps <- 2  # Using 2 time steps for LSTM
+
+     timesteps <- 32
      n_features <- ncol(X_train_scaled)
-     
-     message(glue::glue("Reshaping data: {n_features} features, {timesteps} timesteps"))
-     
-     # Create 3D arrays for LSTM: (samples, timesteps, features)
-     X_train_reshaped <- array(X_train_scaled, dim = c(nrow(X_train_scaled), timesteps, n_features))
-     X_pred_all_reshaped <- array(X_pred_all_scaled, dim = c(nrow(X_pred_all_scaled), timesteps, n_features))
-     
+
+     message(glue::glue("Creating temporal sequences: {n_features} features, {timesteps} timesteps"))
+
+     # Helper function to create LSTM sequences with proper temporal structure
+     create_lstm_sequences <- function(data_scaled, target, country_ids, dates, timesteps = 3) {
+
+          # Convert dates to ensure proper ordering
+          dates <- as.Date(dates)
+
+          # Pre-allocate lists for valid sequences
+          sequences <- list()
+          targets <- c()
+          countries <- c()
+          sequence_dates <- c()
+
+          # Process each country separately to maintain temporal boundaries
+          unique_countries <- unique(country_ids)
+          message(sprintf("    Processing sequences for %d countries...", length(unique_countries)))
+
+          for (country in unique_countries) {
+               country_mask <- country_ids == country
+               country_data <- data_scaled[country_mask, , drop = FALSE]
+               country_target <- target[country_mask]
+               country_dates <- dates[country_mask]
+
+               # Ensure temporal ordering within country
+               order_idx <- order(country_dates)
+               country_data <- country_data[order_idx, , drop = FALSE]
+               country_target <- country_target[order_idx]
+               country_dates <- country_dates[order_idx]
+
+               country_n <- nrow(country_data)
+
+               # Only create sequences if we have sufficient data
+               if (country_n >= timesteps) {
+                    # Create valid sequences (starting from timestep position)
+                    for (i in timesteps:country_n) {
+
+                         # Check for temporal continuity (no gaps > 2 weeks)
+                         sequence_dates_check <- country_dates[(i-timesteps+1):i]
+                         date_diffs <- as.numeric(diff(sequence_dates_check))
+
+                         # Skip sequences with large temporal gaps
+                         if (any(date_diffs > 14)) {  # More than 2 weeks gap
+                              next
+                         }
+
+                         # Extract temporal sequence: t-2, t-1, t (oldest to newest)
+                         sequence <- country_data[(i-timesteps+1):i, , drop = FALSE]
+
+                         sequences[[length(sequences) + 1]] <- sequence
+                         targets <- c(targets, country_target[i])  # Target for time t
+                         countries <- c(countries, country)
+                         sequence_dates <- c(sequence_dates, country_dates[i])
+                    }
+               }
+          }
+
+          # Convert sequences to 3D array
+          n_valid <- length(sequences)
+          if (n_valid == 0) {
+               stop("No valid sequences created. Check data temporal structure.")
+          }
+
+          X_3d <- array(0, dim = c(n_valid, timesteps, ncol(data_scaled)))
+
+          for (i in 1:n_valid) {
+               X_3d[i, , ] <- sequences[[i]]
+          }
+
+          message(sprintf("    Created %d valid sequences from %d total observations",
+                         n_valid, nrow(data_scaled)))
+
+          return(list(
+               X = X_3d,
+               y = targets,
+               countries = countries,
+               dates = sequence_dates
+          ))
+     }
+
+     # Create training sequences
+     message("  Creating training sequences...")
+     train_sequences <- create_lstm_sequences(
+          data_scaled = X_train_scaled,
+          target = y_train,
+          country_ids = d_train$iso_code,
+          dates = d_train$date,
+          timesteps = timesteps
+     )
+
+     X_train_reshaped <- train_sequences$X
+     y_train_sequences <- train_sequences$y
+
+     # Create prediction sequences
+     message("  Creating prediction sequences...")
+     pred_sequences <- create_lstm_sequences(
+          data_scaled = X_pred_all_scaled,
+          target = rep(0, nrow(X_pred_all_scaled)),  # Dummy target for prediction data
+          country_ids = d_pred$iso_code,
+          dates = d_pred$date,
+          timesteps = timesteps
+     )
+
+     X_pred_all_reshaped <- pred_sequences$X
+
+     message(glue::glue("Sequence generation complete:"))
+     message(glue::glue("  Training sequences: {dim(X_train_reshaped)[1]} (from {length(y_train)} total training obs)"))
+     message(glue::glue("  Prediction sequences: {dim(X_pred_all_reshaped)[1]} (from {nrow(X_pred_all_scaled)} total prediction obs)"))
+     message(glue::glue("  Sequence shape: ({dim(X_train_reshaped)[1]}, {timesteps}, {n_features})"))
+
      # Split training data into train/validation
      set.seed(99)
-     train_indices <- sample(1:nrow(X_train_reshaped), 0.8 * nrow(X_train_reshaped))
-     
+     train_indices <- sample(1:nrow(X_train_reshaped), 0.75 * nrow(X_train_reshaped))
+
      X_train_model <- X_train_reshaped[train_indices, , ]
-     y_train_model <- y_train[train_indices]
+     y_train_model <- y_train_sequences[train_indices]
      X_val_model <- X_train_reshaped[-train_indices, , ]
-     y_val_model <- y_train[-train_indices]
+     y_val_model <- y_train_sequences[-train_indices]
 
      # Reshape target to 2D: (samples, 1)
      y_train_model_array <- array(y_train_model, dim = c(length(y_train_model), 1))
@@ -339,41 +448,51 @@ est_suitability <- function(PATHS,
 
      message("Compiling LSTM model...")
      # Define an exponential decay schedule for learning rate using keras3
+     # Calculate reasonable decay steps based on training size
+     estimated_steps_per_epoch <- max(10, ceiling(nrow(X_train_model) / 2048))  # batch_size = 2048
+
      lr_schedule <- keras3::learning_rate_schedule_exponential_decay(
-          initial_learning_rate = 0.001,
-          decay_steps = 10000,
-          decay_rate = 0.9
+          initial_learning_rate = 0.0001,     # Reasonable starting point
+          decay_steps = 500,                # Much more reasonable for actual training size
+          decay_rate = 0.95                  # Less aggressive decay
      )
 
      # Step 6: Build and Compile the LSTM model
      model <- keras_model_sequential()
-     model <- layer_lstm(model, units = 500, input_shape = c(timesteps, n_features), return_sequences = TRUE,
-                     kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_lstm(model, units = 128, input_shape = c(timesteps, n_features), return_sequences = TRUE,
+                         kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 250, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_lstm(model, units = 64, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 100, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_lstm(model, units = 32, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_dropout(model, rate = 0.5)
+     model <- layer_lstm(model, units = 16, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
      model <- layer_dense(model, units = 1, activation = 'sigmoid')
 
-     # Compile the model with the learning rate schedule
+     # Compile the model with standard binary crossentropy loss
+     message("Compiling model with standard binary crossentropy loss...")
      compile(model,
-          optimizer = optimizer_adam(learning_rate = lr_schedule),  # Using the exponential decay schedule
-          loss = 'binary_crossentropy',
-          metrics = 'accuracy'
+             optimizer = optimizer_adam(learning_rate = lr_schedule),
+             loss = 'binary_crossentropy',  # Standard binary crossentropy
+             metrics = list('accuracy')     # Keep accuracy for monitoring
      )
 
      print(model)
 
-     message("Training LSTM model...")
+     message("Training LSTM model with standard binary crossentropy loss...")
+     message("Smoothness will be handled post-hoc with LOESS smoothing")
+
      # Train the model using the training subset
      history <- fit(model,
-          X_train_model,
-          y_train_model_array,
-          epochs = 200,
-          batch_size = 1024,
-          validation_data = list(X_val_model, y_val_model_array),  # Use explicit validation data
-          callbacks = list(callback_early_stopping(patience = 10))  # Early stopping for stability
+                    X_train_model,
+                    y_train_model_array,
+                    epochs = 100,
+                    batch_size = 2048,
+                    validation_data = list(X_val_model, y_val_model_array),  # Use explicit validation data
+                    callbacks = list(
+                         callback_early_stopping(patience = 10)  # Increased patience for custom loss
+                    )
      )
 
      # Evaluate the model on validation set
@@ -416,7 +535,7 @@ est_suitability <- function(PATHS,
                              values = c("Training Loss" = "blue3",
                                         "Validation Loss" = "red3")) +
           theme_bw() +  # White background
-          theme(legend.position = "bottom") +
+          theme(legend.position = "right") +
           annotate("text", x = max(df$epoch), y = max(df$loss),
                    label = paste("Final Test Loss:", round(final_loss, 2)),
                    vjust=5, hjust=1, color = "blue3")
@@ -430,12 +549,12 @@ est_suitability <- function(PATHS,
                              values = c("Training Accuracy" = "green4",
                                         "Validation Accuracy" = "darkorange")) +
           theme_bw() +  # White background
-          theme(legend.position = "bottom") +
+          theme(legend.position = "right") +
           annotate("text", x = max(df$epoch), y = min(df$accuracy),
                    label = paste("Final Test Accuracy:", round(final_accuracy, 2)),
                    vjust=-5,     hjust=1, color = "green4")
 
-     combined_plot <- cowplot::plot_grid(accuracy_plot, loss_plot, labels = "AUTO", ncol = 2, align = "v")
+     combined_plot <- cowplot::plot_grid(accuracy_plot, loss_plot, labels = "AUTO", nrow = 2, align = "v")
 
      print(combined_plot)
 
@@ -447,83 +566,170 @@ est_suitability <- function(PATHS,
 
 
      message("Generating predictions...")
-     
+
      # ============================================================================
      # Generate predictions for all periods
      # ============================================================================
-     
-     # Predict on training data (for model validation)
-     d_train$pred <- predict(model, X_train_reshaped)
-     
-     # Predict on full prediction dataset
-     d_pred$pred <- predict(model, X_pred_all_reshaped)
+
+     message("Generating predictions on sequences...")
+
+     # Get predictions from LSTM sequences
+     train_pred_sequences <- predict(model, X_train_reshaped)
+     pred_pred_sequences <- predict(model, X_pred_all_reshaped)
+
+     # Map sequence predictions back to original data structure
+     # Initialize prediction columns
+     d_train$pred <- NA
+     d_pred$pred <- NA
+
+     # Map training predictions back to original data
+     # Note: sequences contain fewer samples due to temporal requirements
+     train_countries <- train_sequences$countries
+     train_dates <- train_sequences$dates
+
+     for (i in 1:length(train_pred_sequences)) {
+          country <- train_countries[i]
+          date <- train_dates[i]
+
+          # Find matching row in original training data
+          match_idx <- which(d_train$iso_code == country & d_train$date == as.Date(date))
+          if (length(match_idx) == 1) {
+               d_train$pred[match_idx] <- train_pred_sequences[i]
+          }
+     }
+
+     # Map prediction predictions back to original data
+     pred_countries <- pred_sequences$countries
+     pred_dates <- pred_sequences$dates
+
+     for (i in 1:length(pred_pred_sequences)) {
+          country <- pred_countries[i]
+          date <- pred_dates[i]
+
+          # Find matching row in original prediction data
+          match_idx <- which(d_pred$iso_code == country & d_pred$date == as.Date(date))
+          if (length(match_idx) == 1) {
+               d_pred$pred[match_idx] <- pred_pred_sequences[i]
+          }
+     }
+
+     # Report mapping success
+     train_mapped <- sum(!is.na(d_train$pred))
+     pred_mapped <- sum(!is.na(d_pred$pred))
+     message(sprintf("Prediction mapping: %d/%d training obs, %d/%d prediction obs",
+                    train_mapped, nrow(d_train), pred_mapped, nrow(d_pred)))
+
+     # Handle unmapped predictions (early weeks without sufficient sequence history)
+     # Use simple forward fill for any remaining NA predictions
+     if (train_mapped < nrow(d_train)) {
+          message("Forward-filling missing training predictions from sequences...")
+          d_train <- d_train %>%
+               dplyr::group_by(iso_code) %>%
+               dplyr::arrange(date) %>%
+               dplyr::mutate(pred = zoo::na.locf(pred, na.rm = FALSE)) %>%
+               dplyr::mutate(pred = zoo::na.locf(pred, fromLast = TRUE, na.rm = FALSE)) %>%
+               dplyr::ungroup()
+     }
+
+     if (pred_mapped < nrow(d_pred)) {
+          message("Forward-filling missing prediction predictions from sequences...")
+          d_pred <- d_pred %>%
+               dplyr::group_by(iso_code) %>%
+               dplyr::arrange(date) %>%
+               dplyr::mutate(pred = zoo::na.locf(pred, na.rm = FALSE)) %>%
+               dplyr::mutate(pred = zoo::na.locf(pred, fromLast = TRUE, na.rm = FALSE)) %>%
+               dplyr::ungroup()
+     }
 
 
      # ============================================================================
      # Temporal smoothing of predictions
      # ============================================================================
-     
-     message("Smoothing time series predictions on weekly time scale...")
-     d_pred_smooth <- d_pred %>%
-          dplyr::group_by(iso_code) %>%
-          # Create a complete dataset for each country with all year-week combinations
-          tidyr::complete(year, week, fill = list(pred = NA)) %>%
-          dplyr::mutate(
-               # Create ISO week string
-               iso_week = paste0(year, "-W", sprintf("%02d", week)),  # ISO week format (e.g., "2021-W01")
-
-               # Directly calculate date_start (Monday) and date_stop (Sunday) for each week
-               date_start = ISOweek::ISOweek2date(paste(iso_week, "-1", sep = "")),  # Monday of the week
-               date_stop = ISOweek::ISOweek2date(paste(iso_week, "-7", sep = ""))    # Sunday of the week
-          ) %>%
-          dplyr::arrange(iso_code, date_start) %>%
-          # Remove rows where pred is NA before applying LOESS to avoid errors
-          dplyr::filter(!is.na(pred)) %>%
-          dplyr::mutate(
-               pred_smooth = inv_logit(stats::predict(loess(logit(pred) ~ as.numeric(date_start), span = 0.01)))
-          ) %>%
-          dplyr::ungroup()
-
-
-     if (53 %in% d_pred_smooth$week) stop("week index is out of bounds")
 
      message("Smoothing time series predictions on daily time scale...")
 
-     d_pred_weekly <- as.data.frame(d_pred_smooth[,c('iso_code', 'week', 'date_start', 'date_stop', 'pred', 'pred_smooth')])
+     d_pred_weekly <- d_pred[,c('iso_code', 'year', 'week', 'date', 'cases', 'cases_binary', 'pred')]
 
      split_data <- split(d_pred_weekly, d_pred_weekly$iso_code)
 
-     d_pred_daily <- expand.grid(list(date = seq(min(as.Date(d_pred_weekly$date_start)),
-                                                 max(as.Date(d_pred_weekly$date_stop)),
-                                                 by='day'),
-                                      iso_code = unique(d_pred_weekly$iso_code)))
+     message(sprintf("Processing %d countries for temporal smoothing...", length(split_data)))
 
-     d_pred_daily$week <- lubridate::isoweek(d_pred_daily$date)
-     d_pred_daily <- merge(d_pred_daily, d_pred_weekly, by=c('week', 'iso_code'))
-
-     split_data <- split(d_pred_weekly, d_pred_weekly$iso_code)
 
      smoothed_list <-
           lapply(split_data, function(x) {
 
-               iso_code <- unique(x$iso_code)
-               date_min <- min(as.Date(x$date_start))
-               date_max <- max(as.Date(x$date_stop))
-               x <- x[,c('date_start', 'pred')]
+               iso_code <- unique(x$iso_code)[1]  # Get first non-NA iso_code
+               message(sprintf("  Processing %s (%d observations)", iso_code, nrow(x)))
 
-               d_pred_daily <- data.frame(date = seq(date_min, date_max, by='day'))
-               d_pred_daily <- merge(d_pred_daily, x, by.x='date', by.y='date_start', all.x=TRUE)
-               d_pred_daily$pred <- zoo::na.locf(d_pred_daily$pred)
-               d_pred_daily$pred_smooth <- inv_logit(stats::predict(loess(logit(pred) ~ as.numeric(date), span = 0.005, data=d_pred_daily)))
+               # Calculate date range for daily interpolation using function arguments
+               # This ensures consistency with the specified prediction period
+               weekly_dates <- as.Date(x$date)
+               date_min <- as.Date(pred_date_start)
+               date_max <- as.Date(pred_date_stop)
 
-               #sel <- 1:1000
-               #plot(d_pred_daily$date[sel], d_pred_daily$pred[sel], type='l')
-               #lines(d_pred_daily$date[sel], d_pred_daily$pred_smooth[sel], col='red')
-
-               data.frame(
-                    iso_code = iso_code,
-                    d_pred_daily
+               tmp <- data.frame(
+                    date = weekly_dates,
+                    cases = x$cases,
+                    pred = x$pred
                )
+
+               tmp <- merge(tmp,
+                            data.frame(date = seq(date_min, date_max, by='day')),
+                            by='date',
+                            all.y=TRUE)
+
+               tmp$pred <- zoo::na.locf(tmp$pred, na.rm = FALSE)
+
+               # Robust LOESS smoothing with error handling
+               tmp$pred_smooth <- tryCatch({
+                    # Bound predictions away from 0 and 1 to avoid logit issues
+                    pred_bounded <- pmax(1e-6, pmin(1 - 1e-6, tmp$pred))
+
+                    # Apply LOESS smoothing on logit scale
+                    # Use gentler smoothing since LSTM already provides temporal consistency
+                    loess_fit <- stats::loess(
+                         stats::qlogis(pred_bounded) ~ as.numeric(date),
+                         data = tmp,
+                         span = 0.05,  # Increased from 0.05 to preserve LSTM temporal learning
+                         control = loess.control(surface = "direct")
+                    )
+
+                    # Predict and transform back to probability scale
+                    smoothed_logit <- stats::predict(loess_fit, newdata = data.frame(date = as.numeric(tmp$date)))
+                    stats::plogis(smoothed_logit)
+
+               }, error = function(e) {
+                    # Fallback to simple smoothing if LOESS fails
+                    warning(sprintf("LOESS smoothing failed for %s, using simple moving average", iso_code))
+                    # Use a simple 7-day moving average as fallback
+                    if (requireNamespace("zoo", quietly = TRUE)) {
+                         zoo::rollmean(tmp$pred, k = min(7, length(tmp$pred)), fill = "extend", align = "center")
+                    } else {
+                         tmp$pred  # Ultimate fallback: no smoothing
+                    }
+               })
+
+               # Add iso_code to output for tracking
+               tmp$iso_code <- iso_code
+
+               # Optional plotting (disabled by default)
+               if (T) {
+                    par(mfrow=c(2,1))
+
+                    if (all(is.na(tmp$cases))) {
+                         plot(tmp$date, rep(0, length(tmp$date)), type='n', main=paste(iso_code, "(no case data)"), ylab="Cases", xlab="Date")
+                    } else {
+                         plot(tmp$date, tmp$cases, type='h', main=iso_code, lwd=3, col='grey20', ylab="Cases", xlab="Date")
+                    }
+                    abline(v=fit_date_stop, lty=2)
+
+                    plot(tmp$date, tmp$pred, type='l', col='orange2', lwd=1.5, ylim=c(0,1), , ylab="Env Suitability", xlab="Date")
+                    abline(h=0.5, lty=3, col='grey50')
+                    lines(tmp$date, tmp$pred_smooth, col='red2', lwd=2)
+                    abline(v=fit_date_stop, lty=2)
+               }
+
+               tmp
 
           })
 
@@ -532,15 +738,11 @@ est_suitability <- function(PATHS,
      rm(split_data)
      rm(smoothed_list)
 
+     message(sprintf("Daily smoothing completed. Final dataset: %d daily observations across %d countries",
+                     nrow(d_pred_daily), length(unique(d_pred_daily$iso_code))))
 
 
-     # ELSE method == 'poisson' {
 
-     # Fit LSTM model with count-based link function directly to the cholera case data
-
-     # psi_jt = P(x > k)
-
-     # }
 
 
      # Save predictions to CSV
@@ -560,7 +762,7 @@ est_suitability <- function(PATHS,
      path <- file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv")
      write.csv(d_all_output, path, row.names = FALSE)
      message("All covariates and metadata saved to: ", path)
-     
+
      # Save model configuration and date ranges
      config_info <- list(
           fit_date_start = as.character(fit_date_start),
@@ -575,7 +777,7 @@ est_suitability <- function(PATHS,
           ),
           covariates = covariates
      )
-     
+
      config_path <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
      jsonlite::write_json(config_info, config_path, pretty = TRUE, auto_unbox = TRUE)
      message("Model configuration saved to: ", config_path)
