@@ -17,6 +17,14 @@
 #' @param fit_date_stop Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.
 #' @param pred_date_start Date string or NULL. Start date for prediction period. If NULL, uses fit_date_start.
 #' @param pred_date_stop Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.
+#' @param n_splits Integer. Number of sequential random train/test splits for transfer learning. Default 1 (no fine-tuning).
+#' @param seed_base Integer. Base seed for reproducible random splits. Each split uses seed_base + split_number.
+#' @param fine_tune_epochs Integer. Number of epochs for fine-tuning on additional splits. Default 10.
+#' @param fine_tune_lr Numeric. Lower learning rate for fine-tuning additional splits. Default 0.00001.
+#' @param split_method Character. Method for train/validation splitting: "random" (default) or "location_month_block".
+#'   The "location_month_block" method groups sequences by country-month and randomly assigns entire blocks,
+#'   which better tests spatial-temporal generalization by preventing data leakage within location-months.
+#' @param train_prop Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.
 #'
 #' @return This function processes climate and cholera case data, fits an LSTM model, makes predictions on
 #'         environmental suitability (psi), and saves both the predictions and covariate data. It also
@@ -37,6 +45,25 @@
 #'                fit_date_stop = "2023-12-31",
 #'                pred_date_start = "2020-01-01",
 #'                pred_date_stop = "2025-12-31")
+#'
+#' # Transfer learning with sequential fine-tuning on 3 random splits
+#' est_suitability(PATHS,
+#'                n_splits = 3,
+#'                seed_base = 123,
+#'                fine_tune_epochs = 15,
+#'                fine_tune_lr = 0.00003)
+#'
+#' # Use location-month blocking for better spatial-temporal generalization
+#' est_suitability(PATHS,
+#'                split_method = "location_month_block",
+#'                train_prop = 0.7)
+#'
+#' # Location-month blocking with transfer learning
+#' est_suitability(PATHS,
+#'                split_method = "location_month_block",
+#'                n_splits = 5,
+#'                train_prop = 0.6,
+#'                seed_base = 42)
 #' }
 #'
 #' @details
@@ -46,12 +73,13 @@
 #'   \item Determines appropriate date ranges for fitting and prediction based on data availability.
 #'   \item Validates data completeness within specified date ranges.
 #'   \item Scales the climate covariates using training data statistics.
-#'   \item Splits the training data into training and validation sets using a 60/40 random split.
+#'   \item Splits the training data into training and validation sets using either random sampling or location-month blocking.
 #'   \item Creates temporal LSTM sequences respecting country boundaries and temporal gaps.
 #'   \item Builds an LSTM-based recurrent neural network (RNN) model for predicting cholera outbreaks.
 #'   \item Trains the model on the training set and evaluates performance on the validation set.
 #'   \item Makes predictions on the full prediction period dataset.
 #'   \item Applies temporal smoothing to predictions and saves results to specified directories.
+#'   \item Optional: Performs sequential fine-tuning on additional random splits for transfer learning.
 #' }
 #'
 #' @importFrom arrow read_parquet
@@ -95,7 +123,13 @@ est_suitability <- function(PATHS,
                             fit_date_start = NULL, # Fitting period (training data)
                             fit_date_stop = NULL,
                             pred_date_start = NULL, # Prediction period (inference)
-                            pred_date_stop = NULL
+                            pred_date_stop = NULL,
+                            n_splits = 10, # Number of sequential random train/test splits for transfer learning
+                            seed_base = 99, # Base seed for reproducible random splits
+                            fine_tune_epochs = 12, # Epochs for fine-tuning on additional splits
+                            fine_tune_lr = 0.001, # Lower learning rate for fine-tuning
+                            split_method = "random", # Split method: "random" or "location_month_block"
+                            train_prop = 0.6 # Proportion for training in initial split
 ) {
 
      require(keras3)
@@ -312,7 +346,7 @@ est_suitability <- function(PATHS,
      # Create proper LSTM sequences with temporal structure
      # ============================================================================
 
-     timesteps <- 32
+     timesteps <- 12
      n_features <- ncol(X_train_scaled)
 
      message(glue::glue("Creating temporal sequences: {n_features} features, {timesteps} timesteps"))
@@ -425,22 +459,36 @@ est_suitability <- function(PATHS,
      message(glue::glue("  Prediction sequences: {dim(X_pred_all_reshaped)[1]} (from {nrow(X_pred_all_scaled)} total prediction obs)"))
      message(glue::glue("  Sequence shape: ({dim(X_train_reshaped)[1]}, {timesteps}, {n_features})"))
 
-     # Split training data into train/validation
-     set.seed(99)
-     train_indices <- sample(1:nrow(X_train_reshaped), 0.75 * nrow(X_train_reshaped))
+     # Split training data into train/validation using selected method
+     message(glue::glue("Creating train/validation split using {split_method} method..."))
+
+     split_result <- get_lstm_sequence_splits(
+          train_sequences = train_sequences,
+          split_method = split_method,
+          train_prop = train_prop,
+          seed = seed_base,
+          verbose = TRUE
+     )
+
+     train_indices <- split_result$train_indices
+     val_indices <- split_result$val_indices
 
      X_train_model <- X_train_reshaped[train_indices, , ]
      y_train_model <- y_train_sequences[train_indices]
-     X_val_model <- X_train_reshaped[-train_indices, , ]
-     y_val_model <- y_train_sequences[-train_indices]
+     X_val_model <- X_train_reshaped[val_indices, , ]
+     y_val_model <- y_train_sequences[val_indices]
 
      # Reshape target to 2D: (samples, 1)
      y_train_model_array <- array(y_train_model, dim = c(length(y_train_model), 1))
      y_val_model_array <- array(y_val_model, dim = c(length(y_val_model), 1))
 
      # Display dataset statistics
+     message(glue::glue('Split method: {split_method}'))
      message(glue::glue('Training samples: {dim(X_train_model)[1]} ({sum(y_train_model == 1)} positive)'))
      message(glue::glue('Validation samples: {dim(X_val_model)[1]} ({sum(y_val_model == 1)} positive)'))
+     if (split_method == "location_month_block") {
+          message(glue::glue('Location-month blocks: {split_result$split_info$n_train_blocks} train, {split_result$split_info$n_val_blocks} validation'))
+     }
      message(glue::glue('Total fitting samples: {nrow(X_train_reshaped)} (from {fit_date_start} to {fit_date_stop})'))
      message(glue::glue('Prediction samples: {nrow(X_pred_all_reshaped)} (from {pred_date_start} to {pred_date_stop})'))
 
@@ -452,21 +500,21 @@ est_suitability <- function(PATHS,
      estimated_steps_per_epoch <- max(10, ceiling(nrow(X_train_model) / 2048))  # batch_size = 2048
 
      lr_schedule <- keras3::learning_rate_schedule_exponential_decay(
-          initial_learning_rate = 0.0001,     # Reasonable starting point
+          initial_learning_rate = 0.00001,     # Reasonable starting point
           decay_steps = 500,                # Much more reasonable for actual training size
-          decay_rate = 0.95                  # Less aggressive decay
+          decay_rate = 0.9                  # Less aggressive decay
      )
 
      # Step 6: Build and Compile the LSTM model
      model <- keras_model_sequential()
-     model <- layer_lstm(model, units = 128, input_shape = c(timesteps, n_features), return_sequences = TRUE,
+     model <- layer_lstm(model, units = 1024, input_shape = c(timesteps, n_features), return_sequences = TRUE,
                          kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 64, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_lstm(model, units = 512, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 32, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_lstm(model, units = 256, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 16, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001))
+     model <- layer_lstm(model, units = 128, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001))
      model <- layer_dropout(model, rate = 0.5)
      model <- layer_dense(model, units = 1, activation = 'sigmoid')
 
@@ -483,7 +531,17 @@ est_suitability <- function(PATHS,
      message("Training LSTM model with standard binary crossentropy loss...")
      message("Smoothness will be handled post-hoc with LOESS smoothing")
 
-     # Train the model using the training subset
+     # Learning rate logger callback
+     lr_logger <- keras3::callback_lambda(
+          on_epoch_end = function(epoch, logs) {
+               current_lr <- as.numeric(model$optimizer$learning_rate)
+               message(sprintf("Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - Acc: %.4f - Val_Acc: %.4f",
+                              epoch + 1, current_lr, logs$loss, logs$val_loss, logs$accuracy, logs$val_accuracy))
+          }
+     )
+
+     # Train the model using the training subset (Split 1)
+     message(sprintf("Training model on split 1 of %d...", n_splits))
      history <- fit(model,
                     X_train_model,
                     y_train_model_array,
@@ -491,7 +549,8 @@ est_suitability <- function(PATHS,
                     batch_size = 2048,
                     validation_data = list(X_val_model, y_val_model_array),  # Use explicit validation data
                     callbacks = list(
-                         callback_early_stopping(patience = 10)  # Increased patience for custom loss
+                         callback_early_stopping(patience = 5),  # Increased patience for custom loss
+                         lr_logger  # Add learning rate logging
                     )
      )
 
@@ -500,6 +559,82 @@ est_suitability <- function(PATHS,
      score <- evaluate(model, X_val_model, y_val_model_array)
      message(glue::glue('Validation loss: {round(score$loss, 4)}'))
      message(glue::glue('Validation accuracy: {round(score$acc, 4)}'))
+
+     # ============================================================================
+     # Sequential Fine-tuning on Additional Random Splits (Transfer Learning)
+     # ============================================================================
+
+     if (n_splits > 1) {
+          message(sprintf("Starting sequential fine-tuning on %d additional random splits...", n_splits - 1))
+
+          for (split_i in 2:n_splits) {
+               message(sprintf("Fine-tuning model on split %d of %d...", split_i, n_splits))
+
+               # Create new split with different seed using same method
+               fine_tune_split <- get_lstm_sequence_splits(
+                    train_sequences = train_sequences,
+                    split_method = split_method,
+                    train_prop = train_prop,
+                    seed = seed_base + split_i,
+                    verbose = FALSE
+               )
+
+               fine_tune_indices <- fine_tune_split$train_indices
+               val_fine_tune_indices <- fine_tune_split$val_indices
+
+               X_fine_tune <- X_train_reshaped[fine_tune_indices, , ]
+               y_fine_tune <- y_train_sequences[fine_tune_indices]
+               X_val_fine_tune <- X_train_reshaped[val_fine_tune_indices, , ]
+               y_val_fine_tune <- y_train_sequences[val_fine_tune_indices]
+
+               # Reshape targets for fine-tuning
+               y_fine_tune_array <- array(y_fine_tune, dim = c(length(y_fine_tune), 1))
+               y_val_fine_tune_array <- array(y_val_fine_tune, dim = c(length(y_val_fine_tune), 1))
+
+               # Recompile model with lower learning rate for fine-tuning
+               compile(model,
+                       optimizer = optimizer_adam(learning_rate = fine_tune_lr),
+                       loss = 'binary_crossentropy',
+                       metrics = list('accuracy'))
+
+               # Fine-tuning logger callback
+               fine_tune_lr_logger <- keras3::callback_lambda(
+                    on_epoch_end = function(epoch, logs) {
+                         current_lr <- as.numeric(model$optimizer$learning_rate)
+                         message(sprintf("Split %d - Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - Acc: %.4f - Val_Acc: %.4f",
+                                        split_i, epoch + 1, current_lr, logs$loss, logs$val_loss, logs$accuracy, logs$val_accuracy))
+                    }
+               )
+
+               # Fine-tune the model on this split
+               fine_tune_history <- fit(model,
+                                       X_fine_tune,
+                                       y_fine_tune_array,
+                                       epochs = fine_tune_epochs,  # Fewer epochs for fine-tuning
+                                       batch_size = 2048,
+                                       validation_data = list(X_val_fine_tune, y_val_fine_tune_array),
+                                       callbacks = list(
+                                            callback_early_stopping(patience = 5),  # Shorter patience for fine-tuning
+                                            fine_tune_lr_logger
+                                       ),
+                                       verbose = 0  # Less verbose output for fine-tuning
+               )
+
+               # Evaluate fine-tuned model
+               fine_tune_score <- evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
+               message(sprintf("Split %d - Fine-tuned validation loss: %.4f, accuracy: %.4f",
+                              split_i, fine_tune_score$loss, fine_tune_score$acc))
+          }
+
+          message(sprintf("Sequential fine-tuning complete. Model has been trained on %d different random splits.", n_splits))
+
+          # Final evaluation on last split's validation set
+          final_score <- evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
+          message(sprintf("Final fine-tuned model - Loss: %.4f, Accuracy: %.4f", final_score$loss, final_score$acc))
+
+          # Update score for downstream reporting
+          score <- final_score
+     }
 
 
 
