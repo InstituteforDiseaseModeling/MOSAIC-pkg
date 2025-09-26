@@ -28,7 +28,7 @@
 #'
 #' @return This function processes climate and cholera case data, fits an LSTM model, makes predictions on
 #'         environmental suitability (psi), and saves both the predictions and covariate data. It also
-#'         generates a plot showing the model fit (accuracy and loss over training epochs) and saves it to a
+#'         generates a plot showing the model fit (MAE and loss over training epochs) and saves it to a
 #'         specified directory.
 #'
 #' @examples
@@ -88,7 +88,7 @@
 #' @importFrom dplyr left_join select mutate filter group_by summarize ungroup
 #' @importFrom tidyr pivot_wider complete
 #' @importFrom ISOweek ISOweek2date
-#' @importFrom keras3 keras_model_sequential layer_lstm layer_dropout layer_dense compile fit evaluate regularizer_l2 optimizer_adam callback_early_stopping learning_rate_schedule_exponential_decay
+#' @importFrom keras3 keras_model_sequential layer_conv_1d layer_spatial_dropout_1d layer_lstm layer_dropout layer_dense compile fit evaluate regularizer_l2 optimizer_adam callback_early_stopping callback_reduce_lr_on_plateau callback_model_checkpoint callback_lambda
 #' @importFrom ggplot2 ggplot geom_rect geom_bar geom_line facet_wrap labs scale_y_continuous scale_x_date theme_minimal theme element_text element_line element_blank annotate
 #' @importFrom patchwork plot_layout
 #' @importFrom cowplot plot_grid
@@ -113,7 +113,7 @@
 #'
 #' @note
 #' The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
-#' a CSV file and a plot showing the model fit (accuracy and loss) is generated.
+#' a CSV file and a plot showing the model fit (MAE and loss) is generated.
 #'
 #' @seealso
 #' \code{\link[keras]{layer_lstm}}, \code{\link[keras]{fit}}, \code{\link[ggplot2]{ggplot}}
@@ -147,6 +147,42 @@ est_suitability <- function(PATHS,
 
      if (53 %in% d_all$week) stop("week index is out of bounds")
 
+     # ============================================================================
+     # Create transmission intensity target variable
+     # ============================================================================
+
+     message("Creating transmission intensity transformation...")
+
+     # Handle missing or negative case values
+     d_all$cases[is.na(d_all$cases)] <- 0
+     d_all$cases[d_all$cases < 0] <- 0
+
+     # Calculate 99th percentile for normalization (robust to outliers)
+     cases_99th <- quantile(d_all$cases, 0.99, na.rm = TRUE)
+     message(sprintf("Cases 99th percentile: %.1f", cases_99th))
+
+     # Create transmission intensity using log1p transformation
+     # This preserves epidemic curve shapes while normalizing scale to [0,1]
+     d_all$transmission_intensity <- pmin(1.0, log1p(d_all$cases) / log1p(cases_99th))
+
+     # Transform to logit space for linear model output
+     # Clip more conservatively to avoid extreme logit targets (0.01 to 0.99 range)
+     d_all$transmission_intensity_clipped <- pmax(0.01, pmin(0.99, d_all$transmission_intensity))
+     d_all$transmission_intensity_logit <- qlogis(d_all$transmission_intensity_clipped)
+
+     # Report transformation statistics
+     intensity_stats <- summary(d_all$transmission_intensity)
+     logit_stats <- summary(d_all$transmission_intensity_logit)
+     message("Transmission intensity distribution (original scale):")
+     print(intensity_stats)
+     message("Transmission intensity distribution (logit scale):")
+     print(logit_stats)
+
+     # Check for any remaining issues
+     if(any(is.na(d_all$transmission_intensity_logit))) {
+          warning("NA values detected in transmission_intensity_logit")
+     }
+
      message("Determining date ranges for fitting and prediction...")
 
      # ============================================================================
@@ -156,7 +192,7 @@ est_suitability <- function(PATHS,
      # Auto-detect fitting date range
      if (is.null(fit_date_start)) {
           # Find first date with actual cholera case data
-          fit_date_start <- min(d_all$date_start[!is.na(d_all$cases_binary)], na.rm = TRUE)
+          fit_date_start <- min(d_all$date_start[!is.na(d_all$cases) & d_all$cases >= 0], na.rm = TRUE)
           message(glue::glue("Auto-detected cholera data start: {fit_date_start}"))
      } else {
           fit_date_start <- as.Date(fit_date_start)
@@ -166,7 +202,7 @@ est_suitability <- function(PATHS,
      if (is.null(fit_date_stop)) {
           # Find last date with both cholera cases AND complete ENSO data for fitting
           enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
-          complete_cases <- d_all[!is.na(d_all$cases_binary), ]
+          complete_cases <- d_all[!is.na(d_all$cases) & d_all$cases >= 0, ]
           enso_complete <- complete_cases[complete.cases(complete_cases[enso_cols]), ]
           if (nrow(enso_complete) > 0) {
                fit_date_stop <- max(enso_complete$date_stop, na.rm = TRUE)
@@ -229,7 +265,7 @@ est_suitability <- function(PATHS,
           "sin_biannual", "cos_biannual",
           "sin_quarterly", "cos_quarterly",
           "sin_monthly", "cos_monthly",
-          "time_linear", "years_since_2020",
+          #"time_linear", "years_since_2020",
           "total_population", "population_density", "urban_population_pct",
           "GDP", "poverty_ratio",
           "Piped_Water", "Other_Improved_Water", "Septic_or_Sewer_Sanitation",
@@ -305,9 +341,9 @@ est_suitability <- function(PATHS,
      d_fit <- d_fit[sel_fit, ]
      X_fit_all <- X_fit_all[sel_fit, ]
 
-     # Extract training data (only cases with known binary outcomes)
-     d_train <- d_fit[!is.na(d_fit$cases_binary), ]
-     y_train <- d_train$cases_binary
+     # Extract training data (only cases with known transmission intensity)
+     d_train <- d_fit[!is.na(d_fit$transmission_intensity_logit), ]
+     y_train <- d_train$transmission_intensity_logit
      X_train <- d_train[, colnames(d_train) %in% covariates]
 
      sel_train <- complete.cases(X_train)
@@ -346,7 +382,7 @@ est_suitability <- function(PATHS,
      # Create proper LSTM sequences with temporal structure
      # ============================================================================
 
-     timesteps <- 12
+     timesteps <- 11
      n_features <- ncol(X_train_scaled)
 
      message(glue::glue("Creating temporal sequences: {n_features} features, {timesteps} timesteps"))
@@ -484,8 +520,8 @@ est_suitability <- function(PATHS,
 
      # Display dataset statistics
      message(glue::glue('Split method: {split_method}'))
-     message(glue::glue('Training samples: {dim(X_train_model)[1]} ({sum(y_train_model == 1)} positive)'))
-     message(glue::glue('Validation samples: {dim(X_val_model)[1]} ({sum(y_val_model == 1)} positive)'))
+     message(glue::glue('Training samples: {dim(X_train_model)[1]} (mean logit intensity: {round(mean(y_train_model, na.rm=TRUE), 3)})'))
+     message(glue::glue('Validation samples: {dim(X_val_model)[1]} (mean logit intensity: {round(mean(y_val_model, na.rm=TRUE), 3)})'))
      if (split_method == "location_month_block") {
           message(glue::glue('Location-month blocks: {split_result$split_info$n_train_blocks} train, {split_result$split_info$n_val_blocks} validation'))
      }
@@ -494,49 +530,105 @@ est_suitability <- function(PATHS,
 
 
 
-     message("Compiling LSTM model...")
-     # Define an exponential decay schedule for learning rate using keras3
-     # Calculate reasonable decay steps based on training size
-     estimated_steps_per_epoch <- max(10, ceiling(nrow(X_train_model) / 2048))  # batch_size = 2048
+     message("Building updated LSTM model with linear output...")
 
-     lr_schedule <- keras3::learning_rate_schedule_exponential_decay(
-          initial_learning_rate = 0.00001,     # Reasonable starting point
-          decay_steps = 500,                # Much more reasonable for actual training size
-          decay_rate = 0.9                  # Less aggressive decay
-     )
-
-     # Step 6: Build and Compile the LSTM model
+     # Step 6: Build and Compile the Updated LSTM model
      model <- keras_model_sequential()
-     model <- layer_lstm(model, units = 1024, input_shape = c(timesteps, n_features), return_sequences = TRUE,
-                         kernel_regularizer = regularizer_l2(0.001))
-     model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 512, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
-     model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 256, return_sequences = TRUE, kernel_regularizer = regularizer_l2(0.001))
-     model <- layer_dropout(model, rate = 0.5)
-     model <- layer_lstm(model, units = 128, return_sequences = FALSE, kernel_regularizer = regularizer_l2(0.001))
-     model <- layer_dropout(model, rate = 0.5)
-     model <- layer_dense(model, units = 1, activation = 'sigmoid')
 
-     # Compile the model with standard binary crossentropy loss
-     message("Compiling model with standard binary crossentropy loss...")
+     # Optional: feature-space dropout to regularize many covariates
+     # Use a small Conv1D front-end to capture short motifs (optional but helpful)
+     # model <- layer_conv_1d(model, filters = 32, kernel_size = 3, activation = "relu",
+     #                        input_shape = c(timesteps, n_features), kernel_regularizer = regularizer_l2(0.0005))
+     # model <- layer_spatial_dropout_1d(model, rate = 0.1)
+
+     # If you skip Conv1D, set input_shape on the first LSTM instead:
+     model <- layer_lstm(model, units = 128, return_sequences = TRUE,
+                         input_shape = c(timesteps, n_features),
+                         kernel_regularizer = regularizer_l2(0.0005),
+                         recurrent_dropout = 0.15)
+
+     model <- layer_dropout(model, rate = 0.25)
+
+     model <- layer_lstm(model, units = 64, return_sequences = TRUE,
+                         kernel_regularizer = regularizer_l2(0.0005),
+                         recurrent_dropout = 0.15)
+
+     model <- layer_dropout(model, rate = 0.25)
+
+     # Pool over time instead of a third LSTM (stabilizes with short sequences)
+     # If keras3 has GlobalAveragePooling1D:
+     # model <- layer_global_average_pooling_1d(model)
+     # Otherwise, a final LSTM without return_sequences is fine but keep it small:
+     model <- layer_lstm(model, units = 32, return_sequences = FALSE,
+                         kernel_regularizer = regularizer_l2(0.0005),
+                         recurrent_dropout = 0.1)
+
+     model <- layer_dropout(model, rate = 0.2)
+
+     # OPTION A: logit target (recommended if you keep a single head)
+     # Dense(1, linear) and train on qlogis(target_clipped) with MSE/Huber
+     model <- layer_dense(model, units = 1, activation = "linear")
+
+     # Compile the model with improved training specifications
+     message("Compiling model with adaptive learning rate and advanced callbacks...")
+
+     # Learning rate: start conservatively, adapt on plateau
+     opt <- optimizer_adam(learning_rate = 0.001)
+
+     # Custom loss function to prevent extreme predictions
+     custom_loss_with_penalty <- function(y_true, y_pred) {
+          # Standard MSE loss
+          mse_loss <- keras3::loss_mean_squared_error(y_true, y_pred)
+
+          # Penalty for extreme predictions (beyond ±3 logits)
+          extreme_penalty <- keras3::k_mean(keras3::k_square(keras3::k_maximum(0.0, keras3::k_abs(y_pred) - 3.0)))
+
+          # Combine losses (small penalty weight to avoid interfering with main objective)
+          return(mse_loss + 0.1 * extreme_penalty)
+     }
+
      compile(model,
-             optimizer = optimizer_adam(learning_rate = lr_schedule),
-             loss = 'binary_crossentropy',  # Standard binary crossentropy
-             metrics = list('accuracy')     # Keep accuracy for monitoring
+             optimizer = opt,
+             loss = custom_loss_with_penalty,  # Custom loss with saturation penalty
+             metrics = list('mae')             # Mean Absolute Error
      )
 
      print(model)
 
-     message("Training LSTM model with standard binary crossentropy loss...")
-     message("Smoothness will be handled post-hoc with LOESS smoothing")
+     message("Training LSTM model with adaptive learning rate and model checkpointing...")
 
-     # Learning rate logger callback
-     lr_logger <- keras3::callback_lambda(
+     # Advanced callback configuration
+     cb_early <- callback_early_stopping(
+          monitor = 'val_loss',
+          patience = 10,
+          restore_best_weights = TRUE,
+          verbose = 1
+     )
+
+     cb_rlr <- callback_reduce_lr_on_plateau(
+          monitor = 'val_loss',
+          factor = 0.5,
+          patience = 5,
+          min_lr = 1e-6,
+          verbose = 1
+     )
+
+     cb_ckpt <- callback_model_checkpoint(
+          filepath = file.path(PATHS$MODEL_INPUT, "psi_lstm_best.weights.h5"),
+          monitor = 'val_loss',
+          save_best_only = TRUE,
+          save_weights_only = TRUE,
+          verbose = 1
+     )
+
+     # Learning rate and progress logger
+     cb_logger <- callback_lambda(
           on_epoch_end = function(epoch, logs) {
-               current_lr <- as.numeric(model$optimizer$learning_rate)
-               message(sprintf("Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - Acc: %.4f - Val_Acc: %.4f",
-                              epoch + 1, current_lr, logs$loss, logs$val_loss, logs$accuracy, logs$val_accuracy))
+               if (epoch %% 5 == 0 || epoch < 10) {  # Log first 10 epochs, then every 5
+                    current_lr <- as.numeric(model$optimizer$learning_rate)
+                    message(sprintf("Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - MAE: %.4f - Val_MAE: %.4f",
+                                   epoch + 1, current_lr, logs$loss, logs$val_loss, logs$mae, logs$val_mae))
+               }
           }
      )
 
@@ -545,20 +637,17 @@ est_suitability <- function(PATHS,
      history <- fit(model,
                     X_train_model,
                     y_train_model_array,
-                    epochs = 100,
-                    batch_size = 2048,
-                    validation_data = list(X_val_model, y_val_model_array),  # Use explicit validation data
-                    callbacks = list(
-                         callback_early_stopping(patience = 5),  # Increased patience for custom loss
-                         lr_logger  # Add learning rate logging
-                    )
+                    epochs = 150,
+                    batch_size = 128,
+                    validation_data = list(X_val_model, y_val_model_array),
+                    callbacks = list(cb_early, cb_rlr, cb_ckpt, cb_logger)
      )
 
      # Evaluate the model on validation set
      message("Calculating model performance...")
      score <- evaluate(model, X_val_model, y_val_model_array)
      message(glue::glue('Validation loss: {round(score$loss, 4)}'))
-     message(glue::glue('Validation accuracy: {round(score$acc, 4)}'))
+     message(glue::glue('Validation MAE: {round(score$mae, 4)}'))
 
      # ============================================================================
      # Sequential Fine-tuning on Additional Random Splits (Transfer Learning)
@@ -591,18 +680,36 @@ est_suitability <- function(PATHS,
                y_fine_tune_array <- array(y_fine_tune, dim = c(length(y_fine_tune), 1))
                y_val_fine_tune_array <- array(y_val_fine_tune, dim = c(length(y_val_fine_tune), 1))
 
-               # Recompile model with lower learning rate for fine-tuning
+               # Recompile model with adaptive fine-tuning configuration
                compile(model,
                        optimizer = optimizer_adam(learning_rate = fine_tune_lr),
-                       loss = 'binary_crossentropy',
-                       metrics = list('accuracy'))
+                       loss = 'mse',
+                       metrics = list('mae'))
 
-               # Fine-tuning logger callback
-               fine_tune_lr_logger <- keras3::callback_lambda(
+               # Fine-tuning callbacks (simplified for shorter epochs)
+               fine_tune_early <- callback_early_stopping(
+                    monitor = 'val_loss',
+                    patience = 5,
+                    restore_best_weights = TRUE,
+                    verbose = 0
+               )
+
+               fine_tune_ckpt <- callback_model_checkpoint(
+                    filepath = file.path(PATHS$MODEL_INPUT, paste0("psi_lstm_split_", split_i, ".weights.h5")),
+                    monitor = 'val_loss',
+                    save_best_only = TRUE,
+                    save_weights_only = TRUE,
+                    verbose = 0
+               )
+
+               # Fine-tuning logger callback (less frequent logging)
+               fine_tune_logger <- callback_lambda(
                     on_epoch_end = function(epoch, logs) {
-                         current_lr <- as.numeric(model$optimizer$learning_rate)
-                         message(sprintf("Split %d - Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - Acc: %.4f - Val_Acc: %.4f",
-                                        split_i, epoch + 1, current_lr, logs$loss, logs$val_loss, logs$accuracy, logs$val_accuracy))
+                         if (epoch %% 3 == 0 || epoch < 5) {  # Log first 5 epochs, then every 3
+                              current_lr <- as.numeric(model$optimizer$learning_rate)
+                              message(sprintf("Split %d - Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - MAE: %.4f - Val_MAE: %.4f",
+                                            split_i, epoch + 1, current_lr, logs$loss, logs$val_loss, logs$mae, logs$val_mae))
+                         }
                     }
                )
 
@@ -611,26 +718,23 @@ est_suitability <- function(PATHS,
                                        X_fine_tune,
                                        y_fine_tune_array,
                                        epochs = fine_tune_epochs,  # Fewer epochs for fine-tuning
-                                       batch_size = 2048,
+                                       batch_size = 128,
                                        validation_data = list(X_val_fine_tune, y_val_fine_tune_array),
-                                       callbacks = list(
-                                            callback_early_stopping(patience = 5),  # Shorter patience for fine-tuning
-                                            fine_tune_lr_logger
-                                       ),
+                                       callbacks = list(fine_tune_early, fine_tune_ckpt, fine_tune_logger),
                                        verbose = 0  # Less verbose output for fine-tuning
                )
 
                # Evaluate fine-tuned model
                fine_tune_score <- evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
-               message(sprintf("Split %d - Fine-tuned validation loss: %.4f, accuracy: %.4f",
-                              split_i, fine_tune_score$loss, fine_tune_score$acc))
+               message(sprintf("Split %d - Fine-tuned validation loss: %.4f, MAE: %.4f",
+                              split_i, fine_tune_score$loss, fine_tune_score$mae))
           }
 
           message(sprintf("Sequential fine-tuning complete. Model has been trained on %d different random splits.", n_splits))
 
           # Final evaluation on last split's validation set
           final_score <- evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
-          message(sprintf("Final fine-tuned model - Loss: %.4f, Accuracy: %.4f", final_score$loss, final_score$acc))
+          message(sprintf("Final fine-tuned model - Loss: %.4f, MAE: %.4f", final_score$loss, final_score$mae))
 
           # Update score for downstream reporting
           score <- final_score
@@ -643,13 +747,13 @@ est_suitability <- function(PATHS,
           epoch = 1:length(history$metrics$loss),
           loss = history$metrics$loss,
           val_loss = history$metrics$val_loss,
-          accuracy = history$metrics$accuracy,
-          val_accuracy = history$metrics$val_accuracy
+          mae = history$metrics$mae,
+          val_mae = history$metrics$val_mae
      )
 
      # Get final model performance metrics
      final_loss <- score$loss
-     final_accuracy <- score$acc
+     final_mae <- score$mae
 
 
 
@@ -657,8 +761,8 @@ est_suitability <- function(PATHS,
           epoch = 1:length(history$metrics$loss),
           loss = history$metrics$loss,
           val_loss = history$metrics$val_loss,
-          accuracy = history$metrics$accuracy,
-          val_accuracy = history$metrics$val_accuracy
+          mae = history$metrics$mae,
+          val_mae = history$metrics$val_mae
      )
 
      loss_plot <-
@@ -675,21 +779,21 @@ est_suitability <- function(PATHS,
                    label = paste("Final Test Loss:", round(final_loss, 2)),
                    vjust=5, hjust=1, color = "blue3")
 
-     accuracy_plot <-
+     mae_plot <-
           ggplot(df, aes(x = epoch)) +
-          geom_line(aes(y = accuracy, color = "Training Accuracy")) +
-          geom_line(aes(y = val_accuracy, color = "Validation Accuracy")) +
-          labs(x = "Epoch", y = "Accuracy", title = "Training and Validation Accuracy") +
+          geom_line(aes(y = mae, color = "Training MAE")) +
+          geom_line(aes(y = val_mae, color = "Validation MAE")) +
+          labs(x = "Epoch", y = "MAE", title = "Training and Validation MAE") +
           scale_color_manual(name = "",
-                             values = c("Training Accuracy" = "green4",
-                                        "Validation Accuracy" = "darkorange")) +
+                             values = c("Training MAE" = "green4",
+                                        "Validation MAE" = "darkorange")) +
           theme_bw() +  # White background
           theme(legend.position = "right") +
-          annotate("text", x = max(df$epoch), y = min(df$accuracy),
-                   label = paste("Final Test Accuracy:", round(final_accuracy, 2)),
-                   vjust=-5,     hjust=1, color = "green4")
+          annotate("text", x = max(df$epoch), y = max(df$mae),
+                   label = paste("Final Test MAE:", round(final_mae, 4)),
+                   vjust=-1,     hjust=1, color = "green4")
 
-     combined_plot <- cowplot::plot_grid(accuracy_plot, loss_plot, labels = "AUTO", nrow = 2, align = "v")
+     combined_plot <- cowplot::plot_grid(mae_plot, loss_plot, labels = "AUTO", nrow = 2, align = "v")
 
      print(combined_plot)
 
@@ -708,9 +812,17 @@ est_suitability <- function(PATHS,
 
      message("Generating predictions on sequences...")
 
-     # Get predictions from LSTM sequences
-     train_pred_sequences <- predict(model, X_train_reshaped)
-     pred_pred_sequences <- predict(model, X_pred_all_reshaped)
+     # Get predictions from LSTM sequences (in logit space)
+     train_pred_sequences_logit <- predict(model, X_train_reshaped)
+     pred_pred_sequences_logit <- predict(model, X_pred_all_reshaped)
+
+     # Clip logit predictions to prevent saturation (logit of ~3 = prob ~0.95)
+     train_pred_sequences_clipped <- pmax(-4, pmin(4, train_pred_sequences_logit))
+     pred_pred_sequences_clipped <- pmax(-4, pmin(4, pred_pred_sequences_logit))
+
+     # Transform predictions back to probability space
+     train_pred_sequences <- plogis(train_pred_sequences_clipped)
+     pred_pred_sequences <- plogis(pred_pred_sequences_clipped)
 
      # Map sequence predictions back to original data structure
      # Initialize prediction columns
@@ -908,7 +1020,7 @@ est_suitability <- function(PATHS,
           n_prediction_samples = nrow(d_pred),
           model_performance = list(
                validation_loss = final_loss,
-               validation_accuracy = final_accuracy
+               validation_mae = final_mae
           ),
           covariates = covariates
      )
