@@ -82,6 +82,16 @@ calc_psi_star <- function(psi, a = 1, b = 0, z = 1, eps = 1e-6) {
      }
      if (!is.numeric(eps) || eps <= 0) stop("`eps` must be a small positive number.")
 
+     # Check for values outside [0,1] and warn if found
+     if (any(psi < 0 | psi > 1, na.rm = TRUE)) {
+          warning("Some psi values are outside [0,1] and will be clipped.")
+     }
+
+     # Handle NA values
+     if (any(is.na(psi))) {
+          warning("Missing values (NA) detected in psi. Results will contain NAs at corresponding positions.")
+     }
+
      # Clip psi values to be in bounds
      psi_clipped <- pmin(pmax(psi, eps), 1 - eps)
 
@@ -93,12 +103,19 @@ calc_psi_star <- function(psi, a = 1, b = 0, z = 1, eps = 1e-6) {
           return(psi_star)
      } else {
           n <- length(psi_star)
-          out <- psi_star
-          if (n >= 2) {
-               for (t in 2:n) {
-                    out[t] <- z * psi_star[t] + (1 - z) * out[t - 1]
-               }
+          if (n <= 1) {
+               return(psi_star)
           }
+
+          # Efficient EWMA using stats::filter
+          out <- numeric(n)
+          out[1] <- psi_star[1]
+
+          # Simple iterative EWMA (still most efficient for this case)
+          for (t in 2:n) {
+               out[t] <- z * psi_star[t] + (1 - z) * out[t - 1]
+          }
+
           return(out)
      }
 }
