@@ -1222,23 +1222,53 @@ if (file.exists(mu_file)) {
 # Psi star calibration parameters (location-specific)
 #----------------------------------------
 
-# psi_star - Logit-scale calibration of environmental suitability with optional EWMA smoothing
-# Applied per location to allow location-specific suitability calibration during model fitting
-priors_default$parameters_location$psi_star <- list(
-     description = "Logit calibration of NN suitability psi with optional causal EWMA (a: shape/gain, b: scale/offset, z: smoothing).",
-     a = list(
-          distribution = "lognormal",
-          parameters   = list(meanlog = 0, sdlog = 0.35)  # Mean ~1.06, 95% CI: [0.50, 1.99]
-     ),
-     b = list(
-          distribution = "normal",
-          parameters   = list(mean = 0, sd = 0.75)         # 95% CI: [-1.47, 1.47]
-     ),
-     z = list(
-          distribution = "beta",
-          parameters   = list(shape1 = 6, shape2 = 1)     # Mean: 0.86, Mode: 1.0, 95% CI: [0.54, 1.00]
-     )
+# psi_star_a - Shape/gain parameter for logit-scale suitability calibration (location-specific)
+priors_default$parameters_location$psi_star_a <- list(
+     description = "Shape/gain parameter for logit calibration of NN suitability psi (a>1 sharpens peaks, a<1 flattens)",
+     location = list()
 )
+
+for (iso in j) {
+     priors_default$parameters_location$psi_star_a$location[[iso]] <- list(
+          distribution = "lognormal",
+          parameters = list(
+               meanlog = 0,     # Mean ~1.06, median = 1.0 (no transformation)
+               sdlog = 0.35     # 95% CI: [0.50, 1.99], allows meaningful shape changes
+          )
+     )
+}
+
+# psi_star_b - Scale/offset parameter for logit-scale suitability calibration (location-specific)
+priors_default$parameters_location$psi_star_b <- list(
+     description = "Scale/offset parameter for logit calibration of NN suitability psi (shifts baseline up/down)",
+     location = list()
+)
+
+for (iso in j) {
+     priors_default$parameters_location$psi_star_b$location[[iso]] <- list(
+          distribution = "normal",
+          parameters = list(
+               mean = 0,        # Centered at no offset
+               sd = 0.75        # 95% CI: [-1.47, 1.47], allows substantial baseline shifts
+          )
+     )
+}
+
+# psi_star_z - Smoothing weight parameter for causal EWMA (location-specific)
+priors_default$parameters_location$psi_star_z <- list(
+     description = "Smoothing weight for causal EWMA of calibrated suitability (z=1: no smoothing, z<1: smoothing)",
+     location = list()
+)
+
+for (iso in j) {
+     priors_default$parameters_location$psi_star_z$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(
+               shape1 = 6,      # Mean: 0.86, Mode: 1.0
+               shape2 = 1       # 95% CI: [0.54, 1.00], favors minimal smoothing
+          )
+     )
+}
 
 
 # Save to file and add to MOSAIC R package

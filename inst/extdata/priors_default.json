@@ -4450,27 +4450,858 @@
         }
       }
     },
-    "psi_star": {
-      "description": "Logit calibration of NN suitability psi with optional causal EWMA (a: shape/gain, b: scale/offset, z: smoothing).",
-      "a": {
-        "distribution": "lognormal",
-        "parameters": {
-          "meanlog": 0,
-          "sdlog": 0.35
+    "psi_star_a": {
+      "description": "Shape/gain parameter for logit calibration of NN suitability psi (a>1 sharpens peaks, a<1 flattens)",
+      "location": {
+        "AGO": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "BDI": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "BEN": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "BFA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "BWA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "CAF": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "CIV": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "CMR": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "COD": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "COG": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "ERI": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "ETH": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "GAB": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "GHA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "GIN": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "GMB": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "GNB": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "GNQ": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "KEN": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "LBR": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "MLI": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "MOZ": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "MRT": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "MWI": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "NAM": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "NER": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "NGA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "RWA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "SEN": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "SLE": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "SOM": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "SSD": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "SWZ": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "TCD": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "TGO": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "TZA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "UGA": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "ZAF": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "ZMB": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
+        },
+        "ZWE": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": 0,
+            "sdlog": 0.35
+          }
         }
-      },
-      "b": {
-        "distribution": "normal",
-        "parameters": {
-          "mean": 0,
-          "sd": 0.75
+      }
+    },
+    "psi_star_b": {
+      "description": "Scale/offset parameter for logit calibration of NN suitability psi (shifts baseline up/down)",
+      "location": {
+        "AGO": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "BDI": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "BEN": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "BFA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "BWA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "CAF": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "CIV": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "CMR": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "COD": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "COG": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "ERI": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "ETH": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "GAB": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "GHA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "GIN": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "GMB": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "GNB": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "GNQ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "KEN": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "LBR": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "MLI": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "MRT": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "MWI": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "NAM": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "NER": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "NGA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "RWA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "SEN": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "SLE": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "SOM": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "SSD": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "SWZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "TCD": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "TGO": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "TZA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "UGA": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "ZAF": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "ZMB": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
+        },
+        "ZWE": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.75
+          }
         }
-      },
-      "z": {
-        "distribution": "beta",
-        "parameters": {
-          "shape1": 6,
-          "shape2": 1
+      }
+    },
+    "psi_star_z": {
+      "description": "Smoothing weight for causal EWMA of calibrated suitability (z=1: no smoothing, z<1: smoothing)",
+      "location": {
+        "AGO": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "BDI": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "BEN": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "BFA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "BWA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "CAF": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "CIV": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "CMR": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "COD": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "COG": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "ERI": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "ETH": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "GAB": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "GHA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "GIN": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "GMB": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "GNB": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "GNQ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "KEN": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "LBR": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "MLI": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "MRT": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "MWI": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "NAM": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "NER": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "NGA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "RWA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "SEN": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "SLE": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "SOM": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "SSD": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "SWZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "TCD": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "TGO": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "TZA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "UGA": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "ZAF": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "ZMB": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
+        },
+        "ZWE": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 6,
+            "shape2": 1
+          }
         }
       }
     }
