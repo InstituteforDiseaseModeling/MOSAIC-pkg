@@ -1219,12 +1219,12 @@ if (file.exists(mu_file)) {
 }
 
 #----------------------------------------
-# Psi calibration parameters (location-specific)
+# Psi star calibration parameters (location-specific)
 #----------------------------------------
 
-# psi_calibration - Logit-scale calibration of environmental suitability with optional EWMA smoothing
+# psi_star - Logit-scale calibration of environmental suitability with optional EWMA smoothing
 # Applied per location to allow location-specific suitability calibration during model fitting
-priors_default$parameters_location$psi_calibration <- list(
+priors_default$parameters_location$psi_star <- list(
      description = "Logit calibration of NN suitability psi with optional causal EWMA (a: shape/gain, b: scale/offset, z: smoothing).",
      a = list(
           distribution = "lognormal",
