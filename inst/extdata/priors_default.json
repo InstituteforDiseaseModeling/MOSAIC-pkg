@@ -4450,7 +4450,7 @@
         }
       }
     },
-    "psi_calibration": {
+    "psi_star": {
       "description": "Logit calibration of NN suitability psi with optional causal EWMA (a: shape/gain, b: scale/offset, z: smoothing).",
       "a": {
         "distribution": "lognormal",
