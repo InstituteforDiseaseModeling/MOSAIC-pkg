@@ -374,7 +374,7 @@ est_suitability <- function(PATHS,
      # Create proper LSTM sequences with temporal structure
      # ============================================================================
 
-     timesteps <- 4
+     timesteps <- 5
      n_features <- ncol(X_train_scaled)
 
      message(glue::glue("Creating temporal sequences: {n_features} features, {timesteps} timesteps"))
@@ -533,32 +533,32 @@ est_suitability <- function(PATHS,
      inputs <- layer_input(shape = c(timesteps, n_features), name = "inp")
 
      # First LSTM layer
-     x <- layer_lstm(inputs, units = 256, return_sequences = TRUE,
+     x <- layer_lstm(inputs, units = 128, return_sequences = TRUE,
                      kernel_regularizer = regularizer_l2(0.0005),
                      recurrent_dropout = 0.15, name = "lstm1")
      x <- layer_dropout(x, rate = 0.3, name = "drop1")
 
      # Second LSTM layer
-     x <- layer_lstm(x, units = 128, return_sequences = TRUE,
+     x <- layer_lstm(x, units = 64, return_sequences = TRUE,
                      kernel_regularizer = regularizer_l2(0.0005),
                      recurrent_dropout = 0.15, name = "lstm2")
      x <- layer_dropout(x, rate = 0.3, name = "drop2")
 
      # Third LSTM layer
-     x <- layer_lstm(x, units = 64, return_sequences = FALSE,
+     x <- layer_lstm(x, units = 32, return_sequences = FALSE,
                      kernel_regularizer = regularizer_l2(0.0005),
                      recurrent_dropout = 0.15, name = "lstm3")
      x <- layer_dropout(x, rate = 0.3, name = "drop3")
 
      # ---- Multi-Head Self-Attention (correct keras3 R syntax) ----
-     attn_out <- layer_multi_head_attention(
-          inputs    = list(query = x, value = x, key = x),  # self-attention
-          num_heads = 4,
-          key_dim   = 16,
-          dropout   = 0.1,
-          name      = "mha_self"
-     )
-
+     #attn_out <- layer_multi_head_attention(
+     #     inputs    = list(query = x, value = x, key = x),  # self-attention
+     #     num_heads = 4,
+     #     key_dim   = 16,
+     #     dropout   = 0.1,
+     #     name      = "mha_self"
+     #)
+#
      # (Optional but recommended) residual + LayerNorm around attention
      #x <- layer_add(x, attn_out)
      #x <- layer_layer_normalization(x, name = "mha_norm")
@@ -921,7 +921,7 @@ est_suitability <- function(PATHS,
                     loess_fit <- stats::loess(
                          stats::qlogis(pred_bounded) ~ as.numeric(date),
                          data = tmp,
-                         span = 0.05,  # Increased from 0.05 to preserve LSTM temporal learning
+                         span = 0.025,  # Increased from 0.05 to preserve LSTM temporal learning
                          control = loess.control(surface = "direct")
                     )
 
