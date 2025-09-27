@@ -88,7 +88,7 @@
 #' @importFrom dplyr left_join select mutate filter group_by summarize ungroup
 #' @importFrom tidyr pivot_wider complete
 #' @importFrom ISOweek ISOweek2date
-#' @importFrom keras3 keras_model_sequential layer_conv_1d layer_spatial_dropout_1d layer_lstm layer_dropout layer_dense compile fit evaluate regularizer_l2 optimizer_adam callback_early_stopping callback_reduce_lr_on_plateau callback_model_checkpoint callback_lambda
+#' @importFrom keras3 keras_model_sequential layer_conv_1d layer_spatial_dropout_1d layer_lstm layer_dropout layer_dense compile fit evaluate regularizer_l2 optimizer_adam callback_early_stopping callback_reduce_lr_on_plateau callback_model_checkpoint callback_lambda loss_huber
 #' @importFrom ggplot2 ggplot geom_rect geom_bar geom_line facet_wrap labs scale_y_continuous scale_x_date theme_minimal theme element_text element_line element_blank annotate
 #' @importFrom patchwork plot_layout
 #' @importFrom cowplot plot_grid
@@ -157,7 +157,7 @@ est_suitability <- function(PATHS,
      d_all$cases[is.na(d_all$cases)] <- 0
      d_all$cases[d_all$cases < 0] <- 0
 
-     # Calculate 99th percentile for normalization (robust to outliers)
+     # Calculate 97.5th percentile for normalization (better peak resolution)
      cases_99th <- quantile(d_all$cases, 0.99, na.rm = TRUE)
      message(sprintf("Cases 99th percentile: %.1f", cases_99th))
 
@@ -165,22 +165,14 @@ est_suitability <- function(PATHS,
      # This preserves epidemic curve shapes while normalizing scale to [0,1]
      d_all$transmission_intensity <- pmin(1.0, log1p(d_all$cases) / log1p(cases_99th))
 
-     # Transform to logit space for linear model output
-     # Clip more conservatively to avoid extreme logit targets (0.01 to 0.99 range)
-     d_all$transmission_intensity_clipped <- pmax(0.01, pmin(0.99, d_all$transmission_intensity))
-     d_all$transmission_intensity_logit <- qlogis(d_all$transmission_intensity_clipped)
-
      # Report transformation statistics
      intensity_stats <- summary(d_all$transmission_intensity)
-     logit_stats <- summary(d_all$transmission_intensity_logit)
-     message("Transmission intensity distribution (original scale):")
+     message("Transmission intensity distribution:")
      print(intensity_stats)
-     message("Transmission intensity distribution (logit scale):")
-     print(logit_stats)
 
      # Check for any remaining issues
-     if(any(is.na(d_all$transmission_intensity_logit))) {
-          warning("NA values detected in transmission_intensity_logit")
+     if(any(is.na(d_all$transmission_intensity))) {
+          warning("NA values detected in transmission_intensity")
      }
 
      message("Determining date ranges for fitting and prediction...")
@@ -342,8 +334,8 @@ est_suitability <- function(PATHS,
      X_fit_all <- X_fit_all[sel_fit, ]
 
      # Extract training data (only cases with known transmission intensity)
-     d_train <- d_fit[!is.na(d_fit$transmission_intensity_logit), ]
-     y_train <- d_train$transmission_intensity_logit
+     d_train <- d_fit[!is.na(d_fit$transmission_intensity), ]
+     y_train <- d_train$transmission_intensity
      X_train <- d_train[, colnames(d_train) %in% covariates]
 
      sel_train <- complete.cases(X_train)
@@ -382,7 +374,7 @@ est_suitability <- function(PATHS,
      # Create proper LSTM sequences with temporal structure
      # ============================================================================
 
-     timesteps <- 11
+     timesteps <- 4
      n_features <- ncol(X_train_scaled)
 
      message(glue::glue("Creating temporal sequences: {n_features} features, {timesteps} timesteps"))
@@ -514,14 +506,19 @@ est_suitability <- function(PATHS,
      X_val_model <- X_train_reshaped[val_indices, , ]
      y_val_model <- y_train_sequences[val_indices]
 
+     # Build target on logit scale using clean approach
+     eps <- 1e-6
+     y_train_logit <- qlogis(pmax(eps, pmin(1 - eps, y_train_model)))
+     y_val_logit <- qlogis(pmax(eps, pmin(1 - eps, y_val_model)))
+
      # Reshape target to 2D: (samples, 1)
-     y_train_model_array <- array(y_train_model, dim = c(length(y_train_model), 1))
-     y_val_model_array <- array(y_val_model, dim = c(length(y_val_model), 1))
+     y_train_model_array <- array(y_train_logit, dim = c(length(y_train_logit), 1))
+     y_val_model_array <- array(y_val_logit, dim = c(length(y_val_logit), 1))
 
      # Display dataset statistics
      message(glue::glue('Split method: {split_method}'))
-     message(glue::glue('Training samples: {dim(X_train_model)[1]} (mean logit intensity: {round(mean(y_train_model, na.rm=TRUE), 3)})'))
-     message(glue::glue('Validation samples: {dim(X_val_model)[1]} (mean logit intensity: {round(mean(y_val_model, na.rm=TRUE), 3)})'))
+     message(glue::glue('Training samples: {dim(X_train_model)[1]} (mean logit intensity: {round(mean(y_train_logit, na.rm=TRUE), 3)})'))
+     message(glue::glue('Validation samples: {dim(X_val_model)[1]} (mean logit intensity: {round(mean(y_val_logit, na.rm=TRUE), 3)})'))
      if (split_method == "location_month_block") {
           message(glue::glue('Location-month blocks: {split_result$split_info$n_train_blocks} train, {split_result$split_info$n_val_blocks} validation'))
      }
@@ -530,67 +527,58 @@ est_suitability <- function(PATHS,
 
 
 
-     message("Building updated LSTM model with linear output...")
+     message("Building 2-layer LSTM model with attention and Huber loss...")
 
-     # Step 6: Build and Compile the Updated LSTM model
-     model <- keras_model_sequential()
+     # Use Functional API to support multi-head attention
+     inputs <- layer_input(shape = c(timesteps, n_features), name = "inp")
 
-     # Optional: feature-space dropout to regularize many covariates
-     # Use a small Conv1D front-end to capture short motifs (optional but helpful)
-     # model <- layer_conv_1d(model, filters = 32, kernel_size = 3, activation = "relu",
-     #                        input_shape = c(timesteps, n_features), kernel_regularizer = regularizer_l2(0.0005))
-     # model <- layer_spatial_dropout_1d(model, rate = 0.1)
+     # First LSTM layer
+     x <- layer_lstm(inputs, units = 256, return_sequences = TRUE,
+                     kernel_regularizer = regularizer_l2(0.0005),
+                     recurrent_dropout = 0.15, name = "lstm1")
+     x <- layer_dropout(x, rate = 0.3, name = "drop1")
 
-     # If you skip Conv1D, set input_shape on the first LSTM instead:
-     model <- layer_lstm(model, units = 128, return_sequences = TRUE,
-                         input_shape = c(timesteps, n_features),
-                         kernel_regularizer = regularizer_l2(0.0005),
-                         recurrent_dropout = 0.15)
+     # Second LSTM layer
+     x <- layer_lstm(x, units = 128, return_sequences = TRUE,
+                     kernel_regularizer = regularizer_l2(0.0005),
+                     recurrent_dropout = 0.15, name = "lstm2")
+     x <- layer_dropout(x, rate = 0.3, name = "drop2")
 
-     model <- layer_dropout(model, rate = 0.25)
+     # Third LSTM layer
+     x <- layer_lstm(x, units = 64, return_sequences = FALSE,
+                     kernel_regularizer = regularizer_l2(0.0005),
+                     recurrent_dropout = 0.15, name = "lstm3")
+     x <- layer_dropout(x, rate = 0.3, name = "drop3")
 
-     model <- layer_lstm(model, units = 64, return_sequences = TRUE,
-                         kernel_regularizer = regularizer_l2(0.0005),
-                         recurrent_dropout = 0.15)
+     # ---- Multi-Head Self-Attention (correct keras3 R syntax) ----
+     attn_out <- layer_multi_head_attention(
+          inputs    = list(query = x, value = x, key = x),  # self-attention
+          num_heads = 4,
+          key_dim   = 16,
+          dropout   = 0.1,
+          name      = "mha_self"
+     )
 
-     model <- layer_dropout(model, rate = 0.25)
+     # (Optional but recommended) residual + LayerNorm around attention
+     #x <- layer_add(x, attn_out)
+     #x <- layer_layer_normalization(x, name = "mha_norm")
 
-     # Pool over time instead of a third LSTM (stabilizes with short sequences)
-     # If keras3 has GlobalAveragePooling1D:
-     # model <- layer_global_average_pooling_1d(model)
-     # Otherwise, a final LSTM without return_sequences is fine but keep it small:
-     model <- layer_lstm(model, units = 32, return_sequences = FALSE,
-                         kernel_regularizer = regularizer_l2(0.0005),
-                         recurrent_dropout = 0.1)
+     # Pool over time (you can use avg or max; max sharpens peaks)
+     #x <- layer_global_max_pooling_1d(x, name = "pool")
 
-     model <- layer_dropout(model, rate = 0.2)
+     # Final dense layer with linear activation for logit predictions
+     outputs <- layer_dense(x, units = 1, activation = "linear", name = "logit_head")
 
-     # OPTION A: logit target (recommended if you keep a single head)
-     # Dense(1, linear) and train on qlogis(target_clipped) with MSE/Huber
-     model <- layer_dense(model, units = 1, activation = "linear")
+     # Create the model
+     model <- keras_model(inputs = inputs, outputs = outputs)
 
-     # Compile the model with improved training specifications
-     message("Compiling model with adaptive learning rate and advanced callbacks...")
-
-     # Learning rate: start conservatively, adapt on plateau
-     opt <- optimizer_adam(learning_rate = 0.001)
-
-     # Custom loss function to prevent extreme predictions
-     custom_loss_with_penalty <- function(y_true, y_pred) {
-          # Standard MSE loss
-          mse_loss <- keras3::loss_mean_squared_error(y_true, y_pred)
-
-          # Penalty for extreme predictions (beyond ±3 logits)
-          extreme_penalty <- keras3::k_mean(keras3::k_square(keras3::k_maximum(0.0, keras3::k_abs(y_pred) - 3.0)))
-
-          # Combine losses (small penalty weight to avoid interfering with main objective)
-          return(mse_loss + 0.1 * extreme_penalty)
-     }
+     # Compile with Huber loss for robust training
+     message("Compiling model with Huber loss and advanced callbacks...")
 
      compile(model,
-             optimizer = opt,
-             loss = custom_loss_with_penalty,  # Custom loss with saturation penalty
-             metrics = list('mae')             # Mean Absolute Error
+             optimizer = optimizer_adam(learning_rate = 0.001),
+             loss = 'mse',                            # Mean squared error loss
+             metrics = list("mae", "mse")              # Track both MAE and MSE
      )
 
      print(model)
@@ -812,17 +800,13 @@ est_suitability <- function(PATHS,
 
      message("Generating predictions on sequences...")
 
-     # Get predictions from LSTM sequences (in logit space)
-     train_pred_sequences_logit <- predict(model, X_train_reshaped)
-     pred_pred_sequences_logit <- predict(model, X_pred_all_reshaped)
+     # Inference: get logit predictions and map back with plogis (optionally clip logits)
+     train_pred_logit <- as.numeric(predict(model, X_train_reshaped))
+     pred_pred_logit <- as.numeric(predict(model, X_pred_all_reshaped))
 
-     # Clip logit predictions to prevent saturation (logit of ~3 = prob ~0.95)
-     train_pred_sequences_clipped <- pmax(-4, pmin(4, train_pred_sequences_logit))
-     pred_pred_sequences_clipped <- pmax(-4, pmin(4, pred_pred_sequences_logit))
-
-     # Transform predictions back to probability space
-     train_pred_sequences <- plogis(train_pred_sequences_clipped)
-     pred_pred_sequences <- plogis(pred_pred_sequences_clipped)
+     # Clip logits to prevent extreme predictions (±6 allows up to 99.75% confidence)
+     train_pred_sequences <- plogis(pmax(-6, pmin(6, train_pred_logit)))
+     pred_pred_sequences <- plogis(pmax(-6, pmin(6, pred_pred_logit)))
 
      # Map sequence predictions back to original data structure
      # Initialize prediction columns
