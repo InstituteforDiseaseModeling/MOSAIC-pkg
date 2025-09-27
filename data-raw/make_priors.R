@@ -1,30 +1,21 @@
 library(MOSAIC)
 library(jsonlite)
 
-# make_priors.R with reverted Beta fitting approach for E/I compartments
-#
-# Key changes:
-# - est_initial_E_I now uses fit_beta_from_ci with custom CI bounds for wider exploration
-# - CI bounds: ci_lower = 1e-6, ci_upper = mean_val * ci_upper_inflation_factor
-# - ci_upper_inflation_factor: default = 2 for wider scenario exploration
-# - Other functions (est_initial_R, est_initial_S, est_initial_V1_V2) still use variance_inflation
+# make_priors.R - Generate default prior distributions for MOSAIC model parameters
 
-# Set up paths - critical for finding input files
-# Set root to parent directory containing all MOSAIC repos
+# Set up paths
 MOSAIC::set_root_directory("~/MOSAIC")
 PATHS <- MOSAIC::get_paths()
 
 # Load config_default to get the global date_start
-# This ensures priors are aligned with the model configuration
 config_default <- MOSAIC::config_default
 date_start <- as.Date(config_default$date_start)
-cat(sprintf("Using date_start from config_default: %s\n", date_start))
 
 j <- MOSAIC::iso_codes_mosaic
 
 priors_default <- list(
      metadata = list(
-          version = "6.1.0",
+          version = "6.3.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -37,135 +28,98 @@ priors_default <- list(
 #----------------------------------------
 
 # alpha_1 - Population mixing within metapops
-# Assuming close to 1 on mixing param. Not because we believe pops at country level are that well-mixed,
-# but trying to enable faster epidemic growth rates
-
-# Assumption: set to theoretic max to enable faster epidemic growth rates
-#beta_fit_alpha_1 <- fit_beta_from_ci(mode_val = 0.95, ci_lower = 0.25, ci_upper = 0.99)
-
-# Assumption: Low level mixing at country scale
 beta_fit_alpha_1 <- fit_beta_from_ci(mode_val = 0.25, ci_lower = 0.05, ci_upper = 0.5)
 
 priors_default$parameters_global$alpha_1 <- list(
-     parameter_name = "alpha_1",
+     description = "Population mixing within metapops (0-1, 1 = well-mixed)",
      distribution = "beta",
      parameters = list(shape1 = beta_fit_alpha_1$shape1, shape2 = beta_fit_alpha_1$shape2)
 )
 
 # alpha_2 - Degree of frequency driven transmission
-# assuming more frequency dependent transmission with wide uncertainty
-
-# Assumption: Tranmsmission more frequency dependent
-#beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.4, ci_upper = 0.8)
-
-# Assumption: Transmission more density dependent
-beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.25, ci_lower = 0.1, ci_upper = 0.5)
-
-# Assumption: set to theoretic max within possibility of departure from default full frequency dependence
-#beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.95, ci_lower = 0.25, ci_upper = 0.99)
-
+beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.33, ci_lower = 0.1, ci_upper = 0.66)
 
 priors_default$parameters_global$alpha_2 <- list(
-     parameter_name = "alpha_2",
+     description = "Degree of frequency driven transmission (0-1)",
      distribution = "beta",
      parameters = list(shape1 = beta_fit_alpha_2$shape1, shape2 = beta_fit_alpha_2$shape2)
 )
 
 # decay_days_long - Maximum V. cholerae survival time
 priors_default$parameters_global$decay_days_long <- list(
-     parameter_name = "decay_days_long",
+     description = "Maximum V. cholerae survival time (days)",
      distribution = "uniform",
      parameters = list(min = 30, max = 150)
 )
 
 # decay_days_short - Minimum V. cholerae survival time
 priors_default$parameters_global$decay_days_short <- list(
-     parameter_name = "decay_days_short",
+     description = "Minimum V. cholerae survival time (days)",
      distribution = "uniform",
      parameters = list(min = 0.01, max = 30)
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation
 priors_default$parameters_global$decay_shape_1 <- list(
-     parameter_name = "decay_shape_1",
+     description = "First shape parameter of Beta distribution for V. cholerae decay",
      distribution = "uniform",
      parameters = list(min = 0.5, max = 5.0)
 )
 
 # decay_shape_2 - Second shape parameter of Beta distribution for V. cholerae decay rate transformation
 priors_default$parameters_global$decay_shape_2 <- list(
-     parameter_name = "decay_shape_2",
+     description = "Second shape parameter of Beta distribution for V. cholerae decay",
      distribution = "uniform",
      parameters = list(min = 0.5, max = 5.0)
 )
 
 # epsilon - Natural immunity waning rate
 priors_default$parameters_global$epsilon <- list(
-     parameter_name = "epsilon",
+     description = "Natural immunity waning rate (per day)",
      distribution = "lognormal",
      parameters = list(mean = 3.9e-4, sd = 2.0e-4)  # sd derived from 95% CI [1.7e-4, 1.03e-3]
 )
 
-variance_inflation_epsilon <- 2
-
+# Apply variance inflation to epsilon
 priors_default$parameters_global$epsilon$parameters$sd <-
-     priors_default$parameters_global$epsilon$parameters$sd * variance_inflation_epsilon
+     priors_default$parameters_global$epsilon$parameters$sd * 2
 
 # gamma_1 - Symptomatic/severe shedding duration rate
-# Based on literature: symptomatic cases shed V. cholerae for 7-14 days without treatment
-# This parameter represents the rate at which symptomatic individuals stop shedding bacteria
-# Median shedding ~10 days, allowing range of 7-14 days (untreated populations)
-# Note: With effective antibiotic treatment, shedding reduces to 1-2 days
 priors_default$parameters_global$gamma_1 <- list(
-     parameter_name = "gamma_1",
+     description = "Symptomatic/severe shedding duration rate (per day)",
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/10),  # log of median rate: 1/10 per day = 10 days shedding
-          sdlog = 0.8          # uncertainty allowing 7-14 day range
+          sdlog = 0.5          # uncertainty allowing 7-14 day range
      )
 )
 
 # gamma_2 - Asymptomatic/mild shedding duration rate
-# Based on literature: asymptomatic cases typically shed for only 1-2 days
-# Bangladesh study shows average 2.0 days (95% CI: 1.7-2.4 days)
-# This parameter represents the rate at which asymptomatic individuals stop shedding bacteria
-# Median shedding ~2 days, allowing range of 1-3 days
-# Note: Asymptomatic cases have ~10³ vibrios/gram vs 10¹⁰-10¹² for symptomatic
 priors_default$parameters_global$gamma_2 <- list(
-     parameter_name = "gamma_2",
+     description = "Asymptomatic/mild shedding duration rate (per day)",
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/2),   # log of median rate: 1/2 per day = 2 days shedding
-          sdlog = 0.8           # uncertainty allowing 1-3 day range
+          sdlog = 0.5           # uncertainty allowing 1-3 day range
      )
 )
 
 
 # iota - Incubation rate (1/days)
-# Based on Azman et al. (2013) J Infect 66(5):432-438
-# Median incubation period = 1.4 days (95% CI: 1.3-1.6 days)
-# 5th percentile = 0.5 days, 95th percentile = 4.4 days
 
 priors_default$parameters_global$iota <- list(
-     parameter_name = "iota",
+     description = "Incubation rate (1/days)",
      distribution = "lognormal",
      parameters = list(meanlog = -0.337, sdlog = 0.4)  # Wider distribution
 )
 
-variance_inflation_iota <- 2
-
-priors_default$parameters_global$iota$parameters$sd <-
-     priors_default$parameters_global$iota$parameters$sd * variance_inflation_iota
-
-
-
-
+# No variance inflation for iota (factor = 1)
 
 # kappa - Concentration of V. cholerae which leads to 50% infectious dose
 priors_default$parameters_global$kappa <- list(
-     parameter_name = "kappa",
+     description = "Concentration of V. cholerae for 50% infectious dose",
      distribution = "uniform",
-     parameters = list(min = 10^5, max = 10^10)
+     parameters = list(min = 10^6, max = 10^9)
 )
 
 
@@ -182,14 +136,14 @@ mobility_omega_shape <- mobility_omega_mode * gamma_rate + 1
 
 # mobility_gamma - Mobility distance decay parameter
 priors_default$parameters_global$mobility_gamma <- list(
-     parameter_name = "mobility_gamma",
+     description = "Mobility distance decay parameter",
      distribution = "gamma",
      parameters = list(shape = mobility_gamma_shape, rate = gamma_rate)
 )
 
 # mobility_omega - Mobility population scaling parameter
 priors_default$parameters_global$mobility_omega <- list(
-     parameter_name = "mobility_omega",
+     description = "Mobility population scaling parameter",
      distribution = "gamma",
      parameters = list(shape = mobility_omega_shape, rate = gamma_rate)
 )
@@ -229,8 +183,7 @@ get_vaccine_param <- function(var_name, param_name) {
 
 # omega_1 - Vaccine waning rate (one dose)
 # Based on Xu et al. (2024) meta-regression, fitted using est_vaccine_effectiveness()
-# Fit gamma distribution from confidence intervals with uncertainty inflation
-uncertainty_inflation <- 0.1  # Increase CI width by 20%
+uncertainty_inflation <- 0.05  # Increase CI width
 
 omega_1_mean <- get_vaccine_param("omega_1", "mean")
 omega_1_low <- get_vaccine_param("omega_1", "low")
@@ -267,7 +220,7 @@ omega_1_fit <- fit_gamma_from_ci(
 )
 
 priors_default$parameters_global$omega_1 <- list(
-     parameter_name = "omega_1",
+     description = "Vaccine waning rate (one dose, per day)",
      distribution = "gamma",
      parameters = list(
           shape = omega_1_fit$shape,
@@ -312,7 +265,7 @@ omega_2_fit <- fit_gamma_from_ci(
 )
 
 priors_default$parameters_global$omega_2 <- list(
-     parameter_name = "omega_2",
+     description = "Vaccine waning rate (two dose, per day)",
      distribution = "gamma",
      parameters = list(
           shape = omega_2_fit$shape,
@@ -321,10 +274,9 @@ priors_default$parameters_global$omega_2 <- list(
 )
 
 
-uncertainty_inflation <- 0.2  # Increase CI width by 20%
-
 # phi_1 - Initial vaccine effectiveness (one dose)
 # Based on Xu et al. (2024), fitted using est_vaccine_effectiveness()
+uncertainty_inflation <- 0.05  # Reuse same inflation factor
 phi_1_mean <- get_vaccine_param("phi_1", "mean")
 phi_1_low <- get_vaccine_param("phi_1", "low")
 phi_1_high <- get_vaccine_param("phi_1", "high")
@@ -344,7 +296,7 @@ phi_1_fit <- fit_beta_from_ci(
 )
 
 priors_default$parameters_global$phi_1 <- list(
-     parameter_name = "phi_1",
+     description = "Initial vaccine effectiveness (one dose)",
      distribution = "beta",
      parameters = list(
           shape1 = phi_1_fit$shape1,
@@ -373,7 +325,7 @@ phi_2_fit <- fit_beta_from_ci(
 )
 
 priors_default$parameters_global$phi_2 <- list(
-     parameter_name = "phi_2",
+     description = "Initial vaccine effectiveness (two dose)",
      distribution = "beta",
      parameters = list(
           shape1 = phi_2_fit$shape1,
@@ -450,28 +402,28 @@ if (file.exists(rho_param_file)) {
 # rho - Reporting rate (proportion of suspected cases that are true cholera)
 # Using selected estimate based on outbreak parameter
 priors_default$parameters_global$rho <- list(
-     parameter_name = "rho",
+     description = "Reporting rate (proportion of suspected cases that are true cholera)",
      distribution = "beta",
      parameters = list(shape1 = rho_shape1, shape2 = rho_shape2)
 )
 
 # sigma - Proportion symptomatic
 priors_default$parameters_global$sigma <- list(
-     parameter_name = "sigma",
+     description = "Proportion symptomatic",
      distribution = "beta",
      parameters = list(shape1 = 4.30, shape2 = 13.51)
 )
 
 # zeta_1 - Symptomatic shedding rate
 priors_default$parameters_global$zeta_1 <- list(
-     parameter_name = "zeta_1",
+     description = "Symptomatic shedding rate (bacteria per day)",
      distribution = "uniform",
      parameters = list(min = 1e5, max = 1e10)
 )
 
 # zeta_2 - Asymptomatic shedding rate
 priors_default$parameters_global$zeta_2 <- list(
-     parameter_name = "zeta_2",
+     description = "Asymptomatic shedding rate (bacteria per day)",
      distribution = "uniform",
      parameters = list(min = 100, max = 1e5)
 )
@@ -482,80 +434,49 @@ priors_default$parameters_global$zeta_2 <- list(
 #---------------------------------------------------
 
 # beta_j0_tot - Total base transmission rate (human + environmental)
-# Gompertz prior fitted to handle near-zero transmission rates with right-skewed uncertainty
-# Mode set at 1e-7 (very low baseline transmission) with wide 95% CI allowing for variation
-# The Gompertz distribution better captures the highly skewed nature of transmission rates,
-# which are typically very small but can occasionally be orders of magnitude larger
-# Used with p_beta to derive components:
-#   beta_j0_hum = p_beta * beta_j0_tot
-#   beta_j0_env = (1 - p_beta) * beta_j0_tot
-
 # Fit Gompertz distribution for beta_j0_tot
-# Mode at 1e-7 with very wide uncertainty to capture rare high transmission scenarios
-# CI spans from near-zero to 1e-3 (allowing 4 orders of magnitude variation)
 beta_j0_tot_fit <- fit_gompertz_from_ci(
      mode_val = 1e-6,        # Very low baseline transmission rate
      ci_lower = 1e-8,        # Near-zero lower bound
-     ci_upper = 1e-5,        # Upper bound allows for higher transmission scenarios
+     ci_upper = 1e-4,        # Upper bound allows for higher transmission scenarios
      probs = c(0.025, 0.975),
      verbose = TRUE
 )
 
 priors_default$parameters_location$beta_j0_tot <- list(
-     parameter_name = "beta_j0_tot",
-     description    = "Total base transmission rate (human + environmental)",
-     distribution   = "gompertz",
-     parameters     = list(
-          location = list()
-     ),
-     fitting_info = list(
-          mode = 1e-6,
-          ci_lower = 1e-8,
-          ci_upper = 1e-5,
-          fitted_b = beta_j0_tot_fit$b,
-          fitted_eta = beta_j0_tot_fit$eta,
-          fitted_mean = beta_j0_tot_fit$fitted_mean
-     )
+     description = "Total base transmission rate (human + environmental)",
+     location = list()
 )
 
 for (iso in j) {
      # Use the same Gompertz parameters for all locations
-     # Location-specific variation will come through sampling
-     priors_default$parameters_location$beta_j0_tot$parameters$location[[iso]] <- list(
-          b = beta_j0_tot_fit$b,
-          eta = beta_j0_tot_fit$eta
+     priors_default$parameters_location$beta_j0_tot$location[[iso]] <- list(
+          distribution = "gompertz",
+          parameters = list(
+               b = beta_j0_tot_fit$b,
+               eta = beta_j0_tot_fit$eta
+          )
      )
 }
 
 
 # p_beta - Proportion of human-to-human vs environmental transmission
-# Beta distribution with a weak bias toward human transmission ≈ 2× environmental.
-# Center at p_beta ≈ 2/3 with light concentration:
-#   shape1 = 2.25, shape2 = 1.125  -> Mean ≈ 0.667, SD ≈ 0.226
-# Option for 1:1 (neutral) ratio:
-#   shape1 = 1.5, shape2 = 1.5      -> Mean = 0.5,   SD = 0.25
-# Used to derive: beta_j0_hum = p_beta * beta_j0_total; beta_j0_env = (1 - p_beta) * beta_j0_total
-
-# Assumption: weak 2:1 bias toward human transmission
-#beta_fit_p_beta <- fit_beta_from_ci(mode_val = 0.66, ci_lower = 0.33, ci_upper = 0.9)
-
-# Assumption: more environmentally driven 1:2 up to 1:10
 beta_fit_p_beta <- fit_beta_from_ci(mode_val = 0.33, ci_lower = 0.1, ci_upper = 0.5)
 
 
 priors_default$parameters_location$p_beta <- list(
-     parameter_name = "p_beta",
      description = "Proportion of total base transmission that is human-to-human (0–1)",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 for (iso in j) {
-
-     priors_default$parameters_location$p_beta$parameters$location[[iso]] <- list(shape1 = beta_fit_p_beta$shape1, shape2 = beta_fit_p_beta$shape2)
-
+     priors_default$parameters_location$p_beta$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(
+               shape1 = beta_fit_p_beta$shape1,
+               shape2 = beta_fit_p_beta$shape2
+          )
+     )
 }
 
 
@@ -573,22 +494,11 @@ for (iso in j) {
 # tau_i - Country-level travel probabilities
 # Beta distribution with parameters loaded from param_tau_departure.csv
 
-# Uncertainty adjustment parameter for tau_i
-# Values < 1 increase uncertainty (wider distributions)
-# Values > 1 decrease uncertainty (narrower distributions)
-# Value = 1 keeps original uncertainty from file
-# Value = 0.1 makes distributions 10x wider (much more uncertain)
-# Value = 10 makes distributions 10x narrower (much more certain)
-tau_uncertainty_factor <- 0.001  # Default: use original uncertainty from file
+tau_uncertainty_factor <- 0.001  # Increase tau uncertainty
 
 priors_default$parameters_location$tau_i <- list(
-     parameter_name = "tau_i",
      description = "Country-level travel probabilities",
-     distribution = "beta",
-     uncertainty_factor = tau_uncertainty_factor,
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 # Load tau parameters from file
@@ -624,46 +534,39 @@ if (file.exists(tau_param_file)) {
                tau_shape1 <- mean_tau * concentration_new
                tau_shape2 <- (1 - mean_tau) * concentration_new
 
-               priors_default$parameters_location$tau_i$parameters$location[[iso]] <- list(
-                    shape1 = tau_shape1,
-                    shape2 = tau_shape2
+               priors_default$parameters_location$tau_i$location[[iso]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = tau_shape1,
+                         shape2 = tau_shape2
+                    )
                )
-
-               # Add metadata about the adjustment
-               if (tau_uncertainty_factor != 1.0) {
-                    priors_default$parameters_location$tau_i$parameters$location[[iso]]$original_shape1 <- tau_shape1_orig
-                    priors_default$parameters_location$tau_i$parameters$location[[iso]]$original_shape2 <- tau_shape2_orig
-                    priors_default$parameters_location$tau_i$parameters$location[[iso]]$uncertainty_adjusted <- TRUE
-               }
           } else {
                # Default values if not found (very small travel probability)
                warning(paste("tau parameters not found for", iso, "- using defaults"))
                # Apply uncertainty factor to defaults as well
                default_shape1 <- 100 * tau_uncertainty_factor
                default_shape2 <- 1000000 * tau_uncertainty_factor
-               priors_default$parameters_location$tau_i$parameters$location[[iso]] <- list(
-                    shape1 = default_shape1,
-                    shape2 = default_shape2
+               priors_default$parameters_location$tau_i$location[[iso]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = default_shape1,
+                         shape2 = default_shape2
+                    )
                )
           }
      }
 
-     # Print adjustment message
-     if (tau_uncertainty_factor != 1.0) {
-          cat(paste0("\nTau_i uncertainty adjusted by factor of ", tau_uncertainty_factor, "\n"))
-          if (tau_uncertainty_factor < 1) {
-               cat("  -> Distributions are WIDER (more uncertain)\n")
-          } else {
-               cat("  -> Distributions are NARROWER (less uncertain)\n")
-          }
-     }
 } else {
      warning("tau parameter file not found. Using default values.")
      # Set default values for all locations with uncertainty adjustment
      for (iso in j) {
-          priors_default$parameters_location$tau_i$parameters$location[[iso]] <- list(
-               shape1 = 100 * tau_uncertainty_factor,
-               shape2 = 1000000 * tau_uncertainty_factor
+          priors_default$parameters_location$tau_i$location[[iso]] <- list(
+               distribution = "beta",
+               parameters = list(
+                    shape1 = 100 * tau_uncertainty_factor,
+                    shape2 = 1000000 * tau_uncertainty_factor
+               )
           )
      }
 }
@@ -675,15 +578,11 @@ if (file.exists(tau_param_file)) {
 # theta_j - WASH coverage
 # Beta distribution fitted from weighted mean WASH estimates with uncertainty
 priors_default$parameters_location$theta_j <- list(
-     parameter_name = "theta_j",
      description = "WASH coverage index (proportion with adequate WASH)",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
-theta_uncertainty_one_sided <- 0.1
+theta_uncertainty_one_sided <- 0.05
 
 # Load WASH estimates
 wash_param_file <- file.path(PATHS$MODEL_INPUT, "param_theta_WASH.csv")
@@ -714,10 +613,12 @@ if (file.exists(wash_param_file)) {
                ci_upper = ci_upper
           )
 
-          priors_default$parameters_location$theta_j$parameters$location[[iso]] <- list(
-               shape1 = theta_fit$shape1,
-               shape2 = theta_fit$shape2,
-               point_estimate = wash_value
+          priors_default$parameters_location$theta_j$location[[iso]] <- list(
+               distribution = "beta",
+               parameters = list(
+                    shape1 = theta_fit$shape1,
+                    shape2 = theta_fit$shape2
+               )
           )
 
      }
@@ -726,10 +627,12 @@ if (file.exists(wash_param_file)) {
 
      # Fallback defaults
      for (iso in j) {
-          priors_default$parameters_location$theta_j$parameters$location[[iso]] <- list(
-               shape1 = 13.44396,
-               shape2 = 8.236964,
-               point_estimate = 0.6322853
+          priors_default$parameters_location$theta_j$location[[iso]] <- list(
+               distribution = "beta",
+               parameters = list(
+                    shape1 = 13.44396,
+                    shape2 = 8.236964
+               )
           )
      }
 }
@@ -739,12 +642,7 @@ if (file.exists(wash_param_file)) {
 
 # Seasonality parameters (a_1, a_2, b_1, b_2) - Fourier wave function parameters
 # Normal distributions with parameters loaded from param_seasonal_dynamics.csv
-
-# Uncertainty adjustment parameter for seasonality
-# Values < 1 increase uncertainty (wider distributions)
-# Values > 1 decrease uncertainty (narrower distributions)
-# Value = 1 keeps original uncertainty from file
-seasonality_uncertainty_factor <- 0.95  # Default: use original uncertainty from file
+seasonality_uncertainty_factor <- 0.5  # Increase seasonality uncertainty
 
 # Load seasonal dynamics parameters
 seasonal_param_file <- file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv")
@@ -763,13 +661,8 @@ for (param in c("a1", "a2", "b1", "b2")) {
      param_name <- param  # Use parameter name directly without suffix
 
      priors_default$parameters_location[[param_name]] <- list(
-          parameter_name = param_name,
           description = paste0("Seasonality Fourier coefficient ", param, " (cases)"),
-          distribution = "normal",
-          uncertainty_factor = seasonality_uncertainty_factor,
-          parameters = list(
-               location = list()
-          )
+          location = list()
      )
 
      # Load parameters for each location
@@ -789,48 +682,37 @@ for (param in c("a1", "a2", "b1", "b2")) {
                     # Lower factor = higher SE = higher uncertainty
                     se_adjusted <- se_orig / sqrt(seasonality_uncertainty_factor)
 
-                    priors_default$parameters_location[[param_name]]$parameters$location[[iso]] <- list(
-                         mean = mean_orig,
-                         sd = se_adjusted
+                    priors_default$parameters_location[[param_name]]$location[[iso]] <- list(
+                         distribution = "normal",
+                         parameters = list(
+                              mean = mean_orig,
+                              sd = se_adjusted
+                         )
                     )
-
-                    # Add metadata about the adjustment
-                    if (seasonality_uncertainty_factor != 1.0) {
-                         priors_default$parameters_location[[param_name]]$parameters$location[[iso]]$original_se <- se_orig
-                         priors_default$parameters_location[[param_name]]$parameters$location[[iso]]$uncertainty_adjusted <- TRUE
-                    }
-
-                    # Add info if inferred from neighbor
-                    if (!is.na(param_row$inferred_from_neighbor[1])) {
-                         priors_default$parameters_location[[param_name]]$parameters$location[[iso]]$inferred_from <- param_row$inferred_from_neighbor[1]
-                    }
                } else {
                     # Default values if not found
                     warning(paste("Seasonal parameter", param, "not found for", iso, "- using defaults"))
-                    priors_default$parameters_location[[param_name]]$parameters$location[[iso]] <- list(
-                         mean = 0,
-                         sd = 0.5 / sqrt(seasonality_uncertainty_factor)
+                    priors_default$parameters_location[[param_name]]$location[[iso]] <- list(
+                         distribution = "normal",
+                         parameters = list(
+                              mean = 0,
+                              sd = 0.5 / sqrt(seasonality_uncertainty_factor)
+                         )
                     )
                }
           } else {
                # Default values if file doesn't exist
-               priors_default$parameters_location[[param_name]]$parameters$location[[iso]] <- list(
-                    mean = 0,
-                    sd = 0.5 / sqrt(seasonality_uncertainty_factor)
+               priors_default$parameters_location[[param_name]]$location[[iso]] <- list(
+                    distribution = "normal",
+                    parameters = list(
+                         mean = 0,
+                         sd = 0.5 / sqrt(seasonality_uncertainty_factor)
+                    )
                )
           }
      }
 }
 
-# Print adjustment message for seasonality
-if (seasonality_uncertainty_factor != 1.0) {
-     cat(paste0("\nSeasonality uncertainty adjusted by factor of ", seasonality_uncertainty_factor, "\n"))
-     if (seasonality_uncertainty_factor < 1) {
-          cat("  -> Distributions are WIDER (more uncertain)\n")
-     } else {
-          cat("  -> Distributions are NARROWER (less uncertain)\n")
-     }
-}
 
 
 #---------------------------------------------------
@@ -844,68 +726,50 @@ if (seasonality_uncertainty_factor != 1.0) {
 # typical epidemiological patterns in African cholera settings
 
 # prop_S_initial will be estimated using constrained residual method
-# This ensures S + V1 + V2 + E + I + R = 1 mathematically
-# Placeholder - will be replaced by est_initial_S() below
 
 # prop_V1_initial - Initial proportion with one vaccine dose
-# Beta(0.5, 49.5): mean = 1%, heavily right-skewed
-# OCV coverage typically <5% in Africa
 priors_default$parameters_location$prop_V1_initial <- list(
-     parameter_name = "prop_V1_initial",
      description = "Initial proportion in one-dose vaccine (V1) compartment",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 for (iso in j) {
-     priors_default$parameters_location$prop_V1_initial$parameters$location[[iso]] <- list(shape1 = 0.5, shape2 = 49.5)
+     priors_default$parameters_location$prop_V1_initial$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(shape1 = 0.5, shape2 = 49.5)
+     )
 }
 
 # prop_V2_initial - Initial proportion with two vaccine doses
-# Beta(0.5, 99.5): mean = 0.5%, very heavily right-skewed
-# Lower than V1 as not everyone completes the series
 priors_default$parameters_location$prop_V2_initial <- list(
-     parameter_name = "prop_V2_initial",
      description = "Initial proportion in two-dose vaccine (V2) compartment",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 for (iso in j) {
-     priors_default$parameters_location$prop_V2_initial$parameters$location[[iso]] <- list(shape1 = 0.5, shape2 = 99.5)
+     priors_default$parameters_location$prop_V2_initial$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(shape1 = 0.5, shape2 = 99.5)
+     )
 }
 
 # prop_E_initial - Initial proportion exposed
-# Beta(0.01, 9999.99): mean = 0.0001% (1 per million)
-# Set to essentially zero for simple method compatibility
 priors_default$parameters_location$prop_E_initial <- list(
-     parameter_name = "prop_E_initial",
      description = "Initial proportion in exposed (E) compartment",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 for (iso in j) {
-     priors_default$parameters_location$prop_E_initial$parameters$location[[iso]] <- list(shape1 = 0.01, shape2 = 99999.99)
+     priors_default$parameters_location$prop_E_initial$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(shape1 = 0.01, shape2 = 99999.99)
+     )
 }
 
 # prop_I_initial - Initial proportion infected
-# Default: mean of 100 infected individuals per location
-# Beta(1, b) where b chosen to give mean = 100/population
-# This provides better epidemic seeding than near-zero defaults
 priors_default$parameters_location$prop_I_initial <- list(
-     parameter_name = "prop_I_initial",
      description = "Initial proportion in infected (I) compartment",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 # Load population data to calculate location-specific proportions
@@ -931,28 +795,31 @@ if (file.exists(pop_file)) {
                     # Solve for b: mean_prop = 1/(1+b) => b = (1/mean_prop) - 1
                     shape2_val <- max(2, (1 / mean_prop) - 1)  # Ensure b >= 2 for stability
 
-                    priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
-                         shape1 = 1,
-                         shape2 = shape2_val,
-                         expected_count = target_infected,
-                         population_used = population
+                    priors_default$parameters_location$prop_I_initial$location[[iso]] <- list(
+                         distribution = "beta",
+                         parameters = list(
+                              shape1 = 1,
+                              shape2 = shape2_val
+                         )
                     )
                } else {
                     # Fallback if population invalid
-                    priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
-                         shape1 = 1,
-                         shape2 = 9999,
-                         expected_count = 100,
-                         population_used = 1000000  # Assume 1M default
+                    priors_default$parameters_location$prop_I_initial$location[[iso]] <- list(
+                         distribution = "beta",
+                         parameters = list(
+                              shape1 = 1,
+                              shape2 = 9999
+                         )
                     )
                }
           } else {
                # Fallback if no population data
-               priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
-                    shape1 = 1,
-                    shape2 = 9999,
-                    expected_count = 100,
-                    population_used = 1000000  # Assume 1M default
+               priors_default$parameters_location$prop_I_initial$location[[iso]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = 1,
+                         shape2 = 9999
+                    )
                )
           }
      }
@@ -960,55 +827,44 @@ if (file.exists(pop_file)) {
      # Fallback if population file doesn't exist
      warning("Population file not found. Using default I compartment priors.")
      for (iso in j) {
-          priors_default$parameters_location$prop_I_initial$parameters$location[[iso]] <- list(
-               shape1 = 1,
-               shape2 = 9999,
-               expected_count = 100,
-               population_used = 1000000  # Assume 1M default
+          priors_default$parameters_location$prop_I_initial$location[[iso]] <- list(
+               distribution = "beta",
+               parameters = list(
+                    shape1 = 1,
+                    shape2 = 9999
+               )
           )
      }
 }
 
 # prop_R_initial - Initial proportion recovered/immune
-# Beta(3.5, 14): mean = 20%, allows 5-40% range
-# Highly variable depending on historical cholera exposure
 priors_default$parameters_location$prop_R_initial <- list(
-     parameter_name = "prop_R_initial",
      description = "Initial proportion in recovered/immune (R) compartment",
-     distribution = "beta",
-     parameters = list(
-          location = list()
-     )
+     location = list()
 )
 
 for (iso in j) {
-     priors_default$parameters_location$prop_R_initial$parameters$location[[iso]] <- list(shape1 = 3.5, shape2 = 14)
+     priors_default$parameters_location$prop_R_initial$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(shape1 = 3.5, shape2 = 14)
+     )
 }
 
 
 
-#--------------------------------------------------------------
-# Update default priors with estimated initial conditions
-# for Vaccination compartments (V1 and V2)
-#--------------------------------------------------------------
+# Update default priors with estimated initial conditions for V1 and V2
 
-# Use est_initial_V1_V2() with the in-progress priors_default object as input, use config_default
-cat("Estimating initial V1/V2 vaccination compartments for all locations...\n")
-
-# Run estimation for all locations in config_default
 initial_conditions_V1_V2 <- est_initial_V1_V2(
      PATHS = PATHS,
-     priors = priors_default,  # Use the priors being built in this script
-     config = config_default,  # Use all locations from config_default
-     n_samples = 100,         # Production-quality uncertainty quantification
-     t0 = date_start,         # Use date_start from config_default
-     variance_inflation = 0.5,   # Triple variance for increased uncertainty (still supported)
-     parallel = TRUE,           # Enable parallel processing for efficiency
-     verbose = TRUE            # Quiet mode for cleaner output
+     priors = priors_default,
+     config = config_default,
+     n_samples = 1000,
+     t0 = date_start,
+     variance_inflation = 0,
+     parallel = TRUE,
+     verbose = FALSE
 )
 
-cat(sprintf("  Completed V1/V2 estimation for %d locations\n",
-            initial_conditions_V1_V2$metadata$initial_conditions_V1_V2$n_locations_processed))
 
 # Update initial conditions priors with priors from est_initial_V1_V2()
 # The new structure matches priors_default exactly, so integration is simple
@@ -1019,12 +875,18 @@ n_updated <- 0
 # Update prop_V1_initial for each location
 for (loc in names(initial_conditions_V1_V2$parameters_location$prop_V1_initial$parameters$location)) {
      # Only update if location already exists in priors_default
-     if (!is.null(priors_default$parameters_location$prop_V1_initial$parameters$location[[loc]])) {
+     if (!is.null(priors_default$parameters_location$prop_V1_initial$location[[loc]])) {
           loc_estimate <- initial_conditions_V1_V2$parameters_location$prop_V1_initial$parameters$location[[loc]]
 
           if (!is.na(loc_estimate$shape1)) {
-               # Direct replacement with data-based estimate
-               priors_default$parameters_location$prop_V1_initial$parameters$location[[loc]] <- loc_estimate
+               # Extract parameters and create proper structure
+               priors_default$parameters_location$prop_V1_initial$location[[loc]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = loc_estimate$shape1,
+                         shape2 = loc_estimate$shape2
+                    )
+               )
                n_updated <- n_updated + 1
           }
      }
@@ -1033,69 +895,56 @@ for (loc in names(initial_conditions_V1_V2$parameters_location$prop_V1_initial$p
 # Update prop_V2_initial for each location
 for (loc in names(initial_conditions_V1_V2$parameters_location$prop_V2_initial$parameters$location)) {
      # Only update if location already exists in priors_default
-     if (!is.null(priors_default$parameters_location$prop_V2_initial$parameters$location[[loc]])) {
+     if (!is.null(priors_default$parameters_location$prop_V2_initial$location[[loc]])) {
           loc_estimate <- initial_conditions_V1_V2$parameters_location$prop_V2_initial$parameters$location[[loc]]
 
           if (!is.na(loc_estimate$shape1)) {
-               # Direct replacement with data-based estimate
-               priors_default$parameters_location$prop_V2_initial$parameters$location[[loc]] <- loc_estimate
+               # Extract parameters and create proper structure
+               priors_default$parameters_location$prop_V2_initial$location[[loc]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = loc_estimate$shape1,
+                         shape2 = loc_estimate$shape2
+                    )
+               )
           }
      }
 }
 
-cat(sprintf("  Added V1/V2 initial condition priors for %d locations\n", n_updated))
 
-# Add metadata about the V1/V2 estimation
-if (is.null(priors_default$metadata$initial_conditions)) {
-     priors_default$metadata$initial_conditions <- list()
-}
 
-# Copy metadata from the estimation results
-priors_default$metadata$initial_conditions$V1_V2 <- initial_conditions_V1_V2$metadata$initial_conditions_V1_V2
-priors_default$metadata$initial_conditions$V1_V2$summary <- initial_conditions_V1_V2$metadata$summary
+# Update default priors with estimated initial conditions for E and I
+if (TRUE) {
 
-cat("  V1/V2 initial condition priors successfully added to priors_default\n\n")
-
-#--------------------------------------------------------------
-# Update default priors with estimated initial conditions
-# for the Infection compartments (E and I)
-#--------------------------------------------------------------
-
-if (F) {
-
-     cat("Estimating initial E/I compartments from recent surveillance data...\n")
-
-     # Run estimation for all locations using variance inflation approach
      initial_conditions_E_I <- est_initial_E_I(
           PATHS = PATHS,
-          priors = priors_default,  # Use the priors being built in this script
-          config = config_default,  # Use all locations from config_default
-          n_samples = 100,         # Production-quality uncertainty quantification
-          t0 = date_start,         # Use date_start from config_default
-          lookback_days = 10,      # Default lookback window
-          variance_inflation = 100, # Higher inflation for wider uncertainty
-          verbose = TRUE,          # Verbose output for monitoring
-          parallel = TRUE          # Can enable for faster processing
+          priors = priors_default,
+          config = config_default,
+          n_samples = 1000,
+          t0 = date_start,
+          lookback_days = 7,
+          variance_inflation = 100,
+          verbose = FALSE,
+          parallel = TRUE
      )
-
-     cat(sprintf("  Completed E/I estimation for %d locations\n",
-                 length(initial_conditions_E_I$parameters_location$prop_E_initial$parameters$location)))
-
-     # Update initial conditions priors with estimates from est_initial_E_I()
-     # The new structure matches priors_default exactly, so integration is simple
-     # Only update locations that already exist - do NOT create new locations
 
      n_updated_E_I <- 0
 
      # Update prop_E_initial for each location
      for (loc in names(initial_conditions_E_I$parameters_location$prop_E_initial$parameters$location)) {
           # Only update if location already exists in priors_default
-          if (!is.null(priors_default$parameters_location$prop_E_initial$parameters$location[[loc]])) {
+          if (!is.null(priors_default$parameters_location$prop_E_initial$location[[loc]])) {
                loc_estimate <- initial_conditions_E_I$parameters_location$prop_E_initial$parameters$location[[loc]]
 
                if (!is.na(loc_estimate$shape1)) {
-                    # Direct replacement with data-based estimate
-                    priors_default$parameters_location$prop_E_initial$parameters$location[[loc]] <- loc_estimate
+                    # Extract parameters and create proper structure
+                    priors_default$parameters_location$prop_E_initial$location[[loc]] <- list(
+                         distribution = "beta",
+                         parameters = list(
+                              shape1 = loc_estimate$shape1,
+                              shape2 = loc_estimate$shape2
+                         )
+                    )
                     n_updated_E_I <- n_updated_E_I + 1
                }
           }
@@ -1104,60 +953,40 @@ if (F) {
      # Update prop_I_initial for each location
      for (loc in names(initial_conditions_E_I$parameters_location$prop_I_initial$parameters$location)) {
           # Only update if location already exists in priors_default
-          if (!is.null(priors_default$parameters_location$prop_I_initial$parameters$location[[loc]])) {
+          if (!is.null(priors_default$parameters_location$prop_I_initial$location[[loc]])) {
                loc_estimate <- initial_conditions_E_I$parameters_location$prop_I_initial$parameters$location[[loc]]
 
                if (!is.na(loc_estimate$shape1)) {
-                    # Direct replacement with data-based estimate
-                    priors_default$parameters_location$prop_I_initial$parameters$location[[loc]] <- loc_estimate
+                    # Extract parameters and create proper structure
+                    priors_default$parameters_location$prop_I_initial$location[[loc]] <- list(
+                         distribution = "beta",
+                         parameters = list(
+                              shape1 = loc_estimate$shape1,
+                              shape2 = loc_estimate$shape2
+                         )
+                    )
                }
           }
      }
 
-     cat(sprintf("  Added E/I initial condition priors for %d locations\n", n_updated_E_I))
-
-     # Add metadata about the E/I estimation
-     if (is.null(priors_default$metadata$initial_conditions)) {
-          priors_default$metadata$initial_conditions <- list()
-     }
-
-     # Copy metadata from the estimation results
-     priors_default$metadata$initial_conditions$E_I <- initial_conditions_E_I$metadata
-     if (!is.null(initial_conditions_E_I$metadata$summary)) {
-          priors_default$metadata$initial_conditions$E_I$summary <- initial_conditions_E_I$metadata$summary
-     }
-
-     cat("  E/I initial condition priors successfully added to priors_default\n\n")
 
 }
 
 
-#--------------------------------------------------------------
-# Update default priors with estimated initial conditions
-# for the Recovered compartment (R)
-#--------------------------------------------------------------
+# Update default priors with estimated initial conditions for R
 
-cat("Estimating initial R compartment from historical cholera surveillance data...\n")
-
-# Use the package version of est_initial_R (already loaded via library(MOSAIC))
-# Note: Removed source() to use the updated package function with new variance inflation method
-
-# Run estimation for all locations using temporal disaggregation
-# NOTE: est_initial_R still uses the old variance_inflation parameter
 initial_conditions_R <- est_initial_R(
      PATHS = PATHS,
-     priors = priors_default,  # Use the priors being built in this script
-     config = config_default,  # Use all locations from config_default
-     n_samples = 100,         # Production-quality uncertainty quantification
-     t0 = date_start,         # Use date_start from config_default
-     disaggregate = TRUE,      # Use Fourier disaggregation for better accuracy
-     variance_inflation = 2,  # Higher inflation for wider uncertainty (old parameter)
-     verbose = TRUE,          # Verbose output for monitoring
-     parallel = TRUE           # Enable parallel processing for faster computation
+     priors = priors_default,
+     config = config_default,
+     n_samples = 1000,
+     t0 = date_start,
+     disaggregate = TRUE,
+     variance_inflation = 12,
+     verbose = FALSE,
+     parallel = TRUE
 )
 
-cat(sprintf("  Completed R estimation for %d locations\n",
-            initial_conditions_R$metadata$initial_conditions_R$n_locations_processed))
 
 # Update initial conditions priors with priors from est_initial_R()
 # The new structure matches priors_default exactly, so integration is simple
@@ -1167,70 +996,38 @@ n_updated_R <- 0
 
 # Update prop_R_initial for each location
 for (loc in names(initial_conditions_R$parameters_location$prop_R_initial$parameters$location)) {
+
      # Only update if location already exists in priors_default
-     if (!is.null(priors_default$parameters_location$prop_R_initial$parameters$location[[loc]])) {
+     if (!is.null(priors_default$parameters_location$prop_R_initial$location[[loc]])) {
           loc_estimate <- initial_conditions_R$parameters_location$prop_R_initial$parameters$location[[loc]]
 
           if (!is.na(loc_estimate$shape1)) {
-               # Direct replacement with data-based estimate
-               priors_default$parameters_location$prop_R_initial$parameters$location[[loc]] <- loc_estimate
+               # Extract parameters and create proper structure
+               priors_default$parameters_location$prop_R_initial$location[[loc]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = loc_estimate$shape1,
+                         shape2 = loc_estimate$shape2
+                    )
+               )
                n_updated_R <- n_updated_R + 1
-
-               # Optional: Print summary for each location
-               if (!is.null(loc_estimate$metadata)) {
-                    cat(sprintf("    %s: R = %.2f%% (%.2f%% - %.2f%%)\n",
-                                loc,
-                                loc_estimate$metadata$mean * 100,
-                                loc_estimate$metadata$ci_lower * 100,
-                                loc_estimate$metadata$ci_upper * 100))
-               }
           }
      }
 }
 
-cat(sprintf("  Added R initial condition priors for %d locations\n", n_updated_R))
 
-# Add metadata about the R estimation
-if (is.null(priors_default$metadata$initial_conditions)) {
-     priors_default$metadata$initial_conditions <- list()
-}
-
-# Copy metadata from the estimation results
-priors_default$metadata$initial_conditions$R <- initial_conditions_R$metadata$initial_conditions_R
-if (!is.null(initial_conditions_R$metadata$summary)) {
-     priors_default$metadata$initial_conditions$R$summary <- initial_conditions_R$metadata$summary
-}
-
-cat("  R initial condition priors successfully added to priors_default\n\n")
-
-#--------------------------------------------------------------
-# Update default priors with estimated initial conditions
-# for the Susceptible compartment (S) - CONSTRAINED RESIDUAL
-#--------------------------------------------------------------
-
-cat("Estimating initial S compartment using constrained residual method...\n")
-
-# Use est_initial_S() with all other compartments already estimated
-# This ensures S + V1 + V2 + E + I + R = 1 mathematically
-
-# Note that this distribution for the S compartment is not directly sampled from in the sample_parameters() function.
-# The value for S is still determined as the remainder: (S = N - (V1 + V2 + E + I + R)), but its implied prior is effectively
-# the same as what is sampled below in the est_initial_S function
-
-# NOTE: est_initial_S still uses the old variance_inflation parameter
+# Update default priors with estimated initial conditions for S (constrained residual)
 initial_conditions_S <- est_initial_S(
      PATHS = PATHS,
-     priors = priors_default,  # Use priors with all other compartments estimated
-     config = config_default,  # Use all locations from config_default
-     n_samples = 100,         # Production-quality uncertainty quantification
-     t0 = date_start,         # Use date_start from config_default
-     variance_inflation = 0,   # No inflation for S (constrained residual, old parameter)
-     verbose = TRUE,          # Verbose output for monitoring
-     min_S_proportion = 0.001   # Minimum 0.1% susceptible for biological realism
+     priors = priors_default,
+     config = config_default,
+     n_samples = 1000,
+     t0 = date_start,
+     variance_inflation = 0,
+     verbose = FALSE,
+     min_S_proportion = 0.001
 )
 
-cat(sprintf("  Completed S estimation for %d locations\n",
-            initial_conditions_S$metadata$initial_conditions_S$n_locations_processed))
 
 # Update initial conditions priors with estimates from est_initial_S()
 # The new structure matches priors_default exactly, so integration is simple
@@ -1248,90 +1045,30 @@ for (loc in names(initial_conditions_S$parameters_location$prop_S_initial$parame
                # Create the S compartment in priors_default if it doesn't exist
                if (is.null(priors_default$parameters_location$prop_S_initial)) {
                     priors_default$parameters_location$prop_S_initial <- list(
-                         parameter_name = "prop_S_initial",
                          description = "Initial proportion in susceptible (S) compartment from constrained residual",
-                         distribution = "beta",
-                         parameters = list(location = list())
+                         location = list()
                     )
                }
 
-               # Direct replacement with constrained estimate
-               priors_default$parameters_location$prop_S_initial$parameters$location[[loc]] <- loc_estimate
+               # Extract parameters and create proper structure
+               priors_default$parameters_location$prop_S_initial$location[[loc]] <- list(
+                    distribution = "beta",
+                    parameters = list(
+                         shape1 = loc_estimate$shape1,
+                         shape2 = loc_estimate$shape2
+                    )
+               )
                n_updated_S <- n_updated_S + 1
 
-               # Optional: Print summary for each location
-               if (!is.null(loc_estimate$metadata)) {
-                    cat(sprintf("    %s: S = %.1f%% (%.1f%% - %.1f%%), violations: %.1f%%\n",
-                                loc,
-                                loc_estimate$metadata$mean * 100,
-                                loc_estimate$metadata$ci_lower * 100,
-                                loc_estimate$metadata$ci_upper * 100,
-                                loc_estimate$metadata$constraint_violation_rate * 100))
-               }
           }
      }
 }
 
-cat(sprintf("  Added S initial condition priors for %d locations\n", n_updated_S))
 
-# Add metadata about the S estimation
-if (is.null(priors_default$metadata$initial_conditions)) {
-     priors_default$metadata$initial_conditions <- list()
-}
 
-# Copy metadata from the estimation results
-priors_default$metadata$initial_conditions$S <- initial_conditions_S$metadata$initial_conditions_S
-if (!is.null(initial_conditions_S$metadata$summary)) {
-     priors_default$metadata$initial_conditions$S$summary <- initial_conditions_S$metadata$summary
-}
-
-cat("  S initial condition priors successfully added to priors_default\n")
-cat("  Mathematical constraint S + V1 + V2 + E + I + R = 1 is now enforced\n\n")
-
-# Verify compartment consistency for a sample location
-if (n_updated_S > 0) {
-     sample_loc <- names(initial_conditions_S$parameters_location$prop_S_initial$parameters$location)[1]
-     if (!is.null(priors_default$parameters_location$prop_S_initial$parameters$location[[sample_loc]])) {
-          cat(sprintf("Example compartment verification for %s:\n", sample_loc))
-
-          # Calculate expected means for each compartment
-          S_mean <- priors_default$parameters_location$prop_S_initial$parameters$location[[sample_loc]]$metadata$mean
-          V1_mean <- if(!is.null(priors_default$parameters_location$prop_V1_initial$parameters$location[[sample_loc]]$metadata)) {
-               priors_default$parameters_location$prop_V1_initial$parameters$location[[sample_loc]]$metadata$mean
-          } else { 0.01 }
-          V2_mean <- if(!is.null(priors_default$parameters_location$prop_V2_initial$parameters$location[[sample_loc]]$metadata)) {
-               priors_default$parameters_location$prop_V2_initial$parameters$location[[sample_loc]]$metadata$mean
-          } else { 0.005 }
-          E_mean <- if(!is.null(priors_default$parameters_location$prop_E_initial$parameters$location[[sample_loc]]$metadata)) {
-               priors_default$parameters_location$prop_E_initial$parameters$location[[sample_loc]]$metadata$mean
-          } else { 0.000001 }
-          I_mean <- if(!is.null(priors_default$parameters_location$prop_I_initial$parameters$location[[sample_loc]]$metadata)) {
-               priors_default$parameters_location$prop_I_initial$parameters$location[[sample_loc]]$metadata$mean
-          } else { 0.000001 }
-          R_mean <- if(!is.null(priors_default$parameters_location$prop_R_initial$parameters$location[[sample_loc]]$metadata)) {
-               priors_default$parameters_location$prop_R_initial$parameters$location[[sample_loc]]$metadata$mean
-          } else { 0.2 }
-
-          total_mean <- S_mean + V1_mean + V2_mean + E_mean + I_mean + R_mean
-          cat(sprintf("  S=%.1f%% + V1=%.1f%% + V2=%.1f%% + E=%.3f%% + I=%.3f%% + R=%.1f%% = %.1f%%\n",
-                      S_mean*100, V1_mean*100, V2_mean*100, E_mean*100, I_mean*100, R_mean*100, total_mean*100))
-
-          if (abs(total_mean - 1.0) < 0.01) {
-               cat("  ✓ Compartment consistency verified (sum ≈ 100%)\n")
-          } else {
-               cat("  ⚠ Potential inconsistency detected - check compartment estimates\n")
-          }
-          cat("\n")
-     }
-}
-
-#--------------------------------------------------------------
 # Add mu_j priors from disease mortality data
-#--------------------------------------------------------------
 
-cat("Adding mu_j priors from disease mortality parameters...\n")
-
-mu_variance_inflation_percent <- 0.2
+mu_inflation <- 0.2  # Inflate mu variance
 
 # Load disease mortality parameter data
 mu_file <- file.path(PATHS$MODEL_INPUT, "param_mu_disease_mortality.csv")
@@ -1345,12 +1082,8 @@ if (file.exists(mu_file)) {
 
      # Initialize mu_j prior structure
      priors_default$parameters_location$mu_j <- list(
-          parameter_name = "mu_j",
           description = "Base disease mortality rate (case fatality ratio) per location",
-          distribution = "gamma",
-          parameters = list(
-               location = list()
-          )
+          location = list()
      )
 
      n_mu_j_added <- 0
@@ -1402,8 +1135,8 @@ if (file.exists(mu_file)) {
                     }
 
                     # Ensure bounds are reasonable
-                    ci_lower <- max(ci_lower*(1-mu_variance_inflation_percent), 0.001)  # Minimum 0.1% CFR
-                    ci_upper <- min(ci_upper*(1+mu_variance_inflation_percent), 0.5)    # Maximum 50% CFR
+                    ci_lower <- max(ci_lower*(1-mu_inflation), 0.001)  # Minimum 0.1% CFR
+                    ci_upper <- min(ci_upper*(1+mu_inflation), 0.5)    # Maximum 50% CFR
                     mean_cfr <- max(min(mean_cfr, 0.4), 0.002)  # Keep mean in reasonable range
 
                     # Try to fit gamma distribution
@@ -1416,9 +1149,12 @@ if (file.exists(mu_file)) {
                               verbose = FALSE
                          )
 
-                         priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
-                              shape = gamma_fit$shape,
-                              rate = gamma_fit$rate
+                         priors_default$parameters_location$mu_j$location[[loc]] <- list(
+                              distribution = "gamma",
+                              parameters = list(
+                                   shape = gamma_fit$shape,
+                                   rate = gamma_fit$rate
+                              )
                          )
 
                          n_mu_j_added <- n_mu_j_added + 1
@@ -1433,9 +1169,12 @@ if (file.exists(mu_file)) {
                          shape <- max(shape, 1.5)
                          rate <- max(rate, 10)
 
-                         priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
-                              shape = shape,
-                              rate = rate
+                         priors_default$parameters_location$mu_j$location[[loc]] <- list(
+                              distribution = "gamma",
+                              parameters = list(
+                                   shape = shape,
+                                   rate = rate
+                              )
                          )
 
                          n_mu_j_added <- n_mu_j_added + 1
@@ -1444,103 +1183,65 @@ if (file.exists(mu_file)) {
           }
 
           # Add default if location not found
-          if (is.null(priors_default$parameters_location$mu_j$parameters$location[[loc]])) {
+          if (is.null(priors_default$parameters_location$mu_j$location[[loc]])) {
                # Default gamma parameters for ~2% CFR
-               priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
-                    shape = 2,
-                    rate = 100
+               priors_default$parameters_location$mu_j$location[[loc]] <- list(
+                    distribution = "gamma",
+                    parameters = list(
+                         shape = 2,
+                         rate = 100
+                    )
                )
                n_mu_j_added <- n_mu_j_added + 1
           }
      }
 
-     cat(sprintf("  Added mu_j priors for %d locations\n", n_mu_j_added))
-
-     # Calculate summary statistics
-     all_shapes <- sapply(priors_default$parameters_location$mu_j$parameters$location, function(x) x$shape)
-     all_rates <- sapply(priors_default$parameters_location$mu_j$parameters$location, function(x) x$rate)
-     all_means <- all_shapes / all_rates
-
-     cat(sprintf("  Shape range: [%.2f, %.2f]\n", min(all_shapes), max(all_shapes)))
-     cat(sprintf("  Rate range: [%.2f, %.2f]\n", min(all_rates), max(all_rates)))
-     cat(sprintf("  Mean CFR range: [%.1f%%, %.1f%%]\n", min(all_means)*100, max(all_means)*100))
-     cat(sprintf("  Median CFR: %.2f%%\n", median(all_means)*100))
 
 } else {
      warning("Disease mortality parameter file not found. Using default mu_j priors.")
 
      # Add default gamma priors for all locations
      priors_default$parameters_location$mu_j <- list(
-          parameter_name = "mu_j",
           description = "Base disease mortality rate (case fatality ratio) per location",
-          distribution = "gamma",
-          parameters = list(
-               location = list()
-          )
+          location = list()
      )
 
      for (loc in j) {
           # Default gamma parameters for ~2% CFR
-          priors_default$parameters_location$mu_j$parameters$location[[loc]] <- list(
-               shape = 2,
-               rate = 100
+          priors_default$parameters_location$mu_j$location[[loc]] <- list(
+               distribution = "gamma",
+               parameters = list(
+                    shape = 2,
+                    rate = 100
+               )
           )
      }
 }
 
-cat("  mu_j priors successfully added to priors_default\n\n")
+#----------------------------------------
+# Psi calibration parameters (location-specific)
+#----------------------------------------
 
-#-----------------------------------------
-# Ensure all location endpoints have distribution slot
-# This makes the prior structure consistent for simplified sample_from_prior()
-#-----------------------------------------
+# psi_calibration - Logit-scale calibration of environmental suitability with optional EWMA smoothing
+# Applied per location to allow location-specific suitability calibration during model fitting
+priors_default$parameters_location$psi_calibration <- list(
+     description = "Logit calibration of NN suitability psi with optional causal EWMA (a: shape/gain, b: scale/offset, z: smoothing).",
+     a = list(
+          distribution = "lognormal",
+          parameters   = list(meanlog = 0, sdlog = 0.35)  # Mean ~1.06, 95% CI: [0.50, 1.99]
+     ),
+     b = list(
+          distribution = "normal",
+          parameters   = list(mean = 0, sd = 0.75)         # 95% CI: [-1.47, 1.47]
+     ),
+     z = list(
+          distribution = "beta",
+          parameters   = list(shape1 = 6, shape2 = 1)     # Mean: 0.86, Mode: 1.0, 95% CI: [0.54, 1.00]
+     )
+)
 
-cat("Ensuring consistent prior structure for all location endpoints...\n")
 
-# Process each location parameter
-for (param_name in names(priors_default$parameters_location)) {
-     param <- priors_default$parameters_location[[param_name]]
-
-     # Skip if no locations defined
-     if (is.null(param$parameters$location)) next
-
-     # Get the distribution type from parent level
-     dist_type <- param$distribution
-
-     if (is.null(dist_type)) {
-          warning(sprintf("No distribution type for parameter %s", param_name))
-          next
-     }
-
-     # Process each location
-     n_updated <- 0
-     for (loc in names(param$parameters$location)) {
-          loc_prior <- param$parameters$location[[loc]]
-
-          # Check if it already has distribution slot
-          if (!is.null(loc_prior$distribution)) {
-               # Already has distribution, skip
-               next
-          }
-
-          # Add distribution slot to location endpoint
-          priors_default$parameters_location[[param_name]]$parameters$location[[loc]] <- list(
-               distribution = dist_type,
-               parameters = loc_prior
-          )
-          n_updated <- n_updated + 1
-     }
-
-     if (n_updated > 0) {
-          cat(sprintf("  Updated %d locations for %s\n", n_updated, param_name))
-     }
-}
-
-cat("Prior structure consistency ensured.\n\n")
-
-#-----------------------------------------
 # Save to file and add to MOSAIC R package
-#-----------------------------------------
 
 fp <- file.path(PATHS$ROOT, 'MOSAIC-pkg/inst/extdata/priors_default.json')
 
