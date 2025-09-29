@@ -41,6 +41,11 @@
 #' @param sample_b2 Sample b2 parameter (seasonality). Default TRUE.
 #' @param sample_mu_j Sample mu_j parameter (location-specific case fatality ratio). Default TRUE.
 #'
+#' @param sample_psi_star_a Sample psi_star_a parameter (suitability calibration shape/gain). Default TRUE.
+#' @param sample_psi_star_b Sample psi_star_b parameter (suitability calibration scale/offset). Default TRUE.
+#' @param sample_psi_star_z Sample psi_star_z parameter (suitability calibration smoothing). Default TRUE.
+#' @param sample_psi_star_k Sample psi_star_k parameter (suitability calibration time offset). Default TRUE.
+#'
 #' @param sample_initial_conditions Sample initial condition proportions for all compartments. Default TRUE.
 #'
 #' @param verbose Logical indicating whether to print progress messages. Default TRUE.
@@ -99,7 +104,7 @@ sample_parameters <- function(
   sample_zeta_1 = TRUE,
   sample_zeta_2 = TRUE,
 
-  # Location-specific parameter sampling controls (9 parameters)
+  # Location-specific parameter sampling controls (13 parameters)
   sample_beta_j0_tot = TRUE,
   sample_p_beta = TRUE,
   sample_tau_i = TRUE,
@@ -109,6 +114,12 @@ sample_parameters <- function(
   sample_b1 = TRUE,
   sample_b2 = TRUE,
   sample_mu_j = TRUE,
+
+  # psi_star calibration parameters
+  sample_psi_star_a = TRUE,
+  sample_psi_star_b = TRUE,
+  sample_psi_star_z = TRUE,
+  sample_psi_star_k = TRUE,
 
   # Initial conditions sampling control
   sample_initial_conditions = TRUE,
@@ -142,12 +153,12 @@ sample_parameters <- function(
     if (verbose) cat("Getting PATHS using get_paths()...\n")
     PATHS <- get_paths()
   }
-  
+
   if (is.null(priors)) {
     if (verbose) cat("Loading MOSAIC::priors_default from package data...\n")
     priors <- MOSAIC::priors_default
   }
-  
+
   if (is.null(config)) {
     if (verbose) cat("Loading MOSAIC::config_default from package data...\n")
     config <- MOSAIC::config_default
@@ -198,6 +209,9 @@ sample_parameters <- function(
     )
   }
 
+  # Apply psi_star calibration to psi_jt matrix if psi_star parameters were sampled
+  config_sampled <- apply_psi_star_calibration(config_sampled, sampling_flags, verbose)
+
   # Update seed in config
   config_sampled$seed <- seed
 
@@ -241,21 +255,21 @@ sample_parameters <- function(
 extract_sampling_flags <- function(env) {
   # Get all objects from the environment
   all_vars <- ls(env)
-  
+
   # Filter to only sample_* variables
   sample_vars <- grep("^sample_", all_vars, value = TRUE)
-  
+
   # Exclude sample_initial_conditions as it's handled separately
   sample_vars <- setdiff(sample_vars, "sample_initial_conditions")
-  
+
   # Create list with cleaned names
   flags <- lapply(sample_vars, function(var) {
     get(var, envir = env)
   })
-  
+
   # Clean names (remove "sample_" prefix)
   names(flags) <- gsub("^sample_", "", sample_vars)
-  
+
   return(flags)
 }
 
@@ -274,18 +288,18 @@ format_verbose_value <- function(value) {
     }
     return(format(value, scientific = TRUE, digits = 3))
   }
-  
+
   # Vector formatting
   n <- length(value)
   if (n <= 4) {
     formatted <- format_numeric_vector(value)
     return(paste0("[", paste(formatted, collapse = ", "), "]"))
   }
-  
+
   # Show first 3 and last for long vectors
   first <- format_numeric_vector(value[1:3])
   last <- format_numeric_vector(value[n])
-  return(paste0("[", paste(first, collapse = ", "), 
+  return(paste0("[", paste(first, collapse = ", "),
                 ", ... (n=", n, "), ", last, "]"))
 }
 
@@ -387,11 +401,11 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
         iso <- locations[i]
 
         # Get distribution info for this location
-        if (!is.null(param_info$parameters$location[[iso]])) {
+        if (!is.null(param_info$location[[iso]])) {
 
           # The location-specific prior already has the correct structure
           # with distribution and parameters slots
-          dist_info <- param_info$parameters$location[[iso]]
+          dist_info <- param_info$location[[iso]]
 
           tryCatch({
             sampled_value <- sample_from_prior(
@@ -492,257 +506,206 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 sample_initial_conditions_impl <- function(config_sampled, location_params,
                                           locations, verbose) {
   if (verbose) cat("\nProcessing initial conditions...\n")
-  
+
   # Sample proportions for each compartment
   sampled_props <- sample_ic_proportions(location_params, locations, verbose)
-  
+
   # Normalize and convert to counts
   config_sampled <- props_to_counts(config_sampled, sampled_props, locations, verbose)
-  
+
   return(config_sampled)
 }
 
 #' Sample initial condition proportions
 #' @noRd
 sample_ic_proportions <- function(location_params, locations, verbose) {
-  n_locations <- length(locations)
+     n_locations <- length(locations)
 
-  # Define IC compartments - NOTE: S is calculated as residual, not sampled
-  ic_compartments_all <- c("S", "V1", "V2", "E", "I", "R")
-  ic_compartments_sample <- c("V1", "V2", "E", "I", "R")  # Only sample these
-  ic_param_names_sample <- paste0("prop_", ic_compartments_sample, "_initial")
+     # Define IC compartments - NOTE: S is calculated/adjusted, not sampled
+     ic_compartments_all    <- c("S", "V1", "V2", "E", "I", "R")
+     ic_compartments_sample <- c("V1", "V2", "E", "I", "R")  # Only sample these
+     ic_param_names_sample  <- paste0("prop_", ic_compartments_sample, "_initial")
 
-  # Initialize matrix to store sampled proportions
-  sampled_props <- matrix(NA_real_, nrow = n_locations, ncol = length(ic_compartments_all))
-  colnames(sampled_props) <- ic_compartments_all
-  rownames(sampled_props) <- locations
+     # Initialize matrix to store sampled proportions
+     sampled_props <- matrix(NA_real_, nrow = n_locations, ncol = length(ic_compartments_all))
+     colnames(sampled_props) <- ic_compartments_all
+     rownames(sampled_props) <- locations
 
-  # Sample proportions for V1, V2, E, I, R only (NOT S)
-  for (i in seq_along(ic_compartments_sample)) {
+     # Sample proportions for V1, V2, E, I, R only (NOT S)
+     for (i in seq_along(ic_compartments_sample)) {
 
-    comp <- ic_compartments_sample[i]
-    param_name <- ic_param_names_sample[i]
+          comp <- ic_compartments_sample[i]
+          param_name <- ic_param_names_sample[i]
 
-    # Track values for verbose output
-    sampled_values <- numeric(n_locations)
+          # Track values for verbose output
+          sampled_values <- numeric(n_locations)
 
-    param_info <- location_params[[param_name]]
+          param_info <- location_params[[param_name]]
 
-    if (is.null(param_info)) {
+          if (is.null(param_info)) {
 
-         stop("Cannot find parameter info for: ", comp)
+               stop("Cannot find parameter info for: ", comp)
 
-    } else {
+          } else {
 
-      # Sample for each location
-      for (j in seq_along(locations)) {
+               # Sample for each location
+               for (j in seq_along(locations)) {
 
-        iso <- locations[j]
+                    iso <- locations[j]
 
-        # Get distribution info for this location
-        if (!is.null(param_info$parameters$location[[iso]])) {
+                    # Get distribution info for this location
+                    if (!is.null(param_info$location[[iso]])) {
 
-          # The location-specific prior already has the correct structure
-          # with distribution and parameters slots
-          dist_info <- param_info$parameters$location[[iso]]
+                         # The location-specific prior already has the correct structure
+                         # with distribution and parameters slots
+                         dist_info <- param_info$location[[iso]]
 
-          sampled_value <- tryCatch({
-            sample_from_prior(
-              n = 1,
-              prior = dist_info,
-              verbose = FALSE
-            )
-          }, error = function(e) {
-            warning("Failed to sample ", param_name, " for location ", iso, 
-                   ": ", e$message)
-            NA
-          })
-          sampled_props[j, comp] <- sampled_value
+                         sampled_value <- tryCatch({
+                              sample_from_prior(
+                                   n = 1,
+                                   prior = dist_info,
+                                   verbose = FALSE
+                              )
+                         }, error = function(e) {
+                              warning("Failed to sample ", param_name, " for location ", iso,
+                                      ": ", e$message)
+                              NA
+                         })
 
-          sampled_values[j] <- sampled_props[j, comp]
+                         # guard against negative draw due to a custom prior mistake
+                         if (is.finite(sampled_value) && sampled_value < 0) sampled_value <- 0
 
-        } else {
+                         sampled_props[j, comp] <- sampled_value
+                         sampled_values[j]      <- sampled_value
 
-             stop("Cannot find parameter info for: ", locations[j])
+                    } else {
 
-        }
-      }
-    }
+                         stop("Cannot find parameter info for: ", locations[j])
 
-    if (verbose) {
-      cat("  - Sampling:", param_name, "=",
-          format_verbose_value(sampled_values), "\n")
-    }
-  }
+                    }
+               }
+          }
 
-  # Calculate S as residual to ensure exact constraint: S = 1 - (V1 + V2 + E + I + R)
-  if (verbose) cat("  - Calculating S as residual (S = 1 - sum of other compartments)...\n")
+          if (verbose) {
+               cat("  - Sampling:", param_name, "=",
+                   format_verbose_value(sampled_values), "\n")
+          }
+     }
 
-  # Determine the precision needed based on smallest non-zero proportions
-  # This ensures we maintain enough precision for accurate count conversion
-  min_nonzero_prop <- Inf
-  for (j in seq_along(locations)) {
-    for (comp in ic_compartments_sample) {
-      prop_val <- sampled_props[j, comp]
-      if (!is.na(prop_val) && prop_val > 0) {
-        min_nonzero_prop <- min(min_nonzero_prop, prop_val)
-      }
-    }
-  }
+     # ---------------------------------------------------------------------------
+     # Simple constraint:
+     # If total = S + V1 + V2 + E + I + R >= 1, set S = 0 and normalize the rest
+     # Otherwise set S = 1 - (V1 + V2 + E + I + R)
+     # This guarantees nonnegativity and sum-to-one.
+     # ---------------------------------------------------------------------------
 
-  # Calculate required precision (number of significant digits needed)
-  # We want to preserve at least 2 significant figures in the smallest proportion
-  if (is.finite(min_nonzero_prop) && min_nonzero_prop > 0) {
-    # For precision that ensures smallest_prop * N gives meaningful counts
-    required_precision <- ceiling(-log10(min_nonzero_prop)) + 2
-    if (verbose) {
-      cat(sprintf("  - Smallest non-zero proportion: %.2e (maintaining %d decimal places)\n",
-                  min_nonzero_prop, required_precision))
-    }
-  } else {
-    required_precision <- 10  # Default precision
-  }
+     if (verbose) cat("  - Enforcing IC constraint (S=0 when total >= 1; else S residual)...\n")
 
-  for (j in seq_along(locations)) {
-    # Sum the sampled compartments (V1, V2, E, I, R) with high precision
-    other_sum <- sum(sampled_props[j, ic_compartments_sample])
+     for (j in seq_along(locations)) {
 
-    # Calculate S as the residual (may be negative or > 1, we'll normalize next)
-    sampled_props[j, "S"] <- 1.0 - other_sum
+          # Sum of sampled non-S compartments
+          other_sum <- sum(sampled_props[j, ic_compartments_sample])
 
-    # Now normalize ALL proportions to sum to exactly 1
-    # This handles cases where the raw sum isn't 1
-    total_sum <- sum(sampled_props[j, ])  # S + V1 + V2 + E + I + R
+          if (!is.finite(other_sum)) {
+               stop("Non-finite initial condition proportion(s) at location ", locations[j])
+          }
 
-    # Normalize each compartment while maintaining precision
-    for (comp in ic_compartments_all) {
-      sampled_props[j, comp] <- sampled_props[j, comp] / total_sum
-    }
+          if (other_sum >= 1) {
+               # Overfull case: set S=0, normalize the others to sum to 1
+               sampled_props[j, "S"] <- 0
+               if (other_sum == 0) {
+                    # Degenerate (all zeros) — put all mass in S (rare, but safe-guard)
+                    sampled_props[j, ic_compartments_sample] <- 0
+                    sampled_props[j, "S"] <- 1
+               } else {
+                    sampled_props[j, ic_compartments_sample] <-
+                         sampled_props[j, ic_compartments_sample] / other_sum
+               }
+          } else {
+               # Feasible: use residual for S
+               sampled_props[j, "S"] <- 1 - other_sum
+          }
 
-    # Verify normalization worked
-    normalized_sum <- sum(sampled_props[j, ])
-    if (abs(normalized_sum - 1.0) > 1e-10) {
-      stop("CRITICAL: Normalization failed for location ", locations[j],
-           ". Sum after normalization = ", normalized_sum)
-    }
+          # Final numerical sanity
+          total_sum <- sum(sampled_props[j, ])
+          if (!is.finite(total_sum) || abs(total_sum - 1) > 1e-12) {
+               stop("CRITICAL: Normalization failed for location ", locations[j],
+                    ". Sum after constraint = ", total_sum)
+          }
 
-    if (verbose && j == 1) {  # Show example for first location
-      # Use dynamic formatting based on required precision
-      format_str <- paste0("    - Example (%s): S=%.", min(4, required_precision), "f, ",
-                          "V1=%.", min(4, required_precision), "f, ",
-                          "V2=%.", min(4, required_precision), "f, ",
-                          "E=%.", required_precision, "f, ",
-                          "I=%.", required_precision, "f, ",
-                          "R=%.", min(4, required_precision), "f (sum=%.10f)\n")
-      cat(sprintf(format_str,
-                  locations[j],
-                  sampled_props[j, "S"], sampled_props[j, "V1"], sampled_props[j, "V2"],
-                  sampled_props[j, "E"], sampled_props[j, "I"], sampled_props[j, "R"],
-                  sum(sampled_props[j, ])))
-    }
-  }
+          # Nonnegativity guard (tiny negatives from floating point)
+          sampled_props[j, ] <- pmax(sampled_props[j, ], 0)
 
-  # Convert proportions to counts
-  if (verbose) cat("  - Converting to counts (preserving precision for small compartments)...\n")
+          # (Optional) tiny re-normalization after pmax
+          s <- sum(sampled_props[j, ])
+          if (abs(s - 1) > 1e-12) {
+               sampled_props[j, ] <- sampled_props[j, ] / s
+          }
+     }
+
+     # Verbose preview (first few locations)
+     if (verbose) {
+          cat("  ✓ Initial conditions sampled and constrained\n")
+
+          cat("\n  Summary of initial conditions (first up to 3 locations):\n")
+          for (j in 1:min(3, n_locations)) {
+               cat(sprintf("    %s: S=%.6f, V1=%.6f, V2=%.6f, E=%.8f, I=%.8f, R=%.6f (sum=%.12f)\n",
+                           locations[j],
+                           sampled_props[j, "S"],  sampled_props[j, "V1"], sampled_props[j, "V2"],
+                           sampled_props[j, "E"],  sampled_props[j, "I"],  sampled_props[j, "R"],
+                           sum(sampled_props[j, ])))
+          }
+          if (n_locations > 3) {
+               cat("    ... (", n_locations - 3, " more locations)\n", sep = "")
+          }
+     }
+
+     return(sampled_props)
+}
+
+
+#' Convert proportions to counts
+#' @noRd
+props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
+  if (verbose) cat("  - Converting to counts...\n")
 
   N_j <- config_sampled$N_j_initial
+  n_locations <- length(locations)
+  ic_compartments_all <- colnames(sampled_props)
 
-  for (comp in ic_compartments_all) {  # Use ic_compartments_all which includes S
-
+  # Convert proportions to integer counts
+  for (comp in ic_compartments_all) {
     config_field <- paste0(comp, "_j_initial")
-    counts <- numeric(length(N_j))
+    props <- sampled_props[, comp]
+    counts <- round(props * N_j)
 
-    for (j in seq_along(N_j)) {
-
-      # Calculate exact count with full precision
-      prop_val <- sampled_props[j, comp]
-      
-      # Handle NA values
-      if (is.na(prop_val)) {
-        warning("NA proportion for compartment ", comp, " in location ", j, 
-                ". Setting to 0.")
-        counts[j] <- 0
-      } else {
-        exact_count <- prop_val * N_j[j]
-        
-        # Round to nearest integer
-        counts[j] <- round(exact_count)
-        
-        # Ensure we don't completely lose very small but non-zero compartments
-        # If the proportion was non-zero but rounds to 0, set to 1
-        if (counts[j] == 0 && prop_val > 0 && exact_count >= 0.5) {
-          counts[j] <- 1
-        }
-      }
-    }
+    # Ensure very small compartments aren't completely lost
+    small_nonzero <- (counts == 0) & (props > 0) & (props * N_j >= 0.5)
+    counts[small_nonzero] <- 1
 
     config_sampled[[config_field]] <- as.integer(counts)
   }
 
   # Adjust for rounding errors to ensure sum equals N exactly
-  if (verbose) cat("  - Adjusting for rounding errors to ensure sum = N...\n")
-
   for (j in seq_along(locations)) {
-    actual_sum <- sum(
-      config_sampled$S_j_initial[j],
-      config_sampled$V1_j_initial[j],
-      config_sampled$V2_j_initial[j],
-      config_sampled$E_j_initial[j],
-      config_sampled$I_j_initial[j],
-      config_sampled$R_j_initial[j]
-    )
+    compartment_fields <- c("S_j_initial", "V1_j_initial", "V2_j_initial",
+                           "E_j_initial", "I_j_initial", "R_j_initial")
+    counts <- sapply(compartment_fields, function(f) config_sampled[[f]][j])
 
-    diff <- N_j[j] - actual_sum
-
+    diff <- N_j[j] - sum(counts)
     if (diff != 0) {
-      # Adjust the S compartment (as it's calculated as residual) to absorb rounding error
+      # Adjust S compartment (calculated as residual) for rounding
       config_sampled$S_j_initial[j] <- config_sampled$S_j_initial[j] + diff
 
-      # If S becomes negative, adjust the largest compartment instead
+      # If S becomes negative, adjust largest compartment instead
       if (config_sampled$S_j_initial[j] < 0) {
-        # Revert S adjustment
         config_sampled$S_j_initial[j] <- config_sampled$S_j_initial[j] - diff
-
-        # Find and adjust the largest compartment
-        compartment_values <- c(
-          S = config_sampled$S_j_initial[j],
-          V1 = config_sampled$V1_j_initial[j],
-          V2 = config_sampled$V2_j_initial[j],
-          E = config_sampled$E_j_initial[j],
-          I = config_sampled$I_j_initial[j],
-          R = config_sampled$R_j_initial[j]
-        )
-
-        largest_comp <- names(which.max(compartment_values))
-        largest_field <- paste0(largest_comp, "_j_initial")
-        config_sampled[[largest_field]][j] <- config_sampled[[largest_field]][j] + diff
-
-        if (verbose && abs(diff) > 1) {
-          cat("    - Location ", locations[j], ": adjusted ", largest_comp, " by ", diff,
-              " to match N=", N_j[j], "\n", sep = "")
-        }
-      } else {
-        if (verbose && abs(diff) > 1) {
-          cat("    - Location ", locations[j], ": adjusted S by ", diff,
-              " to match N=", N_j[j], "\n", sep = "")
-        }
+        largest_idx <- which.max(counts)
+        config_sampled[[compartment_fields[largest_idx]]][j] <-
+          config_sampled[[compartment_fields[largest_idx]]][j] + diff
       }
     }
 
-    # Final verification
-    final_sum <- sum(
-      config_sampled$S_j_initial[j],
-      config_sampled$V1_j_initial[j],
-      config_sampled$V2_j_initial[j],
-      config_sampled$E_j_initial[j],
-      config_sampled$I_j_initial[j],
-      config_sampled$R_j_initial[j]
-    )
-
-    if (final_sum != N_j[j]) {
-      stop("CRITICAL: Failed to match population constraint for location ", locations[j],
-           ". Sum=", final_sum, ", N=", N_j[j])
-    }
   }
 
   if (verbose) {
@@ -801,14 +764,14 @@ sample_ic_proportions <- function(location_params, locations, verbose) {
 #'
 #' @export
 validate_sampled_config <- function(config_sampled, verbose = TRUE) {
-  
+
   # Define validation schema
   schema <- list(
     global = list(
       params = c("phi_1", "phi_2", "omega_1", "omega_2", "iota",
                 "gamma_1", "gamma_2", "epsilon", "rho", "sigma",
                 "mobility_omega", "mobility_gamma", "zeta_1", "zeta_2",
-                "kappa", "alpha_1", "alpha_2", "decay_days_long", 
+                "kappa", "alpha_1", "alpha_2", "decay_days_long",
                 "decay_days_short", "decay_shape_1", "decay_shape_2"),
       type = "scalar"
     ),
@@ -824,10 +787,10 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       beta_j0_env = c(0, Inf, FALSE)
     )
   )
-  
+
   valid <- TRUE
   n_locations <- length(config_sampled$location_name)
-  
+
   # Validate using schema
   for (param in schema$global$params) {
     issue <- validate_parameter(config_sampled, param, "scalar", n_locations)
@@ -836,7 +799,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       valid <- FALSE
     }
   }
-  
+
   for (param in schema$location$params) {
     issue <- validate_parameter(config_sampled, param, "vector", n_locations)
     if (!is.null(issue)) {
@@ -844,7 +807,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       valid <- FALSE
     }
   }
-  
+
   # Check bounds for special parameters
   for (param in names(schema$bounds)) {
     if (param %in% names(config_sampled)) {
@@ -852,7 +815,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       vals <- config_sampled[[param]]
       if (bounds[3]) {  # inclusive min
         if (any(vals < bounds[1] | vals > bounds[2], na.rm = TRUE)) {
-          if (verbose) cat("  ⚠", param, "contains values outside [", 
+          if (verbose) cat("  ⚠", param, "contains values outside [",
                           bounds[1], ",", bounds[2], "]\n")
           valid <- FALSE
         }
@@ -864,12 +827,12 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       }
     }
   }
-  
+
   if (verbose) {
-    cat(ifelse(valid, "  ✓ Config validation passed!\n", 
+    cat(ifelse(valid, "  ✓ Config validation passed!\n",
                "  ✗ Config validation failed - see warnings above\n"))
   }
-  
+
   return(valid)
 }
 
@@ -877,27 +840,279 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 #' @noRd
 validate_parameter <- function(config, param, type, n_locations) {
   if (!(param %in% names(config))) {
-    return(paste("Missing", ifelse(type == "scalar", "global", "location"), 
+    return(paste("Missing", ifelse(type == "scalar", "global", "location"),
                  "parameter:", param))
   }
-  
+
   val <- config[[param]]
-  
+
   if (type == "scalar") {
     if (is.na(val) || is.null(val) || is.infinite(val)) {
       return(paste("Invalid value for", param, "=", val))
     }
   } else {  # vector
     if (length(val) != n_locations) {
-      return(paste("Wrong length for", param, 
+      return(paste("Wrong length for", param,
                   "(expected", n_locations, "got", length(val), ")"))
     }
     if (any(is.na(val) | is.infinite(val))) {
       return(paste("Invalid values in", param))
     }
   }
-  
+
   return(NULL)  # No issues
+}
+
+#' Apply psi_star calibration to psi_jt matrix
+#'
+#' @description
+#' Applies location-specific psi_star calibration parameters to transform the
+#' environmental suitability matrix (psi_jt) using the calc_psi_star() function.
+#' Each location gets its own calibration based on sampled psi_star_a, psi_star_b,
+#' psi_star_z, and psi_star_k parameters.
+#'
+#' @param config_sampled The configuration object with sampled parameters
+#' @param sampling_flags Named list of sampling flags to determine which parameters were sampled
+#' @param verbose Logical for verbose output (default FALSE)
+#'
+#' @return Updated config_sampled object with calibrated psi_jt matrix
+#'
+#' @details
+#' This function:
+#' - Checks if any psi_star parameters were sampled via sampling flags
+#' - Applies calc_psi_star() calibration to each location's psi_jt time series
+#' - Uses location-specific parameters or defaults if not sampled
+#' - Handles errors gracefully on a per-location basis
+#' - Updates psi_jt matrix in-place for memory efficiency
+#'
+#' @noRd
+apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose = FALSE) {
+
+  # ============================================================================
+  # Check if calibration should be applied
+  # ============================================================================
+
+  psi_star_params <- c("psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k")
+
+  # Check if any psi_star parameters were requested for sampling
+  psi_star_flags_exist <- psi_star_params %in% names(sampling_flags)
+
+  if (!any(psi_star_flags_exist)) {
+    if (verbose) cat("  ℹ No psi_star sampling flags found, skipping calibration\n")
+    return(config_sampled)
+  }
+
+  # Check if any psi_star parameters were actually enabled for sampling
+  psi_star_enabled <- any(unlist(sampling_flags[psi_star_params[psi_star_flags_exist]]))
+
+  if (!psi_star_enabled) {
+    if (verbose) cat("  ℹ No psi_star parameters were enabled for sampling, skipping calibration\n")
+    return(config_sampled)
+  }
+
+  # Check if psi_jt matrix exists
+  if (!"psi_jt" %in% names(config_sampled)) {
+    if (verbose) cat("  ⚠ psi_jt matrix not found in config, skipping psi_star calibration\n")
+    return(config_sampled)
+  }
+
+  # Check if location names exist
+  if (!"location_name" %in% names(config_sampled)) {
+    warning("location_name not found in config, cannot apply psi_star calibration")
+    return(config_sampled)
+  }
+
+  if (verbose) cat("\n🎯 Applying psi_star calibration to psi_jt matrix...\n")
+
+  # ============================================================================
+  # Setup calibration data
+  # ============================================================================
+
+  psi_original <- config_sampled$psi_jt
+  locations <- config_sampled$location_name
+  n_locations <- length(locations)
+  n_days <- ncol(psi_original)
+
+  if (verbose) {
+    cat("  Matrix dimensions:", n_locations, "locations ×", n_days, "days\n")
+  }
+
+  # Validate matrix dimensions
+  if (nrow(psi_original) != n_locations) {
+    warning("psi_jt matrix rows (", nrow(psi_original), ") != number of locations (", n_locations, ")")
+    return(config_sampled)
+  }
+
+  # ============================================================================
+  # Apply calibration location by location
+  # ============================================================================
+
+  # Tracking statistics
+  n_calibrated <- 0
+  n_failed <- 0
+  failed_locations <- character()
+  calibration_effects <- data.frame(
+    location = character(),
+    a = numeric(), b = numeric(), z = numeric(), k = numeric(),
+    original_min = numeric(), original_max = numeric(),
+    calibrated_min = numeric(), calibrated_max = numeric(),
+    stringsAsFactors = FALSE
+  )
+
+  for (i in seq_along(locations)) {
+    iso <- locations[i]
+
+    tryCatch({
+
+      # Extract psi_star parameters for this location (with fallback defaults)
+      a <- if("psi_star_a" %in% names(config_sampled) && !is.null(config_sampled$psi_star_a)) {
+        config_sampled$psi_star_a[i]
+      } else {
+        1.0  # Default: no shape transformation
+      }
+
+      b <- if("psi_star_b" %in% names(config_sampled) && !is.null(config_sampled$psi_star_b)) {
+        config_sampled$psi_star_b[i]
+      } else {
+        0.0  # Default: no scale offset
+      }
+
+      z <- if("psi_star_z" %in% names(config_sampled) && !is.null(config_sampled$psi_star_z)) {
+        config_sampled$psi_star_z[i]
+      } else {
+        1.0  # Default: no smoothing
+      }
+
+      k <- if("psi_star_k" %in% names(config_sampled) && !is.null(config_sampled$psi_star_k)) {
+        config_sampled$psi_star_k[i]
+      } else {
+        0.0  # Default: no time offset
+      }
+
+      # Validate parameters
+      if (!is.finite(a) || a <= 0) {
+        warning("Invalid psi_star_a for location ", iso, " (", a, "), using default 1.0")
+        a <- 1.0
+      }
+      if (!is.finite(b)) {
+        warning("Invalid psi_star_b for location ", iso, " (", b, "), using default 0.0")
+        b <- 0.0
+      }
+      if (!is.finite(z) || z <= 0 || z > 1) {
+        warning("Invalid psi_star_z for location ", iso, " (", z, "), using default 1.0")
+        z <- 1.0
+      }
+      if (!is.finite(k)) {
+        warning("Invalid psi_star_k for location ", iso, " (", k, "), using default 0.0")
+        k <- 0.0
+      }
+
+      # Extract daily time series for this location
+      psi_timeseries <- psi_original[i, ]
+
+      # Skip locations with all-NA time series
+      if (all(is.na(psi_timeseries))) {
+        if (verbose && n_calibrated < 3) {
+          cat("  -", iso, ": SKIPPED (all NA values)\n")
+        }
+        next
+      }
+
+      # Store original statistics
+      orig_min <- min(psi_timeseries, na.rm = TRUE)
+      orig_max <- max(psi_timeseries, na.rm = TRUE)
+
+      # Apply psi_star calibration
+      psi_calibrated <- calc_psi_star(
+        psi = psi_timeseries,
+        a = a, b = b, z = z, k = k,
+        fill_method = "locf"
+      )
+
+      # Validate calibration result
+      if (length(psi_calibrated) != n_days) {
+        stop("calc_psi_star returned wrong length: ", length(psi_calibrated), " != ", n_days)
+      }
+
+      if (all(is.na(psi_calibrated))) {
+        warning("calc_psi_star returned all NA values for location ", iso)
+      }
+
+      # Store calibrated statistics
+      cal_min <- min(psi_calibrated, na.rm = TRUE)
+      cal_max <- max(psi_calibrated, na.rm = TRUE)
+
+      # Update the matrix in-place
+      config_sampled$psi_jt[i, ] <- psi_calibrated
+      n_calibrated <- n_calibrated + 1
+
+      # Store calibration effects for reporting
+      calibration_effects <- rbind(calibration_effects, data.frame(
+        location = iso,
+        a = a, b = b, z = z, k = k,
+        original_min = orig_min, original_max = orig_max,
+        calibrated_min = cal_min, calibrated_max = cal_max,
+        stringsAsFactors = FALSE
+      ))
+
+      # Show detailed output for first few locations
+      if (verbose && n_calibrated <= 3) {
+        cat("  -", iso, ": a=", round(a,3), ", b=", round(b,3),
+            ", z=", round(z,3), ", k=", round(k,1), "\n")
+        cat("    Range: [", round(orig_min, 4), ",", round(orig_max, 4), "] → [",
+            round(cal_min, 4), ",", round(cal_max, 4), "]\n")
+      }
+
+    }, error = function(e) {
+      warning("Failed psi_star calibration for location ", iso, ": ", e$message, call. = FALSE)
+      n_failed <<- n_failed + 1
+      failed_locations <<- c(failed_locations, iso)
+    })
+  }
+
+  # ============================================================================
+  # Report calibration results
+  # ============================================================================
+
+  if (verbose) {
+    if (n_calibrated > 0) {
+      cat("  ✓ Successfully calibrated", n_calibrated, "of", n_locations, "locations\n")
+
+      # Overall transformation statistics
+      psi_final <- config_sampled$psi_jt
+      cat("  📊 Overall psi_jt transformation:\n")
+      cat("     Original range: [", round(min(psi_original, na.rm=TRUE), 4),
+          ",", round(max(psi_original, na.rm=TRUE), 4), "]\n")
+      cat("     Calibrated range: [", round(min(psi_final, na.rm=TRUE), 4),
+          ",", round(max(psi_final, na.rm=TRUE), 4), "]\n")
+
+      # Parameter usage summary
+      if (nrow(calibration_effects) > 0) {
+        cat("  📈 Parameter ranges used:\n")
+        cat("     psi_star_a: [", round(min(calibration_effects$a), 3),
+            ",", round(max(calibration_effects$a), 3), "]\n")
+        cat("     psi_star_b: [", round(min(calibration_effects$b), 3),
+            ",", round(max(calibration_effects$b), 3), "]\n")
+        cat("     psi_star_z: [", round(min(calibration_effects$z), 3),
+            ",", round(max(calibration_effects$z), 3), "]\n")
+        cat("     psi_star_k: [", round(min(calibration_effects$k), 1),
+            ",", round(max(calibration_effects$k), 1), "] days\n")
+      }
+    }
+
+    if (n_failed > 0) {
+      cat("  ⚠", n_failed, "locations failed calibration:",
+          paste(head(failed_locations, 5), collapse=", "))
+      if (n_failed > 5) cat(" (and", n_failed - 5, "more)")
+      cat("\n")
+    }
+
+    if (n_calibrated == 0) {
+      cat("  ⚠ No locations were successfully calibrated\n")
+    }
+  }
+
+  return(config_sampled)
 }
 
 #' Get all sampling parameters with defaults
@@ -905,14 +1120,14 @@ validate_parameter <- function(config, param, type, n_locations) {
 get_all_sampling_params <- function() {
   # Extract from function formals
   formals_list <- formals(sample_parameters)
-  
+
   # Filter to only sample_* parameters
   sample_params <- names(formals_list)[grep("^sample_", names(formals_list))]
-  
+
   # Create list with all TRUE values
   params <- as.list(rep(TRUE, length(sample_params)))
   names(params) <- sample_params
-  
+
   return(params)
 }
 
@@ -1129,21 +1344,27 @@ check_sampled_parameter <- function(config_sampled, priors,
     # Get prior info
     if (param_name %in% names(priors$parameters_location)) {
       prior_info <- priors$parameters_location[[param_name]]
-      result$distribution <- prior_info$distribution
 
-      if (!is.null(prior_info$parameters$location[[location]])) {
-        loc_params <- prior_info$parameters$location[[location]]
+      if (!is.null(prior_info$location[[location]])) {
+        loc_params <- prior_info$location[[location]]
 
-        if (prior_info$distribution == "gamma") {
-          result$expected_mean <- loc_params$shape / loc_params$rate
-        } else if (prior_info$distribution == "beta") {
-          s1 <- loc_params$shape1
-          s2 <- loc_params$shape2
+        # Get distribution from location endpoint
+        result$distribution <- loc_params$distribution
+
+        # Calculate expected mean based on distribution type
+        if (loc_params$distribution == "gamma") {
+          result$expected_mean <- loc_params$parameters$shape / loc_params$parameters$rate
+        } else if (loc_params$distribution == "beta") {
+          s1 <- loc_params$parameters$shape1
+          s2 <- loc_params$parameters$shape2
           result$expected_mean <- s1 / (s1 + s2)
-        } else if (prior_info$distribution == "normal") {
-          result$expected_mean <- loc_params$mean
-        } else if (prior_info$distribution == "uniform") {
-          result$expected_mean <- (loc_params$min + loc_params$max) / 2
+        } else if (loc_params$distribution == "normal") {
+          result$expected_mean <- loc_params$parameters$mean
+        } else if (loc_params$distribution == "uniform") {
+          result$expected_mean <- (loc_params$parameters$min + loc_params$parameters$max) / 2
+        } else if (loc_params$distribution == "gompertz") {
+          # For Gompertz, expected mean calculation would be more complex
+          result$expected_mean <- NA
         }
       }
     }
