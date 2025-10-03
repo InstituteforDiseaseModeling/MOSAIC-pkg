@@ -43,8 +43,8 @@
 #' ## Vaccination
 #' @param nu_1_jt A matrix of first-dose OCV vaccinations for each location and time step.
 #' @param nu_2_jt A matrix of second-dose OCV vaccinations for each location and time step.
-#' @param phi_1 Effectiveness of one dose of OCV (numeric in [0, 1]).
-#' @param phi_2 Effectiveness of two doses of OCV (numeric in [0, 1]).
+#' @param phi_1 Effectiveness of one dose of OCV (numeric in \[0, 1\]).
+#' @param phi_2 Effectiveness of two doses of OCV (numeric in \[0, 1\]).
 #' @param omega_1 Waning immunity rate for one dose (numeric >= 0).
 #' @param omega_2 Waning immunity rate for two doses (numeric >= 0).
 #'
@@ -57,20 +57,20 @@
 #'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
 #'        If mu_j is provided, mu_jt will be generated from mu_j and mu_j_slope.
 #' @param mu_j A numeric vector of location-specific baseline case fatality ratios. Optional. If provided
-#'        with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in [0, 1].
+#'        with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in \[0, 1\].
 #' @param mu_j_slope A numeric vector of location-specific temporal slopes for case fatality ratio.
 #'        Optional. Default is 0 (no temporal trend). Length must equal length(location_name).
 #'
 #' ## Observation Processes
-#' @param rho Proportion of true infections (numeric in [0, 1]).
-#' @param sigma Proportion of symptomatic infections (numeric in [0, 1]).
+#' @param rho Proportion of true infections (numeric in \[0, 1\]).
+#' @param sigma Proportion of symptomatic infections (numeric in \[0, 1\]).
 #'
 #' ## Spatial model
 #' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
 #' @param latitude A numeric vector of latitudes for each location. Must be same length as location_name.
 #' @param mobility_omega Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.
 #' @param mobility_gamma Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.
-#' @param tau_i Departure probability for each origin location (numeric vector of length(location_name) in [0, 1]).
+#' @param tau_i Departure probability for each origin location (numeric vector of length(location_name) in \[0, 1\]).
 #'
 #' ## Force of Infection (human-to-human)
 #' @param beta_j0_tot Total baseline transmission rate (human + environmental). Optional numeric vector of 
@@ -84,15 +84,23 @@
 #' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
 #' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.
-#' @param alpha_1 Transmission parameter for mixing (numeric in [0, 1]).
-#' @param alpha_2 Transmission parameter for density dependence (numeric in [0, 1]).
+#' @param alpha_1 Transmission parameter for mixing (numeric in \[0, 1\]).
+#' @param alpha_2 Transmission parameter for density dependence (numeric in \[0, 1\]).
 #'
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
 #'        If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * (1 - p_beta).
-#' @param theta_j Proportion with adequate WASH (numeric vector of length(location_name) in [0, 1]).
+#' @param theta_j Proportion with adequate WASH (numeric vector of length(location_name) in \[0, 1\]).
 #' @param psi_jt Matrix of environmental suitability values (matrix with rows = length(location_name) and columns
 #'        equal to the daily sequence from date_start to date_stop).
+#' @param psi_star_a Shape/gain parameter for logit calibration of psi_jt (numeric vector of length(location_name) > 0).
+#'        Values > 1 sharpen peaks, values < 1 flatten peaks. Default 1.0 (no transformation).
+#' @param psi_star_b Scale/offset parameter for logit calibration of psi_jt (numeric vector of length(location_name)).
+#'        Shifts baseline up/down on logit scale. Default 0.0 (no offset).
+#' @param psi_star_z Smoothing weight for causal EWMA of calibrated psi_jt (numeric vector of length(location_name) in (0,1]).
+#'        1.0 = no smoothing, < 1.0 = apply smoothing. Default 1.0 (no smoothing).
+#' @param psi_star_k Time offset in days for psi_jt calibration (numeric vector of length(location_name)).
+#'        Positive values = forward/delay, negative values = backward/advance. Default 0.0 (no offset).
 #' @param zeta_1 Shedding rate (numeric > 0).
 #' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
 #' @param kappa Concentration required for 50% infection (numeric > 0).
@@ -217,6 +225,11 @@ make_LASER_config <- function(output_file_path = NULL,
                               # Observation Processes
                               rho = NULL,
                               sigma = NULL,
+                              # Case reporting parameters for calc_cases_from_infections()
+                              chi_endemic = NULL,
+                              chi_epidemic = NULL,
+                              epidemic_threshold = NULL,
+                              delta_reporting = NULL,
 
                               # Spatial model
                               longitude = NULL,
@@ -241,6 +254,10 @@ make_LASER_config <- function(output_file_path = NULL,
                               beta_j0_env = NULL,
                               theta_j = NULL,
                               psi_jt = NULL,
+                              psi_star_a = NULL,
+                              psi_star_b = NULL,
+                              psi_star_z = NULL,
+                              psi_star_k = NULL,
                               zeta_1 = NULL,
                               zeta_2 = NULL,
                               kappa = NULL,
@@ -312,6 +329,10 @@ make_LASER_config <- function(output_file_path = NULL,
           mu_j_slope        = mu_j_slope,
           rho               = rho,
           sigma             = sigma,
+          chi_endemic       = chi_endemic,
+          chi_epidemic      = chi_epidemic,
+          epidemic_threshold = epidemic_threshold,
+          delta_reporting   = delta_reporting,
           longitude         = longitude,
           latitude          = latitude,
           mobility_omega    = mobility_omega,
@@ -328,6 +349,10 @@ make_LASER_config <- function(output_file_path = NULL,
           beta_j0_env       = beta_j0_env,
           theta_j           = theta_j,
           psi_jt            = psi_jt,
+          psi_star_a        = psi_star_a,
+          psi_star_b        = psi_star_b,
+          psi_star_z        = psi_star_z,
+          psi_star_k        = psi_star_k,
           zeta_1            = zeta_1,
           zeta_2            = zeta_2,
           kappa             = kappa,
@@ -510,6 +535,19 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(sigma) || sigma < 0 || sigma > 1) {
           stop("sigma must be a numeric scalar between 0 and 1.")
      }
+     # Case reporting parameters validation
+     if (!is.numeric(chi_endemic) || chi_endemic <= 0 || chi_endemic > 1) {
+          stop("chi_endemic must be a numeric scalar in (0, 1].")
+     }
+     if (!is.numeric(chi_epidemic) || chi_epidemic <= 0 || chi_epidemic > 1) {
+          stop("chi_epidemic must be a numeric scalar in (0, 1].")
+     }
+     if (!is.null(epidemic_threshold) && (!is.numeric(epidemic_threshold) || epidemic_threshold < 0 || epidemic_threshold > 1)) {
+          stop("epidemic_threshold must be NULL or a numeric scalar in [0, 1].")
+     }
+     if (!is.numeric(delta_reporting) || delta_reporting < 0 || delta_reporting != floor(delta_reporting)) {
+          stop("delta_reporting must be a non-negative integer.")
+     }
 
      # Force of Infection (human-to-human).
      
@@ -601,6 +639,18 @@ make_LASER_config <- function(output_file_path = NULL,
      }
      if (!is.matrix(psi_jt) || nrow(psi_jt) != length(location_name) || ncol(psi_jt) != length(t)) {
           stop("psi_jt must be a matrix with rows equal to location_name and columns equal to the daily sequence from date_start to date_stop.")
+     }
+     if (!is.numeric(psi_star_a) || any(psi_star_a <= 0) || length(psi_star_a) != length(location_name)) {
+          stop("psi_star_a must be a numeric vector of length equal to location_name with values greater than zero.")
+     }
+     if (!is.numeric(psi_star_b) || length(psi_star_b) != length(location_name)) {
+          stop("psi_star_b must be a numeric vector of length equal to location_name.")
+     }
+     if (!is.numeric(psi_star_z) || any(psi_star_z <= 0 | psi_star_z > 1) || length(psi_star_z) != length(location_name)) {
+          stop("psi_star_z must be a numeric vector of length equal to location_name with values in (0, 1].")
+     }
+     if (!is.numeric(psi_star_k) || length(psi_star_k) != length(location_name)) {
+          stop("psi_star_k must be a numeric vector of length equal to location_name.")
      }
      if (!is.numeric(zeta_1) || zeta_1 <= 0) {
           stop("zeta_1 must be a numeric scalar greater than zero.")

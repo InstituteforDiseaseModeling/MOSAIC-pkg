@@ -240,20 +240,12 @@ message(sprintf("  beta_j0_env = %.2e (environmental component)", beta_j0_env[1]
 
 
 message("Get environmental suitability (psi) for each location")
-# Use extended file if date range goes beyond Feb 2025
-if (date_stop > as.Date("2025-02-02")) {
-  if (file.exists(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day_extended.csv'))) {
-    tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day_extended.csv'))
-  } else {
-    tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
-  }
-} else {
-  tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
-}
+
+tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
 tmp$date <- as.Date(tmp$date)
 tmp <- tmp[tmp$iso_code %in% j,]
 tmp <- tmp[tmp$date >= date_start & tmp$date <= date_stop,]
-psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "pred_smooth")
+psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "pred_smooth", fun.aggregate = mean)
 sel <- match(j, row.names(psi_jt))
 psi_jt <- psi_jt[sel,]
 
@@ -313,16 +305,21 @@ default_args <- list(
      mu_jt = mu_jt,
      mu_j = mu_j,
      mu_j_slope = mu_j_slope,
-     rho = 0.52,
      sigma = 0.25,
+     # Case reporting parameters for calc_cases_from_infections()
+     rho = 0.7,                   # Proportion of symptomatic infections seeking care
+     chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
+     chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
+     epidemic_threshold = 1/10000,  # Infection rate threshold for PPV switching (1 per 10k per day)
+     delta_reporting = 2,         # Infection-to-report delay in days
      longitude         = longitude,
      latitude          = latitude,
      mobility_omega    = mobility_omega,
      mobility_gamma    = mobility_gamma,
      tau_i             = tau_i,
      beta_j0_tot = beta_j0_tot,      # Total transmission rate (optional, but included when available)
-    p_beta = p_beta,                # Proportion of human transmission (optional, but included when available)
-    beta_j0_hum = beta_j0_hum,      # Human transmission component (calculated from beta_j0_tot * p_beta)
+     p_beta = p_beta,                # Proportion of human transmission (optional, but included when available)
+     beta_j0_hum = beta_j0_hum,      # Human transmission component (calculated from beta_j0_tot * p_beta)
      a_1_j = a1,
      a_2_j = a2,
      b_1_j = b1,
@@ -332,6 +329,11 @@ default_args <- list(
      alpha_2 = 0.33,
      beta_j0_env = beta_j0_env,      # UPDATED: Now calculated from beta_j0_tot * (1 - p_beta)
      theta_j = theta_j,
+     # psi_star calibration parameters (default to no transformation)
+     psi_star_a = setNames(rep(1.0, length(j)), j),    # Default: no shape/gain transformation
+     psi_star_b = setNames(rep(0.0, length(j)), j),    # Default: no scale/offset transformation
+     psi_star_z = setNames(rep(1.0, length(j)), j),    # Default: no smoothing
+     psi_star_k = setNames(rep(0.0, length(j)), j),    # Default: no time offset
      psi_jt = psi_jt,
      zeta_1 = 7.5,
      zeta_2 = 2.5,
@@ -350,15 +352,15 @@ config_default <- do.call(make_LASER_config, default_args)
 # Note: Using the original vectors since beta_j0_tot and p_beta are not in config
 validation_tol <- 1e-10
 for (i in 1:length(j)) {
-    total_check <- config_default$beta_j0_hum[i] + config_default$beta_j0_env[i]
-    if (abs(total_check - beta_j0_tot[i]) > validation_tol) {
-        warning(sprintf("Transmission parameter inconsistency for %s: hum + env != tot", j[i]))
-    }
+     total_check <- config_default$beta_j0_hum[i] + config_default$beta_j0_env[i]
+     if (abs(total_check - beta_j0_tot[i]) > validation_tol) {
+          warning(sprintf("Transmission parameter inconsistency for %s: hum + env != tot", j[i]))
+     }
 
-    prop_check <- config_default$beta_j0_hum[i] / beta_j0_tot[i]
-    if (abs(prop_check - p_beta[i]) > validation_tol) {
-        warning(sprintf("Transmission parameter inconsistency for %s: hum/tot != p_beta", j[i]))
-    }
+     prop_check <- config_default$beta_j0_hum[i] / beta_j0_tot[i]
+     if (abs(prop_check - p_beta[i]) > validation_tol) {
+          warning(sprintf("Transmission parameter inconsistency for %s: hum/tot != p_beta", j[i]))
+     }
 }
 message("Transmission parameter validation complete")
 
