@@ -32,9 +32,7 @@
 #'     \itemize{
 #'       \item parameter_name: Parameter identifier
 #'       \item distribution: `"beta"`
-#'       \item parameters$location: Named list by ISO code with `shape1`, `shape2`, `mean`,
-#'             `variance`, `method` (fitting method used), and `metadata` (data availability,
-#'             sample statistics)
+#'       \item parameters$location: Named list by ISO code with `shape1` and `shape2`
 #'     }
 #'   }
 #' }
@@ -70,7 +68,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      # ---- Helper: consistent location prior or default ----
      # Uses consistent defaults across sequential/parallel branches.
      draw_loc_or_default <- function(priors, name, loc, default, verbose = FALSE) {
-          loc_prior <- tryCatch(priors$parameters_location[[name]]$parameters$location[[loc]],
+          loc_prior <- tryCatch(priors$parameters_location[[name]]$location[[loc]],
                                 error = function(e) NULL)
           if (!is.null(loc_prior)) {
                # With simplified sample_from_prior, just pass n and prior
@@ -399,37 +397,13 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 
                # Format results with consistent structure
                E_result <- list(
-                    distribution = "beta",
-                    parameters = list(
-                         shape1 = E_beta$shape1,
-                         shape2 = E_beta$shape2
-                    ),
-                    metadata = list(
-                         data_available = TRUE,
-                         total_cases = total_cases,
-                         mean_count = mean(E_samples),
-                         sd_count = sd(E_samples),
-                         n_samples = n_samples,
-                         method = E_beta$method,
-                         message = sprintf("Processed with %d surveillance cases", total_cases)
-                    )
+                    shape1 = E_beta$shape1,
+                    shape2 = E_beta$shape2
                )
                
                I_result <- list(
-                    distribution = "beta",
-                    parameters = list(
-                         shape1 = I_beta$shape1,
-                         shape2 = I_beta$shape2
-                    ),
-                    metadata = list(
-                         data_available = TRUE,
-                         total_cases = total_cases,
-                         mean_count = mean(I_samples),
-                         sd_count = sd(I_samples),
-                         n_samples = n_samples,
-                         method = I_beta$method,
-                         message = sprintf("Processed with %d surveillance cases", total_cases)
-                    )
+                    shape1 = I_beta$shape1,
+                    shape2 = I_beta$shape2
                )
 
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_result
@@ -439,41 +413,15 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                warning(sprintf("Error processing %s: %s", loc, e$message))
                if (verbose) cat(sprintf("error: %s\n", e$message))
                
-               E_error <- list(
-                    distribution = "beta",
-                    parameters = list(
-                         shape1 = 1,
-                         shape2 = 9999
-                    ),
-                    metadata = list(
-                         data_available = FALSE,
-                         total_cases = 0,
-                         mean_count = 0,
-                         sd_count = 0,
-                         n_samples = n_samples,
-                         method = "error_fallback",
-                         message = sprintf("Error during processing: %s", e$message)
-                    )
+               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- list(
+                    shape1 = 1,
+                    shape2 = 9999
                )
-               results$parameters_location$prop_E_initial$parameters$location[[loc]] <- E_error
 
-               I_error <- list(
-                    distribution = "beta",
-                    parameters = list(
-                         shape1 = 0.5,
-                         shape2 = 9999.5
-                    ),
-                    metadata = list(
-                         data_available = FALSE,
-                         total_cases = 0,
-                         mean_count = 0,
-                         sd_count = 0,
-                         n_samples = n_samples,
-                         method = "error_fallback",
-                         message = sprintf("Error during processing: %s", e$message)
-                    )
+               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- list(
+                    shape1 = 0.5,
+                    shape2 = 9999.5
                )
-               results$parameters_location$prop_I_initial$parameters$location[[loc]] <- I_error
           })
 
      }

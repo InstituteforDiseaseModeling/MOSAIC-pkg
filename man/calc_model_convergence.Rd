@@ -2,24 +2,28 @@
 % Please edit documentation in R/calc_model_convergence.R
 \name{calc_model_convergence}
 \alias{calc_model_convergence}
-\title{Calculate model-weight agreement diagnostics from log-likelihoods}
+\title{Calculate convergence diagnostics and write to files}
 \usage{
 calc_model_convergence(
-  loglik,
-  seeds = NULL,
+  PATHS,
+  results,
+  output_dir,
   delta_max = 6,
   temperature = 1,
   ess_min = 1000,
   A_min = 0.75,
   cvw_max = 1,
   B_min = 2,
-  max_w_max = 0.5
+  max_w_max = 0.5,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{loglik}{Numeric vector of log-likelihoods (one per draw). Higher is better.}
+\item{PATHS}{MOSAIC paths object from \code{get_paths()}.}
 
-\item{seeds}{Optional vector of seeds corresponding to each likelihood value (same length as \code{loglik}).}
+\item{results}{Data frame with columns: sim, seed, likelihood (and optionally others).}
+
+\item{output_dir}{Character string specifying directory to write output files.}
 
 \item{delta_max}{Numeric Δ cutoff used for truncation (default \code{6}).}
 
@@ -35,28 +39,24 @@ See \code{\link[=calc_model_akaike_weights]{calc_model_akaike_weights()}} for gu
 \item{B_min}{Integer target minimum retained set size \eqn{B} (default \code{2}).}
 
 \item{max_w_max}{Numeric in (0, 1] for the maximum allowed normalized weight (default \code{0.5}).}
+
+\item{verbose}{Logical indicating whether to print progress messages (default \code{TRUE}).}
 }
 \value{
-A list with:
+A list with summary information:
 \itemize{
-\item \code{loglik}   — original log-likelihood vector.
-\item \code{delta}    — vector of \eqn{\Delta_i}.
-\item \code{delta_max} — the Δ cutoff used.
-\item \code{temperature} — the temperature used.
-\item \code{weights}  — list from \code{\link[=calc_model_akaike_weights]{calc_model_akaike_weights()}} with \code{w}, \code{w_tilde}, \code{retained}, \code{B_idx}.
-\item \code{retained} — logical vector indicating retained draws (same as \code{weights$retained}).
-\item \code{H}        — entropy value from agreement index calculation.
-\item \code{metrics}  — named numeric vector: \code{ESS}, \code{A}, \code{CVw}, \code{B_size}, \code{max_w}.
-\item \code{targets}  — named numeric vector of thresholds.
-\item \code{pass}     — named logical vector indicating if each metric meets target.
-\item \code{status}   — named character vector: "pass", "warn", or "fail" for each metric.
+\item \code{status} — Overall convergence status ("PASS", "WARN", "FAIL")
+\item \code{n_total} — Total number of simulations
+\item \code{n_successful} — Number of successful simulations (finite likelihood)
+\item \code{n_retained} — Number of simulations in retained set
+\item \code{files_written} — Vector of output file names
 }
 }
 \description{
-Convenience wrapper that computes ΔAIC, truncated/temperature-scaled Akaike weights,
-ESS, agreement index \eqn{A}, coefficient of variation of weights (CVw),
-retained set size \eqn{B}, and the maximum normalized weight
-\eqn{\max_i \tilde w_i}. Results are compared to recommended thresholds.
+Calculates model-weight agreement diagnostics from calibration results and writes
+both per-simulation data (Parquet) and aggregate diagnostics (JSON) to files.
+This function measures \strong{model-weight agreement} and \strong{evidence concentration},
+not MCMC convergence.
 }
 \section{Important Note}{
 
@@ -66,44 +66,54 @@ trace plots, etc. The "convergence" terminology here refers to agreement across 
 ensemble of parameter draws, not chain convergence.
 }
 
-\section{Assumptions}{
+\section{File Outputs}{
 
-The ΔAIC computation assumes all draws have the same number of parameters k.
-For models with different k, compute AIC = -2\emph{loglik + 2}k first, then use Δ = AIC - min(AIC).
-}
-
-\section{Recommended usage}{
-
+The function writes two files to the output directory:
 \itemize{
-\item If the top model dominates (\code{max_w \u2192 1}), try \code{temperature = 1.5–2}
-        and/or a looser \code{delta_max} (e.g., 20–100) to increase ESS while preserving ranking.
-\item Keep \code{temperature \u2264 3} for most workflows to avoid overly flat weights.
+\item \code{convergence_results.parquet} — Per-simulation data with columns:
+sim, seed, likelihood, aic, delta_aic, w, w_tilde, retained
+\item \code{convergence_diagnostics.json} — Aggregate metrics with human-readable
+descriptions, targets, and pass/fail status
 }
 }
 
 \examples{
-set.seed(42)
-ll <- 1500 + rnorm(3000, sd = 3)
-# Mild flattening for smoother posterior plots
-res <- calc_model_convergence(ll, delta_max = 20, temperature = 1.8)
-res$metrics; res$pass
+\dontrun{
+# Prepare results data frame
+results <- data.frame(
+  sim = 1:1000,
+  seed = 1001:2000,
+  likelihood = 1500 + rnorm(1000, sd = 3)
+)
+
+# Calculate convergence and write files
+summary <- calc_model_convergence(
+  PATHS = get_paths(),
+  results = results,
+  output_dir = "path/to/output",
+  temperature = 1.5
+)
+
+print(summary)
+}
 
 }
 \seealso{
+\code{\link[=plot_model_convergence]{plot_model_convergence()}},
 \code{\link[=calc_model_aic_delta]{calc_model_aic_delta()}},
-\code{\link[=calc_model_akaike_weights]{calc_model_akaike_weights()}},
-\code{\link[=calc_model_ess]{calc_model_ess()}},
-\code{\link[=calc_model_agreement_index]{calc_model_agreement_index()}},
-\code{\link[=calc_model_cvw]{calc_model_cvw()}},
-\code{\link[=calc_model_max_weight]{calc_model_max_weight()}}
+\code{\link[=calc_model_akaike_weights]{calc_model_akaike_weights()}}
 
 Other calibration-metrics: 
+\code{\link{calc_gibbs_weights}()},
 \code{\link{calc_model_agreement_index}()},
 \code{\link{calc_model_aic_delta}()},
 \code{\link{calc_model_akaike_weights}()},
+\code{\link{calc_model_convergence_loss}()},
 \code{\link{calc_model_cvw}()},
 \code{\link{calc_model_ess}()},
+\code{\link{calc_model_loss_delta}()},
 \code{\link{calc_model_max_weight}()},
-\code{\link{plot_model_convergence}()}
+\code{\link{plot_model_convergence}()},
+\code{\link{select_best_by_loss_band}()}
 }
 \concept{calibration-metrics}

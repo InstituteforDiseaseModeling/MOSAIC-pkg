@@ -9,7 +9,13 @@ est_suitability(
   fit_date_start = NULL,
   fit_date_stop = NULL,
   pred_date_start = NULL,
-  pred_date_stop = NULL
+  pred_date_stop = NULL,
+  n_splits = 10,
+  seed_base = 99,
+  fine_tune_epochs = 12,
+  fine_tune_lr = 0.001,
+  split_method = "random",
+  train_prop = 0.6
 )
 }
 \arguments{
@@ -28,11 +34,25 @@ est_suitability(
 \item{pred_date_start}{Date string or NULL. Start date for prediction period. If NULL, uses fit_date_start.}
 
 \item{pred_date_stop}{Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.}
+
+\item{n_splits}{Integer. Number of sequential random train/test splits for transfer learning. Default 1 (no fine-tuning).}
+
+\item{seed_base}{Integer. Base seed for reproducible random splits. Each split uses seed_base + split_number.}
+
+\item{fine_tune_epochs}{Integer. Number of epochs for fine-tuning on additional splits. Default 10.}
+
+\item{fine_tune_lr}{Numeric. Lower learning rate for fine-tuning additional splits. Default 0.00001.}
+
+\item{split_method}{Character. Method for train/validation splitting: "random" (default) or "location_month_block".
+The "location_month_block" method groups sequences by country-month and randomly assigns entire blocks,
+which better tests spatial-temporal generalization by preventing data leakage within location-months.}
+
+\item{train_prop}{Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.}
 }
 \value{
 This function processes climate and cholera case data, fits an LSTM model, makes predictions on
 environmental suitability (psi), and saves both the predictions and covariate data. It also
-generates a plot showing the model fit (accuracy and loss over training epochs) and saves it to a
+generates a plot showing the model fit (MAE and loss over training epochs) and saves it to a
 specified directory.
 }
 \description{
@@ -49,27 +69,63 @@ The function performs the following steps:
 \item Determines appropriate date ranges for fitting and prediction based on data availability.
 \item Validates data completeness within specified date ranges.
 \item Scales the climate covariates using training data statistics.
-\item Splits the training data into training and validation sets.
+\item Splits the training data into training and validation sets using either random sampling or location-month blocking.
+\item Creates temporal LSTM sequences respecting country boundaries and temporal gaps.
 \item Builds an LSTM-based recurrent neural network (RNN) model for predicting cholera outbreaks.
 \item Trains the model on the training set and evaluates performance on the validation set.
 \item Makes predictions on the full prediction period dataset.
 \item Applies temporal smoothing to predictions and saves results to specified directories.
+\item Optional: Performs sequential fine-tuning on additional random splits for transfer learning.
 }
 }
 \note{
 The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
-a CSV file and a plot showing the model fit (accuracy and loss) is generated.
+a CSV file and a plot showing the model fit (MAE and loss) is generated.
 }
 \examples{
+\dontrun{
+# Set up paths
+PATHS <- get_paths()
+
+# Basic usage with default settings
+est_suitability(PATHS)
+
+# Custom date ranges for fitting and prediction
+est_suitability(PATHS,
+               fit_date_start = "2015-01-01",
+               fit_date_stop = "2023-12-31",
+               pred_date_start = "2020-01-01",
+               pred_date_stop = "2025-12-31")
+
+# Transfer learning with sequential fine-tuning on 3 random splits
+est_suitability(PATHS,
+               n_splits = 3,
+               seed_base = 123,
+               fine_tune_epochs = 15,
+               fine_tune_lr = 0.00003)
+
+# Use location-month blocking for better spatial-temporal generalization
+est_suitability(PATHS,
+               split_method = "location_month_block",
+               train_prop = 0.7)
+
+# Location-month blocking with transfer learning
+est_suitability(PATHS,
+               split_method = "location_month_block",
+               n_splits = 5,
+               train_prop = 0.6,
+               seed_base = 42)
+}
+
 \dontrun{
 # Basic usage with auto-detected date ranges
 est_suitability(PATHS)
 
-# Historical validation: fit on 2010-2020, predict on 2021-2023  
-est_suitability(PATHS, 
-                fit_date_start = "2010-01-01", 
+# Historical validation: fit on 2010-2020, predict on 2021-2023
+est_suitability(PATHS,
+                fit_date_start = "2010-01-01",
                 fit_date_stop = "2020-12-31",
-                pred_date_start = "2021-01-01", 
+                pred_date_start = "2021-01-01",
                 pred_date_stop = "2023-12-31")
 
 }

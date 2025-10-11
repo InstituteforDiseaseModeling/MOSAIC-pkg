@@ -2,16 +2,16 @@
 % Please edit documentation in R/plot_model_convergence.R
 \name{plot_model_convergence}
 \alias{plot_model_convergence}
-\title{Plot Model Convergence Diagnostics}
+\title{Plot Model Convergence Diagnostics from Files}
 \usage{
-plot_model_convergence(convergence_results, output_dir, verbose = TRUE)
+plot_model_convergence(results_dir, plots_dir = NULL, verbose = TRUE)
 }
 \arguments{
-\item{convergence_results}{A list object returned by \code{\link[=calc_model_convergence]{calc_model_convergence()}}.
-Must contain elements: loglik, delta, weights, metrics, targets, pass, status.}
+\item{results_dir}{Character string specifying the directory containing
+convergence_results.parquet and convergence_diagnostics.json files.}
 
-\item{output_dir}{Character string specifying the directory where the plot should
-be saved. Directory will be created if it doesn't exist.}
+\item{plots_dir}{Character string specifying the directory where the plot should
+be saved. If NULL, defaults to ../plots/ relative to results_dir.}
 
 \item{verbose}{Logical indicating whether to print messages. Default is TRUE.}
 }
@@ -19,9 +19,9 @@ be saved. Directory will be created if it doesn't exist.}
 Invisibly returns the ggplot object.
 }
 \description{
-Creates a single comprehensive diagnostic plot from model convergence analysis results.
-Visualizes log-likelihood rankings with the best model highlighted and displays
-convergence metrics with clear pass/warn/fail indicators in the legend.
+Creates a comprehensive diagnostic plot by reading convergence results from files
+written by \code{\link[=calc_model_convergence]{calc_model_convergence()}}. Visualizes log-likelihood rankings with
+the best model highlighted and displays convergence metrics.
 }
 \details{
 This function creates a publication-quality diagnostic plot showing:
@@ -31,12 +31,10 @@ This function creates a publication-quality diagnostic plot showing:
 \item Clear indication of model ensemble agreement metrics
 }
 
-The plot helps diagnose:
+The function reads from two files:
 \itemize{
-\item Whether the model ensemble has adequate effective sample size
-\item If weights are too concentrated in few draws (dominance issues)
-\item Agreement across the retained parameter set
-\item Overall convergence quality
+\item \code{convergence_results.parquet} — Per-simulation data
+\item \code{convergence_diagnostics.json} — Aggregate metrics and descriptions
 }
 }
 \section{Important Note}{
@@ -48,34 +46,35 @@ convergence. For MCMC diagnostics, use trace plots, R-hat, etc.
 
 \examples{
 \dontrun{
-# Generate sample log-likelihoods
-set.seed(42)
-loglik <- 1500 + rnorm(1000, sd = 3)
-
-# Calculate convergence diagnostics
-conv_results <- calc_model_convergence(loglik)
-
-# Create diagnostic plot
-plot <- plot_model_convergence(
-  convergence_results = conv_results,
-  output_dir = "convergence_diagnostics"
+# First calculate convergence (writes files)
+calc_model_convergence(
+  PATHS = get_paths(),
+  results = my_results,
+  output_dir = "path/to/results"
 )
 
-# View plot
-print(plot)
+# Then create plot from files
+plot <- plot_model_convergence(
+  results_dir = "path/to/results",
+  plots_dir = "path/to/plots"
+)
 }
 
 }
 \seealso{
-\code{\link[=calc_model_convergence]{calc_model_convergence()}}, \code{\link[=calc_model_akaike_weights]{calc_model_akaike_weights()}}, \code{\link[=calc_model_ess]{calc_model_ess()}}
+\code{\link[=calc_model_convergence]{calc_model_convergence()}}
 
 Other calibration-metrics: 
+\code{\link{calc_gibbs_weights}()},
 \code{\link{calc_model_agreement_index}()},
 \code{\link{calc_model_aic_delta}()},
 \code{\link{calc_model_akaike_weights}()},
 \code{\link{calc_model_convergence}()},
+\code{\link{calc_model_convergence_loss}()},
 \code{\link{calc_model_cvw}()},
 \code{\link{calc_model_ess}()},
-\code{\link{calc_model_max_weight}()}
+\code{\link{calc_model_loss_delta}()},
+\code{\link{calc_model_max_weight}()},
+\code{\link{select_best_by_loss_band}()}
 }
 \concept{calibration-metrics}

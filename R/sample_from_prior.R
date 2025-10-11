@@ -20,23 +20,32 @@
 #' Supported distributions:
 #' \itemize{
 #'   \item \strong{beta}: parameters$shape1, parameters$shape2
-#'   \item \strong{gamma}: parameters$shape, parameters$rate  
+#'   \item \strong{gamma}: parameters$shape, parameters$rate
 #'   \item \strong{lognormal}: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd
 #'   \item \strong{normal}: parameters$mean, parameters$sd
+#'   \item \strong{truncnorm}: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)
 #'   \item \strong{uniform}: parameters$min, parameters$max
 #'   \item \strong{gompertz}: parameters$b, parameters$eta
 #' }
 #'
 #' @examples
 #' # Sample from a beta distribution
-#' prior <- list(
+#' prior_beta <- list(
 #'   distribution = "beta",
 #'   parameters = list(shape1 = 2, shape2 = 5)
 #' )
-#' sample_from_prior(n = 10, prior = prior)
+#' sample_from_prior(n = 10, prior = prior_beta)
+#'
+#' # Sample from a truncated normal distribution
+#' prior_truncnorm <- list(
+#'   distribution = "truncnorm",
+#'   parameters = list(mean = 0, sd = 1, a = -2, b = 2)
+#' )
+#' sample_from_prior(n = 10, prior = prior_truncnorm)
 #'
 #' @export
 #' @importFrom stats rbeta rgamma rlnorm rnorm runif
+#' @importFrom truncnorm rtruncnorm
 sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
   
   # ---- Input validation ----
@@ -129,6 +138,28 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
         }
         if (params$sd < 0) stop("Normal requires sd >= 0")
         rnorm(n, mean = params$mean, sd = params$sd)
+      },
+
+      truncnorm = {
+        if (!all(c("mean", "sd", "a", "b") %in% names(params))) {
+          stop("Truncated normal distribution requires mean, sd, a (lower bound), and b (upper bound)")
+        }
+        # Check for NA values
+        if (is.na(params$mean) || is.na(params$sd) || is.na(params$a) || is.na(params$b)) {
+          if (verbose) message("Truncated normal parameters contain NA values")
+          return(rep(NA_real_, n))
+        }
+        if (params$sd < 0) stop("Truncated normal requires sd >= 0")
+        if (params$a >= params$b) stop("Truncated normal requires a (lower bound) < b (upper bound)")
+
+        # Check if truncnorm package is available
+        if (!requireNamespace("truncnorm", quietly = TRUE)) {
+          stop("Package 'truncnorm' is required for truncated normal sampling. ",
+               "Please install it with: install.packages('truncnorm')")
+        }
+
+        truncnorm::rtruncnorm(n, a = params$a, b = params$b,
+                             mean = params$mean, sd = params$sd)
       },
       
       uniform = {

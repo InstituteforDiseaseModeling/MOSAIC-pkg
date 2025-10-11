@@ -23,7 +23,7 @@
 #'     \itemize{
 #'       \item prop_S_initial: Beta distribution parameters for S/N by location
 #'     }
-#'     Each parameter contains $parameters$location$[ISO_CODE] with shape1, shape2, and metadata
+#'     Each parameter contains $parameters$location$ISO_CODE with shape1 and shape2
 #'   }
 #' }
 #'
@@ -237,13 +237,7 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
 
             results_list[[loc]] <- list(
                 shape1 = 30,
-                shape2 = 7.5,
-                method = "independent_prior_no_estimates",
-                metadata = list(
-                    estimated_from_constraints = FALSE,
-                    mean = 30 / (30 + 7.5),
-                    message = "No other compartment estimates available"
-                )
+                shape2 = 7.5
             )
             next
         }
@@ -318,22 +312,7 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
         # Store results
         results_list[[loc]] <- list(
             shape1 = S_beta$shape1,
-            shape2 = S_beta$shape2,
-            method = S_beta$method,
-            metadata = list(
-                estimated_from_constraints = TRUE,
-                mean = S_mean,
-                ci_lower = S_ci[1],
-                ci_upper = S_ci[2],
-                constraint_violations = constraint_violations,
-                constraint_violation_rate = constraint_violations / n_samples,
-                t0 = as.character(t0),
-                n_samples = n_samples,
-                min_S_proportion = min_S_proportion,
-                variance_inflation = variance_inflation,
-                message = sprintf("Estimated from %d samples with %.1f%% constraint violations",
-                                n_samples, 100 * constraint_violations / n_samples)
-            )
+            shape2 = S_beta$shape2
         )
     }
 

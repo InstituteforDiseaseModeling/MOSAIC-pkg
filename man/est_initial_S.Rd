@@ -41,7 +41,7 @@ List with priors_default-compatible structure containing:
 \itemize{
 \item prop_S_initial: Beta distribution parameters for S/N by location
 }
-Each parameter contains $parameters$location$\link{ISO_CODE} with shape1, shape2, and metadata
+Each parameter contains $parameters$location$ISO_CODE with shape1 and shape2
 }
 }
 }

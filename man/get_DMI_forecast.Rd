@@ -4,21 +4,34 @@
 \alias{get_DMI_forecast}
 \title{Get DMI (Dipole Mode Index) Forecast Data}
 \usage{
-get_DMI_forecast()
+get_DMI_forecast(use_json = TRUE)
+}
+\arguments{
+\item{use_json}{Logical. Whether to try loading from JSON configuration first (default: TRUE)}
 }
 \value{
 A data frame with columns for year, month (numeric), month_name, variable (DMI), and value. The DMI is a measure of the difference in sea surface temperature anomalies between the western and eastern Indian Ocean and is used to describe the Indian Ocean Dipole (IOD).
 }
 \description{
-This function retrieves the manually extracted Dipole Mode Index (DMI) forecast data from the Bureau of Meteorology's IOD forecast page.
+This function retrieves DMI forecast data from JSON configuration files or
+falls back to hardcoded values. DMI data comes from the Bureau of Meteorology's IOD forecast page.
 }
 \details{
-The IOD forecast is manually extracted from the Bureau of Meteorology's IOD forecast page: \url{http://www.bom.gov.au/climate/ocean/outlooks/#region=IOD}. The data includes DMI values over a series of months and years, representing forecasts of sea surface temperature anomalies. Negative DMI values indicate cooler waters in the west, while positive DMI values indicate warmer waters in the west of the Indian Ocean.
+This function first attempts to load forecast data from
+inst/extdata/dmi_forecast_current.json. If the JSON file doesn't exist or
+use_json=FALSE, it falls back to hardcoded values extracted from the Bureau
+of Meteorology's IOD forecast page. The data includes DMI values representing
+forecasts of sea surface temperature anomalies. Negative DMI values indicate
+cooler waters in the west, while positive DMI values indicate warmer waters
+in the west of the Indian Ocean.
 }
 \examples{
 \dontrun{
-# Get the DMI forecast data
+# Get DMI forecast data (tries JSON first)
 dmi_forecast <- get_DMI_forecast()
+
+# Force use of hardcoded values
+dmi_forecast <- get_DMI_forecast(use_json = FALSE)
 
 # Display the DMI forecast data
 print(dmi_forecast)

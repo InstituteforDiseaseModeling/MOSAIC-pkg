@@ -116,7 +116,12 @@ convert_config_to_matrix <- function(config) {
           "decay_days_short",
           "decay_days_long",
           "decay_shape_1",
-          "decay_shape_2"
+          "decay_shape_2",
+          "mu_j",               # Added: Case fatality ratio
+          "psi_star_a",         # Added: psi_star calibration parameters
+          "psi_star_b",
+          "psi_star_z",
+          "psi_star_k"
      )
      
      config_subset <- config[names(config) %in% params_keep]
@@ -139,7 +144,9 @@ convert_config_to_matrix <- function(config) {
           "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
           "tau_i", "theta_j",
           "a_1_j", "a_2_j", "b_1_j", "b_2_j",
-          "a1", "a2", "b1", "b2"
+          "a1", "a2", "b1", "b2",
+          "mu_j",                                        # Case fatality ratio
+          "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration parameters
      )
      
      # ============================================================================

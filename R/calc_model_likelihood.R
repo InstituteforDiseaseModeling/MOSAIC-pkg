@@ -10,8 +10,8 @@
 #' estimate and a small \code{k_min} floor.
 #'
 #' By default, three "shape" terms are included with modest weights:
-#' (1) peak timing (Normal on peak index difference),
-#' (2) peak magnitude (log-Normal on ratios), and
+#' (1) multi-peak timing (Normal on time differences for matched peaks),
+#' (2) multi-peak magnitude (log-Normal on ratios with adaptive sigma), and
 #' (3) cumulative progression (NB at a few cumulative fractions).
 #'
 #' Minimal inline guardrails floor the score on egregious fits (cumulative
@@ -27,6 +27,7 @@
 #'   Default 1.
 #' @param weights_location Optional length-\code{n_locations} non-negative weights.
 #' @param weights_time Optional length-\code{n_time_steps} non-negative weights.
+#' @param config Optional LASER configuration list containing location_name, date_start, and date_stop.
 #' @param nb_k_min Numeric; minimum NB dispersion floor used for the core NB likelihood
 #'   and WIS quantiles. Default \code{3}.
 #' @param zero_buffer Kept for backward compatibility (not used by the NB core).
@@ -36,13 +37,15 @@
 #' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{TRUE}.
 #' @param add_wis Logical; default \code{FALSE}.
 #'
+#' @param weight_max_terms Component weight for max terms. Default \code{0.5}.
 #' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total
 #'   Component weights. Defaults \code{0.5, 0.5, 0.3}.
 #' @param weight_wis Component weight for optional WIS term.
 #'
-#' @param peak_method \code{"smooth"} (3-pt moving average) or \code{"simple"}.
-#' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{2}.
-#' @param sigma_peak_log SD on log-scale for peak magnitude; default \code{0.5}.
+#' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
+#' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}. 
+#'   Automatically scaled by sqrt(100/max(peak_obs,100)) to allow more variance for smaller peaks.
+#' @param penalty_unmatched_peak Log-likelihood penalty for unmatched peaks; default \code{-3}.
 #'
 #' @param wis_quantiles Quantiles for WIS if enabled.
 #' @param cumulative_timepoints Fractions for cumulative progression; default \code{c(0.25,0.5,0.75,1)}.
@@ -68,6 +71,7 @@ calc_model_likelihood <- function(obs_cases,
                                   weight_deaths    = NULL,
                                   weights_location = NULL,
                                   weights_time     = NULL,
+                                  config           = NULL,
                                   nb_k_min         = 3,
                                   zero_buffer      = TRUE,   # kept for compatibility
                                   verbose          = FALSE,
@@ -78,14 +82,15 @@ calc_model_likelihood <- function(obs_cases,
                                   add_cumulative_total  = TRUE,
                                   add_wis               = TRUE,
                                   # ---- component weights ----
+                                  weight_max_terms         = 0.5,
                                   weight_peak_timing       = 0.5,
                                   weight_peak_magnitude    = 0.5,
                                   weight_cumulative_total  = 0.3,
                                   weight_wis               = 0.8,
                                   # ---- peak controls ----
-                                  peak_method      = c("smooth", "simple"),
-                                  sigma_peak_time  = 2,
+                                  sigma_peak_time  = 1,  
                                   sigma_peak_log   = 0.5,
+                                  penalty_unmatched_peak = -3,
                                   # ---- WIS (optional) ----
                                   wis_quantiles      = c(0.0275, 0.25, 0.5, 0.75, 0.975),
                                   # ---- cumulative progression ----
@@ -131,8 +136,6 @@ calc_model_likelihood <- function(obs_cases,
      if (length(weights_time)     != n_time_steps) stop("weights_time must match n_time_steps.")
      if (any(weights_location < 0) || any(weights_time < 0)) stop("All weights must be >= 0.")
      if (sum(weights_location) == 0 || sum(weights_time) == 0) stop("weights_location and weights_time must not all be zero.")
-
-     peak_method        <- match.arg(peak_method)
 
      # --- inline guardrails ---
      if (enable_guardrails) {
@@ -241,39 +244,59 @@ calc_model_likelihood <- function(obs_cases,
                verbose   = FALSE
           ) else 0
 
-          # Peak timing
+          # Peak-based likelihoods using epidemic_peaks data
           ll_peak_time_c <- ll_peak_time_d <- 0
-          if (add_peak_timing) {
-               if (have_cases) {
-                    tpo <- peak_index(obs_c, peak_method); tpe <- peak_index(est_c, peak_method)
-                    if (is.finite(tpo) && is.finite(tpe)) ll_peak_time_c <- stats::dnorm(tpe - tpo, 0, sigma_peak_time, log = TRUE)
-               }
-               if (have_deaths) {
-                    tpo <- peak_index(obs_d, peak_method); tpe <- peak_index(est_d, peak_method)
-                    if (is.finite(tpo) && is.finite(tpe)) ll_peak_time_d <- stats::dnorm(tpe - tpo, 0, sigma_peak_time, log = TRUE)
-               }
-          }
-
-          # Peak magnitude
           ll_peak_mag_c <- ll_peak_mag_d <- 0
-          if (add_peak_magnitude) {
-               if (have_cases) {
-                    pv_o <- peak_value(obs_c, peak_method); pv_e <- peak_value(est_c, peak_method)
-                    if (is.finite(pv_o) && is.finite(pv_e) && pv_o > 0 && pv_e > 0)
-                         ll_peak_mag_c <- stats::dnorm(log(pv_e) - log(pv_o), 0, sigma_peak_log, log = TRUE)
-               }
-               if (have_deaths) {
-                    pv_o <- peak_value(obs_d, peak_method); pv_e <- peak_value(est_d, peak_method)
-                    if (is.finite(pv_o) && is.finite(pv_e) && pv_o > 0 && pv_e > 0)
-                         ll_peak_mag_d <- stats::dnorm(log(pv_e) - log(pv_o), 0, sigma_peak_log, log = TRUE)
+          
+          if ((add_peak_timing || add_peak_magnitude) && !is.null(config)) {
+               # Extract needed info from config
+               location_names <- config$location_name
+               date_start <- config$date_start
+               date_stop <- config$date_stop
+               
+               if (!is.null(location_names) && !is.null(date_start) && !is.null(date_stop)) {
+                    # Get location name for this index (assuming it's an ISO code)
+                    iso_code <- if (j <= length(location_names)) location_names[j] else NULL
+                    
+                    if (!is.null(iso_code)) {
+                         if (add_peak_timing) {
+                              if (have_cases) {
+                                   ll_peak_time_c <- calc_multi_peak_timing_ll(
+                                        obs_c, est_c, iso_code, date_start, date_stop,
+                                        sigma_peak_time, penalty_unmatched_peak
+                                   )
+                              }
+                              if (have_deaths) {
+                                   ll_peak_time_d <- calc_multi_peak_timing_ll(
+                                        obs_d, est_d, iso_code, date_start, date_stop,
+                                        sigma_peak_time, penalty_unmatched_peak
+                                   )
+                              }
+                         }
+                         
+                         if (add_peak_magnitude) {
+                              if (have_cases) {
+                                   ll_peak_mag_c <- calc_multi_peak_magnitude_ll(
+                                        obs_c, est_c, iso_code, date_start, date_stop,
+                                        sigma_peak_log, penalty_unmatched_peak
+                                   )
+                              }
+                              if (have_deaths) {
+                                   ll_peak_mag_d <- calc_multi_peak_magnitude_ll(
+                                        obs_d, est_d, iso_code, date_start, date_stop,
+                                        sigma_peak_log, penalty_unmatched_peak
+                                   )
+                              }
+                         }
+                    }
                }
           }
 
           # Cumulative progression (using data-driven k)
           ll_cum_tot_c <- ll_cum_tot_d <- 0
           if (add_cumulative_total) {
-               if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c)
-               if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d)
+               if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c, weights_time)
+               if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d, weights_time)
           }
 
 
@@ -300,8 +323,11 @@ calc_model_likelihood <- function(obs_cases,
 
           # Assemble location total
           ll_loc_core <-
-               weight_cases  * (ll_cases  + if (add_max_terms) ll_max_cases  else 0) +
-               weight_deaths * (ll_deaths + if (add_max_terms) ll_max_deaths else 0)
+               weight_cases  * ll_cases +
+               weight_deaths * ll_deaths
+
+          ll_loc_max <-
+               weight_max_terms * (weight_cases * ll_max_cases + weight_deaths * ll_max_deaths)
 
           ll_loc_peaks <-
                weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
@@ -313,6 +339,7 @@ calc_model_likelihood <- function(obs_cases,
           ll_loc_wis <- (weight_cases * ll_wis_cases) + (weight_deaths * ll_wis_deaths)
 
           ll_loc_total <- ll_loc_core
+          if (add_max_terms)                         ll_loc_total <- ll_loc_total + ll_loc_max
           if (add_peak_timing || add_peak_magnitude) ll_loc_total <- ll_loc_total + ll_loc_peaks
           if (add_cumulative_total)                  ll_loc_total <- ll_loc_total + ll_loc_cum
           if (add_wis)                               ll_loc_total <- ll_loc_total + ll_loc_wis
@@ -327,8 +354,9 @@ calc_model_likelihood <- function(obs_cases,
 
           if (verbose) {
                message(sprintf(
-                    "Location %d: core=%.2f | peaks=%.2f | cum=%.2f | wis=%.2f -> weighted=%.2f",
+                    "Location %d: core=%.2f | max=%.2f | peaks=%.2f | cum=%.2f | wis=%.2f -> weighted=%.2f",
                     j, ll_loc_core,
+                    if (add_max_terms) ll_loc_max else 0,
                     if ((add_peak_timing || add_peak_magnitude)) ll_loc_peaks else 0,
                     if (add_cumulative_total) ll_loc_cum else 0,
                     if (add_wis) ll_loc_wis else 0,
@@ -360,27 +388,133 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
      w2
 }
 
-# Peak utilities
-safe_which_max <- function(x) {
-     ix <- which.max(ifelse(is.finite(x), x, -Inf))
-     if (length(ix) == 0L) NA_integer_ else ix
-}
-peak_index <- function(x, method = "smooth") {
-     if (all(!is.finite(x))) return(NA_integer_)
-     if (method == "simple" || length(x) < 3L) return(safe_which_max(x))
-     xs <- stats::filter(ifelse(is.finite(x), x, 0), rep(1/3, 3), sides = 2)
-     safe_which_max(as.numeric(xs))
-}
-peak_value <- function(x, method = "smooth") {
-     result <- if (method == "simple" || length(x) < 3L) {
-          suppressWarnings(max(x, na.rm = TRUE))
-     } else {
-          xs <- stats::filter(ifelse(is.finite(x), x, 0), rep(1/3, 3), sides = 2)
-          suppressWarnings(max(xs, na.rm = TRUE))
+
+
+# Peak timing likelihood using epidemic_peaks data
+calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
+                                     date_start = NULL, date_stop = NULL,
+                                     sigma_peak_time = 1,
+                                     penalty_unmatched = -3) {
+     # Load epidemic_peaks data
+     if (!exists("epidemic_peaks")) {
+          data("epidemic_peaks", package = "MOSAIC", envir = environment())
+          epidemic_peaks <- get("epidemic_peaks", envir = environment())
      }
-     # Fix: Return NA instead of -Inf when all values are NA/non-finite
-     if (is.infinite(result)) return(NA_real_)
-     result
+     
+     # If required info missing, return 0
+     if (is.null(iso_code) || is.null(date_start) || is.null(date_stop)) return(0)
+     
+     # Get peaks for this location
+     loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
+     if (nrow(loc_peaks) == 0) return(0)
+     
+     # Create date sequence for the time series
+     date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "day")
+     if (length(date_seq) != length(obs_vec)) {
+          # Try weekly if daily doesn't match
+          date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "week")
+          if (length(date_seq) != length(obs_vec)) return(0)  # Can't match dates
+     }
+     
+     # Convert peak dates to indices
+     peak_indices <- numeric(nrow(loc_peaks))
+     for (i in 1:nrow(loc_peaks)) {
+          idx <- which.min(abs(date_seq - as.Date(loc_peaks$peak_date[i])))
+          if (length(idx) > 0) peak_indices[i] <- idx[1]
+     }
+     peak_indices <- peak_indices[peak_indices > 0 & peak_indices <= length(obs_vec)]
+     
+     if (length(peak_indices) == 0) return(0)
+     
+     # Find peaks in estimated data near the expected peak times
+     ll_total <- 0
+     n_matched <- 0
+     
+     for (peak_idx in peak_indices) {
+          # Look for peak in estimated data within window
+          window <- max(1, peak_idx - 14):min(length(est_vec), peak_idx + 14)  # +/- 2 weeks
+          if (length(window) > 2) {
+               est_peak_idx <- window[which.max(est_vec[window])]
+               # Calculate timing difference in weeks
+               time_diff <- (est_peak_idx - peak_idx) / 7
+               # Calculate log-likelihood for this peak timing
+               ll_total <- ll_total + stats::dnorm(time_diff, 0, sigma_peak_time, log = TRUE)
+               n_matched <- n_matched + 1
+          }
+     }
+     
+     # Penalize if not all peaks were matched
+     n_unmatched <- length(peak_indices) - n_matched
+     ll_total <- ll_total + n_unmatched * penalty_unmatched
+     
+     return(ll_total)
+}
+
+# Peak magnitude likelihood using epidemic_peaks data
+calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
+                                        date_start = NULL, date_stop = NULL,
+                                        sigma_peak_log = 0.5,
+                                        penalty_unmatched = -3) {
+     # Load epidemic_peaks data
+     if (!exists("epidemic_peaks")) {
+          data("epidemic_peaks", package = "MOSAIC", envir = environment())
+          epidemic_peaks <- get("epidemic_peaks", envir = environment())
+     }
+     
+     # If required info missing, return 0
+     if (is.null(iso_code) || is.null(date_start) || is.null(date_stop)) return(0)
+     
+     # Get peaks for this location
+     loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
+     if (nrow(loc_peaks) == 0) return(0)
+     
+     # Create date sequence for the time series
+     date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "day")
+     if (length(date_seq) != length(obs_vec)) {
+          # Try weekly if daily doesn't match
+          date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "week")
+          if (length(date_seq) != length(obs_vec)) return(0)  # Can't match dates
+     }
+     
+     # Convert peak dates to indices
+     peak_indices <- numeric(nrow(loc_peaks))
+     for (i in 1:nrow(loc_peaks)) {
+          idx <- which.min(abs(date_seq - as.Date(loc_peaks$peak_date[i])))
+          if (length(idx) > 0) peak_indices[i] <- idx[1]
+     }
+     peak_indices <- peak_indices[peak_indices > 0 & peak_indices <= length(obs_vec)]
+     
+     if (length(peak_indices) == 0) return(0)
+     
+     # Calculate magnitude likelihood for peaks
+     ll_total <- 0
+     n_matched <- 0
+     
+     for (peak_idx in peak_indices) {
+          # Get observed magnitude at expected peak time
+          window <- max(1, peak_idx - 14):min(length(obs_vec), peak_idx + 14)  # +/- 2 weeks
+          if (length(window) > 2) {
+               obs_peak_val <- max(obs_vec[window], na.rm = TRUE)
+               est_peak_val <- max(est_vec[window], na.rm = TRUE)
+               
+               if (is.finite(obs_peak_val) && is.finite(est_peak_val) && 
+                   obs_peak_val > 0 && est_peak_val > 0) {
+                    # Adaptive sigma that scales with peak size
+                    adaptive_sigma <- sigma_peak_log * sqrt(100 / max(obs_peak_val, 100))
+                    # Log-normal likelihood on the ratio
+                    ll_mag <- stats::dnorm(log(est_peak_val) - log(obs_peak_val), 
+                                         0, adaptive_sigma, log = TRUE)
+                    ll_total <- ll_total + ll_mag
+                    n_matched <- n_matched + 1
+               }
+          }
+     }
+     
+     # Penalize if not all peaks were matched
+     n_unmatched <- length(peak_indices) - n_matched
+     ll_total <- ll_total + n_unmatched * penalty_unmatched
+     
+     return(ll_total)
 }
 
 # Robust cumulative NB progression
@@ -388,19 +522,31 @@ ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
+                                         weights_time = NULL,
                                          per_tp_ll_floor = -1e9) {
      n <- length(obs_vec)
      vals <- numeric(0L)
+     
+     # Use weights if provided
+     if (is.null(weights_time)) weights_time <- rep(1, n)
+     
      # Use data-driven k if provided, otherwise fall back to option/default
+     # Scale k up for cumulative (sums have higher variance than individual points)
      cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
-          k_data
+          k_data * 2  # Scale up for cumulative sums
      } else {
           getOption("MOSAIC.cumulative_k", 10)
      }
+     
      for (tp in timepoints) {
-          end_idx <- max(1L, floor(n * tp))
-          o_cum <- sum(obs_vec[1:end_idx], na.rm = TRUE)
-          e_cum <- sum(est_vec[1:end_idx], na.rm = TRUE)
+          # Fix: Ensure index is at least 1 and at most n
+          end_idx <- min(n, max(1L, round(n * tp)))
+          
+          # Apply weights to cumulative sums
+          idx_range <- 1:end_idx
+          o_cum <- sum(obs_vec[idx_range] * weights_time[idx_range], na.rm = TRUE) / sum(weights_time[idx_range], na.rm = TRUE) * end_idx
+          e_cum <- sum(est_vec[idx_range] * weights_time[idx_range], na.rm = TRUE) / sum(weights_time[idx_range], na.rm = TRUE) * end_idx
+          
           if (!is.finite(o_cum) || !is.finite(e_cum)) next
           if (e_cum <= 0 && o_cum > 0) { vals <- c(vals, per_tp_ll_floor); next }
           e_cum <- if (e_cum <= 0) .Machine$double.eps else e_cum
@@ -429,29 +575,47 @@ max_ll_poisson <- function(obs_vec, est_vec) {
 
 # WIS helper (uses fixed k from core, or Poisson if Inf)
 compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
+     # Early return for all-NA cases
+     if (all(!is.finite(y)) || all(!is.finite(est))) return(NA_real_)
+     
      w_use <- w_time
-     bad <- !is.finite(y) | !is.finite(est); if (any(bad)) w_use[bad] <- 0
+     bad <- !is.finite(y) | !is.finite(est)
+     if (any(bad)) w_use[bad] <- 0
      if (sum(w_use) == 0) return(NA_real_)
+     
      est_eval <- pmax(est, 1e-12)
+     
+     # Vectorized quantile functions
      qfun <- if (is.infinite(k_use)) {
           function(p) stats::qpois(p, lambda = est_eval)
      } else {
           function(p) stats::qnbinom(p, mu = est_eval, size = k_use)
      }
+     
      probs  <- sort(unique(probs))
      has_med <- any(abs(probs - 0.5) < 1e-8)
      mae_term <- 0
      if (has_med) {
+          # Fix: qfun returns a vector, need element-wise operations
           q_med <- qfun(0.5)
           mae_term <- sum(abs(y - q_med) * w_use, na.rm = TRUE) / sum(w_use)
      }
-     lowers <- probs[probs < 0.5]; uppers <- probs[probs > 0.5]
+     
+     lowers <- probs[probs < 0.5]
+     uppers <- probs[probs > 0.5]
      pairs <- lapply(lowers, function(p) c(p, if ((1 - p) %in% uppers) (1 - p) else uppers[which.min(abs(uppers - (1 - p)))]))
-     K <- length(pairs); sum_IS <- 0
+     K <- length(pairs)
+     sum_IS <- 0
+     
      if (K > 0) {
           for (pq in pairs) {
-               pL <- pq[1]; pU <- pq[2]; qL <- qfun(pL); qU <- qfun(pU)
+               pL <- pq[1]
+               pU <- pq[2]
+               # Fix: These return vectors, need element-wise operations
+               qL <- qfun(pL)
+               qU <- qfun(pU)
                alpha <- 1 - (pU - pL)
+               # Vectorized operations
                width <- qU - qL
                under <- pmax(0, qL - y) * (2/alpha)
                over  <- pmax(0, y - qU) * (2/alpha)

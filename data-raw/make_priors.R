@@ -37,7 +37,7 @@ priors_default$parameters_global$alpha_1 <- list(
 )
 
 # alpha_2 - Degree of frequency driven transmission
-beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.33, ci_lower = 0.1, ci_upper = 0.66)
+beta_fit_alpha_2 <- fit_beta_from_ci(mode_val = 0.5, ci_lower = 0.25, ci_upper = 0.75)
 
 priors_default$parameters_global$alpha_2 <- list(
      description = "Degree of frequency driven transmission (0-1)",
@@ -100,7 +100,7 @@ priors_default$parameters_global$gamma_2 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/2),   # log of median rate: 1/2 per day = 2 days shedding
-          sdlog = 0.5           # uncertainty allowing 1-3 day range
+          sdlog = 0.4           # uncertainty allowing 1-3 day range
      )
 )
 
@@ -1266,6 +1266,24 @@ for (iso in j) {
           parameters = list(
                shape1 = 6,      # Mean: 0.86, Mode: 1.0
                shape2 = 1       # 95% CI: [0.54, 1.00], favors minimal smoothing
+          )
+     )
+}
+
+# psi_star_k - Time offset parameter for suitability calibration (location-specific)
+priors_default$parameters_location$psi_star_k <- list(
+     description = "Time offset in days for suitability calibration (k>0: forward/delay, k<0: backward/advance)",
+     location = list()
+)
+
+for (iso in j) {
+     priors_default$parameters_location$psi_star_k$location[[iso]] <- list(
+          distribution = "truncnorm",
+          parameters = list(
+               mean = 0,        # Centered at no offset
+               sd = 10,         # Standard deviation of 10 days
+               a = -45,         # Lower bound: -45 days
+               b = 45           # Upper bound: +45 days
           )
      )
 }

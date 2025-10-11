@@ -49,8 +49,7 @@ plot_cases_binary <- function(PATHS) {
      message("Loading processed suitability data...")
      case_data <- utils::read.csv(file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_country_weekly_suitability_data.csv"), stringsAsFactors = FALSE)
 
-     case_data$date_start <- as.Date(case_data$date_start)
-     case_data$date_stop <- as.Date(case_data$date_stop)
+     case_data$date <- as.Date(case_data$date)
 
      # Verify that cases_binary column exists
      if (!"cases_binary" %in% names(case_data)) {
@@ -63,17 +62,17 @@ plot_cases_binary <- function(PATHS) {
      message(sprintf("Binary indicators: %d suitable periods, %d with NA binary indicator",
                      sum(case_data$cases_binary == 1, na.rm = TRUE), sum(is.na(case_data$cases_binary))))
      message(sprintf("Full dataset date range: %s to %s",
-                     min(case_data$date_start, na.rm = TRUE), max(case_data$date_start, na.rm = TRUE)))
+                     min(case_data$date, na.rm = TRUE), max(case_data$date, na.rm = TRUE)))
      message(sprintf("Case data available from: %s to %s",
-                     min(case_data$date_start[!is.na(case_data$cases)], na.rm = TRUE),
-                     max(case_data$date_start[!is.na(case_data$cases)], na.rm = TRUE)))
+                     min(case_data$date[!is.na(case_data$cases)], na.rm = TRUE),
+                     max(case_data$date[!is.na(case_data$cases)], na.rm = TRUE)))
 
      # Filter out NA cases AFTER loading for plotting purposes only
      case_data_for_plotting <- case_data[!is.na(case_data$cases), ]
 
      # Remove countries with all zero or missing case data
      countries_with_data <- case_data_for_plotting %>%
-          group_by(country) %>%
+          group_by(iso_code) %>%
           summarize(
                total_cases = sum(cases, na.rm = TRUE),
                max_cases = max(cases, na.rm = TRUE),
@@ -81,21 +80,21 @@ plot_cases_binary <- function(PATHS) {
                .groups = 'drop'
           ) %>%
           filter(total_cases > 0 & n_nonzero > 0) %>%
-          pull(country)
+          pull(iso_code)
 
      message(sprintf("Countries with case data: %d out of %d total countries",
-                     length(countries_with_data), length(unique(case_data$country))))
+                     length(countries_with_data), length(unique(case_data$iso_code))))
      message(sprintf("Excluded countries (no cases): %s",
-                     paste(setdiff(unique(case_data$country), countries_with_data), collapse = ", ")))
+                     paste(setdiff(unique(case_data$iso_code), countries_with_data), collapse = ", ")))
 
      # Filter both datasets to only include countries with actual case data
-     case_data <- case_data[case_data$country %in% countries_with_data, ]
-     case_data_for_plotting <- case_data_for_plotting[case_data_for_plotting$country %in% countries_with_data, ]
+     case_data <- case_data[case_data$iso_code %in% countries_with_data, ]
+     case_data_for_plotting <- case_data_for_plotting[case_data_for_plotting$iso_code %in% countries_with_data, ]
 
      # Group by country and create a new grouping for consecutive cases_binary == 1
      # Use the FULL dataset (including NAs) for shaded region calculation
      case_data_full <- case_data %>%
-          group_by(country) %>%
+          group_by(iso_code) %>%
           mutate(
                # Handle NAs properly by treating them as a distinct state (neither 0 nor 1)
                cases_binary_clean = ifelse(is.na(cases_binary), -1, cases_binary),
@@ -107,8 +106,13 @@ plot_cases_binary <- function(PATHS) {
      # Filter only periods where cases_binary == 1 from the FULL dataset
      shaded_data <- case_data_full %>%
           filter(cases_binary == 1 & !is.na(cases_binary)) %>%
-          group_by(country, group) %>%
-          summarize(date_start = min(date_start), date_stop = max(date_stop), .groups = 'drop')
+          group_by(iso_code, group) %>%
+          summarize(date_start = min(date), date_stop = max(date), .groups = 'drop') %>%
+          mutate(
+               # Add 3.5 days to start and end for weekly data visualization
+               date_start = date_start - 3.5,
+               date_stop = date_stop + 3.5
+          )
 
      # Define colors for cases and shaded regions
      color_cases <- "#152F45"  # Navy Blue for bars (cases)
@@ -116,8 +120,8 @@ plot_cases_binary <- function(PATHS) {
 
      # Define date limits for x-axis based on actual case data availability
      # Use only periods with case data (not the full climate dataset range)
-     date_min <- min(case_data_for_plotting$date_start, na.rm = TRUE)
-     date_max <- max(case_data_for_plotting$date_start, na.rm = TRUE)
+     date_min <- min(case_data_for_plotting$date, na.rm = TRUE)
+     date_max <- max(case_data_for_plotting$date, na.rm = TRUE)
 
      # Calculate appropriate date breaks to have maximum 30 labels
      date_range_months <- as.numeric(difftime(date_max, date_min, units = "days")) / 30.44
@@ -127,6 +131,14 @@ plot_cases_binary <- function(PATHS) {
 
      message(sprintf("Plotting date range: %s to %s", date_min, date_max))
      message(sprintf("Using date breaks: %s (approximately %d labels)", date_break_string, target_breaks))
+     message(sprintf("Shaded regions created: %d environmentally suitable periods", nrow(shaded_data)))
+
+     # Check if epidemic peaks data was used for cases_binary creation
+     if (any(grepl("epidemic", names(case_data), ignore.case = TRUE))) {
+          message("Environmental suitability based on epidemic peak analysis from est_epidemic_peaks()")
+     } else {
+          message("Environmental suitability based on case threshold method")
+     }
 
      # Create the plot using case_data
      p <- ggplot2::ggplot() +
@@ -138,10 +150,10 @@ plot_cases_binary <- function(PATHS) {
 
           # Bar plot for cases (use filtered data that excludes NAs for visual clarity)
           ggplot2::geom_bar(data = case_data_for_plotting,
-                            ggplot2::aes(x = date_start, y = cases), stat = "identity", fill = color_cases, color = color_cases) +
+                            ggplot2::aes(x = date, y = cases), stat = "identity", fill = color_cases, color = color_cases) +
 
           # Facet wrap by country with free y-axis scales
-          ggplot2::facet_wrap(~ country, ncol = 2, scales = "free_y") +
+          ggplot2::facet_wrap(~ iso_code, ncol = 2, scales = "free_y") +
 
           # Labels and axis formatting
           ggplot2::labs(x = NULL, y = "Number of Cases") +

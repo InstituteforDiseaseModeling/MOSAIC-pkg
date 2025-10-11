@@ -43,7 +43,7 @@ A list with priors_default-compatible structure containing:
 \item prop_V1_initial: Beta distribution parameters for V1/N by location
 \item prop_V2_initial: Beta distribution parameters for V2/N by location
 }
-Each parameter contains $parameters$location$\link{ISO_CODE} with shape1, shape2, and metadata
+Each parameter contains $parameters$location$ISO_CODE with shape1, shape2, and metadata
 }
 }
 }

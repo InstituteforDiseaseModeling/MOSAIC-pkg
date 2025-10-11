@@ -20,6 +20,8 @@
 
 plot_climate_data <- function(PATHS, country_iso_code) {
 
+     require(ggplot2)
+
      # Define the path to the weekly climate data file for the given country
      climate_file <- file.path(PATHS$DATA_CLIMATE, glue::glue("climate_data_{country_iso_code}_weekly.parquet"))
 

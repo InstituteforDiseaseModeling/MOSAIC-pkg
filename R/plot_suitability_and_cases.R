@@ -10,13 +10,13 @@
 #'
 #' @return A combined plot showing both cholera case bars and smoothed suitability predictions
 #'   for the specified country, filtered to years >= 2021.
-#'   
+#'
 #' @details The function merges data from two files created by est_suitability():
 #'   \itemize{
 #'     \item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
 #'     \item data_psi_suitability.csv - Contains case counts and outbreak indicators
 #'   }
-#'   
+#'
 #' @export
 
 plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
@@ -27,57 +27,62 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      requireNamespace('glue')
 
      # Load prediction data with smoothed predictions (generated from est_suitability function)
-     pred_weekly_file <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_week.csv")
-     data_main_file <- file.path(PATHS$MODEL_INPUT, "data_psi_suitability.csv")
-     
-     if (!file.exists(pred_weekly_file)) {
-          stop(glue::glue("Prediction file not found: {pred_weekly_file}. Please run est_suitability(PATHS) first."))
+     pred_daily_file <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
+     data_main_file <- file.path(PATHS$DATA_CHOLERA_WEEKLY, 'cholera_country_weekly_suitability_data.csv')
+
+
+     if (!file.exists(pred_daily_file)) {
+          stop(glue::glue("Prediction file not found: {pred_daily_file}. Please run est_suitability(PATHS) first."))
      }
-     
+
      if (!file.exists(data_main_file)) {
           stop(glue::glue("Main data file not found: {data_main_file}. Please run est_suitability(PATHS) first."))
      }
-     
+
      # Load prediction data with smoothed values
-     d_pred <- read.csv(pred_weekly_file, stringsAsFactors = FALSE)
-     
+     d_pred <- read.csv(pred_daily_file, stringsAsFactors = FALSE)
+     d_pred$date <- as.Date(d_pred$date)
+     d_pred$pred <- as.numeric(d_pred$pred)
+     d_pred$pred_smooth <- as.numeric(d_pred$pred_smooth)
+
      # Load main data file to get additional columns (country, cases_binary, year, etc.)
      d_main <- read.csv(data_main_file, stringsAsFactors = FALSE)
-     
+
      # Merge to get all needed columns
      # First, create matching keys
-     d_pred$date_start <- as.Date(d_pred$date_start)
-     d_main$date_start <- as.Date(d_main$date_start)
-     
+
+     d_main$date <- as.Date(d_main$date)
+
+
      # Check what columns are available in the main data file
-     required_cols <- c("iso_code", "week", "date_start", "cases_binary", "year")
+     required_cols <- c("iso_code", "week", "date", "cases_binary", "year")
      optional_cols <- c("country", "cases_weekly", "cases", "weekly_cases", "cholera_cases")
-     
+
      available_cols <- colnames(d_main)
      cols_to_merge <- intersect(c(required_cols, optional_cols), available_cols)
      missing_required <- setdiff(required_cols, available_cols)
-     
+
      if (length(missing_required) > 0) {
           stop(glue::glue("Required columns missing from main data file: {paste(missing_required, collapse=', ')}"))
      }
-     
+
      # Merge on iso_code, week, and date_start for exact matches
-     d_all <- merge(d_pred, 
-                    d_main[cols_to_merge], 
-                    by = c("iso_code", "week", "date_start"), 
+     d_all <- merge(d_pred,
+                    d_main[cols_to_merge],
+                    by = c("iso_code", "date"),
                     all.x = TRUE)
-     
+
      # For prediction periods that don't have main data, fill in missing columns
      # Extract year from date_start if missing
      d_all$year[is.na(d_all$year)] <- as.numeric(format(d_all$date_start[is.na(d_all$year)], "%Y"))
-     
+
      # Set cases_binary to 0 for prediction-only periods
      d_all$cases_binary[is.na(d_all$cases_binary)] <- 0
-     
+
      # Handle case count columns (different datasets may use different column names)
      case_column_options <- c("cases", "cases_weekly", "weekly_cases", "cholera_cases")
      case_column <- NULL
-     
+
      # Find the first available case column
      for (col in case_column_options) {
           if (col %in% colnames(d_all)) {
@@ -85,29 +90,28 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
                break
           }
      }
-     
+
      # Ensure we have a cases column for plotting
      if (!is.null(case_column)) {
           # Use the existing column and clean it up
           d_all$cases <- d_all[[case_column]]
+          # Convert to numeric, handling character "NA" or other non-numeric values
+          d_all$cases <- as.numeric(as.character(d_all$cases))
           d_all$cases[is.na(d_all$cases)] <- 0
      } else {
           # Create a cases column with zeros if none found
           message("Warning: No case count column found. Creating cases column with zeros.")
           d_all$cases <- 0
      }
-     
-     # Ensure cases_weekly exists for backwards compatibility
-     if (!"cases_weekly" %in% colnames(d_all)) {
-          d_all$cases_weekly <- d_all$cases
-     }
-     
+
+
+
      # Handle country column (may not exist in all datasets)
      if ("country" %in% colnames(d_all)) {
           # Fill in country names for missing entries using existing data
           country_lookup <- d_all[!is.na(d_all$country), c("iso_code", "country")]
           country_lookup <- country_lookup[!duplicated(country_lookup$iso_code), ]
-          
+
           for (iso in unique(d_all$iso_code[is.na(d_all$country)])) {
                if (iso %in% country_lookup$iso_code) {
                     d_all$country[d_all$iso_code == iso & is.na(d_all$country)] <- country_lookup$country[country_lookup$iso_code == iso]
@@ -129,29 +133,32 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
      color_actual <- "black"    # Black for actual predictions
 
      # Convert date_stop to Date format (date_start already converted during merge)
-     d_all$date_stop <- as.Date(d_all$date_stop)
+     d_all$date <- as.Date(d_all$date)
 
      # Filter data for the specific country and time range (>= 2021)
-     year_start <- 2021
-     plot_data <- d_all[d_all$iso_code == plot_iso_code & d_all$year >= year_start, ]
+     #year_start <- 2021
+     plot_data <- d_all[d_all$iso_code == plot_iso_code, ]
      plot_country_name <- convert_iso_to_country(plot_iso_code)
-     date_present <- max(plot_data$date_stop[plot_data$date_stop < Sys.Date()], na.rm = TRUE)
+     date_present <- max(plot_data$date[plot_data$date < Sys.Date()], na.rm = TRUE)
 
      # Extract the country name and date limits
      country_name <- unique(plot_data$country_name)
-     date_min <- min(plot_data$date_start, na.rm = TRUE)
-     date_max <- max(plot_data$date_start, na.rm = TRUE)
+     date_min <- min(d_pred$date, na.rm = TRUE)
+     date_max <- max(d_pred$date, na.rm = TRUE)
 
      # Create the subset for shaded regions where cases_binary == 1
      shaded_data <- plot_data[plot_data$cases_binary == 1 & !is.na(plot_data$cases_binary), ]
+     shaded_data$pred <- as.numeric(shaded_data$pred)
+     shaded_data$pred_smooth <- as.numeric(shaded_data$pred_smooth)
 
      # Bar plot for cholera cases with shaded regions
-     bar_plot <- ggplot2::ggplot() +
+     bar_plot <-
+          ggplot2::ggplot() +
           ggplot2::geom_rect(data = shaded_data,
-                             ggplot2::aes(xmin = date_start, xmax = date_stop, ymin = 0, ymax = Inf),
+                             ggplot2::aes(xmin = date_min, xmax = date_max, ymin = 0, ymax = Inf),
                              fill = color_shaded, color = color_shaded) +  # Shaded regions with transparency
           ggplot2::geom_bar(data = plot_data,
-                            ggplot2::aes(x = date_start, y = cases), stat = "identity", fill = color_cases, color = color_cases) +
+                            ggplot2::aes(x = date, y = cases), stat = "identity", fill = color_cases, color = color_cases) +
           ggplot2::labs(x = NULL, y = "Number of Cases") +
           ggplot2::scale_y_continuous(expand = c(0, 0)) +
           ggplot2::scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", expand = c(0, 0),
@@ -167,22 +174,23 @@ plot_suitability_and_cases <- function(PATHS, plot_iso_code) {
           )
 
      # Line plot for predicted suitability with actual data
-     line_plot <- ggplot2::ggplot() +
+     line_plot <-
+          ggplot2::ggplot() +
           ggplot2::geom_rect(data = shaded_data,
-                             ggplot2::aes(xmin = date_start, xmax = date_stop, ymin = 0, ymax = Inf),
+                             ggplot2::aes(xmin = date_min, xmax = date_max, ymin = 0, ymax = Inf),
                              fill = color_shaded, color = color_shaded) +  # Shaded regions
 
           ggplot2::geom_line(data = plot_data,
-                             ggplot2::aes(x = date_start, y = pred), linewidth = 0.8, color = color_pred, alpha = 0.3) +
+                             ggplot2::aes(x = date, y = pred), linewidth = 0.8, color = color_pred, alpha = 0.3) +
 
           ggplot2::geom_line(data = plot_data,
-                             ggplot2::aes(x = date_start, y = pred_smooth), linewidth = 1.2, color = color_pred) +
+                             ggplot2::aes(x = date, y = pred_smooth), linewidth = 1.2, color = color_pred) +
 
           ggplot2::geom_line(data = plot_data[plot_data$date_stop <= date_present, ],
-                             ggplot2::aes(x = date_start, y = pred), linewidth = 0.8, color = color_actual, alpha=0.3) +
+                             ggplot2::aes(x = date, y = pred), linewidth = 0.8, color = color_actual, alpha=0.3) +
 
-          ggplot2::geom_line(data = plot_data[plot_data$date_stop <= date_present, ],
-                             ggplot2::aes(x = date_start, y = pred_smooth), linewidth = 1.2, color = color_actual) +
+          #ggplot2::geom_line(data = plot_data[plot_data$date_stop <= date_present, ],
+          #                   ggplot2::aes(x = date_start, y = pred_smooth), linewidth = 1.2, color = color_actual) +
 
           ggplot2::geom_vline(xintercept = as.Date(date_present) - 7, linetype = "dashed", color = "black", linewidth = 0.5) +
           ggplot2::annotate("text", x = as.Date(date_present) - 7, y = Inf, label = as.character(date_present),

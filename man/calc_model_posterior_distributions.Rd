@@ -2,75 +2,62 @@
 % Please edit documentation in R/calc_model_posterior_distributions.R
 \name{calc_model_posterior_distributions}
 \alias{calc_model_posterior_distributions}
-\title{Calculate Model Posterior Parameter Distributions}
+\title{Calculate Model Posterior Distributions from Quantiles}
 \usage{
 calc_model_posterior_distributions(
-  results,
-  col_ll,
-  col_params,
-  probs = c(0.025, 0.25, 0.5, 0.75, 0.975)
+  quantiles_file = "./results/posterior_quantiles.csv",
+  priors_file,
+  output_dir = "./results",
+  verbose = TRUE
 )
 }
 \arguments{
-\item{results}{Data frame containing simulation results}
+\item{quantiles_file}{Path to the posterior_quantiles.csv file (default: "./results/posterior_quantiles.csv")}
 
-\item{col_ll}{Column index containing log-likelihood values}
+\item{priors_file}{Path to the priors.json file to use as template}
 
-\item{col_params}{Vector of parameter column indices to analyze}
+\item{output_dir}{Directory to save posteriors.json (default: "./results")}
 
-\item{probs}{Quantile probabilities (default: c(0.025, 0.25, 0.5, 0.75, 0.975))}
+\item{verbose}{Logical; print progress messages (default: TRUE)}
 }
 \value{
-List with two components:
-\itemize{
-\item \code{summary_table}: Data frame with posterior statistics for each parameter
-\item \code{posterior_weights}: Vector of importance weights for reuse
+List containing:
+\describe{
+\item{posteriors}{The complete posteriors object}
+\item{n_parameters_updated}{Number of parameters successfully updated}
+\item{n_parameters_failed}{Number of parameters that failed to fit}
+\item{output_file}{Path to the created posteriors.json file}
 }
 }
 \description{
-Calculates posterior parameter distributions from calibration results using
-importance sampling. Transforms log-likelihood values to importance weights
-and computes Bayesian posterior summaries for specified parameters.
+Fits theoretical distributions to posterior quantiles and creates a posteriors.json
+file that mirrors the structure of the priors.json file with updated parameter values.
 }
 \details{
-This function implements unbiased importance sampling by using ALL samples
-(no AIC cutoff) to avoid posterior distribution bias. The importance weights
-are calculated using Akaike weights: w_i = exp(-0.5 * delta_i) where
-delta_i = -2 * (loglik_i - max(loglik)).
-
-The summary table includes:
+The function:
+\enumerate{
+\item Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles
+\item FILTERS for type == "posterior" rows only (NEW)
+\item Loads the priors.json as a template structure
+\item For each posterior parameter in the quantiles table:
 \itemize{
-\item \code{parameter}: Parameter name
-\item \code{mean}: Posterior mean
-\item \code{sd}: Posterior standard deviation
-\item \code{mode}: Posterior mode (via weighted kernel density)
-\item \code{effective_n}: Effective sample size
-\item Quantile columns for specified probability levels
+\item Extracts the 2.5\%, 50\%, and 97.5\% quantiles
+\item Calls the appropriate fit_*_from_ci function based on distribution type
+\item Updates the corresponding entry in the posteriors structure
+}
+\item Preserves all non-estimated parameters from the priors unchanged
+\item Properly handles location-specific parameters for single or multiple countries
+\item Writes posteriors.json to the output directory
 }
 }
 \examples{
 \dontrun{
-# Basic usage
-results <- read.csv("calibration_results.csv")
-posterior <- calc_model_posterior_distributions(
-  results = results,
-  col_ll = 3,           # likelihood column
-  col_params = 4:8,     # parameter columns
-  probs = c(0.025, 0.5, 0.975)
+# Standard usage after running calc_model_posterior_quantiles
+posterior_dists <- calc_model_posterior_distributions(
+  quantiles_file = "./results/posterior_quantiles.csv",
+  priors_file = "./config/priors.json",
+  output_dir = "./results"
 )
-
-# View summary
-print(posterior$summary_table)
-
-# Access weights for plotting
-weights <- posterior$posterior_weights
 }
 
 }
-\seealso{
-\code{\link[=calc_model_akaike_weights]{calc_model_akaike_weights()}}, \code{\link[=plot_model_posteriors]{plot_model_posteriors()}}
-
-Other posterior-analysis: 
-\code{\link{plot_model_posteriors}()}
-}
-\concept{posterior-analysis}

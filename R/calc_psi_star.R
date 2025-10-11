@@ -1,121 +1,128 @@
-#' Calibrate Suitability on the Logit Scale (returns vector; optional causal EWMA)
+#' Calibrate Daily Suitability on the Logit Scale
+#' (vector; optional causal EWMA + time offset + NA filling)
 #'
 #' @description
-#' Transforms a weekly suitability series \eqn{\psi_t \in [0,1]} with a
-#' **logit-scale affine calibration** followed by optional **causal exponential
-#' smoothing (EWMA)**. The result is a single calibrated series \eqn{\psi_t^{\star}}
-#' of the same length as the input.
+#' Transforms a **daily** suitability series \eqn{\psi_t \in [0,1]} with a
+#' **logit-scale affine calibration**, optional **causal EWMA smoothing**, and an
+#' optional **time offset** \eqn{k}. Any missing values introduced by the shift
+#' (or pre-existing) are filled using either **LOCF** (default) or **linear interpolation**.
 #'
 #' @details
-#' Let \eqn{\tilde\psi_t=\min\{\max(\psi_t,\varepsilon),\,1-\varepsilon\}} (clipping for stability),
-#' \eqn{\mathrm{logit}(x)=\log\{x/(1-x)\}}, and \eqn{\sigma(u)=1/(1+e^{-u})}.
+#' **Offset (index shift, in days):** \eqn{\psi^{(k)}_t = \psi_{t-k}}.
+#' Positive \eqn{k} shifts the series forward/right (delay); negative \eqn{k} shifts backward/left.
+#' Non-integer \eqn{k} is rounded to the nearest integer.
 #'
 #' **Calibration (odds-space power & scale):**
-#' \deqn{\psi_t^{\star}=\sigma\!\big(a\cdot \mathrm{logit}(\tilde\psi_t)+b\big)
-#' \quad\Longleftrightarrow\quad \text{odds}^{\star}_t = e^{b}\,(\text{odds}_t)^{a},}
-#' with \eqn{\text{odds}_t=\tilde\psi_t/(1-\tilde\psi_t)}.
+#' \deqn{\psi_t^{\star}=\sigma\!\big(a\cdot \mathrm{logit}(\tilde\psi_t)+b\big),\quad
+#' \tilde\psi_t=\min\{\max(\psi^{(k)}_t,\varepsilon),\,1-\varepsilon\}}
+#' with \eqn{\text{odds}^\star_t = e^{b}\,(\text{odds}_t)^{a}}, \;
+#' \eqn{\text{odds}_t=\tilde\psi_t/(1-\tilde\psi_t)}.
 #'
 #' **Optional causal smoothing (no look-ahead):**
-#' \deqn{\tilde\psi^{\star}_t = z\,\psi^{\star}_t + (1-z)\,\tilde\psi^{\star}_{t-1},
-#' \quad z\in(0,1],\; \tilde\psi^{\star}_1=\psi^{\star}_1.}
+#' \deqn{\tilde\psi^{\star}_t = z\,\psi^{\star}_t + (1-z)\,\tilde\psi^{\star}_{t-1},\quad
+#' z\in(0,1],\ \tilde\psi^{\star}_1=\psi^{\star}_1.}
 #'
-#' @param psi Numeric vector in \eqn{[0,1]}; weekly suitability \eqn{\psi_t}.
-#' @param a   Numeric scalar (>0). \strong{Shape/gain} on the logit scale.
-#'            \eqn{a>1} sharpens peaks; \eqn{a<1} flattens peaks. Default \code{1}.
-#' @param b   Numeric scalar. \strong{Scale/offset} on the logit scale (baseline up/down).
-#'            Default \code{0}.
-#' @param z   Numeric scalar in \eqn{(0,1]} controlling \strong{causal EWMA smoothing}.
-#'            \code{1} = no smoothing (just calibrated). Default \code{1}.
-#' @param eps Small positive numeric used to clip \code{psi} away from \code{0} and \code{1}
-#'            before applying \code{qlogis}. Default \code{1e-6}.
-#'
-#' @return Numeric vector \eqn{\tilde\psi^{\star}_t} of the same length as \code{psi}
-#'         (calibrated, and smoothed if \code{z<1}).
-#'
-#' @section Interpretation:
+#' **NA filling (after calibration, before smoothing):**
+#' Choose via \code{fill_method}:
 #' \itemize{
-#'   \item \strong{a} — shape/gain (peaks sharper for \eqn{a>1}, flatter for \eqn{a<1}).
-#'   \item \strong{b} — scale/offset (shifts baseline up/down on logit scale).
-#'   \item \strong{z} — smoothing weight; smaller values increase causal damping.
+#'   \item \code{"locf"} — forward fill (LOCF) then backward pass for leading gaps.
+#'   \item \code{"linear"} — linear interpolation for interior gaps with constant edge extension.
 #' }
+#' If all values are NA after shifting, the function falls back to a constant baseline \eqn{\sigma(b)}.
 #'
-#' @references
-#' Logit / logistic function: \url{https://en.wikipedia.org/wiki/Logit} \\
-#' Logistic (sigmoid): \url{https://en.wikipedia.org/wiki/Logistic_function} \\
-#' Odds and log-odds: \url{https://en.wikipedia.org/wiki/Odds} \\
-#' Platt scaling (logistic calibration): \url{https://en.wikipedia.org/wiki/Platt_scaling} \\
-#' Exponential smoothing / EWMA: \url{https://en.wikipedia.org/wiki/Exponential_smoothing}
+#' @param psi Numeric vector in \eqn{[0,1]} (daily suitability \eqn{\psi_t}).
+#' @param a   Numeric (>0). Shape/gain on the logit scale (\eqn{a>1} sharpens; \eqn{a<1} flattens).
+#' @param b   Numeric. Scale/offset on the logit scale (baseline up/down).
+#' @param z   Numeric in \eqn{(0,1]} controlling causal EWMA smoothing; \code{1} = no smoothing.
+#' @param k   Numeric or integer; time offset in **days**. Positive = forward/right; negative = backward/left.
+#'            Non-integers are rounded to nearest integer.
+#' @param eps Small positive number to clip \code{psi} away from \{0,1\} before \code{qlogis}.
+#' @param fill_method Character; one of \code{c("locf","linear")} controlling how NA gaps are filled.
 #'
-#' @seealso \code{\link[stats]{qlogis}}, \code{\link[stats]{plogis}}
+#' @return Numeric vector \eqn{\tilde\psi^{\star}_t} (same length as \code{psi}):
+#'         calibrated, offset, NA-filled, and smoothed if \code{z<1}.
 #'
-#' @examples
-#' set.seed(1)
-#' t  <- 1:100
-#' psi <- plogis(-2 + 2.5 * exp(-0.5*((t-60)/6)^2)) + rnorm(100, sd = 0.01)
-#' psi <- pmin(pmax(psi, 0), 1)
-#' psi_star <- calc_psi_star(psi, a = 1.8, b = -0.4, z = 0.85)
-#'
-#' if (requireNamespace("ggplot2", quietly = TRUE)) {
-#'   library(ggplot2)
-#'   df <- data.frame(week = t, original = psi, psi_star = psi_star)
-#'   ggplot(df, aes(week)) +
-#'     geom_line(aes(y = original, colour = "Original ψ"), linewidth = 0.7) +
-#'     geom_line(aes(y = psi_star, colour = "Calibrated ψ* (EWMA if z<1)"), linewidth = 0.9) +
-#'     scale_colour_manual(values = c("grey40","firebrick")) +
-#'     labs(x = "Week", y = "Suitability",
-#'          title = "Logit calibration with optional causal EWMA",
-#'          subtitle = "a: shape/gain | b: scale/offset | z: smoothing weight") +
-#'     theme_bw() + theme(legend.title = element_blank())
-#' }
+#' @seealso \code{\link[stats]{qlogis}}, \code{\link[stats]{plogis}}, \code{\link[stats]{approx}}
 #'
 #' @export
-#'
+calc_psi_star <- function(psi, a = 1, b = 0, z = 1, k = 0, eps = 1e-6,
+                          fill_method = c("locf","linear")) {
 
-calc_psi_star <- function(psi, a = 1, b = 0, z = 1, eps = 1e-6) {
+     fill_method <- match.arg(fill_method)
 
-     # Checks
+     # ---- Checks ----
      if (!is.numeric(psi)) stop("`psi` must be numeric.")
      if (!is.numeric(a) || length(a) != 1 || a <= 0) stop("`a` must be a positive scalar.")
      if (!is.numeric(b) || length(b) != 1) stop("`b` must be a numeric scalar.")
-     if (!is.numeric(z) || length(z) != 1 || z <= 0 || z > 1) {
-          stop("`z` must be in (0, 1]. Use z = 1 for no smoothing.")
-     }
+     if (!is.numeric(z) || length(z) != 1 || z <= 0 || z > 1) stop("`z` must be in (0,1].")
+     if (!is.numeric(k) || length(k) != 1 || is.na(k)) stop("`k` must be a single numeric or integer.")
      if (!is.numeric(eps) || eps <= 0) stop("`eps` must be a small positive number.")
 
-     # Check for values outside [0,1] and warn if found
+     n <- length(psi)
+     if (n == 0L) return(psi)
+
+     # Round k to nearest integer
+     k_int <- as.integer(round(k))
+     if (!isTRUE(all.equal(k, k_int))) {
+          warning(sprintf("`k` (%.3f) is not an integer; rounding to %d.", k, k_int))
+     }
+     if (abs(k_int) >= n) {
+          warning("abs(k) >= length(psi); fill will reduce to a constant baseline at edges.")
+     }
+
+     # Clean psi
+     if (any(!is.finite(psi), na.rm = TRUE)) {
+          warning("Non-finite values detected in `psi` (Inf/-Inf). Treating as NA.")
+          psi[!is.finite(psi)] <- NA_real_
+     }
      if (any(psi < 0 | psi > 1, na.rm = TRUE)) {
           warning("Some psi values are outside [0,1] and will be clipped.")
      }
 
-     # Handle NA values
-     if (any(is.na(psi))) {
-          warning("Missing values (NA) detected in psi. Results will contain NAs at corresponding positions.")
+     # ---- (0) Shift by k days: psi^(k)_t = psi_{t-k} (pad with NA) --------------
+     if (k_int == 0L) {
+          psi_shift <- psi
+     } else if (k_int > 0L) {              # forward/right (delay)
+          psi_shift <- rep(NA_real_, n)
+          if (k_int < n) psi_shift[(k_int + 1L):n] <- psi[1L:(n - k_int)]
+     } else {                               # backward/left (advance)
+          kk <- -k_int
+          psi_shift <- rep(NA_real_, n)
+          if (kk < n) psi_shift[1L:(n - kk)] <- psi[(1L + kk):n]
      }
 
-     # Clip psi values to be in bounds
-     psi_clipped <- pmin(pmax(psi, eps), 1 - eps)
+     # ---- (1) Clip for stable logit --------------------------------------------
+     psi_clipped <- pmin(pmax(psi_shift, eps), 1 - eps)  # NAs stay NA
 
-     # Apply shape and scale adjustments in logit space
+     # ---- (2) Logit affine transform then logistic back-transform --------------
      psi_star <- stats::plogis(a * stats::qlogis(psi_clipped) + b)
 
-     # Smooth psi_star using causal EWMA smoothing
+     # ---- (3) Fill NA's: "locf" or "linear" ------------------------------------
+     if (all(is.na(psi_star))) {
+          # total gap: fall back to baseline σ(b)
+          psi_star[] <- stats::plogis(b)
+     } else if (fill_method == "linear") {
+          idx <- which(!is.na(psi_star))
+          psi_star <- stats::approx(x = idx, y = psi_star[idx],
+                                    xout = seq_len(n),
+                                    method = "linear", rule = 2)$y
+     } else { # "locf": forward fill then backward pass
+          # forward pass
+          for (i in 2L:n) if (is.na(psi_star[i])) psi_star[i] <- psi_star[i - 1]
+          # backward pass for any leading NAs
+          for (i in (n - 1L):1L) if (is.na(psi_star[i])) psi_star[i] <- psi_star[i + 1L]
+          # if still all NA (paranoid fallback)
+          if (all(is.na(psi_star))) psi_star[] <- stats::plogis(b)
+     }
+
+     # ---- (4) Causal EWMA smoothing --------------------------------------------
      if (z >= 1) {
           return(psi_star)
      } else {
-          n <- length(psi_star)
-          if (n <= 1) {
-               return(psi_star)
+          out <- psi_star
+          if (n >= 2L) {
+               for (i in 2L:n) out[i] <- z * psi_star[i] + (1 - z) * out[i - 1]
           }
-
-          # Efficient EWMA using stats::filter
-          out <- numeric(n)
-          out[1] <- psi_star[1]
-
-          # Simple iterative EWMA (still most efficient for this case)
-          for (t in 2:n) {
-               out[t] <- z * psi_star[t] + (1 - z) * out[t - 1]
-          }
-
           return(out)
      }
 }

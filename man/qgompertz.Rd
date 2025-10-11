@@ -7,7 +7,7 @@
 qgompertz(p, b, eta, lower.tail = TRUE, log.p = FALSE)
 }
 \arguments{
-\item{p}{Numeric vector. Probabilities in \link{0,1}.}
+\item{p}{Numeric vector. Probabilities in [0,1].}
 
 \item{b}{Numeric. Shape parameter (b > 0).}
 
