@@ -5,12 +5,16 @@ channels:
 dependencies:
   - python=3.12
   - pip
-  - numpy
-  - pandas
-  - scipy
-  - llvmlite
-  - keras
-  - tensorflow
+  - numpy>=2.0.0,<=2.2
+  - pandas>=2.3.0
+  - scipy>=1.16.0
+  - numba>=0.60.0  # Required by laser-core, compatible with numpy <=2.2
+  - llvmlite>=0.44.0,<0.45  # Required by numba, must be compatible
+  - tensorflow>=2.18.0,<3.0
+  # Additional dependencies for keras3 and LSTM functionality
+  - h5py>=3.14.0
+  - packaging>=25.0
   - pip:
+    - keras==3.11.3
     - laser-core==0.4.0
-    - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.9.0/laser_cholera-0.9.0-py3-none-any.whl
+    - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.9.1/laser_cholera-0.9.1-py3-none-any.whl

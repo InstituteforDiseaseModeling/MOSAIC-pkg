@@ -21,547 +21,1557 @@
 #' }
 #'
 #' @importFrom dplyr mutate arrange filter bind_rows
-#' @importFrom readr read_csv write_csv
-#' @importFrom lubridate as_date
+#' @importFrom utils read.csv write.csv
 #'
 est_epidemic_peaks <- function(PATHS) {
-  
-  # Load cholera surveillance daily data
-  data_file <- file.path(PATHS$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv")
-  
-  if (!file.exists(data_file)) {
-    stop(paste("Cholera surveillance data not found at:", data_file))
-  }
-  
-  cholera_data <- read_csv(data_file, show_col_types = FALSE)
-  
-  # Get unique locations (handle both uppercase and lowercase)
-  locations <- unique(cholera_data$iso_code)
-  locations <- locations[!is.na(locations)]
-  
-  all_peaks <- list()
-  
-  for (loc in locations) {
-      
-      # Filter data for this location
-      loc_data <- cholera_data %>%
-        filter(iso_code == loc) %>%
-        arrange(date) %>%
-        mutate(
-          date = as_date(date),
-          cases = ifelse(is.na(cases), 0, cases)
-        )
-      
-      # Skip if insufficient data
-      if (nrow(loc_data) < 30) {
-        message(paste("Skipping", loc, "- insufficient data"))
-        next
-      }
-      
-      # Simple running mean smoothing
-      tryCatch({
-        
-        # Apply running mean with window of 21 days (3 weeks) for better smoothing
-        window_size <- 21
-        n <- nrow(loc_data)
-        
-        # Initialize smoothed values
-        loc_data$smoothed <- NA
-        
-        # Calculate running mean
-        for (i in 1:n) {
-          # Define window boundaries
-          start_idx <- max(1, i - floor(window_size/2))
-          end_idx <- min(n, i + floor(window_size/2))
-          
-          # Calculate mean for window
-          loc_data$smoothed[i] <- mean(loc_data$cases[start_idx:end_idx], na.rm = TRUE)
-        }
-        
-        # Simple peak detection: find local maxima
-        # A peak is where the smoothed value is higher than both neighbors
-        # Use wider window for comparison to avoid noise
-        n <- nrow(loc_data)
-        is_peak <- rep(FALSE, n)
-        
-        # Check interior points with wider window (compare to points 7 days before/after)
-        window_compare <- 7
-        for (i in (window_compare+1):(n-window_compare)) {
-          # Check if current point is higher than or equal to all points in surrounding windows
-          # Use >= to handle plateaus where multiple consecutive days have the same value
-          left_window <- loc_data$smoothed[(i-window_compare):(i-1)]
-          right_window <- loc_data$smoothed[(i+1):(i+window_compare)]
-          
-          # For plateaus, we want to detect the center point as the peak
-          # So we check if it's >= to left and > to right (to avoid multiple detections)
-          if (loc_data$smoothed[i] >= max(left_window, na.rm = TRUE) && 
-              loc_data$smoothed[i] > max(right_window, na.rm = TRUE)) {
-            is_peak[i] <- TRUE
+
+     # Load cholera surveillance daily data
+     data_file <- file.path(PATHS$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv")
+
+     if (!file.exists(data_file)) {
+          stop(paste("Cholera surveillance data not found at:", data_file))
+     }
+
+     cholera_data <- read.csv(data_file, stringsAsFactors = FALSE)
+
+     # Get unique locations (handle both uppercase and lowercase)
+     locations <- unique(cholera_data$iso_code)
+     locations <- locations[!is.na(locations)]
+
+     all_peaks <- list()
+
+     for (loc in locations) {
+
+          # Filter data for this location
+          loc_data <- cholera_data %>%
+               dplyr::filter(iso_code == loc) %>%
+               dplyr::arrange(date) %>%
+               dplyr::mutate(
+                    date = as.Date(date),
+                    cases = ifelse(is.na(cases), 0, cases)
+               )
+
+          # Skip if insufficient data
+          if (nrow(loc_data) < 30) {
+               message(paste("Skipping", loc, "- insufficient data"))
+               next
           }
-        }
-        
-        # Set minimum thresholds
-        min_peak_height <- 10  # Minimum smoothed cases to be considered a peak
-        
-        # Filter peaks by absolute threshold first
-        is_peak[loc_data$smoothed < min_peak_height] <- FALSE
-        
-        # Filter peaks by prominence
-        # Special handling for known problematic cases
-        if (loc == "NER") {
-          # Niger has very gradual peaks, use lower threshold
-          min_prominence_ratio <- 0.02
-          min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
-          min_prominence <- max(2, min_prominence)
-        } else if (loc == "CMR") {
-          # Cameroon also needs lower threshold for plateau-shaped peaks
-          min_prominence_ratio <- 0.05
-          min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
-          min_prominence <- max(3, min_prominence)
-        } else if (loc == "ETH") {
-          # Ethiopia has multiple significant outbreaks that need detection
-          min_prominence_ratio <- 0.07  # Back to original
-          min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
-          min_prominence <- max(4, min_prominence)
-        } else {
-          # Default: Back to 10% for standard sensitivity
-          min_prominence_ratio <- 0.10
-          min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
-          # Ensure minimum absolute prominence of 5 cases
-          min_prominence <- max(5, min_prominence)
-        }
-        
-        peak_indices <- which(is_peak)
-        prominent_peaks <- c()
-        
-        for (idx in peak_indices) {
-          # Find surrounding valleys (local minima) with a maximum search distance
-          max_search_distance <- 90  # Don't look more than 90 days away
-          
-          # For plateau detection, ignore tiny variations
-          plateau_threshold <- 0.01 * loc_data$smoothed[idx]  # 1% of peak height
-          
-          # Find left valley
-          left_valley <- idx - 1
-          left_limit <- max(1, idx - max_search_distance)
-          # Skip over plateau (values very close to peak)
-          while (left_valley > left_limit && 
-                 abs(loc_data$smoothed[left_valley] - loc_data$smoothed[idx]) < plateau_threshold) {
-            left_valley <- left_valley - 1
-          }
-          # Now find the actual valley
-          while (left_valley > left_limit && loc_data$smoothed[left_valley] > loc_data$smoothed[left_valley - 1]) {
-            left_valley <- left_valley - 1
-          }
-          # If we hit the limit, find minimum in search window
-          if (left_valley == left_limit && left_valley > 1) {
-            search_window <- loc_data$smoothed[left_limit:(idx-1)]
-            min_idx <- which.min(search_window)
-            left_valley <- left_limit + min_idx - 1
-          }
-          
-          # Find right valley
-          right_valley <- idx + 1
-          right_limit <- min(n, idx + max_search_distance)
-          # Skip over plateau (values very close to peak)
-          while (right_valley < right_limit && 
-                 abs(loc_data$smoothed[right_valley] - loc_data$smoothed[idx]) < plateau_threshold) {
-            right_valley <- right_valley + 1
-          }
-          # Now find the actual valley
-          while (right_valley < right_limit && loc_data$smoothed[right_valley] > loc_data$smoothed[right_valley + 1]) {
-            right_valley <- right_valley + 1
-          }
-          # If we hit the limit, find minimum in search window
-          if (right_valley == right_limit && right_valley < n) {
-            search_window <- loc_data$smoothed[(idx+1):right_limit]
-            min_idx <- which.min(search_window)
-            right_valley <- idx + min_idx
-          }
-          
-          # Calculate prominence
-          left_prom <- loc_data$smoothed[idx] - loc_data$smoothed[left_valley]
-          right_prom <- loc_data$smoothed[idx] - loc_data$smoothed[right_valley]
-          prominence <- min(left_prom, right_prom)
-          
-          if (prominence > min_prominence) {
-            prominent_peaks <- c(prominent_peaks, idx)
-          }
-        }
-        
-        # Remove peaks that are too close together (keep the highest)
-        if (length(prominent_peaks) > 1) {
-          min_peak_distance <- 90  # Minimum 90 days between peaks (3 months)
-          
-          # Sort peaks by height (descending)
-          peak_heights <- loc_data$smoothed[prominent_peaks]
-          peak_order <- order(peak_heights, decreasing = TRUE)
-          sorted_peaks <- prominent_peaks[peak_order]
-          
-          # Keep peaks that are far enough from already selected peaks
-          final_peaks <- c(sorted_peaks[1])  # Always keep highest peak
-          
-          for (i in 2:length(sorted_peaks)) {
-            current_peak <- sorted_peaks[i]
-            current_date <- loc_data$date[current_peak]
-            
-            # Check distance to all already selected peaks
-            too_close <- FALSE
-            for (selected_peak in final_peaks) {
-              selected_date <- loc_data$date[selected_peak]
-              if (abs(as.numeric(current_date - selected_date)) < min_peak_distance) {
-                too_close <- TRUE
-                break
-              }
-            }
-            
-            if (!too_close) {
-              final_peaks <- c(final_peaks, current_peak)
-            }
-          }
-          
-          prominent_peaks <- sort(final_peaks)  # Sort back by time
-        }
-        
-        # Create peak data frame
-        if (length(prominent_peaks) > 0) {
-          peaks_df <- data.frame(
-            location_code = loc,
-            peak_date = loc_data$date[prominent_peaks],
-            peak_magnitude = loc_data$smoothed[prominent_peaks],
-            observed_cases = loc_data$cases[prominent_peaks],
-            detection_method = "algorithm"
+
+          # Simple running mean smoothing
+          tryCatch({
+
+               # Apply running mean with window of 21 days (3 weeks) for better smoothing
+               window_size <- 28
+               n <- nrow(loc_data)
+
+               # Initialize smoothed values
+               loc_data$smoothed <- NA
+
+               # Calculate running mean
+               for (i in 1:n) {
+                    # Define window boundaries
+                    start_idx <- max(1, i - floor(window_size/2))
+                    end_idx <- min(n, i + floor(window_size/2))
+
+                    # Calculate mean for window
+                    loc_data$smoothed[i] <- mean(loc_data$cases[start_idx:end_idx], na.rm = TRUE)
+               }
+
+               # Simple peak detection: find local maxima
+               # A peak is where the smoothed value is higher than both neighbors
+               # Use wider window for comparison to avoid noise
+               n <- nrow(loc_data)
+               is_peak <- rep(FALSE, n)
+
+               # Check interior points with wider window (compare to points before/after)
+               # Adjust comparison window based on smoothing window size
+               # For 28-day smoothing, use 10-day comparison window (was 7 for 21-day)
+               window_compare <- 10
+               for (i in (window_compare+1):(n-window_compare)) {
+                    # Check if current point is higher than or equal to all points in surrounding windows
+                    # Use >= to handle plateaus where multiple consecutive days have the same value
+                    left_window <- loc_data$smoothed[(i-window_compare):(i-1)]
+                    right_window <- loc_data$smoothed[(i+1):(i+window_compare)]
+
+                    # For plateaus, we want to detect the center point as the peak
+                    # So we check if it's >= to left and > to right (to avoid multiple detections)
+                    if (loc_data$smoothed[i] >= max(left_window, na.rm = TRUE) &&
+                        loc_data$smoothed[i] > max(right_window, na.rm = TRUE)) {
+                         is_peak[i] <- TRUE
+                    }
+               }
+
+               # Set minimum thresholds
+               min_peak_height <- 10  # Minimum smoothed cases to be considered a peak
+
+               # Filter peaks by absolute threshold first
+               is_peak[loc_data$smoothed < min_peak_height] <- FALSE
+
+               # Filter peaks by prominence
+               # Special handling for known problematic cases
+               # With 28-day smoothing, reduce thresholds slightly to compensate for flattening
+               if (loc == "NER") {
+                    # Niger has very gradual peaks, use lower threshold
+                    min_prominence_ratio <- 0.015  # Reduced from 0.02
+                    min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
+                    min_prominence <- max(2, min_prominence)
+               } else if (loc == "CMR") {
+                    # Cameroon also needs lower threshold for plateau-shaped peaks
+                    min_prominence_ratio <- 0.04  # Reduced from 0.05
+                    min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
+                    min_prominence <- max(3, min_prominence)
+               } else if (loc == "ETH") {
+                    # Ethiopia has multiple significant outbreaks that need detection
+                    # Use lower prominence threshold to capture more potential peaks
+                    min_prominence_ratio <- 0.03  # Reduced to capture more peaks, let height-based sorting handle selection
+                    min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
+                    min_prominence <- max(3, min_prominence)
+               } else {
+                    # Default: Reduced from 10% to 8% for 28-day window
+                    min_prominence_ratio <- 0.08
+                    min_prominence <- min_prominence_ratio * max(loc_data$smoothed, na.rm = TRUE)
+                    # Ensure minimum absolute prominence of 5 cases
+                    min_prominence <- max(5, min_prominence)
+               }
+
+               peak_indices <- which(is_peak)
+               prominent_peaks <- c()
+
+               for (idx in peak_indices) {
+                    # Find surrounding valleys (local minima) with a maximum search distance
+                    max_search_distance <- 90  # Don't look more than 90 days away
+
+                    # For plateau detection, ignore tiny variations
+                    plateau_threshold <- 0.01 * loc_data$smoothed[idx]  # 1% of peak height
+
+                    # Find left valley
+                    left_valley <- idx - 1
+                    left_limit <- max(1, idx - max_search_distance)
+                    # Skip over plateau (values very close to peak)
+                    while (left_valley > left_limit &&
+                           abs(loc_data$smoothed[left_valley] - loc_data$smoothed[idx]) < plateau_threshold) {
+                         left_valley <- left_valley - 1
+                    }
+                    # Now find the actual valley
+                    while (left_valley > left_limit && loc_data$smoothed[left_valley] > loc_data$smoothed[left_valley - 1]) {
+                         left_valley <- left_valley - 1
+                    }
+                    # If we hit the limit, find minimum in search window
+                    if (left_valley == left_limit && left_valley > 1) {
+                         search_window <- loc_data$smoothed[left_limit:(idx-1)]
+                         min_idx <- which.min(search_window)
+                         left_valley <- left_limit + min_idx - 1
+                    }
+
+                    # Find right valley
+                    right_valley <- idx + 1
+                    right_limit <- min(n, idx + max_search_distance)
+                    # Skip over plateau (values very close to peak)
+                    while (right_valley < right_limit &&
+                           abs(loc_data$smoothed[right_valley] - loc_data$smoothed[idx]) < plateau_threshold) {
+                         right_valley <- right_valley + 1
+                    }
+                    # Now find the actual valley
+                    while (right_valley < right_limit && loc_data$smoothed[right_valley] > loc_data$smoothed[right_valley + 1]) {
+                         right_valley <- right_valley + 1
+                    }
+                    # If we hit the limit, find minimum in search window
+                    if (right_valley == right_limit && right_valley < n) {
+                         search_window <- loc_data$smoothed[(idx+1):right_limit]
+                         min_idx <- which.min(search_window)
+                         right_valley <- idx + min_idx
+                    }
+
+                    # Calculate prominence
+                    left_prom <- loc_data$smoothed[idx] - loc_data$smoothed[left_valley]
+                    right_prom <- loc_data$smoothed[idx] - loc_data$smoothed[right_valley]
+                    prominence <- min(left_prom, right_prom)
+
+                    if (prominence > min_prominence) {
+                         prominent_peaks <- c(prominent_peaks, idx)
+                    }
+               }
+
+               # Remove peaks that are too close together (keep the highest)
+               if (length(prominent_peaks) > 1) {
+                    # With 28-day smoothing, peaks are broader, so reduce minimum distance
+                    min_peak_distance <- 75  # Reduced from 90 days to account for wider smoothing
+
+                    # Sort peaks by height (descending)
+                    peak_heights <- loc_data$smoothed[prominent_peaks]
+                    peak_order <- order(peak_heights, decreasing = TRUE)
+                    sorted_peaks <- prominent_peaks[peak_order]
+
+                    # Keep peaks that are far enough from already selected peaks
+                    final_peaks <- c(sorted_peaks[1])  # Always keep highest peak
+
+                    for (i in 2:length(sorted_peaks)) {
+                         current_peak <- sorted_peaks[i]
+                         current_date <- loc_data$date[current_peak]
+
+                         # Check distance to all already selected peaks
+                         too_close <- FALSE
+                         for (selected_peak in final_peaks) {
+                              selected_date <- loc_data$date[selected_peak]
+                              if (abs(as.numeric(current_date - selected_date)) < min_peak_distance) {
+                                   too_close <- TRUE
+                                   break
+                              }
+                         }
+
+                         if (!too_close) {
+                              final_peaks <- c(final_peaks, current_peak)
+                         }
+                    }
+
+                    prominent_peaks <- sort(final_peaks)  # Sort back by time
+               }
+
+               # Create peak data frame
+               if (length(prominent_peaks) > 0) {
+                    peaks_df <- data.frame(
+                         iso_code = loc,
+                         peak_date = loc_data$date[prominent_peaks],
+                         reported_cases = loc_data$cases[prominent_peaks]
+                    )
+
+                    # Estimate peak start/end with magnitude-based threshold scaling
+                    peaks_df$peak_start <- as.Date(NA)
+                    peaks_df$peak_stop <- as.Date(NA)
+
+                    # Find the maximum smoothed value for this location (for scaling)
+                    max_smoothed_cases <- max(loc_data$smoothed, na.rm = TRUE)
+
+                    for (j in 1:nrow(peaks_df)) {
+                         idx <- prominent_peaks[j]
+                         peak_height <- loc_data$smoothed[idx]
+
+                         # Calculate magnitude-based threshold - MAXIMALLY NARROW INTERVALS
+                         # Large peaks (relative to max) get lower thresholds (wider intervals)
+                         # Small peaks get higher thresholds (narrower intervals)
+                         # Most aggressive scaling: 0.97 (97%) for smallest peaks to 0.40 (40%) for largest peaks
+                         # This creates extremely restrictive (very narrow) intervals overall
+                         relative_magnitude <- peak_height / max_smoothed_cases
+
+                         # Maximally restrictive scaling for very narrow intervals: threshold = 0.97 - 0.57 * relative_magnitude
+                         # This gives us: small peaks (~0) -> 0.97, large peaks (~1) -> 0.40
+                         threshold_ratio <- 0.97 - 0.57 * relative_magnitude
+
+                         # Apply bounds to prevent extreme values - highest minimum for maximally narrow intervals
+                         threshold_ratio <- max(0.40, min(0.97, threshold_ratio))
+
+                         # Calculate the actual threshold height
+                         threshold_height <- peak_height * threshold_ratio
+
+                         # Define maximum interval based on peak magnitude - ULTRA NARROW INTERVALS
+                         # Small peaks: max 8-10 days, Large peaks: max 60 days (further reduced for ultra narrow intervals)
+                         peak_reported_cases <- loc_data$cases[idx]
+                         if (peak_reported_cases < 10) {
+                              max_interval_days <- 8   # Further reduced from 12 for ultra narrow
+                         } else if (peak_reported_cases < 30) {
+                              max_interval_days <- 15  # Further reduced from 20 for ultra narrow
+                         } else if (peak_reported_cases < 100) {
+                              max_interval_days <- 28  # Further reduced from 35 for ultra narrow
+                         } else {
+                              max_interval_days <- 60  # Further reduced from 75 for ultra narrow
+                         }
+
+                         # Convert max interval to index range
+                         max_interval_idx <- ceiling(max_interval_days / 2)
+
+                         # Find start (going backwards with max limit)
+                         start_idx <- idx
+                         start_limit <- max(1, idx - max_interval_idx)
+                         while (start_idx > start_limit && loc_data$smoothed[start_idx] > threshold_height) {
+                              start_idx <- start_idx - 1
+                         }
+                         peaks_df$peak_start[j] <- as.Date(loc_data$date[start_idx])
+
+                         # Find end (going forwards with max limit)
+                         end_idx <- idx
+                         end_limit <- min(n, idx + max_interval_idx)
+                         while (end_idx < end_limit && loc_data$smoothed[end_idx] > threshold_height) {
+                              end_idx <- end_idx + 1
+                         }
+                         peaks_df$peak_stop[j] <- as.Date(loc_data$date[end_idx])
+                    }
+
+                    # Reorder columns
+                    peaks_df <- peaks_df[, c("iso_code", "peak_start", "peak_date", "peak_stop", "reported_cases")]
+                    all_peaks[[loc]] <- peaks_df
+               }
+
+               # Simple diagnostic plot
+               if (FALSE) {  # Change to TRUE to see plots
+                    plot(loc_data$date, loc_data$cases,
+                         type = "l", col = "gray70",
+                         main = paste("Epidemic Peaks -", loc),
+                         xlab = "Date", ylab = "Cases")
+                    lines(loc_data$date, loc_data$smoothed, col = "blue", lwd = 2)
+
+                    if (length(prominent_peaks) > 0) {
+                         points(loc_data$date[prominent_peaks],
+                                loc_data$smoothed[prominent_peaks],
+                                col = "red", pch = 19, cex = 1.5)
+                    }
+
+                    legend("topright",
+                           legend = c("Observed", "Smoothed", "Peaks"),
+                           col = c("gray70", "blue", "red"),
+                           lty = c(1, 1, NA),
+                           pch = c(NA, NA, 19),
+                           lwd = c(1, 2, NA))
+               }
+
+          }, error = function(e) {
+               message(paste("Error processing", loc, ":", e$message))
+          })
+     }
+
+     # Combine all peaks
+     if (length(all_peaks) > 0) {
+          out <- dplyr::bind_rows(all_peaks)
+     } else {
+          out <- data.frame(
+               iso_code = character(),
+               peak_start = as.Date(character()),
+               peak_date = as.Date(character()),
+               peak_stop = as.Date(character()),
+               reported_cases = numeric()
           )
-          
-          # Estimate peak start/end (where smoothed drops to 1/3 of peak height)
-          peaks_df$peak_start <- as.Date(NA)
-          peaks_df$peak_end <- as.Date(NA)
-          
-          for (j in 1:nrow(peaks_df)) {
-            idx <- prominent_peaks[j]
-            threshold_height <- loc_data$smoothed[idx] * (1/3)  # 1/3 of peak height
-            
-            # Find start (going backwards)
-            start_idx <- idx
-            while (start_idx > 1 && loc_data$smoothed[start_idx] > threshold_height) {
-              start_idx <- start_idx - 1
-            }
-            peaks_df$peak_start[j] <- as.Date(loc_data$date[start_idx])
-            
-            # Find end (going forwards)
-            end_idx <- idx
-            while (end_idx < n && loc_data$smoothed[end_idx] > threshold_height) {
-              end_idx <- end_idx + 1
-            }
-            peaks_df$peak_end[j] <- as.Date(loc_data$date[end_idx])
+     }
+
+     # Helper function to calculate interval dates based on peak magnitude - ULTRA NARROW INTERVALS
+     calculate_peak_interval <- function(peak_date, reported_cases, scale_factor = 1.0) {
+          # Use magnitude-based scaling for interval width - ULTRA NARROW INTERVALS
+          # Base intervals by category (further reduced for ultra narrow intervals)
+          if (reported_cases < 10) {
+               base_interval <- 4   # Further reduced from 6 days for ultra narrow
+          } else if (reported_cases < 30) {
+               base_interval <- 9   # Further reduced from 12 days for ultra narrow
+          } else if (reported_cases < 100) {
+               base_interval <- 18  # Further reduced from 24 days for ultra narrow
+          } else {
+               base_interval <- 36  # Further reduced from 48 days for ultra narrow
           }
-          
-          all_peaks[[loc]] <- peaks_df
-        }
-        
-        # Simple diagnostic plot
-        if (FALSE) {  # Change to TRUE to see plots
-          plot(loc_data$date, loc_data$cases, 
-               type = "l", col = "gray70",
-               main = paste("Epidemic Peaks -", loc),
-               xlab = "Date", ylab = "Cases")
-          lines(loc_data$date, loc_data$smoothed, col = "blue", lwd = 2)
-          
-          if (length(prominent_peaks) > 0) {
-            points(loc_data$date[prominent_peaks], 
-                   loc_data$smoothed[prominent_peaks],
-                   col = "red", pch = 19, cex = 1.5)
+
+          # Apply scale factor for fine-tuning
+          interval_days <- round(base_interval * scale_factor)
+
+          # Apply maximum constraints - ULTRA NARROW INTERVALS
+          if (reported_cases < 10) {
+               interval_days <- min(interval_days, 8)   # Further reduced from 12 for ultra narrow
+          } else if (reported_cases < 30) {
+               interval_days <- min(interval_days, 15)  # Further reduced from 20 for ultra narrow
+          } else if (reported_cases < 100) {
+               interval_days <- min(interval_days, 28)  # Further reduced from 35 for ultra narrow
+          } else {
+               interval_days <- min(interval_days, 60)  # Further reduced from 75 for ultra narrow
           }
-          
-          legend("topright", 
-                 legend = c("Observed", "Smoothed", "Peaks"),
-                 col = c("gray70", "blue", "red"),
-                 lty = c(1, 1, NA),
-                 pch = c(NA, NA, 19),
-                 lwd = c(1, 2, NA))
-        }
-        
-      }, error = function(e) {
-        message(paste("Error processing", loc, ":", e$message))
-      })
-    }
-    
-  # Combine all peaks
-  if (length(all_peaks) > 0) {
-    out <- bind_rows(all_peaks)
-  } else {
-    out <- data.frame(
-      location_code = character(),
-      peak_date = as.Date(character()),
-      peak_start = as.Date(character()),
-      peak_end = as.Date(character()),
-      peak_magnitude = numeric(),
-      observed_cases = numeric(),
-      detection_method = character()
-    )
-  }
-  
-  # Manual correction for known issues
-  # Ethiopia 2024: Replace Feb peak with March peak (part of same outbreak)
-  if (nrow(out) > 0) {
-    eth_2024_feb <- which(out$location_code == "ETH" & 
-                          out$peak_date >= as.Date("2024-02-01") & 
-                          out$peak_date <= as.Date("2024-02-28"))
-    
-    if (length(eth_2024_feb) > 0) {
-      # Replace with March 21 peak (actual maximum of the outbreak)
-      out$peak_date[eth_2024_feb] <- as.Date("2024-03-21")
-      out$peak_magnitude[eth_2024_feb] <- 170.4
-      out$observed_cases[eth_2024_feb] <- 190
-      out$peak_start[eth_2024_feb] <- as.Date("2024-01-15")
-      out$peak_end[eth_2024_feb] <- as.Date("2024-05-15")
-      message("Corrected Ethiopia 2024 peak from February to March (sustained outbreak)")
-    }
-    
-    # COD late 2022/early 2023: Add missing peak that gets filtered due to proximity
-    cod_early_2023 <- which(out$location_code == "COD" & 
-                            out$peak_date >= as.Date("2023-03-01") & 
-                            out$peak_date <= as.Date("2023-04-30"))
-    
-    if (length(cod_early_2023) > 0) {
-      # Add the January 2023 peak that's being missed
-      new_peak <- data.frame(
-        location_code = "COD",
-        peak_date = as.Date("2023-01-12"),
-        peak_magnitude = 129.9,
-        observed_cases = 109,
-        detection_method = "algorithm",
-        peak_start = as.Date("2022-12-20"),
-        peak_end = as.Date("2023-02-10")
-      )
-      out <- rbind(out, new_peak)
-      out <- out[order(out$location_code, out$peak_date),]
-      message("Added COD January 2023 peak (was filtered due to proximity to March peak)")
-    }
-    
-    # NGA late 2024: Add missing October peak
-    nga_exists <- any(out$location_code == "NGA")
-    if (nga_exists) {
-      # Check if October 2024 peak is missing
-      nga_oct_2024 <- which(out$location_code == "NGA" & 
-                            out$peak_date >= as.Date("2024-10-01") & 
-                            out$peak_date <= as.Date("2024-10-31"))
-      
-      if (length(nga_oct_2024) == 0) {
-        # Add the October 2024 peak
-        new_peak <- data.frame(
-          location_code = "NGA",
-          peak_date = as.Date("2024-10-17"),
-          peak_magnitude = 237.1,
-          observed_cases = 224,
-          detection_method = "algorithm",
-          peak_start = as.Date("2024-09-01"),
-          peak_end = as.Date("2024-11-30")
-        )
-        out <- rbind(out, new_peak)
-        out <- out[order(out$location_code, out$peak_date),]
-        message("Added NGA October 2024 peak")
-      }
-    }
-    
-    # KEN 2022-2023: Fix peaks - add December 2022, remove June 2023
-    ken_exists <- any(out$location_code == "KEN")
-    if (ken_exists) {
-      # Remove the June 2023 peak (minor peak, part of declining phase)
-      ken_june_2023 <- which(out$location_code == "KEN" & 
-                             out$peak_date >= as.Date("2023-06-01") & 
-                             out$peak_date <= as.Date("2023-06-30"))
-      
-      if (length(ken_june_2023) > 0) {
-        out <- out[-ken_june_2023,]
-        message("Removed KEN June 2023 peak (minor peak in declining phase)")
-      }
-      
-      # Add December 2022 peak if missing
-      ken_dec_2022 <- which(out$location_code == "KEN" & 
-                            out$peak_date >= as.Date("2022-12-01") & 
-                            out$peak_date <= as.Date("2022-12-31"))
-      
-      if (length(ken_dec_2022) == 0) {
-        # Add the December 2022 peak
-        new_peak <- data.frame(
-          location_code = "KEN",
-          peak_date = as.Date("2022-12-15"),
-          peak_magnitude = 66.1,
-          observed_cases = 72,
-          detection_method = "algorithm",
-          peak_start = as.Date("2022-11-20"),
-          peak_end = as.Date("2023-02-10")
-        )
-        out <- rbind(out, new_peak)
-        out <- out[order(out$location_code, out$peak_date),]
-        message("Added KEN December 2022 peak (missed due to proximity to March 2023)")
-      }
-    }
-    
-    # MOZ 2024 and 2025 peaks
-    moz_exists <- any(out$location_code == "MOZ")
-    if (moz_exists) {
-      # Add February 2024 peak
-      moz_feb_2024 <- which(out$location_code == "MOZ" & 
-                            out$peak_date >= as.Date("2024-02-01") & 
-                            out$peak_date <= as.Date("2024-03-31"))
-      
-      if (length(moz_feb_2024) == 0) {
-        new_peak <- data.frame(
-          location_code = "MOZ",
-          peak_date = as.Date("2024-02-29"),
-          peak_magnitude = 103.4,
-          observed_cases = 79,
-          detection_method = "algorithm",
-          peak_start = as.Date("2024-01-15"),
-          peak_end = as.Date("2024-04-15")
-        )
-        out <- rbind(out, new_peak)
-        message("Added MOZ February 2024 peak")
-      }
-      
-      # Add March 2025 peak
-      moz_mar_2025 <- which(out$location_code == "MOZ" & 
-                            out$peak_date >= as.Date("2025-03-01") & 
-                            out$peak_date <= as.Date("2025-03-31"))
-      
-      if (length(moz_mar_2025) == 0) {
-        new_peak <- data.frame(
-          location_code = "MOZ",
-          peak_date = as.Date("2025-03-20"),
-          peak_magnitude = 67.6,
-          observed_cases = 76,
-          detection_method = "algorithm",
-          peak_start = as.Date("2025-02-15"),
-          peak_end = as.Date("2025-04-30")
-        )
-        out <- rbind(out, new_peak)
-        message("Added MOZ March 2025 peak")
-      }
-    }
-    
-    # SOM major 2017 peak and 2024 peaks
-    som_exists <- any(out$location_code == "SOM")
-    if (som_exists) {
-      # Add major April 2017 peak
-      som_apr_2017 <- which(out$location_code == "SOM" & 
-                            out$peak_date >= as.Date("2017-04-01") & 
-                            out$peak_date <= as.Date("2017-04-30"))
-      
-      if (length(som_apr_2017) == 0) {
-        new_peak <- data.frame(
-          location_code = "SOM",
-          peak_date = as.Date("2017-04-20"),
-          peak_magnitude = 466.5,
-          observed_cases = 479,
-          detection_method = "algorithm",
-          peak_start = as.Date("2017-02-15"),
-          peak_end = as.Date("2017-07-15")
-        )
-        out <- rbind(out, new_peak)
-        message("Added SOM April 2017 major peak (400+)")
-      }
-      
-      # Add March 2024 peak
-      som_mar_2024 <- which(out$location_code == "SOM" & 
-                            out$peak_date >= as.Date("2024-03-01") & 
-                            out$peak_date <= as.Date("2024-03-31"))
-      
-      if (length(som_mar_2024) == 0) {
-        new_peak <- data.frame(
-          location_code = "SOM",
-          peak_date = as.Date("2024-03-28"),
-          peak_magnitude = 120.3,
-          observed_cases = 120,
-          detection_method = "algorithm",
-          peak_start = as.Date("2024-02-15"),
-          peak_end = as.Date("2024-05-30")
-        )
-        out <- rbind(out, new_peak)
-        message("Added SOM March 2024 peak")
-      }
-      
-      # Add May 2025 peak
-      som_may_2025 <- which(out$location_code == "SOM" & 
-                            out$peak_date >= as.Date("2025-05-01") & 
-                            out$peak_date <= as.Date("2025-05-31"))
-      
-      if (length(som_may_2025) == 0) {
-        new_peak <- data.frame(
-          location_code = "SOM",
-          peak_date = as.Date("2025-05-22"),
-          peak_magnitude = 55.0,
-          observed_cases = 68,
-          detection_method = "algorithm",
-          peak_start = as.Date("2025-04-15"),
-          peak_end = as.Date("2025-06-30")
-        )
-        out <- rbind(out, new_peak)
-        message("Added SOM May 2025 peak")
-      }
-    }
-    
-    # ZMB 2018 peak (2016 is too low to be significant)
-    zmb_exists <- any(out$location_code == "ZMB")
-    if (zmb_exists) {
-      # Add January 2018 peak
-      zmb_jan_2018 <- which(out$location_code == "ZMB" & 
-                            out$peak_date >= as.Date("2018-01-01") & 
-                            out$peak_date <= as.Date("2018-01-31"))
-      
-      if (length(zmb_jan_2018) == 0) {
-        new_peak <- data.frame(
-          location_code = "ZMB",
-          peak_date = as.Date("2018-01-11"),
-          peak_magnitude = 34.3,
-          observed_cases = 16,
-          detection_method = "algorithm",
-          peak_start = as.Date("2017-12-15"),
-          peak_end = as.Date("2018-02-28")
-        )
-        out <- rbind(out, new_peak)
-        message("Added ZMB January 2018 peak")
-      }
-    }
-    
-    # TZA January 2017 peak (between Mar 2016 and Feb 2018)
-    tza_exists <- any(out$location_code == "TZA")
-    if (tza_exists) {
-      # Add January 2017 peak
-      tza_jan_2017 <- which(out$location_code == "TZA" & 
-                            out$peak_date >= as.Date("2017-01-01") & 
-                            out$peak_date <= as.Date("2017-01-31"))
-      
-      if (length(tza_jan_2017) == 0) {
-        new_peak <- data.frame(
-          location_code = "TZA",
-          peak_date = as.Date("2017-01-19"),
-          peak_magnitude = 25.0,
-          observed_cases = 33,
-          detection_method = "algorithm",
-          peak_start = as.Date("2016-12-15"),
-          peak_end = as.Date("2017-02-28")
-        )
-        out <- rbind(out, new_peak)
-        message("Added TZA January 2017 peak (between Mar 2016 and Feb 2018)")
-      }
-    }
-    
-    # Sort final output
-    out <- out[order(out$location_code, out$peak_date),]
-  }
-  
-  # Save as param_epidemic_peaks.csv
-  output_file <- file.path(PATHS$MODEL_INPUT, "param_epidemic_peaks.csv")
-  
-  # Create directory if it doesn't exist
-  if (!dir.exists(PATHS$MODEL_INPUT)) {
-    dir.create(PATHS$MODEL_INPUT, recursive = TRUE)
-  }
-  
-  write_csv(out, output_file)
-  message(paste("Saved epidemic peaks to:", output_file))
-  
-  return(out)
+
+          # Calculate start and stop dates
+          half_interval <- ceiling(interval_days / 2)
+          peak_start <- peak_date - half_interval
+          peak_stop <- peak_date + half_interval
+
+          return(list(start = peak_start, stop = peak_stop))
+     }
+
+     # Manual correction for known issues
+     # Ethiopia 2024: Replace Feb peak with March peak (part of same outbreak)
+     if (nrow(out) > 0) {
+          eth_2024_feb <- which(out$iso_code == "ETH" &
+                                     out$peak_date >= as.Date("2024-02-01") &
+                                     out$peak_date <= as.Date("2024-02-28"))
+
+          if (length(eth_2024_feb) > 0) {
+               # Replace with March 21 peak (actual maximum of the outbreak)
+               out$peak_date[eth_2024_feb] <- as.Date("2024-03-21")
+               out$reported_cases[eth_2024_feb] <- 190
+               # Use magnitude-based interval calculation with 70% scaling
+               # This gives ~84 days, between 2023 (95 days) and 2025 (61 days) peaks
+               interval <- calculate_peak_interval(as.Date("2024-03-21"), 190, scale_factor = 0.7)
+               out$peak_start[eth_2024_feb] <- interval$start
+               out$peak_stop[eth_2024_feb] <- interval$stop
+               message("Corrected Ethiopia 2024 peak from February to March (sustained outbreak)")
+          }
+
+          # COD late 2022/early 2023: Add missing peak that gets filtered due to proximity
+          cod_early_2023 <- which(out$iso_code == "COD" &
+                                       out$peak_date >= as.Date("2023-03-01") &
+                                       out$peak_date <= as.Date("2023-04-30"))
+
+          if (length(cod_early_2023) > 0) {
+               # Add the January 2023 peak that's being missed
+               peak_date <- as.Date("2023-01-12")
+               reported_cases <- 109
+               interval <- calculate_peak_interval(peak_date, reported_cases)
+               new_peak <- data.frame(
+                    iso_code = "COD",
+                    peak_start = interval$start,
+                    peak_date = peak_date,
+                    peak_stop = interval$stop,
+                    reported_cases = reported_cases
+               )
+               out <- rbind(out, new_peak)
+               out <- out[order(out$iso_code, out$peak_date),]
+               message("Added COD January 2023 peak (was filtered due to proximity to March peak)")
+          }
+
+          # NGA late 2024: Add missing October peak
+          nga_exists <- any(out$iso_code == "NGA")
+          if (nga_exists) {
+               # Check if October 2024 peak is missing
+               nga_oct_2024 <- which(out$iso_code == "NGA" &
+                                          out$peak_date >= as.Date("2024-10-01") &
+                                          out$peak_date <= as.Date("2024-10-31"))
+
+               if (length(nga_oct_2024) == 0) {
+                    # Add the October 2024 peak
+                    peak_date <- as.Date("2024-10-17")
+                    reported_cases <- 224
+                    # Reduce interval by 20% to correct for smoothing artifact
+                    interval <- calculate_peak_interval(peak_date, reported_cases, scale_factor = 0.8)
+                    new_peak <- data.frame(
+                         iso_code = "NGA",
+                         peak_start = interval$start,
+                         peak_date = peak_date,
+                         peak_stop = interval$stop,
+                         reported_cases = reported_cases
+                    )
+                    out <- rbind(out, new_peak)
+                    out <- out[order(out$iso_code, out$peak_date),]
+                    message("Added NGA October 2024 peak")
+               }
+          }
+
+          # KEN 2022-2023: Fix peaks - add December 2022, remove June 2023
+          ken_exists <- any(out$iso_code == "KEN")
+          if (ken_exists) {
+               # Keep June 2023 peak - user requested to maintain this peak
+               # (Previously removed as minor peak in declining phase, but keeping per user request)
+
+               # Add December 2022 peak if missing
+               ken_dec_2022 <- which(out$iso_code == "KEN" &
+                                          out$peak_date >= as.Date("2022-12-01") &
+                                          out$peak_date <= as.Date("2022-12-31"))
+
+               if (length(ken_dec_2022) == 0) {
+                    # Add the December 2022 peak
+                    peak_date <- as.Date("2022-12-15")
+                    reported_cases <- 72
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(
+                         iso_code = "KEN",
+                         peak_start = interval$start,
+                         peak_date = peak_date,
+                         peak_stop = interval$stop,
+                         reported_cases = reported_cases
+                    )
+                    out <- rbind(out, new_peak)
+                    out <- out[order(out$iso_code, out$peak_date),]
+                    message("Added KEN December 2022 peak (missed due to proximity to March 2023)")
+               }
+          }
+
+          # MOZ 2024 and 2025 peaks
+          moz_exists <- any(out$iso_code == "MOZ")
+          if (moz_exists) {
+               # Add February 2024 peak
+               moz_feb_2024 <- which(out$iso_code == "MOZ" &
+                                          out$peak_date >= as.Date("2024-02-01") &
+                                          out$peak_date <= as.Date("2024-03-31"))
+
+               if (length(moz_feb_2024) == 0) {
+                    peak_date <- as.Date("2024-02-29")
+                    reported_cases <- 79
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(
+                         iso_code = "MOZ",
+                         peak_start = interval$start,
+                         peak_date = peak_date,
+                         peak_stop = interval$stop,
+                         reported_cases = reported_cases
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added MOZ February 2024 peak")
+               }
+
+               # Add March 2025 peak
+               moz_mar_2025 <- which(out$iso_code == "MOZ" &
+                                          out$peak_date >= as.Date("2025-03-01") &
+                                          out$peak_date <= as.Date("2025-03-31"))
+
+               if (length(moz_mar_2025) == 0) {
+                    peak_date <- as.Date("2025-03-20")
+                    reported_cases <- 76
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(
+                         iso_code = "MOZ",
+                         peak_start = interval$start,
+                         peak_date = peak_date,
+                         peak_stop = interval$stop,
+                         reported_cases = reported_cases
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added MOZ March 2025 peak")
+               }
+          }
+
+          # SOM major 2017 peak and 2024 peaks
+          som_exists <- any(out$iso_code == "SOM")
+          if (som_exists) {
+               # Add major April 2017 peak
+               som_apr_2017 <- which(out$iso_code == "SOM" &
+                                          out$peak_date >= as.Date("2017-04-01") &
+                                          out$peak_date <= as.Date("2017-04-30"))
+
+               if (length(som_apr_2017) == 0) {
+                    peak_date <- as.Date("2017-04-20")
+                    reported_cases <- 479
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(
+                         iso_code = "SOM",
+                         peak_start = interval$start,
+                         peak_date = peak_date,
+                         peak_stop = interval$stop,
+                         reported_cases = reported_cases
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added SOM April 2017 major peak (400+)")
+               }
+
+               # Add March 2024 peak
+               som_mar_2024 <- which(out$iso_code == "SOM" &
+                                          out$peak_date >= as.Date("2024-03-01") &
+                                          out$peak_date <= as.Date("2024-03-31"))
+
+               if (length(som_mar_2024) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "SOM",
+                         peak_start = as.Date("2024-02-15"),
+                         peak_date = as.Date("2024-03-28"),
+                         peak_stop = as.Date("2024-05-30"),
+                         reported_cases = 120
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added SOM March 2024 peak")
+               }
+
+               # Add May 2025 peak
+               som_may_2025 <- which(out$iso_code == "SOM" &
+                                          out$peak_date >= as.Date("2025-05-01") &
+                                          out$peak_date <= as.Date("2025-05-31"))
+
+               if (length(som_may_2025) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "SOM",
+                         peak_start = as.Date("2025-04-15"),
+                         peak_date = as.Date("2025-05-22"),
+                         peak_stop = as.Date("2025-06-30"),
+                         reported_cases = 68
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added SOM May 2025 peak")
+               }
+          }
+
+          # ZMB 2018 peak (2016 is too low to be significant)
+          zmb_exists <- any(out$iso_code == "ZMB")
+          if (zmb_exists) {
+               # Add January 2018 peak
+               zmb_jan_2018 <- which(out$iso_code == "ZMB" &
+                                          out$peak_date >= as.Date("2018-01-01") &
+                                          out$peak_date <= as.Date("2018-01-31"))
+
+               if (length(zmb_jan_2018) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "ZMB",
+                         peak_start = as.Date("2017-12-15"),
+                         peak_date = as.Date("2018-01-11"),
+                         peak_stop = as.Date("2018-02-28"),
+                         reported_cases = 16
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added ZMB January 2018 peak")
+               }
+          }
+
+          # TZA January 2017 peak (between Mar 2016 and Feb 2018)
+          tza_exists <- any(out$iso_code == "TZA")
+          if (tza_exists) {
+               # Add January 2017 peak
+               tza_jan_2017 <- which(out$iso_code == "TZA" &
+                                          out$peak_date >= as.Date("2017-01-01") &
+                                          out$peak_date <= as.Date("2017-01-31"))
+
+               if (length(tza_jan_2017) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "TZA",
+                         peak_start = as.Date("2016-12-15"),
+                         peak_date = as.Date("2017-01-19"),
+                         peak_stop = as.Date("2017-02-28"),
+                         reported_cases = 33
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added TZA January 2017 peak (between Mar 2016 and Feb 2018)")
+               }
+          }
+
+          # AGO peaks
+          ago_exists <- any(out$iso_code == "AGO")
+          if (ago_exists) {
+               # Add January 2018 small peak if missing
+               ago_jan_2018 <- which(out$iso_code == "AGO" &
+                                          out$peak_date >= as.Date("2018-01-01") &
+                                          out$peak_date <= as.Date("2018-01-31"))
+
+               if (length(ago_jan_2018) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "AGO",
+                         peak_start = as.Date("2018-01-01"),
+                         peak_date = as.Date("2018-01-04"),
+                         peak_stop = as.Date("2018-01-31"),
+                         reported_cases = 24
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added AGO January 2018 peak (small outbreak with 24 cases at peak)")
+               }
+
+               # AGO 2025 peak is detected algorithmically (April 28 with 303 cases)
+               # No need to add manually - removing duplicate addition
+          }
+
+          # BDI small peaks
+          bdi_exists <- any(out$iso_code == "BDI")
+          if (bdi_exists) {
+               # BDI late 2017 (6 cases on 2017-10-17)
+               if (length(which(out$iso_code == "BDI" & out$peak_date >= as.Date("2017-09-01") & out$peak_date <= as.Date("2017-12-31"))) == 0) {
+                    peak_date <- as.Date("2017-10-17")
+                    reported_cases <- 6
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "BDI", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added BDI October 2017 peak (6 cases)")
+               }
+               # Add August 2016 small peak if missing
+               bdi_aug_2016 <- which(out$iso_code == "BDI" &
+                                          out$peak_date >= as.Date("2016-08-01") &
+                                          out$peak_date <= as.Date("2016-10-31"))
+
+               if (length(bdi_aug_2016) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "BDI",
+                         peak_start = as.Date("2016-08-01"),
+                         peak_date = as.Date("2016-08-21"),
+                         peak_stop = as.Date("2016-10-31"),
+                         reported_cases = 9
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added BDI August 2016 peak (small outbreak with 9 cases at peak)")
+               }
+
+               # Add April 2023 small peak if missing
+               bdi_apr_2023 <- which(out$iso_code == "BDI" &
+                                          out$peak_date >= as.Date("2023-04-01") &
+                                          out$peak_date <= as.Date("2023-04-30"))
+
+               if (length(bdi_apr_2023) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "BDI",
+                         peak_start = as.Date("2023-04-06"),
+                         peak_date = as.Date("2023-04-13"),
+                         peak_stop = as.Date("2023-04-30"),
+                         reported_cases = 8
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added BDI April 2023 peak (small outbreak with 8 cases at peak)")
+               }
+
+               # Add July 2025 small peak if missing
+               bdi_jul_2025 <- which(out$iso_code == "BDI" &
+                                          out$peak_date >= as.Date("2025-07-01") &
+                                          out$peak_date <= as.Date("2025-07-31"))
+
+               if (length(bdi_jul_2025) == 0) {
+                    new_peak <- data.frame(
+                         iso_code = "BDI",
+                         peak_start = as.Date("2025-07-01"),
+                         peak_date = as.Date("2025-07-11"),
+                         peak_stop = as.Date("2025-07-31"),
+                         reported_cases = 9
+                    )
+                    out <- rbind(out, new_peak)
+                    message("Added BDI July 2025 peak (small outbreak with 9 cases at peak)")
+               }
+          }
+
+          # ============================================================================
+          # COMPREHENSIVE MANUAL PEAK ADDITIONS
+          # Adding all missed peaks with appropriately scaled intervals
+          # Very Small (≤10): 1-2 week peak, 3-4 week total
+          # Small (10-30): 1-2 week peak, 4-6 week total
+          # Medium (30-100): 2-3 week peak, 6-8 week total
+          # Large (>100): 3-4 week peak, 8+ week total
+          # ============================================================================
+
+          # BEN additional peaks
+          # Note: BEN has no algorithmic peaks but needs manual peaks added
+          ben_manual_peaks_needed <- TRUE
+          if (ben_manual_peaks_needed) {
+               # BEN late 2013 - CORRECTED TIMING (9 cases, narrow interval)
+               if (length(which(out$iso_code == "BEN" & out$peak_date >= as.Date("2013-09-01") & out$peak_date <= as.Date("2013-10-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "BEN", peak_start = as.Date("2013-09-17"), peak_date = as.Date("2013-09-19"), peak_stop = as.Date("2013-09-21"), reported_cases = 9)
+                    out <- rbind(out, new_peak)
+                    message("Added BEN September 2013 peak (corrected timing, 5-day interval, 9 cases)")
+               }
+
+               # BEN July 2014 - First second-half 2014 peak (13 cases, narrow interval)
+               if (length(which(out$iso_code == "BEN" & out$peak_date >= as.Date("2014-07-01") & out$peak_date <= as.Date("2014-07-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "BEN", peak_start = as.Date("2014-07-08"), peak_date = as.Date("2014-07-10"), peak_stop = as.Date("2014-07-12"), reported_cases = 13)
+                    out <- rbind(out, new_peak)
+                    message("Added BEN July 2014 peak (first second-half 2014 peak, 5-day interval, 13 cases)")
+               }
+
+               # BEN October 2014 - Second second-half 2014 peak (17 cases, narrow interval)
+               if (length(which(out$iso_code == "BEN" & out$peak_date >= as.Date("2014-10-15") & out$peak_date <= as.Date("2014-11-15"))) == 0) {
+                    new_peak <- data.frame(iso_code = "BEN", peak_start = as.Date("2014-10-27"), peak_date = as.Date("2014-10-29"), peak_stop = as.Date("2014-10-31"), reported_cases = 17)
+                    out <- rbind(out, new_peak)
+                    message("Added BEN October 2014 peak (second second-half 2014 peak, 5-day interval, 17 cases)")
+               }
+
+               # BEN late 2016 (9 cases - very small)
+               if (length(which(out$iso_code == "BEN" & out$peak_date >= as.Date("2016-10-01") & out$peak_date <= as.Date("2016-12-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "BEN", peak_start = as.Date("2016-09-29"), peak_date = as.Date("2016-10-01"), peak_stop = as.Date("2016-10-03"), reported_cases = 9)
+                    out <- rbind(out, new_peak)
+                    message("Added BEN October 2016 peak (5-day interval, 9 cases)")
+               }
+
+               # BEN early 2021 (9 cases - very small)
+               if (length(which(out$iso_code == "BEN" & out$peak_date >= as.Date("2021-01-01") & out$peak_date <= as.Date("2021-03-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "BEN", peak_start = as.Date("2021-01-07"), peak_date = as.Date("2021-01-09"), peak_stop = as.Date("2021-01-11"), reported_cases = 9)
+                    out <- rbind(out, new_peak)
+                    message("Added BEN January 2021 peak (5-day interval, 9 cases)")
+               }
+          }
+
+          # CIV (Côte d'Ivoire) additional peaks
+          # Note: CIV has no algorithmic peaks but needs the early 2015 peak added
+          civ_manual_peaks_needed <- TRUE
+          if (civ_manual_peaks_needed) {
+               # CIV early 2015 (main outbreak) - CORRECTED TIMING
+               if (length(which(out$iso_code == "CIV" & out$peak_date >= as.Date("2015-01-01") & out$peak_date <= as.Date("2015-06-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "CIV", peak_start = as.Date("2015-01-06"), peak_date = as.Date("2015-01-08"), peak_stop = as.Date("2015-01-10"), reported_cases = 7)
+                    out <- rbind(out, new_peak)
+                    message("Added CIV January 2015 peak (corrected timing, 5-day interval, 7 cases)")
+               }
+          }
+
+          # CAF (Central African Republic) additional peaks
+          # Note: CAF has no algorithmic peaks but needs the 2016 peak added (not 2017)
+          caf_manual_peaks_needed <- TRUE
+          if (caf_manual_peaks_needed) {
+               # CAF August 2016 (main outbreak) - CORRECTED TIMING from May 2017
+               if (length(which(out$iso_code == "CAF" & out$peak_date >= as.Date("2016-08-01") & out$peak_date <= as.Date("2016-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "CAF", peak_start = as.Date("2016-08-08"), peak_date = as.Date("2016-08-10"), peak_stop = as.Date("2016-08-12"), reported_cases = 10)
+                    out <- rbind(out, new_peak)
+                    message("Added CAF August 2016 peak (corrected timing from 2017, 5-day interval, 10 cases)")
+               }
+          }
+
+          # COG (Congo) additional peaks - Differentiated intervals by time period
+          # Note: COG has no algorithmic peaks but needs these specific peaks added
+          # Pre-2023: 3-day intervals, 2023+: 5-day intervals
+          cog_manual_peaks_needed <- TRUE
+          if (cog_manual_peaks_needed) {
+               # COG Sep 2016 peak (1 case - 3-day interval)
+               if (length(which(out$iso_code == "COG" & out$peak_date >= as.Date("2016-08-15") & out$peak_date <= as.Date("2016-09-15"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COG", peak_start = as.Date("2016-08-31"), peak_date = as.Date("2016-09-01"), peak_stop = as.Date("2016-09-02"), reported_cases = 1)
+                    out <- rbind(out, new_peak)
+                    message("Added COG September 2016 peak (3-day interval, 1 case)")
+               }
+               # COG Jan 2018 peak (2 cases - 3-day interval, represents Apr 2018 period activity)
+               if (length(which(out$iso_code == "COG" & out$peak_date >= as.Date("2018-01-01") & out$peak_date <= as.Date("2018-04-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COG", peak_start = as.Date("2018-01-09"), peak_date = as.Date("2018-01-10"), peak_stop = as.Date("2018-01-11"), reported_cases = 2)
+                    out <- rbind(out, new_peak)
+                    message("Added COG January 2018 peak (3-day interval, 2 cases)")
+               }
+               # COG Oct 2019 peak (5 cases - 3-day interval)
+               if (length(which(out$iso_code == "COG" & out$peak_date >= as.Date("2019-10-01") & out$peak_date <= as.Date("2019-11-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COG", peak_start = as.Date("2019-10-21"), peak_date = as.Date("2019-10-22"), peak_stop = as.Date("2019-10-23"), reported_cases = 5)
+                    out <- rbind(out, new_peak)
+                    message("Added COG October 2019 peak (3-day interval, 5 cases)")
+               }
+               # COG Aug 2023 peak (7 cases - 5-day interval, represents Aug/Sep 2023 activity)
+               if (length(which(out$iso_code == "COG" & out$peak_date >= as.Date("2023-08-01") & out$peak_date <= as.Date("2023-09-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COG", peak_start = as.Date("2023-08-20"), peak_date = as.Date("2023-08-22"), peak_stop = as.Date("2023-08-24"), reported_cases = 7)
+                    out <- rbind(out, new_peak)
+                    message("Added COG August 2023 peak (5-day interval, 7 cases)")
+               }
+               # COG Jul 2025 peak (27 cases - 5-day interval, represents Aug 2025 activity)
+               if (length(which(out$iso_code == "COG" & out$peak_date >= as.Date("2025-07-01") & out$peak_date <= as.Date("2025-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COG", peak_start = as.Date("2025-07-21"), peak_date = as.Date("2025-07-23"), peak_stop = as.Date("2025-07-25"), reported_cases = 27)
+                    out <- rbind(out, new_peak)
+                    message("Added COG July 2025 peak (5-day interval, 27 cases)")
+               }
+          }
+
+          # CMR additional peaks
+          cmr_exists <- any(out$iso_code == "CMR")
+          if (cmr_exists) {
+               # CMR 2011 second peak (130 cases on August 23)
+               # The first peak (May 2) is detected, but the second peak is filtered by minimum distance constraint
+               if (length(which(out$iso_code == "CMR" & out$peak_date >= as.Date("2011-08-01") & out$peak_date <= as.Date("2011-09-30"))) == 0) {
+                    peak_date <- as.Date("2011-08-23")
+                    reported_cases <- 130
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "CMR", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added CMR August 2011 second peak (130 cases)")
+               }
+
+               # CMR late 2018 (medium outbreak ~30-50 cases estimated)
+               if (length(which(out$iso_code == "CMR" & out$peak_date >= as.Date("2018-10-01") & out$peak_date <= as.Date("2018-12-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "CMR", peak_start = as.Date("2018-10-15"), peak_date = as.Date("2018-11-15"), peak_stop = as.Date("2018-12-15"), reported_cases = 35)
+                    out <- rbind(out, new_peak)
+                    message("Added CMR November 2018 peak (medium outbreak with ~35 cases)")
+               }
+          }
+
+          # COD additional peaks
+          cod_exists <- any(out$iso_code == "COD")
+          if (cod_exists) {
+               # COD late 2019 (118 cases on 2019-10-08)
+               if (length(which(out$iso_code == "COD" & out$peak_date >= as.Date("2019-10-01") & out$peak_date <= as.Date("2019-12-31"))) == 0) {
+                    peak_date <- as.Date("2019-10-08")
+                    reported_cases <- 118
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "COD", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added COD October 2019 peak (118 cases)")
+               }
+               # COD mid 2022 (54 cases - medium)
+               if (length(which(out$iso_code == "COD" & out$peak_date >= as.Date("2022-05-01") & out$peak_date <= as.Date("2022-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COD", peak_start = as.Date("2022-04-15"), peak_date = as.Date("2022-05-01"), peak_stop = as.Date("2022-06-15"), reported_cases = 54)
+                    out <- rbind(out, new_peak)
+                    message("Added COD May 2022 peak (medium outbreak with 54 cases)")
+               }
+
+               # COD mid 2016 (116 cases - large)
+               if (length(which(out$iso_code == "COD" & out$peak_date >= as.Date("2016-06-01") & out$peak_date <= as.Date("2016-09-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COD", peak_start = as.Date("2016-07-15"), peak_date = as.Date("2016-08-07"), peak_stop = as.Date("2016-09-15"), reported_cases = 116)
+                    out <- rbind(out, new_peak)
+                    message("Added COD August 2016 peak (large outbreak with 116 cases)")
+               }
+
+               # COD early 2017 (133 cases - large)
+               if (length(which(out$iso_code == "COD" & out$peak_date >= as.Date("2016-12-15") & out$peak_date <= as.Date("2017-03-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "COD", peak_start = as.Date("2016-12-15"), peak_date = as.Date("2017-01-08"), peak_stop = as.Date("2017-02-15"), reported_cases = 133)
+                    out <- rbind(out, new_peak)
+                    message("Added COD January 2017 peak (large outbreak with 133 cases)")
+               }
+          }
+
+          # ETH additional peaks
+          eth_exists <- any(out$iso_code == "ETH")
+          if (eth_exists) {
+               # ETH mid 2017 (115 cases - large)
+               if (length(which(out$iso_code == "ETH" & out$peak_date >= as.Date("2017-06-01") & out$peak_date <= as.Date("2017-09-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "ETH", peak_start = as.Date("2017-08-01"), peak_date = as.Date("2017-08-26"), peak_stop = as.Date("2017-09-30"), reported_cases = 115)
+                    out <- rbind(out, new_peak)
+                    message("Added ETH August 2017 peak (large outbreak with 115 cases)")
+               }
+          }
+
+          # GHA additional peaks
+          gha_exists <- any(out$iso_code == "GHA")
+          if (gha_exists) {
+               # GHA late 2016 (22 cases - small)
+               if (length(which(out$iso_code == "GHA" & out$peak_date >= as.Date("2016-10-01") & out$peak_date <= as.Date("2016-12-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "GHA", peak_start = as.Date("2016-11-01"), peak_date = as.Date("2016-11-12"), peak_stop = as.Date("2016-12-01"), reported_cases = 22)
+                    out <- rbind(out, new_peak)
+                    message("Added GHA November 2016 peak (small outbreak with 22 cases)")
+               }
+          }
+
+          # GIN additional peaks
+          gin_exists <- any(out$iso_code == "GIN")
+          if (gin_exists) {
+               # GIN early 2012 (11 cases - small)
+               if (length(which(out$iso_code == "GIN" & out$peak_date >= as.Date("2012-01-01") & out$peak_date <= as.Date("2012-04-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "GIN", peak_start = as.Date("2012-02-01"), peak_date = as.Date("2012-02-09"), peak_stop = as.Date("2012-03-01"), reported_cases = 11)
+                    out <- rbind(out, new_peak)
+                    message("Added GIN February 2012 peak (small outbreak with 11 cases)")
+               }
+          }
+
+          # KEN additional peaks
+          ken_exists <- any(out$iso_code == "KEN")
+          if (ken_exists) {
+               # KEN early 2018 (29 cases on January 10-12) - narrow interval
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2018-01-01") & out$peak_date <= as.Date("2018-02-28"))) == 0) {
+                    peak_date <- as.Date("2018-01-11")
+                    reported_cases <- 29
+                    # Use very narrow interval as requested (14 days total)
+                    new_peak <- data.frame(iso_code = "KEN",
+                                         peak_start = peak_date - 7,
+                                         peak_date = peak_date,
+                                         peak_stop = peak_date + 7,
+                                         reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN January 2018 peak (29 cases, narrow interval)")
+               }
+
+               # KEN mid 2017 (32 cases on 2017-07-20) - this is usually detected algorithmically
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2017-05-01") & out$peak_date <= as.Date("2017-08-31"))) == 0) {
+                    peak_date <- as.Date("2017-07-20")
+                    reported_cases <- 32
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "KEN", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN July 2017 peak (32 cases)")
+               }
+
+               # KEN mid 2019 (41 cases on 2019-05-29) - this is usually detected algorithmically
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2019-05-01") & out$peak_date <= as.Date("2019-08-31"))) == 0) {
+                    peak_date <- as.Date("2019-05-29")
+                    reported_cases <- 41
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "KEN", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN May 2019 peak (41 cases)")
+               }
+               # KEN mid 2022 (45 cases - medium)
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2022-05-01") & out$peak_date <= as.Date("2022-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "KEN", peak_start = as.Date("2022-05-10"), peak_date = as.Date("2022-05-21"), peak_stop = as.Date("2022-06-10"), reported_cases = 45)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN May 2022 peak (medium outbreak with 45 cases)")
+               }
+
+               # KEN mid 2023 - REMOVED per user request (misaligned with actual data)
+
+               # KEN early 2024 (29 cases on January 17-19)
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2024-01-01") & out$peak_date <= as.Date("2024-03-31"))) == 0) {
+                    peak_date <- as.Date("2024-01-17")
+                    reported_cases <- 29
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "KEN", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN January 2024 peak (29 cases)")
+               }
+
+               # KEN mid 2024 (26 cases in early August)
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2024-07-01") & out$peak_date <= as.Date("2024-09-30"))) == 0) {
+                    peak_date <- as.Date("2024-08-08")
+                    reported_cases <- 26
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "KEN", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN August 2024 peak (26 cases)")
+               }
+
+               # KEN mid 2025 (15 cases on June 26)
+               if (length(which(out$iso_code == "KEN" & out$peak_date >= as.Date("2025-06-01") & out$peak_date <= as.Date("2025-07-31"))) == 0) {
+                    peak_date <- as.Date("2025-06-26")
+                    reported_cases <- 15
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "KEN", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added KEN June 2025 peak (15 cases)")
+               }
+          }
+
+          # MWI additional peaks
+          mwi_exists <- any(out$iso_code == "MWI")
+          if (mwi_exists) {
+               # MWI early 2018 (14 cases - small)
+               if (length(which(out$iso_code == "MWI" & out$peak_date >= as.Date("2018-01-01") & out$peak_date <= as.Date("2018-03-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "MWI", peak_start = as.Date("2018-02-15"), peak_date = as.Date("2018-02-25"), peak_stop = as.Date("2018-03-15"), reported_cases = 14)
+                    out <- rbind(out, new_peak)
+                    message("Added MWI February 2018 peak (small outbreak with 14 cases)")
+               }
+          }
+
+          # NER additional peaks
+          ner_exists <- any(out$iso_code == "NER")
+          if (ner_exists) {
+               # NER late 2014 (36 cases on 2014-09-09)
+               if (length(which(out$iso_code == "NER" & out$peak_date >= as.Date("2014-09-01") & out$peak_date <= as.Date("2014-12-31"))) == 0) {
+                    peak_date <- as.Date("2014-09-09")
+                    reported_cases <- 36
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "NER", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added NER September 2014 peak (36 cases)")
+               }
+               # NER mid 2012 (13 cases - small, narrow interval as requested)
+               if (length(which(out$iso_code == "NER" & out$peak_date >= as.Date("2012-06-01") & out$peak_date <= as.Date("2012-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "NER", peak_start = as.Date("2012-07-20"), peak_date = as.Date("2012-07-27"), peak_stop = as.Date("2012-08-10"), reported_cases = 13)
+                    out <- rbind(out, new_peak)
+                    message("Added NER July 2012 peak (small outbreak with 13 cases, narrow interval)")
+               }
+          }
+
+          # NGA additional peaks
+          nga_exists <- any(out$iso_code == "NGA")
+          if (nga_exists) {
+               # NGA mid 2025 (377 cases - very large)
+               if (length(which(out$iso_code == "NGA" & out$peak_date >= as.Date("2025-06-01") & out$peak_date <= as.Date("2025-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "NGA", peak_start = as.Date("2025-07-01"), peak_date = as.Date("2025-07-27"), peak_stop = as.Date("2025-09-01"), reported_cases = 377)
+                    out <- rbind(out, new_peak)
+                    message("Added NGA July 2025 peak (very large outbreak with 377 cases)")
+               }
+          }
+
+          # SDN additional peaks
+          sdn_exists <- any(out$iso_code == "SDN")
+          if (sdn_exists) {
+               # SDN late 2024 (second of double peak - estimated 25 cases)
+               if (length(which(out$iso_code == "SDN" & out$peak_date >= as.Date("2024-10-01") & out$peak_date <= as.Date("2024-12-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SDN", peak_start = as.Date("2024-11-01"), peak_date = as.Date("2024-11-15"), peak_stop = as.Date("2024-12-15"), reported_cases = 25)
+                    out <- rbind(out, new_peak)
+                    message("Added SDN November 2024 peak (second of double peak with ~25 cases)")
+               }
+          }
+
+          # SLE additional peaks
+          sle_exists <- any(out$iso_code == "SLE")
+          if (sle_exists) {
+               # SLE early-mid 2012 (66 cases - medium)
+               if (length(which(out$iso_code == "SLE" & out$peak_date >= as.Date("2012-01-01") & out$peak_date <= as.Date("2012-06-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SLE", peak_start = as.Date("2012-02-10"), peak_date = as.Date("2012-02-24"), peak_stop = as.Date("2012-03-30"), reported_cases = 66)
+                    out <- rbind(out, new_peak)
+                    message("Added SLE February 2012 peak (medium outbreak with 66 cases)")
+               }
+          }
+
+          # SOM additional peaks
+          som_exists <- any(out$iso_code == "SOM")
+          if (som_exists) {
+               # SOM mid 2018 (57 cases - medium)
+               if (length(which(out$iso_code == "SOM" & out$peak_date >= as.Date("2018-05-01") & out$peak_date <= as.Date("2018-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SOM", peak_start = as.Date("2018-05-15"), peak_date = as.Date("2018-06-02"), peak_stop = as.Date("2018-07-15"), reported_cases = 57)
+                    out <- rbind(out, new_peak)
+                    message("Added SOM June 2018 peak (medium outbreak with 57 cases)")
+               }
+
+               # SOM early-mid 2019 (small - estimated 18 cases)
+               if (length(which(out$iso_code == "SOM" & out$peak_date >= as.Date("2019-01-01") & out$peak_date <= as.Date("2019-06-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SOM", peak_start = as.Date("2019-03-01"), peak_date = as.Date("2019-03-15"), peak_stop = as.Date("2019-04-15"), reported_cases = 18)
+                    out <- rbind(out, new_peak)
+                    message("Added SOM March 2019 peak (small outbreak with ~18 cases)")
+               }
+          }
+
+          # SSD additional peaks
+          ssd_exists <- any(out$iso_code == "SSD")
+          if (ssd_exists) {
+               # SSD mid 2016 (estimated 30 cases - medium)
+               if (length(which(out$iso_code == "SSD" & out$peak_date >= as.Date("2016-05-01") & out$peak_date <= as.Date("2016-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SSD", peak_start = as.Date("2016-06-01"), peak_date = as.Date("2016-06-15"), peak_stop = as.Date("2016-07-15"), reported_cases = 30)
+                    out <- rbind(out, new_peak)
+                    message("Added SSD June 2016 peak (medium outbreak with ~30 cases)")
+               }
+
+               # SSD early 2017 (estimated 25 cases - small)
+               if (length(which(out$iso_code == "SSD" & out$peak_date >= as.Date("2017-01-01") & out$peak_date <= as.Date("2017-04-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SSD", peak_start = as.Date("2017-02-01"), peak_date = as.Date("2017-02-15"), peak_stop = as.Date("2017-03-15"), reported_cases = 25)
+                    out <- rbind(out, new_peak)
+                    message("Added SSD February 2017 peak (small outbreak with ~25 cases)")
+               }
+
+               # SSD mid 2017 (double peak - estimated 35 cases)
+               if (length(which(out$iso_code == "SSD" & out$peak_date >= as.Date("2017-05-01") & out$peak_date <= as.Date("2017-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SSD", peak_start = as.Date("2017-06-01"), peak_date = as.Date("2017-06-15"), peak_stop = as.Date("2017-07-15"), reported_cases = 35)
+                    out <- rbind(out, new_peak)
+                    message("Added SSD June 2017 peak (double peak with ~35 cases)")
+               }
+
+               # SSD early-mid 2023 (estimated 20 cases - small)
+               if (length(which(out$iso_code == "SSD" & out$peak_date >= as.Date("2023-01-01") & out$peak_date <= as.Date("2023-06-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "SSD", peak_start = as.Date("2023-03-01"), peak_date = as.Date("2023-03-15"), peak_stop = as.Date("2023-04-15"), reported_cases = 20)
+                    out <- rbind(out, new_peak)
+                    message("Added SSD March 2023 peak (small outbreak with ~20 cases)")
+               }
+          }
+
+          # TCD additional peaks
+          tcd_exists <- any(out$iso_code == "TCD")
+          if (tcd_exists) {
+               # TCD late 2014 (9 cases - very small)
+               if (length(which(out$iso_code == "TCD" & out$peak_date >= as.Date("2014-10-01") & out$peak_date <= as.Date("2014-12-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "TCD", peak_start = as.Date("2014-10-01"), peak_date = as.Date("2014-10-04"), peak_stop = as.Date("2014-10-31"), reported_cases = 9)
+                    out <- rbind(out, new_peak)
+                    message("Added TCD October 2014 peak (very small outbreak with 9 cases)")
+               }
+
+               # TCD late 2019 (corrected - October peak with 2 cases - very small)
+               if (length(which(out$iso_code == "TCD" & out$peak_date >= as.Date("2019-10-01") & out$peak_date <= as.Date("2019-12-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "TCD", peak_start = as.Date("2019-10-10"), peak_date = as.Date("2019-10-20"), peak_stop = as.Date("2019-10-31"), reported_cases = 2)
+                    out <- rbind(out, new_peak)
+                    message("Added TCD October 2019 peak (corrected - very small outbreak with 2 cases)")
+               }
+
+               # TCD mid-late 2017 (first smaller peak in double peak - estimated 15 cases)
+               if (length(which(out$iso_code == "TCD" & out$peak_date >= as.Date("2017-06-01") & out$peak_date <= as.Date("2017-10-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "TCD", peak_start = as.Date("2017-08-01"), peak_date = as.Date("2017-08-15"), peak_stop = as.Date("2017-09-15"), reported_cases = 15)
+                    out <- rbind(out, new_peak)
+                    message("Added TCD August 2017 peak (first of double peak with ~15 cases)")
+               }
+          }
+
+          # TZA additional peaks
+          tza_exists <- any(out$iso_code == "TZA")
+          if (tza_exists) {
+               # TZA mid 2023 (estimated 25 cases - small)
+               if (length(which(out$iso_code == "TZA" & out$peak_date >= as.Date("2023-05-01") & out$peak_date <= as.Date("2023-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "TZA", peak_start = as.Date("2023-06-01"), peak_date = as.Date("2023-06-15"), peak_stop = as.Date("2023-07-15"), reported_cases = 25)
+                    out <- rbind(out, new_peak)
+                    message("Added TZA June 2023 peak (small outbreak with ~25 cases)")
+               }
+          }
+
+          # UGA additional peaks
+          uga_exists <- any(out$iso_code == "UGA")
+          if (uga_exists) {
+               # UGA mid 2017 (33 cases on 2017-07-13)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2017-06-01") & out$peak_date <= as.Date("2017-08-31"))) == 0) {
+                    peak_date <- as.Date("2017-07-13")
+                    reported_cases <- 33
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA July 2017 peak (33 cases)")
+               }
+
+               # UGA early-mid 2015 (6 cases - very small, narrow interval)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2015-01-01") & out$peak_date <= as.Date("2015-06-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = as.Date("2015-04-25"), peak_date = as.Date("2015-05-01"), peak_stop = as.Date("2015-05-15"), reported_cases = 6)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA May 2015 peak (very small outbreak with 6 cases)")
+               }
+
+               # UGA early 2021 (25 cases on Jan 1)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2020-12-15") & out$peak_date <= as.Date("2021-01-15"))) == 0) {
+                    peak_date <- as.Date("2021-01-01")
+                    reported_cases <- 25
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA January 2021 peak (25 cases)")
+               }
+
+               # UGA late 2021 (8 cases on Nov 4)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2021-10-01") & out$peak_date <= as.Date("2021-12-31"))) == 0) {
+                    peak_date <- as.Date("2021-11-04")
+                    reported_cases <- 8
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA November 2021 peak (8 cases)")
+               }
+
+               # UGA mid 2023 (7 cases on July 27)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2023-07-01") & out$peak_date <= as.Date("2023-08-31"))) == 0) {
+                    peak_date <- as.Date("2023-07-27")
+                    reported_cases <- 7
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA July 2023 peak (7 cases)")
+               }
+
+               # UGA mid 2024 (7 cases on May 16)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2024-05-01") & out$peak_date <= as.Date("2024-06-30"))) == 0) {
+                    peak_date <- as.Date("2024-05-16")
+                    reported_cases <- 7
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA May 2024 peak (7 cases)")
+               }
+
+               # UGA early 2025 (9 cases on Jan 8)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2025-01-01") & out$peak_date <= as.Date("2025-01-31"))) == 0) {
+                    peak_date <- as.Date("2025-01-08")
+                    reported_cases <- 9
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA January 2025 peak (9 cases)")
+               }
+
+               # UGA mid 2025 (15 cases on July 10)
+               if (length(which(out$iso_code == "UGA" & out$peak_date >= as.Date("2025-07-01") & out$peak_date <= as.Date("2025-07-31"))) == 0) {
+                    peak_date <- as.Date("2025-07-10")
+                    reported_cases <- 15
+                    interval <- calculate_peak_interval(peak_date, reported_cases)
+                    new_peak <- data.frame(iso_code = "UGA", peak_start = interval$start, peak_date = peak_date, peak_stop = interval$stop, reported_cases = reported_cases)
+                    out <- rbind(out, new_peak)
+                    message("Added UGA July 2025 peak (15 cases)")
+               }
+          }
+
+          # ZMB additional peaks
+          zmb_exists <- any(out$iso_code == "ZMB")
+          if (zmb_exists) {
+               # ZMB early 2016 (estimated 12 cases - small)
+               if (length(which(out$iso_code == "ZMB" & out$peak_date >= as.Date("2016-01-01") & out$peak_date <= as.Date("2016-04-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "ZMB", peak_start = as.Date("2016-02-01"), peak_date = as.Date("2016-02-15"), peak_stop = as.Date("2016-03-15"), reported_cases = 12)
+                    out <- rbind(out, new_peak)
+                    message("Added ZMB February 2016 peak (small outbreak with ~12 cases)")
+               }
+
+               # ZMB mid 2023 (small - estimated 8 cases)
+               if (length(which(out$iso_code == "ZMB" & out$peak_date >= as.Date("2023-05-01") & out$peak_date <= as.Date("2023-08-31"))) == 0) {
+                    new_peak <- data.frame(iso_code = "ZMB", peak_start = as.Date("2023-06-01"), peak_date = as.Date("2023-06-15"), peak_stop = as.Date("2023-07-01"), reported_cases = 8)
+                    out <- rbind(out, new_peak)
+                    message("Added ZMB June 2023 peak (very small outbreak with ~8 cases)")
+               }
+
+               # ZMB early 2025 (small - estimated 9 cases)
+               if (length(which(out$iso_code == "ZMB" & out$peak_date >= as.Date("2025-01-01") & out$peak_date <= as.Date("2025-04-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "ZMB", peak_start = as.Date("2025-02-01"), peak_date = as.Date("2025-02-15"), peak_stop = as.Date("2025-03-01"), reported_cases = 9)
+                    out <- rbind(out, new_peak)
+                    message("Added ZMB February 2025 peak (very small outbreak with ~9 cases)")
+               }
+          }
+
+          # ZWE additional peaks
+          zwe_exists <- any(out$iso_code == "ZWE")
+          if (zwe_exists) {
+               # ZWE early-mid 2025 (small - estimated 7 cases)
+               if (length(which(out$iso_code == "ZWE" & out$peak_date >= as.Date("2025-01-01") & out$peak_date <= as.Date("2025-06-30"))) == 0) {
+                    new_peak <- data.frame(iso_code = "ZWE", peak_start = as.Date("2025-03-01"), peak_date = as.Date("2025-03-15"), peak_stop = as.Date("2025-04-01"), reported_cases = 7)
+                    out <- rbind(out, new_peak)
+                    message("Added ZWE March 2025 peak (very small outbreak with ~7 cases)")
+               }
+          }
+
+          # Sort final output
+          out <- out[order(out$iso_code, out$peak_date),]
+     }
+
+     # Apply manual interval adjustments for specific peaks
+     message(paste("DEBUG: About to apply manual adjustments. nrow(out) =", nrow(out)))
+     if (nrow(out) > 0) {
+          # NGA October 2024: Reduce interval by 40% due to smoothing artifact
+          nga_oct_2024_idx <- which(out$iso_code == "NGA" &
+                                   out$peak_date == as.Date("2024-10-17"))
+          if (length(nga_oct_2024_idx) > 0) {
+               # Manual adjustment: 72 days instead of 120
+               # This is ~36 days on each side of the peak
+               out$peak_start[nga_oct_2024_idx] <- as.Date("2024-10-17") - 36
+               out$peak_stop[nga_oct_2024_idx] <- as.Date("2024-10-17") + 36
+               message("Applied 40% interval reduction to NGA October 2024 peak (72 days)")
+          }
+
+          # ETH March 2024: Adjust to be between 2023 and 2025 peaks
+          eth_mar_2024_idx <- which(out$iso_code == "ETH" &
+                                   out$peak_date == as.Date("2024-03-21"))
+          if (length(eth_mar_2024_idx) > 0) {
+               # Manual adjustment: 84 days instead of 120
+               # This is ~42 days on each side of the peak
+               out$peak_start[eth_mar_2024_idx] <- as.Date("2024-03-21") - 42
+               out$peak_stop[eth_mar_2024_idx] <- as.Date("2024-03-21") + 42
+               message("Adjusted ETH March 2024 peak interval to 84 days (between 2023 and 2025)")
+          }
+
+          # SOM May 2025: Reduce interval width due to smoothing artifact
+          som_may_2025_idx <- which(out$iso_code == "SOM" &
+                                   out$peak_date == as.Date("2025-05-22"))
+          if (length(som_may_2025_idx) > 0) {
+               # Manual adjustment: reduce to 50 days total (25 days on each side)
+               # Original was April 15 to June 30 (76 days)
+               out$peak_start[som_may_2025_idx] <- as.Date("2025-05-22") - 25
+               out$peak_stop[som_may_2025_idx] <- as.Date("2025-05-22") + 25
+               message("Applied interval reduction to SOM May 2025 peak (50 days)")
+          }
+
+          # KEN March 2023: Extend interval to the right (activity continues for several months)
+          ken_mar_2023_idx <- which(out$iso_code == "KEN" &
+                                   out$peak_date == as.Date("2023-03-06"))
+          if (length(ken_mar_2023_idx) > 0) {
+               # Extend moderately to capture extended activity
+               # Keep start date, extend stop to June 30
+               out$peak_stop[ken_mar_2023_idx] <- as.Date("2023-06-30")
+               interval_days <- as.numeric(out$peak_stop[ken_mar_2023_idx] - out$peak_start[ken_mar_2023_idx])
+               message(paste("Extended KEN March 2023 interval to the right (", interval_days, "days total)"))
+          }
+
+          # GHA November 2024: Widen the interval (currently 21 days, make it wider)
+          gha_nov_2024_idx <- which(out$iso_code == "GHA" &
+                                   out$peak_date == as.Date("2024-11-18"))
+          if (length(gha_nov_2024_idx) > 0) {
+               # Expand to ~45 days total (22 days on each side)
+               # 74 cases warrants a wider interval than the current 21 days
+               out$peak_start[gha_nov_2024_idx] <- as.Date("2024-11-18") - 22
+               out$peak_stop[gha_nov_2024_idx] <- as.Date("2024-11-18") + 23
+               interval_days <- as.numeric(out$peak_stop[gha_nov_2024_idx] - out$peak_start[gha_nov_2024_idx])
+               message(paste("Widened GHA November 2024 interval (", interval_days, "days total)"))
+          }
+
+          # SDN February 2025: Reduce the interval width slightly (currently 30 days)
+          sdn_feb_2025_idx <- which(out$iso_code == "SDN" &
+                                   out$peak_date == as.Date("2025-02-16"))
+          if (length(sdn_feb_2025_idx) > 0) {
+               # Reduce from 30 to ~22 days (11 days on each side)
+               # 60 cases, reduce from current interval
+               out$peak_start[sdn_feb_2025_idx] <- as.Date("2025-02-16") - 11
+               out$peak_stop[sdn_feb_2025_idx] <- as.Date("2025-02-16") + 11
+               interval_days <- as.numeric(out$peak_stop[sdn_feb_2025_idx] - out$peak_start[sdn_feb_2025_idx])
+               message(paste("Reduced SDN February 2025 interval width (", interval_days, "days total)"))
+          }
+
+          # ============================================================================
+          # ETH (Ethiopia) Peak Interval Adjustments
+          # ============================================================================
+
+          # ETH mid-late 2016: Reduce outbreak interval width
+          eth_2016_idx <- which(out$iso_code == "ETH" &
+                               out$peak_date >= as.Date("2016-06-01") &
+                               out$peak_date <= as.Date("2016-12-31"))  # Extended to include late 2016
+          if (length(eth_2016_idx) > 0) {
+               for (idx in eth_2016_idx) {
+                    current_width <- as.numeric(out$peak_stop[idx] - out$peak_start[idx])
+
+                    # Apply stronger reduction for late 2016 peaks
+                    if (out$peak_date[idx] >= as.Date("2016-10-01")) {
+                         new_width <- round(current_width * 0.75)  # Reduce late 2016 by 25%
+                         period_label <- "late 2016"
+                    } else {
+                         new_width <- round(current_width * 0.92)  # Reduce mid-2016 by 8%
+                         period_label <- "mid-2016"
+                    }
+
+                    half_width <- round(new_width / 2)
+                    peak_date <- out$peak_date[idx]
+                    out$peak_start[idx] <- peak_date - half_width
+                    out$peak_stop[idx] <- peak_date + (new_width - half_width)
+                    message(paste("ETH", period_label, format(peak_date, "%Y-%m-%d"), "peak: Reduced interval width from", current_width, "to", new_width, "days"))
+               }
+          }
+
+          # ETH early 2017: Extend interval to the left a small amount
+          eth_early_2017_idx <- which(out$iso_code == "ETH" &
+                                     out$peak_date >= as.Date("2017-01-01") &
+                                     out$peak_date <= as.Date("2017-05-31"))
+          if (length(eth_early_2017_idx) > 0) {
+               for (idx in eth_early_2017_idx) {
+                    # Extend to the left by 7 days, keep right boundary the same
+                    out$peak_start[idx] <- out$peak_start[idx] - 7
+                    new_width <- as.numeric(out$peak_stop[idx] - out$peak_start[idx])
+                    message(paste("ETH early 2017: Extended interval to the left by 7 days, new width:", new_width, "days"))
+               }
+          }
+
+
+          # ETH late 2023: Remove extra peak that shouldn't be there
+          eth_late_2023_idx <- which(out$iso_code == "ETH" &
+                                    out$peak_date >= as.Date("2023-11-01") &
+                                    out$peak_date <= as.Date("2023-12-31"))
+          if (length(eth_late_2023_idx) > 0) {
+               message(paste("Removing", length(eth_late_2023_idx), "extra ETH late 2023 peak(s) that should not be there"))
+               out <- out[-eth_late_2023_idx, ]
+          }
+
+          # ETH 2023-2025: Reduce interval widths with proper sizing hierarchy (2023 > 2024 > 2025)
+          eth_2023_2025_idx <- which(out$iso_code == "ETH" &
+                                    out$peak_date >= as.Date("2023-01-01") &
+                                    out$peak_date <= as.Date("2025-12-31"))
+          if (length(eth_2023_2025_idx) > 0) {
+               # First pass: get 2023 and 2024 peak widths to establish hierarchy
+               eth_2023_width <- NULL
+               eth_2024_width <- NULL
+
+               for (idx in eth_2023_2025_idx) {
+                    current_width <- as.numeric(out$peak_stop[idx] - out$peak_start[idx])
+
+                    if (out$peak_date[idx] >= as.Date("2023-01-01") &
+                        out$peak_date[idx] <= as.Date("2023-12-31")) {
+                         eth_2023_width <- round(current_width * 0.70)  # 30% reduction for 2023
+                    } else if (out$peak_date[idx] >= as.Date("2024-01-01") &
+                              out$peak_date[idx] <= as.Date("2024-12-31")) {
+                         base_width_2024 <- round(current_width * 0.55)  # 45% reduction
+                         if (!is.null(eth_2023_width)) {
+                              eth_2024_width <- min(base_width_2024, round(eth_2023_width * 0.85))
+                         } else {
+                              eth_2024_width <- base_width_2024
+                         }
+                    }
+               }
+
+               # Second pass: apply width reductions with full hierarchy 2023 > 2024 > 2025
+               for (idx in eth_2023_2025_idx) {
+                    current_width <- as.numeric(out$peak_stop[idx] - out$peak_start[idx])
+
+                    # Apply different reductions based on year with hierarchy constraints
+                    if (out$peak_date[idx] >= as.Date("2024-01-01") &
+                        out$peak_date[idx] <= as.Date("2024-12-31")) {
+                         # 2024 peaks: ensure smaller than 2023
+                         base_width <- round(current_width * 0.55)  # 45% reduction
+                         if (!is.null(eth_2023_width)) {
+                              new_width <- min(base_width, round(eth_2023_width * 0.85))  # At least 15% smaller than 2023
+                         } else {
+                              new_width <- base_width
+                         }
+                         year_label <- "2024"
+                    } else if (out$peak_date[idx] >= as.Date("2025-01-01") &
+                              out$peak_date[idx] <= as.Date("2025-12-31")) {
+                         # 2025 peaks: ensure smaller than 2024
+                         base_width <- round(current_width * 0.65)  # 35% reduction
+                         if (!is.null(eth_2024_width)) {
+                              new_width <- min(base_width, round(eth_2024_width * 0.90))  # At least 10% smaller than 2024
+                         } else {
+                              new_width <- base_width
+                         }
+                         year_label <- "2025"
+                    } else {
+                         # 2023 peaks: reduce by 30%
+                         new_width <- round(current_width * 0.70)
+                         year_label <- "2023"
+                    }
+
+                    half_width <- round(new_width / 2)
+                    peak_date <- out$peak_date[idx]
+                    out$peak_start[idx] <- peak_date - half_width
+                    out$peak_stop[idx] <- peak_date + (new_width - half_width)
+                    message(paste("ETH", year_label, format(peak_date, "%Y-%m-%d"), "peak: Reduced interval width from", current_width, "to", new_width, "days"))
+               }
+          }
+
+          # ============================================================================
+          # KEN (Kenya) Peak Interval Adjustments
+          # ============================================================================
+
+          # KEN all peaks: Reduce interval width by a small amount
+          ken_all_idx <- which(out$iso_code == "KEN")
+          if (length(ken_all_idx) > 0) {
+               for (idx in ken_all_idx) {
+                    current_width <- as.numeric(out$peak_stop[idx] - out$peak_start[idx])
+                    new_width <- round(current_width * 0.90)  # Reduce by 10%
+                    half_width <- round(new_width / 2)
+                    peak_date <- out$peak_date[idx]
+                    out$peak_start[idx] <- peak_date - half_width
+                    out$peak_stop[idx] <- peak_date + (new_width - half_width)
+                    message(paste("KEN", format(peak_date, "%Y-%m-%d"), "peak: Reduced interval width from", current_width, "to", new_width, "days"))
+               }
+          }
+     }
+
+     # ============================================================================
+     # SUPPLEMENTAL PEAKS: Add representative peaks for countries with data but no algorithmic detection
+     # This section runs independently and does not affect existing algorithmic results
+     # ============================================================================
+
+     if (nrow(out) > 0) {
+          message("Adding supplemental peaks for countries with cholera data but no algorithmic detection...")
+
+          # Countries with meaningful cholera activity but no detected peaks
+          # Note: BEN, CIV, CAF, and COG are handled in the manual peaks section above
+          countries_to_supplement <- c("LBR", "TGO", "RWA")
+
+          for (country in countries_to_supplement) {
+               if (!country %in% out$iso_code) {
+
+                    if (country == "LBR") {
+                         # LBR: Peak in early 2017 with 68 cases on April 16, 2017
+                         # 7-day outbreak interval as requested
+                         new_peak <- data.frame(
+                              iso_code = "LBR",
+                              peak_start = as.Date("2017-04-13"),
+                              peak_date = as.Date("2017-04-16"),
+                              peak_stop = as.Date("2017-04-20"),
+                              reported_cases = 68
+                         )
+                         out <- rbind(out, new_peak)
+                         message("Added LBR April 2017 peak (68 cases, 7-day interval)")
+                    }
+
+                    if (country == "TGO") {
+                         # TGO: Two peaks identified from actual surveillance data
+
+                         # TGO late 2013 peak (26 cases on Oct 14-20, 7-day interval)
+                         peak_date_2013 <- as.Date("2013-10-17")
+                         reported_cases_2013 <- 26
+                         new_peak_2013 <- data.frame(
+                              iso_code = "TGO",
+                              peak_start = peak_date_2013 - 3,
+                              peak_date = peak_date_2013,
+                              peak_stop = peak_date_2013 + 4,
+                              reported_cases = reported_cases_2013
+                         )
+                         out <- rbind(out, new_peak_2013)
+                         message("Added TGO October 2013 peak (26 cases, 7-day interval)")
+
+                         # TGO late 2024 peak (66 cases on Oct 14-20, use interval function)
+                         peak_date_2024 <- as.Date("2024-10-17")
+                         reported_cases_2024 <- 66
+                         interval_2024 <- calculate_peak_interval(peak_date_2024, reported_cases_2024)
+                         new_peak_2024 <- data.frame(
+                              iso_code = "TGO",
+                              peak_start = interval_2024$start,
+                              peak_date = peak_date_2024,
+                              peak_stop = interval_2024$stop,
+                              reported_cases = reported_cases_2024
+                         )
+                         out <- rbind(out, new_peak_2024)
+                         message("Added TGO October 2024 peak (66 cases, interval function)")
+                    }
+
+                    if (country == "RWA") {
+                         # RWA: Peak in early 2025 with 83 cases on March 31-April 6, 2025
+                         # 30-day outbreak interval as requested
+                         new_peak <- data.frame(
+                              iso_code = "RWA",
+                              peak_start = as.Date("2025-03-18"),
+                              peak_date = as.Date("2025-04-03"),
+                              peak_stop = as.Date("2025-04-17"),
+                              reported_cases = 83
+                         )
+                         out <- rbind(out, new_peak)
+                         message("Added RWA March-April 2025 peak (83 cases, 30-day interval)")
+                    }
+               }
+          }
+
+          # Sort the final output after adding supplemental peaks
+          out <- out[order(out$iso_code, out$peak_date),]
+     }
+
+     # Constrain all peak intervals to not extend beyond the maximum available data date
+     max_data_date <- max(as.Date(cholera_data$date), na.rm = TRUE)
+     beyond_data_idx <- which(out$peak_stop > max_data_date)
+
+     if (length(beyond_data_idx) > 0) {
+          for (idx in beyond_data_idx) {
+               # Constrain peak_stop to max_data_date
+               old_stop <- out$peak_stop[idx]
+               out$peak_stop[idx] <- max_data_date
+
+               # Optionally adjust peak_start to maintain a reasonable interval
+               # But ensure it doesn't go before the original start
+               interval_days <- as.numeric(old_stop - out$peak_start[idx])
+               adjusted_days <- as.numeric(max_data_date - out$peak_start[idx])
+
+               message(sprintf("Constrained %s %s peak interval to data bounds (was %d days, now %d days)",
+                             out$iso_code[idx], out$peak_date[idx], interval_days, adjusted_days))
+          }
+     }
+
+     # Add outbreak interval information to the dataframe
+     out$outbreak_interval_days <- as.numeric(out$peak_stop - out$peak_start)
+
+     # Save as param_epidemic_peaks.csv
+     output_file <- file.path(PATHS$MODEL_INPUT, "param_epidemic_peaks.csv")
+
+     # Create directory if it doesn't exist
+     if (!dir.exists(PATHS$MODEL_INPUT)) {
+          dir.create(PATHS$MODEL_INPUT, recursive = TRUE)
+     }
+
+     write.csv(out, output_file, row.names = FALSE)
+     message(paste("Saved epidemic peaks to:", output_file))
+
+     return(out)
 }

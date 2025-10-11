@@ -8,19 +8,23 @@
 #'   \item \strong{DATA_ENSO}: Path to the directory where ENSO data is stored.
 #'   \item \strong{DATA_CHOLERA_WEEKLY}: Path to the directory containing processed combined weekly cholera cases data (WHO+JHU+SUPP sources).
 #' }
-#' @param cutoff Numeric threshold for case counts. Weeks with cases >= cutoff are considered
-#'   outbreak periods for the environmental suitability calculation. Default behavior uses this
-#'   value to create the binary indicator.
+#' @param cutoff Numeric threshold for case counts. Used when use_epidemic_peaks = FALSE.
+#'   Weeks with cases >= cutoff are considered outbreak periods for the environmental
+#'   suitability calculation. Default behavior uses this value to create the binary indicator.
+#' @param use_epidemic_peaks Logical. If TRUE, uses epidemic peak periods from
+#'   est_epidemic_peaks() to define environmental suitability using exact peak_start
+#'   to peak_stop dates. Provides deterministic outbreak detection without any
+#'   modifications or lead-up periods. Default FALSE for backwards compatibility.
 #' @param date_start Optional start year for data filtering. If NULL, automatically determined
 #'   from case data (one year prior to earliest case observation).
 #' @param date_stop Optional end year for data filtering. If NULL, automatically determined
 #'   from latest ENSO data availability.
 #' @param forecast_mode Logical. If TRUE, only includes variables that can support forecasting
-#'   at the specified horizon. Excludes case-dependent epidemic memory and spatial import 
+#'   at the specified horizon. Excludes case-dependent epidemic memory and spatial import
 #'   pressure variables. Default TRUE.
-#' @param forecast_horizon Numeric. Forecasting horizon in months. Variables dependent on 
+#' @param forecast_horizon Numeric. Forecasting horizon in months. Variables dependent on
 #'   surveillance data beyond this horizon are excluded in forecast mode. Default 3 months.
-#' @param include_lags Logical. If TRUE, includes time-lagged climate variables with 
+#' @param include_lags Logical. If TRUE, includes time-lagged climate variables with
 #'   epidemiologically-informed lag periods specific to each variable. Default FALSE.
 #'
 #' @return This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
@@ -32,12 +36,18 @@
 #'   \item Loads ENSO and DMI climate index data
 #'   \item Loads combined weekly cholera case surveillance data from WHO, JHU, and supplemental sources
 #'   \item Merges all datasets by country, year, and week
-#'   \item Creates environmental suitability indicator (\code{cases_binary}) that identifies not only outbreak weeks but also the environmental conditions leading up to outbreaks using temporal logic
+#'   \item Creates environmental suitability indicator (\code{cases_binary}) using either epidemic peak-based or threshold-based methods
 #'   \item Saves the complete merged dataset for use in environmental suitability modeling
 #' }
 #'
-#' The \code{cases_binary} indicator uses sophisticated logic to capture environmental suitability periods,
-#' including lead-up weeks before observable outbreaks, making it suitable for predictive modeling.
+#' \strong{Environmental Suitability Methods:}
+#' \itemize{
+#'   \item \strong{Epidemic Peak-based} (use_epidemic_peaks = TRUE): Uses deterministic outbreak detection from est_epidemic_peaks() using exact peak_start to peak_stop dates without any modifications
+#'   \item \strong{Threshold-based} (use_epidemic_peaks = FALSE): Uses simple case count cutoffs with temporal lead-up logic
+#' }
+#'
+#' The epidemic peak-based method provides deterministic, epidemiologically meaningful outbreak periods
+#' and is recommended for consistent environmental suitability modeling.
 #'
 #' @importFrom arrow read_parquet
 #' @importFrom utils read.csv write.csv
@@ -46,10 +56,13 @@
 #' @importFrom tidyr pivot_wider
 #'
 #' @seealso
-#' \code{\link{get_cases_binary}} for details on how the environmental suitability indicator is created.
+#' \code{\link{get_cases_binary}} for the threshold-based environmental suitability method
+#' \code{\link{get_cases_binary_from_peaks}} for the epidemic peak-based method
+#' \code{\link{est_epidemic_peaks}} for epidemic peak detection
 #'
 #' @export
-process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop = NULL, 
+process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
+                                    date_start = NULL, date_stop = NULL,
                                     forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE) {
 
      requireNamespace('arrow')
@@ -591,7 +604,18 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
 
      # Create binary environmental suitability indicator from case data
      message("Creating environmental suitability indicator (cases_binary)...")
-     d <- MOSAIC::get_cases_binary(d, cutoff = cutoff)
+     if (use_epidemic_peaks) {
+          message("  - Using epidemic peak-based method (deterministic)")
+          message("    * Loading epidemic peaks from est_epidemic_peaks() analysis...")
+          message("    * Creating deterministic outbreak-based suitability periods...")
+          message("    * Using exact peak_start to peak_stop dates without modifications...")
+          peak_function <- MOSAIC::get_cases_binary_from_peaks(PATHS)
+          d <- peak_function(d)
+          message("    * Epidemic peak-based environmental suitability indicator completed!")
+     } else {
+          message(sprintf("  - Using case threshold method (cutoff = %d)", cutoff))
+          d <- MOSAIC::get_cases_binary(d, cutoff = cutoff)
+     }
 
      # ============================================================================
      # ENHANCED TIME SERIES COVARIATES
@@ -991,10 +1015,11 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
                dplyr::group_by(iso_code) %>%
                dplyr::arrange(date, .by_group = TRUE) %>%
                dplyr::mutate(
-                    # Precipitation: 1,2,4,8 weeks (runoff/flooding → contamination)
+                    # Precipitation: 1,2,4,6,8 weeks (runoff/flooding → contamination)
                     precipitation_sum_lag1 = dplyr::lag(precipitation_sum, 1),
                     precipitation_sum_lag2 = dplyr::lag(precipitation_sum, 2),
                     precipitation_sum_lag4 = dplyr::lag(precipitation_sum, 4),
+                    precipitation_sum_lag6 = dplyr::lag(precipitation_sum, 6),    # Optimal secondary period (r = 0.029)
                     precipitation_sum_lag8 = dplyr::lag(precipitation_sum, 8),
                     
                     # Temperature: 2,4,8 weeks (growth/survival of vibrios)
@@ -1003,6 +1028,7 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
                     temperature_2m_mean_lag8 = dplyr::lag(temperature_2m_mean, 8),
                     temperature_2m_max_lag2 = dplyr::lag(temperature_2m_max, 2),
                     temperature_2m_max_lag4 = dplyr::lag(temperature_2m_max, 4),
+                    temperature_2m_max_lag6 = dplyr::lag(temperature_2m_max, 6),    # Consistent negative correlation (r = -0.020)
                     temperature_2m_max_lag8 = dplyr::lag(temperature_2m_max, 8),
                     
                     # Relative humidity: 1,2,4 weeks (survival; interacts with heat)
@@ -1011,19 +1037,23 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
                     relative_humidity_2m_mean_lag4 = dplyr::lag(relative_humidity_2m_mean, 4),
                     
                     # VPD: 1,4,8 weeks (dryness preceding wet periods)
-                    vpd_lag1 = ifelse("vpd" %in% names(.), dplyr::lag(vpd, 1), NA),
-                    vpd_lag4 = ifelse("vpd" %in% names(.), dplyr::lag(vpd, 4), NA),
-                    vpd_lag8 = ifelse("vpd" %in% names(.), dplyr::lag(vpd, 8), NA),
+                    # Only create meaningful lags if vpd exists and has valid data
+                    vpd_lag1 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 1) else NA_real_,
+                    vpd_lag4 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 4) else NA_real_,
+                    vpd_lag8 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 8) else NA_real_,
                     
-                    # Soil moisture: 1,4,8 weeks (environmental reservoir readiness)
+                    # Soil moisture: 1,2,4,6,8 weeks (environmental reservoir readiness)
                     soil_moisture_0_to_10cm_mean_lag1 = dplyr::lag(soil_moisture_0_to_10cm_mean, 1),
+                    soil_moisture_0_to_10cm_mean_lag2 = dplyr::lag(soil_moisture_0_to_10cm_mean, 2),    # Optimal period (r = 0.043)
                     soil_moisture_0_to_10cm_mean_lag4 = dplyr::lag(soil_moisture_0_to_10cm_mean, 4),
+                    soil_moisture_0_to_10cm_mean_lag6 = dplyr::lag(soil_moisture_0_to_10cm_mean, 6),    # Secondary optimal (r = 0.037)
                     soil_moisture_0_to_10cm_mean_lag8 = dplyr::lag(soil_moisture_0_to_10cm_mean, 8),
                     
                     # SPEI: 4,8,12 weeks (integrated hydro-climate balance)
-                    spei_approx_lag4 = ifelse("spei_approx" %in% names(.), dplyr::lag(spei_approx, 4), NA),
-                    spei_approx_lag8 = ifelse("spei_approx" %in% names(.), dplyr::lag(spei_approx, 8), NA),
-                    spei_approx_lag12 = ifelse("spei_approx" %in% names(.), dplyr::lag(spei_approx, 12), NA),
+                    # Only create meaningful lags if spei_approx exists and has valid data
+                    spei_approx_lag4 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 4) else NA_real_,
+                    spei_approx_lag8 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 8) else NA_real_,
+                    spei_approx_lag12 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 12) else NA_real_,
                     
                     # Evapotranspiration: 1,4,8 weeks
                     et0_fao_evapotranspiration_sum_lag1 = dplyr::lag(et0_fao_evapotranspiration_sum, 1),
@@ -1031,15 +1061,17 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
                     et0_fao_evapotranspiration_sum_lag8 = dplyr::lag(et0_fao_evapotranspiration_sum, 8),
                     
                     # Diurnal temperature range: 2,4 weeks
-                    diurnal_temp_range_lag2 = ifelse("diurnal_temp_range" %in% names(.), 
-                                                    dplyr::lag(diurnal_temp_range, 2), NA),
-                    diurnal_temp_range_lag4 = ifelse("diurnal_temp_range" %in% names(.), 
-                                                    dplyr::lag(diurnal_temp_range, 4), NA),
+                    # Only create meaningful lags if diurnal_temp_range exists and has valid data
+                    diurnal_temp_range_lag2 = if("diurnal_temp_range" %in% names(.) && !all(is.na(diurnal_temp_range)))
+                                                    dplyr::lag(diurnal_temp_range, 2) else NA_real_,
+                    diurnal_temp_range_lag4 = if("diurnal_temp_range" %in% names(.) && !all(is.na(diurnal_temp_range)))
+                                                    dplyr::lag(diurnal_temp_range, 4) else NA_real_,
                     
                     # Heat index: 2,4,8 weeks
-                    heat_index_lag2 = ifelse("heat_index" %in% names(.), dplyr::lag(heat_index, 2), NA),
-                    heat_index_lag4 = ifelse("heat_index" %in% names(.), dplyr::lag(heat_index, 4), NA),
-                    heat_index_lag8 = ifelse("heat_index" %in% names(.), dplyr::lag(heat_index, 8), NA),
+                    # Only create meaningful lags if heat_index exists and has valid data
+                    heat_index_lag2 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 2) else NA_real_,
+                    heat_index_lag4 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 4) else NA_real_,
+                    heat_index_lag8 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 8) else NA_real_,
                     
                     # Cloud cover: 1,4 weeks
                     cloud_cover_mean_lag1 = dplyr::lag(cloud_cover_mean, 1),
@@ -1049,27 +1081,42 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
                     wind_speed_10m_mean_lag1 = dplyr::lag(wind_speed_10m_mean, 1),
                     wind_speed_10m_mean_lag2 = dplyr::lag(wind_speed_10m_mean, 2),
                     
-                    # Large-scale modes: 4,12,24,36 weeks (slow teleconnections)
-                    ENSO34_lag4 = dplyr::lag(ENSO34, 4),
-                    ENSO34_lag12 = dplyr::lag(ENSO34, 12),
-                    ENSO34_lag24 = dplyr::lag(ENSO34, 24),
-                    ENSO34_lag36 = dplyr::lag(ENSO34, 36),
-                    ENSO3_lag4 = dplyr::lag(ENSO3, 4),
-                    ENSO3_lag12 = dplyr::lag(ENSO3, 12),
-                    ENSO3_lag24 = dplyr::lag(ENSO3, 24),
-                    ENSO3_lag36 = dplyr::lag(ENSO3, 36),
-                    ENSO4_lag4 = dplyr::lag(ENSO4, 4),
-                    ENSO4_lag12 = dplyr::lag(ENSO4, 12),
-                    ENSO4_lag24 = dplyr::lag(ENSO4, 24),
-                    ENSO4_lag36 = dplyr::lag(ENSO4, 36),
-                    DMI_lag4 = dplyr::lag(DMI, 4),
-                    DMI_lag12 = dplyr::lag(DMI, 12),
-                    DMI_lag24 = dplyr::lag(DMI, 24),
-                    DMI_lag36 = dplyr::lag(DMI, 36)
+                    # Large-scale modes: Evidence-based optimal lags from correlation analysis
+                    # ENSO3 (Eastern Pacific) - optimal at 4-6 months (16-24 weeks)
+                    ENSO3_lag4 = dplyr::lag(ENSO3, 4),      # 1 month - good performance
+                    ENSO3_lag16 = dplyr::lag(ENSO3, 16),    # 4 months - strong correlation
+                    ENSO3_lag20 = dplyr::lag(ENSO3, 20),    # 5 months - peak correlation (0.216)
+                    ENSO3_lag24 = dplyr::lag(ENSO3, 24),    # 6 months - optimal period (0.218)
+
+                    # ENSO34 (Central Pacific) - optimal at 6 and 11 months
+                    ENSO34_lag6 = dplyr::lag(ENSO34, 6),    # Early response
+                    ENSO34_lag24 = dplyr::lag(ENSO34, 24),  # 6 months - secondary peak (0.193)
+                    ENSO34_lag44 = dplyr::lag(ENSO34, 44),  # 11 months - optimal (0.203)
+
+                    # ENSO4 (Western Pacific) - optimal at 10-11 months
+                    ENSO4_lag40 = dplyr::lag(ENSO4, 40),    # 10 months - near-optimal (0.226)
+                    ENSO4_lag44 = dplyr::lag(ENSO4, 44),    # 11 months - peak correlation (0.232)
+
+                    # DMI (Indian Ocean Dipole) - stable across 4-5 months, some immediate effects
+                    DMI_lag0 = DMI,                         # Immediate effects (strong in some countries)
+                    DMI_lag4 = dplyr::lag(DMI, 4),         # 1 month - stable period
+                    DMI_lag16 = dplyr::lag(DMI, 16),       # 4 months - good performance
+                    DMI_lag20 = dplyr::lag(DMI, 20)        # 5 months - optimal period (0.185)
                ) %>%
                dplyr::ungroup()
           
-          message(sprintf("    - Added %d time-lagged climate variables", 49))
+          message(sprintf("    - Added %d time-lagged climate variables (including immediate effects)", 51))
+
+          # Remove any lag columns that are entirely NA (failed conditional creation)
+          lag_columns <- names(d)[grepl("_lag\\d+$", names(d))]
+          all_na_lags <- sapply(d[lag_columns], function(x) all(is.na(x)))
+          if (any(all_na_lags)) {
+               removed_lags <- names(all_na_lags)[all_na_lags]
+               d <- d[, !names(d) %in% removed_lags]
+               message(sprintf("    - Removed %d all-NA lag columns: %s",
+                              length(removed_lags),
+                              paste(head(removed_lags, 5), collapse = ", ")))
+          }
      } else {
           message("  - Skipping time-lagged climate variables")
      }
@@ -1152,22 +1199,22 @@ process_suitability_data <- function(PATHS, cutoff, date_start = NULL, date_stop
      
      # 16. Time-lagged climate variables (if included)
      if (include_lags) {
-          lag_cols <- c("precipitation_sum_lag1", "precipitation_sum_lag2", "precipitation_sum_lag4", "precipitation_sum_lag8",
+          lag_cols <- c("precipitation_sum_lag1", "precipitation_sum_lag2", "precipitation_sum_lag4", "precipitation_sum_lag6", "precipitation_sum_lag8",
                        "temperature_2m_mean_lag2", "temperature_2m_mean_lag4", "temperature_2m_mean_lag8",
-                       "temperature_2m_max_lag2", "temperature_2m_max_lag4", "temperature_2m_max_lag8",
+                       "temperature_2m_max_lag2", "temperature_2m_max_lag4", "temperature_2m_max_lag6", "temperature_2m_max_lag8",
                        "relative_humidity_2m_mean_lag1", "relative_humidity_2m_mean_lag2", "relative_humidity_2m_mean_lag4",
                        "vpd_lag1", "vpd_lag4", "vpd_lag8",
-                       "soil_moisture_0_to_10cm_mean_lag1", "soil_moisture_0_to_10cm_mean_lag4", "soil_moisture_0_to_10cm_mean_lag8",
+                       "soil_moisture_0_to_10cm_mean_lag1", "soil_moisture_0_to_10cm_mean_lag2", "soil_moisture_0_to_10cm_mean_lag4", "soil_moisture_0_to_10cm_mean_lag6", "soil_moisture_0_to_10cm_mean_lag8",
                        "spei_approx_lag4", "spei_approx_lag8", "spei_approx_lag12",
                        "et0_fao_evapotranspiration_sum_lag1", "et0_fao_evapotranspiration_sum_lag4", "et0_fao_evapotranspiration_sum_lag8",
                        "diurnal_temp_range_lag2", "diurnal_temp_range_lag4",
                        "heat_index_lag2", "heat_index_lag4", "heat_index_lag8",
                        "cloud_cover_mean_lag1", "cloud_cover_mean_lag4",
                        "wind_speed_10m_mean_lag1", "wind_speed_10m_mean_lag2",
-                       "ENSO34_lag4", "ENSO34_lag12", "ENSO34_lag24", "ENSO34_lag36",
-                       "ENSO3_lag4", "ENSO3_lag12", "ENSO3_lag24", "ENSO3_lag36",
-                       "ENSO4_lag4", "ENSO4_lag12", "ENSO4_lag24", "ENSO4_lag36",
-                       "DMI_lag4", "DMI_lag12", "DMI_lag24", "DMI_lag36")
+                       "ENSO3_lag4", "ENSO3_lag16", "ENSO3_lag20", "ENSO3_lag24",
+                       "ENSO34_lag6", "ENSO34_lag24", "ENSO34_lag44",
+                       "ENSO4_lag40", "ENSO4_lag44",
+                       "DMI_lag0", "DMI_lag4", "DMI_lag16", "DMI_lag20")
      } else {
           lag_cols <- c()
      }

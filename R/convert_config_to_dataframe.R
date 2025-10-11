@@ -109,7 +109,12 @@ convert_config_to_dataframe <- function(config) {
           "decay_days_short",
           "decay_days_long",
           "decay_shape_1",
-          "decay_shape_2"
+          "decay_shape_2",
+          "mu_j",               # Added: Case fatality ratio
+          "psi_star_a",         # Added: psi_star calibration parameters
+          "psi_star_b",
+          "psi_star_z",
+          "psi_star_k"
      )
 
      config_subset <- config[names(config) %in% params_keep]

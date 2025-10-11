@@ -1,0 +1,69 @@
+#' Cholera Epidemic Peaks Data
+#'
+#' A dataset containing identified epidemic peaks from cholera surveillance data
+#' across African countries. Peaks are detected using time series analysis with
+#' smoothing and prominence-based peak detection algorithms.
+#'
+#' @format A data frame with 5 variables:
+#' \describe{
+#'   \item{iso_code}{ISO 3166-1 alpha-3 country code}
+#'   \item{peak_start}{Start date of the epidemic period (Date)}
+#'   \item{peak_date}{Date of peak incidence (Date)}
+#'   \item{peak_stop}{End date of the epidemic period (Date)}
+#'   \item{reported_cases}{Number of reported cholera cases at peak (numeric)}
+#' }
+#'
+#' @details
+#' Epidemic peaks are identified using the following methodology:
+#' \itemize{
+#'   \item Time series smoothing with 21-day running mean window
+#'   \item Local maxima detection with 7-day comparison windows
+#'   \item Prominence-based filtering (minimum 10\% of maximum smoothed value)
+#'   \item Minimum peak height threshold of 10 smoothed cases
+#'   \item Minimum 90-day separation between consecutive peaks
+#'   \item Peak boundaries defined where incidence drops to 1/3 of peak height
+#' }
+#'
+#' Country-specific adjustments are applied for:
+#' \itemize{
+#'   \item Niger (NER): Lower prominence threshold (2\%) for gradual peaks
+#'   \item Cameroon (CMR): Adjusted threshold (5\%) for plateau-shaped peaks
+#'   \item Ethiopia (ETH): Standard threshold (7\%) for multiple outbreaks
+#' }
+#'
+#' Manual corrections have been applied for known issues including:
+#' \itemize{
+#'   \item Ethiopia 2024: February peak corrected to March (sustained outbreak)
+#'   \item DRC 2023: Added January peak (filtered due to proximity)
+#'   \item Nigeria 2024: Added October peak
+#'   \item Kenya 2022-2023: Added December 2022, removed June 2023 minor peak
+#'   \item Mozambique: Added February 2024 and March 2025 peaks
+#'   \item Somalia: Added major April 2017 peak and 2024-2025 peaks
+#'   \item Zambia: Added January 2018 peak
+#'   \item Tanzania: Added January 2017 peak
+#' }
+#'
+#' @source Generated from cholera surveillance data using \code{est_epidemic_peaks()}
+#' function on combined daily surveillance data from WHO and other sources.
+#'
+#' @examples
+#' data(epidemic_peaks)
+#' head(epidemic_peaks)
+#' 
+#' # Countries with epidemic data
+#' unique(epidemic_peaks$iso_code)
+#' 
+#' # Recent peaks (2024-2025)
+#' recent_peaks <- epidemic_peaks[epidemic_peaks$peak_date >= as.Date("2024-01-01"), ]
+#' table(recent_peaks$iso_code)
+#' 
+#' # Peak duration calculation
+#' epidemic_peaks$duration <- as.numeric(
+#'   epidemic_peaks$peak_stop - epidemic_peaks$peak_start
+#' )
+#' summary(epidemic_peaks$duration)
+#'
+#' @seealso \code{\link{est_epidemic_peaks}} for the function that generates this data
+#' @seealso \code{\link{plot_epidemic_peaks}} for visualization
+#'
+"epidemic_peaks"

@@ -50,7 +50,7 @@ without any external dependencies.
 }
 \seealso{
 \itemize{
-\item \code{\link[=make_default_LASER_config]{make_default_LASER_config()}} – function that creates this object.
+\item make_defaut_LASER_config() – function that creates this object.
 \item \link{config_simulation_epidemic} – one-year outbreak toy data set.
 \item \link{config_simulation_endemic} – 5-year endemic toy data set.
 }

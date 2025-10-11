@@ -402,28 +402,13 @@ est_initial_R <- function(
 
                output$parameters_location$prop_R_initial$parameters$location[[loc]] <- list(
                     shape1 = alpha,
-                    shape2 = beta,
-                    metadata = list(
-                         estimated_from_data = TRUE,
-                         mean = loc_data$mean,
-                         ci_lower = loc_data$ci_lower,
-                         ci_upper = loc_data$ci_upper,
-                         t0 = as.character(t0),
-                         population_at_t0 = loc_data$population,
-                         count_mean = loc_data$count_mean,
-                         count_ci = c(loc_data$count_ci_lower, loc_data$count_ci_upper),
-                         variance_inflation = variance_inflation
-                    )
+                    shape2 = beta
                )
           } else {
                # Include NA values for locations without data
                output$parameters_location$prop_R_initial$parameters$location[[loc]] <- list(
                     shape1 = NA,
-                    shape2 = NA,
-                    metadata = list(
-                         estimated_from_data = FALSE,
-                         note = "No surveillance data available for estimation"
-                    )
+                    shape2 = NA
                )
           }
      }

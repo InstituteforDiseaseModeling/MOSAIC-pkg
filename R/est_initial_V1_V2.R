@@ -24,7 +24,7 @@
 #'       \item prop_V1_initial: Beta distribution parameters for V1/N by location
 #'       \item prop_V2_initial: Beta distribution parameters for V2/N by location
 #'     }
-#'     Each parameter contains $parameters$location$[ISO_CODE] with shape1, shape2, and metadata
+#'     Each parameter contains $parameters$location$ISO_CODE with shape1, shape2, and metadata
 #'   }
 #' }
 #'
@@ -468,28 +468,13 @@ est_initial_V1_V2 <- function(PATHS,
 
       output$parameters_location$prop_V1_initial$parameters$location[[loc]] <- list(
         shape1 = alpha_v1,
-        shape2 = beta_v1,
-        metadata = list(
-          estimated_from_data = TRUE,
-          mean = loc_data$V1_proportion$mean,
-          ci_lower = loc_data$V1_proportion$ci_lower,
-          ci_upper = loc_data$V1_proportion$ci_upper,
-          t0 = as.character(loc_data$t0),
-          population_at_t0 = loc_data$population,
-          count_mean = loc_data$V1_count$mean,
-          count_ci = c(loc_data$V1_count$ci_lower, loc_data$V1_count$ci_upper),
-          variance_inflation = variance_inflation
-        )
+        shape2 = beta_v1
       )
     } else {
       # Include NA values for locations without data
       output$parameters_location$prop_V1_initial$parameters$location[[loc]] <- list(
         shape1 = NA,
-        shape2 = NA,
-        metadata = list(
-          estimated_from_data = FALSE,
-          note = "No vaccination data available for estimation"
-        )
+        shape2 = NA
       )
     }
 
@@ -503,27 +488,12 @@ est_initial_V1_V2 <- function(PATHS,
 
       output$parameters_location$prop_V2_initial$parameters$location[[loc]] <- list(
         shape1 = alpha_v2,
-        shape2 = beta_v2,
-        metadata = list(
-          estimated_from_data = TRUE,
-          mean = loc_data$V2_proportion$mean,
-          ci_lower = loc_data$V2_proportion$ci_lower,
-          ci_upper = loc_data$V2_proportion$ci_upper,
-          t0 = as.character(loc_data$t0),
-          population_at_t0 = loc_data$population,
-          count_mean = loc_data$V2_count$mean,
-          count_ci = c(loc_data$V2_count$ci_lower, loc_data$V2_count$ci_upper),
-          variance_inflation = variance_inflation
-        )
+        shape2 = beta_v2
       )
     } else {
       output$parameters_location$prop_V2_initial$parameters$location[[loc]] <- list(
         shape1 = NA,
-        shape2 = NA,
-        metadata = list(
-          estimated_from_data = FALSE,
-          note = "No two-dose vaccination data or all zeros"
-        )
+        shape2 = NA
       )
     }
   }

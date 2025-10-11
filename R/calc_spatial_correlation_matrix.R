@@ -6,24 +6,24 @@
 #' spatial–correlation coefficients (Keeling & Rohani 2002) for every pair of
 #' locations.
 #'
-#' *All three input objects must be arranged as* **[locations \(J\) × time \(T\)]**
-#' (rows are the *J* locations; columns are the *T* time steps).
+#' All three input objects must be arranged as (locations J × time T)
+#' (rows are the J locations; columns are the T time steps).
 #'
-#' Total infections at time *t* in location *j* are taken as
+#' Total infections at time t in location j are taken as
 #' \eqn{I_{jt} = I^{(\mathrm{sym})}_{jt} + I^{(\mathrm{asym})}_{jt}}; these
 #' are converted to prevalence by dividing by the matching population size
 #' \eqn{N_{jt}}.  Pair-wise correlations are then computed with
 #' [`calc_spatial_correlation()`].
 #'
-#' @param I_sym  Numeric **matrix** (J × T).  Symptomatic infections.
-#' @param I_asym Numeric **matrix** (J × T).  Asymptomatic infections.
+#' @param I_sym  Numeric matrix (J × T).  Symptomatic infections.
+#' @param I_asym Numeric matrix (J × T).  Asymptomatic infections.
 #'               Must have the same dimensions as `I_sym`.
 #' @param N      Population sizes. Accepts
 #'   * a single scalar (same for every j & t),
-#'   * a length-*J* vector (different per location, constant in time), **or**
-#'   * a full *J × T* matrix (time‑varying populations).
+#'   * a length-J vector (different per location, constant in time), or
+#'   * a full J × T matrix (time‑varying populations).
 #'
-#' @return A **J × J** symmetric numeric matrix whose \((i,j)\) entry is
+#' @return A J × J symmetric numeric matrix whose \((i,j)\) entry is
 #'   \eqn{\mathcal{C}_{ij}}; diagonal elements are set to 1.
 #'   Pairs that cannot be computed (all `NA`, zero variance, etc.) are `NA_real_`.
 #'

@@ -109,8 +109,8 @@ get_location_priors <- function(priors = NULL, iso) {
     first_param <- priors$parameters_location[[1]]
     
     # Check for location structure
-    if (!is.null(first_param$parameters$location)) {
-      available_locations <- names(first_param$parameters$location)
+    if (!is.null(first_param$location)) {
+      available_locations <- names(first_param$location)
     }
   }
   
@@ -160,31 +160,29 @@ get_location_priors <- function(priors = NULL, iso) {
       
       # Create filtered parameter structure
       param_filtered <- list(
-        parameter_name = param$parameter_name,
         description = param$description,
-        distribution = param$distribution,
-        parameters = list(location = list())
+        location = list()
       )
       
       # Copy any other attributes that might exist
       other_attrs <- setdiff(names(param), 
-                            c("parameter_name", "description", "distribution", "parameters"))
+                            c("description", "location"))
       for (attr in other_attrs) {
         param_filtered[[attr]] <- param[[attr]]
       }
       
       # Extract only the requested locations
-      if (!is.null(param$parameters$location)) {
+      if (!is.null(param$location)) {
         for (loc in iso) {
-          if (!is.null(param$parameters$location[[loc]])) {
-            param_filtered$parameters$location[[loc]] <- 
-              param$parameters$location[[loc]]
+          if (!is.null(param$location[[loc]])) {
+            param_filtered$location[[loc]] <- 
+              param$location[[loc]]
           }
         }
       }
       
       # Only add the parameter if it has at least one location
-      if (length(param_filtered$parameters$location) > 0) {
+      if (length(param_filtered$location) > 0) {
         priors_filtered$parameters_location[[param_name]] <- param_filtered
       }
     }
@@ -233,8 +231,8 @@ print.mosaic_priors <- function(x, ...) {
   cat("  Location-specific:", n_location, "\n")
   
   # Get locations if available
-  if (n_location > 0 && !is.null(x$parameters_location[[1]]$parameters$location)) {
-    locations <- names(x$parameters_location[[1]]$parameters$location)
+  if (n_location > 0 && !is.null(x$parameters_location[[1]]$location)) {
+    locations <- names(x$parameters_location[[1]]$location)
     cat("  Locations included:", paste(locations, collapse = ", "), "\n")
   }
   

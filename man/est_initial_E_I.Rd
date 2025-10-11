@@ -49,9 +49,7 @@ lookback_days, n_samples, and method.}
 \itemize{
 \item parameter_name: Parameter identifier
 \item distribution: \code{"beta"}
-\item parameters$location: Named list by ISO code with \code{shape1}, \code{shape2}, \code{mean},
-\code{variance}, \code{method} (fitting method used), and \code{metadata} (data availability,
-sample statistics)
+\item parameters$location: Named list by ISO code with \code{shape1} and \code{shape2}
 }
 }
 }

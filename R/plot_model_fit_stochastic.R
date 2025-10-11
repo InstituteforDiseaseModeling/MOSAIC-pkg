@@ -285,10 +285,10 @@ plot_model_fit_stochastic <- function(config,
             manual_upper <- quantile(sim_values, probs = envelope_quantiles[2], na.rm = TRUE)
             manual_mean <- mean(sim_values, na.rm = TRUE)
 
-            message(sprintf("  Time %d: Mean=%.1f, [%.1f%% CI: %.1f-%.1f], Range=[%.1f-%.1f]",
+            message(sprintf("  Time %d: Mean=%.1f, [%.0f%%-%.0f%% CI: %.1f-%.1f], Range=[%.1f-%.1f]",
                           t, manual_mean,
-                          envelope_quantiles[1] * 100, manual_lower,
-                          envelope_quantiles[2] * 100, manual_upper,
+                          envelope_quantiles[1] * 100, envelope_quantiles[2] * 100,
+                          manual_lower, manual_upper,
                           min(sim_values, na.rm = TRUE), max(sim_values, na.rm = TRUE)))
         }
     }
@@ -403,8 +403,8 @@ plot_model_fit_stochastic <- function(config,
                               color = "black",
                               size = 1.5,
                               alpha = 0.6) +
-            # Median prediction line
-            ggplot2::geom_line(ggplot2::aes(y = predicted_median, color = metric),
+            # Mean prediction line
+            ggplot2::geom_line(ggplot2::aes(y = predicted_mean, color = metric),
                              linewidth = 0.8) +
             # Facet by metric
             ggplot2::facet_grid(metric ~ .,
@@ -509,8 +509,8 @@ plot_model_fit_stochastic <- function(config,
                               color = "black",
                               size = 1.5,
                               alpha = 0.6) +
-            # Median prediction line
-            ggplot2::geom_line(ggplot2::aes(y = predicted_median),
+            # Mean prediction line
+            ggplot2::geom_line(ggplot2::aes(y = predicted_mean),
                              color = "steelblue",
                              linewidth = 0.8) +
             # Facet by location
@@ -618,8 +618,8 @@ plot_model_fit_stochastic <- function(config,
                               color = "black",
                               size = 1.5,
                               alpha = 0.6) +
-            # Median prediction line
-            ggplot2::geom_line(ggplot2::aes(y = predicted_median),
+            # Mean prediction line
+            ggplot2::geom_line(ggplot2::aes(y = predicted_mean),
                              color = "darkred",
                              linewidth = 0.8) +
             # Facet by location

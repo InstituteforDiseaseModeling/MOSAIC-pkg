@@ -1,9 +1,9 @@
-#' Calculate model-weight agreement diagnostics from log-likelihoods
+#' Calculate convergence diagnostics and write to files
 #'
-#' Convenience wrapper that computes ΔAIC, truncated/temperature-scaled Akaike weights,
-#' ESS, agreement index \eqn{A}, coefficient of variation of weights (CVw),
-#' retained set size \eqn{B}, and the maximum normalized weight
-#' \eqn{\max_i \tilde w_i}. Results are compared to recommended thresholds.
+#' Calculates model-weight agreement diagnostics from calibration results and writes
+#' both per-simulation data (Parquet) and aggregate diagnostics (JSON) to files.
+#' This function measures \strong{model-weight agreement} and \strong{evidence concentration},
+#' not MCMC convergence.
 #'
 #' @section Important Note:
 #' This function measures \strong{model-weight agreement} and \strong{evidence concentration},
@@ -11,12 +11,18 @@
 #' trace plots, etc. The "convergence" terminology here refers to agreement across the
 #' ensemble of parameter draws, not chain convergence.
 #'
-#' @section Assumptions:
-#' The ΔAIC computation assumes all draws have the same number of parameters k.
-#' For models with different k, compute AIC = -2*loglik + 2*k first, then use Δ = AIC - min(AIC).
+#' @section File Outputs:
+#' The function writes two files to the output directory:
+#' \itemize{
+#'   \item \code{convergence_results.parquet} — Per-simulation data with columns:
+#'         sim, seed, likelihood, aic, delta_aic, w, w_tilde, retained
+#'   \item \code{convergence_diagnostics.json} — Aggregate metrics with human-readable
+#'         descriptions, targets, and pass/fail status
+#' }
 #'
-#' @param loglik Numeric vector of log-likelihoods (one per draw). Higher is better.
-#' @param seeds Optional vector of seeds corresponding to each likelihood value (same length as \code{loglik}).
+#' @param PATHS MOSAIC paths object from \code{get_paths()}.
+#' @param results Data frame with columns: sim, seed, likelihood (and optionally others).
+#' @param output_dir Character string specifying directory to write output files.
 #' @param delta_max Numeric Δ cutoff used for truncation (default \code{6}).
 #' @param temperature Positive scalar temperature for weight scaling (default \code{1}).
 #'   See [calc_model_akaike_weights()] for guidance.
@@ -25,104 +31,209 @@
 #' @param cvw_max Numeric target maximum coefficient of variation of weights (default \code{1.0}).
 #' @param B_min Integer target minimum retained set size \eqn{B} (default \code{2}).
 #' @param max_w_max Numeric in (0, 1] for the maximum allowed normalized weight (default \code{0.5}).
+#' @param verbose Logical indicating whether to print progress messages (default \code{TRUE}).
 #'
-#' @return A list with:
+#' @return A list with summary information:
 #' \itemize{
-#'   \item `loglik`   — original log-likelihood vector.
-#'   \item `delta`    — vector of \eqn{\Delta_i}.
-#'   \item `delta_max` — the Δ cutoff used.
-#'   \item `temperature` — the temperature used.
-#'   \item `weights`  — list from [calc_model_akaike_weights()] with `w`, `w_tilde`, `retained`, `B_idx`.
-#'   \item `retained` — logical vector indicating retained draws (same as `weights$retained`).
-#'   \item `H`        — entropy value from agreement index calculation.
-#'   \item `metrics`  — named numeric vector: `ESS`, `A`, `CVw`, `B_size`, `max_w`.
-#'   \item `targets`  — named numeric vector of thresholds.
-#'   \item `pass`     — named logical vector indicating if each metric meets target.
-#'   \item `status`   — named character vector: "pass", "warn", or "fail" for each metric.
-#' }
-#'
-#' @section Recommended usage:
-#' \itemize{
-#'   \item If the top model dominates (\code{max_w \u2192 1}), try \code{temperature = 1.5–2}
-#'         and/or a looser \code{delta_max} (e.g., 20–100) to increase ESS while preserving ranking.
-#'   \item Keep \code{temperature \u2264 3} for most workflows to avoid overly flat weights.
+#'   \item \code{status} — Overall convergence status ("PASS", "WARN", "FAIL")
+#'   \item \code{n_total} — Total number of simulations
+#'   \item \code{n_successful} — Number of successful simulations (finite likelihood)
+#'   \item \code{n_retained} — Number of simulations in retained set
+#'   \item \code{files_written} — Vector of output file names
 #' }
 #'
 #' @examples
-#' set.seed(42)
-#' ll <- 1500 + rnorm(3000, sd = 3)
-#' # Mild flattening for smoother posterior plots
-#' res <- calc_model_convergence(ll, delta_max = 20, temperature = 1.8)
-#' res$metrics; res$pass
+#' \dontrun{
+#' # Prepare results data frame
+#' results <- data.frame(
+#'   sim = 1:1000,
+#'   seed = 1001:2000,
+#'   likelihood = 1500 + rnorm(1000, sd = 3)
+#' )
+#'
+#' # Calculate convergence and write files
+#' summary <- calc_model_convergence(
+#'   PATHS = get_paths(),
+#'   results = results,
+#'   output_dir = "path/to/output",
+#'   temperature = 1.5
+#' )
+#'
+#' print(summary)
+#' }
 #'
 #' @seealso
+#'   [plot_model_convergence()],
 #'   [calc_model_aic_delta()],
-#'   [calc_model_akaike_weights()],
-#'   [calc_model_ess()],
-#'   [calc_model_agreement_index()],
-#'   [calc_model_cvw()],
-#'   [calc_model_max_weight()]
+#'   [calc_model_akaike_weights()]
 #'
 #' @family calibration-metrics
 #' @export
-calc_model_convergence <- function(loglik,
-                                   seeds       = NULL,
+calc_model_convergence <- function(PATHS,
+                                   results,
+                                   output_dir,
                                    delta_max   = 6,
                                    temperature = 1,
                                    ess_min     = 1000,
                                    A_min       = 0.75,
                                    cvw_max     = 1.0,
                                    B_min       = 2,
-                                   max_w_max   = 0.5) {
+                                   max_w_max   = 0.5,
+                                   verbose     = TRUE) {
 
-     stopifnot(is.numeric(loglik), length(loglik) > 0)
-     if (!is.null(seeds)) stopifnot(length(seeds) == length(loglik))
+    # ============================================================================
+    # Input validation
+    # ============================================================================
 
-     delta   <- calc_model_aic_delta(loglik)
-     weights <- calc_model_akaike_weights(delta,
-                                          delta_max   = delta_max,
-                                          temperature = temperature)
+    if (!is.data.frame(results)) {
+        stop("results must be a data frame")
+    }
 
-     ESS   <- calc_model_ess(weights$w_tilde)
-     ag    <- calc_model_agreement_index(weights$w)
-     CVw   <- calc_model_cvw(weights$w)
-     max_w <- calc_model_max_weight(weights$w)
+    required_cols <- c("sim", "likelihood")
+    missing_cols <- setdiff(required_cols, names(results))
+    if (length(missing_cols) > 0) {
+        stop("results data frame missing required columns: ", paste(missing_cols, collapse = ", "))
+    }
 
-     metrics <- c(ESS = ESS, A = ag$A, CVw = CVw, B_size = ag$B_size, max_w = max_w)
-     targets <- c(ESS_min = ess_min, A_min = A_min, CVw_max = cvw_max,
-                  B_min = B_min, max_w_max = max_w_max)
+    if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE)
+        if (verbose) message("Created output directory: ", output_dir)
+    }
 
-     pass <- c(
-          ESS    = is.finite(ESS)   && ESS   >= ess_min,
-          A      = is.finite(ag$A)  && ag$A  >= A_min,
-          CVw    = is.finite(CVw)   && CVw   <= cvw_max,
-          B_size = ag$B_size        >= B_min,
-          max_w  = is.finite(max_w) && max_w <= max_w_max
-     )
+    # Extract likelihood data
+    loglik <- results$likelihood
+    seeds <- results$sim
+    n_total <- length(loglik)
+    n_successful <- sum(is.finite(loglik))
 
-     status <- c(
-          ESS    = if (!is.finite(ESS)) "fail" else if (ESS < 500) "fail" else if (ESS < ess_min) "warn" else "pass",
-          A      = if (!is.finite(ag$A)) "fail" else if (ag$A < 0.5) "fail" else if (ag$A < A_min) "warn" else "pass",
-          CVw    = if (!is.finite(CVw)) "fail" else if (CVw > 2 * cvw_max) "fail" else if (CVw > cvw_max) "warn" else "pass",
-          B_size = if (ag$B_size < 1) "fail" else if (ag$B_size < B_min) "warn" else "pass",
-          max_w  = if (!is.finite(max_w)) "fail" else if (max_w > 0.9) "fail" else if (max_w > max_w_max) "warn" else "pass"
-     )
+    if (verbose) {
+        message("Processing convergence diagnostics for ", n_total, " simulations")
+        message("Successful simulations: ", n_successful, " (", round(100 * n_successful / n_total, 1), "%)")
+    }
 
-     result <- list(
-          loglik      = loglik,
-          delta       = delta,
-          delta_max   = delta_max,
-          temperature = temperature,
-          weights     = weights,
-          retained    = weights$retained,
-          H           = ag$H,
-          metrics     = metrics,
-          targets     = targets,
-          pass        = pass,
-          status      = status
-     )
-     if (!is.null(seeds)) result$seeds <- seeds
-     result
+    # ============================================================================
+    # Calculate convergence metrics
+    # ============================================================================
+
+    delta   <- calc_model_aic_delta(loglik)
+    weights <- calc_model_akaike_weights(delta,
+                                         delta_max   = delta_max,
+                                         temperature = temperature)
+
+    ESS   <- calc_model_ess(weights$w_tilde)
+    ag    <- calc_model_agreement_index(weights$w)
+    CVw   <- calc_model_cvw(weights$w)
+    max_w <- calc_model_max_weight(weights$w)
+
+    metrics <- c(ESS = ESS, A = ag$A, CVw = CVw, B_size = ag$B_size, max_w = max_w)
+    targets <- c(ESS_min = ess_min, A_min = A_min, CVw_max = cvw_max,
+                 B_min = B_min, max_w_max = max_w_max)
+
+    pass <- c(
+        ESS    = is.finite(ESS)   && ESS   >= ess_min,
+        A      = is.finite(ag$A)  && ag$A  >= A_min,
+        CVw    = is.finite(CVw)   && CVw   <= cvw_max,
+        B_size = ag$B_size        >= B_min,
+        max_w  = is.finite(max_w) && max_w <= max_w_max
+    )
+
+    status <- c(
+        ESS    = if (!is.finite(ESS)) "fail" else if (ESS < 500) "fail" else if (ESS < ess_min) "warn" else "pass",
+        A      = if (!is.finite(ag$A)) "fail" else if (ag$A < 0.5) "fail" else if (ag$A < A_min) "warn" else "pass",
+        CVw    = if (!is.finite(CVw)) "fail" else if (CVw > 2 * cvw_max) "fail" else if (CVw > cvw_max) "warn" else "pass",
+        B_size = if (ag$B_size < 1) "fail" else if (ag$B_size < B_min) "warn" else "pass",
+        max_w  = if (!is.finite(max_w)) "fail" else if (max_w > 0.9) "fail" else if (max_w > max_w_max) "warn" else "pass"
+    )
+
+    n_retained <- sum(weights$retained)
+    overall_status <- if (all(status == "pass")) "PASS" else if (any(status == "fail")) "FAIL" else "WARN"
+
+    if (verbose) {
+        message("Convergence metrics calculated:")
+        message("  ESS: ", round(ESS, 0), " (target ≥ ", ess_min, ") - ", toupper(status["ESS"]))
+        message("  Agreement: ", round(ag$A, 3), " (target ≥ ", A_min, ") - ", toupper(status["A"]))
+        message("  Retained: ", n_retained, " simulations")
+        message("  Overall status: ", overall_status)
+    }
+
+    # ============================================================================
+    # Create results data frame for Parquet export
+    # ============================================================================
+
+    results_df <- data.frame(
+        sim = results$sim,
+        seed = results$sim,
+        likelihood = loglik,
+        aic = -2 * loglik,
+        delta_aic = delta,
+        w = weights$w,
+        w_tilde = weights$w_tilde,
+        retained = weights$retained
+    )
+
+    # ============================================================================
+    # Create diagnostics structure for JSON export
+    # ============================================================================
+
+    diagnostics <- list(
+        settings = list(
+            delta_max = delta_max,
+            temperature = temperature,
+            description = "Temperature-scaled truncated Akaike weights"
+        ),
+        targets = list(
+            ess_min = list(value = ess_min, description = "Minimum effective sample size"),
+            A_min = list(value = A_min, description = "Minimum agreement index (entropy-based consensus)"),
+            cvw_max = list(value = cvw_max, description = "Maximum coefficient of variation of weights"),
+            B_min = list(value = B_min, description = "Minimum retained set size"),
+            max_w_max = list(value = max_w_max, description = "Maximum allowed normalized weight")
+        ),
+        metrics = list(
+            ess = list(value = ESS, description = "Effective sample size", status = status["ESS"]),
+            agreement_index = list(value = ag$A, description = "Entropy-based model agreement", status = status["A"]),
+            cvw = list(value = CVw, description = "Coefficient of variation of weights", status = status["CVw"]),
+            retained_count = list(value = ag$B_size, description = "Number of models in retained set", status = status["B_size"]),
+            max_weight = list(value = max_w, description = "Maximum normalized weight", status = status["max_w"])
+        ),
+        summary = list(
+            total_simulations = n_total,
+            successful_simulations = n_successful,
+            retained_simulations = n_retained,
+            convergence_status = overall_status
+        )
+    )
+
+    # ============================================================================
+    # Write output files
+    # ============================================================================
+
+    # Write Parquet file
+    results_file <- file.path(output_dir, "convergence_results.parquet")
+    arrow::write_parquet(results_df, results_file)
+
+    # Write JSON file
+    diagnostics_file <- file.path(output_dir, "convergence_diagnostics.json")
+    jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE)
+
+    files_written <- c("convergence_results.parquet", "convergence_diagnostics.json")
+
+    if (verbose) {
+        message("Files written to ", output_dir, ":")
+        message("  - ", basename(results_file))
+        message("  - ", basename(diagnostics_file))
+    }
+
+    # ============================================================================
+    # Return summary
+    # ============================================================================
+
+    return(list(
+        status = overall_status,
+        n_total = n_total,
+        n_successful = n_successful,
+        n_retained = n_retained,
+        files_written = files_written
+    ))
 }
 
 
@@ -260,34 +371,6 @@ calc_model_akaike_weights <- function(delta,
 
 
 
-#' Effective sample size (ESS) of weights
-#'
-#' Computes \eqn{\widehat{\mathrm{ESS}} = 1 / \sum_i \tilde w_i^2}.
-#' If weights are not normalized, they are normalized internally before computing ESS.
-#'
-#' @param w Numeric vector of weights (raw or normalized). Larger ESS is better.
-#'
-#' @return Scalar ESS.
-#'
-#' @examples
-#' set.seed(1)
-#' ll <- 1000 + rnorm(500, sd = 3)
-#' d  <- calc_model_aic_delta(ll)
-#' aw <- calc_model_akaike_weights(d)
-#' calc_model_ess(aw$w_tilde)
-#'
-#' @seealso [calc_model_convergence()]
-#' @family calibration-metrics
-#' @export
-calc_model_ess <- function(w) {
-     stopifnot(is.numeric(w))
-     s <- sum(w)
-     if (s <= 0) return(NA_real_)
-     wt <- w / s
-     denom <- sum(wt^2)
-     if (denom <= 0) return(NA_real_)
-     1 / denom
-}
 
 #' Agreement index A based on entropy of weights
 #'
@@ -299,7 +382,7 @@ calc_model_ess <- function(w) {
 #' @param w Numeric vector of weights (raw or normalized). Only strictly positive entries form \eqn{\mathcal B}.
 #'   Internally normalized within \eqn{\mathcal B}; larger \eqn{A} is better.
 #'
-#' @return A list with `A` (agreement index in [0,1]), `H` (entropy), and `B_size` (retained set size).
+#' @return A list with `A` (agreement index in \\[0,1\\]), `H` (entropy), and `B_size` (retained set size).
 #'
 #' @examples
 #' set.seed(1)

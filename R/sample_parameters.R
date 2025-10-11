@@ -9,44 +9,49 @@
 #' @param config A config template list. If NULL, will use MOSAIC::config_default.
 #' @param seed Random seed for reproducible sampling (required).
 #'
-#' @param sample_alpha_1 Sample alpha_1 parameter (population mixing within metapops). Default TRUE.
-#' @param sample_alpha_2 Sample alpha_2 parameter (degree of frequency driven transmission). Default TRUE.
-#' @param sample_decay_days_long Sample decay_days_long parameter (maximum V. cholerae survival). Default TRUE.
-#' @param sample_decay_days_short Sample decay_days_short parameter (minimum V. cholerae survival). Default TRUE.
-#' @param sample_decay_shape_1 Sample decay_shape_1 parameter (first Beta shape for decay). Default TRUE.
-#' @param sample_decay_shape_2 Sample decay_shape_2 parameter (second Beta shape for decay). Default TRUE.
-#' @param sample_epsilon Sample epsilon parameter (immunity). Default TRUE.
-#' @param sample_gamma_1 Sample gamma_1 parameter (recovery rate). Default TRUE.
-#' @param sample_gamma_2 Sample gamma_2 parameter (recovery rate). Default TRUE.
-#' @param sample_iota Sample iota parameter (importation rate). Default TRUE.
-#' @param sample_kappa Sample kappa parameter (spatial correlation). Default TRUE.
-#' @param sample_mobility_gamma Sample mobility_gamma parameter. Default TRUE.
-#' @param sample_mobility_omega Sample mobility_omega parameter. Default TRUE.
-#' @param sample_omega_1 Sample omega_1 parameter (infection). Default TRUE.
-#' @param sample_omega_2 Sample omega_2 parameter (infection). Default TRUE.
-#' @param sample_phi_1 Sample phi_1 parameter (incubation). Default TRUE.
-#' @param sample_phi_2 Sample phi_2 parameter (incubation). Default TRUE.
-#' @param sample_rho Sample rho parameter (immunity waning). Default TRUE.
-#' @param sample_sigma Sample sigma parameter (immunity). Default TRUE.
-#' @param sample_zeta_1 Sample zeta_1 parameter (spatial). Default TRUE.
-#' @param sample_zeta_2 Sample zeta_2 parameter (spatial). Default TRUE.
-#'
-#' @param sample_beta_j0_tot Sample beta_j0_tot parameter (total transmission rate). Default TRUE.
-#' @param sample_p_beta Sample p_beta parameter (proportion of human-to-human transmission). Default TRUE.
-#' @param sample_tau_i Sample tau_i parameter (diffusion). Default TRUE.
-#' @param sample_theta_j Sample theta_j parameter (WASH coverage). Default TRUE.
-#' @param sample_a1 Sample a1 parameter (seasonality). Default TRUE.
-#' @param sample_a2 Sample a2 parameter (seasonality). Default TRUE.
-#' @param sample_b1 Sample b1 parameter (seasonality). Default TRUE.
-#' @param sample_b2 Sample b2 parameter (seasonality). Default TRUE.
-#' @param sample_mu_j Sample mu_j parameter (location-specific case fatality ratio). Default TRUE.
-#'
-#' @param sample_psi_star_a Sample psi_star_a parameter (suitability calibration shape/gain). Default TRUE.
-#' @param sample_psi_star_b Sample psi_star_b parameter (suitability calibration scale/offset). Default TRUE.
-#' @param sample_psi_star_z Sample psi_star_z parameter (suitability calibration smoothing). Default TRUE.
-#' @param sample_psi_star_k Sample psi_star_k parameter (suitability calibration time offset). Default TRUE.
-#'
-#' @param sample_initial_conditions Sample initial condition proportions for all compartments. Default TRUE.
+#' @param sample_args Named list of logical values controlling which parameters to sample.
+#'   Each element should be named as sample_[parameter] with a logical value.
+#'   Available options include:
+#'   \itemize{
+#'     \item sample_alpha_1: Population mixing within metapops (default TRUE)
+#'     \item sample_alpha_2: Degree of frequency driven transmission (default TRUE)
+#'     \item sample_decay_days_long: Maximum V. cholerae survival (default TRUE)
+#'     \item sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
+#'     \item sample_decay_shape_1: First Beta shape for decay (default TRUE)
+#'     \item sample_decay_shape_2: Second Beta shape for decay (default TRUE)
+#'     \item sample_epsilon: Immunity (default TRUE)
+#'     \item sample_gamma_1: Recovery rate (default TRUE)
+#'     \item sample_gamma_2: Recovery rate (default TRUE)
+#'     \item sample_iota: Importation rate (default TRUE)
+#'     \item sample_kappa: Spatial correlation (default TRUE)
+#'     \item sample_mobility_gamma: Mobility parameter (default TRUE)
+#'     \item sample_mobility_omega: Mobility parameter (default TRUE)
+#'     \item sample_omega_1: Infection (default TRUE)
+#'     \item sample_omega_2: Infection (default TRUE)
+#'     \item sample_phi_1: Incubation (default TRUE)
+#'     \item sample_phi_2: Incubation (default TRUE)
+#'     \item sample_rho: Immunity waning (default TRUE)
+#'     \item sample_sigma: Immunity (default TRUE)
+#'     \item sample_zeta_1: Spatial (default TRUE)
+#'     \item sample_zeta_2: Spatial (default TRUE)
+#'     \item sample_beta_j0_tot: Total transmission rate (default TRUE)
+#'     \item sample_p_beta: Proportion of human-to-human transmission (default TRUE)
+#'     \item sample_tau_i: Diffusion (default TRUE)
+#'     \item sample_theta_j: WASH coverage (default TRUE)
+#'     \item sample_a1: Seasonality (default TRUE)
+#'     \item sample_a2: Seasonality (default TRUE)
+#'     \item sample_b1: Seasonality (default TRUE)
+#'     \item sample_b2: Seasonality (default TRUE)
+#'     \item sample_mu_j: Location-specific case fatality ratio (default TRUE)
+#'     \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
+#'     \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
+#'     \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
+#'     \item sample_psi_star_k: Suitability calibration time offset (default TRUE)
+#'     \item sample_initial_conditions: Initial condition proportions (default TRUE)
+#'   }
+#'   If NULL, all parameters are sampled (default behavior).
+#' @param ... Additional individual sample_* arguments for backward compatibility.
+#'   These override values in sample_args if both are provided.
 #'
 #' @param verbose Logical indicating whether to print progress messages. Default TRUE.
 #'
@@ -62,17 +67,23 @@
 #' # Sample all parameters (default)
 #' config_sampled <- sample_parameters(seed = 123)
 #'
-#' # Sample only disease progression parameters
+#' # Sample only disease progression parameters using sample_args
+#' config_sampled <- sample_parameters(
+#'   seed = 123,
+#'   sample_args = list(
+#'     sample_mobility_omega = FALSE,
+#'     sample_mobility_gamma = FALSE,
+#'     sample_kappa = FALSE
+#'   )
+#' )
+#'
+#' # Backward compatibility: still works with individual arguments
 #' config_sampled <- sample_parameters(
 #'   seed = 123,
 #'   sample_mobility_omega = FALSE,
 #'   sample_mobility_gamma = FALSE,
 #'   sample_kappa = FALSE
 #' )
-#'
-#' # Use helper for common patterns
-#' args <- create_sampling_args("disease_only", seed = 123)
-#' config_sampled <- do.call(sample_parameters, args)
 #' }
 sample_parameters <- function(
   # Required and core arguments
@@ -81,52 +92,92 @@ sample_parameters <- function(
   config = NULL,
   seed,
 
-  # Global parameter sampling controls (21 parameters)
-  sample_alpha_1 = TRUE,
-  sample_alpha_2 = TRUE,
-  sample_decay_days_long = TRUE,
-  sample_decay_days_short = TRUE,
-  sample_decay_shape_1 = TRUE,
-  sample_decay_shape_2 = TRUE,
-  sample_epsilon = TRUE,
-  sample_gamma_1 = TRUE,
-  sample_gamma_2 = TRUE,
-  sample_iota = TRUE,
-  sample_kappa = TRUE,
-  sample_mobility_gamma = TRUE,
-  sample_mobility_omega = TRUE,
-  sample_omega_1 = TRUE,
-  sample_omega_2 = TRUE,
-  sample_phi_1 = TRUE,
-  sample_phi_2 = TRUE,
-  sample_rho = TRUE,
-  sample_sigma = TRUE,
-  sample_zeta_1 = TRUE,
-  sample_zeta_2 = TRUE,
-
-  # Location-specific parameter sampling controls (13 parameters)
-  sample_beta_j0_tot = TRUE,
-  sample_p_beta = TRUE,
-  sample_tau_i = TRUE,
-  sample_theta_j = TRUE,
-  sample_a1 = TRUE,
-  sample_a2 = TRUE,
-  sample_b1 = TRUE,
-  sample_b2 = TRUE,
-  sample_mu_j = TRUE,
-
-  # psi_star calibration parameters
-  sample_psi_star_a = TRUE,
-  sample_psi_star_b = TRUE,
-  sample_psi_star_z = TRUE,
-  sample_psi_star_k = TRUE,
-
-  # Initial conditions sampling control
-  sample_initial_conditions = TRUE,
+  # New unified sampling control
+  sample_args = NULL,
 
   # Other options
-  verbose = TRUE
+  verbose = TRUE,
+
+  # Individual sampling controls for backward compatibility
+  ...
 ) {
+
+  # ============================================================================
+  # Process sampling arguments
+  # ============================================================================
+
+  # Define all possible sampling parameters with defaults
+  default_sample_args <- list(
+    # Global parameter sampling controls (21 parameters)
+    sample_alpha_1 = TRUE,
+    sample_alpha_2 = TRUE,
+    sample_decay_days_long = TRUE,
+    sample_decay_days_short = TRUE,
+    sample_decay_shape_1 = TRUE,
+    sample_decay_shape_2 = TRUE,
+    sample_epsilon = TRUE,
+    sample_gamma_1 = TRUE,
+    sample_gamma_2 = TRUE,
+    sample_iota = TRUE,
+    sample_kappa = TRUE,
+    sample_mobility_gamma = TRUE,
+    sample_mobility_omega = TRUE,
+    sample_omega_1 = TRUE,
+    sample_omega_2 = TRUE,
+    sample_phi_1 = TRUE,
+    sample_phi_2 = TRUE,
+    sample_rho = TRUE,
+    sample_sigma = TRUE,
+    sample_zeta_1 = TRUE,
+    sample_zeta_2 = TRUE,
+
+    # Location-specific parameter sampling controls (13 parameters)
+    sample_beta_j0_tot = TRUE,
+    sample_p_beta = TRUE,
+    sample_tau_i = TRUE,
+    sample_theta_j = TRUE,
+    sample_a1 = TRUE,
+    sample_a2 = TRUE,
+    sample_b1 = TRUE,
+    sample_b2 = TRUE,
+    sample_mu_j = TRUE,
+
+    # psi_star calibration parameters
+    sample_psi_star_a = TRUE,
+    sample_psi_star_b = TRUE,
+    sample_psi_star_z = TRUE,
+    sample_psi_star_k = TRUE,
+
+    # Initial conditions sampling control
+    sample_initial_conditions = TRUE
+  )
+
+  # Start with defaults
+  final_sample_args <- default_sample_args
+
+  # Override with sample_args if provided
+  if (!is.null(sample_args)) {
+    for (name in names(sample_args)) {
+      if (name %in% names(default_sample_args)) {
+        final_sample_args[[name]] <- sample_args[[name]]
+      } else {
+        warning("Unknown sampling parameter: ", name)
+      }
+    }
+  }
+
+  # Override with individual arguments from ... for backward compatibility
+  dots <- list(...)
+  for (name in names(dots)) {
+    if (name %in% names(default_sample_args)) {
+      final_sample_args[[name]] <- dots[[name]]
+    }
+  }
+
+  # Extract individual values for use in the function
+  for (name in names(final_sample_args)) {
+    assign(name, final_sample_args[[name]])
+  }
 
   # Input validation
   if (missing(seed) || !is.numeric(seed) || length(seed) != 1) {

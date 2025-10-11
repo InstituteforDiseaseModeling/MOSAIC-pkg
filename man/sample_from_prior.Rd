@@ -34,16 +34,24 @@ Supported distributions:
 \item \strong{gamma}: parameters$shape, parameters$rate
 \item \strong{lognormal}: parameters$meanlog, parameters$sdlog OR parameters$mean, parameters$sd
 \item \strong{normal}: parameters$mean, parameters$sd
+\item \strong{truncnorm}: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)
 \item \strong{uniform}: parameters$min, parameters$max
 \item \strong{gompertz}: parameters$b, parameters$eta
 }
 }
 \examples{
 # Sample from a beta distribution
-prior <- list(
+prior_beta <- list(
   distribution = "beta",
   parameters = list(shape1 = 2, shape2 = 5)
 )
-sample_from_prior(n = 10, prior = prior)
+sample_from_prior(n = 10, prior = prior_beta)
+
+# Sample from a truncated normal distribution
+prior_truncnorm <- list(
+  distribution = "truncnorm",
+  parameters = list(mean = 0, sd = 1, a = -2, b = 2)
+)
+sample_from_prior(n = 10, prior = prior_truncnorm)
 
 }

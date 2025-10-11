@@ -34,6 +34,10 @@ make_LASER_config(
   mu_j_slope = NULL,
   rho = NULL,
   sigma = NULL,
+  chi_endemic = NULL,
+  chi_epidemic = NULL,
+  epidemic_threshold = NULL,
+  delta_reporting = NULL,
   longitude = NULL,
   latitude = NULL,
   mobility_omega = NULL,
@@ -52,6 +56,10 @@ make_LASER_config(
   beta_j0_env = NULL,
   theta_j = NULL,
   psi_jt = NULL,
+  psi_star_a = NULL,
+  psi_star_b = NULL,
+  psi_star_z = NULL,
+  psi_star_k = NULL,
   zeta_1 = NULL,
   zeta_2 = NULL,
   kappa = NULL,
@@ -117,9 +125,9 @@ sequence from date_start to date_stop.
 
 \item{nu_2_jt}{A matrix of second-dose OCV vaccinations for each location and time step.}
 
-\item{phi_1}{Effectiveness of one dose of OCV (numeric in \link{0, 1}).}
+\item{phi_1}{Effectiveness of one dose of OCV (numeric in [0, 1]).}
 
-\item{phi_2}{Effectiveness of two doses of OCV (numeric in \link{0, 1}).}
+\item{phi_2}{Effectiveness of two doses of OCV (numeric in [0, 1]).}
 
 \item{omega_1}{Waning immunity rate for one dose (numeric >= 0).}
 
@@ -140,16 +148,16 @@ length(location_name) and columns equal to length(t). All values must be numeric
 If mu_j is provided, mu_jt will be generated from mu_j and mu_j_slope.}
 
 \item{mu_j}{A numeric vector of location-specific baseline case fatality ratios. Optional. If provided
-with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in \link{0, 1}.}
+with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in [0, 1].}
 
 \item{mu_j_slope}{A numeric vector of location-specific temporal slopes for case fatality ratio.
 Optional. Default is 0 (no temporal trend). Length must equal length(location_name).
 \subsection{Observation Processes}{
 }}
 
-\item{rho}{Proportion of true infections (numeric in \link{0, 1}).}
+\item{rho}{Proportion of true infections (numeric in [0, 1]).}
 
-\item{sigma}{Proportion of symptomatic infections (numeric in \link{0, 1}).
+\item{sigma}{Proportion of symptomatic infections (numeric in [0, 1]).
 \subsection{Spatial model}{
 }}
 
@@ -161,7 +169,7 @@ Optional. Default is 0 (no temporal trend). Length must equal length(location_na
 
 \item{mobility_gamma}{Exponent weight for distance decay in the gravity mobility model. Must be numeric ≥ 0.}
 
-\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_name) in \link{0, 1}).
+\item{tau_i}{Departure probability for each origin location (numeric vector of length(location_name) in [0, 1]).
 \subsection{Force of Infection (human-to-human)}{
 }}
 
@@ -184,19 +192,31 @@ If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_t
 
 \item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.}
 
-\item{alpha_1}{Transmission parameter for mixing (numeric in \link{0, 1}).}
+\item{alpha_1}{Transmission parameter for mixing (numeric in [0, 1]).}
 
-\item{alpha_2}{Transmission parameter for density dependence (numeric in \link{0, 1}).
+\item{alpha_2}{Transmission parameter for density dependence (numeric in [0, 1]).
 \subsection{Force of Infection (environment-to-human)}{
 }}
 
 \item{beta_j0_env}{Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
 If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * (1 - p_beta).}
 
-\item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_name) in \link{0, 1}).}
+\item{theta_j}{Proportion with adequate WASH (numeric vector of length(location_name) in [0, 1]).}
 
 \item{psi_jt}{Matrix of environmental suitability values (matrix with rows = length(location_name) and columns
 equal to the daily sequence from date_start to date_stop).}
+
+\item{psi_star_a}{Shape/gain parameter for logit calibration of psi_jt (numeric vector of length(location_name) > 0).
+Values > 1 sharpen peaks, values < 1 flatten peaks. Default 1.0 (no transformation).}
+
+\item{psi_star_b}{Scale/offset parameter for logit calibration of psi_jt (numeric vector of length(location_name)).
+Shifts baseline up/down on logit scale. Default 0.0 (no offset).}
+
+\item{psi_star_z}{Smoothing weight for causal EWMA of calibrated psi_jt (numeric vector of length(location_name) in (0,1]).
+1.0 = no smoothing, < 1.0 = apply smoothing. Default 1.0 (no smoothing).}
+
+\item{psi_star_k}{Time offset in days for psi_jt calibration (numeric vector of length(location_name)).
+Positive values = forward/delay, negative values = backward/advance. Default 0.0 (no offset).}
 
 \item{zeta_1}{Shedding rate (numeric > 0).}
 

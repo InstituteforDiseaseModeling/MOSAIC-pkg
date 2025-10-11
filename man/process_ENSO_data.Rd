@@ -29,7 +29,15 @@ A data frame with combined historical and forecast data for DMI, ENSO3, ENSO34, 
 }
 }
 \description{
-This function compiles historical and forecast data for DMI and ENSO (Niño3, Niño3.4, and Niño4) into a single data frame. The data is filtered to only include years from a specified \code{year_start} onwards. The function also allows for disaggregation of monthly data into daily or weekly values using either linear interpolation or spline interpolation.
+This function compiles historical and forecast data for DMI and ENSO (Niño3, Niño3.4, and Niño4) into a single data frame. The data is filtered to only include years from a specified \code{year_start} onwards. The function also allows for disaggregation of monthly data into daily or weekly values using either linear interpolation or spline interpolation. When historical and forecast data overlap for the same dates, historical data takes precedence.
+}
+\details{
+The function automatically handles overlapping data between historical and forecast sources:
+\itemize{
+\item When the same date exists in both historical and forecast data, historical data is preferred
+\item The function reports any overlaps found, including the date range and number of overlapping months
+\item Data source tracking is added internally but not included in the final output
+}
 }
 \examples{
 \dontrun{

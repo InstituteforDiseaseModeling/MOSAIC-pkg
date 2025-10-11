@@ -13,6 +13,7 @@ calc_model_likelihood(
   weight_deaths = NULL,
   weights_location = NULL,
   weights_time = NULL,
+  config = NULL,
   nb_k_min = 3,
   zero_buffer = TRUE,
   verbose = FALSE,
@@ -21,13 +22,14 @@ calc_model_likelihood(
   add_peak_magnitude = TRUE,
   add_cumulative_total = TRUE,
   add_wis = TRUE,
+  weight_max_terms = 0.5,
   weight_peak_timing = 0.5,
   weight_peak_magnitude = 0.5,
   weight_cumulative_total = 0.3,
   weight_wis = 0.8,
-  peak_method = c("smooth", "simple"),
-  sigma_peak_time = 2,
+  sigma_peak_time = 1,
   sigma_peak_log = 0.5,
+  penalty_unmatched_peak = -3,
   wis_quantiles = c(0.0275, 0.25, 0.5, 0.75, 0.975),
   cumulative_timepoints = c(0.25, 0.5, 0.75, 1),
   enable_guardrails = TRUE,
@@ -56,6 +58,8 @@ Default 1.}
 
 \item{weights_time}{Optional length-\code{n_time_steps} non-negative weights.}
 
+\item{config}{Optional LASER configuration list containing location_name, date_start, and date_stop.}
+
 \item{nb_k_min}{Numeric; minimum NB dispersion floor used for the core NB likelihood
 and WIS quantiles. Default \code{3}.}
 
@@ -69,15 +73,18 @@ and WIS quantiles. Default \code{3}.}
 
 \item{add_wis}{Logical; default \code{FALSE}.}
 
+\item{weight_max_terms}{Component weight for max terms. Default \code{0.5}.}
+
 \item{weight_peak_timing, weight_peak_magnitude, weight_cumulative_total}{Component weights. Defaults \code{0.5, 0.5, 0.3}.}
 
 \item{weight_wis}{Component weight for optional WIS term.}
 
-\item{peak_method}{\code{"smooth"} (3-pt moving average) or \code{"simple"}.}
+\item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{1}.}
 
-\item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{2}.}
+\item{sigma_peak_log}{Base SD on log-scale for peak magnitude; default \code{0.5}.
+Automatically scaled by sqrt(100/max(peak_obs,100)) to allow more variance for smaller peaks.}
 
-\item{sigma_peak_log}{SD on log-scale for peak magnitude; default \code{0.5}.}
+\item{penalty_unmatched_peak}{Log-likelihood penalty for unmatched peaks; default \code{-3}.}
 
 \item{wis_quantiles}{Quantiles for WIS if enabled.}
 
@@ -113,8 +120,8 @@ estimate and a small \code{k_min} floor.
 }
 \details{
 By default, three "shape" terms are included with modest weights:
-(1) peak timing (Normal on peak index difference),
-(2) peak magnitude (log-Normal on ratios), and
+(1) multi-peak timing (Normal on time differences for matched peaks),
+(2) multi-peak magnitude (log-Normal on ratios with adaptive sigma), and
 (3) cumulative progression (NB at a few cumulative fractions).
 
 Minimal inline guardrails floor the score on egregious fits (cumulative

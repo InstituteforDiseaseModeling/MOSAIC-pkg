@@ -7,20 +7,20 @@
 calc_spatial_correlation_matrix(I_sym, I_asym, N)
 }
 \arguments{
-\item{I_sym}{Numeric \strong{matrix} (J × T).  Symptomatic infections.}
+\item{I_sym}{Numeric matrix (J × T).  Symptomatic infections.}
 
-\item{I_asym}{Numeric \strong{matrix} (J × T).  Asymptomatic infections.
+\item{I_asym}{Numeric matrix (J × T).  Asymptomatic infections.
 Must have the same dimensions as \code{I_sym}.}
 
 \item{N}{Population sizes. Accepts
 \itemize{
 \item a single scalar (same for every j & t),
-\item a length-\emph{J} vector (different per location, constant in time), \strong{or}
-\item a full \emph{J × T} matrix (time‑varying populations).
+\item a length-J vector (different per location, constant in time), or
+\item a full J × T matrix (time‑varying populations).
 }}
 }
 \value{
-A \strong{J × J} symmetric numeric matrix whose \((i,j)\) entry is
+A J × J symmetric numeric matrix whose \((i,j)\) entry is
 \eqn{\mathcal{C}_{ij}}; diagonal elements are set to 1.
 Pairs that cannot be computed (all \code{NA}, zero variance, etc.) are \code{NA_real_}.
 }
@@ -32,10 +32,10 @@ spatial–correlation coefficients (Keeling & Rohani 2002) for every pair of
 locations.
 }
 \details{
-\emph{All three input objects must be arranged as} \strong{\link[=locations \\(J\\) × time \\(T\\)]{locations \(J\) × time \(T\)}}
-(rows are the \emph{J} locations; columns are the \emph{T} time steps).
+All three input objects must be arranged as (locations J × time T)
+(rows are the J locations; columns are the T time steps).
 
-Total infections at time \emph{t} in location \emph{j} are taken as
+Total infections at time t in location j are taken as
 \eqn{I_{jt} = I^{(\mathrm{sym})}_{jt} + I^{(\mathrm{asym})}_{jt}}; these
 are converted to prevalence by dividing by the matching population size
 \eqn{N_{jt}}.  Pair-wise correlations are then computed with

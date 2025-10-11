@@ -28,12 +28,16 @@ calc_model_max_weight(aw$w)
 \code{\link[=calc_model_convergence]{calc_model_convergence()}}
 
 Other calibration-metrics: 
+\code{\link{calc_gibbs_weights}()},
 \code{\link{calc_model_agreement_index}()},
 \code{\link{calc_model_aic_delta}()},
 \code{\link{calc_model_akaike_weights}()},
 \code{\link{calc_model_convergence}()},
+\code{\link{calc_model_convergence_loss}()},
 \code{\link{calc_model_cvw}()},
 \code{\link{calc_model_ess}()},
-\code{\link{plot_model_convergence}()}
+\code{\link{calc_model_loss_delta}()},
+\code{\link{plot_model_convergence}()},
+\code{\link{select_best_by_loss_band}()}
 }
 \concept{calibration-metrics}

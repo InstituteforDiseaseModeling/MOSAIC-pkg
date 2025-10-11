@@ -303,7 +303,7 @@ pgompertz <- function(q, b, eta, lower.tail = TRUE, log.p = FALSE) {
 #'
 #' Compute the quantile function (inverse CDF) of a Gompertz distribution.
 #'
-#' @param p Numeric vector. Probabilities in [0,1].
+#' @param p Numeric vector. Probabilities in \[0,1\].
 #' @param b Numeric. Shape parameter (b > 0).
 #' @param eta Numeric. Rate parameter (eta > 0).
 #' @param lower.tail Logical. If TRUE, probabilities are P(X <= x).
