@@ -975,6 +975,58 @@ if (TRUE) {
 
 # Update default priors with estimated initial conditions for R
 
+# Define location-specific variance inflation for R compartment
+# Higher values = more uncertainty, allowing for greater variation in estimates
+variance_inflation_R <- c(
+     "TCD" = 20,  # Chad: High cholera burden, more uncertainty
+     "CAF" = 18,  # Central African Republic: Limited data quality
+     "SSD" = 22,  # South Sudan: Conflict-affected, high uncertainty
+     "SOM" = 25,  # Somalia: Very limited surveillance data
+     "AFG" = 15,  # Afghanistan: Moderate uncertainty
+     "YEM" = 24,  # Yemen: Conflict, poor surveillance
+     "LBR" = 12,  # Liberia: Better data quality
+     "SLE" = 12,  # Sierra Leone: Improved surveillance
+     "GIN" = 14,  # Guinea: Moderate data quality
+     "MLI" = 16,  # Mali: Some data limitations
+     "BFA" = 14,  # Burkina Faso: Moderate uncertainty
+     "NER" = 16,  # Niger: Limited resources
+     "NGA" = 10,  # Nigeria: Large system, better data
+     "CMR" = 13,  # Cameroon: Moderate data quality
+     "COD" = 20,  # Democratic Republic of Congo: Large, varied conditions
+     "AGO" = 15,  # Angola: Improving surveillance
+     "ZMB" = 8,   # Zambia: Good surveillance system
+     "MWI" = 9,   # Malawi: Relatively good data
+     "MOZ" = 17,  # Mozambique: Variable data quality
+     "MDG" = 19,  # Madagascar: Island, unique conditions
+     "TZA" = 11,  # Tanzania: Moderate data quality
+     "KEN" = 9,   # Kenya: Good surveillance
+     "UGA" = 10,  # Uganda: Good health systems
+     "RWA" = 7,   # Rwanda: Excellent health systems
+     "BDI" = 14,  # Burundi: Limited resources
+     "ETH" = 13,  # Ethiopia: Large system, variable quality
+     "ERI" = 18,  # Eritrea: Limited international data
+     "DJI" = 16,  # Djibouti: Small, limited data
+     "SDN" = 21,  # Sudan: Political instability
+     "EGY" = 8,   # Egypt: Good surveillance systems
+     "LBY" = 20,  # Libya: Conflict-affected
+     "TUN" = 6,   # Tunisia: Good health systems
+     "DZA" = 7,   # Algeria: Good surveillance
+     "MAR" = 6,   # Morocco: Good health systems
+     "MRT" = 16,  # Mauritania: Limited resources
+     "SEN" = 12,  # Senegal: Moderate surveillance
+     "GMB" = 14,  # Gambia: Small, limited data
+     "GNB" = 17,  # Guinea-Bissau: Poor data quality
+     "CIV" = 13,  # Côte d'Ivoire: Moderate systems
+     "GHA" = 10,  # Ghana: Good health systems
+     "TGO" = 15,  # Togo: Limited resources
+     "BEN" = 14,  # Benin: Moderate surveillance
+     "ZWE" = 16,  # Zimbabwe: Economic challenges
+     "BWA" = 8,   # Botswana: Good health systems
+     "ZAF" = 6,   # South Africa: Excellent surveillance
+     "LSO" = 12,  # Lesotho: Small, good systems
+     "SWZ" = 11   # Eswatini: Small, moderate systems
+)
+
 initial_conditions_R <- est_initial_R(
      PATHS = PATHS,
      priors = priors_default,
@@ -982,7 +1034,7 @@ initial_conditions_R <- est_initial_R(
      n_samples = 1000,
      t0 = date_start,
      disaggregate = TRUE,
-     variance_inflation = 12,
+     variance_inflation = variance_inflation_R,
      verbose = FALSE,
      parallel = TRUE
 )
