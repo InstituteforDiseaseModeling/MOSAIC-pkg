@@ -6,11 +6,11 @@ test_that("delta_t = 0 maps 1:1 with no NAs and correct scaling", {
      chi_epidemic <- 0.75  # unused here
      out <- calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = sigma,
           rho = rho,
           chi_endemic = chi_endemic,
           chi_epidemic = chi_epidemic,
-          N = NULL,
           epidemic_threshold = NULL,
           delta_t = 0
      )
@@ -28,11 +28,11 @@ test_that("delta_t > 0 pads with NAs and shifts correctly", {
      k <- 2
      out <- calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = sigma,
           rho = rho,
           chi_endemic = chi_endemic,
           chi_epidemic = 0.75,
-          N = NULL,
           epidemic_threshold = NULL,
           delta_t = k
      )
@@ -53,11 +53,11 @@ test_that("epidemic switching uses chi_epidemic when infections/N exceeds thresh
      chi_endemic <- 0.50; chi_epidemic <- 0.75
      out <- calc_cases_from_infections(
           infections = infections,
+          N = N_vec,
           sigma = sigma,
           rho = rho,
           chi_endemic = chi_endemic,
           chi_epidemic = chi_epidemic,
-          N = N_vec,
           epidemic_threshold = thr,
           delta_t = 0
      )
@@ -73,11 +73,11 @@ test_that("When epidemic_threshold = NULL, N is ignored and chi_endemic is used 
      infections <- c(5, 10, 15)
      out <- calc_cases_from_infections(
           infections = infections,
+          N = 12345,                   # should be ignored
           sigma = 0.25,
           rho = 0.70,
           chi_endemic = 0.60,
           chi_epidemic = 0.90,
-          N = 12345,                   # should be ignored
           epidemic_threshold = NULL,   # bypass switching
           delta_t = 0
      )
@@ -88,11 +88,11 @@ test_that("delta_t >= length(infections) returns all NAs", {
      infections <- c(1, 2, 3)
      out <- calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = 0.25,
           rho = 0.70,
           chi_endemic = 0.50,
           chi_epidemic = 0.75,
-          N = NULL,
           epidemic_threshold = NULL,
           delta_t = length(infections)  # all outputs should be NA
      )
@@ -104,33 +104,33 @@ test_that("Input validation errors are thrown for bad arguments", {
      infections <- c(1, 2, 3)
      expect_error(calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = 1.1,
           rho = 0.7,
           chi_endemic = 0.5,
           chi_epidemic = 0.75,
-          N = NULL,
           epidemic_threshold = NULL,
           delta_t = 0
      ))
 
      expect_error(calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = 0.25,
           rho = -0.1,
           chi_endemic = 0.5,
           chi_epidemic = 0.75,
-          N = NULL,
           epidemic_threshold = NULL,
           delta_t = 0
      ))
 
      expect_error(calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = 0.25,
           rho = 0.7,
           chi_endemic = 0,
           chi_epidemic = 0.75,
-          N = NULL,
           epidemic_threshold = NULL,
           delta_t = 0
      ))
@@ -138,11 +138,11 @@ test_that("Input validation errors are thrown for bad arguments", {
      # Switching requested but N missing
      expect_error(calc_cases_from_infections(
           infections = infections,
+          N = NULL,
           sigma = 0.25,
           rho = 0.7,
           chi_endemic = 0.5,
           chi_epidemic = 0.75,
-          N = NULL,
           epidemic_threshold = 0.01,
           delta_t = 0
      ))

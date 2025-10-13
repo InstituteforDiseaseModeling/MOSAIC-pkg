@@ -31,18 +31,19 @@
 #'
 #' @param infections Numeric vector of incident true infections \eqn{I_{\text{new}}(t)} (length \eqn{n}).
 #'   Must be non-negative; \code{NA}s are allowed and propagate.
+#' @param N Numeric scalar or vector of length \eqn{n}: population size used to compute the infection proportion
+#'   \eqn{I_{\text{new}}(t)/N(t)} for the switching rule. **Ignored if** \code{epidemic_threshold} is \code{NULL}.
+#'   Default is \code{NULL}.
 #' @param sigma Scalar in \eqn{[0,1]}: symptomatic fraction.
 #' @param rho   Scalar in \eqn{[0,1]}: probability a symptomatic cholera infection is reported as \emph{suspected}.
 #' @param chi_endemic  Scalar in \eqn{(0,1]}: PPV among suspected during endemic levels (also the default PPV if
 #'   \code{epidemic_threshold} is \code{NULL}).
 #' @param chi_epidemic Scalar in \eqn{(0,1]}: PPV among suspected during epidemic levels (used only when
 #'   \code{epidemic_threshold} is provided).
-#' @param N Numeric scalar or vector of length \eqn{n}: population size used to compute the infection proportion
-#'   \eqn{I_{\text{new}}(t)/N(t)} for the switching rule. **Ignored if** \code{epidemic_threshold} is \code{NULL}.
 #' @param epidemic_threshold \code{NULL} or a scalar in \eqn{[0,1]}: threshold on \eqn{I_{\text{new}}(t)/N(t)} that
 #'   determines whether \code{chi_epidemic} (above threshold) or \code{chi_endemic} (otherwise) is used.
-#'   If \code{NULL}, no switching is applied and \code{chi_endemic} is used for all times.
-#' @param delta_t Non-negative integer number of days for the infection→report delay \eqn{\Delta}.
+#'   If \code{NULL}, no switching is applied and \code{chi_endemic} is used for all times. Default is \code{NULL}.
+#' @param delta_t Non-negative integer number of days for the infection→report delay \eqn{\Delta}. Default is 0.
 #'
 #' @return A named list with two numeric vectors, each length \eqn{n}:
 #' \itemize{
@@ -61,11 +62,11 @@
 #' # 1) No switching: epidemic_threshold = NULL (chi_endemic used everywhere; N ignored)
 #' out1 <- calc_cases_from_infections(
 #'   infections = infections,
+#'   N = NULL,
 #'   sigma = 0.25,
 #'   rho = 0.70,
 #'   chi_endemic = 0.50,
 #'   chi_epidemic = 0.75,
-#'   N = NULL,
 #'   epidemic_threshold = NULL,
 #'   delta_t = 0
 #' )
@@ -74,11 +75,11 @@
 #' # 2) Switching on: use chi_epidemic when infections/N > 15/100,000
 #' out2 <- calc_cases_from_infections(
 #'   infections = infections,
+#'   N = N,
 #'   sigma = 0.25,
 #'   rho = 0.70,
 #'   chi_endemic = 0.50,
 #'   chi_epidemic = 0.75,
-#'   N = N,
 #'   epidemic_threshold = 15/100000,
 #'   delta_t = 2
 #' )
@@ -86,13 +87,13 @@
 #'
 #' @export
 calc_cases_from_infections <- function(infections,
+                                       N = NULL,
                                        sigma,
                                        rho,
                                        chi_endemic,
                                        chi_epidemic,
-                                       N = NULL,
                                        epidemic_threshold = NULL,
-                                       delta_t) {
+                                       delta_t = 0) {
      # ---- input checks ----
      if (!is.numeric(infections) || !is.vector(infections)) {
           stop("`infections` must be a numeric vector.", call. = FALSE)
