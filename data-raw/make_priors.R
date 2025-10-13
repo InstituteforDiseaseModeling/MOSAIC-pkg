@@ -15,7 +15,7 @@ j <- MOSAIC::iso_codes_mosaic
 
 priors_default <- list(
      metadata = list(
-          version = "6.3.0",
+          version = "7.0.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -426,6 +426,22 @@ priors_default$parameters_global$zeta_2 <- list(
      description = "Asymptomatic shedding rate (bacteria per day)",
      distribution = "uniform",
      parameters = list(min = 100, max = 1e5)
+)
+
+# delta_reporting_cases - Infection-to-case reporting delay
+# This corresponds to the delta_t parameter in calc_cases_from_infections()
+priors_default$parameters_global$delta_reporting_cases <- list(
+     description = "Infection-to-case reporting delay in days",
+     distribution = "discrete_uniform",
+     parameters = list(min = 0, max = 7)
+)
+
+# delta_reporting_deaths - Infection-to-death reporting delay
+# This corresponds to the delta_t parameter in calc_deaths_from_infections()
+priors_default$parameters_global$delta_reporting_deaths <- list(
+     description = "Infection-to-death reporting delay in days",
+     distribution = "discrete_uniform",
+     parameters = list(min = 0, max = 14)
 )
 
 
@@ -914,19 +930,66 @@ for (loc in names(initial_conditions_V1_V2$parameters_location$prop_V2_initial$p
 
 
 # Update default priors with estimated initial conditions for E and I
-if (TRUE) {
 
-     initial_conditions_E_I <- est_initial_E_I(
-          PATHS = PATHS,
-          priors = priors_default,
-          config = config_default,
-          n_samples = 1000,
-          t0 = date_start,
-          lookback_days = 7,
-          variance_inflation = 100,
-          verbose = FALSE,
-          parallel = TRUE
-     )
+# Define location-specific variance inflation for E/I compartments
+# Higher values = more uncertainty in initial E/I estimates
+# E/I have higher baseline uncertainty due to short-term dynamics
+# Only includes ISO codes in MOSAIC::iso_codes_mosaic
+variance_inflation_E_I <- c(
+     "AGO" = 120,  # Angola: Improving surveillance
+     "BDI" = 110,  # Burundi: Limited resources
+     "BEN" = 110,  # Benin: Moderate surveillance
+     "BFA" = 110,  # Burkina Faso: Moderate uncertainty
+     "BWA" = 65,   # Botswana: Good health systems
+     "CAF" = 140,  # Central African Republic: Limited data quality
+     "CIV" = 105,  # Côte d'Ivoire: Moderate systems
+     "CMR" = 105,  # Cameroon: Moderate data quality
+     "COD" = 160,  # Democratic Republic of Congo: Large, varied conditions
+     "COG" = 100,  # Congo: Moderate uncertainty
+     "ERI" = 140,  # Eritrea: Limited international data
+     "ETH" = 100,  # Ethiopia: Large system, variable quality
+     "GAB" = 100,  # Gabon: Moderate surveillance (default)
+     "GHA" = 80,   # Ghana: Good health systems
+     "GIN" = 110,  # Guinea: Moderate data quality
+     "GMB" = 110,  # Gambia: Small, limited data
+     "GNB" = 140,  # Guinea-Bissau: Poor data quality
+     "GNQ" = 100,  # Equatorial Guinea: Moderate uncertainty
+     "KEN" = 40,   # Kenya: Good surveillance
+     "LBR" = 100,  # Liberia: Better data quality
+     "MLI" = 80,  # Mali: Some data limitations
+     "MOZ" = 30,  # Mozambique: Variable data quality
+     "MRT" = 130,  # Mauritania: Limited resources
+     "MWI" = 25,   # Malawi: Relatively good data
+     "NAM" = 80,   # Namibia: Good health systems (default)
+     "NER" = 130,  # Niger: Limited resources
+     "NGA" = 80,   # Nigeria: Large system, better data
+     "RWA" = 55,   # Rwanda: Excellent health systems
+     "SEN" = 95,   # Senegal: Moderate surveillance
+     "SLE" = 100,  # Sierra Leone: Improved surveillance
+     "SOM" = 200,  # Somalia: Very limited surveillance data
+     "SSD" = 180,  # South Sudan: Conflict-affected, high uncertainty
+     "SWZ" = 90,   # Eswatini: Small, moderate systems
+     "TCD" = 150,  # Chad: High cholera burden, more uncertainty
+     "TGO" = 120,  # Togo: Limited resources
+     "TZA" = 90,   # Tanzania: Moderate data quality
+     "UGA" = 80,   # Uganda: Good health systems
+     "ZAF" = 50,   # South Africa: Excellent surveillance
+     "ZMB" = 60,   # Zambia: Good surveillance system
+     "ZWE" = 20   # Zimbabwe: Economic challenges
+)
+
+# Use location-specific variance inflation with single function call
+initial_conditions_E_I <- est_initial_E_I(
+     PATHS = PATHS,
+     priors = priors_default,
+     config = config_default,
+     n_samples = 1000,
+     t0 = date_start,
+     lookback_days = 5,
+     variance_inflation = variance_inflation_E_I,  # Named vector for location-specific values
+     verbose = FALSE,
+     parallel = TRUE
+)
 
      n_updated_E_I <- 0
 
@@ -970,63 +1033,55 @@ if (TRUE) {
      }
 
 
-}
-
-
 # Update default priors with estimated initial conditions for R
 
 # Define location-specific variance inflation for R compartment
 # Higher values = more uncertainty, allowing for greater variation in estimates
+# Only includes ISO codes in MOSAIC::iso_codes_mosaic
 variance_inflation_R <- c(
-     "TCD" = 20,  # Chad: High cholera burden, more uncertainty
-     "CAF" = 18,  # Central African Republic: Limited data quality
-     "SSD" = 22,  # South Sudan: Conflict-affected, high uncertainty
-     "SOM" = 25,  # Somalia: Very limited surveillance data
-     "AFG" = 15,  # Afghanistan: Moderate uncertainty
-     "YEM" = 24,  # Yemen: Conflict, poor surveillance
-     "LBR" = 12,  # Liberia: Better data quality
-     "SLE" = 12,  # Sierra Leone: Improved surveillance
-     "GIN" = 14,  # Guinea: Moderate data quality
-     "MLI" = 16,  # Mali: Some data limitations
+     "AGO" = 3,   # Angola: Further reduced
+     "BDI" = 4,   # Burundi: Further reduced
+     "BEN" = 4,   # Benin: Further reduced
      "BFA" = 14,  # Burkina Faso: Moderate uncertainty
-     "NER" = 16,  # Niger: Limited resources
-     "NGA" = 10,  # Nigeria: Large system, better data
-     "CMR" = 13,  # Cameroon: Moderate data quality
-     "COD" = 20,  # Democratic Republic of Congo: Large, varied conditions
-     "AGO" = 15,  # Angola: Improving surveillance
-     "ZMB" = 8,   # Zambia: Good surveillance system
-     "MWI" = 9,   # Malawi: Relatively good data
-     "MOZ" = 17,  # Mozambique: Variable data quality
-     "MDG" = 19,  # Madagascar: Island, unique conditions
-     "TZA" = 11,  # Tanzania: Moderate data quality
-     "KEN" = 9,   # Kenya: Good surveillance
-     "UGA" = 10,  # Uganda: Good health systems
-     "RWA" = 7,   # Rwanda: Excellent health systems
-     "BDI" = 14,  # Burundi: Limited resources
-     "ETH" = 13,  # Ethiopia: Large system, variable quality
-     "ERI" = 18,  # Eritrea: Limited international data
-     "DJI" = 16,  # Djibouti: Small, limited data
-     "SDN" = 21,  # Sudan: Political instability
-     "EGY" = 8,   # Egypt: Good surveillance systems
-     "LBY" = 20,  # Libya: Conflict-affected
-     "TUN" = 6,   # Tunisia: Good health systems
-     "DZA" = 7,   # Algeria: Good surveillance
-     "MAR" = 6,   # Morocco: Good health systems
-     "MRT" = 16,  # Mauritania: Limited resources
-     "SEN" = 12,  # Senegal: Moderate surveillance
-     "GMB" = 14,  # Gambia: Small, limited data
-     "GNB" = 17,  # Guinea-Bissau: Poor data quality
+     "BWA" = 50,  # Botswana: Maximum uncertainty
+     "CAF" = 24,  # Central African Republic: Increased - limited data quality
      "CIV" = 13,  # Côte d'Ivoire: Moderate systems
-     "GHA" = 10,  # Ghana: Good health systems
-     "TGO" = 15,  # Togo: Limited resources
-     "BEN" = 14,  # Benin: Moderate surveillance
-     "ZWE" = 16,  # Zimbabwe: Economic challenges
-     "BWA" = 8,   # Botswana: Good health systems
+     "CMR" = 4,   # Cameroon: Further reduced
+     "COD" = 2,   # Democratic Republic of Congo: Further decreased
+     "COG" = 4,   # Congo: Further reduced
+     "ERI" = 100, # Eritrea: Extreme maximum uncertainty - very limited international data
+     "ETH" = 13,  # Ethiopia: Large system, variable quality
+     "GAB" = 20,  # Gabon: High uncertainty
+     "GHA" = 3,   # Ghana: Further reduced
+     "GIN" = 4,   # Guinea: Further reduced
+     "GMB" = 60,  # Gambia: Maximum uncertainty - small, limited data
+     "GNB" = 0.5, # Guinea-Bissau: Increased slightly from ultra-low
+     "GNQ" = 4,   # Equatorial Guinea: Further reduced
+     "KEN" = 5,   # Kenya: Good surveillance
+     "LBR" = 1,   # Liberia: Minimum variance inflation
+     "MLI" = 14,  # Mali: Slightly decreased - data limitations
+     "MOZ" = 1.5, # Mozambique: Further decreased
+     "MRT" = 5,   # Mauritania: Further reduced
+     "MWI" = 2,   # Malawi: Decreased further
+     "NAM" = 8,   # Namibia: Good health systems (default)
+     "NER" = 5,   # Niger: Further reduced
+     "NGA" = 3,   # Nigeria: Further reduced
+     "RWA" = 7,   # Rwanda: Excellent health systems
+     "SEN" = 3,   # Senegal: Further reduced
+     "SLE" = 2,   # Sierra Leone: Decreased further
+     "SOM" = 2,   # Somalia: Increased uncertainty
+     "SSD" = 4,   # South Sudan: Decreased further
+     "SWZ" = 2,   # Eswatini: Decreased more
+     "TCD" = 4,   # Chad: Decreased further
+     "TGO" = 6,   # Togo: Further reduced
+     "TZA" = 4,   # Tanzania: Further reduced
+     "UGA" = 8,   # Uganda: Increased uncertainty
      "ZAF" = 6,   # South Africa: Excellent surveillance
-     "LSO" = 12,  # Lesotho: Small, good systems
-     "SWZ" = 11   # Eswatini: Small, moderate systems
+     "ZMB" = 3,   # Zambia: Further reduced
+     "ZWE" = 1.5  # Zimbabwe: Further decreased
 )
 
+# Use location-specific variance inflation with single function call
 initial_conditions_R <- est_initial_R(
      PATHS = PATHS,
      priors = priors_default,
@@ -1034,7 +1089,7 @@ initial_conditions_R <- est_initial_R(
      n_samples = 1000,
      t0 = date_start,
      disaggregate = TRUE,
-     variance_inflation = variance_inflation_R,
+     variance_inflation = variance_inflation_R,  # Named vector for location-specific values
      verbose = FALSE,
      parallel = TRUE
 )
@@ -1069,15 +1124,64 @@ for (loc in names(initial_conditions_R$parameters_location$prop_R_initial$parame
 
 
 # Update default priors with estimated initial conditions for S (constrained residual)
+
+# Define location-specific variance inflation for S compartment
+# S is calculated as constrained residual, so variance inflation is typically 0 or very small
+# Only use non-zero values for locations where you want to allow more uncertainty in the residual
+# Only includes ISO codes in MOSAIC::iso_codes_mosaic
+variance_inflation_S <- c(
+     "AGO" = 0.00,  # Angola: Standard residual calculation
+     "BDI" = 0.02,  # Burundi: Slight flexibility
+     "BEN" = 0.00,  # Benin: Standard residual calculation
+     "BFA" = 0.02,  # Burkina Faso: Slight flexibility
+     "BWA" = 0.00,  # Botswana: Good systems, no inflation needed
+     "CAF" = 0.05,  # Central African Republic: Allow slight flexibility
+     "CIV" = 0.00,  # Côte d'Ivoire: Standard residual calculation
+     "CMR" = 0.00,  # Cameroon: Standard residual calculation
+     "COD" = 0.05,  # Democratic Republic of Congo: Large varied conditions
+     "COG" = 0.02,  # Congo: Slight flexibility
+     "ERI" = 0.05,  # Eritrea: Limited data
+     "ETH" = 0.01,  # Ethiopia: Minimal flexibility
+     "GAB" = 0.00,  # Gabon: Standard residual calculation (default)
+     "GHA" = 0.00,  # Ghana: Good systems, no inflation needed
+     "GIN" = 0.02,  # Guinea: Slight flexibility
+     "GMB" = 0.02,  # Gambia: Slight flexibility
+     "GNB" = 0.04,  # Guinea-Bissau: More flexibility for poor data
+     "GNQ" = 0.02,  # Equatorial Guinea: Slight flexibility
+     "KEN" = 0.00,  # Kenya: Good systems, no inflation needed
+     "LBR" = 0.01,  # Liberia: Minimal flexibility
+     "MLI" = 0.03,  # Mali: Some flexibility for data limitations
+     "MOZ" = 0.03,  # Mozambique: Some flexibility for variable quality
+     "MRT" = 0.03,  # Mauritania: Some flexibility
+     "MWI" = 0.00,  # Malawi: Standard residual calculation
+     "NAM" = 0.00,  # Namibia: Good systems, no inflation needed (default)
+     "NER" = 0.03,  # Niger: Some flexibility for limited resources
+     "NGA" = 0.00,  # Nigeria: Standard residual calculation
+     "RWA" = 0.00,  # Rwanda: Good systems, no inflation needed
+     "SEN" = 0.00,  # Senegal: Standard residual calculation
+     "SLE" = 0.01,  # Sierra Leone: Minimal flexibility
+     "SOM" = 0.10,  # Somalia: Most flexibility due to very limited data
+     "SSD" = 0.08,  # South Sudan: More flexibility due to poor data
+     "SWZ" = 0.00,  # Eswatini: Standard residual calculation
+     "TCD" = 0.05,  # Chad: Allow slight flexibility
+     "TGO" = 0.02,  # Togo: Slight flexibility
+     "TZA" = 0.00,  # Tanzania: Standard residual calculation
+     "UGA" = 0.00,  # Uganda: Standard residual calculation
+     "ZAF" = 0.00,  # South Africa: Good systems, no inflation needed
+     "ZMB" = 0.00,  # Zambia: Good systems, no inflation needed
+     "ZWE" = 0.03   # Zimbabwe: Some flexibility for economic challenges
+)
+
+# Use location-specific variance inflation with single function call
 initial_conditions_S <- est_initial_S(
      PATHS = PATHS,
      priors = priors_default,
      config = config_default,
      n_samples = 1000,
      t0 = date_start,
-     variance_inflation = 0,
+     variance_inflation = variance_inflation_S,  # Named vector for location-specific values
      verbose = FALSE,
-     min_S_proportion = 0.001
+     min_S_proportion = 0.001  # Default minimum S proportion
 )
 
 
@@ -1118,7 +1222,8 @@ for (loc in names(initial_conditions_S$parameters_location$prop_S_initial$parame
 
 
 
-# Add mu_j priors from disease mortality data
+# Add mu_j_baseline priors from disease mortality data
+# This is the baseline IFR for the threshold-dependent IFR model
 
 mu_inflation <- 0.2  # Inflate mu variance
 
@@ -1132,9 +1237,9 @@ if (file.exists(mu_file)) {
      recent_years <- 2021:2025
      mu_recent <- mu_data[mu_data$t %in% recent_years, ]
 
-     # Initialize mu_j prior structure
-     priors_default$parameters_location$mu_j <- list(
-          description = "Base disease mortality rate (case fatality ratio) per location",
+     # Initialize mu_j_baseline prior structure
+     priors_default$parameters_location$mu_j_baseline <- list(
+          description = "Baseline infection fatality ratio (IFR) per location, adjusted from CFR using IFR = CFR × σ × ρ",
           location = list()
      )
 
@@ -1191,17 +1296,38 @@ if (file.exists(mu_file)) {
                     ci_upper <- min(ci_upper*(1+mu_inflation), 0.5)    # Maximum 50% CFR
                     mean_cfr <- max(min(mean_cfr, 0.4), 0.002)  # Keep mean in reasonable range
 
-                    # Try to fit gamma distribution
+                    #----------------------------------------
+                    # Convert CFR to IFR using simple scalar adjustment
+                    #----------------------------------------
+                    # IFR = CFR × σ × ρ
+                    # where σ = proportion symptomatic ≈ 0.24
+                    #       ρ = reporting rate ≈ 0.63
+
+                    sigma_mean <- 0.25  # Proportion symptomatic
+                    rho_mean <- 0.66    # Average reporting rate
+
+                    # Calculate adjustment factor
+                    cfr_to_ifr_adjustment <- sigma_mean * rho_mean  # ≈ 0.15
+
+                    # Convert CFR to IFR
+                    mean_ifr <- mean_cfr * cfr_to_ifr_adjustment
+                    ci_lower_ifr <- ci_lower * cfr_to_ifr_adjustment
+                    ci_upper_ifr <- ci_upper * cfr_to_ifr_adjustment
+
+                    cat(sprintf("  %s: CFR=%.3f%% -> IFR=%.3f%% (adjustment factor=%.3f)\n",
+                                loc, mean_cfr*100, mean_ifr*100, cfr_to_ifr_adjustment))
+
+                    # Try to fit gamma distribution (now using IFR instead of CFR)
                     tryCatch({
                          gamma_fit <- MOSAIC::fit_gamma_from_ci(
-                              mode_val = mean_cfr,
-                              ci_lower = ci_lower,
-                              ci_upper = ci_upper,
+                              mode_val = mean_ifr,
+                              ci_lower = ci_lower_ifr,
+                              ci_upper = ci_upper_ifr,
                               method = "optimization",
                               verbose = FALSE
                          )
 
-                         priors_default$parameters_location$mu_j$location[[loc]] <- list(
+                         priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
                               distribution = "gamma",
                               parameters = list(
                                    shape = gamma_fit$shape,
@@ -1212,16 +1338,16 @@ if (file.exists(mu_file)) {
                          n_mu_j_added <- n_mu_j_added + 1
 
                     }, error = function(e) {
-                         # Fallback to simple moment matching
-                         var_cfr <- ((ci_upper - ci_lower) / 4)^2  # Approximate variance
-                         shape <- mean_cfr^2 / var_cfr
-                         rate <- mean_cfr / var_cfr
+                         # Fallback to simple moment matching (using IFR)
+                         var_ifr <- ((ci_upper_ifr - ci_lower_ifr) / 4)^2  # Approximate variance
+                         shape <- mean_ifr^2 / var_ifr
+                         rate <- mean_ifr / var_ifr
 
                          # Ensure reasonable parameters
                          shape <- max(shape, 1.5)
                          rate <- max(rate, 10)
 
-                         priors_default$parameters_location$mu_j$location[[loc]] <- list(
+                         priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
                               distribution = "gamma",
                               parameters = list(
                                    shape = shape,
@@ -1235,13 +1361,13 @@ if (file.exists(mu_file)) {
           }
 
           # Add default if location not found
-          if (is.null(priors_default$parameters_location$mu_j$location[[loc]])) {
-               # Default gamma parameters for ~2% CFR
-               priors_default$parameters_location$mu_j$location[[loc]] <- list(
+          if (is.null(priors_default$parameters_location$mu_j_baseline$location[[loc]])) {
+               # Default gamma parameters for ~0.3% IFR (after CFR->IFR adjustment)
+               priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
                     distribution = "gamma",
                     parameters = list(
                          shape = 2,
-                         rate = 100
+                         rate = 667   # Gives mean of 0.003 (0.3% IFR)
                     )
                )
                n_mu_j_added <- n_mu_j_added + 1
@@ -1250,24 +1376,146 @@ if (file.exists(mu_file)) {
 
 
 } else {
-     warning("Disease mortality parameter file not found. Using default mu_j priors.")
+     warning("Disease mortality parameter file not found. Using default mu_j_baseline priors.")
 
      # Add default gamma priors for all locations
-     priors_default$parameters_location$mu_j <- list(
-          description = "Base disease mortality rate (case fatality ratio) per location",
+     priors_default$parameters_location$mu_j_baseline <- list(
+          description = "Baseline infection fatality ratio (IFR) per location",
           location = list()
      )
 
      for (loc in j) {
-          # Default gamma parameters for ~2% CFR
-          priors_default$parameters_location$mu_j$location[[loc]] <- list(
+          # Default gamma parameters for ~0.3% IFR
+          priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
                distribution = "gamma",
                parameters = list(
                     shape = 2,
-                    rate = 100
+                    rate = 667   # Gives mean of 0.003 (0.3% IFR)
                )
           )
      }
+}
+
+#----------------------------------------
+# Additional IFR parameters for threshold-dependent model
+#----------------------------------------
+
+# mu_j_slope - Temporal trend in IFR per location
+priors_default$parameters_location$mu_j_slope <- list(
+     description = "Temporal trend in baseline IFR (proportion change over simulation period)",
+     location = list()
+)
+
+for (iso in j) {
+     priors_default$parameters_location$mu_j_slope$location[[iso]] <- list(
+          distribution = "normal",
+          parameters = list(
+               mean = 0,      # No trend by default
+               sd = 0.05      # ±10% change over simulation period (95% CI)
+          )
+     )
+}
+
+# mu_j_epidemic_factor - Proportional IFR increase during epidemics
+priors_default$parameters_location$mu_j_epidemic_factor <- list(
+     description = "Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50% increase)",
+     location = list()
+)
+
+for (iso in j) {
+     priors_default$parameters_location$mu_j_epidemic_factor$location[[iso]] <- list(
+          distribution = "lognormal",
+          parameters = list(
+               meanlog = log(0.5),  # Median: 50% increase
+               sdlog = 0.7          # 95% CI: ~10% to 200% increase
+          )
+     )
+}
+
+# epidemic_threshold - Location-specific epidemic threshold
+priors_default$parameters_location$epidemic_threshold <- list(
+     description = "Incidence threshold (infections per capita) for epidemic definition",
+     location = list()
+)
+
+# Define location-specific thresholds based on healthcare capacity (per 100,000)
+epidemic_threshold_by_country <- c(
+     "AGO" = 20,  # Angola
+     "BDI" = 15,  # Burundi
+     "BEN" = 20,  # Benin
+     "BFA" = 15,  # Burkina Faso
+     "BWA" = 40,  # Botswana - good healthcare
+     "CAF" = 10,  # Central African Republic - limited capacity
+     "CIV" = 25,  # Côte d'Ivoire
+     "CMR" = 25,  # Cameroon
+     "COD" = 15,  # Democratic Republic of Congo
+     "COG" = 20,  # Congo
+     "ERI" = 15,  # Eritrea
+     "ETH" = 20,  # Ethiopia
+     "GAB" = 30,  # Gabon
+     "GHA" = 30,  # Ghana - good healthcare
+     "GIN" = 20,  # Guinea
+     "GMB" = 20,  # Gambia
+     "GNB" = 15,  # Guinea-Bissau
+     "GNQ" = 25,  # Equatorial Guinea
+     "KEN" = 35,  # Kenya - good surveillance
+     "LBR" = 20,  # Liberia
+     "MLI" = 20,  # Mali
+     "MOZ" = 20,  # Mozambique
+     "MRT" = 15,  # Mauritania
+     "MWI" = 25,  # Malawi
+     "NAM" = 35,  # Namibia - good healthcare
+     "NER" = 15,  # Niger
+     "NGA" = 25,  # Nigeria
+     "RWA" = 40,  # Rwanda - excellent healthcare
+     "SEN" = 30,  # Senegal
+     "SLE" = 20,  # Sierra Leone
+     "SOM" = 10,  # Somalia - very limited capacity
+     "SSD" = 10,  # South Sudan - conflict affected
+     "SWZ" = 30,  # Eswatini
+     "TCD" = 15,  # Chad
+     "TGO" = 20,  # Togo
+     "TZA" = 25,  # Tanzania
+     "UGA" = 30,  # Uganda
+     "ZAF" = 50,  # South Africa - excellent healthcare
+     "ZMB" = 30,  # Zambia
+     "ZWE" = 20   # Zimbabwe
+)
+
+for (iso in j) {
+     # Get location-specific threshold or use default
+     threshold_per_100k <- ifelse(
+          iso %in% names(epidemic_threshold_by_country),
+          epidemic_threshold_by_country[iso],
+          25  # Default: 25 per 100,000
+     )
+
+     # Convert to per capita
+     threshold_mean <- threshold_per_100k / 100000
+
+     # Create beta distribution centered on this value with some uncertainty
+     # Use method of moments for Beta distribution
+     # Mean = threshold_mean, CV = 0.2 (20% coefficient of variation)
+     cv <- 0.2
+     variance <- (threshold_mean * cv)^2
+
+     # Beta parameters from mean and variance
+     # Mean = a/(a+b), Var = ab/((a+b)^2(a+b+1))
+     common_term <- threshold_mean * (1 - threshold_mean) / variance - 1
+     shape1 <- threshold_mean * common_term
+     shape2 <- (1 - threshold_mean) * common_term
+
+     # Ensure reasonable bounds
+     shape1 <- max(shape1, 2)
+     shape2 <- max(shape2, 2)
+
+     priors_default$parameters_location$epidemic_threshold$location[[iso]] <- list(
+          distribution = "beta",
+          parameters = list(
+               shape1 = shape1,
+               shape2 = shape2
+          )
+     )
 }
 
 #----------------------------------------
@@ -1284,8 +1532,8 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_a$location[[iso]] <- list(
           distribution = "lognormal",
           parameters = list(
-               meanlog = 0,     # Mean ~1.06, median = 1.0 (no transformation)
-               sdlog = 0.35     # 95% CI: [0.50, 1.99], allows meaningful shape changes
+               meanlog = 0,     # Mean ~1.16, median = 1.0 (no transformation)
+               sdlog = 0.6      # 95% CI: [0.30, 3.30], allows more flexible shape changes
           )
      )
 }
@@ -1301,7 +1549,7 @@ for (iso in j) {
           distribution = "normal",
           parameters = list(
                mean = 0,        # Centered at no offset
-               sd = 0.75        # 95% CI: [-1.47, 1.47], allows substantial baseline shifts
+               sd = 1.25        # 95% CI: [-2.45, 2.45], allows larger baseline shifts
           )
      )
 }
@@ -1316,8 +1564,8 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_z$location[[iso]] <- list(
           distribution = "beta",
           parameters = list(
-               shape1 = 6,      # Mean: 0.86, Mode: 1.0
-               shape2 = 1       # 95% CI: [0.54, 1.00], favors minimal smoothing
+               shape1 = 3,      # Mean: 0.75, Mode: 1.0
+               shape2 = 1       # 95% CI: [0.21, 1.00], allows more smoothing flexibility
           )
      )
 }
@@ -1333,9 +1581,9 @@ for (iso in j) {
           distribution = "truncnorm",
           parameters = list(
                mean = 0,        # Centered at no offset
-               sd = 10,         # Standard deviation of 10 days
-               a = -45,         # Lower bound: -45 days
-               b = 45           # Upper bound: +45 days
+               sd = 15,         # Standard deviation of 15 days (increased from 10)
+               a = -60,         # Lower bound: -60 days (increased from -45)
+               b = 60           # Upper bound: +60 days (increased from 45)
           )
      )
 }

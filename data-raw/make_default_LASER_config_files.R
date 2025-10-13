@@ -113,16 +113,20 @@ if (file.exists(cfr_file)) {
      warning("param_mu_disease_mortality.csv not found. Using default CFR of 0.01")
 }
 
-# Extract mu_j from mu_jt (location-specific baseline CFR)
+# Extract mu_j_baseline from mu_jt (location-specific baseline CFR)
 # Use the mean value across time for each location
-mu_j <- rowMeans(mu_jt, na.rm = TRUE)
-names(mu_j) <- j
+mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
+names(mu_j_baseline) <- j
 
 # Initialize mu_j_slope to 0 (no temporal trend by default)
 mu_j_slope <- rep(0, length(j))
 names(mu_j_slope) <- j
 
-message("Created mu_j and mu_j_slope parameters from mu_jt")
+# Initialize mu_j_epidemic_factor to 0.5 (50% increase during epidemics by default)
+mu_j_epidemic_factor <- rep(0.5, length(j))
+names(mu_j_epidemic_factor) <- j
+
+message("Created mu_j_baseline, mu_j_slope, and mu_j_epidemic_factor parameters from mu_jt")
 
 #####
 # Vaccination rate needs work
@@ -303,15 +307,17 @@ default_args <- list(
      gamma_2 = 0.1,
      epsilon = 0.0003,
      mu_jt = mu_jt,
-     mu_j = mu_j,
-     mu_j_slope = mu_j_slope,
+     mu_j_baseline = mu_j_baseline,       # NEW: Baseline IFR (replaces mu_j)
+     mu_j_slope = mu_j_slope,              # Temporal trend in IFR
+     mu_j_epidemic_factor = mu_j_epidemic_factor,  # NEW: Epidemic increase factor
      sigma = 0.25,
      # Case reporting parameters for calc_cases_from_infections()
      rho = 0.7,                   # Proportion of symptomatic infections seeking care
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
      epidemic_threshold = 1/10000,  # Infection rate threshold for PPV switching (1 per 10k per day)
-     delta_reporting = 2,         # Infection-to-report delay in days
+     delta_reporting_cases = 2,   # NEW: Infection-to-case report delay in days
+     delta_reporting_deaths = 7,  # NEW: Infection-to-death report delay in days
      longitude         = longitude,
      latitude          = latitude,
      mobility_omega    = mobility_omega,

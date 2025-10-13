@@ -55,15 +55,23 @@
 #' @param epsilon Waning immunity rate (numeric >= 0).
 #' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 #'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
-#'        If mu_j is provided, mu_jt will be generated from mu_j and mu_j_slope.
-#' @param mu_j A numeric vector of location-specific baseline case fatality ratios. Optional. If provided
-#'        with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in \[0, 1\].
-#' @param mu_j_slope A numeric vector of location-specific temporal slopes for case fatality ratio.
-#'        Optional. Default is 0 (no temporal trend). Length must equal length(location_name).
+#'        If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().
+#' @param mu_j_baseline Baseline infection fatality ratio for threshold-dependent IFR model.
+#'        Numeric vector of length(location_name). Values must be in \[0, 1\].
+#' @param mu_j_slope Temporal trend in baseline IFR (proportion change over simulation period).
+#'        Numeric vector of length(location_name). Default is 0 (no temporal trend).
+#' @param mu_j_epidemic_factor Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50% increase).
+#'        Numeric vector of length(location_name). Must be >= 0.
 #'
 #' ## Observation Processes
 #' @param rho Proportion of true infections (numeric in \[0, 1\]).
 #' @param sigma Proportion of symptomatic infections (numeric in \[0, 1\]).
+#' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
+#' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
+#' @param epidemic_threshold Incidence threshold (infections per capita) for epidemic definition. Used for both
+#'        case reporting and IFR threshold models. Numeric in \[0, 1\].
+#' @param delta_reporting_cases Infection-to-case reporting delay in days (non-negative integer).
+#' @param delta_reporting_deaths Infection-to-death reporting delay in days (non-negative integer).
 #'
 #' ## Spatial model
 #' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
@@ -219,8 +227,9 @@ make_LASER_config <- function(output_file_path = NULL,
                               gamma_2 = NULL,
                               epsilon = NULL,
                               mu_jt = NULL,
-                              mu_j = NULL,
-                              mu_j_slope = NULL,
+                              mu_j_baseline = NULL,  # Baseline IFR for threshold-dependent model
+                              mu_j_slope = NULL,  # Temporal trend in IFR
+                              mu_j_epidemic_factor = NULL,  # Proportional increase during epidemics
 
                               # Observation Processes
                               rho = NULL,
@@ -228,8 +237,9 @@ make_LASER_config <- function(output_file_path = NULL,
                               # Case reporting parameters for calc_cases_from_infections()
                               chi_endemic = NULL,
                               chi_epidemic = NULL,
-                              epidemic_threshold = NULL,
-                              delta_reporting = NULL,
+                              epidemic_threshold = NULL,  # Used for both case reporting and IFR threshold models
+                              delta_reporting_cases = NULL,  # Infection-to-case reporting delay
+                              delta_reporting_deaths = NULL,  # Infection-to-death reporting delay
 
                               # Spatial model
                               longitude = NULL,
@@ -324,15 +334,11 @@ make_LASER_config <- function(output_file_path = NULL,
           gamma_1           = gamma_1,
           gamma_2           = gamma_2,
           epsilon           = epsilon,
-          mu_jt             = mu_jt,
-          mu_j              = mu_j,
-          mu_j_slope        = mu_j_slope,
           rho               = rho,
           sigma             = sigma,
           chi_endemic       = chi_endemic,
           chi_epidemic      = chi_epidemic,
           epidemic_threshold = epidemic_threshold,
-          delta_reporting   = delta_reporting,
           longitude         = longitude,
           latitude          = latitude,
           mobility_omega    = mobility_omega,
@@ -371,7 +377,26 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.null(p_beta)) {
           params$p_beta <- p_beta
      }
-     
+
+     # Add optional IFR parameters if provided
+     if (!is.null(mu_j_baseline)) {
+          params$mu_j_baseline <- mu_j_baseline
+     }
+     if (!is.null(mu_j_slope)) {
+          params$mu_j_slope <- mu_j_slope
+     }
+     if (!is.null(mu_j_epidemic_factor)) {
+          params$mu_j_epidemic_factor <- mu_j_epidemic_factor
+     }
+
+     # Add optional delta parameters if provided
+     if (!is.null(delta_reporting_cases)) {
+          params$delta_reporting_cases <- delta_reporting_cases
+     }
+     if (!is.null(delta_reporting_deaths)) {
+          params$delta_reporting_deaths <- delta_reporting_deaths
+     }
+
      # Check for NULL values in required parameters
      null_fields <- names(params)[sapply(params, is.null)]
      if (length(null_fields) > 0) {
@@ -483,43 +508,61 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("epsilon must be a numeric scalar greater than or equal to zero.")
      }
 
-     # Handle mu_j and mu_j_slope if provided
-     if (!is.null(mu_j)) {
-          # Validate mu_j
-          if (!is.numeric(mu_j) || length(mu_j) != length(location_name)) {
-               stop("mu_j must be a numeric vector with length equal to location_name.")
+     # Handle mu_j_baseline and related parameters for threshold-dependent IFR
+     # If mu_jt is not provided directly, generate it from mu_j_baseline if available
+     if (is.null(mu_jt) && !is.null(mu_j_baseline)) {
+          # Validate mu_j_baseline
+          if (!is.numeric(mu_j_baseline) || length(mu_j_baseline) != length(location_name)) {
+               stop("mu_j_baseline must be a numeric vector with length equal to location_name.")
           }
-          if (any(mu_j < 0 | mu_j > 1)) {
-               stop("All values in mu_j must be between 0 and 1.")
+          if (any(mu_j_baseline < 0 | mu_j_baseline > 1)) {
+               stop("All values in mu_j_baseline must be between 0 and 1.")
           }
-          
+
           # Initialize mu_j_slope if not provided
           if (is.null(mu_j_slope)) {
                mu_j_slope <- rep(0, length(location_name))
           }
-          
+
           # Validate mu_j_slope
           if (!is.numeric(mu_j_slope) || length(mu_j_slope) != length(location_name)) {
                stop("mu_j_slope must be a numeric vector with length equal to location_name.")
           }
-          
-          # Generate mu_jt from mu_j and mu_j_slope
+
+          # Initialize mu_j_epidemic_factor if not provided
+          if (is.null(mu_j_epidemic_factor)) {
+               mu_j_epidemic_factor <- rep(0, length(location_name))  # No epidemic effect by default
+          }
+
+          # Validate mu_j_epidemic_factor
+          if (!is.numeric(mu_j_epidemic_factor) || length(mu_j_epidemic_factor) != length(location_name)) {
+               stop("mu_j_epidemic_factor must be a numeric vector with length equal to location_name.")
+          }
+          if (any(mu_j_epidemic_factor < -1)) {
+               stop("All values in mu_j_epidemic_factor must be greater than or equal to -1.")
+          }
+
+          # Generate mu_jt from mu_j_baseline and mu_j_slope (epidemic factor applied at runtime)
           n_days <- length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))
           mu_jt <- matrix(NA, nrow = length(location_name), ncol = n_days)
-          
+
           for (j in 1:length(location_name)) {
                # Create time-varying mu with optional slope
-               # mu_jt[j,t] = mu_j[j] + mu_j_slope[j] * (t - 1) / n_days
-               # This creates a linear trend from mu_j[j] at t=1 to mu_j[j] + mu_j_slope[j] at t=n_days
+               # mu_jt[j,t] = mu_j_baseline[j] * (1 + mu_j_slope[j] * (t - 1) / n_days)
+               # This creates a multiplicative trend from mu_j_baseline[j] at t=1
                time_factor <- (seq_len(n_days) - 1) / max(1, n_days - 1)
-               mu_jt[j, ] <- mu_j[j] + mu_j_slope[j] * time_factor
-               
+               mu_jt[j, ] <- mu_j_baseline[j] * (1 + mu_j_slope[j] * time_factor)
+
                # Ensure values stay within [0, 1]
                mu_jt[j, ] <- pmax(0, pmin(1, mu_jt[j, ]))
           }
      }
 
      # Ensure mu_jt follows required structure (n_locations x time_steps) and values are in [0,1].
+     # mu_jt is required - either provided directly or generated from mu_j_baseline
+     if (is.null(mu_jt)) {
+          stop("mu_jt must be provided directly or mu_j_baseline must be provided to generate it.")
+     }
      if (!is.matrix(mu_jt) || nrow(mu_jt) != length(location_name) ||
          ncol(mu_jt) != length(seq.Date(as.Date(date_start), as.Date(date_stop), by = "day"))) {
           stop("mu_jt must be a numeric matrix with rows equal to length(location_name) and columns equal to the daily sequence from date_start to date_stop.")
@@ -527,6 +570,9 @@ make_LASER_config <- function(output_file_path = NULL,
      if (any(mu_jt < 0 | mu_jt > 1)) {
           stop("All values in mu_jt must be between 0 and 1.")
      }
+
+     # Add mu_jt to params after validation
+     params$mu_jt <- mu_jt
 
      # Observation Processes validation.
      if (!is.numeric(rho) || rho < 0 || rho > 1) {
@@ -545,8 +591,18 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.null(epidemic_threshold) && (!is.numeric(epidemic_threshold) || epidemic_threshold < 0 || epidemic_threshold > 1)) {
           stop("epidemic_threshold must be NULL or a numeric scalar in [0, 1].")
      }
-     if (!is.numeric(delta_reporting) || delta_reporting < 0 || delta_reporting != floor(delta_reporting)) {
-          stop("delta_reporting must be a non-negative integer.")
+     # Validate delta_reporting_cases
+     if (!is.null(delta_reporting_cases)) {
+          if (!is.numeric(delta_reporting_cases) || delta_reporting_cases < 0 || delta_reporting_cases != floor(delta_reporting_cases)) {
+               stop("delta_reporting_cases must be a non-negative integer.")
+          }
+     }
+
+     # Validate delta_reporting_deaths
+     if (!is.null(delta_reporting_deaths)) {
+          if (!is.numeric(delta_reporting_deaths) || delta_reporting_deaths < 0 || delta_reporting_deaths != floor(delta_reporting_deaths)) {
+               stop("delta_reporting_deaths must be a non-negative integer.")
+          }
      }
 
      # Force of Infection (human-to-human).

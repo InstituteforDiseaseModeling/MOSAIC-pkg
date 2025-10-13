@@ -30,14 +30,16 @@ make_LASER_config(
   gamma_2 = NULL,
   epsilon = NULL,
   mu_jt = NULL,
-  mu_j = NULL,
+  mu_j_baseline = NULL,
   mu_j_slope = NULL,
+  mu_j_epidemic_factor = NULL,
   rho = NULL,
   sigma = NULL,
   chi_endemic = NULL,
   chi_epidemic = NULL,
   epidemic_threshold = NULL,
-  delta_reporting = NULL,
+  delta_reporting_cases = NULL,
+  delta_reporting_deaths = NULL,
   longitude = NULL,
   latitude = NULL,
   mobility_omega = NULL,
@@ -145,19 +147,33 @@ sequence from date_start to date_stop.
 
 \item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
-If mu_j is provided, mu_jt will be generated from mu_j and mu_j_slope.}
+If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().}
 
-\item{mu_j}{A numeric vector of location-specific baseline case fatality ratios. Optional. If provided
-with mu_j_slope, will generate mu_jt. Length must equal length(location_name). Values must be in [0, 1].}
+\item{mu_j_baseline}{Baseline infection fatality ratio for threshold-dependent IFR model.
+Numeric vector of length(location_name). Values must be in [0, 1].}
 
-\item{mu_j_slope}{A numeric vector of location-specific temporal slopes for case fatality ratio.
-Optional. Default is 0 (no temporal trend). Length must equal length(location_name).
+\item{mu_j_slope}{Temporal trend in baseline IFR (proportion change over simulation period).
+Numeric vector of length(location_name). Default is 0 (no temporal trend).}
+
+\item{mu_j_epidemic_factor}{Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50\% increase).
+Numeric vector of length(location_name). Must be >= 0.
 \subsection{Observation Processes}{
 }}
 
 \item{rho}{Proportion of true infections (numeric in [0, 1]).}
 
-\item{sigma}{Proportion of symptomatic infections (numeric in [0, 1]).
+\item{sigma}{Proportion of symptomatic infections (numeric in [0, 1]).}
+
+\item{chi_endemic}{Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).}
+
+\item{chi_epidemic}{Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).}
+
+\item{epidemic_threshold}{Incidence threshold (infections per capita) for epidemic definition. Used for both
+case reporting and IFR threshold models. Numeric in [0, 1].}
+
+\item{delta_reporting_cases}{Infection-to-case reporting delay in days (non-negative integer).}
+
+\item{delta_reporting_deaths}{Infection-to-death reporting delay in days (non-negative integer).
 \subsection{Spatial model}{
 }}
 
