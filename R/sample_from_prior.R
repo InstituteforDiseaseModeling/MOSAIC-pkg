@@ -25,6 +25,7 @@
 #'   \item \strong{normal}: parameters$mean, parameters$sd
 #'   \item \strong{truncnorm}: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)
 #'   \item \strong{uniform}: parameters$min, parameters$max
+#'   \item \strong{discrete_uniform}: parameters$min, parameters$max (returns integers)
 #'   \item \strong{gompertz}: parameters$b, parameters$eta
 #' }
 #'
@@ -171,7 +172,23 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
         }
         runif(n, min = params$min, max = params$max)
       },
-      
+
+      discrete_uniform = {
+        if (!all(c("min", "max") %in% names(params))) {
+          stop("Discrete uniform distribution requires min and max")
+        }
+        if (params$min >= params$max) {
+          stop("Discrete uniform requires min < max")
+        }
+        # Ensure we have integer bounds
+        min_int <- as.integer(ceiling(params$min))
+        max_int <- as.integer(floor(params$max))
+        if (min_int > max_int) {
+          stop("Discrete uniform requires at least one integer between min and max")
+        }
+        sample(min_int:max_int, n, replace = TRUE)
+      },
+
       gompertz = {
         if (!all(c("b", "eta") %in% names(params))) {
           stop("Gompertz distribution requires b and eta")
