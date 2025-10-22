@@ -1,8 +1,8 @@
 #' Map infections to suspected and true cholera cases
 #'
 #' @description
-#' Given a vector of incident *true infections* \eqn{I_{\text{new}}(t)} and constants
-#' \eqn{\sigma} (symptomatic fraction) and \eqn{\rho} (reporting probability among symptomatic),
+#' Given a vector of incident *symptomatic infections* \eqn{I_{\text{sym}}(t)} (e.g., from LASER model)
+#' and constant \eqn{\rho} (reporting probability among symptomatic),
 #' this function returns vectors of expected **suspected** and **true/confirmed** cases aligned
 #' on report day using a simple time shift \eqn{\Delta} (days).
 #'
@@ -12,14 +12,14 @@
 #' \eqn{I_{\text{new}}(t-\Delta)/N(t-\Delta)} exceeds the threshold.
 #'
 #' @details
-#' Shift-only delay model with constant \eqn{\sigma,\rho}:
-#' \deqn{\mathbb{E}[C_{\text{true}}(t)] \;=\; \rho\,\sigma\,I_{\text{new}}(t-\Delta),}
-#' \deqn{\mathbb{E}[C_{\text{sus}}(t)] \;=\; \frac{\rho\,\sigma}{\chi_t}\,I_{\text{new}}(t-\Delta),}
+#' Shift-only delay model with constant \eqn{\rho}:
+#' \deqn{\mathbb{E}[C_{\text{true}}(t)] \;=\; \rho\,I_{\text{sym}}(t-\Delta),}
+#' \deqn{\mathbb{E}[C_{\text{sus}}(t)] \;=\; \frac{\rho}{\chi_t}\,I_{\text{sym}}(t-\Delta),}
 #' where \eqn{\chi_t \in (0,1]} is the PPV among suspected cases (fraction that are truly cholera).
 #'
 #' **Epidemic switching rule (optional):**
 #' \deqn{\chi_t \;=\; \begin{cases}
-#' \text{chi\_epidemic}, & \text{if } I_{\text{new}}(t-\Delta)/N(t-\Delta) > \text{epidemic\_threshold},\\
+#' \text{chi\_epidemic}, & \text{if } I_{\text{sym}}(t-\Delta)/N(t-\Delta) > \text{epidemic\_threshold},\\
 #' \text{chi\_endemic},  & \text{otherwise.}
 #' \end{cases}}
 #' If \code{epidemic_threshold} is \code{NULL}, the function uses \code{chi_endemic} for all times
@@ -29,21 +29,20 @@
 #' (no earlier infections available to map forward). When \code{delta_t = 0}, outputs are aligned
 #' one-to-one with \code{infections} and contain no leading \code{NA}s.
 #'
-#' @param infections Numeric vector of incident true infections \eqn{I_{\text{new}}(t)} (length \eqn{n}).
+#' @param infections Numeric vector of incident symptomatic infections \eqn{I_{\text{sym}}(t)} (length \eqn{n}).
 #'   Must be non-negative; \code{NA}s are allowed and propagate.
 #' @param N Numeric scalar or vector of length \eqn{n}: population size used to compute the infection proportion
-#'   \eqn{I_{\text{new}}(t)/N(t)} for the switching rule. **Ignored if** \code{epidemic_threshold} is \code{NULL}.
+#'   \eqn{I_{\text{sym}}(t)/N(t)} for the switching rule. **Ignored if** \code{epidemic_threshold} is \code{NULL}.
 #'   Default is \code{NULL}.
-#' @param sigma Scalar in \eqn{[0,1]}: symptomatic fraction.
 #' @param rho   Scalar in \eqn{[0,1]}: probability a symptomatic cholera infection is reported as \emph{suspected}.
 #' @param chi_endemic  Scalar in \eqn{(0,1]}: PPV among suspected during endemic levels (also the default PPV if
 #'   \code{epidemic_threshold} is \code{NULL}).
 #' @param chi_epidemic Scalar in \eqn{(0,1]}: PPV among suspected during epidemic levels (used only when
 #'   \code{epidemic_threshold} is provided).
-#' @param epidemic_threshold \code{NULL} or a scalar in \eqn{[0,1]}: threshold on \eqn{I_{\text{new}}(t)/N(t)} that
+#' @param epidemic_threshold \code{NULL} or a scalar in \eqn{[0,1]}: threshold on \eqn{I_{\text{sym}}(t)/N(t)} that
 #'   determines whether \code{chi_epidemic} (above threshold) or \code{chi_endemic} (otherwise) is used.
 #'   If \code{NULL}, no switching is applied and \code{chi_endemic} is used for all times. Default is \code{NULL}.
-#' @param delta_t Non-negative integer number of days for the infection→report delay \eqn{\Delta}. Default is 0.
+#' @param delta_t Non-negative integer number of days for the symptomatic infection→report delay \eqn{\Delta}. Default is 0.
 #'
 #' @return A named list with two numeric vectors, each length \eqn{n}:
 #' \itemize{
@@ -53,9 +52,10 @@
 #'
 #' @section Alignment note:
 #' Outputs are indexed by report day \eqn{t}. Values at indices \eqn{1:\Delta} are \code{NA}
-#' because they depend on \eqn{I_{\text{new}}(t-\Delta)} before the start of the series.
+#' because they depend on \eqn{I_{\text{sym}}(t-\Delta)} before the start of the series.
 #'
 #' @examples
+# These are symptomatic infections (e.g., I_sym from LASER model)
 #' infections <- c(0, 1, 2, 5, 40, 120, 200, 75, 50, 30, 15, 10, 3, 0, 0)
 #' N <- 20000
 #'
@@ -63,7 +63,6 @@
 #' out1 <- calc_cases_from_infections(
 #'   infections = infections,
 #'   N = NULL,
-#'   sigma = 0.25,
 #'   rho = 0.70,
 #'   chi_endemic = 0.50,
 #'   chi_epidemic = 0.75,
@@ -76,7 +75,6 @@
 #' out2 <- calc_cases_from_infections(
 #'   infections = infections,
 #'   N = N,
-#'   sigma = 0.25,
 #'   rho = 0.70,
 #'   chi_endemic = 0.50,
 #'   chi_epidemic = 0.75,
@@ -88,7 +86,6 @@
 #' @export
 calc_cases_from_infections <- function(infections,
                                        N = NULL,
-                                       sigma,
                                        rho,
                                        chi_endemic,
                                        chi_epidemic,
@@ -99,10 +96,6 @@ calc_cases_from_infections <- function(infections,
           stop("`infections` must be a numeric vector.", call. = FALSE)
      }
      n <- length(infections)
-
-     if (!is.numeric(sigma) || length(sigma) != 1L || is.na(sigma) || sigma < 0 || sigma > 1) {
-          stop("`sigma` must be a scalar in [0, 1].", call. = FALSE)
-     }
      if (!is.numeric(rho) || length(rho) != 1L || is.na(rho) || rho < 0 || rho > 1) {
           stop("`rho` must be a scalar in [0, 1].", call. = FALSE)
      }
@@ -169,11 +162,11 @@ calc_cases_from_infections <- function(infections,
                chi_use <- ifelse(epidemic_flag, chi_epidemic, chi_endemic)  # length n - k
           }
 
-          # true/confirmed cases: C_true(t) = rho * sigma * I_new(t - delta_t)
-          cases_true[idx_report] <- rho * sigma * infections[idx_infect]
+          # true/confirmed cases: C_true(t) = rho * I_sym(t - delta_t)
+          cases_true[idx_report] <- rho * infections[idx_infect]
 
-          # suspected cases: C_sus(t) = (rho * sigma / chi_use) * I_new(t - delta_t)
-          cases_suspected[idx_report] <- (rho * sigma / chi_use) * infections[idx_infect]
+          # suspected cases: C_sus(t) = (rho / chi_use) * I_sym(t - delta_t)
+          cases_suspected[idx_report] <- (rho / chi_use) * infections[idx_infect]
      }
      # else: all NAs (no infections available before start)
 
