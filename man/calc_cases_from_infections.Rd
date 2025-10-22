@@ -5,9 +5,8 @@
 \title{Map infections to suspected and true cholera cases}
 \usage{
 calc_cases_from_infections(
-  infections,
+  infections_symptomatic,
   N = NULL,
-  sigma,
   rho,
   chi_endemic,
   chi_epidemic,
@@ -16,14 +15,12 @@ calc_cases_from_infections(
 )
 }
 \arguments{
-\item{infections}{Numeric vector of incident true infections \eqn{I_{\text{new}}(t)} (length \eqn{n}).
+\item{infections_symptomatic}{Numeric vector of incident symptomatic infections \eqn{I_{\text{sym}}(t)} (length \eqn{n}).
 Must be non-negative; \code{NA}s are allowed and propagate.}
 
 \item{N}{Numeric scalar or vector of length \eqn{n}: population size used to compute the infection proportion
-\eqn{I_{\text{new}}(t)/N(t)} for the switching rule. \strong{Ignored if} \code{epidemic_threshold} is \code{NULL}.
+\eqn{I_{\text{sym}}(t)/N(t)} for the switching rule. \strong{Ignored if} \code{epidemic_threshold} is \code{NULL}.
 Default is \code{NULL}.}
-
-\item{sigma}{Scalar in \eqn{[0,1]}: symptomatic fraction.}
 
 \item{rho}{Scalar in \eqn{[0,1]}: probability a symptomatic cholera infection is reported as \emph{suspected}.}
 
@@ -33,11 +30,11 @@ Default is \code{NULL}.}
 \item{chi_epidemic}{Scalar in \eqn{(0,1]}: PPV among suspected during epidemic levels (used only when
 \code{epidemic_threshold} is provided).}
 
-\item{epidemic_threshold}{\code{NULL} or a scalar in \eqn{[0,1]}: threshold on \eqn{I_{\text{new}}(t)/N(t)} that
+\item{epidemic_threshold}{\code{NULL} or a scalar in \eqn{[0,1]}: threshold on \eqn{I_{\text{sym}}(t)/N(t)} that
 determines whether \code{chi_epidemic} (above threshold) or \code{chi_endemic} (otherwise) is used.
 If \code{NULL}, no switching is applied and \code{chi_endemic} is used for all times. Default is \code{NULL}.}
 
-\item{delta_t}{Non-negative integer number of days for the infection→report delay \eqn{\Delta}. Default is 0.}
+\item{delta_t}{Non-negative integer number of days for the symptomatic infection→report delay \eqn{\Delta}. Default is 0.}
 }
 \value{
 A named list with two numeric vectors, each length \eqn{n}:
@@ -47,8 +44,8 @@ A named list with two numeric vectors, each length \eqn{n}:
 }
 }
 \description{
-Given a vector of incident \emph{true infections} \eqn{I_{\text{new}}(t)} and constants
-\eqn{\sigma} (symptomatic fraction) and \eqn{\rho} (reporting probability among symptomatic),
+Given a vector of incident \emph{symptomatic infections} \eqn{I_{\text{sym}}(t)} and constant
+\eqn{\rho} (reporting probability among symptomatic),
 this function returns vectors of expected \strong{suspected} and \strong{true/confirmed} cases aligned
 on report day using a simple time shift \eqn{\Delta} (days).
 
@@ -58,14 +55,14 @@ switches \eqn{\chi} between \code{chi_endemic} and \code{chi_epidemic} according
 \eqn{I_{\text{new}}(t-\Delta)/N(t-\Delta)} exceeds the threshold.
 }
 \details{
-Shift-only delay model with constant \eqn{\sigma,\rho}:
-\deqn{\mathbb{E}[C_{\text{true}}(t)] \;=\; \rho\,\sigma\,I_{\text{new}}(t-\Delta),}
-\deqn{\mathbb{E}[C_{\text{sus}}(t)] \;=\; \frac{\rho\,\sigma}{\chi_t}\,I_{\text{new}}(t-\Delta),}
+Shift-only delay model with constant \eqn{\rho}:
+\deqn{\mathbb{E}[C_{\text{true}}(t)] \;=\; \rho\,I_{\text{sym}}(t-\Delta),}
+\deqn{\mathbb{E}[C_{\text{sus}}(t)] \;=\; \frac{\rho}{\chi_t}\,I_{\text{sym}}(t-\Delta),}
 where \eqn{\chi_t \in (0,1]} is the PPV among suspected cases (fraction that are truly cholera).
 
 \strong{Epidemic switching rule (optional):}
 \deqn{\chi_t \;=\; \begin{cases}
-\text{chi\_epidemic}, & \text{if } I_{\text{new}}(t-\Delta)/N(t-\Delta) > \text{epidemic\_threshold},\\
+\text{chi\_epidemic}, & \text{if } I_{\text{sym}}(t-\Delta)/N(t-\Delta) > \text{epidemic\_threshold},\\
 \text{chi\_endemic},  & \text{otherwise.}
 \end{cases}}
 If \code{epidemic_threshold} is \code{NULL}, the function uses \code{chi_endemic} for all times
@@ -78,18 +75,17 @@ one-to-one with \code{infections} and contain no leading \code{NA}s.
 \section{Alignment note}{
 
 Outputs are indexed by report day \eqn{t}. Values at indices \eqn{1:\Delta} are \code{NA}
-because they depend on \eqn{I_{\text{new}}(t-\Delta)} before the start of the series.
+because they depend on \eqn{I_{\text{sym}}(t-\Delta)} before the start of the series.
 }
 
 \examples{
-infections <- c(0, 1, 2, 5, 40, 120, 200, 75, 50, 30, 15, 10, 3, 0, 0)
+infections_symptomatic <- c(0, 1, 2, 5, 40, 120, 200, 75, 50, 30, 15, 10, 3, 0, 0)
 N <- 20000
 
 # 1) No switching: epidemic_threshold = NULL (chi_endemic used everywhere; N ignored)
 out1 <- calc_cases_from_infections(
-  infections = infections,
+  infections_symptomatic = infections_symptomatic,
   N = NULL,
-  sigma = 0.25,
   rho = 0.70,
   chi_endemic = 0.50,
   chi_epidemic = 0.75,
@@ -100,9 +96,8 @@ out1$cases_suspected; out1$cases_true
 
 # 2) Switching on: use chi_epidemic when infections/N > 15/100,000
 out2 <- calc_cases_from_infections(
-  infections = infections,
+  infections_symptomatic = infections_symptomatic,
   N = N,
-  sigma = 0.25,
   rho = 0.70,
   chi_endemic = 0.50,
   chi_epidemic = 0.75,
