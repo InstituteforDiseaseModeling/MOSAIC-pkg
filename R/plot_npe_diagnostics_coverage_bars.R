@@ -230,8 +230,8 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
             page_coverage_rev <- rev(page_coverage)
             page_colors_rev <- rev(page_colors)
 
-            # Set up plot with margins adjusted for legend
-            par(mar = c(5, 10, 5, 3), mgp = c(3, 0.7, 0), xpd = FALSE)
+            # Set up plot with margins adjusted for legend at bottom
+            par(mar = c(6.5, 10, 4, 3), mgp = c(3, 0.7, 0), xpd = FALSE)
 
             # Calculate proper y-axis range for barplot
             n_bars <- length(page_params)
@@ -263,12 +263,12 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
             # Get plot region limits
             usr <- par("usr")
 
-            # Ensure shaded areas don't extend past 0 or 1 horizontally, but use full plot height
-            rect(max(0, level - 0.05), usr[3], min(1, level + 0.05), usr[4],
+            # Ensure shaded areas don't extend past 0 or 1 horizontally, but use full plot height with extension
+            rect(max(0, level - 0.05), usr[3] - 0.5, min(1, level + 0.05), usr[4] + 0.5,
                  col = adjustcolor(col_text_secondary, alpha = 0.15), border = NA)
-            rect(max(0, level - 0.10), usr[3], max(0, level - 0.05), usr[4],
+            rect(max(0, level - 0.10), usr[3] - 0.5, max(0, level - 0.05), usr[4] + 0.5,
                  col = adjustcolor(col_text_secondary, alpha = 0.10), border = NA)
-            rect(min(1, level + 0.05), usr[3], min(1, level + 0.10), usr[4],
+            rect(min(1, level + 0.05), usr[3] - 0.5, min(1, level + 0.10), usr[4] + 0.5,
                  col = adjustcolor(col_text_secondary, alpha = 0.10), border = NA)
 
             # Now add the bars with proper positioning
@@ -308,9 +308,9 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                          mean_coverage, level, n_pass, n_warn, n_fail),
                   side = 3, line = 0.5, cex = 0.9, col = col_text_secondary)
 
-            # Add legend under the subtitle (at top of plot area)
+            # Add legend at bottom of plot
             par(xpd = TRUE)  # Allow drawing outside plot area
-            legend(x = 0.5, y = usr[4] * 1.08,
+            legend(x = 0.5, y = usr[3] - 1.5,
                    xjust = 0.5,
                    legend = c(
                        "Pass (within ±5%)",
@@ -320,7 +320,7 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                    fill = c(col_pass, col_warn, col_fail),
                    border = NA,
                    bty = "n",
-                   cex = 0.75,
+                   cex = 0.8,
                    ncol = 3,  # Horizontal layout
                    horiz = FALSE)
             par(xpd = FALSE)  # Reset to default
