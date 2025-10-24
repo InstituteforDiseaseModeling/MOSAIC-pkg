@@ -230,11 +230,17 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
             page_coverage_rev <- rev(page_coverage)
             page_colors_rev <- rev(page_colors)
 
-            # Set up plot with extra bottom margin for legend
-            par(mar = c(7, 10, 4, 3), mgp = c(3, 0.7, 0), xpd = FALSE)
+            # Set up plot with margins adjusted for legend
+            par(mar = c(5, 10, 5, 3), mgp = c(3, 0.7, 0), xpd = FALSE)
+
+            # Calculate proper y-axis range for barplot
+            n_bars <- length(page_params)
+            bar_width <- 1  # Standard bar width
+            bar_space <- 0.2  # Space between bars
+            total_height <- n_bars * bar_width + (n_bars - 1) * bar_space
 
             # First create empty plot to add background elements
-            plot(NULL, xlim = c(0, 1), ylim = c(0.5, length(page_params) + 0.5),
+            plot(NULL, xlim = c(0, 1), ylim = c(0, total_height + 1),
                  xlab = "Coverage", ylab = "",
                  main = sprintf("%s - %.0f%% CI Coverage%s",
                               param_group_name, level * 100,
@@ -242,22 +248,25 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                  cex.main = 1.2, col.main = col_text_primary,
                  axes = FALSE)
 
-            # Add axes
+            # Add axes - calculate proper positions for y-axis labels
             axis(1)
-            axis(2, at = 1:length(page_params), labels = page_params_rev, las = 1, cex.axis = 0.7)
+            bar_positions <- seq(from = bar_width/2,
+                               by = bar_width + bar_space,
+                               length.out = n_bars)
+            axis(2, at = bar_positions, labels = page_params_rev, las = 1, cex.axis = 0.7)
 
             # Add grid lines first (in background)
             abline(v = seq(0, 1, by = 0.1), col = col_grid, lty = 3, lwd = 0.5)
 
             # Add tolerance zones (shaded areas) using grey colors
-            rect(level - 0.05, 0, level + 0.05, length(page_params) + 1,
+            rect(level - 0.05, -1, level + 0.05, total_height + 2,
                  col = adjustcolor(col_text_secondary, alpha = 0.15), border = NA)
-            rect(level - 0.10, 0, level - 0.05, length(page_params) + 1,
+            rect(level - 0.10, -1, level - 0.05, total_height + 2,
                  col = adjustcolor(col_text_secondary, alpha = 0.10), border = NA)
-            rect(level + 0.05, 0, level + 0.10, length(page_params) + 1,
+            rect(level + 0.05, -1, level + 0.10, total_height + 2,
                  col = adjustcolor(col_text_secondary, alpha = 0.10), border = NA)
 
-            # Now add the bars with reduced thickness (space parameter)
+            # Now add the bars with proper positioning
             bp <- barplot(page_coverage_rev,
                          horiz = TRUE,
                          names.arg = rep("", length(page_params)),  # Empty names since we already added axis
@@ -265,7 +274,8 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                          col = page_colors_rev,
                          border = NA,
                          xlim = c(0, 1),
-                         space = 0.5,  # Increase space between bars to make them thinner
+                         ylim = c(0, total_height + 1),
+                         space = bar_space/bar_width,  # Space as proportion of bar width
                          add = TRUE,   # Add to existing plot
                          axes = FALSE)
 
@@ -296,9 +306,10 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                          mean_coverage, level, n_pass, n_warn, n_fail),
                   side = 3, line = 0.5, cex = 0.9, col = col_text_secondary)
 
-            # Add legend outside plot area at bottom
+            # Add legend under the subtitle (at top of plot area)
             par(xpd = TRUE)  # Allow drawing outside plot area
-            legend(x = 0.5, y = -0.15, xjust = 0.5,
+            legend(x = "top",
+                   y = total_height + 0.5,  # Position just below the subtitle
                    legend = c(
                        "Pass (within ±5%)",
                        "Warn (within ±10%)",
@@ -307,9 +318,10 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                    fill = c(col_pass, col_warn, col_fail),
                    border = NA,
                    bty = "n",
-                   cex = 0.8,
+                   cex = 0.75,
                    ncol = 3,  # Horizontal layout
-                   horiz = FALSE)
+                   horiz = FALSE,
+                   inset = c(0, -0.12))  # Fine-tune vertical position
             par(xpd = FALSE)  # Reset to default
         }
     }
