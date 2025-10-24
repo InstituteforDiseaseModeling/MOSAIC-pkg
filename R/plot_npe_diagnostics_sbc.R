@@ -1,4 +1,4 @@
-#' Plot NPE diagnostics SBC KS test results as horizontal bar plots
+#' Plot NPE diagnostics SBC test results as horizontal bar plots
 #'
 #' Creates horizontal bar plots showing SBC Kolmogorov-Smirnov test p-values
 #' for each parameter, color-coded by significance level and grouped by parameter type.
@@ -9,20 +9,20 @@
 #' @param max_params_per_page Maximum number of parameters per page (default: 40)
 #' @param verbose Logical indicating whether to print messages
 #'
-#' @return Invisible NULL. Creates a PDF file with SBC KS test bar plots.
+#' @return Invisible NULL. Creates a PDF file with SBC test bar plots.
 #'
 #' @export
 #' @examples
 #' \dontrun{
-#' # Create NPE SBC KS bar plots
-#' plot_npe_diagnostics_sbc_ks(
+#' # Create NPE SBC bar plots
+#' plot_npe_diagnostics_sbc(
 #'   diagnostics_dir = "./local/calibration/calibration_test_13/npe/diagnostics"
 #' )
 #' }
-plot_npe_diagnostics_sbc_ks <- function(diagnostics_dir,
-                                        plots_dir = NULL,
-                                        max_params_per_page = 40,
-                                        verbose = TRUE) {
+plot_npe_diagnostics_sbc <- function(diagnostics_dir,
+                                    plots_dir = NULL,
+                                    max_params_per_page = 40,
+                                    verbose = TRUE) {
 
     # --- I/O checks -------------------------------------------------------------
     if (!dir.exists(diagnostics_dir)) stop("diagnostics_dir does not exist: ", diagnostics_dir)
@@ -40,7 +40,7 @@ plot_npe_diagnostics_sbc_ks <- function(diagnostics_dir,
     }
 
     if (verbose) {
-        message("Reading NPE SBC KS test data from: ", diagnostics_dir)
+        message("Reading NPE SBC test data from: ", diagnostics_dir)
     }
 
     # --- Read data --------------------------------------------------------------
@@ -126,7 +126,7 @@ plot_npe_diagnostics_sbc_ks <- function(diagnostics_dir,
     }
 
     # --- Create plots -----------------------------------------------------------
-    pdf(file.path(plots_dir, "npe_diagnostics_sbc_ks.pdf"), width = 12, height = 10)
+    pdf(file.path(plots_dir, "npe_diagnostics_sbc.pdf"), width = 12, height = 10)
 
     # Professional color scheme (matching status PDFs)
     col_header_bg <- "#2C3E50"
@@ -311,8 +311,8 @@ plot_npe_diagnostics_sbc_ks <- function(diagnostics_dir,
     dev.off()
 
     if (verbose) {
-        message("NPE SBC KS test plots saved to: ",
-                file.path(plots_dir, "npe_diagnostics_sbc_ks.pdf"))
+        message("NPE SBC test plots saved to: ",
+                file.path(plots_dir, "npe_diagnostics_sbc.pdf"))
     }
 
     invisible(NULL)
