@@ -249,12 +249,8 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                  axes = FALSE,
                  yaxs = "i")  # Suppress y-axis expansion
 
-            # Add axes - calculate proper positions for y-axis labels
+            # Add x-axis only - y-axis will be added after barplot
             axis(1)
-            bar_positions <- seq(from = bar_width/2,
-                               by = bar_width + bar_space,
-                               length.out = n_bars)
-            axis(2, at = bar_positions, labels = page_params_rev, las = 1, cex.axis = 0.7)
 
             # Add grid lines first (in background)
             abline(v = seq(0, 1, by = 0.1), col = col_grid, lty = 3, lwd = 0.5)
@@ -284,6 +280,9 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                          add = TRUE,   # Add to existing plot
                          axes = FALSE)
 
+            # Add y-axis labels at the actual bar positions
+            axis(2, at = bp, labels = page_params_rev, las = 1, cex.axis = 0.7)
+
             # Add target line on top
             abline(v = level, col = col_text_primary, lwd = 3, lty = 2)
 
@@ -308,9 +307,9 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
                          mean_coverage, level, n_pass, n_warn, n_fail),
                   side = 3, line = 0.5, cex = 0.9, col = col_text_secondary)
 
-            # Add legend at bottom of plot
+            # Add legend at bottom of plot (positioned to avoid x-axis label)
             par(xpd = TRUE)  # Allow drawing outside plot area
-            legend(x = 0.5, y = usr[3] - 1.5,
+            legend(x = 0.5, y = usr[3] - 2.2,
                    xjust = 0.5,
                    legend = c(
                        "Pass (within ±5%)",
