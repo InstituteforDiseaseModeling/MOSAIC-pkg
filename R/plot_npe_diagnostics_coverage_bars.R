@@ -231,7 +231,7 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
             page_colors_rev <- rev(page_colors)
 
             # Set up plot with margins adjusted for legend at bottom and subtitle spacing
-            par(mar = c(8, 10, 5.5, 3), mgp = c(2.5, 0.7, 0), xpd = FALSE)
+            par(mar = c(8, 10, 6, 3), mgp = c(2.5, 0.7, 0), xpd = FALSE)
 
             # Calculate proper y-axis range for barplot
             n_bars <- length(page_params)
