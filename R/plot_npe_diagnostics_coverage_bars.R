@@ -230,8 +230,8 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
             page_coverage_rev <- rev(page_coverage)
             page_colors_rev <- rev(page_colors)
 
-            # Set up plot with margins adjusted for legend at bottom
-            par(mar = c(6.5, 10, 4, 3), mgp = c(3, 0.7, 0), xpd = FALSE)
+            # Set up plot with margins adjusted for legend at bottom and subtitle spacing
+            par(mar = c(8, 10, 5.5, 3), mgp = c(2.5, 0.7, 0), xpd = FALSE)
 
             # Calculate proper y-axis range for barplot
             n_bars <- length(page_params)
@@ -302,14 +302,14 @@ plot_npe_diagnostics_coverage_bars <- function(diagnostics_dir,
             n_warn <- sum(abs(page_coverage - level) > 0.05 & abs(page_coverage - level) <= 0.10, na.rm = TRUE)
             n_fail <- sum(abs(page_coverage - level) > 0.10, na.rm = TRUE)
 
-            # Add status summary at top
+            # Add status summary at top with more spacing
             mtext(sprintf("Mean: %.3f | Target: %.2f | Pass: %d | Warn: %d | Fail: %d",
                          mean_coverage, level, n_pass, n_warn, n_fail),
-                  side = 3, line = 0.5, cex = 0.9, col = col_text_secondary)
+                  side = 3, line = 1.0, cex = 0.9, col = col_text_secondary)
 
-            # Add legend at bottom of plot (positioned to avoid x-axis label)
+            # Add legend at bottom of plot with more spacing from x-axis label
             par(xpd = TRUE)  # Allow drawing outside plot area
-            legend(x = 0.5, y = usr[3] - 2.2,
+            legend(x = 0.5, y = usr[3] - 3.2,
                    xjust = 0.5,
                    legend = c(
                        "Pass (within ±5%)",
