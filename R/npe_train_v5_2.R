@@ -371,14 +371,54 @@ train_npe_v5_2 <- function(
 .run_npe_training_internal <- function(params, outputs, param_cols, spec,
                                        output_dir, seed, device, logger) {
 
-    # This would contain the actual Python training code
-    # For now, returning a placeholder
     logger$log("INFO", "Training NPE with spec: %s tier, %d transforms, %d bins",
               spec$tier, spec$flow$num_transforms, spec$flow$num_bins)
 
-    # [Full Python training implementation would go here]
+    # Save data to temporary files for the existing train_npe function
+    temp_sim_file <- file.path(output_dir, "temp_simulations.parquet")
+    temp_out_file <- file.path(output_dir, "temp_outputs.parquet")
 
-    return(list(success = TRUE))
+    tryCatch({
+        # Write data to temporary parquet files
+        arrow::write_parquet(params, temp_sim_file)
+        arrow::write_parquet(outputs, temp_out_file)
+
+        # Call the original train_npe with our enhanced spec
+        result <- train_npe(
+            simulations_file = temp_sim_file,
+            outputs_file = temp_out_file,
+            output_dir = output_dir,
+            param_names = param_cols,
+            simulation_filter = "complete_cases",
+            architecture = spec$tier,
+            override_spec = spec,  # Use our v5.2 spec
+            use_gpu = (device != "cpu"),
+            seed = seed,
+            verbose = FALSE  # We handle logging
+        )
+
+        # Clean up temp files
+        unlink(temp_sim_file)
+        unlink(temp_out_file)
+
+        # Check if the model was actually trained
+        metadata_file <- file.path(output_dir, "npe_metadata.json")
+        if (!file.exists(metadata_file)) {
+            # If metadata doesn't exist, something went wrong
+            logger$log("WARNING", "NPE metadata file not created - training may have failed")
+        }
+
+        return(list(success = TRUE, result = result))
+
+    }, error = function(e) {
+        logger$log("ERROR", "NPE training failed: %s", e$message)
+
+        # Clean up temp files on error
+        if (file.exists(temp_sim_file)) unlink(temp_sim_file)
+        if (file.exists(temp_out_file)) unlink(temp_out_file)
+
+        return(list(success = FALSE, error = e$message))
+    })
 }
 
 #' Backup models with suffix

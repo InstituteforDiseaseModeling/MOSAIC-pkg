@@ -190,7 +190,7 @@ def compute_coverage(model_dir, test_params, test_obs, levels):
     reasons <- character()
 
     # Check coverage at 50% level (most sensitive)
-    if (!is.null(coverage_50)) {
+    if (!is.null(coverage_50) && !is.na(coverage_50)) {
         if (coverage_50 < 0.45) {
             tune <- TRUE
             reasons <- c(reasons, sprintf("Under-coverage at 50%%: %.1f%% (expected 50%%)",
@@ -202,7 +202,7 @@ def compute_coverage(model_dir, test_params, test_obs, levels):
     }
 
     # Check coverage at 80% level
-    if (!is.null(coverage_80)) {
+    if (!is.null(coverage_80) && !is.na(coverage_80)) {
         if (coverage_80 < 0.72) {  # 10% tolerance
             tune <- TRUE
             reasons <- c(reasons, sprintf("Under-coverage at 80%%: %.1f%% (expected 80%%)",
@@ -218,6 +218,21 @@ def compute_coverage(model_dir, test_params, test_obs, levels):
             reasons <- c(reasons, sprintf("Poor SBC calibration: %.0f%% parameters with p<0.01",
                                          prop_failed * 100))
         }
+    }
+
+    # Handle case where all diagnostics failed
+    if ((is.null(coverage_50) || is.na(coverage_50)) &&
+        (is.null(coverage_80) || is.na(coverage_80)) &&
+        (is.null(ks_pvalues) || length(ks_pvalues) == 0)) {
+
+        if (verbose) {
+            message("Auto-tune skipped: No valid diagnostic metrics available")
+            message("  Coverage computation may have failed - check model training")
+        }
+        return(list(
+            tune = FALSE,
+            reasons = "Diagnostics unavailable - skipping auto-tune"
+        ))
     }
 
     # Log decision
