@@ -4,7 +4,12 @@
 \alias{plot_model_distributions}
 \title{Plot Multi-Method Parameter Distributions}
 \usage{
-plot_model_distributions(json_files, method_names, output_dir)
+plot_model_distributions(
+  json_files,
+  method_names,
+  output_dir,
+  custom_colors = NULL
+)
 }
 \arguments{
 \item{json_files}{Vector of paths to JSON distribution files}
@@ -12,6 +17,8 @@ plot_model_distributions(json_files, method_names, output_dir)
 \item{method_names}{Vector of method names corresponding to each JSON file (for legends and colors)}
 
 \item{output_dir}{Directory to save generated plots}
+
+\item{custom_colors}{Optional named vector of colors for each method (e.g., c("Prior" = "#666666", "BFRS" = "#D55E00", "NPE" = "#0072B2"))}
 }
 \value{
 Invisibly returns a list of generated plot objects
@@ -35,6 +42,18 @@ plot_model_distributions(
   json_files = c("priors.json", "posteriors_npe.json"),
   method_names = c("Prior", "NPE"),
   output_dir = "plots"
+)
+
+# Use custom colors for better visibility
+plot_model_distributions(
+  json_files = c("priors.json", "posteriors_bfrs.json", "posteriors_npe.json"),
+  method_names = c("Prior", "BFRS", "NPE"),
+  output_dir = "plots",
+  custom_colors = c(
+    "Prior" = "#808080",  # Grey
+    "BFRS" = "#E31A1C",   # Red
+    "NPE" = "#1F78B4"     # Blue
+  )
 )
 }
 

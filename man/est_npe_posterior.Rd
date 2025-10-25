@@ -10,7 +10,9 @@ est_npe_posterior(
   n_samples = 10000,
   quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
   output_dir = NULL,
-  verbose = TRUE
+  verbose = TRUE,
+  return_samples = TRUE,
+  config_override = NULL
 )
 }
 \arguments{
@@ -35,6 +37,10 @@ results are not saved to files (only returned in memory). If a path is provided,
 results are saved to that directory.}
 
 \item{verbose}{Logical indicating whether to print progress messages. Default is TRUE.}
+
+\item{return_samples}{Logical indicating whether to return raw posterior samples.
+Default is TRUE. This parameter is included for backward compatibility - samples
+are always included in the return value.}
 }
 \value{
 A list containing:

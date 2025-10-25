@@ -15,7 +15,7 @@ generate_synthetic_observation_training(config, metadata)
 Vector of synthetic observations
 }
 \description{
-Internal helper to generate synthetic observations using forward model.
-This is a placeholder that would interface with LASER simulation.
+Internal helper to generate synthetic observations using LASER forward model
+for simulation-based calibration testing.
 }
 \keyword{internal}
