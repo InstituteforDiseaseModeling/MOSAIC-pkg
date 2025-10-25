@@ -14,7 +14,7 @@ plot_model_fit_stochastic_param(
   priors = NULL,
   sampling_args = list(),
   output_dir,
-  envelope_quantiles = c(0.0275, 0.25, 0.75, 0.975),
+  envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
   verbose = TRUE,
   plot_decomposed = FALSE
 )
@@ -52,7 +52,7 @@ Default is empty list.}
 be saved. Directory will be created if it doesn't exist.}
 
 \item{envelope_quantiles}{Numeric vector specifying the quantiles for confidence
-intervals. Default is c(0.0275, 0.25, 0.75, 0.975) for 50\% and 95\% CIs.
+intervals. Default is c(0.025, 0.25, 0.75, 0.975) for 50\% and 95\% CIs.
 Must have an even number of elements to form pairs of (lower, upper) bounds.}
 
 \item{verbose}{Logical indicating whether to print progress messages. Default is TRUE.}

@@ -281,6 +281,35 @@ for (i in seq_along(j)) {
 }
 
 message("Define a base list of arguments (all parameters that are common to all calls)")
+
+# Calculate initial condition proportions from counts
+prop_S_initial <- S_j / N_j
+prop_E_initial <- E_j / N_j
+prop_I_initial <- I_j / N_j
+prop_R_initial <- R_j / N_j
+prop_V1_initial <- V1_j / N_j
+prop_V2_initial <- V2_j / N_j
+
+# Add names to match location names
+names(prop_S_initial) <- j
+names(prop_E_initial) <- j
+names(prop_I_initial) <- j
+names(prop_R_initial) <- j
+names(prop_V1_initial) <- j
+names(prop_V2_initial) <- j
+
+# Validate that proportions sum to 1.0 for each location
+for (i in seq_along(j)) {
+    prop_sum <- prop_S_initial[i] + prop_E_initial[i] + prop_I_initial[i] +
+                prop_R_initial[i] + prop_V1_initial[i] + prop_V2_initial[i]
+    if (abs(prop_sum - 1.0) > 1e-6) {
+        warning(sprintf("Initial condition proportions don't sum to 1.0 for %s: sum = %.6f",
+                       j[i], prop_sum))
+    }
+}
+
+message("Initial condition proportions calculated and validated")
+
 default_args <- list(
      output_file_path = NULL, # Return config back to R env in list form (nothing written to file)
      seed = 123,
@@ -294,6 +323,12 @@ default_args <- list(
      R_j_initial = R_j,
      V1_j_initial = V1_j,
      V2_j_initial = V2_j,
+     prop_S_initial = prop_S_initial,
+     prop_E_initial = prop_E_initial,
+     prop_I_initial = prop_I_initial,
+     prop_R_initial = prop_R_initial,
+     prop_V1_initial = prop_V1_initial,
+     prop_V2_initial = prop_V2_initial,
      b_jt = b_jt,
      d_jt = d_jt,
      nu_1_jt = nu_1_jt,

@@ -36,6 +36,7 @@ Supported distributions:
 \item \strong{normal}: parameters$mean, parameters$sd
 \item \strong{truncnorm}: parameters$mean, parameters$sd, parameters$a (lower bound), parameters$b (upper bound)
 \item \strong{uniform}: parameters$min, parameters$max
+\item \strong{discrete_uniform}: parameters$min, parameters$max (returns integers)
 \item \strong{gompertz}: parameters$b, parameters$eta
 }
 }

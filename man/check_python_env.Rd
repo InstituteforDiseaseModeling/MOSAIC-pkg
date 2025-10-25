@@ -7,11 +7,10 @@
 check_python_env()
 }
 \value{
-No return value. Outputs messages to the console.
+Logical. TRUE if the r-mosaic Python environment is linked to the current session, FALSE otherwise.
 }
 \description{
-Checks whether the current R session is attached to the MOSAIC Python environment.
-The environment is fixed to "~/.virtualenvs/r-mosaic". If the environment is missing,
-it instructs the user to run MOSAIC::install_dependencies(). If a different Python interpreter
-is attached, it alerts the user with a restart suggestion.
+Displays information about the Python environment currently attached to the R session
+and checks whether it matches the MOSAIC Python environment at ~/.virtualenvs/r-mosaic.
+Provides clickable links to relevant functions based on the environment status.
 }

@@ -82,6 +82,12 @@ convert_config_to_matrix <- function(config) {
           "R_j_initial",
           "V1_j_initial",
           "V2_j_initial",
+          "prop_S_initial",     # Added: Initial condition proportions
+          "prop_E_initial",
+          "prop_I_initial",
+          "prop_R_initial",
+          "prop_V1_initial",
+          "prop_V2_initial",
           "phi_1",
           "phi_2",
           "omega_1",
@@ -106,7 +112,7 @@ convert_config_to_matrix <- function(config) {
           "b_2_j",
           "a1",                 # Added: Alternative seasonality parameter names
           "a2",
-          "b1", 
+          "b1",
           "b2",
           "alpha_1",
           "alpha_2",
@@ -141,6 +147,8 @@ convert_config_to_matrix <- function(config) {
      location_params_base <- c(
           "S_j_initial", "E_j_initial", "I_j_initial",
           "R_j_initial", "V1_j_initial", "V2_j_initial",
+          "prop_S_initial", "prop_E_initial", "prop_I_initial",   # Added: Initial condition proportions
+          "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
           "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
           "tau_i", "theta_j",
           "a_1_j", "a_2_j", "b_1_j", "b_2_j",

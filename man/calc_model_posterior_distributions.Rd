@@ -36,8 +36,8 @@ file that mirrors the structure of the priors.json file with updated parameter v
 \details{
 The function:
 \enumerate{
-\item Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles
-\item FILTERS for type == "posterior" rows only (NEW)
+\item Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles or est_npe_posterior
+\item Processes all quantile rows in the file (user controls what to include)
 \item Loads the priors.json as a template structure
 \item For each posterior parameter in the quantiles table:
 \itemize{

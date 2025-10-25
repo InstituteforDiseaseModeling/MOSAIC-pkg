@@ -706,7 +706,7 @@ plot_model_fit_stochastic <- function(config,
         n_successful = n_successful,
         success_rate = n_successful / n_simulations,
         envelope_quantiles = envelope_quantiles,
-        seed_base = seed_base,
+        seeds = seeds,
         cases_stats = cases_stats,
         deaths_stats = deaths_stats
     )

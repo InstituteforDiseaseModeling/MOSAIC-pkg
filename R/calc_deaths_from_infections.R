@@ -14,7 +14,7 @@
 #' @param epidemic_threshold Scalar location-specific threshold (infections/N) for epidemic definition
 #' @param delta_t Non-negative integer number of days for the infection-to-death delay (default 0)
 #'
-#' @return Numeric vector of deaths at each timestep
+#' @return Numeric vector of deaths at each time step
 #'
 #' @details
 #' The time-varying IFR is calculated as:

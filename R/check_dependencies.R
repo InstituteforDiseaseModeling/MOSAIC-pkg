@@ -115,15 +115,49 @@ check_dependencies <- function() {
           sel <- grep("laser-core", pkg_names)
           if (length(sel) > 0) pkg_names[sel] <- "laser_core"
 
-          for (pkg in pkg_names) {
+          for (pkg_spec in pkg_names) {
+
+               # Extract package name from version specifications
+               # Handle patterns like: "numpy=2.1.3", "sbi==0.23.2", "pytorch::pytorch=2.5.1"
+               pkg_import_name <- pkg_spec
+
+               # Remove channel prefix if present (e.g., "pytorch::pytorch" -> "pytorch")
+               pkg_import_name <- sub("^[^:]+::", "", pkg_import_name)
+
+               # Extract base package name (remove version specs)
+               pkg_import_name <- sub("[=><!].*$", "", pkg_import_name)
+
+               # Handle special import name mappings
+               import_map <- c(
+                    "pytorch" = "torch",
+                    "scikit-learn" = "sklearn",
+                    "laser-cholera" = "laser_cholera",
+                    "laser-core" = "laser_core"
+               )
+
+               if (pkg_import_name %in% names(import_map)) {
+                    pkg_import_name <- import_map[[pkg_import_name]]
+               }
+
+               # Skip special entries
+               if (pkg_import_name %in% c("pip", "python")) next
+               if (grepl("^https?://", pkg_spec)) next
+               if (grepl("^libblas", pkg_import_name)) next
 
                tryCatch({
 
-                    module <- reticulate::import(pkg, delay_load = TRUE)
+                    module <- reticulate::import(pkg_import_name, delay_load = TRUE)
                     version <- module[["__version__"]]
-                    cli::cli_alert_success("{pkg}: {version}")
 
-                    if (pkg == "laser_cholera") {
+                    # Show both the expected spec and actual version
+                    if (grepl("[=><!]", pkg_spec)) {
+                         expected <- sub("^[^=><!]+", "", pkg_spec)
+                         cli::cli_alert_success("{pkg_import_name}: {version} (expected {expected})")
+                    } else {
+                         cli::cli_alert_success("{pkg_import_name}: {version}")
+                    }
+
+                    if (pkg_import_name == "laser_cholera") {
                          cli::cli_alert_info("LASER built with:")
                          freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
                          laser_lines <- grep("laser", freeze, value = TRUE)
@@ -132,7 +166,7 @@ check_dependencies <- function() {
                     }
 
                }, error = function(e) {
-                    cli::cli_alert_danger("{pkg} cannot be found in the Python environment.")
+                    cli::cli_alert_danger("{pkg_import_name} cannot be found in the Python environment (from spec: {pkg_spec}).")
                })
           }
 

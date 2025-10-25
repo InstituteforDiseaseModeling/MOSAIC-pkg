@@ -30,7 +30,7 @@ calc_model_likelihood(
   sigma_peak_time = 1,
   sigma_peak_log = 0.5,
   penalty_unmatched_peak = -3,
-  wis_quantiles = c(0.0275, 0.25, 0.5, 0.75, 0.975),
+  wis_quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
   cumulative_timepoints = c(0.25, 0.5, 0.75, 1),
   enable_guardrails = TRUE,
   floor_likelihood = -999999999,

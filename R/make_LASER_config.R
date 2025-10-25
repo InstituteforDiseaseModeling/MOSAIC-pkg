@@ -33,6 +33,19 @@
 #'        of individuals in vaccine compartment V1 for each location. Names must match location_name.
 #' @param V2_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of individuals in vaccine compartment V2 for each location. Names must match location_name.
+#' @param prop_S_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
+#'        of susceptible individuals for each location. Values must be in [0,1]. Names must match location_name.
+#'        These proportion fields are provided for analysis convenience but are not required by the LASER model.
+#' @param prop_E_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
+#'        of exposed individuals for each location. Values must be in [0,1]. Names must match location_name.
+#' @param prop_I_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
+#'        of infected individuals for each location. Values must be in [0,1]. Names must match location_name.
+#' @param prop_R_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
+#'        of recovered individuals for each location. Values must be in [0,1]. Names must match location_name.
+#' @param prop_V1_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
+#'        of individuals in vaccine compartment V1 for each location. Values must be in [0,1]. Names must match location_name.
+#' @param prop_V2_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
+#'        of individuals in vaccine compartment V2 for each location. Values must be in [0,1]. Names must match location_name.
 #'
 #' ## Demographics
 #' @param b_jt A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily
@@ -208,6 +221,12 @@ make_LASER_config <- function(output_file_path = NULL,
                               R_j_initial = NULL,
                               V1_j_initial = NULL,
                               V2_j_initial = NULL,
+                              prop_S_initial = NULL,
+                              prop_E_initial = NULL,
+                              prop_I_initial = NULL,
+                              prop_R_initial = NULL,
+                              prop_V1_initial = NULL,
+                              prop_V2_initial = NULL,
 
                               # Demographics
                               b_jt = NULL,
@@ -378,6 +397,26 @@ make_LASER_config <- function(output_file_path = NULL,
           params$p_beta <- p_beta
      }
 
+     # Add optional proportion parameters if provided
+     if (!is.null(prop_S_initial)) {
+          params$prop_S_initial <- prop_S_initial
+     }
+     if (!is.null(prop_E_initial)) {
+          params$prop_E_initial <- prop_E_initial
+     }
+     if (!is.null(prop_I_initial)) {
+          params$prop_I_initial <- prop_I_initial
+     }
+     if (!is.null(prop_R_initial)) {
+          params$prop_R_initial <- prop_R_initial
+     }
+     if (!is.null(prop_V1_initial)) {
+          params$prop_V1_initial <- prop_V1_initial
+     }
+     if (!is.null(prop_V2_initial)) {
+          params$prop_V2_initial <- prop_V2_initial
+     }
+
      # Add optional IFR parameters if provided
      if (!is.null(mu_j_baseline)) {
           params$mu_j_baseline <- mu_j_baseline
@@ -444,6 +483,61 @@ make_LASER_config <- function(output_file_path = NULL,
           params[[v]] <- as.integer(vec)
      }
 
+     # Validate optional proportion parameters if present
+     prop_params <- c("prop_S_initial", "prop_E_initial", "prop_I_initial",
+                      "prop_R_initial", "prop_V1_initial", "prop_V2_initial")
+
+     for (v in prop_params) {
+          if (!is.null(params[[v]])) {
+               vec <- params[[v]]
+
+               # Must be numeric with values in [0,1]
+               if (!is.numeric(vec) || any(vec < 0) || any(vec > 1)) {
+                    stop(v, " must be numeric with values in [0,1].", call. = FALSE)
+               }
+
+               # Must match number of locations
+               if (length(vec) != length(location_name)) {
+                    stop(v, " must be a vector of length equal to number of locations.", call. = FALSE)
+               }
+
+               # If named, names must match location_name
+               if (!is.null(names(vec)) && !all(names(vec) == location_name)) {
+                    stop(v, " names must match the provided location_name values.", call. = FALSE)
+               }
+          }
+     }
+
+     # If proportion parameters are provided, validate they sum to 1.0 per location
+     all_prop_present <- all(sapply(prop_params, function(v) !is.null(params[[v]])))
+     if (all_prop_present) {
+          for (i in seq_along(location_name)) {
+               prop_sum <- params$prop_S_initial[i] + params$prop_E_initial[i] +
+                          params$prop_I_initial[i] + params$prop_R_initial[i] +
+                          params$prop_V1_initial[i] + params$prop_V2_initial[i]
+               if (abs(prop_sum - 1.0) > 1e-6) {
+                    warning(sprintf("Initial condition proportions don't sum to 1.0 for %s: sum = %.6f",
+                                  location_name[i], prop_sum), call. = FALSE)
+               }
+          }
+
+          # Validate consistency between counts and proportions (if both present)
+          for (i in seq_along(location_name)) {
+               count_params <- c("S_j_initial", "E_j_initial", "I_j_initial",
+                               "R_j_initial", "V1_j_initial", "V2_j_initial")
+               for (j in seq_along(count_params)) {
+                    count_field <- count_params[j]
+                    prop_field <- prop_params[j]
+                    expected_count <- round(params[[prop_field]][i] * params$N_j_initial[i])
+                    actual_count <- params[[count_field]][i]
+                    if (abs(expected_count - actual_count) > 1) {
+                         warning(sprintf("Inconsistency for %s in %s: prop=%.4f gives count=%d, but actual=%d",
+                                       prop_field, location_name[i], params[[prop_field]][i],
+                                       expected_count, actual_count), call. = FALSE)
+                    }
+               }
+          }
+     }
 
      # Check compartments sum to N_j_initial (allow small tolerance)
      total_j <- params$S_j_initial +

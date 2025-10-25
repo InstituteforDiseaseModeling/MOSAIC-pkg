@@ -73,7 +73,7 @@ write_list_to_yaml <- function(data_list, file_path, compress = FALSE) {
 
      }
 
-     yaml_text <- yaml::as.yaml(data_list, precision = 4)
+     yaml_text <- yaml::as.yaml(data_list, precision = 10)
 
      if (compress) {
 

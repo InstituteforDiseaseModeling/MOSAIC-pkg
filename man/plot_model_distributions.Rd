@@ -2,36 +2,40 @@
 % Please edit documentation in R/plot_model_distributions.R
 \name{plot_model_distributions}
 \alias{plot_model_distributions}
-\title{Plot Prior and Posterior Distributions for MOSAIC Model Parameters}
+\title{Plot Multi-Method Parameter Distributions}
 \usage{
-plot_model_distributions(
-  PATHS = NULL,
-  priors_file = NULL,
-  posteriors_file = NULL,
-  config = NULL,
-  output_dir = NULL,
-  selected_locations = NULL
-)
+plot_model_distributions(json_files, method_names, output_dir)
 }
 \arguments{
-\item{PATHS}{A list containing paths for the MOSAIC project, from \code{get_paths()}}
+\item{json_files}{Vector of paths to JSON distribution files}
 
-\item{config}{A configuration object containing date_start and other settings. If NULL, uses default date.}
+\item{method_names}{Vector of method names corresponding to each JSON file (for legends and colors)}
 
-\item{output_dir}{Output directory for plots. If NULL, uses PATHS$DOCS_FIGURES}
-
-\item{selected_locations}{Character vector of ISO codes for location-specific plots. If NULL, plots all available locations.}
-
-\item{priors}{Path to priors JSON file. If NULL, uses default priors file.}
-
-\item{posteriors}{Path to posteriors JSON file (optional). If provided, posterior distributions are overlaid on priors.}
+\item{output_dir}{Directory to save generated plots}
 }
 \value{
 Invisibly returns a list of generated plot objects
 }
 \description{
-Creates visualizations of global and location-specific parameter priors and posteriors using
-metadata from the estimated_parameters inventory. Parameters are organized by
-biological category and ordered consistently across all plots. When posteriors are provided,
-they are overlaid on the prior distributions for direct comparison.
+Creates visualizations comparing parameter distributions across multiple methods
+(e.g., priors, BFRS posteriors, NPE posteriors) using a flexible vector-based interface.
+Parameters are organized by biological category and ordered consistently across all plots.
+}
+\examples{
+\dontrun{
+# Compare three methods
+plot_model_distributions(
+  json_files = c("priors.json", "posteriors_bfrs.json", "posteriors_npe.json"),
+  method_names = c("Prior", "BFRS", "NPE"),
+  output_dir = "plots"
+)
+
+# Compare just prior and NPE
+plot_model_distributions(
+  json_files = c("priors.json", "posteriors_npe.json"),
+  method_names = c("Prior", "NPE"),
+  output_dir = "plots"
+)
+}
+
 }

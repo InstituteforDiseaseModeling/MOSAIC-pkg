@@ -61,7 +61,8 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
      if (!is.list(PATHS)) stop("PATHS must be a list")
      if (!is.list(priors)) stop("priors must be a list")
      if (!is.list(config)) stop("config must be a list")
-     if (variance_inflation < 1.1) {
+     # Check variance_inflation validity (only for single values)
+     if (length(variance_inflation) == 1 && variance_inflation < 1.1) {
           warning("variance_inflation too low - should be > 1.1 for meaningful variance")
      }
 
@@ -176,6 +177,24 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           cat("\n")
      }
 
+     # Handle variance_inflation parameter - convert to location-specific lookup
+     if (is.numeric(variance_inflation) && length(variance_inflation) > 1) {
+          # Named vector provided
+          if (is.null(names(variance_inflation))) {
+               stop("Multi-value variance_inflation must be a named vector with ISO codes")
+          }
+          variance_inflation_lookup <- variance_inflation
+          default_variance_inflation <- variance_inflation[1]  # Use first as default
+          if (verbose) {
+               cat(sprintf("Using location-specific variance inflation (range: %.1f-%.1f)\n",
+                          min(variance_inflation), max(variance_inflation)))
+          }
+     } else {
+          # Single value provided - use for all locations
+          variance_inflation_lookup <- NULL
+          default_variance_inflation <- variance_inflation
+     }
+
      # ---- Monte Carlo method: Per-location processing ----
      for (loc in location_codes) {
           if (verbose) cat(sprintf("Processing %s... ", loc))
@@ -240,10 +259,10 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          #---------------------------------------------------------------------------------
                          # Temporary manual patch until observation process updated in LASER model
                          # TODO: Create proper priors for these parameters when LASER model is updated
-                         rho_prior <- list(distribution = "uniform", parameters = list(min = 0.05, max = 0.30))
+                         rho_prior <- list(distribution = "uniform", parameters = list(min = 0.2, max = 0.7))
                          chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
                          tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
-                         
+
                          rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)  # Reporting rate: 5-30%
                          chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)  # Diagnostic accuracy: 50-75%
                          tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)  # Reporting delay ~ mean 4, sd ≈ 2.8
@@ -293,13 +312,13 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          iota_i    <- sample_from_prior(n = 1, prior = priors$parameters_global$iota, verbose = FALSE)
                          gamma_1_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_1, verbose = FALSE)
                          gamma_2_i <- sample_from_prior(n = 1, prior = priors$parameters_global$gamma_2, verbose = FALSE)
-                         
+
                          # Temporary manual patch until observation process updated in LASER model
                          # TODO: Create proper priors for these parameters when LASER model is updated
                          rho_prior <- list(distribution = "uniform", parameters = list(min = 0.05, max = 0.30))
                          chi_prior <- list(distribution = "uniform", parameters = list(min = 0.50, max = 0.75))
                          tau_r_prior <- list(distribution = "gamma", parameters = list(shape = 2, rate = 0.5))
-                         
+
                          rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)
                          chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)
                          tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)
@@ -347,18 +366,33 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                # Remove invalid samples and calculate mean
                E_valid <- E_prop[!is.na(E_prop) & E_prop > 0 & E_prop < 1]
                I_valid <- I_prop[!is.na(I_prop) & I_prop > 0 & I_prop < 1]
-               
+
                if (length(E_valid) < 2) {
                     if (verbose) cat("  Insufficient E data for", loc, "- using default\n")
                     E_beta <- list(shape1 = 1, shape2 = 999, method = "insufficient_data")
                } else {
+                    # Get location-specific variance inflation
+                    if (!is.null(variance_inflation_lookup)) {
+                         loc_variance_inflation <- if (loc %in% names(variance_inflation_lookup)) {
+                              variance_inflation_lookup[loc]
+                         } else {
+                              default_variance_inflation
+                         }
+                    } else {
+                         loc_variance_inflation <- default_variance_inflation
+                    }
+
                     E_mean <- mean(E_valid)
-                    E_ci_lower <- E_mean * (1 / variance_inflation)
-                    E_ci_upper <- E_mean * variance_inflation
+
+                    # For E/I compartments, always use multiplicative approach
+                    # since values are typically very small
+                    E_ci_lower <- E_mean * (1 / loc_variance_inflation)
+                    E_ci_upper <- E_mean * loc_variance_inflation
+
                     # Ensure valid Beta bounds
                     E_ci_lower <- max(1e-10, min(E_ci_lower, 0.999))
                     E_ci_upper <- max(E_ci_lower + 1e-10, min(E_ci_upper, 0.999))
-                    
+
                     E_fit <- fit_beta_from_ci(
                          mode_val = E_mean,
                          ci_lower = E_ci_lower,
@@ -367,18 +401,34 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     )
                     E_beta <- list(shape1 = E_fit$shape1, shape2 = E_fit$shape2, method = "variance_inflation")
                }
-               
+
                if (length(I_valid) < 2) {
                     if (verbose) cat("  Insufficient I data for", loc, "- using default\n")
                     I_beta <- list(shape1 = 1, shape2 = 999, method = "insufficient_data")
                } else {
+                    # Get location-specific variance inflation if not already set (when E had insufficient data)
+                    if (!exists("loc_variance_inflation")) {
+                         if (!is.null(variance_inflation_lookup)) {
+                              loc_variance_inflation <- if (loc %in% names(variance_inflation_lookup)) {
+                                   variance_inflation_lookup[loc]
+                              } else {
+                                   default_variance_inflation
+                              }
+                         } else {
+                              loc_variance_inflation <- default_variance_inflation
+                         }
+                    }
                     I_mean <- mean(I_valid)
-                    I_ci_lower <- I_mean * (1 / variance_inflation)
-                    I_ci_upper <- I_mean * variance_inflation
+
+                    # For E/I compartments, always use multiplicative approach
+                    # since values are typically very small
+                    I_ci_lower <- I_mean * (1 / loc_variance_inflation)
+                    I_ci_upper <- I_mean * loc_variance_inflation
+
                     # Ensure valid Beta bounds
                     I_ci_lower <- max(1e-10, min(I_ci_lower, 0.999))
                     I_ci_upper <- max(I_ci_lower + 1e-10, min(I_ci_upper, 0.999))
-                    
+
                     I_fit <- fit_beta_from_ci(
                          mode_val = I_mean,
                          ci_lower = I_ci_lower,
@@ -400,7 +450,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                     shape1 = E_beta$shape1,
                     shape2 = E_beta$shape2
                )
-               
+
                I_result <- list(
                     shape1 = I_beta$shape1,
                     shape2 = I_beta$shape2
@@ -412,7 +462,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
           }, error = function(e) {
                warning(sprintf("Error processing %s: %s", loc, e$message))
                if (verbose) cat(sprintf("error: %s\n", e$message))
-               
+
                results$parameters_location$prop_E_initial$parameters$location[[loc]] <- list(
                     shape1 = 1,
                     shape2 = 9999

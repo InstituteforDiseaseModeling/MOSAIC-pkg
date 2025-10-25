@@ -136,8 +136,9 @@ plot_model_posteriors_detail <- function(quantiles_file,
   }
 
   # Get unique parameters from quantiles (only posteriors have KL values)
+  posterior_types <- c("posterior", "npe", "bfrs")
   params_with_posteriors <- quantiles_df %>%
-    filter(type == "posterior", !is.na(kl)) %>%
+    filter(type %in% posterior_types, !is.na(kl)) %>%
     pull(parameter) %>%
     unique()
 
@@ -285,7 +286,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Get quantiles and KL from the quantiles_df
     param_data <- quantiles_df %>% filter(parameter == param_name)
-    posterior_data <- param_data %>% filter(type == "posterior")
+    posterior_types <- c("posterior", "npe", "bfrs")
+    posterior_data <- param_data %>% filter(type %in% posterior_types)
     prior_data <- param_data %>% filter(type == "prior")
 
     if (nrow(posterior_data) == 0 || nrow(prior_data) == 0) {
@@ -436,8 +438,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
               get_quantile_safe(posterior_data, "q0.25")),
       q75 = c(get_quantile_safe(prior_data, "q0.75"),
               get_quantile_safe(posterior_data, "q0.75")),
-      q2.75 = c(get_quantile_safe(prior_data, "q0.0275"),
-                get_quantile_safe(posterior_data, "q0.0275")),
+      q2.75 = c(get_quantile_safe(prior_data, "q0.025"),
+                get_quantile_safe(posterior_data, "q0.025")),
       q97.5 = c(get_quantile_safe(prior_data, "q0.975"),
                 get_quantile_safe(posterior_data, "q0.975"))
     )

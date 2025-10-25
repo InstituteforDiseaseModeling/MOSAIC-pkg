@@ -9,6 +9,7 @@
 #'   elements include:
 #'   * **Scalars** – biological constants (`phi_1`, `gamma_1`, `epsilon`, …);
 #'   * **Vectors** – initial populations (`S_j_initial`, `I_j_initial`, …),
+#'     initial proportions (optional: `prop_S_initial`, `prop_I_initial`, …),
 #'     coordinates (`longitude`, `latitude`), mobility coefficients, etc.;
 #'   * **Matrices** – day-by-day series such as human-to-human transmission
 #'     (`b_jt`), environmental suitability (`psi_jt`), birth/death rates;
@@ -32,10 +33,17 @@
 #'
 #' The object is intended for full-scale analyses and is therefore **large**
 #' (tens of megabytes) and **not self-contained** – it will error if the file
-#' paths it references do not exist on the user’s machine.  For tutorials or
+#' paths it references do not exist on the user's machine.  For tutorials or
 #' automated tests, consider using
 #' [`config_simulation_epidemic`] or [`config_simulation_endemic`], which run
 #' without any external dependencies.
+#'
+#' **Note on Initial Condition Formats**: This configuration includes both count
+#' (`*_j_initial`) and proportion (`prop_*_initial`) representations of initial
+#' conditions. The count fields are required by the LASER model for simulation,
+#' while the proportion fields are optional and provided for statistical analysis
+#' convenience. Both formats are automatically maintained in sync during
+#' parameter sampling operations.
 #'
 #' @usage
 #' config_default

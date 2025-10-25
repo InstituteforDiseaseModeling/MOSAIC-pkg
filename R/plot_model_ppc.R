@@ -129,16 +129,22 @@ plot_model_ppc <- function(model,
         grid(nx = NULL, ny = NULL, col = col_grid, lty = 1, lwd = 0.5)
     }
 
-    # Cases density overlay
-    if (length(obs_cases_valid) > 0 && !any(is.na(obs_cases_valid))) {
-        # Calculate densities with fallback bandwidth selection
+    # Cases density overlay (need at least 2 points for density estimation)
+    if (length(obs_cases_valid) >= 2 && !any(is.na(obs_cases_valid))) {
+        # Calculate densities with robust fallback bandwidth selection
         dens_obs <- tryCatch(
             density(log(obs_cases_valid + 1), bw = "SJ"),
-            error = function(e) density(log(obs_cases_valid + 1), bw = "nrd0")
+            error = function(e) tryCatch(
+                density(log(obs_cases_valid + 1), bw = "nrd0"),
+                error = function(e2) density(log(obs_cases_valid + 1), bw = 0.5)  # Fixed bandwidth
+            )
         )
         dens_pred <- tryCatch(
             density(log(pred_cases_valid + 1), bw = "SJ"),
-            error = function(e) density(log(pred_cases_valid + 1), bw = "nrd0")
+            error = function(e) tryCatch(
+                density(log(pred_cases_valid + 1), bw = "nrd0"),
+                error = function(e2) density(log(pred_cases_valid + 1), bw = 0.5)  # Fixed bandwidth
+            )
         )
 
         # Set up plot with better limits
@@ -174,15 +180,21 @@ plot_model_ppc <- function(model,
         text(0.5, 0.5, "Insufficient valid case data for density plot", cex = 1.2)
     }
 
-    # Deaths density overlay
-    if (length(obs_deaths_valid) > 0 && !any(is.na(obs_deaths_valid))) {
+    # Deaths density overlay (need at least 2 points for density estimation)
+    if (length(obs_deaths_valid) >= 2 && !any(is.na(obs_deaths_valid))) {
         dens_obs <- tryCatch(
             density(log(obs_deaths_valid + 1), bw = "SJ"),
-            error = function(e) density(log(obs_deaths_valid + 1), bw = "nrd0")
+            error = function(e) tryCatch(
+                density(log(obs_deaths_valid + 1), bw = "nrd0"),
+                error = function(e2) density(log(obs_deaths_valid + 1), bw = 0.5)  # Fixed bandwidth
+            )
         )
         dens_pred <- tryCatch(
             density(log(pred_deaths_valid + 1), bw = "SJ"),
-            error = function(e) density(log(pred_deaths_valid + 1), bw = "nrd0")
+            error = function(e) tryCatch(
+                density(log(pred_deaths_valid + 1), bw = "nrd0"),
+                error = function(e2) density(log(pred_deaths_valid + 1), bw = 0.5)  # Fixed bandwidth
+            )
         )
 
         xlim_range <- range(c(dens_obs$x, dens_pred$x))

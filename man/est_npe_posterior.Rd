@@ -31,13 +31,20 @@ Default is 10,000. Higher values provide more accurate quantiles but slower comp
 Default is \code{c(0.025, 0.25, 0.5, 0.75, 0.975)} for 95\% credible intervals.}
 
 \item{output_dir}{Character string path for saving estimation results. If NULL (default),
-creates \code{posterior_estimates} subdirectory in \code{model_dir}.}
+results are not saved to files (only returned in memory). If a path is provided,
+results are saved to that directory.}
 
 \item{verbose}{Logical indicating whether to print progress messages. Default is TRUE.}
 }
 \value{
-Data frame with posterior quantiles matching \code{\link{calc_model_posterior_quantiles}}
-format containing columns:
+A list containing:
+\itemize{
+\item \code{quantiles} — Data frame with posterior quantiles
+\item \code{samples} — Matrix of raw posterior samples (n_samples × n_parameters)
+\item \code{metadata} — List containing estimation metadata
+\item \code{param_names} — Character vector of parameter names
+}
+The \code{quantiles} data frame contains columns:
 \itemize{
 \item \code{parameter} — Parameter name
 \item \code{description} — Human-readable parameter description
@@ -91,12 +98,17 @@ observed <- data.frame(
 )
 
 # Estimate parameters using trained NPE
-posterior_quantiles <- est_npe_posterior(
+result <- est_npe_posterior(
   model_dir = "path/to/trained/npe/models",
   observed_data = observed,
   n_samples = 5000,
-  quantiles = c(0.05, 0.25, 0.5, 0.75, 0.95)
+  quantiles = c(0.05, 0.25, 0.5, 0.75, 0.95),
+  output_dir = NULL  # Don't save to files
 )
+
+# Access results
+posterior_quantiles <- result$quantiles
+posterior_samples <- result$samples
 }
 
 }

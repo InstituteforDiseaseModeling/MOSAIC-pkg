@@ -22,8 +22,8 @@
 #'
 #' @details
 #' The function:
-#' 1. Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles
-#' 2. FILTERS for type == "posterior" rows only (NEW)
+#' 1. Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles or est_npe_posterior
+#' 2. Processes all quantile rows in the file (user controls what to include)
 #' 3. Loads the priors.json as a template structure
 #' 4. For each posterior parameter in the quantiles table:
 #'    - Extracts the 2.5%, 50%, and 97.5% quantiles
@@ -71,23 +71,36 @@ calc_model_posterior_distributions <- function(
     if (verbose) message("Loading posterior quantiles from: ", quantiles_file)
     quantiles_all <- read.csv(quantiles_file, stringsAsFactors = FALSE)
 
-    # IMPORTANT: Filter for posterior rows only
-    if ("type" %in% names(quantiles_all)) {
-        quantiles <- quantiles_all[quantiles_all$type == "posterior", ]
-        if (verbose) {
-            message("  Total rows in file: ", nrow(quantiles_all))
-            message("  Posterior rows to process: ", nrow(quantiles))
-        }
-    } else {
-        # Backward compatibility: if no 'type' column, assume all rows are posterior
-        quantiles <- quantiles_all
-        if (verbose) {
-            message("  No 'type' column found, assuming all ", nrow(quantiles), " rows are posterior")
+    # Process all quantile rows - let the user decide what to include in the file
+    quantiles <- quantiles_all
+
+    if (verbose) {
+        message("  Total rows to process: ", nrow(quantiles))
+        if ("type" %in% names(quantiles)) {
+            types_found <- unique(quantiles$type)
+            message("  Types found: ", paste(types_found, collapse = ", "))
         }
     }
 
     if (nrow(quantiles) == 0) {
-        stop("No posterior rows found in quantiles file")
+        stop("No rows found in quantiles file")
+    }
+
+    # Check for duplicated parameters
+    if ("parameter" %in% names(quantiles)) {
+        duplicated_params <- quantiles$parameter[duplicated(quantiles$parameter)]
+        if (length(duplicated_params) > 0) {
+            warning("Found duplicated parameters in quantiles file: ",
+                   paste(unique(duplicated_params), collapse = ", "),
+                   "\nLater occurrences will overwrite earlier ones.")
+            if (verbose) {
+                dup_summary <- table(quantiles$parameter[quantiles$parameter %in% duplicated_params])
+                message("  Duplicate parameter counts:")
+                for (param in names(dup_summary)) {
+                    message("    ", param, ": ", dup_summary[param], " occurrences")
+                }
+            }
+        }
     }
 
     # Load priors as template
@@ -154,7 +167,7 @@ calc_model_posterior_distributions <- function(
         }
 
         # Get quantiles
-        q_low <- param_row$q0.0275
+        q_low <- param_row$q0.025
         q_med <- param_row$q0.5
         q_high <- param_row$q0.975
 
