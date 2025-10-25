@@ -114,7 +114,7 @@ est_initial_V1_V2 <- function(PATHS,
     cat("Processing", length(location_codes), "locations with",
         n_samples, "samples each\n")
     cat("t0 =", as.character(t0), "\n")
-    if (variance_inflation != 1) {
+    if (length(variance_inflation) == 1 && variance_inflation != 1) {
       cat("Variance inflation factor:", variance_inflation, "\n")
     }
     cat("\n")

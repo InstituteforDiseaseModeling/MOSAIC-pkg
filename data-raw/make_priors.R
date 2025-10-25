@@ -957,9 +957,9 @@ variance_inflation_E_I <- c(
      "KEN" = 40,   # Kenya: Good surveillance
      "LBR" = 100,  # Liberia: Better data quality
      "MLI" = 80,  # Mali: Some data limitations
-     "MOZ" = 30,  # Mozambique: Variable data quality
+     "MOZ" = 10,  # Mozambique: Variable data quality
      "MRT" = 130,  # Mauritania: Limited resources
-     "MWI" = 25,   # Malawi: Relatively good data
+     "MWI" = 5,   # Malawi: Relatively good data
      "NAM" = 80,   # Namibia: Good health systems (default)
      "NER" = 130,  # Niger: Limited resources
      "NGA" = 80,   # Nigeria: Large system, better data
@@ -973,9 +973,9 @@ variance_inflation_E_I <- c(
      "TGO" = 120,  # Togo: Limited resources
      "TZA" = 90,   # Tanzania: Moderate data quality
      "UGA" = 80,   # Uganda: Good health systems
-     "ZAF" = 50,   # South Africa: Excellent surveillance
-     "ZMB" = 60,   # Zambia: Good surveillance system
-     "ZWE" = 20   # Zimbabwe: Economic challenges
+     "ZAF" = 40,   # South Africa: Excellent surveillance
+     "ZMB" = 50,   # Zambia: Good surveillance system
+     "ZWE" = 5   # Zimbabwe: Economic challenges
 )
 
 # Use location-specific variance inflation with single function call
@@ -985,7 +985,7 @@ initial_conditions_E_I <- est_initial_E_I(
      config = config_default,
      n_samples = 1000,
      t0 = date_start,
-     lookback_days = 5,
+     lookback_days = 3,
      variance_inflation = variance_inflation_E_I,  # Named vector for location-specific values
      verbose = FALSE,
      parallel = TRUE

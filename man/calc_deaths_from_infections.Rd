@@ -30,7 +30,7 @@ calc_deaths_from_infections(
 \item{delta_t}{Non-negative integer number of days for the infection-to-death delay (default 0)}
 }
 \value{
-Numeric vector of deaths at each timestep
+Numeric vector of deaths at each time step
 }
 \description{
 Maps symptomatic infections to deaths using an infection fatality ratio (IFR)

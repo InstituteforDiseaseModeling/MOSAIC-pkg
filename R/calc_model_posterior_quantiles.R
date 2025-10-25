@@ -5,7 +5,7 @@
 #'
 #' @param results Data frame with calibration results containing parameter columns
 #'   and index columns (is_finite, is_retained, is_best_subset)
-#' @param probs Numeric vector of quantile probabilities (default: c(0.0275, 0.25, 0.5, 0.75, 0.975))
+#' @param probs Numeric vector of quantile probabilities (default: c(0.025, 0.25, 0.5, 0.75, 0.975))
 #' @param output_dir Directory path to save results (default: "./results")
 #' @param verbose Logical; print progress messages (default: TRUE)
 #'
@@ -22,7 +22,7 @@
 #' @seealso \code{\link{weighted_quantiles}}, \code{\link{calc_model_ess}}
 #' @export
 calc_model_posterior_quantiles <- function(results,
-                                         probs = c(0.0275, 0.25, 0.5, 0.75, 0.975),
+                                         probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
                                          output_dir = "./results",
                                          verbose = TRUE) {
 

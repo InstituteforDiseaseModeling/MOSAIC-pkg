@@ -87,7 +87,7 @@ est_initial_R <- function(
           cat("Target date (t0):", as.character(t0), "\n")
           cat("Disaggregation mode:", ifelse(disaggregate, "Fourier series", "Mid-year point estimate"), "\n")
           cat("Number of samples per location:", n_samples, "\n")
-          if (variance_inflation != 1) {
+          if (length(variance_inflation) == 1 && variance_inflation != 1) {
                cat("Variance inflation factor:", variance_inflation, "\n")
           }
           cat("Processing", length(location_codes), "locations")
@@ -98,6 +98,24 @@ est_initial_R <- function(
                pb <- txtProgressBar(min = 0, max = length(location_codes), style = 3)
                loc_counter <- 0
           }
+     }
+
+     # Handle variance_inflation parameter - convert to location-specific lookup
+     if (is.numeric(variance_inflation) && length(variance_inflation) > 1) {
+          # Named vector provided
+          if (is.null(names(variance_inflation))) {
+               stop("Multi-value variance_inflation must be a named vector with ISO codes")
+          }
+          variance_inflation_lookup <- variance_inflation
+          default_variance_inflation <- variance_inflation[1]  # Use first as default
+          if (verbose) {
+               cat(sprintf("Using location-specific variance inflation (range: %.1f-%.1f)\n",
+                          min(variance_inflation), max(variance_inflation)))
+          }
+     } else {
+          # Single value provided - use for all locations
+          variance_inflation_lookup <- NULL
+          default_variance_inflation <- variance_inflation
      }
 
      # Define location processing function
@@ -286,9 +304,21 @@ est_initial_R <- function(
 
           # Fit Beta distribution to R/N proportions with variance inflation
           R_proportions <- valid_samples / population_t0
+
+          # Get location-specific variance inflation
+          if (!is.null(variance_inflation_lookup)) {
+               loc_variance_inflation <- if (loc %in% names(variance_inflation_lookup)) {
+                    variance_inflation_lookup[loc]
+               } else {
+                    default_variance_inflation
+               }
+          } else {
+               loc_variance_inflation <- default_variance_inflation
+          }
+
           beta_fit <- fit_beta_with_variance_inflation_R(
                samples = R_proportions,
-               variance_inflation = variance_inflation,
+               variance_inflation = loc_variance_inflation,
                label = paste0("R_", loc)
           )
 
@@ -723,8 +753,23 @@ fit_beta_with_variance_inflation_R <- function(samples, variance_inflation=0, la
      ci_lower <- sample_quantiles[1]
      ci_upper <- sample_quantiles[2]
 
-     ci_lower <- pmax(1e-10, ci_lower*(1-variance_inflation))
-     ci_upper <- pmin(0.999, ci_upper*(1+variance_inflation))
+     # Apply variance inflation correctly:
+     # For values < 1: tighten CI toward the mean
+     # For values > 1: expand CI away from the mean
+     if (variance_inflation <= 1 && variance_inflation > 0) {
+          # Tighten toward mean
+          ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
+          ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
+     } else if (variance_inflation > 1) {
+          # Expand away from mean
+          ci_lower <- sample_mean - (sample_mean - ci_lower) * variance_inflation
+          ci_upper <- sample_mean + (ci_upper - sample_mean) * variance_inflation
+     }
+     # If variance_inflation = 0, use original CI
+
+     # Ensure bounds remain valid
+     ci_lower <- pmax(1e-10, ci_lower)
+     ci_upper <- pmin(0.999, ci_upper)
 
      # Wrap in tryCatch to handle potential errors
      tryCatch({

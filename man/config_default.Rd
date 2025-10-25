@@ -10,6 +10,7 @@ elements include:
 \itemize{
 \item \strong{Scalars} – biological constants (\code{phi_1}, \code{gamma_1}, \code{epsilon}, …);
 \item \strong{Vectors} – initial populations (\code{S_j_initial}, \code{I_j_initial}, …),
+initial proportions (optional: \code{prop_S_initial}, \code{prop_I_initial}, …),
 coordinates (\code{longitude}, \code{latitude}), mobility coefficients, etc.;
 \item \strong{Matrices} – day-by-day series such as human-to-human transmission
 (\code{b_jt}), environmental suitability (\code{psi_jt}), birth/death rates;
@@ -43,10 +44,17 @@ spatial priors for environmental suitability.}
 
 The object is intended for full-scale analyses and is therefore \strong{large}
 (tens of megabytes) and \strong{not self-contained} – it will error if the file
-paths it references do not exist on the user’s machine.  For tutorials or
+paths it references do not exist on the user's machine.  For tutorials or
 automated tests, consider using
 \code{\link{config_simulation_epidemic}} or \code{\link{config_simulation_endemic}}, which run
 without any external dependencies.
+
+\strong{Note on Initial Condition Formats}: This configuration includes both count
+(\verb{*_j_initial}) and proportion (\verb{prop_*_initial}) representations of initial
+conditions. The count fields are required by the LASER model for simulation,
+while the proportion fields are optional and provided for statistical analysis
+convenience. Both formats are automatically maintained in sync during
+parameter sampling operations.
 }
 \seealso{
 \itemize{

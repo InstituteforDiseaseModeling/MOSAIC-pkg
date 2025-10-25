@@ -92,7 +92,7 @@ calc_model_likelihood <- function(obs_cases,
                                   sigma_peak_log   = 0.5,
                                   penalty_unmatched_peak = -3,
                                   # ---- WIS (optional) ----
-                                  wis_quantiles      = c(0.0275, 0.25, 0.5, 0.75, 0.975),
+                                  wis_quantiles      = c(0.025, 0.25, 0.5, 0.75, 0.975),
                                   # ---- cumulative progression ----
                                   cumulative_timepoints = c(0.25, 0.5, 0.75, 1.0),
                                   # ---- inline guardrails ----

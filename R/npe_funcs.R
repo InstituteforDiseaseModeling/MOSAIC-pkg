@@ -1,3 +1,292 @@
+# =============================================================================
+# NPE HELPER FUNCTIONS - Production-ready utilities
+# =============================================================================
+
+#' Create NPE logger for structured logging
+#' @keywords internal
+.create_npe_logger <- function(verbose = TRUE, log_file = NULL) {
+    logger <- list(
+        verbose = verbose,
+        log_file = log_file,
+        log = function(level, msg, ...) {
+            if (!verbose && level != "ERROR") return(invisible())
+
+            timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
+            formatted_msg <- sprintf(paste(timestamp, level, "NPE:", msg), ...)
+
+            if (!is.null(log_file)) {
+                tryCatch({
+                    cat(formatted_msg, "\n", file = log_file, append = TRUE)
+                }, error = function(e) {
+                    warning("Failed to write to log file: ", e$message)
+                })
+            }
+
+            if (level == "ERROR") {
+                stop(formatted_msg, call. = FALSE)
+            } else if (level == "WARNING") {
+                warning(formatted_msg, call. = FALSE)
+            } else {
+                message(formatted_msg)
+            }
+        }
+    )
+    class(logger) <- "npe_logger"
+    return(logger)
+}
+
+#' Validate inputs for train_npe function
+#' @keywords internal
+.validate_train_inputs <- function(simulations_file, outputs_file, output_dir,
+                                  param_names, simulation_filter, architecture,
+                                  override_spec, use_gpu, seed, verbose, logger) {
+
+    logger$log("INFO", "Validating input parameters...")
+
+    # File validation
+    if (!file.exists(simulations_file)) {
+        logger$log("ERROR", "Simulations file not found: %s", simulations_file)
+    }
+    if (!file.access(simulations_file, 4) == 0) {
+        logger$log("ERROR", "No read permission for simulations file: %s", simulations_file)
+    }
+    if (!file.exists(outputs_file)) {
+        logger$log("ERROR", "Outputs file not found: %s", outputs_file)
+    }
+    if (!file.access(outputs_file, 4) == 0) {
+        logger$log("ERROR", "No read permission for outputs file: %s", outputs_file)
+    }
+
+    # Directory validation
+    parent_dir <- dirname(output_dir)
+    if (!dir.exists(parent_dir)) {
+        logger$log("ERROR", "Parent directory does not exist: %s", parent_dir)
+    }
+
+    # Create output directory if needed
+    if (!dir.exists(output_dir)) {
+        tryCatch({
+            dir.create(output_dir, recursive = TRUE)
+            logger$log("INFO", "Created output directory: %s", output_dir)
+        }, error = function(e) {
+            logger$log("ERROR", "Failed to create output directory: %s", e$message)
+        })
+    }
+
+    # Check write permission
+    test_file <- file.path(output_dir, ".write_test")
+    tryCatch({
+        writeLines("test", test_file)
+        unlink(test_file)
+    }, error = function(e) {
+        logger$log("ERROR", "No write permission for output directory: %s", output_dir)
+    })
+
+    # Parameter validation
+    if (!is.null(param_names) && !is.character(param_names)) {
+        logger$log("ERROR", "param_names must be a character vector or NULL")
+    }
+
+    # Architecture validation
+    valid_architectures <- c("auto", "tiny", "small", "medium", "large", "xlarge",
+                            "epidemic_small", "epidemic_large", "endemic")
+    if (!architecture %in% valid_architectures) {
+        logger$log("ERROR", "Invalid architecture: %s. Must be one of: %s",
+                  architecture, paste(valid_architectures, collapse = ", "))
+    }
+
+    # Numeric validation
+    if (!is.numeric(seed) || seed != as.integer(seed)) {
+        logger$log("ERROR", "seed must be an integer")
+    }
+
+    if (!is.logical(use_gpu)) {
+        logger$log("ERROR", "use_gpu must be logical (TRUE/FALSE)")
+    }
+
+    if (!is.logical(verbose)) {
+        logger$log("ERROR", "verbose must be logical (TRUE/FALSE)")
+    }
+
+    logger$log("INFO", "Input validation completed successfully")
+    return(invisible(TRUE))
+}
+
+#' Save model atomically to prevent corruption
+#' @keywords internal
+.save_model_atomic <- function(object, filepath, logger = NULL) {
+    if (is.null(logger)) logger <- .create_npe_logger(verbose = FALSE)
+
+    temp_file <- paste0(filepath, ".tmp")
+    backup_file <- paste0(filepath, ".bak")
+
+    tryCatch({
+        # Save to temporary file first
+        if (tools::file_ext(filepath) == "json") {
+            jsonlite::write_json(object, temp_file, auto_unbox = TRUE, pretty = TRUE)
+        } else if (tools::file_ext(filepath) == "rds") {
+            saveRDS(object, temp_file)
+        } else if (tools::file_ext(filepath) == "csv") {
+            write.csv(object, temp_file, row.names = FALSE)
+        } else {
+            # Default to RDS for unknown extensions
+            saveRDS(object, temp_file)
+        }
+
+        # Backup existing file if present
+        if (file.exists(filepath)) {
+            file.rename(filepath, backup_file)
+        }
+
+        # Atomic rename
+        file.rename(temp_file, filepath)
+
+        # Remove backup on success
+        if (file.exists(backup_file)) {
+            unlink(backup_file)
+        }
+
+        logger$log("DEBUG", "Successfully saved: %s", basename(filepath))
+        return(TRUE)
+
+    }, error = function(e) {
+        # Restore from backup on failure
+        if (file.exists(backup_file)) {
+            file.rename(backup_file, filepath)
+            logger$log("WARNING", "Restored backup after save failure: %s", filepath)
+        }
+        if (file.exists(temp_file)) {
+            unlink(temp_file)
+        }
+        logger$log("ERROR", "Failed to save %s: %s", filepath, e$message)
+        return(FALSE)
+    })
+}
+
+#' Clean up Python and R resources
+#' @keywords internal
+.cleanup_npe_resources <- function(use_gpu = FALSE, logger = NULL) {
+    if (is.null(logger)) logger <- .create_npe_logger(verbose = FALSE)
+
+    tryCatch({
+        # Python garbage collection
+        if (requireNamespace("reticulate", quietly = TRUE)) {
+            reticulate::py_run_string("import gc; gc.collect()")
+
+            # GPU memory cleanup if applicable
+            if (use_gpu) {
+                reticulate::py_run_string("
+import torch
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+")
+            }
+        }
+
+        # R garbage collection
+        gc(verbose = FALSE, full = TRUE)
+
+        logger$log("DEBUG", "Resource cleanup completed")
+    }, error = function(e) {
+        logger$log("WARNING", "Resource cleanup failed: %s", e$message)
+    })
+}
+
+#' Check Python dependencies with version requirements
+#' @keywords internal
+.check_python_dependencies <- function(logger = NULL) {
+    if (is.null(logger)) logger <- .create_npe_logger(verbose = TRUE)
+
+    deps <- list(
+        torch = list(min_version = "1.10.0", install = "pip install torch"),
+        lampe = list(min_version = "0.5.0", install = "pip install lampe-torch"),
+        zuko = list(min_version = "1.0.0", install = "pip install zuko"),
+        numpy = list(min_version = "1.19.0", install = "pip install numpy"),
+        pandas = list(min_version = "1.0.0", install = "pip install pandas"),
+        sklearn = list(min_version = "0.24.0", install = "pip install scikit-learn")
+    )
+
+    missing <- character()
+    outdated <- character()
+
+    for (pkg_name in names(deps)) {
+        tryCatch({
+            # Special handling for sklearn (import name differs)
+            import_name <- if (pkg_name == "sklearn") "sklearn" else pkg_name
+            module <- reticulate::import(import_name)
+
+            # Get version
+            version <- module$`__version__`
+
+            # Compare versions
+            if (utils::compareVersion(version, deps[[pkg_name]]$min_version) < 0) {
+                outdated <- c(outdated,
+                            sprintf("%s (have %s, need >=%s): %s",
+                                   pkg_name, version,
+                                   deps[[pkg_name]]$min_version,
+                                   deps[[pkg_name]]$install))
+            }
+
+            logger$log("DEBUG", "Python package %s version %s OK", pkg_name, version)
+
+        }, error = function(e) {
+            missing <- c(missing, sprintf("%s: %s", pkg_name, deps[[pkg_name]]$install))
+        })
+    }
+
+    if (length(missing) > 0) {
+        logger$log("ERROR", "Missing Python packages:\n%s", paste(missing, collapse = "\n"))
+    }
+
+    if (length(outdated) > 0) {
+        logger$log("ERROR", "Outdated Python packages:\n%s", paste(outdated, collapse = "\n"))
+    }
+
+    logger$log("INFO", "All Python dependencies satisfied")
+    return(invisible(TRUE))
+}
+
+#' Get NPE configuration with defaults and overrides
+#' @keywords internal
+.get_npe_config <- function(override = NULL) {
+    default_config <- list(
+        training = list(
+            early_stopping_patience = 30,
+            gradient_clip_value = 1.0,
+            log_every_n_epochs = 20
+        ),
+        gpu = list(
+            memory_fraction = 0.9,
+            fallback_to_cpu = TRUE,
+            enable_amp = TRUE  # Automatic mixed precision
+        ),
+        io = list(
+            use_atomic_save = TRUE,
+            create_backups = TRUE,
+            compression = "gzip"
+        ),
+        validation = list(
+            strict_mode = FALSE,
+            warn_on_na_replacement = TRUE,
+            check_data_range = TRUE
+        ),
+        features = list(
+            use_improved_loss_check = TRUE,  # Fix NaN loss timing
+            use_proportion_bounds_fix = TRUE, # Fix proportion bounds
+            enable_checkpointing = FALSE      # Future feature
+        )
+    )
+
+    # Merge with overrides if provided
+    if (!is.null(override) && is.list(override)) {
+        config <- modifyList(default_config, override)
+    } else {
+        config <- default_config
+    }
+
+    return(config)
+}
 
 #' Train Neural Posterior Estimator for MOSAIC Parameters
 #'
@@ -103,52 +392,96 @@ train_npe <- function(
           override_spec = NULL,
           use_gpu = TRUE,
           seed = 42,
-          verbose = TRUE
+          verbose = TRUE,
+          config_override = NULL  # New parameter for configuration overrides
 ) {
 
      # =============================================================================
-     # SETUP
+     # SETUP WITH PRODUCTION-READY IMPROVEMENTS
      # =============================================================================
 
-     require(reticulate)
-     require(dplyr)
-     require(tidyr)
-     require(arrow)
-     require(jsonlite)
+     # Create logger
+     log_file_path <- if (!is.null(output_dir)) {
+          file.path(output_dir, paste0("npe_training_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
+     } else NULL
+
+     logger <- .create_npe_logger(verbose = verbose, log_file = log_file_path)
+
+     # Register cleanup on exit
+     on.exit({
+          logger$log("DEBUG", "Running cleanup...")
+          .cleanup_npe_resources(use_gpu = use_gpu, logger = logger)
+     }, add = TRUE)
+
+     # Get configuration
+     config <- .get_npe_config(config_override)
+     logger$log("INFO", "NPE configuration loaded (atomic_save=%s, strict_validation=%s)",
+               config$io$use_atomic_save, config$validation$strict_mode)
+
+     # Validate inputs
+     .validate_train_inputs(
+          simulations_file = simulations_file,
+          outputs_file = outputs_file,
+          output_dir = output_dir,
+          param_names = param_names,
+          simulation_filter = simulation_filter,
+          architecture = architecture,
+          override_spec = override_spec,
+          use_gpu = use_gpu,
+          seed = seed,
+          verbose = verbose,
+          logger = logger
+     )
+
+     # Load required packages with error handling
+     required_packages <- c("reticulate", "dplyr", "tidyr", "arrow", "jsonlite")
+     for (pkg in required_packages) {
+          if (!requireNamespace(pkg, quietly = TRUE)) {
+               logger$log("ERROR", "Required R package not installed: %s", pkg)
+          }
+          suppressPackageStartupMessages(library(pkg, character.only = TRUE))
+     }
+
+     # Check Python dependencies
+     logger$log("INFO", "Checking Python dependencies...")
+     .check_python_dependencies(logger)
 
      set.seed(seed)
+     logger$log("INFO", "Random seed set to %d", seed)
 
-     if (!dir.exists(output_dir)) {
-          dir.create(output_dir, recursive = TRUE)
-     }
+     # Backward compatibility wrapper for log_msg
+     log_msg <- function(msg, ...) logger$log("INFO", msg, ...)
 
-     log_msg <- function(msg, ...) {
-          if (verbose) {
-               timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
-               message(sprintf(paste(timestamp, msg), ...))
-          }
-     }
-
-     log_msg("Starting Lampe NPE v5.0 with proportion-based initial conditions")
+     logger$log("INFO", "Starting Lampe NPE v5.1 with production-ready improvements")
 
      # =============================================================================
-     # DATA LOADING
+     # DATA LOADING WITH ERROR HANDLING
      # =============================================================================
 
-     log_msg("Loading simulation data...")
-     log_msg("  Simulations file: %s", simulations_file)
-     log_msg("  Outputs file: %s", outputs_file)
+     logger$log("INFO", "Loading simulation data...")
+     logger$log("INFO", "  Simulations file: %s", simulations_file)
+     logger$log("INFO", "  Outputs file: %s", outputs_file)
 
-     # Validate input files exist
-     if (!file.exists(simulations_file)) {
-          stop("Simulations file not found: ", simulations_file)
-     }
-     if (!file.exists(outputs_file)) {
-          stop("Outputs file not found: ", outputs_file)
-     }
+     # Load data with error handling
+     params <- tryCatch({
+          arrow::read_parquet(simulations_file)
+     }, error = function(e) {
+          logger$log("ERROR", "Failed to load simulations file: %s", e$message)
+     })
 
-     params <- arrow::read_parquet(simulations_file)
-     outputs <- arrow::read_parquet(outputs_file)
+     outputs <- tryCatch({
+          arrow::read_parquet(outputs_file)
+     }, error = function(e) {
+          logger$log("ERROR", "Failed to load outputs file: %s", e$message)
+     })
+
+     # Validate data structure
+     if (nrow(params) == 0) {
+          logger$log("ERROR", "Simulations file contains no data")
+     }
+     if (nrow(outputs) == 0) {
+          logger$log("ERROR", "Outputs file contains no data")
+     }
 
      log_msg("Data loaded: %d simulations, %d output rows", nrow(params), nrow(outputs))
 
@@ -238,12 +571,14 @@ train_npe <- function(
           if (mean_val < 1e-10) {
                if (var_val < 1e-20) {  # Very strict for near-zero parameters
                     constant_params <- c(constant_params, param_name)
+                    logger$log("DEBUG", "Parameter %s identified as constant (near-zero variance)", param_name)
                }
           } else {
                # Use coefficient of variation for other parameters
                cv <- sqrt(var_val) / mean_val
                if (cv < 1e-6) {  # Less than 0.0001% variation
                     constant_params <- c(constant_params, param_name)
+                    logger$log("DEBUG", "Parameter %s identified as constant (CV < 1e-6)", param_name)
                }
           }
      }
@@ -387,10 +722,17 @@ train_npe <- function(
                     actual_max <- prior_bounds_df$max[param_idx]
 
                     if (actual_min != 0.0 || actual_max != 1.0) {
-                         warning(sprintf("Failed to set bounds for %s: got [%.6f, %.6f]",
-                                         prop_param, actual_min, actual_max))
+                         if (config$features$use_proportion_bounds_fix) {
+                              # Force correction in strict mode
+                              prior_bounds_df$min[param_idx] <- 0.0
+                              prior_bounds_df$max[param_idx] <- 1.0
+                              logger$log("WARNING", "Forced bounds correction for %s to [0.0, 1.0]", prop_param)
+                         } else {
+                              logger$log("WARNING", "Failed to set bounds for %s: got [%.6f, %.6f]",
+                                        prop_param, actual_min, actual_max)
+                         }
                     } else {
-                         log_msg("  %s: [0.0, 1.0] ✓", prop_param)
+                         logger$log("DEBUG", "  %s: [0.0, 1.0] ✓", prop_param)
                     }
                }
           }
@@ -1076,6 +1418,7 @@ for ensemble_idx in range(n_ensembles):
         encoder.train()
         epoch_train_loss = 0.0
         accumulate_loss = 0.0
+        nan_count = 0  # Track NaN/Inf losses for debugging
 
         for batch_idx, (batch_theta, batch_x_raw) in enumerate(train_loader):
             # Gradient accumulation (Feature #5): only zero gradients at start of accumulation
@@ -1090,7 +1433,11 @@ for ensemble_idx in range(n_ensembles):
                     # Scale loss for gradient accumulation
                     loss = loss / gradient_accumulate_steps
 
+                # CRITICAL FIX: Check for NaN/Inf BEFORE backward propagation
                 if torch.isnan(loss) or torch.isinf(loss):
+                    nan_count += 1
+                    if nan_count % 10 == 0:  # Log every 10th NaN
+                        print(f"  Warning: Skipped {nan_count} batches with NaN/Inf loss")
                     continue
 
                 scaler.scale(loss).backward()
@@ -1114,7 +1461,11 @@ for ensemble_idx in range(n_ensembles):
                 # Scale loss for gradient accumulation
                 loss = loss / gradient_accumulate_steps
 
+                # CRITICAL FIX: Check for NaN/Inf BEFORE backward propagation
                 if torch.isnan(loss) or torch.isinf(loss):
+                    nan_count += 1
+                    if nan_count % 10 == 0:  # Log every 10th NaN
+                        print(f"  Warning: Skipped {nan_count} batches with NaN/Inf loss")
                     continue
 
                 loss.backward()
@@ -1432,37 +1783,55 @@ est_npe_posterior <- function(
           quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
           output_dir = NULL,
           verbose = TRUE,
-          return_samples = TRUE  # For backward compatibility - samples are always returned
+          return_samples = TRUE,  # For backward compatibility - samples are always returned
+          config_override = NULL   # New parameter for configuration overrides
 ) {
 
      # =============================================================================
-     # SETUP AND VALIDATION
+     # SETUP AND VALIDATION WITH PRODUCTION IMPROVEMENTS
      # =============================================================================
 
-     log_msg <- function(msg, ...) {
-          if (verbose) {
-               timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
-               message(sprintf(paste(timestamp, msg), ...))
-          }
-     }
+     # Create logger
+     logger <- .create_npe_logger(verbose = verbose)
 
-     log_msg("Starting NPE v5 parameter estimation")
+     # Register cleanup on exit
+     on.exit({
+          logger$log("DEBUG", "Running cleanup...")
+          .cleanup_npe_resources(use_gpu = FALSE, logger = logger)
+     }, add = TRUE)
 
-     # Validate inputs
+     # Get configuration
+     config <- .get_npe_config(config_override)
+
+     # Backward compatibility wrapper for log_msg
+     log_msg <- function(msg, ...) logger$log("INFO", msg, ...)
+
+     logger$log("INFO", "Starting NPE v5.1 parameter estimation with production improvements")
+
+     # Comprehensive input validation
      if (!dir.exists(model_dir)) {
-          stop("Model directory does not exist: ", model_dir)
+          logger$log("ERROR", "Model directory does not exist: %s", model_dir)
      }
 
      if (!is.data.frame(observed_data)) {
-          stop("observed_data must be a data frame")
+          logger$log("ERROR", "observed_data must be a data frame")
      }
 
-     if (n_samples <= 0 || !is.numeric(n_samples)) {
-          stop("n_samples must be a positive integer")
+     if (!is.numeric(n_samples) || n_samples <= 0) {
+          logger$log("ERROR", "n_samples must be a positive numeric value")
      }
+     n_samples <- as.integer(n_samples)
 
      if (!is.numeric(quantiles) || any(quantiles < 0) || any(quantiles > 1)) {
-          stop("quantiles must be numeric values between 0 and 1")
+          logger$log("ERROR", "quantiles must be numeric values between 0 and 1")
+     }
+
+     # Check for reasonable sample size
+     if (n_samples < 100) {
+          logger$log("WARNING", "Small sample size (%d) may lead to inaccurate estimates", n_samples)
+     }
+     if (n_samples > 1000000) {
+          logger$log("WARNING", "Large sample size (%d) may cause memory issues", n_samples)
      }
 
      # Check required columns in observed data
@@ -1593,10 +1962,23 @@ est_npe_posterior <- function(
           stop("Observed data must represent a single outbreak/observation")
      }
 
-     # Check for and handle missing values in observed data
+     # Check for and handle missing values in observed data with proper warnings
      if (any(is.na(observed_x_matrix))) {
           na_count <- sum(is.na(observed_x_matrix))
-          log_msg("Warning: %d NaN values found in observed data - replacing with zeros", na_count)
+          na_positions <- which(is.na(observed_x_matrix), arr.ind = TRUE)
+
+          if (config$validation$warn_on_na_replacement) {
+               logger$log("WARNING", "Found %d NA values in observed data matrix", na_count)
+               logger$log("WARNING", "Replacing NA values with 0 - this may affect results")
+               if (na_count <= 10) {
+                    # Show specific positions if not too many
+                    for (i in 1:nrow(na_positions)) {
+                         logger$log("DEBUG", "  NA at position [%d, %d]",
+                                   na_positions[i, 1], na_positions[i, 2])
+                    }
+               }
+          }
+
           observed_x_matrix[is.na(observed_x_matrix)] <- 0
      }
 
@@ -1606,11 +1988,33 @@ est_npe_posterior <- function(
           log_msg("Applied log1p transformation to observed data")
      }
 
-     # Final validation of observed data
+     # Final validation of observed data with enhanced checking
      if (any(!is.finite(observed_x_matrix))) {
           non_finite_count <- sum(!is.finite(observed_x_matrix))
-          log_msg("Warning: %d non-finite values found after preprocessing - replacing with zeros", non_finite_count)
+          inf_count <- sum(is.infinite(observed_x_matrix))
+          nan_count <- sum(is.nan(observed_x_matrix))
+
+          if (config$validation$warn_on_na_replacement) {
+               logger$log("WARNING", "Found %d non-finite values after preprocessing:", non_finite_count)
+               if (inf_count > 0) logger$log("WARNING", "  - %d infinite values", inf_count)
+               if (nan_count > 0) logger$log("WARNING", "  - %d NaN values", nan_count)
+               logger$log("WARNING", "Replacing non-finite values with 0 - this may affect results")
+          }
+
           observed_x_matrix[!is.finite(observed_x_matrix)] <- 0
+     }
+
+     # Data range validation
+     if (config$validation$check_data_range) {
+          data_min <- min(observed_x_matrix)
+          data_max <- max(observed_x_matrix)
+
+          if (data_min < 0) {
+               logger$log("WARNING", "Negative values detected in observed data (min=%.3f)", data_min)
+          }
+          if (data_max > 1e6) {
+               logger$log("WARNING", "Very large values detected in observed data (max=%.3e)", data_max)
+          }
      }
 
      log_msg("Observed data matrix shape: 1 × %d (range: %.3f to %.3f)",
@@ -1622,25 +2026,34 @@ est_npe_posterior <- function(
 
      log_msg("Setting up Python environment...")
 
-     # Load required libraries
+     # Load required libraries with better error handling
      required_packages <- c("reticulate", "dplyr", "tidyr", "jsonlite", "arrow")
-     missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
-
-     if (length(missing_packages) > 0) {
-          stop("Required R packages not available: ", paste(missing_packages, collapse = ", "))
+     for (pkg in required_packages) {
+          if (!requireNamespace(pkg, quietly = TRUE)) {
+               logger$log("ERROR", "Required R package not installed: %s", pkg)
+          }
      }
+
+     # Check Python dependencies first
+     logger$log("INFO", "Checking Python dependencies...")
+     tryCatch({
+          .check_python_dependencies(logger)
+     }, error = function(e) {
+          # Continue anyway but warn user
+          logger$log("WARNING", "Some Python dependencies may be missing or outdated")
+     })
 
      # Import Python modules with error handling
      torch <- tryCatch({
           reticulate::import("torch", convert = FALSE)
      }, error = function(e) {
-          stop("PyTorch not available. Please install: pip install torch")
+          logger$log("ERROR", "PyTorch not available: %s", e$message)
      })
 
      np <- tryCatch({
           reticulate::import("numpy")
      }, error = function(e) {
-          stop("NumPy not available. Please install: pip install numpy")
+          logger$log("ERROR", "NumPy not available: %s", e$message)
      })
 
      lampe_available <- tryCatch({

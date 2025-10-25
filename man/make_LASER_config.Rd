@@ -17,6 +17,12 @@ make_LASER_config(
   R_j_initial = NULL,
   V1_j_initial = NULL,
   V2_j_initial = NULL,
+  prop_S_initial = NULL,
+  prop_E_initial = NULL,
+  prop_I_initial = NULL,
+  prop_R_initial = NULL,
+  prop_V1_initial = NULL,
+  prop_V2_initial = NULL,
   b_jt = NULL,
   d_jt = NULL,
   nu_1_jt = NULL,
@@ -111,7 +117,26 @@ of recovered individuals for each location. Names must match location_name.}
 of individuals in vaccine compartment V1 for each location. Names must match location_name.}
 
 \item{V2_j_initial}{A named numeric or integer vector of length equal to location_name giving the starting number
-of individuals in vaccine compartment V2 for each location. Names must match location_name.
+of individuals in vaccine compartment V2 for each location. Names must match location_name.}
+
+\item{prop_S_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
+of susceptible individuals for each location. Values must be in \link{0,1}. Names must match location_name.
+These proportion fields are provided for analysis convenience but are not required by the LASER model.}
+
+\item{prop_E_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
+of exposed individuals for each location. Values must be in \link{0,1}. Names must match location_name.}
+
+\item{prop_I_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
+of infected individuals for each location. Values must be in \link{0,1}. Names must match location_name.}
+
+\item{prop_R_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
+of recovered individuals for each location. Values must be in \link{0,1}. Names must match location_name.}
+
+\item{prop_V1_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
+of individuals in vaccine compartment V1 for each location. Values must be in \link{0,1}. Names must match location_name.}
+
+\item{prop_V2_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
+of individuals in vaccine compartment V2 for each location. Values must be in \link{0,1}. Names must match location_name.
 \subsection{Demographics}{
 }}
 

@@ -5,7 +5,7 @@
 \title{Map infections to suspected and true cholera cases}
 \usage{
 calc_cases_from_infections(
-  infections_symptomatic,
+  infections,
   N = NULL,
   rho,
   chi_endemic,
@@ -15,7 +15,7 @@ calc_cases_from_infections(
 )
 }
 \arguments{
-\item{infections_symptomatic}{Numeric vector of incident symptomatic infections \eqn{I_{\text{sym}}(t)} (length \eqn{n}).
+\item{infections}{Numeric vector of incident symptomatic infections \eqn{I_{\text{sym}}(t)} (length \eqn{n}).
 Must be non-negative; \code{NA}s are allowed and propagate.}
 
 \item{N}{Numeric scalar or vector of length \eqn{n}: population size used to compute the infection proportion
@@ -44,8 +44,8 @@ A named list with two numeric vectors, each length \eqn{n}:
 }
 }
 \description{
-Given a vector of incident \emph{symptomatic infections} \eqn{I_{\text{sym}}(t)} and constant
-\eqn{\rho} (reporting probability among symptomatic),
+Given a vector of incident \emph{symptomatic infections} \eqn{I_{\text{sym}}(t)} (e.g., from LASER model)
+and constant \eqn{\rho} (reporting probability among symptomatic),
 this function returns vectors of expected \strong{suspected} and \strong{true/confirmed} cases aligned
 on report day using a simple time shift \eqn{\Delta} (days).
 
@@ -79,12 +79,12 @@ because they depend on \eqn{I_{\text{sym}}(t-\Delta)} before the start of the se
 }
 
 \examples{
-infections_symptomatic <- c(0, 1, 2, 5, 40, 120, 200, 75, 50, 30, 15, 10, 3, 0, 0)
+infections <- c(0, 1, 2, 5, 40, 120, 200, 75, 50, 30, 15, 10, 3, 0, 0)
 N <- 20000
 
 # 1) No switching: epidemic_threshold = NULL (chi_endemic used everywhere; N ignored)
 out1 <- calc_cases_from_infections(
-  infections_symptomatic = infections_symptomatic,
+  infections = infections,
   N = NULL,
   rho = 0.70,
   chi_endemic = 0.50,
@@ -96,7 +96,7 @@ out1$cases_suspected; out1$cases_true
 
 # 2) Switching on: use chi_epidemic when infections/N > 15/100,000
 out2 <- calc_cases_from_infections(
-  infections_symptomatic = infections_symptomatic,
+  infections = infections,
   N = N,
   rho = 0.70,
   chi_endemic = 0.50,
