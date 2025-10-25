@@ -339,10 +339,15 @@ calc_npe_spec_v5_2 <- function(
     original_bins <- num_bins
 
     # Apply smooth transform ramp based on parameter count
-    if (!is.null(n_params) && transforms_ramp$enabled) {
-        if (n_params > transforms_ramp$start_at) {
-            extra <- ceiling((n_params - transforms_ramp$start_at) / transforms_ramp$per_params)
-            num_transforms <- min(num_transforms + extra, transforms_ramp$cap)
+    if (!is.null(n_params) && !is.null(transforms_ramp$enabled) && transforms_ramp$enabled) {
+        # Use default values if not provided
+        start_at <- if (!is.null(transforms_ramp$start_at)) transforms_ramp$start_at else 50
+        per_params <- if (!is.null(transforms_ramp$per_params)) transforms_ramp$per_params else 25
+        cap <- if (!is.null(transforms_ramp$cap)) transforms_ramp$cap else 20
+
+        if (n_params > start_at) {
+            extra <- ceiling((n_params - start_at) / per_params)
+            num_transforms <- min(num_transforms + extra, cap)
 
             if (extra > 0) {
                 rationale$transforms_ramp_applied <- TRUE
@@ -471,6 +476,7 @@ calc_npe_spec_v5_2 <- function(
 
     spec <- list(
         tier = tier,
+        preset = preset,
 
         embedding = list(
             embedding_dim = as.integer(embedding_dim),
@@ -501,8 +507,12 @@ calc_npe_spec_v5_2 <- function(
             batch_size = as.integer(batch_size),
             validation_split = val_split,
             max_epochs = as.integer(max_epochs),
+            n_epochs = as.integer(max_epochs),
+            learning_rate = learning_rate,
             early_stopping_patience = 30L,
-            n_ensembles = as.integer(n_ensembles)
+            n_ensembles = as.integer(n_ensembles),
+            gradient_clip_value = gradient_clip_value,
+            scheduler_patience = as.integer(scheduler_patience)
         ),
 
         optimization = list(
@@ -519,11 +529,7 @@ calc_npe_spec_v5_2 <- function(
             use_log1p = FALSE
         ),
 
-        device = list(
-            device_type = device,
-            use_amp = (device == "cuda"),
-            pin_memory = (device == "cuda")
-        ),
+        device = device,
 
         architecture_type = sprintf("%s_tier_%dt_%dj_%dp",
                                    tier,
@@ -624,7 +630,7 @@ calc_npe_spec_v5_2 <- function(
 #' @return List with spec and recommendation message
 #' @export
 recommend_npe_spec <- function(n_sims, n_params, n_timesteps = NULL,
-                              n_locations = NULL, flow_complexity = "auto") {
+                              n_locations = NULL, flow_complexity = "auto", verbose = TRUE) {
 
     spec <- calc_npe_spec_v5_2(
         n_sims = n_sims,
@@ -632,7 +638,7 @@ recommend_npe_spec <- function(n_sims, n_params, n_timesteps = NULL,
         n_timesteps = n_timesteps,
         n_locations = n_locations,
         flow_complexity = flow_complexity,
-        verbose = FALSE
+        verbose = verbose
     )
 
     # Generate recommendation message
