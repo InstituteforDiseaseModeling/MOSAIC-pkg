@@ -14,7 +14,8 @@ train_npe(
   override_spec = NULL,
   use_gpu = TRUE,
   seed = 42,
-  verbose = TRUE
+  verbose = TRUE,
+  config_override = NULL
 )
 }
 \arguments{
