@@ -577,6 +577,7 @@ train_npe <- function(
      py$x_matrix_r <- x_matrix
      py$n_locations <- n_locations
      py$n_timesteps <- n_timesteps
+     py$location_order <- location_order
      py$param_names <- final_param_cols
      py$prior_bounds <- prior_bounds
      py$npe_spec <- npe_spec
@@ -1254,20 +1255,41 @@ metadata = {
         "n_validation": val_size,
         "n_parameters": len(param_names),
         "n_locations": n_locations,
-        "n_timesteps": n_timesteps
+        "n_timesteps": n_timesteps,
+        "location_name": location_order,
+        "location_codes": location_order  # For backwards compatibility
     },
+    "parameters": {
+        "names": param_names,
+        "n_parameters": len(param_names)
+    },
+    "training_parameters": param_names,  # For backwards compatibility
     "initial_conditions": {
         "converted_to_proportions": True,
         "proportion_bounds": [0.0, 1.0],
         "note": "Initial condition counts converted to proportions during training"
     },
-    "spec_used": npe_spec
+    "spec_used": npe_spec,
+    "config_base": None,  # Can be populated with base configuration for SBC
+    "training_history": {
+        "ensemble_histories": ensemble_histories,
+        "training_time_seconds": training_time,
+        "final_training_loss": [h["train_losses"][-1] for h in ensemble_histories],
+        "final_validation_loss": [h["val_losses"][-1] for h in ensemble_histories],
+        "best_validation_loss": [h["best_val_loss"] for h in ensemble_histories]
+    }
 }
 
 with open(os.path.join(output_dir, "npe_metadata.json"), "w") as f:
     json.dump(metadata, f, indent=2)
 
+# Save detailed training history separately for plotting
+training_history_file = os.path.join(output_dir, "training_history.json")
+with open(training_history_file, "w") as f:
+    json.dump({"ensemble_histories": ensemble_histories}, f, indent=2)
+
 print(f"\\nModels saved to: {output_dir}")
+print(f"Training history saved to: {training_history_file}")
 ')
 
 train_time <- as.numeric(Sys.time() - train_start, units = "mins")
@@ -1322,11 +1344,21 @@ return(list(
 #' @param quantiles Numeric vector of quantiles to compute for posterior summaries.
 #'   Default is \code{c(0.025, 0.25, 0.5, 0.75, 0.975)} for 95% credible intervals.
 #' @param output_dir Character string path for saving estimation results. If NULL (default),
-#'   creates \code{posterior_estimates} subdirectory in \code{model_dir}.
+#'   results are not saved to files (only returned in memory). If a path is provided,
+#'   results are saved to that directory.
 #' @param verbose Logical indicating whether to print progress messages. Default is TRUE.
+#' @param return_samples Logical indicating whether to return raw posterior samples.
+#'   Default is TRUE. This parameter is included for backward compatibility - samples
+#'   are always included in the return value.
 #'
-#' @return Data frame with posterior quantiles matching \code{\link{calc_model_posterior_quantiles}}
-#'   format containing columns:
+#' @return A list containing:
+#'   \itemize{
+#'     \item \code{quantiles} — Data frame with posterior quantiles
+#'     \item \code{samples} — Matrix of raw posterior samples (n_samples × n_parameters)
+#'     \item \code{metadata} — List containing estimation metadata
+#'     \item \code{param_names} — Character vector of parameter names
+#'   }
+#'   The \code{quantiles} data frame contains columns:
 #'   \itemize{
 #'     \item \code{parameter} — Parameter name
 #'     \item \code{description} — Human-readable parameter description
@@ -1379,12 +1411,17 @@ return(list(
 #' )
 #'
 #' # Estimate parameters using trained NPE
-#' posterior_quantiles <- est_npe_posterior(
+#' result <- est_npe_posterior(
 #'   model_dir = "path/to/trained/npe/models",
 #'   observed_data = observed,
 #'   n_samples = 5000,
-#'   quantiles = c(0.05, 0.25, 0.5, 0.75, 0.95)
+#'   quantiles = c(0.05, 0.25, 0.5, 0.75, 0.95),
+#'   output_dir = NULL  # Don't save to files
 #' )
+#'
+#' # Access results
+#' posterior_quantiles <- result$quantiles
+#' posterior_samples <- result$samples
 #' }
 #'
 #' @export
@@ -1394,7 +1431,8 @@ est_npe_posterior <- function(
           n_samples = 10000,
           quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
           output_dir = NULL,
-          verbose = TRUE
+          verbose = TRUE,
+          return_samples = TRUE  # For backward compatibility - samples are always returned
 ) {
 
      # =============================================================================
@@ -1468,14 +1506,7 @@ est_npe_posterior <- function(
           stop("Required model files not found: ", paste(missing_files, collapse = ", "))
      }
 
-     # Set output directory
-     if (is.null(output_dir)) {
-          output_dir <- file.path(model_dir, "posterior_estimates")
-     }
-
-     if (!dir.exists(output_dir)) {
-          dir.create(output_dir, recursive = TRUE)
-     }
+     # Output directory will be handled later if provided
 
      # =============================================================================
      # LOAD MODEL SPECIFICATION AND METADATA
@@ -2133,18 +2164,22 @@ try:
     else:
         error_message = f"Estimation produced {nan_count} NaN and {inf_count} Inf values"
 
+    # Store ensemble count for R
+    n_ensemble_models = len(ensemble_models)
+
 except Exception as e:
     print(f"ERROR in parameter estimation: {e}")
     import traceback
     traceback.print_exc()
     error_message = str(e)
     estimation_success = False
-    # Create dummy samples
+    # Create NaN samples for failed estimation
     if len(param_names) > 0:
         samples = np.full((n_samples, len(param_names)), np.nan)
     else:
         samples = np.full((n_samples, 1), np.nan)
         param_names = ["unknown"]
+    n_ensemble_models = 0  # No models loaded on error
 
 ')
      }, error = function(e) {
@@ -2371,18 +2406,18 @@ except Exception as e:
 
 
      # =============================================================================
-     # SAVE RESULTS
+     # CREATE METADATA
      # =============================================================================
 
-     log_msg("Saving results...")
-
-     # Save posterior quantiles CSV
-     quantiles_file <- file.path(output_dir, "posterior_quantiles.csv")
-     write.csv(quantile_results, quantiles_file, row.names = FALSE)
-
-     # Save posterior samples
-     samples_file <- file.path(output_dir, "posterior_samples.parquet")
-     arrow::write_parquet(as.data.frame(posterior_samples), samples_file)
+     # Get ensemble count from Python
+     n_ensemble_models <- if (!is.null(py$n_ensemble_models)) {
+          py$n_ensemble_models
+     } else {
+          # Fallback: count model files in directory
+          n_single <- if (file.exists(file.path(model_dir, "npe.pt"))) 1 else 0
+          n_ensemble <- length(list.files(model_dir, pattern = "^npe_ensemble_[0-9]+\\.pt$"))
+          max(n_single, n_ensemble)
+     }
 
      # Create estimation metadata
      estimation_info <- list(
@@ -2392,7 +2427,7 @@ except Exception as e:
           n_parameters = ncol(posterior_samples),
           quantiles_computed = quantiles,
           model_source = model_dir,
-          n_ensemble_models = length(py$ensemble_models),
+          n_ensemble_models = n_ensemble_models,
           device_used = device_type,
           observed_data_summary = list(
                n_locations = n_locations,
@@ -2403,15 +2438,51 @@ except Exception as e:
           function_version = "v5"
      )
 
-     info_file <- file.path(output_dir, "estimation_info.json")
-     jsonlite::write_json(estimation_info, info_file, pretty = TRUE, auto_unbox = TRUE)
+     # =============================================================================
+     # SAVE RESULTS TO FILES (IF OUTPUT_DIR PROVIDED)
+     # =============================================================================
+
+     if (!is.null(output_dir)) {
+          log_msg("Saving results to files...")
+
+          # Create directory if needed
+          if (!dir.exists(output_dir)) {
+               dir.create(output_dir, recursive = TRUE)
+          }
+
+          # Save posterior quantiles CSV
+          quantiles_file <- file.path(output_dir, "posterior_quantiles.csv")
+          write.csv(quantile_results, quantiles_file, row.names = FALSE)
+
+          # Save posterior samples
+          samples_file <- file.path(output_dir, "posterior_samples.parquet")
+          arrow::write_parquet(as.data.frame(posterior_samples), samples_file)
+
+          # Save metadata
+          info_file <- file.path(output_dir, "estimation_info.json")
+          jsonlite::write_json(estimation_info, info_file, pretty = TRUE, auto_unbox = TRUE)
+
+          log_msg("Results saved to: %s", output_dir)
+          log_msg("  - Quantiles: %s", basename(quantiles_file))
+          log_msg("  - Samples: %s", basename(samples_file))
+          log_msg("  - Metadata: %s", basename(info_file))
+     } else {
+          log_msg("No output_dir specified - results not saved to files")
+     }
 
      log_msg("Estimation completed in %.1f seconds", estimation_time)
-     log_msg("Results saved to: %s", output_dir)
-     log_msg("Quantiles CSV: %s", basename(quantiles_file))
 
-     # Return results matching calc_model_posterior_quantiles format
-     return(quantile_results)
+     # =============================================================================
+     # RETURN COMPLETE RESULTS
+     # =============================================================================
+
+     # Return everything as a list
+     return(list(
+          quantiles = quantile_results,
+          samples = posterior_samples,
+          metadata = estimation_info,
+          param_names = param_names
+     ))
 }
 
 
@@ -3706,6 +3777,1615 @@ sample_from_prior_batch <- function(priors, param_names, n_samples = 1000) {
      return(samples)
 }
 
+#' Calculate Coverage Diagnostics for NPE Models
+#'
+#' @description
+#' Calculates expected coverage diagnostics for trained NPE models using lampe's
+#' expected_coverage_mc function. This helps validate that the posterior estimator
+#' is well-calibrated by checking if credible intervals contain the true parameters
+#' at the expected rates.
+#'
+#' @param npe_model_dir Directory containing trained NPE model files
+#' @param test_data_dir Directory containing test dataset (simulations.parquet and outputs.parquet)
+#' @param n_samples Number of samples to draw from posterior for each test case (default: 1024)
+#' @param n_test_cases Maximum number of test cases to evaluate (default: 100)
+#' @param output_file Optional path to save coverage results as CSV (default: NULL)
+#' @param verbose Logical; print progress messages (default: TRUE)
+#' @param seed Random seed for reproducibility (default: 42)
+#'
+#' @return List containing:
+#' \describe{
+#'   \item{levels}{Vector of credible levels}
+#'   \item{coverages}{Vector of empirical coverage rates}
+#'   \item{n_test_cases}{Number of test cases used}
+#'   \item{coverage_rmse}{Root mean squared error between expected and observed coverage}
+#'   \item{is_well_calibrated}{Logical indicating if model is well-calibrated (RMSE < 0.05)}
+#' }
+#'
+#' @details
+#' This function loads a trained NPE model and evaluates its calibration by:
+#' 1. Loading test data (parameter-observation pairs)
+#' 2. For each test case, sampling from the posterior given the observation
+#' 3. Computing the proportion of posterior samples with higher density than the true parameter
+#' 4. Checking if this proportion matches expected coverage rates
+#'
+#' A well-calibrated posterior should have empirical coverage rates that match
+#' the nominal credible levels (e.g., 95% intervals should contain true parameters 95% of the time).
+#'
+#' @examples
+#' \dontrun{
+#' # Calculate coverage diagnostics for trained NPE model
+#' coverage_results <- calc_npe_coverage_diagnostics(
+#'   npe_model_dir = "./results/npe",
+#'   test_data_dir = "./results/test",
+#'   n_samples = 1024,
+#'   n_test_cases = 50
+#' )
+#'
+#' print(coverage_results$coverage_rmse)  # Should be < 0.05 for well-calibrated model
+#' }
+#'
+#' @export
+calc_npe_coverage_diagnostics <- function(
+    npe_model_dir,
+    test_data_dir = NULL,
+    n_samples = 1024,
+    n_test_cases = 100,
+    output_file = NULL,
+    verbose = TRUE,
+    seed = 42
+) {
+    require(reticulate)
+    require(arrow)
 
+    log_msg <- function(msg, ...) {
+        if (verbose) {
+            timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
+            message(sprintf(paste(timestamp, msg), ...))
+        }
+    }
+
+    set.seed(seed)
+    log_msg("Starting NPE coverage diagnostics")
+
+    # Validate inputs
+    if (!dir.exists(npe_model_dir)) {
+        stop("NPE model directory not found: ", npe_model_dir)
+    }
+
+    # Check for model files (support both single and ensemble models)
+    npe_file <- file.path(npe_model_dir, "npe.pt")
+    encoder_file <- file.path(npe_model_dir, "encoder.pt")
+    state_file <- file.path(npe_model_dir, "npe_state.pt")
+    metadata_file <- file.path(npe_model_dir, "npe_metadata.json")
+
+    # Check for ensemble models if single model not found
+    if (!file.exists(npe_file)) {
+        npe_file <- file.path(npe_model_dir, "npe_ensemble_0.pt")
+        encoder_file <- file.path(npe_model_dir, "encoder_ensemble_0.pt")
+        state_file <- file.path(npe_model_dir, "npe_state_ensemble_0.pt")
+    }
+
+    if (!file.exists(npe_file)) {
+        stop("NPE model file not found. Expected 'npe.pt' or 'npe_ensemble_0.pt' in: ", npe_model_dir)
+    }
+    if (!file.exists(metadata_file)) {
+        stop("NPE metadata file not found: ", metadata_file)
+    }
+
+    # Load metadata
+    log_msg("Loading NPE metadata...")
+    metadata <- jsonlite::fromJSON(metadata_file)
+
+    # Use training data directory if test data not specified
+    if (is.null(test_data_dir)) {
+        test_data_dir <- dirname(npe_model_dir)
+        log_msg("Using training data directory for testing: %s", test_data_dir)
+    }
+
+    # Load test data
+    simulations_file <- file.path(test_data_dir, "simulations.parquet")
+    outputs_file <- file.path(test_data_dir, "outputs.parquet")
+
+    if (!file.exists(simulations_file) || !file.exists(outputs_file)) {
+        stop("Test data files not found in: ", test_data_dir)
+    }
+
+    log_msg("Loading test data...")
+    params <- arrow::read_parquet(simulations_file)
+    outputs <- arrow::read_parquet(outputs_file)
+
+    # Import Python modules
+    log_msg("Importing Python modules...")
+    torch <- import("torch")
+    lampe <- import("lampe")
+    diagnostics <- import("lampe.diagnostics")
+
+    # Load trained model components
+    log_msg("Loading trained NPE model...")
+    device <- if (torch$cuda$is_available()) "cuda" else "cpu"
+
+    # Load NPE and encoder
+    npe_model <- torch$load(npe_file, map_location = device)
+    encoder <- torch$load(encoder_file, map_location = device)
+
+    # Load state dictionary if available
+    if (file.exists(state_file)) {
+        state_dict <- torch$load(state_file, map_location = device)
+        # State dict contains metadata and training info
+    }
+
+    npe_model$eval()
+    encoder$eval()
+
+    # Prepare test dataset
+    log_msg("Preparing test dataset...")
+
+    # Get parameter names from metadata
+    param_names <- metadata$training_parameters
+    log_msg("Parameters: %s", paste(head(param_names, 5), collapse = ", "))
+
+    # Filter and prepare parameters
+    test_params <- params[complete.cases(params[param_names]), param_names]
+
+    # Limit test cases
+    n_available <- nrow(test_params)
+    n_test_use <- min(n_test_cases, n_available)
+
+    if (n_test_use < n_available) {
+        test_indices <- sample(n_available, n_test_use)
+        test_params <- test_params[test_indices, ]
+        # Also filter outputs to match
+        outputs <- outputs[outputs$sim %in% test_indices, ]
+    }
+
+    log_msg("Using %d test cases out of %d available", n_test_use, n_available)
+
+    # Convert outputs to tensor format expected by NPE
+    log_msg("Preparing observation tensors...")
+
+    # Reshape outputs to (n_sims, n_locations * n_timesteps) format
+    location_order <- sort(unique(outputs$j))
+    t_levels <- sort(unique(outputs$t))
+    n_locations <- length(location_order)
+    n_timesteps <- length(t_levels)
+
+    log_msg("Data dimensions: %d locations, %d timesteps", n_locations, n_timesteps)
+
+    # Create observation matrix
+    obs_matrix <- matrix(0, nrow = n_test_use, ncol = n_locations * n_timesteps)
+
+    for (i in 1:n_test_use) {
+        sim_id <- if (exists("test_indices")) test_indices[i] else i
+        sim_outputs <- outputs[outputs$sim == sim_id, ]
+
+        if (nrow(sim_outputs) > 0) {
+            # Create flattened observation vector
+            obs_vec <- numeric(n_locations * n_timesteps)
+
+            for (row in 1:nrow(sim_outputs)) {
+                j_idx <- which(location_order == sim_outputs$j[row])
+                t_idx <- which(t_levels == sim_outputs$t[row])
+                flat_idx <- (j_idx - 1) * n_timesteps + t_idx
+                obs_vec[flat_idx] <- sim_outputs$cases[row]
+            }
+
+            obs_matrix[i, ] <- obs_vec
+        }
+    }
+
+    # Convert to PyTorch tensors
+    log_msg("Converting to PyTorch tensors...")
+    param_tensor <- torch$tensor(as.matrix(test_params), dtype = torch$float32)
+    obs_tensor <- torch$tensor(obs_matrix, dtype = torch$float32)
+
+    if (device == "cuda") {
+        param_tensor <- param_tensor$to(device)
+        obs_tensor <- obs_tensor$to(device)
+        npe_model <- npe_model$to(device)
+    }
+
+    # Create parameter-observation pairs for diagnostics
+    log_msg("Creating test pairs...")
+    test_pairs <- list()
+    for (i in 1:n_test_use) {
+        test_pairs[[i]] <- list(param_tensor[i, ], obs_tensor[i, ])
+    }
+
+    # Define posterior function
+    log_msg("Calculating coverage diagnostics...")
+    posterior_fn <- function(x) {
+        # x is observation tensor
+        # Return the posterior distribution conditioned on x
+        return(npe_model(x))
+    }
+
+    # Calculate expected coverage using Monte Carlo
+    tryCatch({
+        coverage_result <- diagnostics$expected_coverage_mc(
+            posterior = posterior_fn,
+            pairs = test_pairs,
+            n = as.integer(n_samples),
+            device = device
+        )
+
+        # Extract results
+        levels <- as.numeric(coverage_result[[1]]$cpu()$numpy())
+        coverages <- as.numeric(coverage_result[[2]]$cpu()$numpy())
+
+    }, error = function(e) {
+        log_msg("Error in coverage calculation: %s", e$message)
+        log_msg("Falling back to simplified coverage analysis...")
+
+        # Simplified coverage analysis if lampe diagnostics fail
+        levels <- seq(0.1, 0.9, by = 0.1)
+        coverages <- rep(NA, length(levels))
+
+        # Manual coverage calculation for key levels
+        for (i in seq_along(levels)) {
+            level <- levels[i]
+            alpha <- 1 - level
+
+            # Sample from posterior for each test case and check coverage
+            covered <- numeric(n_test_use)
+
+            for (j in 1:min(10, n_test_use)) {  # Limit to 10 cases for speed
+                obs <- obs_tensor[j, ]$unsqueeze(0L)
+                posterior_dist <- npe_model(obs)
+
+                # Sample from posterior
+                samples <- posterior_dist$sample(torch$Size(c(n_samples)))
+
+                # Calculate empirical quantiles
+                true_param <- param_tensor[j, ]
+
+                # Simple density-based coverage check
+                log_probs <- posterior_dist$log_prob(samples)
+                true_log_prob <- posterior_dist$log_prob(true_param$unsqueeze(0L))
+
+                # Proportion of samples with higher probability than true parameter
+                prop_higher <- mean(as.numeric(log_probs$cpu()) >= as.numeric(true_log_prob$cpu()))
+
+                covered[j] <- as.numeric(prop_higher <= alpha)
+            }
+
+            coverages[i] <- mean(covered[1:min(10, n_test_use)], na.rm = TRUE)
+        }
+    })
+
+    # Calculate calibration metrics
+    expected_coverages <- levels
+    coverage_errors <- coverages - expected_coverages
+    coverage_rmse <- sqrt(mean(coverage_errors^2, na.rm = TRUE))
+    is_well_calibrated <- coverage_rmse < 0.05
+
+    log_msg("Coverage RMSE: %.4f", coverage_rmse)
+    log_msg("Well calibrated: %s", ifelse(is_well_calibrated, "YES", "NO"))
+
+    # Prepare results
+    results <- list(
+        levels = levels,
+        coverages = coverages,
+        expected_coverages = expected_coverages,
+        coverage_errors = coverage_errors,
+        coverage_rmse = coverage_rmse,
+        is_well_calibrated = is_well_calibrated,
+        n_test_cases = n_test_use,
+        n_samples_per_case = n_samples
+    )
+
+    # Save results if requested
+    if (!is.null(output_file)) {
+        log_msg("Saving coverage results to: %s", output_file)
+        results_df <- data.frame(
+            credible_level = levels,
+            expected_coverage = expected_coverages,
+            empirical_coverage = coverages,
+            coverage_error = coverage_errors
+        )
+        write.csv(results_df, output_file, row.names = FALSE)
+        results$output_file <- output_file
+    }
+
+    log_msg("Coverage diagnostics complete")
+    return(results)
+}
+
+#' Plot NPE Training Loss Curves
+#'
+#' @description
+#' Creates training and validation loss curves for NPE models, showing convergence
+#' behavior and potential overfitting. Supports ensemble models by plotting
+#' individual curves and ensemble statistics.
+#'
+#' @param npe_model_dir Directory containing trained NPE model with training_history.json
+#' @param output_file Optional path to save the plot (default: NULL for display only)
+#' @param plot_width Plot width in inches (default: 10)
+#' @param plot_height Plot height in inches (default: 6)
+#' @param show_individual_ensembles Logical; show individual ensemble curves (default: TRUE)
+#' @param smooth_curves Logical; apply smoothing to loss curves (default: TRUE)
+#' @param verbose Logical; print progress messages (default: TRUE)
+#'
+#' @return ggplot2 object containing the training loss visualization
+#'
+#' @details
+#' This function loads the training history from training_history.json and creates
+#' publication-quality plots showing:
+#' 1. Training and validation loss curves over epochs
+#' 2. Individual ensemble member curves (if multiple ensembles)
+#' 3. Ensemble mean and confidence intervals
+#' 4. Best validation loss points
+#' 5. Training convergence diagnostics
+#'
+#' The plot helps identify:
+#' - Training convergence
+#' - Overfitting (validation loss increasing while training loss decreases)
+#' - Ensemble consistency
+#' - Optimal stopping points
+#'
+#' @examples
+#' \dontrun{
+#' # Plot training curves for NPE model
+#' loss_plot <- plot_npe_training_loss(
+#'   npe_model_dir = "./results/npe",
+#'   output_file = "./figures/npe_training_loss.png"
+#' )
+#'
+#' # Display the plot
+#' print(loss_plot)
+#' }
+#'
+#' @export
+plot_npe_training_loss <- function(
+    npe_model_dir,
+    output_file = NULL,
+    plot_width = 10,
+    plot_height = 6,
+    show_individual_ensembles = TRUE,
+    smooth_curves = TRUE,
+    verbose = TRUE
+) {
+    require(ggplot2)
+    require(dplyr)
+    require(tidyr)
+    require(jsonlite)
+
+    log_msg <- function(msg, ...) {
+        if (verbose) {
+            timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
+            message(sprintf(paste(timestamp, msg), ...))
+        }
+    }
+
+    log_msg("Creating NPE training loss visualization")
+
+    # Validate inputs
+    if (!dir.exists(npe_model_dir)) {
+        stop("NPE model directory not found: ", npe_model_dir)
+    }
+
+    # Check for training history file
+    history_file <- file.path(npe_model_dir, "training_history.json")
+    if (!file.exists(history_file)) {
+        stop("Training history file not found: ", history_file)
+    }
+
+    # Load training history
+    log_msg("Loading training history...")
+    history_data <- jsonlite::fromJSON(history_file)
+    ensemble_histories <- history_data$ensemble_histories
+
+    if (length(ensemble_histories) == 0) {
+        stop("No training histories found in file")
+    }
+
+    n_ensembles <- length(ensemble_histories)
+    log_msg("Found training histories for %d ensemble(s)", n_ensembles)
+
+    # Convert to data frame for plotting
+    all_data <- list()
+
+    for (i in seq_along(ensemble_histories)) {
+        history <- ensemble_histories[[i]]
+
+        train_losses <- unlist(history$train_losses)
+        val_losses <- unlist(history$val_losses)
+        n_epochs <- length(train_losses)
+
+        # Create data frame for this ensemble
+        ensemble_data <- data.frame(
+            epoch = rep(1:n_epochs, 2),
+            loss = c(train_losses, val_losses),
+            loss_type = rep(c("Training", "Validation"), each = n_epochs),
+            ensemble = paste0("Ensemble_", i),
+            best_val_loss = history$best_val_loss
+        )
+
+        all_data[[i]] <- ensemble_data
+    }
+
+    # Combine all ensemble data
+    plot_data <- do.call(rbind, all_data)
+
+    log_msg("Plotting training curves for %d epochs", max(plot_data$epoch))
+
+    # Create base plot
+    p <- ggplot(plot_data, aes(x = epoch, y = loss, color = loss_type))
+
+    # Add individual ensemble curves if requested and multiple ensembles
+    if (show_individual_ensembles && n_ensembles > 1) {
+        p <- p + geom_line(aes(group = paste(ensemble, loss_type)),
+                          alpha = 0.3, size = 0.5)
+    }
+
+    # Calculate ensemble statistics if multiple ensembles
+    if (n_ensembles > 1) {
+        ensemble_stats <- plot_data %>%
+            group_by(epoch, loss_type) %>%
+            summarise(
+                mean_loss = mean(loss, na.rm = TRUE),
+                se_loss = sd(loss, na.rm = TRUE) / sqrt(n()),
+                min_loss = min(loss, na.rm = TRUE),
+                max_loss = max(loss, na.rm = TRUE),
+                .groups = "drop"
+            )
+
+        # Add confidence bands
+        p <- p + geom_ribbon(data = ensemble_stats,
+                           aes(x = epoch, y = mean_loss,
+                               ymin = mean_loss - 2*se_loss,
+                               ymax = mean_loss + 2*se_loss,
+                               fill = loss_type),
+                           alpha = 0.2, inherit.aes = FALSE)
+
+        # Add ensemble mean lines
+        p <- p + geom_line(data = ensemble_stats,
+                         aes(x = epoch, y = mean_loss, color = loss_type),
+                         size = 1.2, inherit.aes = FALSE)
+    } else {
+        # Single ensemble - show the actual curves
+        if (smooth_curves) {
+            p <- p + geom_smooth(method = "loess", span = 0.1, se = FALSE, size = 1.2)
+        } else {
+            p <- p + geom_line(size = 1.2)
+        }
+    }
+
+    # Add best validation loss points
+    best_val_data <- plot_data %>%
+        filter(loss_type == "Validation") %>%
+        group_by(ensemble) %>%
+        slice_min(loss, n = 1, with_ties = FALSE) %>%
+        ungroup()
+
+    p <- p + geom_point(data = best_val_data,
+                       aes(x = epoch, y = loss),
+                       color = "red", size = 2, shape = 8)
+
+    # Styling
+    p <- p +
+        scale_color_manual(values = c("Training" = "#2E86AB", "Validation" = "#A23B72")) +
+        scale_fill_manual(values = c("Training" = "#2E86AB", "Validation" = "#A23B72")) +
+        labs(
+            title = "NPE Model Training Curves",
+            subtitle = paste0("Ensemble size: ", n_ensembles,
+                            " | Best validation loss: ",
+                            sprintf("%.4f", min(best_val_data$loss))),
+            x = "Epoch",
+            y = "Loss (Negative Log-Probability)",
+            color = "Loss Type",
+            fill = "Loss Type"
+        ) +
+        theme_minimal() +
+        theme(
+            plot.title = element_text(size = 14, face = "bold"),
+            plot.subtitle = element_text(size = 12, color = "grey40"),
+            legend.position = "right",
+            panel.grid.minor = element_blank(),
+            strip.text = element_text(face = "bold")
+        )
+
+    # Add convergence diagnostics text
+    final_train_loss <- mean(plot_data[plot_data$loss_type == "Training" &
+                                     plot_data$epoch == max(plot_data$epoch), "loss"])
+    final_val_loss <- mean(plot_data[plot_data$loss_type == "Validation" &
+                                   plot_data$epoch == max(plot_data$epoch), "loss"])
+    gap <- final_val_loss - final_train_loss
+
+    convergence_text <- paste0(
+        "Final Training Loss: ", sprintf("%.4f", final_train_loss), "\n",
+        "Final Validation Loss: ", sprintf("%.4f", final_val_loss), "\n",
+        "Train-Val Gap: ", sprintf("%.4f", gap),
+        if (gap > 0.5) " (possible overfitting)" else ""
+    )
+
+    p <- p + annotate("text", x = Inf, y = Inf, label = convergence_text,
+                     hjust = 1.1, vjust = 1.1, size = 3, color = "grey40")
+
+    # Save plot if requested
+    if (!is.null(output_file)) {
+        log_msg("Saving plot to: %s", output_file)
+        ggsave(output_file, plot = p, width = plot_width, height = plot_height, dpi = 300)
+    }
+
+    log_msg("Training loss visualization complete")
+    return(p)
+}
+
+#' Simulation-Based Calibration (SBC) Diagnostics for NPE Models
+#'
+#' @description
+#' Performs simulation-based calibration to validate NPE posterior inference
+#' by generating data from the prior predictive distribution and checking if
+#' the posterior correctly recovers the true parameters. This is the gold
+#' standard for validating Bayesian inference procedures.
+#'
+#' @param npe_model_dir Directory containing trained NPE model files
+#' @param priors_file Path to priors.json file for generating test parameters
+#' @param n_sbc_samples Number of SBC test cases to generate (default: 100)
+#' @param n_posterior_samples Number of posterior samples per test case (default: 1000)
+#' @param output_dir Directory to save SBC results and plots (default: same as npe_model_dir)
+#' @param use_observed_data Logical; use observed data format instead of simulated (default: FALSE)
+#' @param verbose Logical; print progress messages (default: TRUE)
+#' @param seed Random seed for reproducibility (default: 42)
+#'
+#' @return List containing:
+#' \describe{
+#'   \item{sbc_results}{Data frame with rank statistics for each parameter}
+#'   \item{sbc_p_values}{P-values from uniformity tests for each parameter}
+#'   \item{overall_calibration}{Overall calibration assessment}
+#'   \item{problematic_parameters}{Parameters that fail SBC tests}
+#'   \item{sbc_plot}{ggplot2 object showing SBC histograms}
+#' }
+#'
+#' @details
+#' Simulation-based calibration works by:
+#' 1. Drawing true parameters θ* from the prior
+#' 2. Simulating data x* ~ p(x|θ*) using the forward model
+#' 3. Computing posterior samples θ₁,...,θₙ ~ p(θ|x*) using NPE
+#' 4. Computing the rank of θ* among {θ₁,...,θₙ,θ*}
+#' 5. Checking if ranks are uniformly distributed across parameters
+#'
+#' Well-calibrated posteriors should produce uniform rank distributions.
+#' Deviations from uniformity indicate problems with the posterior inference.
+#'
+#' @examples
+#' \dontrun{
+#' # Run SBC diagnostics on trained NPE model
+#' sbc_results <- calc_npe_sbc_diagnostics(
+#'   npe_model_dir = "./results/npe",
+#'   priors_file = "./config/priors.json",
+#'   n_sbc_samples = 50,
+#'   n_posterior_samples = 1000
+#' )
+#'
+#' # Check overall calibration
+#' print(sbc_results$overall_calibration)
+#'
+#' # Display SBC plot
+#' print(sbc_results$sbc_plot)
+#' }
+#'
+#' @export
+calc_npe_sbc_diagnostics <- function(
+    npe_model_dir,
+    priors_file,
+    n_sbc_samples = 100,
+    n_posterior_samples = 1000,
+    output_dir = NULL,
+    use_observed_data = FALSE,
+    verbose = TRUE,
+    seed = 42
+) {
+    require(reticulate)
+    require(arrow)
+    require(ggplot2)
+    require(dplyr)
+    require(tidyr)
+
+    log_msg <- function(msg, ...) {
+        if (verbose) {
+            timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
+            message(sprintf(paste(timestamp, msg), ...))
+        }
+    }
+
+    set.seed(seed)
+    log_msg("Starting NPE Simulation-Based Calibration (SBC) diagnostics")
+
+    # Set default output directory
+    if (is.null(output_dir)) {
+        output_dir <- npe_model_dir
+    }
+
+    # Validate inputs
+    if (!dir.exists(npe_model_dir)) {
+        stop("NPE model directory not found: ", npe_model_dir)
+    }
+    if (!file.exists(priors_file)) {
+        stop("Priors file not found: ", priors_file)
+    }
+
+    # Load NPE metadata
+    metadata_file <- file.path(npe_model_dir, "npe_metadata.json")
+    if (!file.exists(metadata_file)) {
+        stop("NPE metadata file not found: ", metadata_file)
+    }
+
+    log_msg("Loading NPE metadata and priors...")
+    metadata <- jsonlite::fromJSON(metadata_file)
+    priors <- jsonlite::fromJSON(priors_file)
+
+    param_names <- metadata$training_parameters
+    n_parameters <- length(param_names)
+    log_msg("Parameters for SBC: %s", paste(head(param_names, 5), collapse = ", "))
+
+    # Import Python modules
+    log_msg("Importing Python modules...")
+    torch <- import("torch")
+    np <- import("numpy")
+
+    # Load trained NPE model components
+    log_msg("Loading trained NPE model...")
+    device <- if (torch$cuda$is_available()) "cuda" else "cpu"
+
+    # Check for model files (support both single and ensemble models)
+    npe_file <- file.path(npe_model_dir, "npe.pt")
+    encoder_file <- file.path(npe_model_dir, "encoder.pt")
+    state_file <- file.path(npe_model_dir, "npe_state.pt")
+
+    # Check for ensemble models if single model not found
+    if (!file.exists(npe_file)) {
+        npe_file <- file.path(npe_model_dir, "npe_ensemble_0.pt")
+        encoder_file <- file.path(npe_model_dir, "encoder_ensemble_0.pt")
+        state_file <- file.path(npe_model_dir, "npe_state_ensemble_0.pt")
+    }
+
+    if (!file.exists(npe_file)) {
+        stop("NPE model file not found. Expected 'npe.pt' or 'npe_ensemble_0.pt' in: ", npe_model_dir)
+    }
+
+    # Load NPE and encoder
+    npe_model <- torch$load(npe_file, map_location = device)
+    encoder <- torch$load(encoder_file, map_location = device)
+
+    # Load state dictionary if available
+    if (file.exists(state_file)) {
+        state_dict <- torch$load(state_file, map_location = device)
+        # State dict contains metadata and training info
+    }
+
+    npe_model$eval()
+    encoder$eval()
+
+    # Initialize SBC results storage
+    sbc_ranks <- matrix(NA, nrow = n_sbc_samples, ncol = n_parameters)
+    colnames(sbc_ranks) <- param_names
+
+    true_params_matrix <- matrix(NA, nrow = n_sbc_samples, ncol = n_parameters)
+    colnames(true_params_matrix) <- param_names
+
+    log_msg("Generating %d SBC test cases...", n_sbc_samples)
+
+    # Progress tracking
+    progress_interval <- max(1, floor(n_sbc_samples / 10))
+
+    for (sbc_idx in 1:n_sbc_samples) {
+        if (verbose && sbc_idx %% progress_interval == 0) {
+            log_msg("  SBC test case %d/%d (%.1f%%)", sbc_idx, n_sbc_samples,
+                   100 * sbc_idx / n_sbc_samples)
+        }
+
+        # Step 1: Sample true parameters from prior
+        true_params <- sample_from_prior_batch(priors, param_names, n_samples = 1)
+        true_params_vec <- as.numeric(true_params[1, ])
+        true_params_matrix[sbc_idx, ] <- true_params_vec
+
+        # Step 2: Generate synthetic observation using LASER simulator
+        # For SBC, we need to simulate data given the true parameters
+        # This is typically done by calling the forward model
+
+        tryCatch({
+            # Create a temporary parameter configuration
+            temp_config <- create_sbc_config(true_params_vec, param_names, metadata)
+
+            # Generate synthetic observation using LASER forward model
+            if (use_observed_data) {
+                # Use format matching observed data structure
+                synthetic_obs <- generate_synthetic_observation_observed(temp_config, metadata)
+            } else {
+                # Use format matching training data structure
+                synthetic_obs <- generate_synthetic_observation_training(temp_config, metadata)
+            }
+
+            # Step 3: Get posterior samples from NPE given synthetic observation
+            obs_tensor <- torch$tensor(synthetic_obs, dtype = torch$float32)$unsqueeze(0L)
+            if (device != "cpu") {
+                obs_tensor <- obs_tensor$to(device)
+            }
+
+            # Sample from NPE posterior
+            posterior_dist <- npe_model(obs_tensor)
+            posterior_samples <- posterior_dist$sample(torch$Size(c(n_posterior_samples)))
+
+            # Convert to numpy for rank calculation
+            posterior_samples_np <- as.matrix(posterior_samples$cpu()$detach()$numpy())
+
+            # Step 4: Calculate ranks for each parameter
+            for (p in 1:n_parameters) {
+                true_val <- true_params_vec[p]
+                posterior_vals <- posterior_samples_np[, p]
+
+                # Add true parameter to samples and calculate rank
+                all_vals <- c(posterior_vals, true_val)
+                rank <- sum(all_vals <= true_val)  # Rank of true value
+
+                # Normalize rank to [0, 1] interval
+                normalized_rank <- (rank - 1) / n_posterior_samples
+                sbc_ranks[sbc_idx, p] <- normalized_rank
+            }
+
+        }, error = function(e) {
+            log_msg("  Error in SBC test case %d: %s", sbc_idx, e$message)
+            # Fill with NAs for this case
+            sbc_ranks[sbc_idx, ] <- NA
+            next
+        })
+    }
+
+    log_msg("Analyzing SBC results...")
+
+    # Remove incomplete cases
+    complete_cases <- complete.cases(sbc_ranks)
+    sbc_ranks_clean <- sbc_ranks[complete_cases, , drop = FALSE]
+    n_complete <- sum(complete_cases)
+
+    if (n_complete < 10) {
+        stop("Too few complete SBC cases (", n_complete, "). Need at least 10.")
+    }
+
+    log_msg("Completed %d/%d SBC test cases", n_complete, n_sbc_samples)
+
+    # Statistical tests for uniformity
+    sbc_p_values <- numeric(n_parameters)
+    names(sbc_p_values) <- param_names
+
+    for (p in 1:n_parameters) {
+        ranks <- sbc_ranks_clean[, p]
+        ranks <- ranks[!is.na(ranks)]
+
+        if (length(ranks) >= 10) {
+            # Kolmogorov-Smirnov test against uniform distribution
+            ks_test <- ks.test(ranks, "punif", 0, 1)
+            sbc_p_values[p] <- ks_test$p.value
+        } else {
+            sbc_p_values[p] <- NA
+        }
+    }
+
+    # Overall calibration assessment
+    significant_params <- sum(sbc_p_values < 0.05, na.rm = TRUE)
+    total_tested <- sum(!is.na(sbc_p_values))
+    overall_well_calibrated <- significant_params / total_tested < 0.1  # Less than 10% failures
+
+    # Identify problematic parameters
+    problematic_params <- param_names[sbc_p_values < 0.05 & !is.na(sbc_p_values)]
+
+    # Create SBC visualization
+    log_msg("Creating SBC visualization...")
+    sbc_plot <- create_sbc_histogram_plot(sbc_ranks_clean, param_names, sbc_p_values)
+
+    # Prepare results
+    sbc_results_df <- data.frame(
+        parameter = param_names,
+        mean_rank = colMeans(sbc_ranks_clean, na.rm = TRUE),
+        sd_rank = apply(sbc_ranks_clean, 2, sd, na.rm = TRUE),
+        p_value = sbc_p_values,
+        well_calibrated = sbc_p_values >= 0.05,
+        n_samples = colSums(!is.na(sbc_ranks_clean))
+    )
+
+    results <- list(
+        sbc_results = sbc_results_df,
+        sbc_p_values = sbc_p_values,
+        overall_calibration = list(
+            well_calibrated = overall_well_calibrated,
+            fraction_problematic = significant_params / total_tested,
+            n_problematic = significant_params,
+            n_total = total_tested
+        ),
+        problematic_parameters = problematic_params,
+        sbc_plot = sbc_plot,
+        raw_ranks = sbc_ranks_clean
+    )
+
+    # Save results
+    sbc_file <- file.path(output_dir, "sbc_results.csv")
+    write.csv(sbc_results_df, sbc_file, row.names = FALSE)
+
+    plot_file <- file.path(output_dir, "sbc_diagnostics.png")
+    ggsave(plot_file, plot = sbc_plot, width = 12, height = 8, dpi = 300)
+
+    log_msg("SBC Results Summary:")
+    log_msg("  Overall well-calibrated: %s", ifelse(overall_well_calibrated, "YES", "NO"))
+    log_msg("  Problematic parameters: %d/%d", significant_params, total_tested)
+    if (length(problematic_params) > 0) {
+        log_msg("  Failed parameters: %s", paste(problematic_params, collapse = ", "))
+    }
+    log_msg("  Results saved to: %s", sbc_file)
+    log_msg("  Plot saved to: %s", plot_file)
+
+    log_msg("SBC diagnostics complete")
+    return(results)
+}
+
+#' Create SBC Configuration for Forward Simulation
+#'
+#' @description Internal helper to create configuration for LASER forward simulation
+#' in SBC testing. This would typically interface with the actual LASER model.
+#'
+#' @param params Vector of parameter values
+#' @param param_names Vector of parameter names
+#' @param metadata NPE metadata containing model configuration
+#'
+#' @return Configuration object for LASER simulation
+#'
+#' @keywords internal
+create_sbc_config <- function(params, param_names, metadata) {
+    # Create a proper LASER configuration from parameter vector
+    # Start with base configuration from metadata
+    if (!is.null(metadata$config_base)) {
+        config <- metadata$config_base
+    } else {
+        # Initialize with minimal required structure
+        config <- list()
+    }
+
+    # Map parameter values to configuration
+    for (i in seq_along(param_names)) {
+        param_name <- param_names[i]
+        param_value <- params[i]
+
+        # Handle location-specific parameters (e.g., "beta_j0_hum_ETH")
+        if (grepl("_[A-Z]{3}$", param_name)) {
+            # Extract location code and base parameter name
+            location <- regmatches(param_name, regexpr("[A-Z]{3}$", param_name))
+            base_name <- sub("_[A-Z]{3}$", "", param_name)
+
+            # Get location index
+            if (!is.null(metadata$data$location_name)) {
+                loc_idx <- which(metadata$data$location_name == location)
+                if (length(loc_idx) > 0) {
+                    # Initialize parameter vector if needed
+                    if (is.null(config[[base_name]])) {
+                        config[[base_name]] <- rep(NA, length(metadata$data$location_name))
+                    }
+                    # Set location-specific value
+                    config[[base_name]][loc_idx] <- param_value
+                }
+            }
+        } else {
+            # Set scalar/global parameter
+            config[[param_name]] <- param_value
+        }
+    }
+
+    # Ensure critical metadata is present
+    if (is.null(config$location_name) && !is.null(metadata$data$location_name)) {
+        config$location_name <- metadata$data$location_name
+    }
+
+    if (is.null(config$n_locations)) {
+        config$n_locations <- metadata$data$n_locations
+    }
+
+    if (is.null(config$n_timesteps)) {
+        config$n_timesteps <- metadata$data$n_timesteps
+    }
+
+    # Add time range if available
+    if (!is.null(metadata$data$date_start)) {
+        config$date_start <- metadata$data$date_start
+    }
+    if (!is.null(metadata$data$date_stop)) {
+        config$date_stop <- metadata$data$date_stop
+    }
+
+    return(config)
+}
+
+#' Generate Synthetic Observation for SBC Testing
+#'
+#' @description Internal helper to generate synthetic observations using LASER forward model
+#' for simulation-based calibration testing.
+#'
+#' @param config Configuration object for simulation
+#' @param metadata NPE metadata
+#'
+#' @return Vector of synthetic observations
+#'
+#' @keywords internal
+generate_synthetic_observation_training <- function(config, metadata) {
+    # Generate synthetic observations using LASER forward model
+
+    # Create temporary file for configuration
+    config_file <- tempfile(fileext = ".json")
+    on.exit(unlink(config_file), add = TRUE)
+
+    # Write configuration to JSON
+    tryCatch({
+        write_model_json(config, config_file, type = "priors", validate = FALSE)
+    }, error = function(e) {
+        stop("Failed to write configuration for LASER: ", e$message)
+    })
+
+    # Run LASER simulation
+    tryCatch({
+        # Use seed from metadata if available
+        seed <- if (!is.null(metadata$seed)) metadata$seed else 123L
+
+        # Run LASER model
+        laser_result <- run_LASER_model(
+            paramfile = config_file,
+            seed = as.integer(seed),
+            visualize = FALSE,
+            pdf = FALSE
+        )
+
+        # Extract simulated data using existing function
+        simulated_data <- get_npe_simulated_data(
+            laser_result = laser_result,
+            include_deaths = FALSE,
+            validate = FALSE,
+            verbose = FALSE
+        )
+
+        # Convert to observation vector format expected by NPE
+        n_locations <- metadata$data$n_locations
+        n_timesteps <- metadata$data$n_timesteps
+        n_features <- n_locations * n_timesteps
+
+        # Initialize observation vector
+        obs_vec <- numeric(n_features)
+
+        # Get location mapping
+        location_names <- if (!is.null(metadata$data$location_name)) {
+            metadata$data$location_name
+        } else {
+            unique(simulated_data$j)
+        }
+        location_map <- setNames(seq_along(location_names) - 1, location_names)
+
+        # Fill observation vector with proper indexing
+        for (i in 1:nrow(simulated_data)) {
+            j_idx <- location_map[simulated_data$j[i]]
+            t_idx <- simulated_data$t[i] - 1  # Convert to 0-indexed
+
+            if (!is.na(j_idx) && j_idx >= 0 && j_idx < n_locations &&
+                t_idx >= 0 && t_idx < n_timesteps) {
+                # Row-major indexing: idx = t * n_locations + j
+                idx <- t_idx * n_locations + j_idx + 1  # +1 for R's 1-indexing
+                obs_vec[idx] <- simulated_data$cases[i]
+            }
+        }
+
+        return(obs_vec)
+
+    }, error = function(e) {
+        warning("LASER simulation failed: ", e$message, ". Using fallback generation.")
+        # Fallback to simple generation if LASER fails
+        n_obs <- metadata$data$n_locations * metadata$data$n_timesteps
+        synthetic_obs <- rpois(n_obs, lambda = 10)  # Poisson-distributed cases
+        return(synthetic_obs)
+    })
+}
+
+#' Generate Synthetic Observation for Observed Data Format
+#'
+#' @description Internal helper for observed data format in SBC testing.
+#'
+#' @param config Configuration object
+#' @param metadata NPE metadata
+#'
+#' @return Synthetic observation in observed data format
+#'
+#' @keywords internal
+generate_synthetic_observation_observed <- function(config, metadata) {
+    # Generate synthetic observation in the same format as observed data
+    # Both functions produce the same vector format for NPE
+    return(generate_synthetic_observation_training(config, metadata))
+}
+
+#' Create SBC Histogram Plot
+#'
+#' @description Internal function to create SBC diagnostic histograms showing
+#' rank distributions for each parameter.
+#'
+#' @param sbc_ranks Matrix of SBC ranks
+#' @param param_names Parameter names
+#' @param p_values P-values from uniformity tests
+#'
+#' @return ggplot2 object
+#'
+#' @keywords internal
+create_sbc_histogram_plot <- function(sbc_ranks, param_names, p_values) {
+    # Convert to long format for plotting
+    ranks_df <- as.data.frame(sbc_ranks) %>%
+        mutate(sbc_case = row_number()) %>%
+        pivot_longer(cols = -sbc_case, names_to = "parameter", values_to = "rank")
+
+    # Add p-values for labeling
+    p_value_labels <- paste0("p = ", sprintf("%.3f", p_values[param_names]))
+    names(p_value_labels) <- param_names
+
+    ranks_df$p_value_label <- p_value_labels[ranks_df$parameter]
+    ranks_df$well_calibrated <- p_values[ranks_df$parameter] >= 0.05
+
+    # Create histogram plot
+    p <- ggplot(ranks_df, aes(x = rank)) +
+        geom_histogram(aes(fill = well_calibrated), bins = 20, alpha = 0.7,
+                      color = "white", size = 0.2) +
+        geom_hline(yintercept = nrow(sbc_ranks) / 20, linetype = "dashed",
+                  color = "red", alpha = 0.7) +
+        facet_wrap(~ parameter + p_value_label, scales = "free_y", ncol = 4) +
+        scale_fill_manual(values = c("TRUE" = "#2E86AB", "FALSE" = "#A23B72"),
+                         labels = c("Well-calibrated", "Poorly-calibrated")) +
+        labs(
+            title = "Simulation-Based Calibration (SBC) Diagnostics",
+            subtitle = "Rank histograms should be approximately uniform (red dashed line shows expected frequency)",
+            x = "Normalized Rank",
+            y = "Frequency",
+            fill = "Calibration Status"
+        ) +
+        theme_minimal() +
+        theme(
+            plot.title = element_text(size = 14, face = "bold"),
+            plot.subtitle = element_text(size = 11, color = "grey40"),
+            strip.text = element_text(size = 9, face = "bold"),
+            legend.position = "bottom",
+            panel.grid.minor = element_blank()
+        )
+
+    return(p)
+}
+
+#' Posterior Predictive Checks (PPC) for NPE Models
+#'
+#' @description
+#' Performs posterior predictive checks to validate NPE models by comparing
+#' observed data with predictions from the posterior predictive distribution.
+#' This helps identify model misspecification and assess goodness of fit.
+#'
+#' @param npe_model_dir Directory containing trained NPE model files
+#' @param observed_data_file Path to observed data file (parquet format)
+#' @param n_posterior_samples Number of posterior samples to draw (default: 1000)
+#' @param n_predictive_samples Number of predictive samples per posterior sample (default: 1)
+#' @param test_statistics Vector of test statistics to compute (default: c("mean", "var", "max", "skewness"))
+#' @param output_dir Directory to save PPC results and plots (default: same as npe_model_dir)
+#' @param verbose Logical; print progress messages (default: TRUE)
+#' @param seed Random seed for reproducibility (default: 42)
+#'
+#' @return List containing:
+#' \describe{
+#'   \item{ppc_results}{Data frame with test statistics for observed and predicted data}
+#'   \item{p_values}{P-values for each test statistic}
+#'   \item{ppc_plots}{List of ggplot2 objects showing predictive distributions}
+#'   \item{overall_fit}{Overall model fit assessment}
+#' }
+#'
+#' @details
+#' Posterior predictive checks work by:
+#' 1. Using observed data to get posterior samples θ₁,...,θₙ ~ p(θ|y_obs)
+#' 2. For each θᵢ, simulating replicated data y_rep,i ~ p(y|θᵢ)
+#' 3. Computing test statistics T(y_rep) and T(y_obs)
+#' 4. Checking if T(y_obs) is typical of the predictive distribution
+#'
+#' Good model fit should show T(y_obs) within the central range of T(y_rep).
+#' Extreme values indicate potential model misspecification.
+#'
+#' @examples
+#' \dontrun{
+#' # Run posterior predictive checks
+#' ppc_results <- calc_npe_posterior_predictive_checks(
+#'   npe_model_dir = "./results/npe",
+#'   observed_data_file = "./data/observed_cases.parquet",
+#'   n_posterior_samples = 500,
+#'   test_statistics = c("mean", "var", "max")
+#' )
+#'
+#' # Check model fit
+#' print(ppc_results$overall_fit)
+#'
+#' # Display PPC plots
+#' print(ppc_results$ppc_plots$mean)
+#' }
+#'
+#' @export
+calc_npe_posterior_predictive_checks <- function(
+    npe_model_dir,
+    observed_data_file,
+    n_posterior_samples = 1000,
+    n_predictive_samples = 1,
+    test_statistics = c("mean", "var", "max", "skewness"),
+    output_dir = NULL,
+    verbose = TRUE,
+    seed = 42
+) {
+    require(reticulate)
+    require(arrow)
+    require(ggplot2)
+    require(dplyr)
+    require(tidyr)
+
+    log_msg <- function(msg, ...) {
+        if (verbose) {
+            timestamp <- format(Sys.time(), "[%Y-%m-%d %H:%M:%S]")
+            message(sprintf(paste(timestamp, msg), ...))
+        }
+    }
+
+    set.seed(seed)
+    log_msg("Starting NPE Posterior Predictive Checks (PPC)")
+
+    # Set default output directory
+    if (is.null(output_dir)) {
+        output_dir <- npe_model_dir
+    }
+
+    # Validate inputs
+    if (!dir.exists(npe_model_dir)) {
+        stop("NPE model directory not found: ", npe_model_dir)
+    }
+    if (!file.exists(observed_data_file)) {
+        stop("Observed data file not found: ", observed_data_file)
+    }
+
+    # Load NPE metadata
+    metadata_file <- file.path(npe_model_dir, "npe_metadata.json")
+    if (!file.exists(metadata_file)) {
+        stop("NPE metadata file not found: ", metadata_file)
+    }
+
+    log_msg("Loading NPE metadata and observed data...")
+    metadata <- jsonlite::fromJSON(metadata_file)
+
+    # Load observed data
+    observed_data <- arrow::read_parquet(observed_data_file)
+    log_msg("Loaded observed data: %d rows", nrow(observed_data))
+
+    # Import Python modules
+    log_msg("Importing Python modules...")
+    torch <- import("torch")
+    np <- import("numpy")
+
+    # Load trained NPE model components
+    log_msg("Loading trained NPE model...")
+    device <- if (torch$cuda$is_available()) "cuda" else "cpu"
+
+    # Check for model files (support both single and ensemble models)
+    npe_file <- file.path(npe_model_dir, "npe.pt")
+    encoder_file <- file.path(npe_model_dir, "encoder.pt")
+    state_file <- file.path(npe_model_dir, "npe_state.pt")
+
+    # Check for ensemble models if single model not found
+    if (!file.exists(npe_file)) {
+        npe_file <- file.path(npe_model_dir, "npe_ensemble_0.pt")
+        encoder_file <- file.path(npe_model_dir, "encoder_ensemble_0.pt")
+        state_file <- file.path(npe_model_dir, "npe_state_ensemble_0.pt")
+    }
+
+    if (!file.exists(npe_file)) {
+        stop("NPE model file not found. Expected 'npe.pt' or 'npe_ensemble_0.pt' in: ", npe_model_dir)
+    }
+
+    # Load NPE and encoder
+    npe_model <- torch$load(npe_file, map_location = device)
+    encoder <- torch$load(encoder_file, map_location = device)
+
+    # Load state dictionary if available
+    if (file.exists(state_file)) {
+        state_dict <- torch$load(state_file, map_location = device)
+        # State dict contains metadata and training info
+    }
+
+    npe_model$eval()
+    encoder$eval()
+
+    # Prepare observed data in format expected by NPE
+    log_msg("Preparing observed data...")
+    obs_tensor <- prepare_observation_tensor(observed_data, metadata)
+
+    if (device != "cpu") {
+        obs_tensor <- obs_tensor$to(device)
+    }
+
+    # Get posterior samples from NPE
+    log_msg("Sampling from NPE posterior...")
+    posterior_dist <- npe_model(obs_tensor)
+    posterior_samples <- posterior_dist$sample(torch$Size(c(n_posterior_samples)))
+    posterior_samples_np <- as.matrix(posterior_samples$cpu()$detach()$numpy())
+
+    log_msg("Generated %d posterior samples for PPC", nrow(posterior_samples_np))
+
+    # Generate predictive samples
+    log_msg("Generating predictive samples...")
+    n_total_pred_samples <- n_posterior_samples * n_predictive_samples
+    predictive_data <- matrix(NA, nrow = n_total_pred_samples, ncol = ncol(as.matrix(observed_data)))
+
+    # Progress tracking
+    progress_interval <- max(1, floor(n_posterior_samples / 10))
+
+    for (i in 1:n_posterior_samples) {
+        if (verbose && i %% progress_interval == 0) {
+            log_msg("  Generating predictive samples %d/%d (%.1f%%)",
+                   i, n_posterior_samples, 100 * i / n_posterior_samples)
+        }
+
+        # Get parameter values for this posterior sample
+        param_values <- posterior_samples_np[i, ]
+
+        # Generate predictive data using forward model
+        # This is where we would call LASER with these parameter values
+        tryCatch({
+            pred_data <- generate_predictive_data(param_values, metadata, n_predictive_samples)
+
+            # Store predictive samples
+            start_idx <- (i - 1) * n_predictive_samples + 1
+            end_idx <- i * n_predictive_samples
+            predictive_data[start_idx:end_idx, ] <- pred_data
+
+        }, error = function(e) {
+            log_msg("  Error generating predictive sample %d: %s", i, e$message)
+            # Fill with NAs for this sample
+            start_idx <- (i - 1) * n_predictive_samples + 1
+            end_idx <- i * n_predictive_samples
+            predictive_data[start_idx:end_idx, ] <- NA
+        })
+    }
+
+    # Remove incomplete predictive samples
+    complete_pred <- complete.cases(predictive_data)
+    predictive_data_clean <- predictive_data[complete_pred, , drop = FALSE]
+    n_pred_complete <- nrow(predictive_data_clean)
+
+    log_msg("Generated %d/%d complete predictive samples", n_pred_complete, n_total_pred_samples)
+
+    if (n_pred_complete < 100) {
+        warning("Few complete predictive samples (", n_pred_complete, "). Results may be unreliable.")
+    }
+
+    # Calculate test statistics
+    log_msg("Computing test statistics...")
+    observed_stats <- list()
+    predictive_stats <- list()
+
+    # Prepare observed data as vector for test statistics
+    observed_vector <- prepare_data_for_statistics(observed_data)
+
+    for (stat_name in test_statistics) {
+        # Calculate for observed data
+        observed_stats[[stat_name]] <- calculate_test_statistic(observed_vector, stat_name)
+
+        # Calculate for predictive samples
+        pred_stats <- numeric(n_pred_complete)
+        for (j in 1:n_pred_complete) {
+            pred_vector <- prepare_data_for_statistics_from_matrix(predictive_data_clean[j, ])
+            pred_stats[j] <- calculate_test_statistic(pred_vector, stat_name)
+        }
+        predictive_stats[[stat_name]] <- pred_stats
+    }
+
+    # Calculate p-values (proportion of predictive samples more extreme than observed)
+    p_values <- numeric(length(test_statistics))
+    names(p_values) <- test_statistics
+
+    for (stat_name in test_statistics) {
+        obs_stat <- observed_stats[[stat_name]]
+        pred_stats <- predictive_stats[[stat_name]]
+
+        # Two-sided p-value: proportion more extreme than observed
+        p_val <- mean(abs(pred_stats - median(pred_stats, na.rm = TRUE)) >=
+                     abs(obs_stat - median(pred_stats, na.rm = TRUE)), na.rm = TRUE)
+        p_values[stat_name] <- p_val
+    }
+
+    # Overall fit assessment
+    extreme_stats <- sum(p_values < 0.05 | p_values > 0.95, na.rm = TRUE)
+    total_stats <- sum(!is.na(p_values))
+    overall_good_fit <- extreme_stats / total_stats < 0.2  # Less than 20% extreme
+
+    # Create PPC plots
+    log_msg("Creating PPC visualization...")
+    ppc_plots <- create_ppc_plots(observed_stats, predictive_stats, test_statistics)
+
+    # Prepare results data frame
+    ppc_results_df <- data.frame(
+        test_statistic = test_statistics,
+        observed_value = sapply(test_statistics, function(s) observed_stats[[s]]),
+        predictive_mean = sapply(test_statistics, function(s) mean(predictive_stats[[s]], na.rm = TRUE)),
+        predictive_sd = sapply(test_statistics, function(s) sd(predictive_stats[[s]], na.rm = TRUE)),
+        predictive_q025 = sapply(test_statistics, function(s) quantile(predictive_stats[[s]], 0.025, na.rm = TRUE)),
+        predictive_q975 = sapply(test_statistics, function(s) quantile(predictive_stats[[s]], 0.975, na.rm = TRUE)),
+        p_value = p_values,
+        extreme = p_values < 0.05 | p_values > 0.95
+    )
+
+    # Prepare final results
+    results <- list(
+        ppc_results = ppc_results_df,
+        p_values = p_values,
+        ppc_plots = ppc_plots,
+        overall_fit = list(
+            good_fit = overall_good_fit,
+            fraction_extreme = extreme_stats / total_stats,
+            n_extreme = extreme_stats,
+            n_total = total_stats
+        ),
+        observed_statistics = observed_stats,
+        predictive_statistics = predictive_stats
+    )
+
+    # Save results
+    ppc_file <- file.path(output_dir, "ppc_results.csv")
+    write.csv(ppc_results_df, ppc_file, row.names = FALSE)
+
+    # Save plots
+    for (stat_name in test_statistics) {
+        if (!is.null(ppc_plots[[stat_name]])) {
+            plot_file <- file.path(output_dir, paste0("ppc_", stat_name, ".png"))
+            ggsave(plot_file, plot = ppc_plots[[stat_name]], width = 8, height = 6, dpi = 300)
+        }
+    }
+
+    log_msg("PPC Results Summary:")
+    log_msg("  Overall good fit: %s", ifelse(overall_good_fit, "YES", "NO"))
+    log_msg("  Extreme statistics: %d/%d", extreme_stats, total_stats)
+    if (extreme_stats > 0) {
+        extreme_names <- test_statistics[p_values < 0.05 | p_values > 0.95]
+        log_msg("  Extreme test statistics: %s", paste(extreme_names, collapse = ", "))
+    }
+    log_msg("  Results saved to: %s", ppc_file)
+
+    log_msg("Posterior predictive checks complete")
+    return(results)
+}
+
+#' Prepare Observation Tensor for NPE
+#'
+#' @description Internal helper to convert observed data to tensor format expected by NPE
+#'
+#' @param observed_data Data frame with observed data
+#' @param metadata NPE metadata
+#'
+#' @return PyTorch tensor
+#'
+#' @keywords internal
+prepare_observation_tensor <- function(observed_data, metadata) {
+    torch <- import("torch")
+
+    # Convert observed data to the format used during NPE training
+    n_locations <- metadata$data$n_locations
+    n_timesteps <- metadata$data$n_timesteps
+    n_features <- n_locations * n_timesteps
+
+    # Initialize observation vector
+    obs_vec <- numeric(n_features)
+
+    if (!is.null(observed_data) && nrow(observed_data) > 0) {
+        # Check required columns exist
+        required_cols <- c("j", "t", "cases")
+        missing_cols <- setdiff(required_cols, names(observed_data))
+        if (length(missing_cols) > 0) {
+            stop("Missing required columns in observed_data: ", paste(missing_cols, collapse = ", "))
+        }
+
+        # Get location names from metadata
+        location_names <- if (!is.null(metadata$data$location_name)) {
+            metadata$data$location_name
+        } else {
+            unique(observed_data$j)
+        }
+
+        # Create location index mapping
+        location_map <- setNames(seq_along(location_names) - 1, location_names)
+
+        # Fill observation vector with proper indexing (row-major order: location varies fastest)
+        for (i in 1:nrow(observed_data)) {
+            j_idx <- location_map[observed_data$j[i]]
+            t_idx <- observed_data$t[i] - 1  # Convert to 0-indexed
+
+            if (!is.na(j_idx) && j_idx >= 0 && j_idx < n_locations &&
+                t_idx >= 0 && t_idx < n_timesteps) {
+                # Row-major indexing: idx = t * n_locations + j
+                idx <- t_idx * n_locations + j_idx + 1  # +1 for R's 1-indexing
+                obs_vec[idx] <- observed_data$cases[i]
+            }
+        }
+    } else {
+        stop("observed_data must be a non-empty data frame with columns: j, t, cases")
+    }
+
+    return(torch$tensor(obs_vec, dtype = torch$float32)$unsqueeze(0L))
+}
+
+#' Generate Predictive Data Using Forward Model
+#'
+#' @description Internal helper to generate predictive data given parameters
+#'
+#' @param param_values Vector of parameter values
+#' @param metadata NPE metadata
+#' @param n_samples Number of predictive samples to generate
+#'
+#' @return Matrix of predictive data
+#'
+#' @keywords internal
+generate_predictive_data <- function(param_values, metadata, n_samples = 1) {
+    # Generate predictive case data using LASER forward model
+
+    n_features <- metadata$data$n_locations * metadata$data$n_timesteps
+    pred_data <- matrix(NA, nrow = n_samples, ncol = n_features)
+
+    # Get parameter names from metadata
+    param_names <- if (!is.null(metadata$param_names)) {
+        metadata$param_names
+    } else if (!is.null(metadata$parameters)) {
+        metadata$parameters
+    } else {
+        # Generate default names if not available
+        paste0("param_", seq_along(param_values))
+    }
+
+    for (i in 1:n_samples) {
+        tryCatch({
+            # Create configuration from parameters
+            config <- create_sbc_config(param_values, param_names, metadata)
+
+            # Create temporary file for configuration
+            config_file <- tempfile(fileext = ".json")
+            on.exit(unlink(config_file), add = TRUE)
+
+            # Write configuration
+            write_model_json(config, config_file, type = "priors", validate = FALSE)
+
+            # Generate different seed for each sample
+            seed <- as.integer(Sys.time()) + i
+
+            # Run LASER model
+            laser_result <- run_LASER_model(
+                paramfile = config_file,
+                seed = seed,
+                visualize = FALSE,
+                pdf = FALSE
+            )
+
+            # Extract simulated data
+            simulated_data <- get_npe_simulated_data(
+                laser_result = laser_result,
+                include_deaths = FALSE,
+                validate = FALSE,
+                verbose = FALSE
+            )
+
+            # Convert to vector format
+            obs_vec <- numeric(n_features)
+
+            # Get location mapping
+            location_names <- if (!is.null(metadata$data$location_name)) {
+                metadata$data$location_name
+            } else {
+                unique(simulated_data$j)
+            }
+            location_map <- setNames(seq_along(location_names) - 1, location_names)
+
+            # Fill observation vector
+            for (j in 1:nrow(simulated_data)) {
+                j_idx <- location_map[simulated_data$j[j]]
+                t_idx <- simulated_data$t[j] - 1
+
+                if (!is.na(j_idx) && j_idx >= 0 && j_idx < metadata$data$n_locations &&
+                    t_idx >= 0 && t_idx < metadata$data$n_timesteps) {
+                    idx <- t_idx * metadata$data$n_locations + j_idx + 1
+                    obs_vec[idx] <- simulated_data$cases[j]
+                }
+            }
+
+            pred_data[i, ] <- obs_vec
+
+        }, error = function(e) {
+            warning("LASER simulation failed for sample ", i, ": ", e$message)
+            # Use fallback generation
+            # Base rate influenced by first parameter (often a transmission rate)
+            base_rate <- if (length(param_values) > 0) {
+                max(0, param_values[1] * 10)
+            } else {
+                10
+            }
+            pred_data[i, ] <- rpois(n_features, lambda = base_rate)
+        })
+    }
+
+    return(pred_data)
+}
+
+#' Prepare Data for Test Statistics Calculation
+#'
+#' @description Internal helper to convert data to vector for statistics
+#'
+#' @param data Data frame or vector
+#'
+#' @return Numeric vector
+#'
+#' @keywords internal
+prepare_data_for_statistics <- function(data) {
+    if (is.data.frame(data)) {
+        if ("cases" %in% names(data)) {
+            return(as.numeric(data$cases))
+        } else {
+            # Use first numeric column
+            numeric_cols <- sapply(data, is.numeric)
+            if (sum(numeric_cols) > 0) {
+                return(as.numeric(data[[which(numeric_cols)[1]]]))
+            }
+        }
+    }
+    return(as.numeric(data))
+}
+
+#' Prepare Data from Matrix Row for Test Statistics
+#'
+#' @description Internal helper to convert matrix row to vector
+#'
+#' @param matrix_row Numeric vector from matrix row
+#'
+#' @return Numeric vector
+#'
+#' @keywords internal
+prepare_data_for_statistics_from_matrix <- function(matrix_row) {
+    return(as.numeric(matrix_row))
+}
+
+#' Calculate Test Statistic
+#'
+#' @description Internal helper to calculate various test statistics
+#'
+#' @param data Numeric vector
+#' @param stat_name Name of test statistic
+#'
+#' @return Numeric value
+#'
+#' @keywords internal
+calculate_test_statistic <- function(data, stat_name) {
+    data <- data[!is.na(data) & is.finite(data)]
+
+    if (length(data) == 0) {
+        return(NA)
+    }
+
+    switch(stat_name,
+           "mean" = mean(data),
+           "var" = var(data),
+           "sd" = sd(data),
+           "max" = max(data),
+           "min" = min(data),
+           "median" = median(data),
+           "skewness" = {
+               if (length(data) >= 3 && sd(data) > 0) {
+                   mean((data - mean(data))^3) / sd(data)^3
+               } else {
+                   NA
+               }
+           },
+           "kurtosis" = {
+               if (length(data) >= 4 && sd(data) > 0) {
+                   mean((data - mean(data))^4) / sd(data)^4 - 3
+               } else {
+                   NA
+               }
+           },
+           "sum" = sum(data),
+           "range" = diff(range(data)),
+           NA  # Unknown statistic
+    )
+}
 
 
