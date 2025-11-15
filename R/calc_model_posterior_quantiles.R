@@ -121,11 +121,14 @@ calc_model_posterior_quantiles <- function(results,
             if (!is.null(posterior_weights) && length(posterior_weights) == length(posterior_samples)) {
                 # Normalize weights
                 posterior_weights <- posterior_weights / sum(posterior_weights)
-                kde_posterior <- density(posterior_samples,
-                                        weights = posterior_weights,
-                                        from = eval_from,
-                                        to = eval_to,
-                                        n = 512)
+                # Suppress expected warning about bandwidth not using weights (known R limitation)
+                kde_posterior <- suppressWarnings(
+                    density(posterior_samples,
+                           weights = posterior_weights,
+                           from = eval_from,
+                           to = eval_to,
+                           n = 512)
+                )
             } else {
                 kde_posterior <- density(posterior_samples,
                                         from = eval_from,
