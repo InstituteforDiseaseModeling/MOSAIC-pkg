@@ -250,17 +250,9 @@
 #' Safe State Save with Locking
 #' @noRd
 .mosaic_save_state_safe <- function(state, path) {
-  lockfile <- paste0(path, ".lock")
-  lock <- .mosaic_acquire_lock(lockfile, timeout_sec = 10)
-
-  if (is.null(lock)) {
-    warning("Could not acquire lock to save state", call. = FALSE)
-    return(FALSE)
-  }
-
-  on.exit(.mosaic_release_lock(lock), add = TRUE)
-
-  # Use atomic write
+  # For single-process runs, locking is not needed
+  # For cluster runs, the flock implementation needs improvement
+  # Just use atomic write for now
   .mosaic_atomic_write(state, path, saveRDS)
 }
 
@@ -271,16 +263,8 @@
     return(NULL)
   }
 
-  lockfile <- paste0(path, ".lock")
-  lock <- .mosaic_acquire_lock(lockfile, timeout_sec = 10)
-
-  if (is.null(lock)) {
-    warning("Could not acquire lock to load state", call. = FALSE)
-    return(NULL)
-  }
-
-  on.exit(.mosaic_release_lock(lock), add = TRUE)
-
+  # For single-process runs, locking is not needed
+  # Just load and validate
   state <- tryCatch({
     readRDS(path)
   }, error = function(e) {
