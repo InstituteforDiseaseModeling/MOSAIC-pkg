@@ -792,7 +792,8 @@ run_MOSAIC <- function(config,
       # Without this, each worker spawns multiple BLAS threads → severe oversubscription
       # Example: 16 workers × 8 BLAS threads = 128 total threads (worse than single-threaded!)
       # This ensures: 16 workers × 1 BLAS thread = 16 threads (optimal)
-      .mosaic_set_blas_threads(1L)
+      # Use ::: to access internal function from MOSAIC namespace in PSOCK workers
+      MOSAIC:::.mosaic_set_blas_threads(1L)
 
       set_root_directory(.root_dir_val)
       PATHS <- get_paths()
@@ -816,7 +817,8 @@ run_MOSAIC <- function(config,
     # This avoids anonymous function closure serialization overhead
     parallel::clusterCall(cl, function() {
       assign(".run_sim_worker", function(sim_id) {
-        .mosaic_run_simulation_worker(
+        # Use ::: to access internal function from MOSAIC namespace in PSOCK workers
+        MOSAIC:::.mosaic_run_simulation_worker(
           sim_id = sim_id,
           n_iterations = n_iterations,
           priors = priors,
