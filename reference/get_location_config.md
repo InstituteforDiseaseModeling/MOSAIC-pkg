@@ -1,0 +1,60 @@
+# Get Location-Specific Configuration
+
+Extracts configuration for specific location(s) from a config object.
+Systematically subsets all location-specific parameters to only include
+the requested location(s).
+
+## Usage
+
+``` r
+get_location_config(config = NULL, iso)
+```
+
+## Arguments
+
+- config:
+
+  A configuration list object in the format of MOSAIC::config_default.
+  If NULL, will use MOSAIC::config_default.
+
+- iso:
+
+  Character vector of ISO3 country codes to extract (e.g., "ETH" or
+  c("ETH", "KEN")).
+
+## Value
+
+A config list object with the same structure as the input, but with all
+location-specific parameters subset to only the requested locations.
+
+## Details
+
+This function systematically identifies and subsets all
+location-specific parameters in the config object. Location-specific
+parameters are identified as vectors with length matching the number of
+locations in the original config.
+
+For single location extractions, vector parameters are converted to
+scalars to maintain consistency with single-location configurations.
+
+Node-level parameters (N, S, V1, V2, E, I, R) are also properly subset
+based on the cumulative node indices for each location.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Extract config for Ethiopia
+eth_config <- get_location_config(iso = "ETH")
+
+# Extract config for multiple countries
+east_africa_config <- get_location_config(
+  config = MOSAIC::config_default,
+  iso = c("ETH", "KEN", "UGA", "TZA")
+)
+
+# Use with sampled parameters
+config_sampled <- sample_parameters(seed = 123)
+config_eth <- get_location_config(config_sampled, iso = "ETH")
+} # }
+```

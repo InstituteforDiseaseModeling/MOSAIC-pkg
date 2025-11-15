@@ -1,0 +1,70 @@
+# Get WHO Vaccination Data
+
+This function processes raw WHO vaccination request data and converts it
+into a format suitable for use in the MOSAIC cholera model. It extracts
+relevant information from tab-separated text data for various years,
+such as the year, country, request number, status, context, ICG decision
+date, number of doses requested, approved, and shipped, as well as the
+date of the vaccination campaign. The data is compiled into a data frame
+and saved to a CSV format for further analysis.
+
+## Usage
+
+``` r
+get_WHO_vaccination_data(PATHS)
+```
+
+## Source
+
+The data used by this function is sourced from the WHO ICG
+(International Coordinating Group on Vaccine Provision) dashboard, which
+can be accessed via the following Power BI link:
+<https://app.powerbi.com/view?r=eyJrIjoiYmFmZTBmM2EtYWM3Mi00NWYwLTg3YjgtN2Q0MjM5ZmE1ZjFkIiwidCI6ImY2MTBjMGI3LWJkMjQtNGIzOS04MTBiLTNkYzI4MGFmYjU5MCIsImMiOjh9>
+
+## Arguments
+
+- PATHS:
+
+  A list of file paths, which should include the following element:
+
+  DATA_SCRAPE_WHO_VACCINATION
+
+  :   The path to the folder where the processed vaccination data will
+      be saved as a CSV file.
+
+## Value
+
+A data frame containing the processed WHO vaccination request data. The
+function also prints summary information, including the total number of
+observations, total requested doses, approved doses, shipped doses, and
+the start and end dates of the requests.
+
+## Details
+
+The function performs the following steps:
+
+- Reads raw vaccination request data from tab-separated text for
+  multiple years (e.g., 2016-2024).
+
+- Extracts relevant columns such as Year, Country, Request Number,
+  Status, Context, Decision Date, Doses Requested, Approved, and
+  Shipped.
+
+- Handles missing values and checks for duplicated rows, removing
+  duplicates and printing which rows were removed.
+
+- Summarizes the data, printing the total number of observations, total
+  doses requested, approved, and shipped, as well as the first and last
+  decision dates.
+
+- Saves the processed vaccination data to a CSV file in the location
+  specified by the `PATHS` argument.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+PATHS <- list(DATA_SCRAPE_WHO_VACCINATION = "path/to/save")
+who_data <- get_WHO_vaccination_data(PATHS)
+} # }
+```

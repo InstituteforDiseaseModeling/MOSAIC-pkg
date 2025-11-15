@@ -1,0 +1,44 @@
+# Read a JSON File into an R List
+
+Reads a JSON file (optionally compressed with gzip) and converts it into
+a named R list.
+
+## Usage
+
+``` r
+read_json_to_list(file_path)
+```
+
+## Arguments
+
+- file_path:
+
+  A character string specifying the full file path to the input JSON
+  file.
+
+## Value
+
+A named R list containing the data from the JSON file.
+
+## Details
+
+The function first verifies that the specified file exists. If the file
+name ends with ".gz" (ignoring case), it is assumed to be gzipped and is
+read using a gzfile connection. Otherwise, the file is read directly.
+The JSON text is then parsed with
+[`jsonlite::fromJSON()`](https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html)
+into an R list.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+  # Read from a plain JSON file.
+  data_list <- read_json_to_list("output.json")
+  print(data_list)
+
+  # Read from a gzipped JSON file.
+  data_list_gz <- read_json_to_list("output.json.gz")
+  print(data_list_gz)
+} # }
+```

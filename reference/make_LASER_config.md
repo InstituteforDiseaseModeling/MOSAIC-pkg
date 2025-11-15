@@ -1,0 +1,562 @@
+# Create a Configuration File for LASER
+
+This function generates a JSON/HDF5/YAML configuration file to be used
+as LASER model simulation parameters. It validates all input parameters
+and, if an output file path is provided, writes the parameters to a
+file. The file extension determines which output format is used:
+
+- .json or .json.gz → written with write_list_to_json,
+
+- .h5, or .h5.gz → written with write_list_to_hdf5,
+
+- .yaml or .yaml.gz → written with write_list_to_yaml.
+
+## Usage
+
+``` r
+make_LASER_config(
+  output_file_path = NULL,
+  seed = NULL,
+  date_start = NULL,
+  date_stop = NULL,
+  location_name = NULL,
+  N_j_initial = NULL,
+  S_j_initial = NULL,
+  E_j_initial = NULL,
+  I_j_initial = NULL,
+  R_j_initial = NULL,
+  V1_j_initial = NULL,
+  V2_j_initial = NULL,
+  prop_S_initial = NULL,
+  prop_E_initial = NULL,
+  prop_I_initial = NULL,
+  prop_R_initial = NULL,
+  prop_V1_initial = NULL,
+  prop_V2_initial = NULL,
+  b_jt = NULL,
+  d_jt = NULL,
+  nu_1_jt = NULL,
+  nu_2_jt = NULL,
+  phi_1 = NULL,
+  phi_2 = NULL,
+  omega_1 = NULL,
+  omega_2 = NULL,
+  iota = NULL,
+  gamma_1 = NULL,
+  gamma_2 = NULL,
+  epsilon = NULL,
+  mu_jt = NULL,
+  mu_j_baseline = NULL,
+  mu_j_slope = NULL,
+  mu_j_epidemic_factor = NULL,
+  rho = NULL,
+  sigma = NULL,
+  chi_endemic = NULL,
+  chi_epidemic = NULL,
+  epidemic_threshold = NULL,
+  delta_reporting_cases = NULL,
+  delta_reporting_deaths = NULL,
+  longitude = NULL,
+  latitude = NULL,
+  mobility_omega = NULL,
+  mobility_gamma = NULL,
+  tau_i = NULL,
+  beta_j0_tot = NULL,
+  p_beta = NULL,
+  beta_j0_hum = NULL,
+  a_1_j = NULL,
+  a_2_j = NULL,
+  b_1_j = NULL,
+  b_2_j = NULL,
+  p = 365L,
+  alpha_1 = NULL,
+  alpha_2 = NULL,
+  beta_j0_env = NULL,
+  theta_j = NULL,
+  psi_jt = NULL,
+  psi_star_a = NULL,
+  psi_star_b = NULL,
+  psi_star_z = NULL,
+  psi_star_k = NULL,
+  zeta_1 = NULL,
+  zeta_2 = NULL,
+  kappa = NULL,
+  decay_days_short = NULL,
+  decay_days_long = NULL,
+  decay_shape_1 = NULL,
+  decay_shape_2 = NULL,
+  reported_cases = NULL,
+  reported_deaths = NULL,
+  sigfigs = 8
+)
+```
+
+## Arguments
+
+- output_file_path:
+
+  A character string representing the full file path of the output file.
+  Must have a .json, .json.gz, .h5, .hdf5, .h5.gz, .yaml, or .yaml.gz
+  extension. If NULL, no file is written and the parameters are
+  returned.
+
+- seed:
+
+  Integer scalar giving the random seed value for the simulation run.
+
+  ### Initialization
+
+- date_start:
+
+  Start date for the simulation period in "YYYY-MM-DD" format. If
+  provided as a character string, it will be converted to a Date object.
+
+- date_stop:
+
+  End date for the simulation period in "YYYY-MM-DD" format. If provided
+  as a character string, it will be converted to a Date object.
+
+- location_name:
+
+  A character vector giving the names of each metapopulation location.
+  The order and names here must match those used in the initial
+  population vectors.
+
+- N_j_initial:
+
+  A named numeric or integer vector of length equal to `location_name`
+  giving the total initial population size for each location. Note that
+  total population size must be the sum of all model compartments.
+
+- S_j_initial:
+
+  A named numeric or integer vector of length equal to location_name
+  giving the starting number of susceptible individuals for each
+  location. Names must match location_name.
+
+- E_j_initial:
+
+  A named numeric or integer vector of length equal to location_name
+  giving the starting number of exposed individuals for each location.
+  Names must match location_name.
+
+- I_j_initial:
+
+  A named numeric or integer vector of length equal to location_name
+  giving the starting number of infected individuals for each location.
+  Names must match location_name.
+
+- R_j_initial:
+
+  A named numeric or integer vector of length equal to location_name
+  giving the starting number of recovered individuals for each location.
+  Names must match location_name.
+
+- V1_j_initial:
+
+  A named numeric or integer vector of length equal to location_name
+  giving the starting number of individuals in vaccine compartment V1
+  for each location. Names must match location_name.
+
+- V2_j_initial:
+
+  A named numeric or integer vector of length equal to location_name
+  giving the starting number of individuals in vaccine compartment V2
+  for each location. Names must match location_name.
+
+- prop_S_initial:
+
+  Optional. A named numeric vector of length equal to location_name
+  giving the starting proportion of susceptible individuals for each
+  location. Values must be in `[0,1]`. Names must match location_name.
+  These proportion fields are provided for analysis convenience but are
+  not required by the LASER model.
+
+- prop_E_initial:
+
+  Optional. A named numeric vector of length equal to location_name
+  giving the starting proportion of exposed individuals for each
+  location. Values must be in `[0,1]`. Names must match location_name.
+
+- prop_I_initial:
+
+  Optional. A named numeric vector of length equal to location_name
+  giving the starting proportion of infected individuals for each
+  location. Values must be in `[0,1]`. Names must match location_name.
+
+- prop_R_initial:
+
+  Optional. A named numeric vector of length equal to location_name
+  giving the starting proportion of recovered individuals for each
+  location. Values must be in `[0,1]`. Names must match location_name.
+
+- prop_V1_initial:
+
+  Optional. A named numeric vector of length equal to location_name
+  giving the starting proportion of individuals in vaccine compartment
+  V1 for each location. Values must be in `[0,1]`. Names must match
+  location_name.
+
+- prop_V2_initial:
+
+  Optional. A named numeric vector of length equal to location_name
+  giving the starting proportion of individuals in vaccine compartment
+  V2 for each location. Values must be in `[0,1]`. Names must match
+  location_name.
+
+  ### Demographics
+
+- b_jt:
+
+  A matrix of birth rates with rows equal to length(location_name) and
+  columns equal to the daily sequence from date_start to date_stop.
+
+- d_jt:
+
+  A matrix of mortality rates with rows equal to length(location_name)
+  and columns equal to the daily sequence from date_start to date_stop.
+
+  ### Vaccination
+
+- nu_1_jt:
+
+  A matrix of first-dose OCV vaccinations for each location and time
+  step.
+
+- nu_2_jt:
+
+  A matrix of second-dose OCV vaccinations for each location and time
+  step.
+
+- phi_1:
+
+  Effectiveness of one dose of OCV (numeric in \[0, 1\]).
+
+- phi_2:
+
+  Effectiveness of two doses of OCV (numeric in \[0, 1\]).
+
+- omega_1:
+
+  Waning immunity rate for one dose (numeric \>= 0).
+
+- omega_2:
+
+  Waning immunity rate for two doses (numeric \>= 0).
+
+  ### Infection dynamics
+
+- iota:
+
+  Incubation period (numeric \> 0).
+
+- gamma_1:
+
+  Recovery rate for severe infection (numeric \>= 0).
+
+- gamma_2:
+
+  Recovery rate for mild infection (numeric \>= 0).
+
+- epsilon:
+
+  Waning immunity rate (numeric \>= 0).
+
+- mu_jt:
+
+  A matrix of time-varying probabilities of mortality due to infection,
+  with rows equal to length(location_name) and columns equal to
+  length(t). All values must be numeric and between 0 and 1. If
+  mu_j_baseline is provided with other IFR parameters, mu_jt can be
+  generated using calc_deaths_from_infections().
+
+- mu_j_baseline:
+
+  Baseline infection fatality ratio for threshold-dependent IFR model.
+  Numeric vector of length(location_name). Values must be in \[0, 1\].
+
+- mu_j_slope:
+
+  Temporal trend in baseline IFR (proportion change over simulation
+  period). Numeric vector of length(location_name). Default is 0 (no
+  temporal trend).
+
+- mu_j_epidemic_factor:
+
+  Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50%
+  increase). Numeric vector of length(location_name). Must be \>= 0.
+
+  ### Observation Processes
+
+- rho:
+
+  Proportion of true infections (numeric in \[0, 1\]).
+
+- sigma:
+
+  Proportion of symptomatic infections (numeric in \[0, 1\]).
+
+- chi_endemic:
+
+  Positive predictive value among suspected cases during endemic periods
+  (numeric in (0, 1\]).
+
+- chi_epidemic:
+
+  Positive predictive value among suspected cases during epidemic
+  periods (numeric in (0, 1\]).
+
+- epidemic_threshold:
+
+  Incidence threshold (infections per capita) for epidemic definition.
+  Used for both case reporting and IFR threshold models. Numeric in \[0,
+  1\].
+
+- delta_reporting_cases:
+
+  Infection-to-case reporting delay in days (non-negative integer).
+
+- delta_reporting_deaths:
+
+  Infection-to-death reporting delay in days (non-negative integer).
+
+  ### Spatial model
+
+- longitude:
+
+  A numeric vector of longitudes for each location. Must be same length
+  as location_name.
+
+- latitude:
+
+  A numeric vector of latitudes for each location. Must be same length
+  as location_name.
+
+- mobility_omega:
+
+  Exponent weight for destination population in the gravity mobility
+  model. Must be numeric ≥ 0.
+
+- mobility_gamma:
+
+  Exponent weight for distance decay in the gravity mobility model. Must
+  be numeric ≥ 0.
+
+- tau_i:
+
+  Departure probability for each origin location (numeric vector of
+  length(location_name) in \[0, 1\]).
+
+  ### Force of Infection (human-to-human)
+
+- beta_j0_tot:
+
+  Total baseline transmission rate (human + environmental). Optional
+  numeric vector of length(location_name). If provided with p_beta, used
+  to derive beta_j0_hum and beta_j0_env.
+
+- p_beta:
+
+  Proportion of total transmission that is human-to-human (0-1).
+  Optional numeric vector of length(location_name). If provided with
+  beta_j0_tot, used to derive beta_j0_hum and beta_j0_env.
+
+- beta_j0_hum:
+
+  Baseline human-to-human transmission rate (numeric vector of
+  length(location_name)). If beta_j0_tot and p_beta are provided, this
+  will be validated against beta_j0_tot \* p_beta.
+
+- a_1_j:
+
+  Vector of sine amplitude coefficients (1st harmonic) for each
+  location. Numeric, length = length(location_name).
+
+- a_2_j:
+
+  Vector of sine amplitude coefficients (2nd harmonic) for each
+  location. Numeric, length = length(location_name).
+
+- b_1_j:
+
+  Vector of cosine amplitude coefficients (1st harmonic) for each
+  location. Numeric, length = length(location_name).
+
+- b_2_j:
+
+  Vector of cosine amplitude coefficients (2nd harmonic) for each
+  location. Numeric, length = length(location_name).
+
+- p:
+
+  Period of the seasonal forcing function. Scalar numeric \> 0. Default
+  is 365 for daily annual seasonality.
+
+- alpha_1:
+
+  Transmission parameter for mixing (numeric in \[0, 1\]).
+
+- alpha_2:
+
+  Transmission parameter for density dependence (numeric in \[0, 1\]).
+
+  ### Force of Infection (environment-to-human)
+
+- beta_j0_env:
+
+  Baseline environment-to-human transmission rate (numeric vector of
+  length(location_name)). If beta_j0_tot and p_beta are provided, this
+  will be validated against beta_j0_tot \* (1 - p_beta).
+
+- theta_j:
+
+  Proportion with adequate WASH (numeric vector of length(location_name)
+  in \[0, 1\]).
+
+- psi_jt:
+
+  Matrix of environmental suitability values (matrix with rows =
+  length(location_name) and columns equal to the daily sequence from
+  date_start to date_stop).
+
+- psi_star_a:
+
+  Shape/gain parameter for logit calibration of psi_jt (numeric vector
+  of length(location_name) \> 0). Values \> 1 sharpen peaks, values \< 1
+  flatten peaks. Default 1.0 (no transformation).
+
+- psi_star_b:
+
+  Scale/offset parameter for logit calibration of psi_jt (numeric vector
+  of length(location_name)). Shifts baseline up/down on logit scale.
+  Default 0.0 (no offset).
+
+- psi_star_z:
+
+  Smoothing weight for causal EWMA of calibrated psi_jt (numeric vector
+  of length(location_name) in (0,1\]). 1.0 = no smoothing, \< 1.0 =
+  apply smoothing. Default 1.0 (no smoothing).
+
+- psi_star_k:
+
+  Time offset in days for psi_jt calibration (numeric vector of
+  length(location_name)). Positive values = forward/delay, negative
+  values = backward/advance. Default 0.0 (no offset).
+
+- zeta_1:
+
+  Shedding rate (numeric \> 0).
+
+- zeta_2:
+
+  Shedding rate (numeric \> 0; must be less than zeta_1).
+
+- kappa:
+
+  Concentration required for 50% infection (numeric \> 0).
+
+- decay_days_short:
+
+  Time constant (in days) for short-term survival of *V. cholerae* in
+  the environment. Must be \> 0 and \< decay_days_long.
+
+- decay_days_long:
+
+  Time constant (in days) for long-term survival of *V. cholerae* in the
+  environment. Must be \> 0 and \> decay_days_short.
+
+- decay_shape_1:
+
+  First shape parameter for beta distribution controlling how
+  environmental suitability maps to the decay rate of *V. cholerae* in
+  the environment. Must be numeric \> 0.
+
+- decay_shape_2:
+
+  Second shape parameter for beta distribution controlling how
+  environmental suitability maps to the decay rate of *V. cholerae* in
+  the environment. Must be numeric \> 0.
+
+  ### Reported data
+
+- reported_cases:
+
+  Matrix of daily reported cholera cases. Must be integer. NA allowed.
+  nrow=length(location_name), ncol=length(t).
+
+- reported_deaths:
+
+  Matrix of daily reported cholera deaths. Must be integer. NA allowed.
+  nrow=length(location_name), ncol=length(t).
+
+- sigfigs:
+
+  Integer; number of significant figures to round all numeric values to.
+  Default is 4.
+
+## Value
+
+Returns the validated list of parameters. If output_file_path is
+provided, the parameters are written to a file in the format determined
+by the file extension.
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+make_LASER_config(
+     output_file_path = "parameters.json",
+     seed = 123,
+     date_start = "2024-12-01",
+     date_stop = "2024-12-31",
+     location_name = c("Location A", "Location B"),
+     N_j_initial = c("Location A" = 1000, "Location B" = 1000),
+     S_j_initial = c("Location A" = 900, "Location B" = 900),
+     E_j_initial = c("Location A" = 0, "Location B" = 0),
+     I_j_initial = c("Location A" = 50, "Location B" = 50),
+     R_j_initial = c("Location A" = 50, "Location B" = 50),
+     V1_j_initial = c("Location A" = 0, "Location B" = 0),
+     V2_j_initial = c("Location A" = 0, "Location B" = 0),
+     b_jt = matrix(data = 0.0015, nrow = 2, ncol = 366),
+     d_jt = matrix(data = 0.001, nrow = 2, ncol = 366),
+     nu_1_jt = matrix(data = 0, nrow = 2, ncol = 366),
+     nu_2_jt = matrix(data = 0, nrow = 2, ncol = 366),
+     phi_1 = 0.8,
+     phi_2 = 0.85,
+     omega_1 = 0.1,
+     omega_2 = 0.12,
+     iota = 1.4,
+     gamma_1 = 0.2,
+     gamma_2 = 0.25,
+     epsilon = 0.05,
+     mu_jt = matrix(0.01, nrow = 2, ncol = 31),
+     rho = 0.9,
+     sigma = 0.5,
+     beta_j0_hum = c(0.05, 0.03),
+     a_1_j = c(0.02, 0.02),
+     a_2_j = c(0.01, 0.01),
+     b_1_j = c(0.03, 0.03),
+     b_2_j = c(0.01, 0.01),
+     p     = 365,
+     longitude = c(36.8, 37.0),
+     latitude = c(-1.3, -1.2),
+     mobility_omega = 1.0,
+     mobility_gamma = 2.0,
+     tau_i = c(0.1, 0.2),
+     alpha_1 = 0.95,
+     alpha_2 = 1,
+     beta_j0_env = c(0.02, 0.04),
+     theta_j = c(0.6, 0.7),
+     psi_jt = matrix(data = 0, nrow = 2, ncol = 366),
+     zeta_1 = 0.5,
+     zeta_2 = 0.4,
+     kappa = 10^5,
+     decay_days_short  = 3,
+     decay_days_long   = 90,
+     decay_shape_1     = 1,
+     decay_shape_2     = 1,
+     reported_cases    = matrix(NA, nrow=2, ncol=366),
+     reported_deaths   = matrix(NA, nrow=2, ncol=366)
+)
+} # }
+```

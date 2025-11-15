@@ -1,0 +1,185 @@
+# Plot Stochastic Model Fit with Parameter and Stochastic Uncertainty
+
+Runs multiple simulations with both parameter uncertainty (different
+parameter sets) and stochastic uncertainty (different random seeds) to
+create timeseries plots showing median predictions with comprehensive
+uncertainty envelopes.
+
+## Usage
+
+``` r
+plot_model_fit_stochastic_param(
+  configs = NULL,
+  config = NULL,
+  parameter_seeds = NULL,
+  parameter_weights = NULL,
+  n_simulations_per_config = 30,
+  PATHS = NULL,
+  priors = NULL,
+  sampling_args = list(),
+  output_dir,
+  envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+  save_predictions = FALSE,
+  parallel = FALSE,
+  n_cores = NULL,
+  root_dir = NULL,
+  verbose = TRUE,
+  plot_decomposed = FALSE
+)
+```
+
+## Arguments
+
+- configs:
+
+  List of pre-sampled configuration objects. If provided, these
+  configurations will be used directly. Must be a list of valid config
+  objects.
+
+- config:
+
+  Base configuration object for internal parameter sampling. Required if
+  configs is NULL and parameter_seeds is provided.
+
+- parameter_seeds:
+
+  Numeric vector of seeds for parameter sampling. Each seed will
+  generate a different parameter set using sample_parameters(). Required
+  if configs is NULL.
+
+- parameter_weights:
+
+  Numeric vector of weights for each parameter set, same length as
+  configs or parameter_seeds. Weights are used when calculating median
+  and quantiles across parameter sets. If NULL, all parameter sets are
+  weighted equally. Weights are automatically normalized to sum to 1.
+
+- n_simulations_per_config:
+
+  Integer specifying number of stochastic simulations to run for each
+  parameter configuration. Default is 30.
+
+- PATHS:
+
+  List of paths as returned by get_paths(). Required if using
+  parameter_seeds for internal sampling.
+
+- priors:
+
+  Priors object for parameter sampling. Required if using
+  parameter_seeds for internal sampling.
+
+- sampling_args:
+
+  Named list of additional arguments to pass to sample_parameters(). For
+  example: list(sample_tau_i = FALSE, sample_mobility_gamma = FALSE).
+  Default is empty list.
+
+- output_dir:
+
+  Character string specifying the directory where plots should be saved.
+  Directory will be created if it doesn't exist.
+
+- envelope_quantiles:
+
+  Numeric vector specifying the quantiles for confidence intervals.
+  Default is c(0.025, 0.25, 0.75, 0.975) for 50% and 95% CIs. Must have
+  an even number of elements to form pairs of (lower, upper) bounds.
+
+- save_predictions:
+
+  Logical indicating whether to save prediction data to CSV files.
+  Default is FALSE. If TRUE, saves predictions_ensemble_location.csv for
+  each location.
+
+- parallel:
+
+  Logical indicating whether to use parallel computation. Default is
+  FALSE. When TRUE, simulations are run in parallel across multiple
+  cores.
+
+- n_cores:
+
+  Integer specifying number of cores to use for parallel computation.
+  Default is NULL (uses detectCores() - 1). Only used when parallel =
+  TRUE.
+
+- root_dir:
+
+  Character string specifying the root directory for MOSAIC project.
+  Required when parallel = TRUE. Workers need this to initialize PATHS
+  correctly.
+
+- verbose:
+
+  Logical indicating whether to print progress messages. Default is
+  TRUE.
+
+- plot_decomposed:
+
+  Logical indicating whether to create additional plots showing
+  decomposed uncertainty. Default is FALSE.
+
+## Value
+
+Invisibly returns a list containing:
+
+- `individual`: Named list of plots for each location
+
+- `cases_faceted`: Faceted plot of cases by location (if n_locations \>
+  1)
+
+- `deaths_faceted`: Faceted plot of deaths by location (if n_locations
+  \> 1)
+
+- `simulation_stats`: Detailed statistics from all simulations
+
+- `param_configs`: List of parameter configurations used
+
+## Details
+
+This function handles two types of uncertainty:
+
+1.  **Parameter uncertainty**: Different parameter sets from calibration
+
+2.  **Stochastic uncertainty**: Random variation within each parameter
+    set
+
+The function can operate in two modes:
+
+- **Direct mode**: Provide pre-sampled configs via the configs parameter
+
+- **Sampling mode**: Provide config + parameter_seeds for internal
+  sampling
+
+The total number of simulations = length(configs) ×
+n_simulations_per_config
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# Mode 1: Using pre-sampled configurations
+configs <- list(config1, config2, config3)
+plots <- plot_model_fit_stochastic_param(
+    configs = configs,
+    n_simulations_per_config = 20,
+    output_dir = "output/plots",
+    save_predictions = TRUE
+)
+
+# Mode 2: Using parameter seeds (typical calibration workflow)
+best_seeds <- c(123, 456, 789)  # Top seeds from calibration
+plots <- plot_model_fit_stochastic_param(
+    config = base_config,
+    parameter_seeds = best_seeds,
+    n_simulations_per_config = 20,
+    PATHS = PATHS,
+    priors = priors,
+    sampling_args = list(sample_tau_i = FALSE),
+    output_dir = "output/plots",
+    save_predictions = TRUE  # Save predictions to CSV
+)
+# Saves: predictions_ensemble_ETH.csv (or other location names)
+} # }
+```

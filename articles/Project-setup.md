@@ -1,0 +1,88 @@
+# Project setup
+
+### Instructions to setup a MOSAIC project programmatically
+
+The following instructions guide you through setting up the MOSAIC
+project directory and programmatically cloning the necessary
+repositories using a Bash script.
+
+``` sh
+#!/bin/bash
+
+# Set the MOSAIC parent directory
+MOSAIC_DIR="MOSAIC"
+
+# Create the MOSAIC directory if it doesn't exist
+if [ ! -d "$MOSAIC_DIR" ]; then
+    mkdir "$MOSAIC_DIR"
+    echo "Created directory: $MOSAIC_DIR"
+fi
+
+# Change to the MOSAIC directory
+cd "$MOSAIC_DIR"
+
+# Function to clone or update a repository
+clone_or_update_repo() {
+    REPO_NAME=$1
+    REPO_URL=$2
+
+    if [ ! -d "$REPO_NAME" ]; then
+        git clone "$REPO_URL"
+        echo "Cloned $REPO_NAME repository."
+    else
+        echo "$REPO_NAME repository already exists. Pulling latest changes."
+        cd "$REPO_NAME"
+        git pull
+        cd ..
+    fi
+}
+
+# Clone or update the MOSAIC-data repository
+clone_or_update_repo "MOSAIC-data" "git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git"
+
+# Clone or update the MOSAIC-pkg repository
+clone_or_update_repo "MOSAIC-pkg" "git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git"
+
+# Clone or update the MOSAIC-docs repository
+clone_or_update_repo "MOSAIC-docs" "git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git"
+
+# Clone or update the ees-cholera-mapping repository
+clone_or_update_repo "ees-cholera-mapping" "git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git"
+
+echo "MOSAIC project setup complete."
+```
+
+``` sh
+Created directory: MOSAIC
+Cloning into 'MOSAIC-data'...
+remote: Enumerating objects: 282, done.
+remote: Counting objects: 100% (282/282), done.
+remote: Compressing objects: 100% (218/218), done.
+remote: Total 282 (delta 61), reused 280 (delta 59), pack-reused 0 (from 0)
+Receiving objects: 100% (282/282), 30.82 MiB | 21.81 MiB/s, done.
+Resolving deltas: 100% (61/61), done.
+Cloned MOSAIC-data repository.
+Cloning into 'MOSAIC-pkg'...
+remote: Enumerating objects: 695, done.
+remote: Counting objects: 100% (695/695), done.
+remote: Compressing objects: 100% (388/388), done.
+remote: Total 695 (delta 422), reused 569 (delta 296), pack-reused 0 (from 0)
+Receiving objects: 100% (695/695), 4.24 MiB | 6.23 MiB/s, done.
+Resolving deltas: 100% (422/422), done.
+Cloned MOSAIC-pkg repository.
+Cloning into 'MOSAIC-docs'...
+remote: Enumerating objects: 330, done.
+remote: Total 330 (delta 0), reused 0 (delta 0), pack-reused 330 (from 1)
+Receiving objects: 100% (330/330), 53.60 MiB | 19.46 MiB/s, done.
+Resolving deltas: 100% (102/102), done.
+Cloned MOSAIC-docs repository.
+Cloning into 'ees-cholera-mapping'...
+remote: Enumerating objects: 281, done.
+remote: Counting objects: 100% (24/24), done.
+remote: Compressing objects: 100% (19/19), done.
+remote: Total 281 (delta 6), reused 9 (delta 4), pack-reused 257 (from 1)
+Receiving objects: 100% (281/281), 169.76 KiB | 1.40 MiB/s, done.
+Resolving deltas: 100% (122/122), done.
+Cloned ees-cholera-mapping repository.
+MOSAIC project setup complete.
+```
