@@ -1,0 +1,498 @@
+---
+title: "Installation"
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+MOSAIC offers three installation configurations to match different user needs. Choose the setup that best fits your workflow:
+
+| Configuration | Time | Who It's For | What You Need |
+|--------------|------|--------------|---------------|
+| **Quick Start** | 5 min | Run pre-configured models | R + internet |
+| **Standard Setup** | 15 min | Process data & estimate parameters | R + git + system libs |
+| **Developer Setup** | 20 min | Contribute code & full development | All of the above |
+
+**Most users should start with Quick Start.** You can always upgrade to Standard or Developer setup later if needed.
+
+---
+
+## Configuration A: Quick Start (Recommended)
+
+### Who This Is For
+
+- Users who want to run MOSAIC models immediately
+- Researchers exploring cholera transmission modeling
+- Anyone learning how MOSAIC works
+
+### What You'll Be Able To Do
+
+✅ Run simulations with pre-configured models
+✅ Create custom model configurations
+✅ Run single or multi-location simulations
+✅ Use pre-computed parameter estimates
+✅ Basic visualization of results
+
+### What You Won't Be Able To Do
+
+❌ Process raw surveillance data
+❌ Re-estimate model parameters from data
+❌ Regenerate mobility matrices
+❌ Update climate or demographic data
+
+*Note: These capabilities require Standard Setup (Configuration B)*
+
+### Installation Steps
+
+#### Step 1: Install R Package
+
+```{r quick-install}
+# Install devtools if needed
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
+
+# Install MOSAIC from GitHub
+devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
+                         dependencies = TRUE)
+```
+
+#### Step 2: Install Python Dependencies
+
+```{r quick-python}
+library(MOSAIC)
+
+# Check what's missing
+check_dependencies()
+
+# Install Python environment and laser-cholera automatically
+install_dependencies()
+```
+
+This automatically:
+- Creates a Python virtual environment
+- Installs the laser-cholera simulation engine
+- Installs all Python dependencies
+- Configures everything to work together
+
+#### Step 3: Verify Installation
+
+```{r quick-verify}
+# Test with a simple 2-location simulation
+config <- MOSAIC::config_default
+results <- run_LASER(config, n_sim = 2, seed = 123)
+
+# If this runs without errors, you're ready!
+```
+
+### What Gets Installed
+
+With Quick Start, you get:
+- **MOSAIC R package** with 100+ functions
+- **laser-cholera Python engine** (installed as Python package, not git repo)
+- **Pre-computed data files** in `MOSAIC-pkg/model/input/`:
+  - Mobility matrices
+  - CFR estimates
+  - Vaccination data
+  - Suitability maps
+  - Seasonal patterns
+
+### Next Steps
+
+- See the "Running MOSAIC" vignette to learn model execution
+- Explore default configurations: `config_default`, `config_simulation_endemic`
+- Try customizing parameters with `make_LASER_config()`
+
+---
+
+## Configuration B: Standard Setup (Data Processing)
+
+### Who This Is For
+
+- Researchers processing cholera surveillance data
+- Users estimating model parameters from data
+- Analysts working with custom datasets
+- Anyone who needs the full data processing pipeline
+
+### What You'll Be Able To Do
+
+Everything from Quick Start, PLUS:
+
+✅ Process raw WHO/GTFCC surveillance data (`process_*` functions)
+✅ Estimate model parameters from data (`est_*` functions)
+✅ Generate custom mobility matrices
+✅ Download and process climate data
+✅ Create publication-quality figures
+✅ Access full raw and processed datasets
+
+### Prerequisites
+
+Before starting, install these system dependencies:
+
+#### macOS
+
+```{sh std-macos}
+# Install with Homebrew
+brew install gdal proj geos udunits
+```
+
+#### Ubuntu/Debian
+
+```{sh std-ubuntu}
+sudo apt-get update
+sudo apt-get install -y \
+  gdal-bin libgdal-dev \
+  libproj-dev libgeos-dev \
+  libudunits2-dev
+```
+
+#### Windows
+
+Install [OSGeo4W](https://trac.osgeo.org/osgeo4w/) which provides GDAL, PROJ, and GEOS.
+
+### Installation Steps
+
+#### Step 1: Create MOSAIC Directory
+
+```{sh std-mkdir}
+# Create parent directory for all repositories
+mkdir -p ~/MOSAIC
+cd ~/MOSAIC
+```
+
+#### Step 2: Clone Required Repositories
+
+Clone these four repositories into the MOSAIC directory:
+
+```{sh std-clone}
+# Core R package (source installation)
+git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
+
+# Data repository (raw + processed data)
+git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
+
+# Documentation (figure outputs)
+git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
+
+# Python simulation engine (source code)
+git clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git
+```
+
+Your directory structure should now look like:
+```
+~/MOSAIC/
+├── MOSAIC-pkg/
+├── MOSAIC-data/
+├── MOSAIC-docs/
+└── laser-cholera/
+```
+
+#### Step 3: Install R Package from Source
+
+```{r std-install-pkg}
+# Navigate to MOSAIC-pkg and install from source
+setwd("~/MOSAIC/MOSAIC-pkg")
+devtools::install(dependencies = TRUE)
+```
+
+#### Step 4: Install Python Environment
+
+```{r std-python}
+library(MOSAIC)
+
+# Automatically install laser-cholera
+install_dependencies()
+
+# Verify Python setup
+check_dependencies()
+```
+
+#### Step 5: Set Root Directory
+
+The package needs to know where your repositories are:
+
+```{r std-set-root}
+# Set root to parent directory containing all repos
+set_root_directory("~/MOSAIC")
+
+# Get paths to all data directories
+PATHS <- get_paths()
+
+# Verify paths are correct
+print(PATHS$DATA_PROCESSED)
+print(PATHS$DOCS_FIGURES)
+```
+
+#### Step 6: Verify Installation
+
+```{r std-verify}
+# Test data processing capability
+print(PATHS$DATA_RAW)
+
+# Test model execution
+config <- config_default
+results <- run_LASER(config, n_sim = 2, seed = 123)
+
+# If both work, you're ready for data processing!
+```
+
+### What's Different from Quick Start
+
+With Standard Setup, you now have:
+- **Full data repositories** for processing raw data
+- **Access to `get_paths()`** for data directory management
+- **All `process_*` functions** work (they need MOSAIC-data)
+- **All `est_*` functions** work (they need processed data)
+- **Figure outputs** can be saved to MOSAIC-docs
+
+### Data Processing Workflow
+
+```{r std-workflow, eval=FALSE}
+# Set up paths
+library(MOSAIC)
+set_root_directory("~/MOSAIC")
+PATHS <- get_paths()
+
+# Process surveillance data
+process_WHO_weekly_data(PATHS)
+
+# Estimate seasonal dynamics
+seasonal_params <- est_seasonal_dynamics(PATHS)
+
+# Create figures (saved to MOSAIC-docs)
+plot_seasonal_dynamics(PATHS)
+```
+
+---
+
+## Configuration C: Developer Setup (Complete)
+
+### Who This Is For
+
+- Contributors to MOSAIC codebase
+- Developers updating data scraping tools
+- Advanced users regenerating all data from scratch
+- Anyone submitting pull requests
+
+### What You'll Be Able To Do
+
+Everything from Standard Setup, PLUS:
+
+✅ Contribute code to MOSAIC
+✅ Update web scraping tools
+✅ Regenerate all surveillance data
+✅ Run complete test suite
+✅ Build package documentation
+✅ Update pkgdown website
+
+### Additional Repository (Optional)
+
+Clone the data scraping tools (only needed if updating scraped data):
+
+```{sh dev-clone-scrape}
+cd ~/MOSAIC
+git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
+```
+
+**Note:** Most developers don't need this. It's only required if you're updating the web scraping code that pulls WHO/GTFCC surveillance data.
+
+### Development Tools
+
+#### Install Package in Development Mode
+
+```{r dev-install}
+# Install from source with development dependencies
+devtools::install("~/MOSAIC/MOSAIC-pkg", dependencies = TRUE)
+
+# Load for development (auto-reloads on changes)
+devtools::load_all("~/MOSAIC/MOSAIC-pkg")
+```
+
+#### Running Tests
+
+```{r dev-test}
+# Run all tests
+devtools::test()
+
+# Run specific test file
+testthat::test_file("tests/testthat/test-calc_spatial_correlation.R")
+
+# Check test coverage
+covr::package_coverage()
+```
+
+#### Building Documentation
+
+```{r dev-docs}
+# Generate roxygen2 documentation
+devtools::document()
+
+# Build pkgdown site
+pkgdown::build_site()
+```
+
+#### Optional: Mobility Package
+
+The `mobility` package is only needed if regenerating mobility matrices from flight data:
+
+```{r dev-mobility}
+# Install JAGS first (system dependency)
+# macOS: brew install jags
+# Ubuntu: sudo apt-get install jags
+
+# Install mobility package
+remotes::install_github("COVID-19-Mobility-Data-Network/mobility")
+
+# Most developers won't need this - pre-computed files exist
+```
+
+---
+
+## System Requirements Summary
+
+### All Configurations
+
+- **R** (>= 4.1.1)
+- **Python** (>= 3.9)
+- Internet connection for package installation
+
+### Standard & Developer Only
+
+- **Git** for cloning repositories
+- **GDAL** (>= 2.0.0) for geospatial operations
+- **PROJ** (>= 4.8.0) for map projections
+- **GEOS** (>= 3.4.0) for geometry operations
+- **UDUNITS-2** for unit conversions
+
+### Developer Only (Optional)
+
+- **JAGS** (>= 4.3.0) if using mobility package
+
+---
+
+## Troubleshooting
+
+### Python Issues
+
+```{r troubleshoot-python}
+# Check Python configuration
+reticulate::py_config()
+
+# Check if laser-cholera is available
+reticulate::py_module_available("laser_cholera")
+
+# Reset and reinstall if needed
+remove_MOSAIC_python_env()
+install_dependencies()
+```
+
+### Path Issues (Standard/Developer Setup)
+
+```{r troubleshoot-paths}
+# If get_paths() fails, check root directory
+getOption("root_directory")
+
+# Reset if needed
+set_root_directory("~/MOSAIC")
+PATHS <- get_paths()
+
+# Verify directories exist
+dir.exists(PATHS$DATA_PROCESSED)
+dir.exists(PATHS$DOCS_FIGURES)
+```
+
+### System Dependencies (Standard/Developer Setup)
+
+```{sh troubleshoot-sys}
+# Check if GDAL is installed
+gdal-config --version
+
+# Check if PROJ is installed
+proj
+
+# On macOS, ensure Homebrew packages are linked
+brew link gdal proj geos
+```
+
+---
+
+## Upgrading Between Configurations
+
+### Quick Start → Standard Setup
+
+If you started with Quick Start and now need data processing:
+
+1. Clone the additional repositories:
+   ```sh
+   cd ~/MOSAIC  # or wherever you want them
+   git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
+   git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
+   git clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git
+   git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
+   ```
+
+2. Reinstall from source:
+   ```r
+   devtools::install("~/MOSAIC/MOSAIC-pkg")
+   ```
+
+3. Set root directory:
+   ```r
+   library(MOSAIC)
+   set_root_directory("~/MOSAIC")
+   ```
+
+### Standard Setup → Developer Setup
+
+1. Clone ees-cholera-mapping (optional):
+   ```sh
+   cd ~/MOSAIC
+   git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
+   ```
+
+2. Install development dependencies:
+   ```r
+   devtools::install("~/MOSAIC/MOSAIC-pkg", dependencies = TRUE)
+   ```
+
+---
+
+## Summary Table
+
+| Feature | Quick Start | Standard Setup | Developer Setup |
+|---------|-------------|----------------|-----------------|
+| **Run models** | ✅ | ✅ | ✅ |
+| **Custom configs** | ✅ | ✅ | ✅ |
+| **Process data** | ❌ | ✅ | ✅ |
+| **Estimate parameters** | ❌ | ✅ | ✅ |
+| **Create figures** | Basic | Full | Full |
+| **Contribute code** | ❌ | ❌ | ✅ |
+| **Run tests** | ❌ | ❌ | ✅ |
+| **Build docs** | ❌ | ❌ | ✅ |
+| **Installation time** | 5 min | 15 min | 20 min |
+| **Disk space** | ~500 MB | ~5 GB | ~6 GB |
+| **Repositories needed** | 0 (pkg via GitHub) | 4 repos | 4-5 repos |
+
+---
+
+## Getting Help
+
+- **Package documentation**: `help(package = "MOSAIC")`
+- **Function help**: `?run_LASER`, `?make_LASER_config`
+- **Check dependencies**: `check_dependencies()`
+- **Report issues**: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues
+- **Website**: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/
+
+## Next Steps
+
+After installation, continue to:
+- **"Running MOSAIC"** vignette - Learn how to execute models
+- **Function reference** - Explore available functions by category
+- **Examples** - See practical use cases
