@@ -74,10 +74,18 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>Deploy MOSAIC on remote virtual machines or compute clusters using
-transportable bash scripts. All scripts are non-interactive and can be
-executed via SSH or cloud-init.</p>
-<p>Setup scripts are available in the <code>vm/</code> directory of the
+<p>This guide shows how to deploy MOSAIC on remote virtual machines or
+compute clusters for production use and large-scale simulations. MOSAIC
+provides ready-to-use bash scripts that handle all installation steps
+automatically.</p>
+<p>The deployment scripts are: - <strong>Non-interactive</strong> - Run
+without user input, perfect for automation -
+<strong>SSH-compatible</strong> - Execute remotely via
+<code>ssh user@host 'bash -s' &lt; script.sh</code> -
+<strong>Cloud-ready</strong> - Use with cloud-init or VM provisioning
+tools - <strong>Verified</strong> - Include automatic dependency
+checking</p>
+<p>All scripts are available in the <code>vm/</code> directory of the
 MOSAIC-pkg repository.</p>
 <hr>
 </div>
