@@ -35,6 +35,7 @@ mosaic_control_defaults(
   targets = NULL,
   fine_tuning = NULL,
   npe = NULL,
+  predictions = NULL,
   parallel = NULL,
   io = NULL,
   paths = NULL
@@ -115,6 +116,21 @@ mosaic_control_defaults(
   - `enable`: Enable NPE training (default: FALSE)
 
   - `weight_strategy`: NPE weight strategy (default: "continuous_all")
+
+- predictions:
+
+  List of prediction generation settings. Default is:
+
+  - `best_model_n_sims`: Stochastic runs for best model (default: 100L)
+
+  - `ensemble_n_param_sets`: Number of parameter sets in ensemble
+    (default: 50L)
+
+  - `ensemble_n_sims_per_param`: Stochastic runs per parameter set
+    (default: 10L)
+
+  Total ensemble simulations = ensemble_n_param_sets ×
+  ensemble_n_sims_per_param (e.g., 50 × 10 = 500)
 
 - parallel:
 
