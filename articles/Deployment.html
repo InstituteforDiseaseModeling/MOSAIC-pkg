@@ -92,6 +92,68 @@ Ubuntu/Debian systems.</p>
 <p><strong>Or run directly on VM:</strong></p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">bash</span> vm/setup_mosaic.sh</span></code></pre></div>
 <p><strong>Script contents:</strong></p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co">#!/bin/bash</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="bu">set</span> <span class="at">-e</span>  <span class="co"># Exit on any error</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"MOSAIC VM Setup Script"</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co"># Update system</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[1/6] Updating system packages..."</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="fu">sudo</span> apt-get update</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="fu">sudo</span> apt-get upgrade <span class="at">-y</span></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co"># Install R and dependencies</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[2/6] Installing R (&gt;= 4.1.1)..."</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> software-properties-common dirmngr</span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="fu">wget</span> <span class="at">-qO-</span> https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc <span class="kw">|</span> <span class="fu">sudo</span> tee <span class="at">-a</span> /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc</span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="fu">sudo</span> add-apt-repository <span class="st">"deb https://cloud.r-project.org/bin/linux/ubuntu </span><span class="va">$(</span><span class="ex">lsb_release</span> <span class="at">-cs</span><span class="va">)</span><span class="st">-cran40/"</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="fu">sudo</span> apt-get update</span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> r-base r-base-dev</span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co"># Install system dependencies for geospatial operations</span></span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[3/6] Installing geospatial libraries (GDAL, PROJ, GEOS)..."</span></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a>  gdal-bin libgdal-dev <span class="dt">\</span></span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a>  libproj-dev proj-bin <span class="dt">\</span></span>
+<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a>  libgeos-dev libgeos++-dev <span class="dt">\</span></span>
+<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a>  libudunits2-dev <span class="dt">\</span></span>
+<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a>  libcurl4-openssl-dev <span class="dt">\</span></span>
+<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a>  libssl-dev <span class="dt">\</span></span>
+<span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a>  libxml2-dev <span class="dt">\</span></span>
+<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a>  libfontconfig1-dev <span class="dt">\</span></span>
+<span id="cb3-32"><a href="#cb3-32" tabindex="-1"></a>  libharfbuzz-dev <span class="dt">\</span></span>
+<span id="cb3-33"><a href="#cb3-33" tabindex="-1"></a>  libfribidi-dev <span class="dt">\</span></span>
+<span id="cb3-34"><a href="#cb3-34" tabindex="-1"></a>  libfreetype6-dev <span class="dt">\</span></span>
+<span id="cb3-35"><a href="#cb3-35" tabindex="-1"></a>  libpng-dev <span class="dt">\</span></span>
+<span id="cb3-36"><a href="#cb3-36" tabindex="-1"></a>  libtiff5-dev <span class="dt">\</span></span>
+<span id="cb3-37"><a href="#cb3-37" tabindex="-1"></a>  libjpeg-dev</span>
+<span id="cb3-38"><a href="#cb3-38" tabindex="-1"></a></span>
+<span id="cb3-39"><a href="#cb3-39" tabindex="-1"></a><span class="co"># Install Python 3.9+</span></span>
+<span id="cb3-40"><a href="#cb3-40" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[4/6] Installing Python 3.9+..."</span></span>
+<span id="cb3-41"><a href="#cb3-41" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
+<span id="cb3-42"><a href="#cb3-42" tabindex="-1"></a>  python3 <span class="dt">\</span></span>
+<span id="cb3-43"><a href="#cb3-43" tabindex="-1"></a>  python3-pip <span class="dt">\</span></span>
+<span id="cb3-44"><a href="#cb3-44" tabindex="-1"></a>  python3-venv <span class="dt">\</span></span>
+<span id="cb3-45"><a href="#cb3-45" tabindex="-1"></a>  python3-dev</span>
+<span id="cb3-46"><a href="#cb3-46" tabindex="-1"></a></span>
+<span id="cb3-47"><a href="#cb3-47" tabindex="-1"></a><span class="co"># Install R packages system-wide (non-interactive)</span></span>
+<span id="cb3-48"><a href="#cb3-48" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[5/6] Installing MOSAIC R package..."</span></span>
+<span id="cb3-49"><a href="#cb3-49" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"options(repos = c(CRAN = 'https://cloud.r-project.org')); </span><span class="dt">\</span></span>
+<span id="cb3-50"><a href="#cb3-50" tabindex="-1"></a><span class="st">  if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); </span><span class="dt">\</span></span>
+<span id="cb3-51"><a href="#cb3-51" tabindex="-1"></a><span class="st">  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"</span></span>
+<span id="cb3-52"><a href="#cb3-52" tabindex="-1"></a></span>
+<span id="cb3-53"><a href="#cb3-53" tabindex="-1"></a><span class="co"># Install Python dependencies</span></span>
+<span id="cb3-54"><a href="#cb3-54" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[6/6] Installing Python dependencies..."</span></span>
+<span id="cb3-55"><a href="#cb3-55" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies()"</span></span>
+<span id="cb3-56"><a href="#cb3-56" tabindex="-1"></a></span>
+<span id="cb3-57"><a href="#cb3-57" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-58"><a href="#cb3-58" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Installation complete!"</span></span>
+<span id="cb3-59"><a href="#cb3-59" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-60"><a href="#cb3-60" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-61"><a href="#cb3-61" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verify installation with:"</span></span>
+<span id="cb3-62"><a href="#cb3-62" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"  Rscript -e </span><span class="dt">\"</span><span class="st">library(MOSAIC); MOSAIC::check_dependencies()</span><span class="dt">\"</span><span class="st">"</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
@@ -100,15 +162,42 @@ Ubuntu/Debian systems.</p>
 <p>If R &gt;= 4.1.1 is already installed on your VM, use
 <code>vm/setup_mosaic_minimal.sh</code>:</p>
 <p><strong>Execute via SSH:</strong></p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">ssh</span> user@host <span class="st">'bash -s'</span> <span class="op">&lt;</span> vm/setup_mosaic_minimal.sh</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">ssh</span> user@host <span class="st">'bash -s'</span> <span class="op">&lt;</span> vm/setup_mosaic_minimal.sh</span></code></pre></div>
 <p><strong>Script contents:</strong></p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co">#!/bin/bash</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="bu">set</span> <span class="at">-e</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"MOSAIC Minimal Setup (R pre-installed)"</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co"># System libraries</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[1/3] Installing system dependencies..."</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="fu">sudo</span> apt-get update</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>  gdal-bin libgdal-dev <span class="dt">\</span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>  libproj-dev libgeos-dev <span class="dt">\</span></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>  libudunits2-dev <span class="dt">\</span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>  python3 python3-pip python3-venv</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a></span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co"># MOSAIC R package</span></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[2/3] Installing MOSAIC R package..."</span></span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg')"</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a></span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a><span class="co"># Python dependencies</span></span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[3/3] Installing Python dependencies..."</span></span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies()"</span></span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a></span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Installation complete!"</span></span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
 <h2 id="parallel-execution">Parallel Execution<a class="anchor" aria-label="anchor" href="#parallel-execution"></a>
 </h2>
 <p>For running multiple simulations in parallel on a cluster:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Set number of cores</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>mc.cores <span class="op">=</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span></span>
@@ -131,7 +220,7 @@ Ubuntu/Debian systems.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
 </h2>
 <p><strong>Python issues:</strong></p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check Python configuration</span></span>
 <span><span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/py_config.html" class="external-link">py_config</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
