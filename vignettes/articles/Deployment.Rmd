@@ -23,23 +23,20 @@ Setup scripts are available in the `vm/` directory of the MOSAIC-pkg repository.
 The `vm/setup_mosaic.sh` script installs R, system dependencies, MOSAIC package, and Python components from scratch on Ubuntu/Debian systems.
 
 **Execute via SSH:**
-```{sh vm-setup}
+```{sh vm-setup, eval=FALSE}
 ssh user@host 'bash -s' < vm/setup_mosaic.sh
 ```
 
 **Or run directly on VM:**
-```{sh vm-direct}
+```{sh vm-direct, eval=FALSE}
 bash vm/setup_mosaic.sh
 ```
 
-**What it installs:**
-- System updates
-- R (>= 4.1.1) from CRAN
-- Geospatial libraries (GDAL, PROJ, GEOS, UDUNITS)
-- Additional dev libraries (libcurl, libssl, libxml2, etc.)
-- Python 3.9+
-- MOSAIC R package from GitHub
-- Python dependencies (laser-cholera)
+**Script contents:**
+
+```{r show-setup-script, echo=FALSE, comment='', class.source='bash'}
+cat(readLines('../../vm/setup_mosaic.sh'), sep='\n')
+```
 
 ---
 
@@ -48,14 +45,15 @@ bash vm/setup_mosaic.sh
 If R >= 4.1.1 is already installed on your VM, use `vm/setup_mosaic_minimal.sh`:
 
 **Execute via SSH:**
-```{sh vm-minimal}
+```{sh vm-minimal, eval=FALSE}
 ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
 ```
 
-**What it installs:**
-- System libraries only (GDAL, PROJ, GEOS, UDUNITS, Python)
-- MOSAIC R package
-- Python dependencies
+**Script contents:**
+
+```{r show-minimal-script, echo=FALSE, comment='', class.source='bash'}
+cat(readLines('../../vm/setup_mosaic_minimal.sh'), sep='\n')
+```
 
 ---
 
