@@ -130,62 +130,16 @@ If R \>= 4.1.1 is already installed on your VM, use
 ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
 ```
 
-**Script contents:**
+**What it does:**
 
-``` bash
-#!/bin/bash
-set -e
+This script is identical to the complete setup but skips R installation
+(step 2/6). It installs:
 
-echo "======================================"
-echo "MOSAIC Minimal Setup (R pre-installed)"
-echo "======================================"
-
-# System libraries
-echo "[1/3] Installing system dependencies..."
-sudo apt-get update
-sudo apt-get install -y \
-  gdal-bin libgdal-dev \
-  libproj-dev libgeos-dev \
-  libudunits2-dev \
-  python3 python3-pip python3-venv
-
-# MOSAIC R package
-echo "[2/3] Installing MOSAIC R package..."
-Rscript -e "remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg')"
-
-# Python dependencies
-echo "[3/3] Installing Python dependencies..."
-Rscript -e "MOSAIC::install_dependencies()"
-
-# Verify installation
-echo ""
-echo "Verifying installation..."
-Rscript -e "
-  library(MOSAIC)
-  result <- tryCatch({
-    MOSAIC::check_dependencies()
-    TRUE
-  }, error = function(e) {
-    cat('ERROR:', e\$message, '\n')
-    FALSE
-  })
-  if (!result) quit(status = 1)
-"
-
-if [ $? -eq 0 ]; then
-  echo ""
-  echo "======================================"
-  echo "Installation complete and verified!"
-  echo "======================================"
-else
-  echo ""
-  echo "======================================"
-  echo "Installation completed with errors"
-  echo "Please check the output above"
-  echo "======================================"
-  exit 1
-fi
-```
+- System libraries (GDAL, PROJ, GEOS, UDUNITS, Python)
+- MOSAIC R package from GitHub
+- Python dependencies (laser-cholera)
+- Verifies installation with
+  [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
 
 ------------------------------------------------------------------------
 
