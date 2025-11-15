@@ -40,6 +40,9 @@ results <- run_LASER(config, n_sim = 2, seed = 123)
 Clone the full repository structure for data processing and parameter
 estimation. Requires system dependencies (GDAL, PROJ, GEOS, UDUNITS).
 
+**Note**: We recommend creating a `~/MOSAIC` directory to organize all
+MOSAIC repositories in one location.
+
 **macOS:**
 
 ``` sh

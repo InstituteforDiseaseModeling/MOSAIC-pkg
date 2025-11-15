@@ -23,19 +23,39 @@ repository.
 The `vm/setup_mosaic.sh` script installs R, system dependencies, MOSAIC
 package, and Python components from scratch on Ubuntu/Debian systems.
 
-**Execute via SSH:**
+### Execution Options
+
+**Option 1: Direct from GitHub (recommended)**
+
+No local files needed - downloads and executes the latest script
+directly:
 
 ``` sh
-ssh user@host 'bash -s' < vm/setup_mosaic.sh
+curl -fsSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic.sh | ssh user@host 'bash -s'
 ```
 
-**Or run directly on VM:**
+**Option 2: From local MOSAIC repository**
+
+If you have MOSAIC-pkg cloned locally (from Standard Setup in
+Installation vignette):
 
 ``` sh
-bash vm/setup_mosaic.sh
+ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
 ```
 
-**Script contents:**
+**Option 3: Run directly on VM**
+
+If you have direct access to the VM (not via SSH):
+
+``` sh
+# Download script to VM
+wget https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic.sh
+
+# Run script
+bash setup_mosaic.sh
+```
+
+### Script Contents
 
 ``` bash
 #!/bin/bash
@@ -157,15 +177,23 @@ fi
 ## Minimal VM Setup
 
 If R \>= 4.1.1 is already installed on your VM, use
-`vm/setup_mosaic_minimal.sh`:
+`vm/setup_mosaic_minimal.sh`.
 
-**Execute via SSH:**
+### Execution Options
+
+**Option 1: Direct from GitHub (recommended)**
 
 ``` sh
-ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
+curl -fsSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic_minimal.sh | ssh user@host 'bash -s'
 ```
 
-**What it does:**
+**Option 2: From local MOSAIC repository**
+
+``` sh
+ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic_minimal.sh
+```
+
+### What it does
 
 This script is identical to the complete setup but skips R installation
 (step 2/6). It installs:
