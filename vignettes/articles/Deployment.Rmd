@@ -14,107 +14,48 @@ knitr::opts_chunk$set(
 
 Deploy MOSAIC on remote virtual machines or compute clusters using transportable bash scripts. All scripts are non-interactive and can be executed via SSH or cloud-init.
 
+Setup scripts are available in the `vm/` directory of the MOSAIC-pkg repository.
+
 ---
 
 ## Complete VM Setup
 
-Save this script as `setup_mosaic_vm.sh` and run via `ssh user@host 'bash -s' < setup_mosaic_vm.sh`
+The `vm/setup_mosaic.sh` script installs R, system dependencies, MOSAIC package, and Python components from scratch on Ubuntu/Debian systems.
 
-This script installs R, system dependencies, MOSAIC package, and Python components from scratch on Ubuntu/Debian systems.
-
+**Execute via SSH:**
 ```{sh vm-setup}
-#!/bin/bash
-set -e  # Exit on any error
-
-echo "======================================"
-echo "MOSAIC VM Setup Script"
-echo "======================================"
-
-# Update system
-echo "[1/6] Updating system packages..."
-sudo apt-get update
-sudo apt-get upgrade -y
-
-# Install R and dependencies
-echo "[2/6] Installing R (>= 4.1.1)..."
-sudo apt-get install -y software-properties-common dirmngr
-wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-sudo add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
-sudo apt-get update
-sudo apt-get install -y r-base r-base-dev
-
-# Install system dependencies for geospatial operations
-echo "[3/6] Installing geospatial libraries (GDAL, PROJ, GEOS)..."
-sudo apt-get install -y \
-  gdal-bin libgdal-dev \
-  libproj-dev proj-bin \
-  libgeos-dev libgeos++-dev \
-  libudunits2-dev \
-  libcurl4-openssl-dev \
-  libssl-dev \
-  libxml2-dev \
-  libfontconfig1-dev \
-  libharfbuzz-dev \
-  libfribidi-dev \
-  libfreetype6-dev \
-  libpng-dev \
-  libtiff5-dev \
-  libjpeg-dev
-
-# Install Python 3.9+
-echo "[4/6] Installing Python 3.9+..."
-sudo apt-get install -y \
-  python3 \
-  python3-pip \
-  python3-venv \
-  python3-dev
-
-# Install R packages system-wide (non-interactive)
-echo "[5/6] Installing MOSAIC R package..."
-sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
-  if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); \
-  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"
-
-# Install Python dependencies
-echo "[6/6] Installing Python dependencies..."
-sudo Rscript -e "MOSAIC::install_dependencies()"
-
-echo "======================================"
-echo "Installation complete!"
-echo "======================================"
-echo ""
-echo "Verify installation with:"
-echo "  Rscript -e \"library(MOSAIC); MOSAIC::check_dependencies()\""
+ssh user@host 'bash -s' < vm/setup_mosaic.sh
 ```
+
+**Or run directly on VM:**
+```{sh vm-direct}
+bash vm/setup_mosaic.sh
+```
+
+**What it installs:**
+- System updates
+- R (>= 4.1.1) from CRAN
+- Geospatial libraries (GDAL, PROJ, GEOS, UDUNITS)
+- Additional dev libraries (libcurl, libssl, libxml2, etc.)
+- Python 3.9+
+- MOSAIC R package from GitHub
+- Python dependencies (laser-cholera)
 
 ---
 
 ## Minimal VM Setup
 
-If R is already installed on your VM, use this lighter script:
+If R >= 4.1.1 is already installed on your VM, use `vm/setup_mosaic_minimal.sh`:
 
+**Execute via SSH:**
 ```{sh vm-minimal}
-#!/bin/bash
-set -e
-
-echo "Installing MOSAIC dependencies..."
-
-# System libraries
-sudo apt-get update
-sudo apt-get install -y \
-  gdal-bin libgdal-dev \
-  libproj-dev libgeos-dev \
-  libudunits2-dev \
-  python3 python3-pip python3-venv
-
-# MOSAIC R package
-Rscript -e "remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg')"
-
-# Python dependencies
-Rscript -e "MOSAIC::install_dependencies()"
-
-echo "Installation complete!"
+ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
 ```
+
+**What it installs:**
+- System libraries only (GDAL, PROJ, GEOS, UDUNITS, Python)
+- MOSAIC R package
+- Python dependencies
 
 ---
 
@@ -140,12 +81,6 @@ results <- run_LASER(
   seed = 123
 )
 ```
-
----
-
-## Azure Deployment
-
-For Azure-specific deployment, see the `azure/` directory in MOSAIC-pkg for batch execution scripts.
 
 ---
 
