@@ -761,12 +761,8 @@ run_MOSAIC <- function(config,
     control$parallel$n_cores <- 1L
   }
 
-  # Detect if progress bars should be disabled (batch job / redirected output)
-  output_redirected <- .mosaic_is_output_redirected()
-  if (output_redirected && control$parallel$progress) {
-    log_msg("Output redirected to file - disabling progress bars")
-    control$parallel$progress <- FALSE
-  }
+  # Progress bar controlled by user via control$parallel$progress
+  # (No automatic detection - user can disable if needed)
 
   # Only create cluster if n_cores > 1
   if (control$parallel$n_cores > 1L) {
