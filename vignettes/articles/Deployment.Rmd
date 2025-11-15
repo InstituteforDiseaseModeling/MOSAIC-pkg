@@ -28,17 +28,37 @@ All scripts are available in the `vm/` directory of the MOSAIC-pkg repository.
 
 The `vm/setup_mosaic.sh` script installs R, system dependencies, MOSAIC package, and Python components from scratch on Ubuntu/Debian systems.
 
-**Execute via SSH:**
-```{sh vm-setup, eval=FALSE}
-ssh user@host 'bash -s' < vm/setup_mosaic.sh
+### Execution Options
+
+**Option 1: Direct from GitHub (recommended)**
+
+No local files needed - downloads and executes the latest script directly:
+
+```{sh vm-github, eval=FALSE}
+curl -fsSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic.sh | ssh user@host 'bash -s'
 ```
 
-**Or run directly on VM:**
+**Option 2: From local MOSAIC repository**
+
+If you have MOSAIC-pkg cloned locally (from Standard Setup in Installation vignette):
+
+```{sh vm-local, eval=FALSE}
+ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
+```
+
+**Option 3: Run directly on VM**
+
+If you have direct access to the VM (not via SSH):
+
 ```{sh vm-direct, eval=FALSE}
-bash vm/setup_mosaic.sh
+# Download script to VM
+wget https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic.sh
+
+# Run script
+bash setup_mosaic.sh
 ```
 
-**Script contents:**
+### Script Contents
 
 ```{bash, code=readLines('../../vm/setup_mosaic.sh'), eval=FALSE}
 ```
@@ -47,14 +67,23 @@ bash vm/setup_mosaic.sh
 
 ## Minimal VM Setup
 
-If R >= 4.1.1 is already installed on your VM, use `vm/setup_mosaic_minimal.sh`:
+If R >= 4.1.1 is already installed on your VM, use `vm/setup_mosaic_minimal.sh`.
 
-**Execute via SSH:**
-```{sh vm-minimal, eval=FALSE}
-ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
+### Execution Options
+
+**Option 1: Direct from GitHub (recommended)**
+
+```{sh vm-minimal-github, eval=FALSE}
+curl -fsSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic_minimal.sh | ssh user@host 'bash -s'
 ```
 
-**What it does:**
+**Option 2: From local MOSAIC repository**
+
+```{sh vm-minimal-local, eval=FALSE}
+ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic_minimal.sh
+```
+
+### What it does
 
 This script is identical to the complete setup but skips R installation (step 2/6). It installs:
 
