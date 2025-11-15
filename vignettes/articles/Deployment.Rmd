@@ -12,9 +12,15 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-Deploy MOSAIC on remote virtual machines or compute clusters using transportable bash scripts. All scripts are non-interactive and can be executed via SSH or cloud-init.
+This guide shows how to deploy MOSAIC on remote virtual machines or compute clusters for production use and large-scale simulations. MOSAIC provides ready-to-use bash scripts that handle all installation steps automatically.
 
-Setup scripts are available in the `vm/` directory of the MOSAIC-pkg repository.
+The deployment scripts are:
+- **Non-interactive** - Run without user input, perfect for automation
+- **SSH-compatible** - Execute remotely via `ssh user@host 'bash -s' < script.sh`
+- **Cloud-ready** - Use with cloud-init or VM provisioning tools
+- **Verified** - Include automatic dependency checking
+
+All scripts are available in the `vm/` directory of the MOSAIC-pkg repository.
 
 ---
 
