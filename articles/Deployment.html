@@ -148,12 +148,34 @@ Ubuntu/Debian systems.</p>
 <span id="cb3-54"><a href="#cb3-54" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[6/6] Installing Python dependencies..."</span></span>
 <span id="cb3-55"><a href="#cb3-55" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies()"</span></span>
 <span id="cb3-56"><a href="#cb3-56" tabindex="-1"></a></span>
-<span id="cb3-57"><a href="#cb3-57" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-58"><a href="#cb3-58" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Installation complete!"</span></span>
-<span id="cb3-59"><a href="#cb3-59" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-60"><a href="#cb3-60" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-61"><a href="#cb3-61" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verify installation with:"</span></span>
-<span id="cb3-62"><a href="#cb3-62" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"  Rscript -e </span><span class="dt">\"</span><span class="st">library(MOSAIC); MOSAIC::check_dependencies()</span><span class="dt">\"</span><span class="st">"</span></span></code></pre></div>
+<span id="cb3-57"><a href="#cb3-57" tabindex="-1"></a><span class="co"># Verify installation</span></span>
+<span id="cb3-58"><a href="#cb3-58" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-59"><a href="#cb3-59" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verifying installation..."</span></span>
+<span id="cb3-60"><a href="#cb3-60" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"</span></span>
+<span id="cb3-61"><a href="#cb3-61" tabindex="-1"></a><span class="st">  library(MOSAIC)</span></span>
+<span id="cb3-62"><a href="#cb3-62" tabindex="-1"></a><span class="st">  result &lt;- tryCatch({</span></span>
+<span id="cb3-63"><a href="#cb3-63" tabindex="-1"></a><span class="st">    MOSAIC::check_dependencies()</span></span>
+<span id="cb3-64"><a href="#cb3-64" tabindex="-1"></a><span class="st">    TRUE</span></span>
+<span id="cb3-65"><a href="#cb3-65" tabindex="-1"></a><span class="st">  }, error = function(e) {</span></span>
+<span id="cb3-66"><a href="#cb3-66" tabindex="-1"></a><span class="st">    cat('ERROR:', e</span><span class="dt">\$</span><span class="st">message, '\n')</span></span>
+<span id="cb3-67"><a href="#cb3-67" tabindex="-1"></a><span class="st">    FALSE</span></span>
+<span id="cb3-68"><a href="#cb3-68" tabindex="-1"></a><span class="st">  })</span></span>
+<span id="cb3-69"><a href="#cb3-69" tabindex="-1"></a><span class="st">  if (!result) quit(status = 1)</span></span>
+<span id="cb3-70"><a href="#cb3-70" tabindex="-1"></a><span class="st">"</span></span>
+<span id="cb3-71"><a href="#cb3-71" tabindex="-1"></a></span>
+<span id="cb3-72"><a href="#cb3-72" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb3-73"><a href="#cb3-73" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-74"><a href="#cb3-74" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-75"><a href="#cb3-75" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation complete and verified!"</span></span>
+<span id="cb3-76"><a href="#cb3-76" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-77"><a href="#cb3-77" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-78"><a href="#cb3-78" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-79"><a href="#cb3-79" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-80"><a href="#cb3-80" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation completed with errors"</span></span>
+<span id="cb3-81"><a href="#cb3-81" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Please check the output above"</span></span>
+<span id="cb3-82"><a href="#cb3-82" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-83"><a href="#cb3-83" tabindex="-1"></a>  <span class="bu">exit</span> 1</span>
+<span id="cb3-84"><a href="#cb3-84" tabindex="-1"></a><span class="cf">fi</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
@@ -188,9 +210,34 @@ Ubuntu/Debian systems.</p>
 <span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[3/3] Installing Python dependencies..."</span></span>
 <span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies()"</span></span>
 <span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a></span>
-<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Installation complete!"</span></span>
-<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span></code></pre></div>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a><span class="co"># Verify installation</span></span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verifying installation..."</span></span>
+<span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"</span></span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a><span class="st">  library(MOSAIC)</span></span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a><span class="st">  result &lt;- tryCatch({</span></span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a><span class="st">    MOSAIC::check_dependencies()</span></span>
+<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a><span class="st">    TRUE</span></span>
+<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a><span class="st">  }, error = function(e) {</span></span>
+<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a><span class="st">    cat('ERROR:', e</span><span class="dt">\$</span><span class="st">message, '\n')</span></span>
+<span id="cb5-35"><a href="#cb5-35" tabindex="-1"></a><span class="st">    FALSE</span></span>
+<span id="cb5-36"><a href="#cb5-36" tabindex="-1"></a><span class="st">  })</span></span>
+<span id="cb5-37"><a href="#cb5-37" tabindex="-1"></a><span class="st">  if (!result) quit(status = 1)</span></span>
+<span id="cb5-38"><a href="#cb5-38" tabindex="-1"></a><span class="st">"</span></span>
+<span id="cb5-39"><a href="#cb5-39" tabindex="-1"></a></span>
+<span id="cb5-40"><a href="#cb5-40" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb5-41"><a href="#cb5-41" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb5-42"><a href="#cb5-42" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-43"><a href="#cb5-43" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation complete and verified!"</span></span>
+<span id="cb5-44"><a href="#cb5-44" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-45"><a href="#cb5-45" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb5-46"><a href="#cb5-46" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb5-47"><a href="#cb5-47" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-48"><a href="#cb5-48" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation completed with errors"</span></span>
+<span id="cb5-49"><a href="#cb5-49" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Please check the output above"</span></span>
+<span id="cb5-50"><a href="#cb5-50" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb5-51"><a href="#cb5-51" tabindex="-1"></a>  <span class="bu">exit</span> 1</span>
+<span id="cb5-52"><a href="#cb5-52" tabindex="-1"></a><span class="cf">fi</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">

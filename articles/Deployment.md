@@ -87,12 +87,34 @@ sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 echo "[6/6] Installing Python dependencies..."
 sudo Rscript -e "MOSAIC::install_dependencies()"
 
-echo "======================================"
-echo "Installation complete!"
-echo "======================================"
+# Verify installation
 echo ""
-echo "Verify installation with:"
-echo "  Rscript -e \"library(MOSAIC); MOSAIC::check_dependencies()\""
+echo "Verifying installation..."
+Rscript -e "
+  library(MOSAIC)
+  result <- tryCatch({
+    MOSAIC::check_dependencies()
+    TRUE
+  }, error = function(e) {
+    cat('ERROR:', e\$message, '\n')
+    FALSE
+  })
+  if (!result) quit(status = 1)
+"
+
+if [ $? -eq 0 ]; then
+  echo ""
+  echo "======================================"
+  echo "Installation complete and verified!"
+  echo "======================================"
+else
+  echo ""
+  echo "======================================"
+  echo "Installation completed with errors"
+  echo "Please check the output above"
+  echo "======================================"
+  exit 1
+fi
 ```
 
 ------------------------------------------------------------------------
@@ -135,9 +157,34 @@ Rscript -e "remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg')"
 echo "[3/3] Installing Python dependencies..."
 Rscript -e "MOSAIC::install_dependencies()"
 
-echo "======================================"
-echo "Installation complete!"
-echo "======================================"
+# Verify installation
+echo ""
+echo "Verifying installation..."
+Rscript -e "
+  library(MOSAIC)
+  result <- tryCatch({
+    MOSAIC::check_dependencies()
+    TRUE
+  }, error = function(e) {
+    cat('ERROR:', e\$message, '\n')
+    FALSE
+  })
+  if (!result) quit(status = 1)
+"
+
+if [ $? -eq 0 ]; then
+  echo ""
+  echo "======================================"
+  echo "Installation complete and verified!"
+  echo "======================================"
+else
+  echo ""
+  echo "======================================"
+  echo "Installation completed with errors"
+  echo "Please check the output above"
+  echo "======================================"
+  exit 1
+fi
 ```
 
 ------------------------------------------------------------------------
