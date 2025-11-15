@@ -1039,6 +1039,9 @@ run_MOSAIC <- function(config,
   log_msg("COMBINING SIMULATION OUTPUT FILES")
   log_msg(paste(rep("=", 80), collapse = ""))
 
+  # Get list of simulation files before loading
+  parquet_files <- list.files(dirs$bfrs_params, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+
   # Load and combine all simulation files
   # Default: streaming (memory-safe for large runs)
   # Override via control$io$load_method if needed
@@ -1085,7 +1088,12 @@ run_MOSAIC <- function(config,
   # Write combined simulations and clean up shards
   simulations_file <- file.path(dirs$bfrs_out, "simulations.parquet")
   .mosaic_write_parquet(results, simulations_file, control$io)
-  unlink(parquet_files)
+
+  # Delete individual simulation files after combining
+  if (length(parquet_files) > 0) {
+    unlink(parquet_files)
+    log_msg("  Cleaned up %d individual simulation files", length(parquet_files))
+  }
 
   log_msg("  Combined simulations saved: %s", basename(simulations_file))
 
