@@ -407,8 +407,8 @@ plot_model_convergence_status <- function(results_dir,
     if (verbose) message("Successfully processed ", nrow(metrics_data), " metrics")
 
     # --- Create plot ------------------------------------------------------------
-    # Increased height to accommodate parameter table
-    pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 11)
+    # Increased height to accommodate parameter table and footer
+    pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 14)
 
     # Set up plot area with minimal margins (reduced bottom margin since no URL)
     par(mar = c(2, 1, 3, 1), xpd = TRUE, family = "sans")
@@ -457,8 +457,9 @@ plot_model_convergence_status <- function(results_dir,
          col = "white", font = 2, cex = 1.2)
 
     # Table layout (wider margins for larger page)
+    # Main table: compact rows to leave room for parameter table at bottom
     table_top <- 0.82
-    table_bottom <- 0.25
+    table_bottom <- 0.48
     table_left <- 0.05
     table_right <- 0.95
 
@@ -576,9 +577,9 @@ plot_model_convergence_status <- function(results_dir,
 
         # Only show table if there are failing parameters or if less than 100% pass
         if (nrow(params_below) > 0 || n_pass < n_params) {
-            # Position for parameter table
-            param_table_top <- 0.45
-            param_table_height <- min(0.25, 0.02 + nrow(params_below) * 0.018)  # Dynamic height
+            # Position for parameter table (below main diagnostics table)
+            param_table_top <- table_bottom - 0.06  # Position below main table with smaller gap
+            param_table_height <- min(0.30, 0.025 + nrow(params_below) * 0.018)  # Dynamic height
             param_table_bottom <- param_table_top - param_table_height
 
             # Add section header
@@ -695,10 +696,10 @@ plot_model_convergence_status <- function(results_dir,
              adj = 0, cex = 0.8, col = col_text_secondary)
     }
 
-    # Footer with timestamp
+    # Footer with timestamp (positioned at very bottom)
     timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
     footer_text <- paste0("Generated: ", timestamp)
-    text(0.5, 0.04, footer_text, cex = 0.7, col = col_text_secondary)
+    text(0.5, 0.02, footer_text, cex = 0.7, col = col_text_secondary)
 
     dev.off()
 

@@ -1100,7 +1100,8 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
       psi_calibrated <- calc_psi_star(
         psi = psi_timeseries,
         a = a, b = b, z = z, k = k,
-        fill_method = "locf"
+        fill_method = "locf",
+        warn_k_rounding = FALSE  # k is sampled from continuous prior, rounding is expected
       )
 
       # Validate calibration result

@@ -243,11 +243,14 @@ plot_model_ppc <- function(model,
         # Add loess smooth
         if (length(obs_cases_valid) > 10) {
             tryCatch({
-                lo <- loess(log(obs_cases_valid + 1) ~ log(pred_cases_valid + 1), span = 0.75)
+                # Suppress numerical warnings from loess (expected with sparse/boundary data)
+                lo <- suppressWarnings(
+                    loess(log(obs_cases_valid + 1) ~ log(pred_cases_valid + 1), span = 0.75)
+                )
                 x_seq <- seq(min(log(pred_cases_valid + 1)),
                             max(log(pred_cases_valid + 1)),
                             length.out = 100)
-                lo_pred <- predict(lo, x_seq)
+                lo_pred <- suppressWarnings(predict(lo, x_seq))
 
                 if (!any(is.na(lo_pred))) {
                     lines(x_seq, lo_pred, col = col_smooth, lwd = 2.5)
@@ -286,11 +289,14 @@ plot_model_ppc <- function(model,
 
         if (length(obs_deaths_valid) > 10) {
             tryCatch({
-                lo <- loess(log(obs_deaths_valid + 1) ~ log(pred_deaths_valid + 1), span = 0.75)
+                # Suppress numerical warnings from loess (expected with sparse/boundary data)
+                lo <- suppressWarnings(
+                    loess(log(obs_deaths_valid + 1) ~ log(pred_deaths_valid + 1), span = 0.75)
+                )
                 x_seq <- seq(min(log(pred_deaths_valid + 1)),
                             max(log(pred_deaths_valid + 1)),
                             length.out = 100)
-                lo_pred <- predict(lo, x_seq)
+                lo_pred <- suppressWarnings(predict(lo, x_seq))
 
                 if (!any(is.na(lo_pred))) {
                     lines(x_seq, lo_pred, col = col_smooth, lwd = 2.5)
@@ -445,11 +451,14 @@ plot_model_ppc <- function(model,
             # Add loess smooth
             if (sum(valid_resid) > 10) {
                 tryCatch({
-                    lo <- loess(residuals_cases[valid_resid] ~ obs_cases_flat[valid_resid], span = 0.75)
+                    # Suppress numerical warnings from loess (expected with sparse/boundary data)
+                    lo <- suppressWarnings(
+                        loess(residuals_cases[valid_resid] ~ obs_cases_flat[valid_resid], span = 0.75)
+                    )
                     x_seq <- seq(min(obs_cases_flat[valid_resid]),
                                 max(obs_cases_flat[valid_resid]),
                                 length.out = 100)
-                    lo_pred <- predict(lo, x_seq)
+                    lo_pred <- suppressWarnings(predict(lo, x_seq))
                     if (!any(is.na(lo_pred))) {
                         lines(x_seq, lo_pred, col = col_smooth, lwd = 2.5)
                     }
@@ -486,11 +495,14 @@ plot_model_ppc <- function(model,
 
             if (sum(valid_resid) > 10) {
                 tryCatch({
-                    lo <- loess(residuals_deaths[valid_resid] ~ obs_deaths_flat[valid_resid], span = 0.75)
+                    # Suppress numerical warnings from loess (expected with sparse/boundary data)
+                    lo <- suppressWarnings(
+                        loess(residuals_deaths[valid_resid] ~ obs_deaths_flat[valid_resid], span = 0.75)
+                    )
                     x_seq <- seq(min(obs_deaths_flat[valid_resid]),
                                 max(obs_deaths_flat[valid_resid]),
                                 length.out = 100)
-                    lo_pred <- predict(lo, x_seq)
+                    lo_pred <- suppressWarnings(predict(lo, x_seq))
                     if (!any(is.na(lo_pred))) {
                         lines(x_seq, lo_pred, col = col_smooth, lwd = 2.5)
                     }
@@ -526,11 +538,14 @@ plot_model_ppc <- function(model,
 
             if (sum(valid_time) > 10) {
                 tryCatch({
-                    lo <- loess(residuals_cases[valid_time] ~ time_vec[valid_time], span = 0.3)
+                    # Suppress numerical warnings from loess (expected with sparse/boundary data)
+                    lo <- suppressWarnings(
+                        loess(residuals_cases[valid_time] ~ time_vec[valid_time], span = 0.3)
+                    )
                     x_seq <- seq(min(time_vec[valid_time]),
                                 max(time_vec[valid_time]),
                                 length.out = 200)
-                    lo_pred <- predict(lo, x_seq)
+                    lo_pred <- suppressWarnings(predict(lo, x_seq))
                     if (!any(is.na(lo_pred))) {
                         lines(x_seq, lo_pred, col = col_smooth, lwd = 2.5)
                     }
@@ -566,11 +581,14 @@ plot_model_ppc <- function(model,
 
             if (sum(valid_time) > 10) {
                 tryCatch({
-                    lo <- loess(residuals_deaths[valid_time] ~ time_vec[valid_time], span = 0.3)
+                    # Suppress numerical warnings from loess (expected with sparse/boundary data)
+                    lo <- suppressWarnings(
+                        loess(residuals_deaths[valid_time] ~ time_vec[valid_time], span = 0.3)
+                    )
                     x_seq <- seq(min(time_vec[valid_time]),
                                 max(time_vec[valid_time]),
                                 length.out = 200)
-                    lo_pred <- predict(lo, x_seq)
+                    lo_pred <- suppressWarnings(predict(lo, x_seq))
                     if (!any(is.na(lo_pred))) {
                         lines(x_seq, lo_pred, col = col_smooth, lwd = 2.5)
                     }

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,8 +18,8 @@
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="articles/Default-MOSAIC-parameters.html">Default parameters for running MOSIAC</a></li>
-    <li><a class="dropdown-item" href="articles/Project-setup.html">Project setup</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="articles/Deployment.html">Deployment</a></li>
+    <li><a class="dropdown-item" href="articles/Installation.html">Installation</a></li>
     <li><a class="dropdown-item" href="articles/Running-MOSAIC.html">Running MOSAIC</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -193,6 +193,19 @@
 <strong>reticulate configuration</strong>: For Python environment management</li>
 <li>Use <code><a href="reference/check_dependencies.html">check_dependencies()</a></code> and <code><a href="reference/install_dependencies.html">install_dependencies()</a></code> for setup</li>
 </ul></div>
+<div class="section level3">
+<h3 id="optional-dependencies">Optional Dependencies<a class="anchor" aria-label="anchor" href="#optional-dependencies"></a></h3>
+<ul><li>
+<strong>mobility package</strong>: Optional GitHub package for regenerating mobility estimates
+<ul><li>Only needed if regenerating mobility data (most users won’t need this)</li>
+<li>Requires JAGS (&gt;= 4.3.0) system installation</li>
+<li>Pre-computed mobility files included in <code>model/input/</code>
+</li>
+<li>Install with: <code>remotes::install_github("COVID-19-Mobility-Data-Network/mobility")</code>
+</li>
+<li>Used by: <code><a href="reference/est_mobility.html">est_mobility()</a></code> function</li>
+</ul></li>
+</ul></div>
 </div>
 <div class="section level2">
 <h2 id="laser-model-configuration">LASER Model Configuration<a class="anchor" aria-label="anchor" href="#laser-model-configuration"></a></h2>
@@ -209,7 +222,7 @@
 <h3 id="model-execution-flow">Model Execution Flow<a class="anchor" aria-label="anchor" href="#model-execution-flow"></a></h3>
 <ol style="list-style-type: decimal"><li>Create/modify configuration using <code><a href="reference/make_LASER_config.html">make_LASER_config()</a></code>
 </li>
-<li>Run model via <code><a href="reference/run_LASER_model.html">run_LASER_model()</a></code> or direct Python interface</li>
+<li>Run model via <code>run_LASER_model()</code> or direct Python interface</li>
 <li>Process results using <code><a href="reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> and related functions</li>
 </ol></div>
 </div>
@@ -309,7 +322,7 @@
 <div class="section level3">
 <h3 id="key-integration-functions">Key Integration Functions<a class="anchor" aria-label="anchor" href="#key-integration-functions"></a></h3>
 <ul><li>
-<code><a href="reference/run_LASER_model.html">run_LASER_model()</a></code>: Main interface to Python simulation</li>
+<code>run_LASER_model()</code>: Main interface to Python simulation</li>
 <li>
 <code><a href="reference/calc_model_likelihood.html">calc_model_likelihood()</a></code>: Process simulation results</li>
 <li>Plotting functions: Output to <code>../MOSAIC-docs/figures/</code>

@@ -2,10 +2,10 @@ pandoc: 3.6.3
 pkgdown: 2.1.3
 pkgdown_sha: ~
 articles:
-  articles/Default-MOSAIC-parameters: Default-MOSAIC-parameters.html
-  articles/Project-setup: Project-setup.html
+  articles/Deployment: Deployment.html
+  articles/Installation: Installation.html
   articles/Running-MOSAIC: Running-MOSAIC.html
-last_built: 2025-11-15T00:24Z
+last_built: 2025-11-15T22:40Z
 urls:
   reference: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference
   article: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles

@@ -16,7 +16,7 @@
 #' @examples
 #' \dontrun{
 #' # Run with default settings:
-#' result <- run_LASER_model(
+#' result <- run_LASER(
 #'   paramfile = "path/to/laser_params.yml",
 #'   seed      = 20250418L,
 #'   visualize = FALSE,
@@ -31,7 +31,7 @@
 #' @export
 #'
 
-run_LASER_model <- function(
+run_LASER <- function(
           paramfile,
           seed      = 123L,
           visualize = FALSE,
@@ -61,3 +61,7 @@ run_LASER_model <- function(
 
      return(result)
 }
+
+#' @rdname run_LASER
+#' @export
+run_laser <- run_LASER

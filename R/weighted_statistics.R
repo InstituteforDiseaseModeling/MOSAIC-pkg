@@ -115,9 +115,12 @@ weighted_quantiles <- function(x, w, probs) {
 #' @export
 calc_weighted_mode <- function(x, w) {
   if (length(unique(x)) <= 1) return(x[1])
-  
+
   tryCatch({
-    dens <- stats::density(x, weights = w / sum(w), adjust = 1.2, n = 512)
+    # Suppress expected warning about bandwidth not using weights (known R limitation)
+    dens <- suppressWarnings(
+      stats::density(x, weights = w / sum(w), adjust = 1.2, n = 512)
+    )
     dens$x[which.max(dens$y)]
   }, error = function(e) {
     # Fallback to weighted median

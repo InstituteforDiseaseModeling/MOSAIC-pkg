@@ -237,6 +237,10 @@ plot_model_fit_stochastic <- function(config,
         # Run parallel simulations
         if (verbose) {
             message("Running ", n_simulations, " simulations on ", n_cores_use, " cores...")
+            # Simple progress bar with block character (no color codes)
+            # style = 1: Shows elapsed and remaining time with percentage
+            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+            on.exit(pbapply::pboptions(pbo), add = TRUE)
         }
 
         simulation_results <- pbapply::pblapply(
@@ -250,20 +254,18 @@ plot_model_fit_stochastic <- function(config,
         # SEQUENTIAL EXECUTION
         # ========================================================================
 
-        simulation_results <- list()
-        pb <- NULL
-
         if (verbose) {
             message("Running ", n_simulations, " simulations sequentially...")
-            pb <- utils::txtProgressBar(min = 0, max = n_simulations, style = 3)
+            # Simple progress bar with block character (no color codes)
+            # style = 1: Shows elapsed and remaining time with percentage
+            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+            on.exit(pbapply::pboptions(pbo), add = TRUE)
         }
 
-        for (i in 1:n_simulations) {
-            simulation_results[[i]] <- run_single_simulation(seeds[i], config)
-            if (verbose) utils::setTxtProgressBar(pb, i)
-        }
-
-        if (verbose) close(pb)
+        simulation_results <- pbapply::pblapply(
+            seeds,
+            function(s) run_single_simulation(s, config)
+        )
     }
 
     # ============================================================================

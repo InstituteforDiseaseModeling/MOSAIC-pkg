@@ -260,16 +260,16 @@ plot_model_convergence <- function(results_dir,
         ggplot2::geom_hline(yintercept = best_ll,
                            linetype = "dashed", color = "#2E8B57", alpha = 0.3, linewidth = 0.5) +
         # Line connecting all points
-        ggplot2::geom_line(color = "gray70", linewidth = 0.8, alpha = 0.5) +
+        ggplot2::geom_line(color = "gray70", linewidth = 0.8, alpha = 0.5, na.rm = TRUE) +
         # Non-retained points (gray)
         ggplot2::geom_point(data = plot_data[!plot_data$retained, ],
-                           color = "gray60", size = 1.2, alpha = 0.6) +
+                           color = "gray60", size = 1.2, alpha = 0.6, na.rm = TRUE) +
         # Retained points (bold black)
         ggplot2::geom_point(data = plot_data[plot_data$retained, ],
-                           color = "black", size = 2) +
+                           color = "black", size = 2, na.rm = TRUE) +
         # Best likelihood point highlighted (green with green fill)
         ggplot2::geom_point(data = plot_data[best_idx, ],
-                           color = "black", fill = "#2E8B57", size = 4, shape = 21) +
+                           color = "black", fill = "#2E8B57", size = 4, shape = 21, na.rm = TRUE) +
         # Best likelihood value label (centered below the green dot)
         ggplot2::annotate("text",
                          x = best_idx,  # Centered on best model

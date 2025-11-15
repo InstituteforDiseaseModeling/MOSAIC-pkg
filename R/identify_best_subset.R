@@ -8,7 +8,9 @@
 #'   - sim: Simulation ID
 #'   - likelihood: Log-likelihood values
 #'   - Other columns containing parameter values
-#' @param min_B Integer minimum number of simulations to include even if percentile is smaller (default: 100)
+#' @param min_B Integer minimum number of simulations to include even if percentile is smaller (default: 30)
+#'   This ensures enough samples for stable convergence metrics (ESS, A, CVw).
+#'   Can be lowered for small datasets, but values < 20 may give unstable results.
 #' @param target_ESS_B Numeric target minimum ESS for the subset using Kish formula (default: 50)
 #' @param target_A Numeric target minimum agreement index (default: 0.95)
 #' @param target_CVw Numeric target maximum coefficient of variation (default: 0.5)
@@ -35,7 +37,7 @@
 #' # Identify best subset from calibration results
 #' best_subset <- identify_best_subset(
 #'   results = calibration_results,
-#'   min_B = 100,
+#'   min_B = 30,              # Minimum 30 simulations for stable metrics
 #'   target_ESS_B = 50,
 #'   target_A = 0.95,
 #'   target_CVw = 0.5,
@@ -51,7 +53,7 @@
 #' @export
 identify_best_subset <- function(
     results,
-    min_B = 100,
+    min_B = 30,
     target_ESS_B = 50,
     target_A = 0.95,
     target_CVw = 0.5,
@@ -79,9 +81,11 @@ identify_best_subset <- function(
 
     # Filter to valid likelihoods
     valid_rows <- is.finite(results$likelihood)
-    if (sum(valid_rows) < min_B) {
+    n_valid <- sum(valid_rows)
+
+    if (n_valid < min_B) {
         stop(sprintf("Insufficient valid simulations: %d (need at least %d)",
-                     sum(valid_rows), min_B))
+                     n_valid, min_B))
     }
 
     results_valid <- results[valid_rows, ]
@@ -92,6 +96,12 @@ identify_best_subset <- function(
                 target_ESS_B, target_A, target_CVw)
         log_msg("Search range: %.3f%% to %.1f%%",
                 min_percentile, max_percentile)
+
+        # Warn if sample size is small but still acceptable
+        if (n_valid < 50) {
+            log_msg("⚠ WARNING: Small sample size (%d simulations)", n_valid)
+            log_msg("  Convergence metrics may be less stable. Consider running more simulations.")
+        }
     }
 
     # ==========================================================================

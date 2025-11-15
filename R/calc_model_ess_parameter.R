@@ -82,13 +82,23 @@ calc_model_ess_parameter <- function(
 
     # Filter to valid rows
     valid_rows <- !is.na(results[[likelihood_col]]) & is.finite(results[[likelihood_col]])
-    min_samples_required <- max(100, n_grid * 2)  # Ensure enough samples for KDE
+    n_valid <- sum(valid_rows)
 
-    if (sum(valid_rows) < min_samples_required) {
-        stop(sprintf("Insufficient valid samples: %d (need at least %d for n_grid=%d)",
-                     sum(valid_rows), min_samples_required, n_grid))
+    # Require minimum of 50 samples for reasonable KDE
+    if (n_valid < 50) {
+        stop(sprintf("Insufficient valid samples: %d (need at least 50 for ESS calculation)",
+                     n_valid))
     }
-    
+
+    # Adapt n_grid to sample size if necessary
+    # Rule of thumb: n_grid should be at most n_samples / 2
+    n_grid_adaptive <- min(n_grid, floor(n_valid / 2))
+    if (n_grid_adaptive < n_grid && verbose) {
+        log_msg("Adapting n_grid from %d to %d based on sample size (%d samples)",
+                n_grid, n_grid_adaptive, n_valid)
+    }
+    n_grid <- n_grid_adaptive
+
     results_valid <- results[valid_rows, ]
     n_samples <- nrow(results_valid)
     
