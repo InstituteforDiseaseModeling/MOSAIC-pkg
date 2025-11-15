@@ -33,13 +33,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
                                  output_dir = "./results/plots",
                                  verbose = TRUE) {
 
-  # Load required libraries
-  library(ggplot2)
-  library(dplyr)
-  library(arrow)
-  library(patchwork)
-  library(cowplot)
-  library(jsonlite)
+  # All required packages loaded via NAMESPACE
 
   # MOSAIC color palette
   prior_color <- "#4a4a4a"      # Dark gray
@@ -382,8 +376,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
     df_retained <- data.frame(x = retained_samples)
     df_best <- data.frame(x = best_samples)
 
-    # Filter out invalid weights (NA, zero, negative, or infinite) to prevent ggplot warnings
-    valid_best_idx <- is.finite(posterior_weights) & posterior_weights > 0
+    # Filter out invalid samples and weights (NA, zero, negative, or infinite) to prevent ggplot warnings
+    valid_best_idx <- is.finite(best_samples) & is.finite(posterior_weights) & posterior_weights > 0
     df_best_weighted <- data.frame(
       x = best_samples[valid_best_idx],
       w = posterior_weights[valid_best_idx]
@@ -391,7 +385,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Create retained weighted df if weights exist
     df_retained_weighted <- if (!is.null(retained_weights)) {
-      valid_retained_idx <- is.finite(retained_weights) & retained_weights > 0
+      valid_retained_idx <- is.finite(retained_samples) & is.finite(retained_weights) & retained_weights > 0
       data.frame(
         x = retained_samples[valid_retained_idx],
         w = retained_weights[valid_retained_idx]
