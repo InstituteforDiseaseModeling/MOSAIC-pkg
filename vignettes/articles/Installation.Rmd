@@ -14,11 +14,11 @@ knitr::opts_chunk$set(
 
 MOSAIC has three installation levels depending on your needs:
 
-| Setup | Purpose | Requirements |
-|-------|---------|--------------|
-| **Quick Start** | Run pre-configured models | R + internet |
-| **Standard Setup** | Process data & estimate parameters | R + git + system libraries |
-| **Developer Setup** | Contribute code & full development | All above + dev tools |
+| Setup                | Purpose                             | Requirements                 |
+|----------------------|-------------------------------------|------------------------------|
+| **Quick Start**      | Run pre-configured models           | R + internet                 |
+| **Standard Setup**   | Process data & estimate parameters  | R + git + system libraries   |
+| **Developer Setup**  | Contribute code & full development  | All above + dev tools        |
 
 Most users should start with Quick Start.
 
