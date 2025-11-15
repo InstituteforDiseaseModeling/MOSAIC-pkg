@@ -335,11 +335,11 @@ plot_model_posteriors_detail <- function(quantiles_file,
       stop("weight_best column is not numeric. Check the results data.")
     }
 
-    # Calculate ESS using perplexity method (1/sum(w^2)) directly from weights
+    # Calculate ESS using Kish formula (1/sum(w^2)) directly from weights
     n_retained <- length(retained_samples)
     n_best <- length(best_samples)
 
-    # Calculate ESS for retained samples using perplexity method
+    # Calculate ESS for retained samples using Kish formula
     if (!is.null(retained_weights)) {
       # Normalize weights (they should already be normalized, but ensure)
       w_norm_retained <- retained_weights / sum(retained_weights)
@@ -349,7 +349,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
       ess_retained <- n_retained
     }
 
-    # Calculate ESS for best subset using perplexity method
+    # Calculate ESS for best subset using Kish formula
     if (!is.null(posterior_weights) && length(posterior_weights) > 0) {
       # Normalize weights (they should already be normalized, but ensure)
       w_norm_best <- posterior_weights / sum(posterior_weights)

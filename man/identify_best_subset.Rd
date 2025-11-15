@@ -26,7 +26,7 @@ identify_best_subset(
 
 \item{min_B}{Integer minimum number of simulations to include even if percentile is smaller (default: 100)}
 
-\item{target_ESS_B}{Numeric target minimum ESS for the subset using perplexity method (default: 50)}
+\item{target_ESS_B}{Numeric target minimum ESS for the subset using Kish formula (default: 50)}
 
 \item{target_A}{Numeric target minimum agreement index (default: 0.95)}
 
