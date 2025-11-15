@@ -40,8 +40,8 @@ identify_best_subset(
 
 - target_ESS_B:
 
-  Numeric target minimum ESS for the subset using perplexity method
-  (default: 50)
+  Numeric target minimum ESS for the subset using Kish formula (default:
+  50)
 
 - target_A:
 
