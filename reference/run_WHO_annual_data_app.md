@@ -31,6 +31,11 @@ between viewing cases, deaths, or CFR and can select specific countries
 for visualization. The app generates bar plots for cases and deaths, and
 point plots with error bars for CFR.
 
+## Note
+
+This function requires the optional `shiny` package. Install with:
+`install.packages("shiny")`
+
 ## Examples
 
 ``` r

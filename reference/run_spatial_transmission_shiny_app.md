@@ -60,6 +60,11 @@ The main panel is organised as a 4 × 2 layout created with
 
   4.  WASH covariate value.
 
+## Note
+
+This function requires the optional `shiny` package. Install with:
+`install.packages("shiny")`
+
 ## Side Effects
 
 Opens a Shiny window and blocks the R session while the app is running.
