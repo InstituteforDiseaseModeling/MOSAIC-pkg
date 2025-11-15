@@ -1751,10 +1751,11 @@ run_MOSAIC <- function(config,
 
         # Generate stochastic fit plot for best model
         log_msg("Generating best model fit with stochastic uncertainty...")
+        log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
         tryCatch({
           plot_model_fit_stochastic(
             config = config_best,
-            n_simulations = 100,
+            n_simulations = control$predictions$best_model_n_sims,
             output_dir = dirs$bfrs_plots_pred,
             envelope_quantiles = c(0.025, 0.975),
             save_predictions = TRUE,
@@ -1805,12 +1806,18 @@ run_MOSAIC <- function(config,
                 min(param_weights), max(param_weights))
       }
 
+      log_msg("  Using %d stochastic simulations per parameter set",
+              control$predictions$ensemble_n_sims_per_param)
+      log_msg("  Total simulations: %d param sets × %d sims = %d",
+              length(param_seeds), control$predictions$ensemble_n_sims_per_param,
+              length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
+
       tryCatch({
         plot_model_fit_stochastic_param(
           config = config,
           parameter_seeds = param_seeds,
           parameter_weights = param_weights,
-          n_simulations_per_config = 10,
+          n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
           envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
           PATHS = PATHS,
           priors = priors,
@@ -2198,10 +2205,11 @@ run_MOSAIC <- function(config,
       log_msg("\n=== GENERATING STOCHASTIC MODEL PLOTS WITH NPE ESTIMATES ===")
 
       log_msg("Plotting model fit using NPE posterior median values...")
+      log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
 
       stochastic_plots_median <- plot_model_fit_stochastic(
         config = config_npe,
-        n_simulations = 100,
+        n_simulations = control$predictions$best_model_n_sims,
         output_dir = npe_dirs$plots,
         envelope_quantiles = c(0.025, 0.975),
         save_predictions = TRUE,
@@ -2216,7 +2224,8 @@ run_MOSAIC <- function(config,
       # Generate parameter uncertainty plots using multiple NPE posterior samples
       log_msg("\nGenerating stochastic plots with parameter uncertainty...")
 
-      n_param_sets <- 50
+      n_param_sets <- control$predictions$ensemble_n_param_sets
+      log_msg("  Using %d parameter sets from NPE posterior", n_param_sets)
       param_configs <- list()
 
       if (nrow(posterior_samples) >= n_param_sets) {
@@ -2247,10 +2256,16 @@ run_MOSAIC <- function(config,
           log_msg("  Using weighted parameter sets based on posterior probabilities")
         }
 
+        log_msg("  Using %d stochastic simulations per parameter set",
+                control$predictions$ensemble_n_sims_per_param)
+        log_msg("  Total simulations: %d param sets × %d sims = %d",
+                n_param_sets, control$predictions$ensemble_n_sims_per_param,
+                n_param_sets * control$predictions$ensemble_n_sims_per_param)
+
         stochastic_param_plots <- plot_model_fit_stochastic_param(
           configs = param_configs,
           parameter_weights = param_weights,
-          n_simulations_per_config = 10,
+          n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
           output_dir = npe_dirs$plots,
           envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
           save_predictions = TRUE,
@@ -2398,6 +2413,14 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{weight_strategy}: NPE weight strategy (default: "continuous_all")
 #'   }
 #'
+#' @param predictions List of prediction generation settings. Default is:
+#'   \itemize{
+#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 100L)
+#'     \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
+#'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
+#'   }
+#'   Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)
+#'
 #' @param parallel List of parallelization settings (infrastructure). Default is:
 #'   \itemize{
 #'     \item \code{enable}: Enable parallel execution (default: FALSE)
@@ -2481,6 +2504,7 @@ mosaic_control_defaults <- function(calibration = NULL,
                            targets = NULL,
                            fine_tuning = NULL,
                            npe = NULL,
+                           predictions = NULL,
                            parallel = NULL,
                            io = NULL,
                            paths = NULL) {
@@ -2549,6 +2573,13 @@ mosaic_control_defaults <- function(calibration = NULL,
     weight_strategy = "continuous_all"
   )
 
+  # Default prediction settings
+  default_predictions <- list(
+    best_model_n_sims = 100L,           # Stochastic runs for best model
+    ensemble_n_param_sets = 50L,        # Number of parameter sets in ensemble
+    ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
+  )
+
   # Default I/O settings
   default_io <- list(
     format = "parquet",
@@ -2558,13 +2589,14 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → targets → fine_tuning → npe → parallel → io → paths
+  # Order follows workflow: calibration → sampling → targets → fine_tuning → npe → predictions → parallel → io → paths
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
     targets = if (is.null(targets)) default_targets else modifyList(default_targets, targets),
     fine_tuning = if (is.null(fine_tuning)) default_fine_tuning else modifyList(default_fine_tuning, fine_tuning),
     npe = if (is.null(npe)) default_npe else modifyList(default_npe, npe),
+    predictions = if (is.null(predictions)) default_predictions else modifyList(default_predictions, predictions),
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),
     io = if (is.null(io)) default_io else modifyList(default_io, io),
     paths = if (is.null(paths)) default_paths else modifyList(default_paths, paths)
@@ -2619,6 +2651,11 @@ mosaic_run_defaults <- function() {
     npe = list(
       enable = FALSE,
       weight_strategy = "continuous_all"
+    ),
+    predictions = list(
+      best_model_n_sims = 100L,
+      ensemble_n_param_sets = 50L,
+      ensemble_n_sims_per_param = 10L
     ),
     io = list(
       format = "parquet",
