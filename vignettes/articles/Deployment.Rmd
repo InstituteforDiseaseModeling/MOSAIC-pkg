@@ -1,0 +1,168 @@
+---
+title: "Deployment"
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Overview
+
+Deploy MOSAIC on remote virtual machines or compute clusters using transportable bash scripts. All scripts are non-interactive and can be executed via SSH or cloud-init.
+
+---
+
+## Complete VM Setup
+
+Save this script as `setup_mosaic_vm.sh` and run via `ssh user@host 'bash -s' < setup_mosaic_vm.sh`
+
+This script installs R, system dependencies, MOSAIC package, and Python components from scratch on Ubuntu/Debian systems.
+
+```{sh vm-setup}
+#!/bin/bash
+set -e  # Exit on any error
+
+echo "======================================"
+echo "MOSAIC VM Setup Script"
+echo "======================================"
+
+# Update system
+echo "[1/6] Updating system packages..."
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# Install R and dependencies
+echo "[2/6] Installing R (>= 4.1.1)..."
+sudo apt-get install -y software-properties-common dirmngr
+wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
+sudo add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+sudo apt-get update
+sudo apt-get install -y r-base r-base-dev
+
+# Install system dependencies for geospatial operations
+echo "[3/6] Installing geospatial libraries (GDAL, PROJ, GEOS)..."
+sudo apt-get install -y \
+  gdal-bin libgdal-dev \
+  libproj-dev proj-bin \
+  libgeos-dev libgeos++-dev \
+  libudunits2-dev \
+  libcurl4-openssl-dev \
+  libssl-dev \
+  libxml2-dev \
+  libfontconfig1-dev \
+  libharfbuzz-dev \
+  libfribidi-dev \
+  libfreetype6-dev \
+  libpng-dev \
+  libtiff5-dev \
+  libjpeg-dev
+
+# Install Python 3.9+
+echo "[4/6] Installing Python 3.9+..."
+sudo apt-get install -y \
+  python3 \
+  python3-pip \
+  python3-venv \
+  python3-dev
+
+# Install R packages system-wide (non-interactive)
+echo "[5/6] Installing MOSAIC R package..."
+sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
+  if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); \
+  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"
+
+# Install Python dependencies
+echo "[6/6] Installing Python dependencies..."
+sudo Rscript -e "MOSAIC::install_dependencies()"
+
+echo "======================================"
+echo "Installation complete!"
+echo "======================================"
+echo ""
+echo "Verify installation with:"
+echo "  Rscript -e \"library(MOSAIC); MOSAIC::check_dependencies()\""
+```
+
+---
+
+## Minimal VM Setup
+
+If R is already installed on your VM, use this lighter script:
+
+```{sh vm-minimal}
+#!/bin/bash
+set -e
+
+echo "Installing MOSAIC dependencies..."
+
+# System libraries
+sudo apt-get update
+sudo apt-get install -y \
+  gdal-bin libgdal-dev \
+  libproj-dev libgeos-dev \
+  libudunits2-dev \
+  python3 python3-pip python3-venv
+
+# MOSAIC R package
+Rscript -e "remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg')"
+
+# Python dependencies
+Rscript -e "MOSAIC::install_dependencies()"
+
+echo "Installation complete!"
+```
+
+---
+
+## Parallel Execution
+
+For running multiple simulations in parallel on a cluster:
+
+```{r vm-parallel}
+# Set number of cores
+library(MOSAIC)
+options(mc.cores = parallel::detectCores() - 1)
+
+# Run parallel simulations
+ctrl <- mosaic_control(
+  parallel = TRUE,
+  n_cores = parallel::detectCores() - 1
+)
+
+results <- run_LASER(
+  config = config_default,
+  control = ctrl,
+  n_sim = 100,
+  seed = 123
+)
+```
+
+---
+
+## Azure Deployment
+
+For Azure-specific deployment, see the `azure/` directory in MOSAIC-pkg for batch execution scripts.
+
+---
+
+## Troubleshooting
+
+**Python issues:**
+```{r troubleshoot}
+# Check Python configuration
+reticulate::py_config()
+
+# Reset if needed
+remove_MOSAIC_python_env()
+install_dependencies()
+```
+
+---
+
+## Next Steps
+
+After deployment, see the **"Running MOSAIC"** vignette to learn model execution.
