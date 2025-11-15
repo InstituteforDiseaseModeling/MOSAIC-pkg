@@ -1,0 +1,138 @@
+# Installation
+
+## Overview
+
+MOSAIC has three installation levels depending on your needs:
+
+| Setup           | Purpose                            | Requirements               |
+|:----------------|:-----------------------------------|:---------------------------|
+| **Quick Start** | Run pre-configured models          | R + internet               |
+| **Standard**    | Process data & estimate parameters | R + git + system libraries |
+| **Developer**   | Contribute code & full development | All above + dev tools      |
+
+Most users should start with Quick Start.
+
+------------------------------------------------------------------------
+
+## Quick Start
+
+Install the R package from GitHub and let it automatically set up Python
+dependencies. This is sufficient for running models with pre-configured
+parameters.
+
+``` r
+# Install MOSAIC R package
+devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg")
+
+# Load and install Python dependencies
+library(MOSAIC)
+install_dependencies()
+
+# Verify installation
+config <- config_default
+results <- run_LASER(config, n_sim = 2, seed = 123)
+```
+
+------------------------------------------------------------------------
+
+## Standard Setup
+
+Clone the full repository structure for data processing and parameter
+estimation. Requires system dependencies (GDAL, PROJ, GEOS, UDUNITS).
+
+**macOS:**
+
+``` sh
+brew install gdal proj geos udunits
+```
+
+**Ubuntu/Debian:**
+
+``` sh
+sudo apt-get install -y gdal-bin libgdal-dev libproj-dev libgeos-dev libudunits2-dev
+```
+
+**Clone repositories:**
+
+``` sh
+mkdir -p ~/MOSAIC && cd ~/MOSAIC
+git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
+git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
+git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
+git clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git
+```
+
+**Install and configure:**
+
+``` r
+# Install R package from source
+devtools::install("~/MOSAIC/MOSAIC-pkg")
+
+# Set up Python and paths
+library(MOSAIC)
+install_dependencies()
+set_root_directory("~/MOSAIC")
+
+# Verify
+PATHS <- get_paths()
+config <- config_default
+results <- run_LASER(config, n_sim = 2, seed = 123)
+```
+
+------------------------------------------------------------------------
+
+## Developer Setup
+
+Same as Standard Setup, plus optional data scraping repository and
+development tools.
+
+**Clone additional repository (optional):**
+
+``` sh
+cd ~/MOSAIC
+git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
+```
+
+**Development workflow:**
+
+``` r
+# Load for development
+devtools::load_all("~/MOSAIC/MOSAIC-pkg")
+
+# Run tests
+devtools::test()
+
+# Build documentation
+devtools::document()
+pkgdown::build_site()
+```
+
+------------------------------------------------------------------------
+
+## Troubleshooting
+
+**Python issues:**
+
+``` r
+# Check Python configuration
+reticulate::py_config()
+
+# Reset if needed
+remove_MOSAIC_python_env()
+install_dependencies()
+```
+
+**Path issues (Standard/Developer only):**
+
+``` r
+# Check and reset root directory
+getOption("root_directory")
+set_root_directory("~/MOSAIC")
+```
+
+------------------------------------------------------------------------
+
+## Next Steps
+
+- **Running MOSAIC**: Learn how to execute models and work with outputs
+- **Deployment**: Set up MOSAIC on remote VMs or compute clusters

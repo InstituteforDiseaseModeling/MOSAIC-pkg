@@ -1,21 +1,197 @@
 # Running MOSAIC
 
+## Overview
+
+MOSAIC (Metapopulation Outbreak Simulation with Agent-based
+Implementation for Cholera) is a modeling framework that simulates
+cholera transmission dynamics across Sub-Saharan Africa. The framework
+integrates the LASER (Light-agent Spatial model for ERadication) cholera
+transmission model with extensive data processing and calibration tools.
+
+## Installation
+
+First, install the MOSAIC R package from GitHub:
+
 ``` r
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
 
-if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
+                         dependencies = TRUE,
+                         force = TRUE)
+```
 
-devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", dependencies = TRUE, force = TRUE)
+## Quick Start
 
+### Load the package
+
+``` r
 library(MOSAIC)
+```
 
+### Check dependencies
+
+MOSAIC requires Python and the `laser-cholera` package. Check that all
+dependencies are installed:
+
+``` r
+# Check if Python environment and laser-cholera are available
+MOSAIC::check_dependencies()
+
+# If dependencies are missing, install them:
+# MOSAIC::install_dependencies()
+```
+
+### Run a simple simulation
+
+MOSAIC provides default configurations for testing. Here’s how to run a
+basic simulation:
+
+``` r
+# Use a default configuration (2-location simulation)
+config <- MOSAIC::config_default
+
+# Run the LASER model directly via Python interface
 lc <- reticulate::import("laser_cholera.metapop.model")
-params <- MOSAIC::default_config
 
 model <- lc$run_model(
-     quiet = FALSE,
-     paramfile = params
+  quiet = FALSE,
+  paramfile = config
 )
 
-names(model$params)
-names(model$patches)
+# Examine model outputs
+names(model$params)   # Model parameters used
+names(model$patches)  # Patch-level data
 ```
+
+## Using High-Level Wrapper Functions
+
+MOSAIC provides convenient wrapper functions for running models:
+
+### Single location simulation
+
+``` r
+# Run simulation for a single location (e.g., Democratic Republic of Congo)
+results <- run_mosaic_iso(
+  iso_code = "COD",
+  date_start = "2024-01-01",
+  date_stop = "2024-12-31",
+  n_sim = 10,           # Number of stochastic replicates
+  seed = 123
+)
+
+# Results contain:
+# - Time series of cases and deaths by location
+# - Epidemiological metrics
+# - Model configuration used
+```
+
+### Multi-location simulation
+
+``` r
+# Run simulation for multiple locations
+results <- run_LASER(
+  config = MOSAIC::config_default,
+  n_sim = 10,
+  seed = 123,
+  quiet = FALSE
+)
+```
+
+## Customizing Model Configuration
+
+Create a custom configuration using
+[`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md):
+
+``` r
+# Define locations
+locations <- c("COD", "AGO", "TZA")  # DRC, Angola, Tanzania
+
+# Create custom configuration
+my_config <- make_LASER_config(
+  date_start = "2023-01-01",
+  date_stop = "2025-12-31",
+  location_name = locations,
+  # Add custom parameters here
+  verbose = TRUE
+)
+
+# Run with custom config
+results <- run_LASER(
+  config = my_config,
+  n_sim = 20,
+  seed = 456
+)
+```
+
+## Understanding Model Outputs
+
+The LASER model produces several output types:
+
+``` r
+# Time series data
+# - Daily cases and deaths by location
+# - Compartment sizes (S, E, I, R, V)
+# - Environmental contamination
+
+# Access model results
+head(model$patches[[1]])  # First location's time series
+
+# Summary statistics
+summary(results)
+```
+
+## Advanced Options with mosaic_control()
+
+For advanced users, `mosaic_control()` provides fine-grained control
+over model execution:
+
+``` r
+# Create control parameters
+ctrl <- mosaic_control(
+  parallel = TRUE,
+  n_cores = 4,
+  save_intermediate = TRUE,
+  verbose = TRUE
+)
+
+# Run with custom control
+results <- run_LASER(
+  config = my_config,
+  control = ctrl,
+  n_sim = 100
+)
+```
+
+## Visualization
+
+MOSAIC provides visualization functions for exploring results:
+
+``` r
+# Plot time series (example - function names may vary)
+# plot_model_fit(results)
+# plot_epidemic_curves(results)
+
+# Plot spatial patterns
+# plot_spatial_transmission(results)
+```
+
+## Next Steps
+
+- **Project Setup**: See the “Project setup” vignette for setting up the
+  full MOSAIC repository structure
+- **Parameter Estimation**: Explore `est_*` functions for estimating
+  model parameters from data
+- **Calibration**: Use BFRS and NPE workflows for Bayesian calibration
+- **Data Processing**: Use `process_*` functions to prepare your own
+  data
+
+## Getting Help
+
+- Package documentation:
+  [`help(package = "MOSAIC")`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference)
+- Function help: `?run_LASER`,
+  [`?make_LASER_config`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
+- Report issues:
+  <https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues>

@@ -435,11 +435,6 @@ Plotting functions
 
 Helper and utility functions
 
-- [`get_effective_aic_range_chisq()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.md)
-  [`get_effective_aic_range_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.md)
-  [`get_effective_aic_range_empirical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.md)
-  : Alternative Theoretically-Grounded Approaches for Effective AIC
-  Range
 - [`get_DMI_forecast()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast.md)
   : Get DMI (Dipole Mode Index) Forecast Data
 - [`get_DMI_forecast_from_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast_from_json.md)
@@ -751,8 +746,6 @@ Other exported functions and internal helpers
   : Convert array-wrapped JSON to clean format
 - [`combine_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/combine_vaccination_data.md)
   : Combine WHO and GTFCC Vaccination Data
-- [`compare_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compare_distributions.md)
-  : Compare beta and gamma fitting approaches
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
   : Default LASER Configuration
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
@@ -800,11 +793,6 @@ Other exported functions and internal helpers
   : Downscale Weekly Cholera Data to Daily Frequency
 - [`downscale_weekly_values()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/downscale_weekly_values.md)
   : Downscale weekly values to a daily time series
-- [`get_effective_aic_range_chisq()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.md)
-  [`get_effective_aic_range_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.md)
-  [`get_effective_aic_range_empirical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.md)
-  : Alternative Theoretically-Grounded Approaches for Effective AIC
-  Range
 - [`epidemic_peaks`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/epidemic_peaks.md)
   : Cholera Epidemic Peaks Data
 - [`est_CFR_hierarchical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.md)
@@ -889,8 +877,6 @@ Other exported functions and internal helpers
 - [`generate_country_grid_n()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/generate_country_grid_n.md)
   : Generate a Grid of Points Within a Country's Shapefile Based on
   Number of Points
-- [`generate_test_data_for_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/generate_test_data_for_ess.md)
-  : Generate Synthetic Data for Testing calc_model_ess_parameter
 - [`get_DMI_forecast()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast.md)
   : Get DMI (Dipole Mode Index) Forecast Data
 - [`get_DMI_forecast_from_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast_from_json.md)
@@ -1203,11 +1189,6 @@ Other exported functions and internal helpers
   : Set Root Directory
 - [`store_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/store_sampling_metadata.md)
   : Store Sampling Metadata in Config
-- [`test_beta_fitting()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/test_beta_fitting.md)
-  : Test the beta fitting function with vaccine effectiveness parameters
-- [`test_gamma_fitting()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/test_gamma_fitting.md)
-  : Test the gamma fitting function with vaccine effectiveness
-  parameters
 - [`train_npe()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/train_npe.md)
   : Train NPE Model
 - [`update_forecast_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_forecast_json.md)
@@ -1235,9 +1216,7 @@ Other exported functions and internal helpers
 
 ### All vignettes
 
-- [Default parameters for running
-  MOSIAC](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Default-MOSAIC-parameters.md):
-- [Project
-  setup](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Project-setup.md):
+- [Deployment](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Deployment.md):
+- [Installation](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.md):
 - [Running
   MOSAIC](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Running-MOSAIC.md):

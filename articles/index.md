@@ -2,9 +2,7 @@
 
 ### All vignettes
 
-- [Default parameters for running
-  MOSIAC](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Default-MOSAIC-parameters.md):
-- [Project
-  setup](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Project-setup.md):
+- [Deployment](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Deployment.md):
+- [Installation](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.md):
 - [Running
   MOSAIC](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Running-MOSAIC.md):

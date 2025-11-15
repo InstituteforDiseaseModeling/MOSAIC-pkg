@@ -2,8 +2,8 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/404.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/CLAUDE.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/LICENSE-text.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Default-MOSAIC-parameters.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Project-setup.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Deployment.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Installation.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/Running-MOSAIC.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/articles/index.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/authors.html</loc></url>
@@ -69,7 +69,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_sampled_parameter.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/clean_priors_json.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/combine_vaccination_data.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compare_distributions.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.html</loc></url>
@@ -102,7 +101,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_country_DEM.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/downscale_weekly_cholera_data.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/downscale_weekly_values.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/effective_aic_alternatives.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/epidemic_peaks.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_CFR_hierarchical.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_WASH_coverage.html</loc></url>
@@ -141,7 +139,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fourier_series_double.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/generate_country_grid_dist.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/generate_country_grid_n.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/generate_test_data_for_ess.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast_from_json.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_historical.html</loc></url>
@@ -292,8 +289,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_openmeteo_api_key.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/store_sampling_metadata.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/test_beta_fitting.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/test_gamma_fitting.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/train_npe.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_forecast_json.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/use_mosaic_env.html</loc></url>

@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,8 +38,8 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/Default-MOSAIC-parameters.html">Default parameters for running MOSIAC</a></li>
-    <li><a class="dropdown-item" href="../articles/Project-setup.html">Project setup</a></li>
+<li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
+    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
   </ul>
 </li>
@@ -71,25 +71,214 @@
 
     
     
+<div class="section level2">
+<h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
+</h2>
+<p>MOSAIC (Metapopulation Outbreak Simulation with Agent-based
+Implementation for Cholera) is a modeling framework that simulates
+cholera transmission dynamics across Sub-Saharan Africa. The framework
+integrates the LASER (Light-agent Spatial model for ERadication) cholera
+transmission model with extensive data processing and calibration
+tools.</p>
+</div>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<p>First, install the MOSAIC R package from GitHub:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"devtools"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"devtools"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"devtools"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"devtools"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
 <span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"InstituteforDiseaseModeling/MOSAIC-pkg"</span>, dependencies <span class="op">=</span> <span class="cn">TRUE</span>, force <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"InstituteforDiseaseModeling/MOSAIC-pkg"</span>,</span>
+<span>                         dependencies <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>                         force <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="quick-start">Quick Start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+</h2>
+<div class="section level3">
+<h3 id="load-the-package">Load the package<a class="anchor" aria-label="anchor" href="#load-the-package"></a>
+</h3>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="check-dependencies">Check dependencies<a class="anchor" aria-label="anchor" href="#check-dependencies"></a>
+</h3>
+<p>MOSAIC requires Python and the <code>laser-cholera</code> package.
+Check that all dependencies are installed:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Check if Python environment and laser-cholera are available</span></span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/check_dependencies.html">check_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
+<span><span class="co"># If dependencies are missing, install them:</span></span>
+<span><span class="co"># MOSAIC::install_dependencies()</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="run-a-simple-simulation">Run a simple simulation<a class="anchor" aria-label="anchor" href="#run-a-simple-simulation"></a>
+</h3>
+<p>MOSAIC provides default configurations for testing. Here’s how to run
+a basic simulation:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Use a default configuration (2-location simulation)</span></span>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="../reference/config_default.html">config_default</a></span></span>
 <span></span>
+<span><span class="co"># Run the LASER model directly via Python interface</span></span>
 <span><span class="va">lc</span> <span class="op">&lt;-</span> <span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/import.html" class="external-link">import</a></span><span class="op">(</span><span class="st">"laser_cholera.metapop.model"</span><span class="op">)</span></span>
-<span><span class="va">params</span> <span class="op">&lt;-</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va">default_config</span></span>
 <span></span>
 <span><span class="va">model</span> <span class="op">&lt;-</span> <span class="va">lc</span><span class="op">$</span><span class="fu">run_model</span><span class="op">(</span></span>
-<span>     quiet <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>     paramfile <span class="op">=</span> <span class="va">params</span></span>
+<span>  quiet <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  paramfile <span class="op">=</span> <span class="va">config</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">patches</span><span class="op">)</span></span></code></pre></div>
-  </main>
+<span><span class="co"># Examine model outputs</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">)</span>   <span class="co"># Model parameters used</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">patches</span><span class="op">)</span>  <span class="co"># Patch-level data</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="using-high-level-wrapper-functions">Using High-Level Wrapper Functions<a class="anchor" aria-label="anchor" href="#using-high-level-wrapper-functions"></a>
+</h2>
+<p>MOSAIC provides convenient wrapper functions for running models:</p>
+<div class="section level3">
+<h3 id="single-location-simulation">Single location simulation<a class="anchor" aria-label="anchor" href="#single-location-simulation"></a>
+</h3>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Run simulation for a single location (e.g., Democratic Republic of Congo)</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_mosaic_iso</span><span class="op">(</span></span>
+<span>  iso_code <span class="op">=</span> <span class="st">"COD"</span>,</span>
+<span>  date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
+<span>  date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
+<span>  n_sim <span class="op">=</span> <span class="fl">10</span>,           <span class="co"># Number of stochastic replicates</span></span>
+<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Results contain:</span></span>
+<span><span class="co"># - Time series of cases and deaths by location</span></span>
+<span><span class="co"># - Epidemiological metrics</span></span>
+<span><span class="co"># - Model configuration used</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="multi-location-simulation">Multi-location simulation<a class="anchor" aria-label="anchor" href="#multi-location-simulation"></a>
+</h3>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Run simulation for multiple locations</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span>  config <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="../reference/config_default.html">config_default</a></span>,</span>
+<span>  n_sim <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
+<span>  quiet <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="customizing-model-configuration">Customizing Model Configuration<a class="anchor" aria-label="anchor" href="#customizing-model-configuration"></a>
+</h2>
+<p>Create a custom configuration using
+<code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code>:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Define locations</span></span>
+<span><span class="va">locations</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span><span class="op">)</span>  <span class="co"># DRC, Angola, Tanzania</span></span>
+<span></span>
+<span><span class="co"># Create custom configuration</span></span>
+<span><span class="va">my_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
+<span>  date_start <span class="op">=</span> <span class="st">"2023-01-01"</span>,</span>
+<span>  date_stop <span class="op">=</span> <span class="st">"2025-12-31"</span>,</span>
+<span>  location_name <span class="op">=</span> <span class="va">locations</span>,</span>
+<span>  <span class="co"># Add custom parameters here</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run with custom config</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span>  config <span class="op">=</span> <span class="va">my_config</span>,</span>
+<span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="understanding-model-outputs">Understanding Model Outputs<a class="anchor" aria-label="anchor" href="#understanding-model-outputs"></a>
+</h2>
+<p>The LASER model produces several output types:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Time series data</span></span>
+<span><span class="co"># - Daily cases and deaths by location</span></span>
+<span><span class="co"># - Compartment sizes (S, E, I, R, V)</span></span>
+<span><span class="co"># - Environmental contamination</span></span>
+<span></span>
+<span><span class="co"># Access model results</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">patches</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>  <span class="co"># First location's time series</span></span>
+<span></span>
+<span><span class="co"># Summary statistics</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="advanced-options-with-mosaic_control">Advanced Options with mosaic_control()<a class="anchor" aria-label="anchor" href="#advanced-options-with-mosaic_control"></a>
+</h2>
+<p>For advanced users, <code>mosaic_control()</code> provides
+fine-grained control over model execution:</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Create control parameters</span></span>
+<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu">mosaic_control</span><span class="op">(</span></span>
+<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  n_cores <span class="op">=</span> <span class="fl">4</span>,</span>
+<span>  save_intermediate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run with custom control</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span>  config <span class="op">=</span> <span class="va">my_config</span>,</span>
+<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
+<span>  n_sim <span class="op">=</span> <span class="fl">100</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="visualization">Visualization<a class="anchor" aria-label="anchor" href="#visualization"></a>
+</h2>
+<p>MOSAIC provides visualization functions for exploring results:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Plot time series (example - function names may vary)</span></span>
+<span><span class="co"># plot_model_fit(results)</span></span>
+<span><span class="co"># plot_epidemic_curves(results)</span></span>
+<span></span>
+<span><span class="co"># Plot spatial patterns</span></span>
+<span><span class="co"># plot_spatial_transmission(results)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
+</h2>
+<ul>
+<li>
+<strong>Project Setup</strong>: See the “Project setup” vignette for
+setting up the full MOSAIC repository structure</li>
+<li>
+<strong>Parameter Estimation</strong>: Explore <code>est_*</code>
+functions for estimating model parameters from data</li>
+<li>
+<strong>Calibration</strong>: Use BFRS and NPE workflows for
+Bayesian calibration</li>
+<li>
+<strong>Data Processing</strong>: Use <code>process_*</code>
+functions to prepare your own data</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="getting-help">Getting Help<a class="anchor" aria-label="anchor" href="#getting-help"></a>
+</h2>
+<ul>
+<li>Package documentation: <code><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference">help(package = "MOSAIC")</a></code>
+</li>
+<li>Function help: <code>?run_LASER</code>,
+<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code>
+</li>
+<li>Report issues: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues" class="external-link uri">https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues</a>
+</li>
+</ul>
+</div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside>
 </div>
 
 
