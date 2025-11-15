@@ -407,25 +407,6 @@
   invisible(success)
 }
 
-#' Detect If Output is Redirected (Batch Job)
-#'
-#' Determines if stdout is a terminal or redirected to file.
-#' Used to disable progress bars in batch jobs.
-#'
-#' @return Logical, TRUE if output is redirected
-#' @noRd
-.mosaic_is_output_redirected <- function() {
-  # Check if stdout is a terminal
-  if (.Platform$OS.type == "unix") {
-    # Use test command to check if stdout is a tty
-    result <- system("test -t 1", ignore.stdout = TRUE, ignore.stderr = TRUE)
-    return(result != 0)  # Non-zero means not a terminal
-  }
-
-  # Windows: check if interactive
-  !interactive()
-}
-
 #' Log Cluster Metadata
 #'
 #' Captures SLURM/PBS job metadata for debugging.
