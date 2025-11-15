@@ -142,6 +142,20 @@ Rscript -e "MOSAIC::install_dependencies()"
   [`install_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/install_dependencies.md)
   for setup
 
+### Optional Dependencies
+
+- **mobility package**: Optional GitHub package for regenerating
+  mobility estimates
+  - Only needed if regenerating mobility data (most users won’t need
+    this)
+  - Requires JAGS (\>= 4.3.0) system installation
+  - Pre-computed mobility files included in `model/input/`
+  - Install with:
+    `remotes::install_github("COVID-19-Mobility-Data-Network/mobility")`
+  - Used by:
+    [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
+    function
+
 ## LASER Model Configuration
 
 ### Configuration Files

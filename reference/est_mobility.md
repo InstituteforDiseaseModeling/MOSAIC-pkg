@@ -38,3 +38,13 @@ est_mobility(PATHS)
 The function saves mobility matrices (M, D, N), travel probabilities
 (tau_j), and diffusion matrices (pi_ij) as CSV files in the specified
 directory. It also generates and saves visualizations as PNG files.
+
+## Note
+
+This function requires the optional `mobility` package from GitHub.
+Install with:
+`remotes::install_github("COVID-19-Mobility-Data-Network/mobility")`
+
+The `mobility` package requires JAGS (\>= 4.3.0) to be installed on your
+system. Most users will not need to regenerate mobility data, as
+pre-computed files are included in the package.

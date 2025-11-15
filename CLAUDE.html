@@ -193,6 +193,19 @@
 <strong>reticulate configuration</strong>: For Python environment management</li>
 <li>Use <code><a href="reference/check_dependencies.html">check_dependencies()</a></code> and <code><a href="reference/install_dependencies.html">install_dependencies()</a></code> for setup</li>
 </ul></div>
+<div class="section level3">
+<h3 id="optional-dependencies">Optional Dependencies<a class="anchor" aria-label="anchor" href="#optional-dependencies"></a></h3>
+<ul><li>
+<strong>mobility package</strong>: Optional GitHub package for regenerating mobility estimates
+<ul><li>Only needed if regenerating mobility data (most users won’t need this)</li>
+<li>Requires JAGS (&gt;= 4.3.0) system installation</li>
+<li>Pre-computed mobility files included in <code>model/input/</code>
+</li>
+<li>Install with: <code>remotes::install_github("COVID-19-Mobility-Data-Network/mobility")</code>
+</li>
+<li>Used by: <code><a href="reference/est_mobility.html">est_mobility()</a></code> function</li>
+</ul></li>
+</ul></div>
 </div>
 <div class="section level2">
 <h2 id="laser-model-configuration">LASER Model Configuration<a class="anchor" aria-label="anchor" href="#laser-model-configuration"></a></h2>

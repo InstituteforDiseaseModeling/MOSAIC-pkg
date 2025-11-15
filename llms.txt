@@ -87,6 +87,12 @@ Functions starting with run\_, make\_, or create\_
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
+- [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`mosaic_run_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`mosaic_sampling_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  : Run MOSAIC Calibration Workflow
 - [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
   : Run NPE Diagnostics
 - [`run_spatial_transmission_shiny_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_spatial_transmission_shiny_app.md)
@@ -1182,6 +1188,12 @@ Other exported functions and internal helpers
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
+- [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`mosaic_run_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`mosaic_sampling_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  : Run MOSAIC Calibration Workflow
 - [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
   : Run NPE Diagnostics
 - [`run_spatial_transmission_shiny_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_spatial_transmission_shiny_app.md)
