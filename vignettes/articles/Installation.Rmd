@@ -12,7 +12,15 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-MOSAIC has three installation levels depending on your needs: **Quick Start** (5 min) for running models, **Standard Setup** (15 min) for data processing, and **Developer Setup** (20 min) for contributing code. Most users should start with Quick Start.
+MOSAIC has three installation levels depending on your needs:
+
+| Setup | Time | Purpose | Requirements |
+|-------|------|---------|--------------|
+| **Quick Start** | 5 min | Run pre-configured models | R + internet |
+| **Standard Setup** | 15 min | Process data & estimate parameters | R + git + system libraries |
+| **Developer Setup** | 20 min | Contribute code & full development | All above + dev tools |
+
+Most users should start with Quick Start.
 
 ---
 
