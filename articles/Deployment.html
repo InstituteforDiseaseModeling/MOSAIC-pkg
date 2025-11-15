@@ -100,82 +100,110 @@ Ubuntu/Debian systems.</p>
 <span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"======================================"</span></span>
 <span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a></span>
 <span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co"># Update system</span></span>
-<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[1/6] Updating system packages..."</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[1/7] Updating system packages..."</span></span>
 <span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="fu">sudo</span> apt-get update</span>
 <span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="fu">sudo</span> apt-get upgrade <span class="at">-y</span></span>
 <span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a></span>
-<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co"># Install R and dependencies</span></span>
-<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[2/6] Installing R (&gt;= 4.1.1)..."</span></span>
-<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> software-properties-common dirmngr</span>
-<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="fu">wget</span> <span class="at">-qO-</span> https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc <span class="kw">|</span> <span class="fu">sudo</span> tee <span class="at">-a</span> /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc</span>
-<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="fu">sudo</span> add-apt-repository <span class="st">"deb https://cloud.r-project.org/bin/linux/ubuntu </span><span class="va">$(</span><span class="ex">lsb_release</span> <span class="at">-cs</span><span class="va">)</span><span class="st">-cran40/"</span></span>
-<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="fu">sudo</span> apt-get update</span>
-<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> r-base r-base-dev</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co"># Install essential build tools</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[2/7] Installing essential build tools..."</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a>  git <span class="dt">\</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>  ca-certificates <span class="dt">\</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a>  build-essential <span class="dt">\</span></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a>  gfortran</span>
 <span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a></span>
-<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co"># Install system dependencies for geospatial operations</span></span>
-<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[3/6] Installing geospatial libraries (GDAL, PROJ, GEOS)..."</span></span>
-<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
-<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a>  gdal-bin libgdal-dev <span class="dt">\</span></span>
-<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a>  libproj-dev proj-bin <span class="dt">\</span></span>
-<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a>  libgeos-dev libgeos++-dev <span class="dt">\</span></span>
-<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a>  libudunits2-dev <span class="dt">\</span></span>
-<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a>  libcurl4-openssl-dev <span class="dt">\</span></span>
-<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a>  libssl-dev <span class="dt">\</span></span>
-<span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a>  libxml2-dev <span class="dt">\</span></span>
-<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a>  libfontconfig1-dev <span class="dt">\</span></span>
-<span id="cb3-32"><a href="#cb3-32" tabindex="-1"></a>  libharfbuzz-dev <span class="dt">\</span></span>
-<span id="cb3-33"><a href="#cb3-33" tabindex="-1"></a>  libfribidi-dev <span class="dt">\</span></span>
-<span id="cb3-34"><a href="#cb3-34" tabindex="-1"></a>  libfreetype6-dev <span class="dt">\</span></span>
-<span id="cb3-35"><a href="#cb3-35" tabindex="-1"></a>  libpng-dev <span class="dt">\</span></span>
-<span id="cb3-36"><a href="#cb3-36" tabindex="-1"></a>  libtiff5-dev <span class="dt">\</span></span>
-<span id="cb3-37"><a href="#cb3-37" tabindex="-1"></a>  libjpeg-dev</span>
-<span id="cb3-38"><a href="#cb3-38" tabindex="-1"></a></span>
-<span id="cb3-39"><a href="#cb3-39" tabindex="-1"></a><span class="co"># Install Python 3.9+</span></span>
-<span id="cb3-40"><a href="#cb3-40" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[4/6] Installing Python 3.9+..."</span></span>
-<span id="cb3-41"><a href="#cb3-41" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
-<span id="cb3-42"><a href="#cb3-42" tabindex="-1"></a>  python3 <span class="dt">\</span></span>
-<span id="cb3-43"><a href="#cb3-43" tabindex="-1"></a>  python3-pip <span class="dt">\</span></span>
-<span id="cb3-44"><a href="#cb3-44" tabindex="-1"></a>  python3-venv <span class="dt">\</span></span>
-<span id="cb3-45"><a href="#cb3-45" tabindex="-1"></a>  python3-dev</span>
-<span id="cb3-46"><a href="#cb3-46" tabindex="-1"></a></span>
-<span id="cb3-47"><a href="#cb3-47" tabindex="-1"></a><span class="co"># Install R packages system-wide (non-interactive)</span></span>
-<span id="cb3-48"><a href="#cb3-48" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[5/6] Installing MOSAIC R package..."</span></span>
-<span id="cb3-49"><a href="#cb3-49" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"options(repos = c(CRAN = 'https://cloud.r-project.org')); </span><span class="dt">\</span></span>
-<span id="cb3-50"><a href="#cb3-50" tabindex="-1"></a><span class="st">  if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); </span><span class="dt">\</span></span>
-<span id="cb3-51"><a href="#cb3-51" tabindex="-1"></a><span class="st">  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"</span></span>
-<span id="cb3-52"><a href="#cb3-52" tabindex="-1"></a></span>
-<span id="cb3-53"><a href="#cb3-53" tabindex="-1"></a><span class="co"># Install Python dependencies</span></span>
-<span id="cb3-54"><a href="#cb3-54" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[6/6] Installing Python dependencies..."</span></span>
-<span id="cb3-55"><a href="#cb3-55" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies()"</span></span>
-<span id="cb3-56"><a href="#cb3-56" tabindex="-1"></a></span>
-<span id="cb3-57"><a href="#cb3-57" tabindex="-1"></a><span class="co"># Verify installation</span></span>
-<span id="cb3-58"><a href="#cb3-58" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-59"><a href="#cb3-59" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verifying installation..."</span></span>
-<span id="cb3-60"><a href="#cb3-60" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"</span></span>
-<span id="cb3-61"><a href="#cb3-61" tabindex="-1"></a><span class="st">  library(MOSAIC)</span></span>
-<span id="cb3-62"><a href="#cb3-62" tabindex="-1"></a><span class="st">  result &lt;- tryCatch({</span></span>
-<span id="cb3-63"><a href="#cb3-63" tabindex="-1"></a><span class="st">    MOSAIC::check_dependencies()</span></span>
-<span id="cb3-64"><a href="#cb3-64" tabindex="-1"></a><span class="st">    TRUE</span></span>
-<span id="cb3-65"><a href="#cb3-65" tabindex="-1"></a><span class="st">  }, error = function(e) {</span></span>
-<span id="cb3-66"><a href="#cb3-66" tabindex="-1"></a><span class="st">    cat('ERROR:', e</span><span class="dt">\$</span><span class="st">message, '\n')</span></span>
-<span id="cb3-67"><a href="#cb3-67" tabindex="-1"></a><span class="st">    FALSE</span></span>
-<span id="cb3-68"><a href="#cb3-68" tabindex="-1"></a><span class="st">  })</span></span>
-<span id="cb3-69"><a href="#cb3-69" tabindex="-1"></a><span class="st">  if (!result) quit(status = 1)</span></span>
-<span id="cb3-70"><a href="#cb3-70" tabindex="-1"></a><span class="st">"</span></span>
-<span id="cb3-71"><a href="#cb3-71" tabindex="-1"></a></span>
-<span id="cb3-72"><a href="#cb3-72" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
-<span id="cb3-73"><a href="#cb3-73" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-74"><a href="#cb3-74" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-75"><a href="#cb3-75" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation complete and verified!"</span></span>
-<span id="cb3-76"><a href="#cb3-76" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-77"><a href="#cb3-77" tabindex="-1"></a><span class="cf">else</span></span>
-<span id="cb3-78"><a href="#cb3-78" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-79"><a href="#cb3-79" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-80"><a href="#cb3-80" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation completed with errors"</span></span>
-<span id="cb3-81"><a href="#cb3-81" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Please check the output above"</span></span>
-<span id="cb3-82"><a href="#cb3-82" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-83"><a href="#cb3-83" tabindex="-1"></a>  <span class="bu">exit</span> 1</span>
-<span id="cb3-84"><a href="#cb3-84" tabindex="-1"></a><span class="cf">fi</span></span></code></pre></div>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co"># Install R and dependencies</span></span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[3/7] Installing R (&gt;= 4.1.1)..."</span></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> software-properties-common dirmngr</span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a><span class="fu">wget</span> <span class="at">-qO-</span> https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc <span class="kw">|</span> <span class="fu">sudo</span> tee <span class="at">-a</span> /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc</span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a><span class="fu">sudo</span> add-apt-repository <span class="st">"deb https://cloud.r-project.org/bin/linux/ubuntu </span><span class="va">$(</span><span class="ex">lsb_release</span> <span class="at">-cs</span><span class="va">)</span><span class="st">-cran40/"</span></span>
+<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a><span class="fu">sudo</span> apt-get update</span>
+<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> r-base r-base-dev</span>
+<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a></span>
+<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a><span class="co"># Install system dependencies for geospatial operations and R packages</span></span>
+<span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[4/7] Installing system libraries (GDAL, PROJ, GEOS, Arrow, HDF5)..."</span></span>
+<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
+<span id="cb3-32"><a href="#cb3-32" tabindex="-1"></a>  gdal-bin libgdal-dev <span class="dt">\</span></span>
+<span id="cb3-33"><a href="#cb3-33" tabindex="-1"></a>  libproj-dev proj-bin <span class="dt">\</span></span>
+<span id="cb3-34"><a href="#cb3-34" tabindex="-1"></a>  libgeos-dev libgeos++-dev <span class="dt">\</span></span>
+<span id="cb3-35"><a href="#cb3-35" tabindex="-1"></a>  libudunits2-dev <span class="dt">\</span></span>
+<span id="cb3-36"><a href="#cb3-36" tabindex="-1"></a>  libcurl4-openssl-dev <span class="dt">\</span></span>
+<span id="cb3-37"><a href="#cb3-37" tabindex="-1"></a>  libssl-dev <span class="dt">\</span></span>
+<span id="cb3-38"><a href="#cb3-38" tabindex="-1"></a>  libxml2-dev <span class="dt">\</span></span>
+<span id="cb3-39"><a href="#cb3-39" tabindex="-1"></a>  libfontconfig1-dev <span class="dt">\</span></span>
+<span id="cb3-40"><a href="#cb3-40" tabindex="-1"></a>  libharfbuzz-dev <span class="dt">\</span></span>
+<span id="cb3-41"><a href="#cb3-41" tabindex="-1"></a>  libfribidi-dev <span class="dt">\</span></span>
+<span id="cb3-42"><a href="#cb3-42" tabindex="-1"></a>  libfreetype6-dev <span class="dt">\</span></span>
+<span id="cb3-43"><a href="#cb3-43" tabindex="-1"></a>  libpng-dev <span class="dt">\</span></span>
+<span id="cb3-44"><a href="#cb3-44" tabindex="-1"></a>  libtiff5-dev <span class="dt">\</span></span>
+<span id="cb3-45"><a href="#cb3-45" tabindex="-1"></a>  libjpeg-dev <span class="dt">\</span></span>
+<span id="cb3-46"><a href="#cb3-46" tabindex="-1"></a>  libarrow-dev <span class="dt">\</span></span>
+<span id="cb3-47"><a href="#cb3-47" tabindex="-1"></a>  libhdf5-dev <span class="dt">\</span></span>
+<span id="cb3-48"><a href="#cb3-48" tabindex="-1"></a>  zlib1g-dev</span>
+<span id="cb3-49"><a href="#cb3-49" tabindex="-1"></a></span>
+<span id="cb3-50"><a href="#cb3-50" tabindex="-1"></a><span class="co"># Install Python 3.9+</span></span>
+<span id="cb3-51"><a href="#cb3-51" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[5/7] Installing Python 3.9+..."</span></span>
+<span id="cb3-52"><a href="#cb3-52" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> <span class="dt">\</span></span>
+<span id="cb3-53"><a href="#cb3-53" tabindex="-1"></a>  python3 <span class="dt">\</span></span>
+<span id="cb3-54"><a href="#cb3-54" tabindex="-1"></a>  python3-pip <span class="dt">\</span></span>
+<span id="cb3-55"><a href="#cb3-55" tabindex="-1"></a>  python3-venv <span class="dt">\</span></span>
+<span id="cb3-56"><a href="#cb3-56" tabindex="-1"></a>  python3-dev</span>
+<span id="cb3-57"><a href="#cb3-57" tabindex="-1"></a></span>
+<span id="cb3-58"><a href="#cb3-58" tabindex="-1"></a><span class="co"># Verify Python version</span></span>
+<span id="cb3-59"><a href="#cb3-59" tabindex="-1"></a><span class="va">PYTHON_VERSION</span><span class="op">=</span><span class="va">$(</span><span class="ex">python3</span> <span class="at">--version</span> <span class="dv">2</span><span class="op">&gt;&amp;</span><span class="dv">1</span> <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-oP</span> <span class="st">'\d+\.\d+'</span> <span class="kw">|</span> <span class="fu">head</span> <span class="at">-1</span><span class="va">)</span></span>
+<span id="cb3-60"><a href="#cb3-60" tabindex="-1"></a><span class="va">PYTHON_MAJOR</span><span class="op">=</span><span class="va">$(</span><span class="bu">echo</span> <span class="va">$PYTHON_VERSION</span> <span class="kw">|</span> <span class="fu">cut</span> <span class="at">-d.</span> <span class="at">-f1</span><span class="va">)</span></span>
+<span id="cb3-61"><a href="#cb3-61" tabindex="-1"></a><span class="va">PYTHON_MINOR</span><span class="op">=</span><span class="va">$(</span><span class="bu">echo</span> <span class="va">$PYTHON_VERSION</span> <span class="kw">|</span> <span class="fu">cut</span> <span class="at">-d.</span> <span class="at">-f2</span><span class="va">)</span></span>
+<span id="cb3-62"><a href="#cb3-62" tabindex="-1"></a></span>
+<span id="cb3-63"><a href="#cb3-63" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$PYTHON_MAJOR</span><span class="st">"</span> <span class="ot">-lt</span> 3 <span class="bu">]</span> <span class="kw">||</span> <span class="kw">(</span><span class="bu">[</span> <span class="st">"</span><span class="va">$PYTHON_MAJOR</span><span class="st">"</span> <span class="ot">-eq</span> 3 <span class="bu">]</span> <span class="kw">&amp;&amp;</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$PYTHON_MINOR</span><span class="st">"</span> <span class="ot">-lt</span> 9 <span class="bu">]</span><span class="kw">);</span> <span class="cf">then</span></span>
+<span id="cb3-64"><a href="#cb3-64" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"WARNING: Python </span><span class="va">$PYTHON_VERSION</span><span class="st"> detected, but &gt;= 3.9 required"</span></span>
+<span id="cb3-65"><a href="#cb3-65" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Attempting to install Python 3.9..."</span></span>
+<span id="cb3-66"><a href="#cb3-66" tabindex="-1"></a>  <span class="fu">sudo</span> add-apt-repository <span class="at">-y</span> ppa:deadsnakes/ppa</span>
+<span id="cb3-67"><a href="#cb3-67" tabindex="-1"></a>  <span class="fu">sudo</span> apt-get update</span>
+<span id="cb3-68"><a href="#cb3-68" tabindex="-1"></a>  <span class="fu">sudo</span> apt-get install <span class="at">-y</span> python3.9 python3.9-venv python3.9-dev</span>
+<span id="cb3-69"><a href="#cb3-69" tabindex="-1"></a>  <span class="fu">sudo</span> update-alternatives <span class="at">--install</span> /usr/bin/python3 python3 /usr/bin/python3.9 1</span>
+<span id="cb3-70"><a href="#cb3-70" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Python 3.9 installed and set as default"</span></span>
+<span id="cb3-71"><a href="#cb3-71" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-72"><a href="#cb3-72" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Python </span><span class="va">$PYTHON_VERSION</span><span class="st"> detected (OK)"</span></span>
+<span id="cb3-73"><a href="#cb3-73" tabindex="-1"></a><span class="cf">fi</span></span>
+<span id="cb3-74"><a href="#cb3-74" tabindex="-1"></a></span>
+<span id="cb3-75"><a href="#cb3-75" tabindex="-1"></a><span class="co"># Install R packages system-wide (non-interactive)</span></span>
+<span id="cb3-76"><a href="#cb3-76" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[6/7] Installing MOSAIC R package..."</span></span>
+<span id="cb3-77"><a href="#cb3-77" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"options(repos = c(CRAN = 'https://cloud.r-project.org')); </span><span class="dt">\</span></span>
+<span id="cb3-78"><a href="#cb3-78" tabindex="-1"></a><span class="st">  if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); </span><span class="dt">\</span></span>
+<span id="cb3-79"><a href="#cb3-79" tabindex="-1"></a><span class="st">  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"</span></span>
+<span id="cb3-80"><a href="#cb3-80" tabindex="-1"></a></span>
+<span id="cb3-81"><a href="#cb3-81" tabindex="-1"></a><span class="co"># Install Python dependencies</span></span>
+<span id="cb3-82"><a href="#cb3-82" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[7/7] Installing Python dependencies..."</span></span>
+<span id="cb3-83"><a href="#cb3-83" tabindex="-1"></a><span class="fu">sudo</span> Rscript <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies()"</span></span>
+<span id="cb3-84"><a href="#cb3-84" tabindex="-1"></a></span>
+<span id="cb3-85"><a href="#cb3-85" tabindex="-1"></a><span class="co"># Verify installation</span></span>
+<span id="cb3-86"><a href="#cb3-86" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-87"><a href="#cb3-87" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verifying installation..."</span></span>
+<span id="cb3-88"><a href="#cb3-88" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"</span></span>
+<span id="cb3-89"><a href="#cb3-89" tabindex="-1"></a><span class="st">  library(MOSAIC)</span></span>
+<span id="cb3-90"><a href="#cb3-90" tabindex="-1"></a><span class="st">  result &lt;- tryCatch({</span></span>
+<span id="cb3-91"><a href="#cb3-91" tabindex="-1"></a><span class="st">    MOSAIC::check_dependencies()</span></span>
+<span id="cb3-92"><a href="#cb3-92" tabindex="-1"></a><span class="st">    TRUE</span></span>
+<span id="cb3-93"><a href="#cb3-93" tabindex="-1"></a><span class="st">  }, error = function(e) {</span></span>
+<span id="cb3-94"><a href="#cb3-94" tabindex="-1"></a><span class="st">    cat('ERROR:', e</span><span class="dt">\$</span><span class="st">message, '\n')</span></span>
+<span id="cb3-95"><a href="#cb3-95" tabindex="-1"></a><span class="st">    FALSE</span></span>
+<span id="cb3-96"><a href="#cb3-96" tabindex="-1"></a><span class="st">  })</span></span>
+<span id="cb3-97"><a href="#cb3-97" tabindex="-1"></a><span class="st">  if (!result) quit(status = 1)</span></span>
+<span id="cb3-98"><a href="#cb3-98" tabindex="-1"></a><span class="st">"</span></span>
+<span id="cb3-99"><a href="#cb3-99" tabindex="-1"></a></span>
+<span id="cb3-100"><a href="#cb3-100" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb3-101"><a href="#cb3-101" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-102"><a href="#cb3-102" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-103"><a href="#cb3-103" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation complete and verified!"</span></span>
+<span id="cb3-104"><a href="#cb3-104" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-105"><a href="#cb3-105" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-106"><a href="#cb3-106" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-107"><a href="#cb3-107" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-108"><a href="#cb3-108" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation completed with errors"</span></span>
+<span id="cb3-109"><a href="#cb3-109" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Please check the output above"</span></span>
+<span id="cb3-110"><a href="#cb3-110" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-111"><a href="#cb3-111" tabindex="-1"></a>  <span class="bu">exit</span> 1</span>
+<span id="cb3-112"><a href="#cb3-112" tabindex="-1"></a><span class="cf">fi</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
