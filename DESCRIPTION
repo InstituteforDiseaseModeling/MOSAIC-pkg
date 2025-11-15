@@ -58,7 +58,6 @@ Imports:
   magrittr,
   Matrix,
   minpack.lm,
-  mobility,
   parallel,
   patchwork,
   propvacc,
@@ -94,7 +93,8 @@ Depends:
   grDevices,
   utils,
   methods
-Suggests: 
-  testthat (>= 3.0.0)  
+Suggests:
+  testthat (>= 3.0.0),
+  mobility  
 Config/Needs/website: rmarkdown
 Config/testthat/edition: 3
