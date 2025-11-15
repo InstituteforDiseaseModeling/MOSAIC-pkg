@@ -50,7 +50,8 @@
       priors = priors,
       config = config,
       seed = sim_id,
-      sample_args = sampling_args
+      sample_args = sampling_args,
+      verbose = FALSE  # Suppress verbose output (progress bar shows overall progress)
     )
   }, error = function(e) {
     # Log error details for debugging
