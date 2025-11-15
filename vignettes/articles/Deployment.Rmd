@@ -48,10 +48,14 @@ If R >= 4.1.1 is already installed on your VM, use `vm/setup_mosaic_minimal.sh`:
 ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
 ```
 
-**Script contents:**
+**What it does:**
 
-```{bash, code=readLines('../../vm/setup_mosaic_minimal.sh'), eval=FALSE}
-```
+This script is identical to the complete setup but skips R installation (step 2/6). It installs:
+
+- System libraries (GDAL, PROJ, GEOS, UDUNITS, Python)
+- MOSAIC R package from GitHub
+- Python dependencies (laser-cholera)
+- Verifies installation with `check_dependencies()`
 
 ---
 
