@@ -437,14 +437,14 @@ calc_npe_weights <- function(
         weights <- .calc_gibbs_weights(aic, temperature)
 
         if (verbose) {
-            # Calculate ESS using existing MOSAIC function
-            eff_n <- calc_model_ess(weights, method = "perplexity")
+            # Calculate ESS using Kish method (standard for MOSAIC)
+            eff_n <- calc_model_ess(weights, method = "kish")
 
-            # Also calculate Kish ESS for comparison
-            kish_ess <- calc_model_ess(weights, method = "kish")
+            # Also calculate perplexity ESS for comparison
+            perplexity_ess <- calc_model_ess(weights, method = "perplexity")
 
-            message("  Continuous weights: ESS = ", sprintf("%.1f", eff_n), " (perplexity)")
-            message("  Kish ESS = ", sprintf("%.1f", kish_ess))
+            message("  Continuous weights: ESS (Kish) = ", sprintf("%.1f", eff_n))
+            message("  ESS (Perplexity) = ", sprintf("%.1f", perplexity_ess))
             message("  Temperature = ", sprintf("%.4f", temperature))
             message("  Effective AIC range = ", sprintf("%.1f", effective_range))
         }
