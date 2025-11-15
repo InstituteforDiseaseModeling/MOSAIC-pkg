@@ -381,11 +381,21 @@ plot_model_posteriors_detail <- function(quantiles_file,
     df_prior <- data.frame(x = prior_samples)
     df_retained <- data.frame(x = retained_samples)
     df_best <- data.frame(x = best_samples)
-    df_best_weighted <- data.frame(x = best_samples, w = posterior_weights)
+
+    # Filter out invalid weights (NA, zero, negative, or infinite) to prevent ggplot warnings
+    valid_best_idx <- is.finite(posterior_weights) & posterior_weights > 0
+    df_best_weighted <- data.frame(
+      x = best_samples[valid_best_idx],
+      w = posterior_weights[valid_best_idx]
+    )
 
     # Create retained weighted df if weights exist
     df_retained_weighted <- if (!is.null(retained_weights)) {
-      data.frame(x = retained_samples, w = retained_weights)
+      valid_retained_idx <- is.finite(retained_weights) & retained_weights > 0
+      data.frame(
+        x = retained_samples[valid_retained_idx],
+        w = retained_weights[valid_retained_idx]
+      )
     } else {
       NULL
     }
