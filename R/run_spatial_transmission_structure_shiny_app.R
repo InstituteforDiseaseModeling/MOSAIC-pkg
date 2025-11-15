@@ -40,7 +40,9 @@
 #' @section Side Effects:
 #' Opens a Shiny window and blocks the R session while the app is running.
 #'
-#' @import shiny
+#' @note This function requires the optional \code{shiny} package.
+#'   Install with: \code{install.packages("shiny")}
+#'
 #' @import ggplot2
 #' @import patchwork
 #'
@@ -57,6 +59,15 @@
 #'
 
 run_spatial_transmission_shiny_app <- function(mod) {
+     # Check for optional shiny package
+     if (!requireNamespace("shiny", quietly = TRUE)) {
+          stop(
+               "The 'shiny' package is required but not installed.\n",
+               "Install with: install.packages('shiny')",
+               call. = FALSE
+          )
+     }
+
      library(shiny)
      library(ggplot2)
      library(patchwork)

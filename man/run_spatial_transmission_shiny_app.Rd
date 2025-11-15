@@ -46,6 +46,10 @@ values; the dashed red line marks \eqn{\beta_{\text{hum}}^{\ast}}.}
 \item WASH covariate value.}}
 }
 }
+\note{
+This function requires the optional \code{shiny} package.
+Install with: \code{install.packages("shiny")}
+}
 \section{Side Effects}{
 
 Opens a Shiny window and blocks the R session while the app is running.

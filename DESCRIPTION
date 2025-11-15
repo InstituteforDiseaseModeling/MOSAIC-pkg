@@ -31,7 +31,6 @@ Remotes:
 Imports:
   arrow,
   cli,
-  compiler,
   cowplot,
   countrycode,
   data.table,
@@ -41,22 +40,18 @@ Imports:
   exactextractr,
   FNN,
   ggplot2,
-  ggraph,
   ggrepel,
-  ggh4x,
   glue,
   grid,
   gridExtra,
   gtable,
   gtools,
   httr,
-  igraph,
   ISOweek,
   jsonlite,
   keras3,
   lubridate,
   magrittr,
-  Matrix,
   minpack.lm,
   parallel,
   patchwork,
@@ -71,21 +66,17 @@ Imports:
   sp,
   stringr,
   tidyr,
-  tidyverse,
   tensorflow,
   viridis,
   zoo,
   RColorBrewer,
   remotes,
   scales,
-  shiny,
-  shinyWidgets,
   yaml,
   hdf5r,
   R.utils,
   RhpcBLASctl,
-  reticulate,
-  withr
+  reticulate
 Depends: 
   R (>= 4.1.1),
   stats, 
@@ -95,6 +86,9 @@ Depends:
   methods
 Suggests:
   testthat (>= 3.0.0),
-  mobility  
+  mobility,
+  shiny,
+  shinyWidgets,
+  withr  
 Config/Needs/website: rmarkdown
 Config/testthat/edition: 3
