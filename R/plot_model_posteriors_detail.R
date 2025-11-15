@@ -371,10 +371,10 @@ plot_model_posteriors_detail <- function(quantiles_file,
     x_padding <- diff(x_range) * 0.05
     x_limits <- c(x_range[1] - x_padding, x_range[2] + x_padding)
 
-    # Create data frames
-    df_prior <- data.frame(x = prior_samples)
-    df_retained <- data.frame(x = retained_samples)
-    df_best <- data.frame(x = best_samples)
+    # Create data frames (filter out invalid values to prevent ggplot warnings)
+    df_prior <- data.frame(x = prior_samples[is.finite(prior_samples)])
+    df_retained <- data.frame(x = retained_samples[is.finite(retained_samples)])
+    df_best <- data.frame(x = best_samples[is.finite(best_samples)])
 
     # Filter out invalid samples and weights (NA, zero, negative, or infinite) to prevent ggplot warnings
     valid_best_idx <- is.finite(best_samples) & is.finite(posterior_weights) & posterior_weights > 0
