@@ -204,6 +204,8 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_io_presets.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/pgompertz.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plan_batch_strategy.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_by_country.html</loc></url>
@@ -280,9 +282,10 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/read_yaml_to_list.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rgompertz.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.html</loc></url>

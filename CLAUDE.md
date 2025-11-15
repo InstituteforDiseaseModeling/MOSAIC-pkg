@@ -172,9 +172,7 @@ Rscript -e "MOSAIC::install_dependencies()"
 
 1.  Create/modify configuration using
     [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
-2.  Run model via
-    [`run_LASER_model()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.md)
-    or direct Python interface
+2.  Run model via `run_LASER_model()` or direct Python interface
 3.  Process results using
     [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
     and related functions
@@ -302,8 +300,7 @@ directory)
 
 ### Key Integration Functions
 
-- [`run_LASER_model()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.md):
-  Main interface to Python simulation
+- `run_LASER_model()`: Main interface to Python simulation
 - [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md):
   Process simulation results
 - Plotting functions: Output to `../MOSAIC-docs/figures/`

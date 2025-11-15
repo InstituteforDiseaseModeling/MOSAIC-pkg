@@ -75,7 +75,8 @@ formatting placeholders (e.g., "%d", "%s", "%.2f").</p></dd>
     <p>The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS" format
 to each message. Messages are printed to the console and, if a 'dir_output'
 variable exists in the calling environment, also appended to a 'run.log' file
-in that directory (dir_output/run.log).</p>
+in that directory (dir_output/run.log). If the directory does not exist, it
+will be created automatically.</p>
 <p>This is particularly useful for:</p><ul><li><p>Model calibration workflows (logs entire BFRS → NPE sequence)</p></li>
 <li><p>Long-running simulations</p></li>
 <li><p>Parallel processing tasks</p></li>

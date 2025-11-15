@@ -91,7 +91,7 @@ to set up MOSAIC and its dependencies.</p>
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Run a 2-location simulation with default parameters</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">123</span></span>
@@ -118,7 +118,7 @@ scenarios:</p>
 <p>Run any pre-configured model:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Run endemic scenario</span></span>
-<span><span class="va">results_endemic</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">results_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">456</span></span>
@@ -128,11 +128,11 @@ scenarios:</p>
 <div class="section level2">
 <h2 id="single-location-simulations">Single-Location Simulations<a class="anchor" aria-label="anchor" href="#single-location-simulations"></a>
 </h2>
-<p>Use <code>run_mosaic_iso()</code> for country-level simulations with
+<p>Use <code><a href="../reference/run_mosaic_iso.html">run_mosaic_iso()</a></code> for country-level simulations with
 ISO codes:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Democratic Republic of Congo (DRC)</span></span>
-<span><span class="va">results_cod</span> <span class="op">&lt;-</span> <span class="fu">run_mosaic_iso</span><span class="op">(</span></span>
+<span><span class="va">results_cod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_mosaic_iso.html">run_mosaic_iso</a></span><span class="op">(</span></span>
 <span>  iso_code <span class="op">=</span> <span class="st">"COD"</span>,</span>
 <span>  date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
 <span>  date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
@@ -143,7 +143,7 @@ ISO codes:</p>
 <span><span class="co"># Multiple countries (sequential)</span></span>
 <span><span class="va">countries</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span><span class="op">)</span>  <span class="co"># DRC, Angola, Tanzania</span></span>
 <span><span class="va">results_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">countries</span>, <span class="kw">function</span><span class="op">(</span><span class="va">iso</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">run_mosaic_iso</span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/run_mosaic_iso.html">run_mosaic_iso</a></span><span class="op">(</span></span>
 <span>    iso_code <span class="op">=</span> <span class="va">iso</span>,</span>
 <span>    date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
 <span>    date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
@@ -159,7 +159,7 @@ ISO codes:</p>
 <div class="section level2">
 <h2 id="multi-location-simulations">Multi-Location Simulations<a class="anchor" aria-label="anchor" href="#multi-location-simulations"></a>
 </h2>
-<p>Use <code>run_LASER()</code> with custom configurations for
+<p>Use <code><a href="../reference/run_LASER.html">run_LASER()</a></code> with custom configurations for
 multi-location models:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Create configuration for three countries</span></span>
@@ -171,7 +171,7 @@ multi-location models:</p>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Run multi-location simulation</span></span>
-<span><span class="va">results_multi</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">results_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_multi</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">789</span></span>
@@ -206,7 +206,7 @@ with custom parameters:</p>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">results_custom</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">custom_config</span>, n_sim <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">results_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">custom_config</span>, n_sim <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="advanced-customization">Advanced Customization<a class="anchor" aria-label="anchor" href="#advanced-customization"></a>
@@ -244,7 +244,7 @@ with custom parameters:</p>
 </h3>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Run model</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Output is a list with:</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span></span>
@@ -290,18 +290,19 @@ with custom parameters:</p>
 <div class="section level2">
 <h2 id="parallel-execution">Parallel Execution<a class="anchor" aria-label="anchor" href="#parallel-execution"></a>
 </h2>
-<p>For large-scale simulations, use <code>mosaic_control()</code> to
-enable parallel processing:</p>
+<p>For large-scale simulations, use
+<code><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults()</a></code> to enable parallel
+processing:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Configure parallel execution</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu">mosaic_control</span><span class="op">(</span></span>
+<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
 <span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  n_cores <span class="op">=</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Run 100 simulations in parallel</span></span>
-<span><span class="va">results_parallel</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">results_parallel</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
 <span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">100</span>,</span>
@@ -318,16 +319,16 @@ beneficial for <code>n_sim &gt;= 10</code>.</p>
 with the <code>seed</code> parameter:</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Same seed = reproducible results</span></span>
-<span><span class="va">run1</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span><span class="va">run2</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">run1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">run2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span>, <span class="va">run2</span><span class="op">)</span>  <span class="co"># TRUE</span></span>
 <span></span>
 <span><span class="co"># Different seeds = different outcomes</span></span>
-<span><span class="va">run3</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">456</span><span class="op">)</span></span>
+<span><span class="va">run3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">456</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span>, <span class="va">run3</span><span class="op">)</span>  <span class="co"># FALSE</span></span>
 <span></span>
 <span><span class="co"># Multiple simulations capture stochastic variation</span></span>
-<span><span class="va">runs_many</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">50</span>, seed <span class="op">=</span> <span class="fl">789</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">runs_many</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">50</span>, seed <span class="op">=</span> <span class="fl">789</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
@@ -363,7 +364,7 @@ with the <code>seed</code> parameter:</p>
 <span><span class="va">config_modified</span><span class="op">$</span><span class="va">vaccination_rate</span> <span class="op">&lt;-</span> <span class="fl">0.1</span></span>
 <span></span>
 <span><span class="co"># Run with modifications</span></span>
-<span><span class="va">results_modified</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">results_modified</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_modified</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">111</span></span>
@@ -406,7 +407,7 @@ debugging or accessing outputs not returned by R wrapper functions.</p>
 </h3>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Baseline scenario</span></span>
-<span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">100</span></span>
@@ -416,7 +417,7 @@ debugging or accessing outputs not returned by R wrapper functions.</p>
 <span><span class="va">config_intervention</span> <span class="op">&lt;-</span> <span class="va">config_simulation_endemic</span></span>
 <span><span class="va">config_intervention</span><span class="op">$</span><span class="va">vaccination_rate</span> <span class="op">&lt;-</span> <span class="fl">0.15</span></span>
 <span></span>
-<span><span class="va">intervention</span> <span class="op">&lt;-</span> <span class="fu">run_LASER</span><span class="op">(</span></span>
+<span><span class="va">intervention</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
 <span>  config <span class="op">=</span> <span class="va">config_intervention</span>,</span>
 <span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">100</span>  <span class="co"># Same seed for paired comparison</span></span>
@@ -440,7 +441,7 @@ debugging or accessing outputs not returned by R wrapper functions.</p>
 <span>  <span class="va">config</span> <span class="op">&lt;-</span> <span class="va">config_default</span></span>
 <span>  <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span> <span class="op">&lt;-</span> <span class="va">beta</span></span>
 <span></span>
-<span>  <span class="fu">run_LASER</span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, n_sim <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, n_sim <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Extract total cases for each beta</span></span>
@@ -480,7 +481,7 @@ debugging or accessing outputs not returned by R wrapper functions.</p>
 <strong>Solution</strong>: Run <code><a href="../reference/install_dependencies.html">install_dependencies()</a></code></p>
 <p><strong>Issue</strong>: Model runs slowly <strong>Solution</strong>:
 Enable parallel execution with
-<code>mosaic_control(parallel = TRUE)</code></p>
+<code>mosaic_control_defaults(parallel = TRUE)</code></p>
 <p><strong>Issue</strong>: Results vary between runs
 <strong>Solution</strong>: Set a fixed seed:
 <code>run_LASER(..., seed = 123)</code></p>
@@ -518,8 +519,8 @@ workflows</li>
 <code><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference">help(package = "MOSAIC")</a></code>
 </li>
 <li>
-<strong>Function help</strong>: <code>?run_LASER</code>,
-<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code>, <code>?run_mosaic_iso</code>
+<strong>Function help</strong>: <code><a href="../reference/run_LASER.html">?run_LASER</a></code>,
+<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code>, <code><a href="../reference/run_mosaic_iso.html">?run_mosaic_iso</a></code>
 </li>
 <li>
 <strong>Report issues</strong>: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues" class="external-link uri">https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues</a>

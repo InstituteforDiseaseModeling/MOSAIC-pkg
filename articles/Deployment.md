@@ -7,14 +7,9 @@ compute clusters for production use and large-scale simulations. MOSAIC
 provides ready-to-use bash scripts that handle all installation steps
 automatically.
 
-The deployment scripts are: - **Non-interactive** - Run without user
-input, perfect for automation - **SSH-compatible** - Execute remotely
-via `ssh user@host 'bash -s' < script.sh` - **Cloud-ready** - Use with
-cloud-init or VM provisioning tools - **Verified** - Include automatic
-dependency checking
-
-All scripts are available in the `vm/` directory of the MOSAIC-pkg
-repository.
+The deployment scripts are **non-interactive** and execute remotely via
+`ssh user@host 'bash -s' < script.sh`. All scripts are available in the
+`vm/` directory of the MOSAIC-pkg repository.
 
 ------------------------------------------------------------------------
 
@@ -41,18 +36,6 @@ Installation vignette):
 
 ``` sh
 ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
-```
-
-**Option 3: Run directly on VM**
-
-If you have direct access to the VM (not via SSH):
-
-``` sh
-# Download script to VM
-wget https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/setup_mosaic.sh
-
-# Run script
-bash setup_mosaic.sh
 ```
 
 ### Script Contents
@@ -216,7 +199,7 @@ library(MOSAIC)
 options(mc.cores = parallel::detectCores() - 1)
 
 # Run parallel simulations
-ctrl <- mosaic_control(
+ctrl <- mosaic_control_defaults(
   parallel = TRUE,
   n_cores = parallel::detectCores() - 1
 )

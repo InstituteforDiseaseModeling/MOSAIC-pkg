@@ -86,8 +86,6 @@ weights1 <- runif(500, 0.5, 1.5)
 samples2 <- rnorm(500, mean = 1)
 weights2 <- runif(500, 0.5, 1.5)
 kl_div_weighted <- calc_kl_divergence(samples1, weights1, samples2, weights2)
-#> Warning: Selecting bandwidth *not* using 'weights'
-#> Warning: Selecting bandwidth *not* using 'weights'
 
 # Example 3: Comparing posterior to prior in Bayesian analysis
 # prior_samples <- rnorm(1000, mean = 0, sd = 2)  # Prior

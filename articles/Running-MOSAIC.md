@@ -64,7 +64,9 @@ results_endemic <- run_LASER(
 
 ## Single-Location Simulations
 
-Use `run_mosaic_iso()` for country-level simulations with ISO codes:
+Use
+[`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+for country-level simulations with ISO codes:
 
 ``` r
 # Democratic Republic of Congo (DRC)
@@ -97,7 +99,9 @@ countries.
 
 ## Multi-Location Simulations
 
-Use `run_LASER()` with custom configurations for multi-location models:
+Use
+[`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
+with custom configurations for multi-location models:
 
 ``` r
 # Create configuration for three countries
@@ -231,12 +235,13 @@ cat("Mean attack rate:", mean(attack_rate), "\n")
 
 ## Parallel Execution
 
-For large-scale simulations, use `mosaic_control()` to enable parallel
-processing:
+For large-scale simulations, use
+[`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+to enable parallel processing:
 
 ``` r
 # Configure parallel execution
-ctrl <- mosaic_control(
+ctrl <- mosaic_control_defaults(
   parallel = TRUE,
   n_cores = parallel::detectCores() - 1,
   verbose = TRUE
@@ -426,7 +431,7 @@ Run
 [`install_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/install_dependencies.md)
 
 **Issue**: Model runs slowly **Solution**: Enable parallel execution
-with `mosaic_control(parallel = TRUE)`
+with `mosaic_control_defaults(parallel = TRUE)`
 
 **Issue**: Results vary between runs **Solution**: Set a fixed seed:
 `run_LASER(..., seed = 123)`
@@ -449,9 +454,10 @@ with `mosaic_control(parallel = TRUE)`
 
 - **Package documentation**:
   [`help(package = "MOSAIC")`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference)
-- **Function help**: `?run_LASER`,
+- **Function help**:
+  [`?run_LASER`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md),
   [`?make_LASER_config`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md),
-  `?run_mosaic_iso`
+  [`?run_mosaic_iso`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
 - **Report issues**:
   <https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues>
 - **Example scripts**: See `MOSAIC-pkg/model/` directory for complete

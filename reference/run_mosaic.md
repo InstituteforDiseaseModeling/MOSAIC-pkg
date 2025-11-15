@@ -1,7 +1,20 @@
-# Run MOSAIC Calibration Workflow
+# Run MOSAIC Calibration Workflow (Advanced Interface)
 
-High-level entry point that executes the full MOSAIC calibration
-workflow:
+**Advanced interface with full control over model specification.** For
+most users,
+[`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+provides a simpler interface.
+
+This function accepts pre-configured config and priors objects,
+allowing:
+
+- Completely custom configs (non-standard locations, custom data)
+
+- Fine-grained control over all model parameters
+
+- Testing with synthetic configurations
+
+Executes the full MOSAIC calibration workflow:
 
 1.  Adaptive calibration with R² convergence detection
 
@@ -17,102 +30,58 @@ workflow:
 
 7.  Optional: Neural Posterior Estimation (NPE) stage
 
-The simulation engine samples parameters once per simulation seed, runs
-`n_iter` stochastic iterations, collapses likelihoods via log-mean-exp,
-and writes individual parquet files per simulation.
-
-Returns default control settings for `run_mosaic()`
-
-Returns default sampling settings for
-[`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
-
-Returns pre-configured I/O settings for common use cases
-
-Backward-compatible alias for `run_mosaic()`
-
 ## Usage
 
 ``` r
-run_mosaic(
-  iso_code,
-  dir_output,
-  config = NULL,
-  priors = NULL,
-  sampling_args = NULL,
-  n_iter = 3L,
-  n_sims = "auto",
-  control = NULL,
-  resume = FALSE
-)
+run_MOSAIC(config, priors, dir_output, control = NULL, resume = FALSE)
 
-mosaic_run_defaults()
-
-mosaic_sampling_defaults()
-
-mosaic_io_presets(preset = c("default", "debug", "fast", "archive"))
-
-run_MOSAIC(...)
+run_mosaic(config, priors, dir_output, control = NULL, resume = FALSE)
 ```
 
 ## Arguments
 
-- iso_code:
+- config:
 
-  Character vector of ISO3 codes (e.g., `c("MOZ","MWI","ZMB","ZWE")`).
-  Used to load default config and priors if not provided.
+  Named list of LASER model configuration (REQUIRED). Contains
+  location_name, reported_cases, reported_deaths, and all model
+  parameters. Create with custom data or obtain via
+  [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md).
+
+- priors:
+
+  Named list of prior distributions (REQUIRED). Contains distribution
+  specifications for all parameters. Create custom or obtain via
+  [`get_location_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_priors.md).
 
 - dir_output:
 
   Character. Output directory for this calibration run (REQUIRED). All
-  results (simulations, diagnostics, plots, posteriors) will be saved
-  here. Must be unique per run to avoid overwriting results. The
-  directory will be created if it does not exist.
-
-- config:
-
-  Named list of model configuration. If `NULL` (default), loads
-  location-specific configuration via `get_location_config(iso_code)`.
-  Provide custom config to use different outbreak data or model
-  settings.
-
-- priors:
-
-  Named list of prior distributions. If `NULL` (default), loads
-  location-specific priors via `get_location_priors(iso_code)`. Provide
-  custom priors to modify parameter ranges or distributions.
-
-- sampling_args:
-
-  Named list forwarded to
-  [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md).
-  If `NULL` (default), uses `mosaic_sampling_defaults()`. Controls which
-  parameters are sampled vs held fixed.
-
-- n_iter:
-
-  Integer. Stochastic iterations per simulation (collapsed post-hoc via
-  log-mean-exp). Default 3.
-
-- n_sims:
-
-  Either `"auto"` for adaptive ESS-driven batching (stops at
-  `max_simulations` if not converged), or a positive integer for a fixed
-  number of simulations (runs exactly that many, ignoring
-  `max_simulations`).
+  results will be saved here. Must be unique per run.
 
 - control:
 
-  Named list of algorithm settings. Start from `mosaic_run_defaults()`
-  and override fields as needed. See Details for structure.
+  Control list created with
+  [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md).
+  If `NULL`, uses defaults. Controls calibration strategy, parameter
+  sampling, parallelization, and output settings. Key settings:
+
+  - `calibration$n_simulations`: NULL for auto mode, integer for fixed
+    mode
+
+  - `calibration$n_iterations`: LASER iterations per simulation
+    (default: 3)
+
+  - `calibration$max_simulations`: Maximum total simulations (default:
+    100000)
+
+  - `sampling`: Which parameters to sample vs hold fixed
+
+  - `parallel`: Cluster settings for parallel execution
 
 - resume:
 
-  Logical. If `TRUE`, reuses existing per-simulation files and continues
-  from last checkpoint (auto mode) or resumes fixed run.
-
-- preset:
-
-  Character. One of "default", "debug", "fast", or "archive"
+  Logical. If `TRUE`, continues from existing checkpoint. Default:
+  FALSE.
 
 ## Value
 
@@ -132,64 +101,47 @@ Invisibly returns a list with:
 
 ## Control Structure
 
-The `control` argument accepts a nested list with these sections:
-
-- paths:
-
-  Behavior flags: `clean_output`, `plots`
-
-- parallel:
-
-  Cluster settings: `n_cores`, `type`, `progress`
-
-- limits:
-
-  Hard constraints: `max_simulations`, `min_ess_check`
+See
+[`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+for complete documentation. The control structure contains:
 
 - calibration:
 
-  Phase 1: `batch_size`, `min_batches`, `max_batches`, `target_r2`
+  n_simulations, n_iterations, max_simulations, batch_size, etc.
 
-- fine_tuning:
+- sampling:
 
-  Phase 3: `batch_sizes` list (massive/large/standard/precision/final)
+  sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.
+
+- parallel:
+
+  enable, n_cores, type, progress
+
+- paths:
+
+  clean_output, plots
 
 - targets:
 
-  Convergence: `ESS_param`, `ESS_param_prop`, `ESS_best`, `A_best`,
-  `CVw_best`, `B_min`, `percentile_max`
+  ESS_param, ESS_best, A_best, CVw_best, etc.
 
 - npe:
 
-  Stage 2: `enable`, `weight_strategy`
+  enable, weight_strategy
 
 - io:
 
-  File format: `format`, `compression`, `compression_level`
-
-See `mosaic_run_defaults()` for defaults.
-
-## MOSAIC Root Directory
-
-The MOSAIC project root (containing MOSAIC-pkg/, MOSAIC-data/, etc.) is
-auto-detected from `getOption("MOSAIC.root")`. Set once per session:
-
-      options(MOSAIC.root = "/path/to/MOSAIC")
-
-Or add to `~/.Rprofile` for permanent configuration.
+  format, compression, compression_level
 
 ## Output Files
 
 Results are organized in a structured directory tree:
 
-- `0_setup/`: Configuration files (simulation_params.json, priors.json,
-  config_base.json)
+- `0_setup/`: Configuration files (JSON format)
 
-- `1_bfrs/outputs/`: Combined simulations.parquet and individual files
-  during run
+- `1_bfrs/outputs/`: Simulation results (Parquet format)
 
-- `1_bfrs/diagnostics/`: ESS metrics, convergence results, subset
-  selection
+- `1_bfrs/diagnostics/`: ESS metrics, convergence results
 
 - `1_bfrs/posterior/`: Posterior quantiles and distributions
 
@@ -199,53 +151,72 @@ Results are organized in a structured directory tree:
 
 - `3_results/`: Final combined results
 
+## See also
+
+[`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+for simple interface with ISO codes
+
+[`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+for building control structures
+
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-# Set MOSAIC root (once per session or in ~/.Rprofile)
-options(MOSAIC.root = "~/MOSAIC")
+# === BASIC CUSTOM CONFIG ===
 
-# Basic usage with defaults
-result <- run_mosaic(
-  iso_code = "ETH",
-  dir_output = "~/results/ethiopia_2025"
+# Load and modify default config
+config <- get_location_config(iso = "ETH")
+config$population_size <- 1000000
+
+priors <- get_location_priors(iso = "ETH")
+
+run_MOSAIC(
+  config = config,
+  priors = priors,
+  dir_output = "./output"
 )
 
-# Multi-country calibration with custom settings
-ctrl <- mosaic_run_defaults()
-ctrl$parallel$n_cores <- 16
-ctrl$calibration$target_r2 <- 0.95
-ctrl$npe$enable <- TRUE
+# === MULTI-LOCATION WITH CUSTOM CONTROL ===
 
-result <- run_mosaic(
-  iso_code = c("MOZ", "MWI", "ZMB", "ZWE"),
-  dir_output = "~/results/four_countries",
-  n_iter = 5,
-  n_sims = "auto",
-  control = ctrl
+config <- get_location_config(iso = c("ETH", "KEN", "TZA"))
+priors <- get_location_priors(iso = c("ETH", "KEN", "TZA"))
+
+ctrl <- mosaic_control_defaults(
+  calibration = list(
+    n_simulations = 5000,  # Fixed mode
+    n_iterations = 5
+  ),
+  parallel = list(enable = TRUE, n_cores = 16)
 )
 
-# Fixed-size run for testing (CSV output for inspection)
-ctrl <- mosaic_run_defaults()
-ctrl$io <- mosaic_io_presets("debug")  # CSV format
+run_MOSAIC(config, priors, "./output", ctrl)
 
-result <- run_mosaic(
-  iso_code = "ETH",
-  dir_output = "~/results/test_run",
-  n_iter = 1,
-  n_sims = 1000,  # Exactly 1000 simulations
-  control = ctrl
+# === CUSTOM PRIORS FOR SENSITIVITY ===
+
+config <- get_location_config(iso = "ETH")
+priors <- get_location_priors(iso = "ETH")
+
+# Tighten transmission rate prior
+priors$tau_i$shape <- 20
+priors$tau_i$rate <- 4
+
+run_MOSAIC(config, priors, "./output")
+
+# === COMPLETELY CUSTOM CONFIG ===
+
+# Non-standard location names
+custom_config <- list(
+  location_name = c("Region1", "Region2"),
+  reported_cases = my_cases_data,
+  reported_deaths = my_deaths_data,
+  # ... all other LASER parameters
 )
 
-# Custom priors for sensitivity analysis
-priors_tight <- get_location_priors("ETH")
-priors_tight$tau_i$shape <- 20  # Tighter transmission rate prior
-
-result <- run_mosaic(
-  iso_code = "ETH",
-  dir_output = "~/results/sensitivity_tight_tau",
-  priors = priors_tight
+custom_priors <- list(
+  # ... custom prior specifications
 )
+
+run_MOSAIC(custom_config, custom_priors, "./output")
 } # }
 ```

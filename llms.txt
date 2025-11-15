@@ -63,8 +63,15 @@ contact:
 
 Main functions for running MOSAIC simulations
 
-- [`run_LASER_model()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.md)
+- [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
+  [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   : Run LASER Model Simulation
+- [`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+  [`run_MOSAIC_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+  : Run MOSAIC Calibration by ISO Code (Simple Interface)
+- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  : Run MOSAIC Calibration Workflow (Advanced Interface)
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
@@ -78,21 +85,31 @@ Main functions for running MOSAIC simulations
 - [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)
   : Generate Directory Paths for the MOSAIC Project
 
+## Configuration & Control
+
+Functions for configuring MOSAIC execution settings
+
+- [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+  : Build Complete MOSAIC Control Structure
+- [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_io_presets.md)
+  : Get Pre-configured I/O Settings
+
 ## Model Execution
 
 Functions starting with run\_, make\_, or create\_
 
-- [`run_LASER_model()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.md)
+- [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
+  [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   : Run LASER Model Simulation
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
-- [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`mosaic_run_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`mosaic_sampling_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  : Run MOSAIC Calibration Workflow
+- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  : Run MOSAIC Calibration Workflow (Advanced Interface)
+- [`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+  [`run_MOSAIC_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+  : Run MOSAIC Calibration by ISO Code (Simple Interface)
 - [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
   : Run NPE Diagnostics
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
@@ -1007,6 +1024,10 @@ Other exported functions and internal helpers
   : Create Lagged Versions of Data
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values
+- [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+  : Build Complete MOSAIC Control Structure
+- [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_io_presets.md)
+  : Get Pre-configured I/O Settings
 - [`pgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/pgompertz.md)
   : Gompertz Distribution Cumulative Distribution Function
 - [`plan_batch_strategy()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plan_batch_strategy.md)
@@ -1166,17 +1187,18 @@ Other exported functions and internal helpers
   : Remove the MOSAIC Python Environment
 - [`rgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rgompertz.md)
   : Generate Random Gompertz Variates
-- [`run_LASER_model()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER_model.md)
+- [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
+  [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   : Run LASER Model Simulation
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
-- [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`mosaic_run_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`mosaic_sampling_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  : Run MOSAIC Calibration Workflow
+- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
+  : Run MOSAIC Calibration Workflow (Advanced Interface)
+- [`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+  [`run_MOSAIC_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
+  : Run MOSAIC Calibration by ISO Code (Simple Interface)
 - [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
   : Run NPE Diagnostics
 - [`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md)

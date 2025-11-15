@@ -52,7 +52,7 @@ This subset will be used to define priors for Neural Posterior Estimation (NPE).
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">identify_best_subset</span><span class="op">(</span></span>
 <span>  <span class="va">results</span>,</span>
-<span>  min_B <span class="op">=</span> <span class="fl">100</span>,</span>
+<span>  min_B <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  target_ESS_B <span class="op">=</span> <span class="fl">50</span>,</span>
 <span>  target_A <span class="op">=</span> <span class="fl">0.95</span>,</span>
 <span>  target_CVw <span class="op">=</span> <span class="fl">0.5</span>,</span>
@@ -75,7 +75,9 @@ This subset will be used to define priors for Neural Posterior Estimation (NPE).
 
 
 <dt id="arg-min-b">min_B<a class="anchor" aria-label="anchor" href="#arg-min-b"></a></dt>
-<dd><p>Integer minimum number of simulations to include even if percentile is smaller (default: 100)</p></dd>
+<dd><p>Integer minimum number of simulations to include even if percentile is smaller (default: 30)
+This ensures enough samples for stable convergence metrics (ESS, A, CVw).
+Can be lowered for small datasets, but values &lt; 20 may give unstable results.</p></dd>
 
 
 <dt id="arg-target-ess-b">target_ESS_B<a class="anchor" aria-label="anchor" href="#arg-target-ess-b"></a></dt>
@@ -127,7 +129,7 @@ The search stops when the range is smaller than this value.</p></dd>
 <span class="r-in"><span><span class="co"># Identify best subset from calibration results</span></span></span>
 <span class="r-in"><span><span class="va">best_subset</span> <span class="op">&lt;-</span> <span class="fu">identify_best_subset</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  results <span class="op">=</span> <span class="va">calibration_results</span>,</span></span>
-<span class="r-in"><span>  min_B <span class="op">=</span> <span class="fl">100</span>,</span></span>
+<span class="r-in"><span>  min_B <span class="op">=</span> <span class="fl">30</span>,              <span class="co"># Minimum 30 simulations for stable metrics</span></span></span>
 <span class="r-in"><span>  target_ESS_B <span class="op">=</span> <span class="fl">50</span>,</span></span>
 <span class="r-in"><span>  target_A <span class="op">=</span> <span class="fl">0.95</span>,</span></span>
 <span class="r-in"><span>  target_CVw <span class="op">=</span> <span class="fl">0.5</span>,</span></span>

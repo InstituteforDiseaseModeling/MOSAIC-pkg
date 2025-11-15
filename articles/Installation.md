@@ -7,10 +7,10 @@ MOSAIC has three installation levels depending on your needs:
 | Setup           | Purpose                            | Requirements               |
 |:----------------|:-----------------------------------|:---------------------------|
 | **Quick Start** | Run pre-configured models          | R + internet               |
-| **Standard**    | Process data & estimate parameters | R + git + system libraries |
+| **Standard**    | Process data & run prior models    | R + git + system libraries |
 | **Developer**   | Contribute code & full development | All above + dev tools      |
 
-Most users should start with Quick Start.
+Most users should start with **Quick Start**.
 
 ------------------------------------------------------------------------
 
