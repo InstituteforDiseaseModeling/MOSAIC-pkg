@@ -23,9 +23,3 @@ Numeric vector of quantiles.
 \description{
 Compute the quantile function (inverse CDF) of a Gompertz distribution.
 }
-\examples{
-p <- seq(0.01, 0.99, length.out = 100)
-q <- qgompertz(p, b = 2, eta = 3)
-plot(p, q, type = "l", main = "Gompertz Quantile Function")
-
-}

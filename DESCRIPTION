@@ -1,8 +1,8 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.4.1
-Date: 2025-10-13
+Version: 0.5.2
+Date: 2025-11-14
 Authors@R: c(
           person("John R", "Giles", 
                  email = "john.giles@gatesfoundation.org", 
@@ -18,6 +18,9 @@ Description: Tools for preparing data and models for the MOSAIC framework. The M
      to understand the impact of interventions, such as vaccination, as well as large-scale 
      drivers like climate change. 
 License: file LICENSE
+URL: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/
+BugReports: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues
+SystemRequirements: GDAL (>= 2.0.0), PROJ (>= 4.8.0), GEOS (>= 3.4.0), UDUNITS-2, Python (>= 3.9)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
@@ -31,6 +34,8 @@ Imports:
   compiler,
   cowplot,
   countrycode,
+  data.table,
+  dbscan,
   dplyr,
   elevatr,
   exactextractr,
@@ -60,8 +65,8 @@ Imports:
   raster,
   readxl,
   reshape2,
-  rjags,
   rnaturalearth,
+  rnaturalearthdata,
   sf,
   slider,
   sp,

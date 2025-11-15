@@ -1,13 +1,13 @@
 {
-  "fit_date_start": "2010-01-01",
+  "fit_date_start": "2015-01-01",
   "fit_date_stop": "2025-07-24",
-  "pred_date_start": "2010-01-01",
+  "pred_date_start": "2015-01-01",
   "pred_date_stop": "2026-03-31",
-  "n_training_samples": 32499,
-  "n_prediction_samples": 33579,
+  "n_training_samples": 22066,
+  "n_prediction_samples": 23146,
   "model_performance": {
-    "validation_loss": 6.0432,
-    "validation_mae": 0.6917
+    "validation_loss": 7.4435,
+    "validation_mae": 0.878
   },
   "covariates": ["year", "month", "week", "sin_annual", "cos_annual", "sin_biannual", "cos_biannual", "sin_quarterly", "cos_quarterly", "sin_monthly", "cos_monthly", "total_population", "population_density", "urban_population_pct", "GDP", "poverty_ratio", "Piped_Water", "Other_Improved_Water", "Septic_or_Sewer_Sanitation", "Other_Improved_Sanitation", "Unimproved_Water", "Surface_Water", "Open_Defecation", "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min", "precipitation_sum", "relative_humidity_2m_mean", "wind_speed_10m_mean", "cloud_cover_mean", "et0_fao_evapotranspiration_sum", "soil_moisture_0_to_10cm_mean", "precip_sum_2w", "precip_sum_4w", "precip_sum_8w", "precip_sum_12w", "temp_mean_2w", "temp_mean_4w", "temp_mean_8w", "temp_mean_12w", "rh_mean_2w", "rh_mean_4w", "rh_mean_8w", "rh_mean_12w", "precip_anom", "temp_anom", "vpd_anom", "soil_moisture_anom", "precip_extreme_p90_count", "heatwave_days", "dry_spell_len", "temp_precip_interaction", "humidity_temp_interaction", "enso_precip_interaction", "dmi_temp_interaction", "elevation_temp_interaction", "moisture_temp_interaction", "wash_precip_extreme_interaction", "urban_precip_anom_interaction", "precip_anom_sq", "temp_anom_sq", "log1p_cum_vaccine_doses", "vpd", "moisture_deficit", "aridity_index", "spei_approx", "gdd_cholera", "diurnal_temp_range", "heat_index", "dew_point_2m_max", "dew_point_2m_mean", "dew_point_2m_min", "pressure_msl_mean", "relative_humidity_2m_max", "relative_humidity_2m_min", "shortwave_radiation_sum", "wind_speed_10m_max", "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation", "precipitation_sum_lag1", "precipitation_sum_lag2", "precipitation_sum_lag4", "precipitation_sum_lag6", "precipitation_sum_lag8", "temperature_2m_mean_lag2", "temperature_2m_mean_lag4", "temperature_2m_mean_lag8", "temperature_2m_max_lag2", "temperature_2m_max_lag4", "temperature_2m_max_lag6", "temperature_2m_max_lag8", "relative_humidity_2m_mean_lag1", "relative_humidity_2m_mean_lag2", "relative_humidity_2m_mean_lag4", "vpd_lag1", "vpd_lag4", "vpd_lag8", "soil_moisture_0_to_10cm_mean_lag1", "soil_moisture_0_to_10cm_mean_lag2", "soil_moisture_0_to_10cm_mean_lag4", "soil_moisture_0_to_10cm_mean_lag6", "soil_moisture_0_to_10cm_mean_lag8", "spei_approx_lag4", "spei_approx_lag8", "spei_approx_lag12", "et0_fao_evapotranspiration_sum_lag1", "et0_fao_evapotranspiration_sum_lag4", "et0_fao_evapotranspiration_sum_lag8", "diurnal_temp_range_lag2", "diurnal_temp_range_lag4", "heat_index_lag2", "heat_index_lag4", "heat_index_lag8", "cloud_cover_mean_lag1", "cloud_cover_mean_lag4", "wind_speed_10m_mean_lag1", "wind_speed_10m_mean_lag2", "ENSO3_lag4", "ENSO3_lag16", "ENSO3_lag20", "ENSO3_lag24", "ENSO34_lag6", "ENSO34_lag24", "ENSO34_lag44", "ENSO4_lag40", "ENSO4_lag44", "DMI_lag0", "DMI_lag4", "DMI_lag16", "DMI_lag20"]
 }

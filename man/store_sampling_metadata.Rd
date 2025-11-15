@@ -30,6 +30,6 @@ config <- sample_parameters(PATHS, seed = 123, sample_alpha_1 = FALSE)
 config <- store_sampling_metadata(config, sample_alpha_1 = FALSE, sample_phi_1 = TRUE)
 
 # Later retrieve the metadata
-sampling_flags <- config$__sampling_metadata__
+sampling_flags <- extract_sampling_metadata(config)
 }
 }

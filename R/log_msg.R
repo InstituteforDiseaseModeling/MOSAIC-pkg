@@ -10,13 +10,13 @@
 #'
 #' @details
 #' The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS" format
-#' to each message. Messages are printed to the console and, if an 'output_dir'
+#' to each message. Messages are printed to the console and, if a 'dir_output'
 #' variable exists in the calling environment, also appended to a 'run.log' file
-#' in that directory.
+#' in that directory (dir_output/run.log).
 #'
 #' This is particularly useful for:
 #' \itemize{
-#'   \item Model calibration workflows
+#'   \item Model calibration workflows (logs entire BFRS → NPE sequence)
 #'   \item Long-running simulations
 #'   \item Parallel processing tasks
 #'   \item Debugging and progress tracking
@@ -33,11 +33,11 @@
 #' log_msg("Processing %d simulations with %d cores", 100, 8)
 #'
 #' # With output directory for file logging
-#' output_dir <- tempdir()
-#' log_msg("Results saved to %s", output_dir)
+#' dir_output <- tempdir()
+#' log_msg("Results saved to %s", dir_output)
 #'
 #' # Check the log file
-#' log_file <- file.path(output_dir, "run.log")
+#' log_file <- file.path(dir_output, "run.log")
 #' if (file.exists(log_file)) {
 #'   cat(readLines(log_file), sep = "\n")
 #' }
@@ -48,13 +48,13 @@ log_msg <- function(msg, ...) {
   timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   log_entry <- sprintf("[%s] %s", timestamp, sprintf(msg, ...))
   cat(log_entry, "\n")
-  
-  # Check if output_dir exists in the calling environment
-  if (exists("output_dir", envir = parent.frame())) {
-    output_dir <- get("output_dir", envir = parent.frame())
-    log_file <- file.path(output_dir, "run.log")
+
+  # Check if dir_output exists in the calling environment
+  if (exists("dir_output", envir = parent.frame())) {
+    dir_output <- get("dir_output", envir = parent.frame())
+    log_file <- file.path(dir_output, "run.log")
     cat(log_entry, "\n", file = log_file, append = TRUE)
   }
-  
+
   invisible(NULL)
 }

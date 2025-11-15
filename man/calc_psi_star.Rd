@@ -12,7 +12,8 @@ calc_psi_star(
   z = 1,
   k = 0,
   eps = 1e-06,
-  fill_method = c("locf", "linear")
+  fill_method = c("locf", "linear"),
+  warn_k_rounding = TRUE
 )
 }
 \arguments{
@@ -30,6 +31,9 @@ Non-integers are rounded to nearest integer.}
 \item{eps}{Small positive number to clip \code{psi} away from \{0,1\} before \code{qlogis}.}
 
 \item{fill_method}{Character; one of \code{c("locf","linear")} controlling how NA gaps are filled.}
+
+\item{warn_k_rounding}{Logical; if \code{TRUE} (default), warns when \code{k} is rounded to nearest integer.
+Set to \code{FALSE} to suppress this warning.}
 }
 \value{
 Numeric vector \eqn{\tilde\psi^{\star}_t} (same length as \code{psi}):
@@ -63,6 +67,21 @@ Choose via \code{fill_method}:
 \item \code{"linear"} — linear interpolation for interior gaps with constant edge extension.
 }
 If all values are NA after shifting, the function falls back to a constant baseline \eqn{\sigma(b)}.
+}
+\examples{
+# Basic usage with integer k (no warnings)
+psi <- c(0.1, 0.3, 0.7, 0.9, 0.5)
+result1 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2)
+
+# Non-integer k with warning (default behavior)
+result2 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2.744)
+
+# Non-integer k without warning
+result3 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2.744, warn_k_rounding = FALSE)
+
+# With EWMA smoothing
+result4 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2, z = 0.8)
+
 }
 \seealso{
 \code{\link[stats]{qlogis}}, \code{\link[stats]{plogis}}, \code{\link[stats]{approx}}

@@ -55,7 +55,7 @@ plot_model_convergence_loss <- function(results_dir,
 
      # Metrics (new names)
      metrics <- c(
-          ESS_all        = safe_numeric(diagnostics$metrics$ess_all$value),
+          ESS_all        = safe_numeric(diagnostics$metrics$ess_retained$value),
           A_B            = safe_numeric(diagnostics$metrics$A_B$value),
           CVw_B          = safe_numeric(diagnostics$metrics$cvw_B$value),
           B_size         = safe_numeric(diagnostics$metrics$B_size$value),
@@ -72,7 +72,7 @@ plot_model_convergence_loss <- function(results_dir,
 
      # Status (new names)
      status <- c(
-          ESS_all = safe_character(diagnostics$metrics$ess_all$status),
+          ESS_all = safe_character(diagnostics$metrics$ess_retained$status),
           A_B     = safe_character(diagnostics$metrics$A_B$status),
           CVw_B   = safe_character(diagnostics$metrics$cvw_B$status),
           B_size  = safe_character(diagnostics$metrics$B_size$status)
@@ -105,13 +105,13 @@ plot_model_convergence_loss <- function(results_dir,
 
      diagnostic_lines <- c(
           sprintf("Finite-loss: %d/%d", n_successful, n_draws),
-          safe_sprintf("ESS (all): %.0f [target ≥ %.0f]", metrics["ESS_all"], targets["ESS_min"]),
+          safe_sprintf("ESS (all): %.0f [target >= %.0f]", metrics["ESS_all"], targets["ESS_min"]),
           "",
           sprintf("Best subset (B): top %.1f%%", 100*top_pct_lab),
-          sprintf("B = %s [target ≥ 50]", format(metrics["B_size"])),
-          safe_sprintf("  A = %.3f [target ≥ %.3f]", metrics["A_B"],   targets["A_min"]),
-          safe_sprintf("  CVw = %.3f [target ≤ %.3f]", metrics["CVw_B"], targets["CVw_max"]),
-          if (is.finite(metrics["loss_threshold"])) sprintf("  Loss threshold: ≤ %.4f", metrics["loss_threshold"]) else NULL
+          sprintf("B = %s [target >= 50]", format(metrics["B_size"])),
+          safe_sprintf("  A = %.3f [target >= %.3f]", metrics["A_B"],   targets["A_min"]),
+          safe_sprintf("  CVw = %.3f [target <= %.3f]", metrics["CVw_B"], targets["CVw_max"]),
+          if (is.finite(metrics["loss_threshold"])) sprintf("  Loss threshold: <= %.4f", metrics["loss_threshold"]) else NULL
      )
 
      # --- Footnote ---------------------------------------------------------------

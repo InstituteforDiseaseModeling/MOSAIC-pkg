@@ -56,7 +56,9 @@ fit_normal_from_ci <- function(mode_val, ci_lower, ci_upper,
   }
 
   if (mode_val < ci_lower || mode_val > ci_upper) {
-    warning("Mode is outside the confidence interval. For normal distribution, mode should be centered.")
+    if (verbose) {
+      warning("Mode is outside the confidence interval. For normal distribution, mode should be centered.")
+    }
   }
 
   if (method == "moment_matching") {

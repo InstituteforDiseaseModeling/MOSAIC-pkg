@@ -38,9 +38,9 @@ distribution, using the gamma-function formulation. Each observation can be
 weighted.
 }
 \details{
-If \code{k} is not supplied, it is estimated as \eqn{k = \bar x^2 / (s^2 - \bar x)} from
+If \code{k} is not supplied, it is estimated as \eqn{k = \bar{x}^2 / (s^2 - \bar{x})} from
 \code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
-If \code{s^2 \le \bar x}, the function uses the Poisson limit (\code{k = Inf}).
+If \eqn{s^2 \le \bar{x}}, the function uses the Poisson limit (\code{k = Inf}).
 }
 \examples{
 # Default k_min = 3

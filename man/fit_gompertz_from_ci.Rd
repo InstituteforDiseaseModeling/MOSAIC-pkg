@@ -13,72 +13,46 @@ fit_gompertz_from_ci(
 )
 }
 \arguments{
-\item{mode_val}{Numeric (> 0). Target mode of the distribution (very near zero is allowed).}
+\item{mode_val}{Numeric greater than 0. Target mode of the distribution (very near zero is allowed).}
 
-\item{ci_lower}{Numeric (>= 0). Lower bound of the target interval (e.g., 2.5\\% quantile).}
+\item{ci_lower}{Numeric greater than or equal to 0. Lower bound of the target interval (e.g., 2.5 percent quantile).}
 
-\item{ci_upper}{Numeric (> ci_lower). Upper bound of the target interval (e.g., 97.5\\% quantile).}
+\item{ci_upper}{Numeric greater than ci_lower. Upper bound of the target interval (e.g., 97.5 percent quantile).}
 
-\item{probs}{Numeric length-2 vector in (0, 1). Probability levels for the target bounds.
-Defaults to \code{c(0.025, 0.975)}.}
+\item{probs}{Numeric length-2 vector in (0, 1). Probability levels for the target bounds. Defaults to c(0.025, 0.975).}
 
-\item{verbose}{Logical. If \code{TRUE}, prints a diagnostic summary.}
+\item{verbose}{Logical. If TRUE, prints a diagnostic summary.}
 }
 \value{
-A list with components:
+A list containing:
 \itemize{
-\item \code{b}: Gompertz shape parameter.
-\item \code{eta}: Gompertz rate parameter (satisfying \eqn{\eta = b \exp(b\,\text{mode})}).
-\item \code{f0}: Density at zero, \eqn{f(0) = b\,\eta} (finite and positive).
-\item \code{fitted_mode}: The implied mode (matches \code{mode_val} up to numeric error).
-\item \code{fitted_ci}: Named vector of fitted quantiles at \code{probs}.
-\item \code{fitted_mean}: Numerical estimate of \eqn{\mathbb{E}[X]} via quadrature.
-\item \code{fitted_sd}: Numerical estimate of \eqn{\mathrm{sd}(X)} via quadrature.
-\item \code{probs}: The probability levels used.
-\item \code{input_mode}: Echo of \code{mode_val}.
-\item \code{input_ci}: Echo of \code{c(lower = ci_lower, upper = ci_upper)}.
+\item b: Gompertz shape parameter
+\item eta: Gompertz rate parameter
+\item f0: Density at zero (finite and positive)
+\item fitted_mode: The implied mode (matches mode_val up to numeric error)
+\item fitted_ci: Named vector of fitted quantiles at probs
+\item fitted_mean: Numerical estimate of the expected value via quadrature
+\item fitted_sd: Numerical estimate of the standard deviation via quadrature
+\item probs: The probability levels used
+\item input_mode: Echo of mode_val
+\item input_ci: Echo of c(lower = ci_lower, upper = ci_upper)
 }
 }
 \description{
-This function estimates the parameters of a Gompertz distribution on \eqn{[0, \infty)}
-with pdf \eqn{f(x; b, \eta) = b \eta \exp(b x) \exp\{-\eta(\exp(b x) - 1)\}},
-given a target interior mode and a two-sided interval (default: central 95\%).
-The interior mode condition is enforced by \eqn{\eta = b \exp(b\,\text{mode})},
-which holds exactly for the Gompertz mode \eqn{x^* = (1/b)\log(\eta/b)} when \eqn{\eta > b}.
-}
-\details{
-Fitting proceeds by minimizing the sum of squared errors between the target
-interval bounds and the corresponding Gompertz quantiles, with \eqn{b>0} as the
-free parameter (optimized on the log-scale for numerical stability).
-
-\strong{Quantile function.} For \eqn{U \sim \mathrm{Uniform}(0,1)}, the inverse-CDF is
-\deqn{Q(p; b, \eta) = \frac{1}{b}\log\!\left(1 - \frac{\log(1-p)}{\eta}\right)
-     = \frac{1}{b}\log\!\left(1 + \frac{-\log(1-p)}{\eta}\right),}
-which we compute with \code{log1p} for stability. With the mode constraint
-\eqn{\eta(b) = b\,\exp(b\,\text{mode})}, the fit reduces to a 1D search over \eqn{b}.
-
-\strong{Interior mode.} For \eqn{\eta > b}, the mode is \eqn{x^* = (1/b)\log(\eta/b)}.
-Enforcing \eqn{\eta = b \exp(b\,\text{mode})} guarantees an interior mode at
-\code{mode_val} whenever \code{mode_val > 0}.
-
-\strong{Mean and SD.} Closed forms involve exponential integrals; here we
-compute mean and variance by numerical integration over \eqn{[0, Q(0.999999)]}.
+This function estimates the parameters of a Gompertz distribution on [0, Inf)
+with pdf f(x; b, eta) = b * eta * exp(b\emph{x) * exp(-eta}(exp(b\emph{x) - 1)),
+given a target interior mode and a two-sided interval (default: central 95 percent).
+The interior mode condition is enforced by eta = b * exp(b}mode), which holds
+exactly for the Gompertz mode when eta > b.
 }
 \examples{
-# Example: very small positive quantity with near-zero mode and tight right tail
-fit <- fit_gompertz_from_ci(
+# Example: Fit Gompertz for small positive quantity
+result <- fit_gompertz_from_ci(
   mode_val = 1e-8,
   ci_lower = 1e-9,
   ci_upper = 1e-6,
-  probs    = c(0.025, 0.975),
-  verbose  = TRUE
+  probs = c(0.025, 0.975)
 )
-str(fit)
+print(result)
 
-# Quick check: compare target vs. fitted quantiles
-fit$fitted_ci
-
-}
-\seealso{
-\code{\link{fit_gamma_from_ci}}
 }

@@ -31,6 +31,8 @@ A Python object (reticulate) representing the LASER model simulation results.
 }
 \description{
 A wrapper function to execute a LASER model simulation via the Python interface (reticulate).
+Automatically suppresses NumPy divide-by-zero warnings that can occur during vaccination
+calculations when susceptible and exposed compartments are both zero.
 }
 \examples{
 \dontrun{

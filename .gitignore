@@ -6,5 +6,10 @@
 local/
 inst/py/mosaic-python-env
 model/LAUNCH.R
+model/output/
 **data_psi_suitability.csv
 claude/
+*.tar.gz
+*.Rcheck/
+..Rcheck/
+sbi-logs/

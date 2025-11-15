@@ -23,9 +23,3 @@ Numeric vector of probabilities.
 \description{
 Compute the cumulative distribution function of a Gompertz distribution.
 }
-\examples{
-q <- seq(0, 5, length.out = 100)
-p <- pgompertz(q, b = 2, eta = 3)
-plot(q, p, type = "l", main = "Gompertz CDF")
-
-}

@@ -42,7 +42,7 @@ truncation at \code{delta_max}. The temperature \eqn{\tau} flattens
 and you want smoother posterior plots and higher ESS.
 \item \strong{Strong flattening:} \code{3–5}. Use sparingly; weights become
 nearly uniform and discrimination drops. A practical target is to pick
-\code{temperature} so that \code{max(normalized weight) \u2264 0.5}.
+\code{temperature} so that \code{max(normalized weight)} \eqn{\le} \code{0.5}.
 }
 }
 
@@ -61,16 +61,13 @@ c(max_w1 = max(aw1$w / sum(aw1$w)), max_w2 = max(aw2$w / sum(aw2$w)))
 \code{\link[=calc_model_aic_delta]{calc_model_aic_delta()}}, \code{\link[=calc_model_convergence]{calc_model_convergence()}}
 
 Other calibration-metrics: 
-\code{\link{calc_gibbs_weights}()},
+\code{\link{calc_convergence_diagnostics}()},
 \code{\link{calc_model_agreement_index}()},
 \code{\link{calc_model_aic_delta}()},
 \code{\link{calc_model_convergence}()},
-\code{\link{calc_model_convergence_loss}()},
 \code{\link{calc_model_cvw}()},
 \code{\link{calc_model_ess}()},
-\code{\link{calc_model_loss_delta}()},
 \code{\link{calc_model_max_weight}()},
-\code{\link{plot_model_convergence}()},
-\code{\link{select_best_by_loss_band}()}
+\code{\link{plot_model_convergence}()}
 }
 \concept{calibration-metrics}

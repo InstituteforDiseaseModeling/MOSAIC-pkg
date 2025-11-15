@@ -89,5 +89,5 @@ calc_model_loss(Y, Yh, weights = w)
 
 }
 \seealso{
-\code{\link[=calc_model_mse]{calc_model_mse()}}, \code{\link[=calc_model_cor]{calc_model_cor()}}, \code{\link[=calc_model_likelihood]{calc_model_likelihood()}}, \code{\link[=calc_model_ppc]{calc_model_ppc()}}
+\code{\link[=calc_model_mse]{calc_model_mse()}}, \code{\link[=calc_model_cor]{calc_model_cor()}}, \code{\link[=calc_model_likelihood]{calc_model_likelihood()}}
 }

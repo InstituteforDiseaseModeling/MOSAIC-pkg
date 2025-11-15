@@ -34,18 +34,18 @@
 #' @param V2_j_initial A named numeric or integer vector of length equal to location_name giving the starting number
 #'        of individuals in vaccine compartment V2 for each location. Names must match location_name.
 #' @param prop_S_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
-#'        of susceptible individuals for each location. Values must be in [0,1]. Names must match location_name.
+#'        of susceptible individuals for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #'        These proportion fields are provided for analysis convenience but are not required by the LASER model.
 #' @param prop_E_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
-#'        of exposed individuals for each location. Values must be in [0,1]. Names must match location_name.
+#'        of exposed individuals for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #' @param prop_I_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
-#'        of infected individuals for each location. Values must be in [0,1]. Names must match location_name.
+#'        of infected individuals for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #' @param prop_R_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
-#'        of recovered individuals for each location. Values must be in [0,1]. Names must match location_name.
+#'        of recovered individuals for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #' @param prop_V1_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
-#'        of individuals in vaccine compartment V1 for each location. Values must be in [0,1]. Names must match location_name.
+#'        of individuals in vaccine compartment V1 for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #' @param prop_V2_initial Optional. A named numeric vector of length equal to location_name giving the starting proportion
-#'        of individuals in vaccine compartment V2 for each location. Values must be in [0,1]. Names must match location_name.
+#'        of individuals in vaccine compartment V2 for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #'
 #' ## Demographics
 #' @param b_jt A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily

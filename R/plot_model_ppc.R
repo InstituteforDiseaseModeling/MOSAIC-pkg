@@ -19,8 +19,8 @@
 #'
 #' @export
 #' @importFrom grDevices pdf dev.off rgb
-#' @importFrom graphics plot lines abline legend mtext par qqplot grid polygon text points ppoints
-#' @importFrom stats density loess predict quantile sd cor
+#' @importFrom graphics plot lines abline legend mtext par grid polygon text points
+#' @importFrom stats density loess predict quantile sd cor qqplot ppoints
 #'
 plot_model_ppc <- function(model,
                           output_dir,

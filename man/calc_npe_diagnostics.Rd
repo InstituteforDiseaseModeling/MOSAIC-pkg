@@ -2,15 +2,17 @@
 % Please edit documentation in R/calc_npe_diagnostics.R
 \name{calc_npe_diagnostics}
 \alias{calc_npe_diagnostics}
-\title{Calculate NPE Model Diagnostics with SBC}
+\title{Calculate NPE Model Diagnostics with Simulation-Based Calibration (SBC)}
 \usage{
 calc_npe_diagnostics(
   n_sbc_sims,
-  npe_model_dir,
+  model,
+  npe_model_dir = NULL,
   PATHS,
   priors,
   config_base,
-  n_npe_samples = 1000,
+  param_names = NULL,
+  n_npe_samples = 100,
   probs = c(0.025, 0.25, 0.75, 0.975),
   seed_offset = 1000,
   output_dir = NULL,
@@ -20,41 +22,49 @@ calc_npe_diagnostics(
 )
 }
 \arguments{
-\item{n_sbc_sims}{Integer number of SBC test simulations to run (each samples a different "true" theta)}
+\item{n_sbc_sims}{Integer number of SBC test simulations to run}
 
-\item{npe_model_dir}{Character path to trained NPE model directory}
+\item{model}{NPE model object from train_npe() (required)}
+
+\item{npe_model_dir}{Character path to NPE model directory (optional, extracted from model)}
 
 \item{PATHS}{List containing project paths from get_paths()}
 
-\item{priors}{Prior distributions object}
+\item{priors}{Prior distributions object from get_location_priors()}
 
-\item{config_base}{Base configuration template}
+\item{config_base}{Base configuration from get_location_config()}
 
-\item{n_npe_samples}{Number of NPE posterior samples to draw per test simulation (default 1000)}
+\item{param_names}{Character vector of parameter names (optional, extracted from model)}
 
-\item{probs}{Numeric vector of probabilities for quantiles (default c(0.025, 0.25, 0.75, 0.975))}
+\item{n_npe_samples}{Number of NPE posterior samples per test (default 100)}
+
+\item{probs}{Numeric vector of quantiles for coverage (default c(0.025, 0.25, 0.75, 0.975))}
 
 \item{seed_offset}{Integer offset for random seeds (default 1000)}
 
-\item{output_dir}{Character path to save results (NULL = don't save)}
+\item{output_dir}{Character path to save diagnostic files (required for plotting)}
 
-\item{verbose}{Logical whether to print progress messages}
+\item{verbose}{Logical whether to print progress messages (default TRUE)}
 
-\item{parallel}{Logical whether to run simulations in parallel}
+\item{parallel}{Logical whether to run simulations in parallel (default FALSE)}
 
-\item{n_cores}{Number of cores for parallel processing (NULL = use all - 1)}
+\item{n_cores}{Number of cores for parallel processing (default NULL = auto)}
 }
 \value{
-List containing:
-\itemize{
-\item coverage: Matrix of coverage indicators (n_sbc_sims x n_params)
-\item sbc_ranks: Matrix of SBC ranks (n_sbc_sims x n_params)
-\item summary: Data frame with summary statistics per parameter
-\item param_names: Character vector of parameter names
-\item diagnostics: Additional diagnostic information
-}
+List with SBC diagnostic results compatible with test_17 workflow:
+\item{coverage}{Matrix of coverage indicators (n_sbc_sims x n_params)}
+\item{sbc_ranks}{Matrix of SBC ranks (n_sbc_sims x n_params)}
+\item{summary}{Data frame with per-parameter summary statistics}
+\item{param_names}{Character vector of parameter names}
+\item{diagnostics}{List with overall diagnostic metrics for retraining decisions}
 }
 \description{
-Performs Simulation-Based Calibration (SBC) diagnostics for NPE models by running
-multiple test simulations to assess coverage and calibration of posterior estimates.
+Performs comprehensive SBC diagnostics for NPE models trained with train_npe().
+Tests calibration by sampling from priors, generating synthetic data, running
+NPE inference, and checking coverage/uniformity of posterior distributions.
+}
+\details{
+This function is specifically designed for the test_17 calibration workflow.
+It uses estimate_npe_posterior() for inference and produces output files
+compatible with plot_npe_convergence_status().
 }

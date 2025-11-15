@@ -110,20 +110,10 @@ plot_model_convergence_status <- function(results_dir,
     # Row 2: N_retained - Number retained after removing non-finite and outliers
     if (!is.null(diagnostics$summary$retained_simulations)) {
         n_retained <- diagnostics$summary$retained_simulations
-        # Use same target as ESS_retained
-        target_retained <- if (!is.null(diagnostics$targets$ess_min$value)) {
-            paste(">=", diagnostics$targets$ess_min$value)
-        } else {
-            "-"
-        }
-        # Determine status based on ESS_retained target
-        status_retained <- if (!is.null(diagnostics$targets$ess_min$value)) {
-            if (n_retained >= diagnostics$targets$ess_min$value) "pass"
-            else if (n_retained >= diagnostics$targets$ess_min$value / 2) "warn"
-            else "fail"
-        } else {
-            "info"
-        }
+        # No target for N_retained, just informational
+        target_retained <- "-"
+        # No status for N_retained, just a dash
+        status_retained <- "-"
 
         metrics_data <- rbind(metrics_data, data.frame(
             Metric = "N_retained",
@@ -136,9 +126,11 @@ plot_model_convergence_status <- function(results_dir,
         metric_expressions[[length(metric_expressions) + 1]] <- expression(bold(N[retained]))
     }
 
+    # Note: Subset Selection row will be added after ESS_retained in the metric processing loop
+
 
     # Process metrics in specific order for better table organization
-    # Order: ESS_retained, B_size, ESS_best, A_B, cvw_B
+    # Order: ESS_retained, Subset Selection, B_size, ESS_best, A_B, cvw_B
     if (verbose) message("Processing metrics in specified order...")
 
     metric_order <- c("ess_retained", "B_size", "ess_best", "A_B", "cvw_B")
@@ -168,15 +160,20 @@ plot_model_convergence_status <- function(results_dir,
         # Get corresponding target if exists
         target_value <- NA
         if (metric_name %in% c("ess_all", "ess_retained")) {
-            target_value <- paste(">=", diagnostics$targets$ess_min$value)
+            # No target for ESS_retained (informational only)
+            target_value <- "-"
+            # Status comes from diagnostics (should be "-")
         } else if (metric_name == "ess_best") {
-            # ESS_best uses B_min target
-            target_value <- paste(">=", diagnostics$targets$B_min$value)
+            # ESS_best uses ess_best target
+            target_value <- paste(">=", diagnostics$targets$ess_best$value)
         } else if (metric_name == "A_B") {
-            target_value <- paste(">=", diagnostics$targets$A_min$value)
+            # A_B uses A_best target
+            target_value <- paste(">=", diagnostics$targets$A_best$value)
         } else if (metric_name == "cvw_B") {
-            target_value <- paste("<=", diagnostics$targets$cvw_max$value)
+            # cvw_B uses cvw_best target
+            target_value <- paste("<=", diagnostics$targets$cvw_best$value)
         } else if (metric_name == "B_size") {
+            # B_size uses B_min target
             target_value <- paste(">=", diagnostics$targets$B_min$value)
         } else {
             target_value <- "-"
@@ -263,6 +260,139 @@ plot_model_convergence_status <- function(results_dir,
                 message("    Error: ", e$message)
             }
         })
+
+        # Add Subset Selection row after ESS_retained
+        if (metric_name == "ess_retained" && !is.null(diagnostics$summary$percentile_used)) {
+            percentile_val <- diagnostics$summary$percentile_used
+            tier_used <- diagnostics$summary$convergence_tier
+
+            # Get target for max percentile from diagnostics
+            # Check for both old and new target names for backward compatibility
+            target_percentile <- if (!is.null(diagnostics$targets$percentile_max$value)) {
+                diagnostics$targets$percentile_max$value
+            } else if (!is.null(diagnostics$targets$max_percentile$value)) {
+                diagnostics$targets$max_percentile$value
+            } else {
+                5.0  # Default 5%
+            }
+
+            # Format the display value
+            percentile_display <- sprintf("%.1f%%", percentile_val)
+
+            # Calculate status based ONLY on percentile vs target (no tier logic)
+            # This ensures status reflects quality of result, not which criteria set was used
+            percentile_status <- if (percentile_val <= target_percentile) {
+                "pass"
+            } else if (percentile_val <= target_percentile * 1.5) {
+                "warn"
+            } else {
+                "fail"
+            }
+
+            metrics_data <- rbind(metrics_data, data.frame(
+                Metric = "Subset Selection",
+                Description = "Percentile of likelihood distribution used for best subset",
+                Target = sprintf("<=%.1f%%", target_percentile),
+                Value = percentile_display,
+                Status = percentile_status,
+                stringsAsFactors = FALSE
+            ))
+            metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Subset Selection"))
+        }
+    }
+
+    # Add Parameter ESS summary row
+    # Initialize variables for parameter table (used later regardless of path)
+    param_ess_data <- NULL
+    n_params <- NA
+    n_pass <- NA
+
+    # Check if param_ess is in diagnostics.metrics (new format)
+    if (!is.null(diagnostics$metrics$param_ess)) {
+        param_metric <- diagnostics$metrics$param_ess
+
+        # Get targets from diagnostics
+        target_ess_param <- diagnostics$targets$ess_param$value
+        target_ess_param_prop <- diagnostics$targets$ess_param_prop$value
+
+        # Format display value
+        pct_pass_display <- sprintf("%.0f%% (%d/%d >= %.0f)",
+                                   param_metric$value * 100,
+                                   param_metric$n_pass,
+                                   param_metric$n_total,
+                                   target_ess_param)
+
+        # Status comes from diagnostics (no local calculation)
+        param_ess_status <- param_metric$status
+
+        # Also load CSV file for parameter table if it exists
+        param_ess_file <- file.path(results_dir, "parameter_ess.csv")
+        if (file.exists(param_ess_file)) {
+            param_ess_data <- read.csv(param_ess_file, stringsAsFactors = FALSE)
+            n_params <- param_metric$n_total
+            n_pass <- param_metric$n_pass
+        }
+
+        metrics_data <- rbind(metrics_data, data.frame(
+            Metric = "Parameter ESS",
+            Description = "Proportion of parameters with adequate effective sample size",
+            Target = sprintf(">=%.0f%%", target_ess_param_prop * 100),
+            Value = pct_pass_display,
+            Status = param_ess_status,
+            stringsAsFactors = FALSE
+        ))
+        metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Parameter ESS"))
+
+        if (verbose) message("Added Parameter ESS summary from diagnostics: ", pct_pass_display)
+
+    } else {
+        # Backward compatibility: Try to read parameter_ess.csv file if it exists
+        param_ess_file <- file.path(results_dir, "parameter_ess.csv")
+
+        if (file.exists(param_ess_file)) {
+            param_ess_data <- read.csv(param_ess_file, stringsAsFactors = FALSE)
+
+            # Get targets from diagnostics
+            target_ess_param <- if (!is.null(diagnostics$targets$ess_param$value)) {
+                diagnostics$targets$ess_param$value
+            } else {
+                100  # Default target
+            }
+
+            target_ess_param_prop <- if (!is.null(diagnostics$targets$ess_param_prop$value)) {
+                diagnostics$targets$ess_param_prop$value
+            } else {
+                0.90  # Default 90%
+            }
+
+            # Calculate summary statistics (for backward compatibility)
+            n_params <- nrow(param_ess_data)
+            n_pass <- sum(param_ess_data$ess_marginal >= target_ess_param, na.rm = TRUE)
+            pct_pass <- (n_pass / n_params) * 100
+
+            # Format display value
+            param_ess_display <- sprintf("%.0f%% (%d/%d >= %.0f)",
+                                        pct_pass, n_pass, n_params, target_ess_param)
+
+            # Calculate status (for backward compatibility)
+            param_ess_status <- if (pct_pass/100 >= target_ess_param_prop) "pass"
+                               else if (pct_pass/100 >= target_ess_param_prop * 0.8) "warn"
+                               else "fail"
+
+            metrics_data <- rbind(metrics_data, data.frame(
+                Metric = "Parameter ESS",
+                Description = "Proportion of parameters with adequate effective sample size",
+                Target = sprintf(">=%.0f%%", target_ess_param_prop * 100),
+                Value = param_ess_display,
+                Status = param_ess_status,
+                stringsAsFactors = FALSE
+            ))
+            metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Parameter ESS"))
+
+            if (verbose) message("Added Parameter ESS summary from file (legacy): ", param_ess_display)
+        } else {
+            if (verbose) message("Parameter ESS not found in diagnostics or file")
+        }
     }
 
     # Check if we have any data to plot
@@ -277,7 +407,8 @@ plot_model_convergence_status <- function(results_dir,
     if (verbose) message("Successfully processed ", nrow(metrics_data), " metrics")
 
     # --- Create plot ------------------------------------------------------------
-    pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 7)
+    # Increased height to accommodate parameter table
+    pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 11)
 
     # Set up plot area with minimal margins (reduced bottom margin since no URL)
     par(mar = c(2, 1, 3, 1), xpd = TRUE, family = "sans")
@@ -312,7 +443,7 @@ plot_model_convergence_status <- function(results_dir,
 
     # Title section
     rect(0, 0.92, 1, 1, col = "white", border = NA)
-    text(0.5, 0.96, "MOSAIC Model Convergence Diagnostics",
+    text(0.5, 0.96, "Brute Force Random Sampling (BFRS) Convergence Diagnostics",
          cex = 1.8, font = 2, col = col_text_primary)
 
     # Overall status badge
@@ -334,8 +465,8 @@ plot_model_convergence_status <- function(results_dir,
     n_rows <- nrow(metrics_data)
     row_height <- (table_top - table_bottom) / (n_rows + 1)  # +1 for header
 
-    # Column positions and widths (balanced layout)
-    col_x <- c(table_left, 0.18, 0.62, 0.73, 0.84, table_right)
+    # Column positions and widths (adjusted to give more space to Value column)
+    col_x <- c(table_left, 0.18, 0.58, 0.74, 0.84, table_right)
     col_widths <- diff(col_x)
 
     # Draw header
@@ -435,64 +566,120 @@ plot_model_convergence_status <- function(results_dir,
         segments(x, table_bottom, x, table_top, col = col_border, lwd = 0.5)
     }
 
-    # Summary section (moved up slightly for more spacing) - now shows threshold info
-    summary_y <- 0.20
-    rect(table_left, summary_y - 0.05, table_right, summary_y + 0.02,
-         col = col_row_even, border = col_border, lwd = 1)
+    # Removed the grey summary box with "Selection threshold" info as requested
+    # This section previously showed threshold and outlier information
 
-    # Get threshold and method information for summary box
-    threshold_value <- if (!is.null(diagnostics$metrics$threshold)) {
-        sprintf("%.2f", diagnostics$metrics$threshold$value)
-    } else if (!is.null(diagnostics$metrics$loss_threshold)) {
-        sprintf("%.4f", diagnostics$metrics$loss_threshold$value)
-    } else if (!is.null(diagnostics$settings$threshold)) {
-        sprintf("%.2f", diagnostics$settings$threshold)
-    } else {
-        "N/A"
-    }
+    # --- Add Parameter ESS Table (if data exists and some parameters fail) ---
+    if (!is.null(param_ess_data) && !is.na(n_params) && !is.na(n_pass)) {
+        # Filter for parameters below threshold
+        params_below <- param_ess_data[param_ess_data$ess_marginal < target_ess_param, ]
 
-    # Get percentile information
-    percentile_info <- if (!is.null(diagnostics$settings$top_percentile)) {
-        sprintf("top %.1f%%", diagnostics$settings$top_percentile * 100)
-    } else if (!is.null(diagnostics$metrics$threshold$description)) {
-        # Extract percentile from description if available
-        desc <- diagnostics$metrics$threshold$description
-        if (grepl("percentile", desc)) {
-            desc
+        # Only show table if there are failing parameters or if less than 100% pass
+        if (nrow(params_below) > 0 || n_pass < n_params) {
+            # Position for parameter table
+            param_table_top <- 0.45
+            param_table_height <- min(0.25, 0.02 + nrow(params_below) * 0.018)  # Dynamic height
+            param_table_bottom <- param_table_top - param_table_height
+
+            # Add section header
+            text(0.5, param_table_top + 0.03, "Parameter-Specific ESS Details",
+                 cex = 1.1, font = 2, col = col_text_primary)
+
+            # Show failing parameters (limit to worst 15)
+            params_to_show <- if (nrow(params_below) > 0) {
+                params_below <- params_below[order(params_below$ess_marginal), ]
+                head(params_below, 15)
+            } else {
+                # If all pass, show the 5 lowest for reference
+                param_ess_data[order(param_ess_data$ess_marginal), ][1:min(5, nrow(param_ess_data)), ]
+            }
+
+            # Create parameter table
+            param_table_left <- 0.15
+            param_table_right <- 0.85
+
+            # Header
+            param_header_top <- param_table_top
+            param_header_bottom <- param_table_top - 0.025
+            rect(param_table_left, param_header_bottom, param_table_right, param_header_top,
+                 col = col_header_bg, border = col_header_bg)
+
+            # Header text
+            param_col_x <- c(param_table_left,
+                           param_table_left + 0.35,  # Parameter name
+                           param_table_left + 0.50,  # ESS value
+                           param_table_left + 0.60)  # Target
+
+            text(param_col_x[1] + 0.01, param_header_bottom + 0.012,
+                 "Parameter", adj = 0, cex = 0.9, col = col_header_text, font = 2)
+            text(param_col_x[2] + 0.01, param_header_bottom + 0.012,
+                 "ESS", adj = 0, cex = 0.9, col = col_header_text, font = 2)
+            text(param_col_x[3] + 0.01, param_header_bottom + 0.012,
+                 "Target", adj = 0, cex = 0.9, col = col_header_text, font = 2)
+            text(param_table_right - 0.05, param_header_bottom + 0.012,
+                 "Status", adj = 0.5, cex = 0.9, col = col_header_text, font = 2)
+
+            # Data rows
+            for (i in 1:nrow(params_to_show)) {
+                row_top <- param_header_bottom - (i - 1) * 0.02
+                row_bottom <- row_top - 0.02
+
+                # Alternating row colors
+                if (i %% 2 == 0) {
+                    rect(param_table_left, row_bottom, param_table_right, row_top,
+                         col = col_row_even, border = NA)
+                }
+
+                # Parameter name
+                text(param_col_x[1] + 0.01, row_bottom + 0.01,
+                     params_to_show$parameter[i],
+                     adj = 0, cex = 0.85, col = col_text_primary)
+
+                # ESS value
+                text(param_col_x[2] + 0.01, row_bottom + 0.01,
+                     sprintf("%.1f", params_to_show$ess_marginal[i]),
+                     adj = 0, cex = 0.85, col = col_text_primary, font = 2)
+
+                # Target
+                text(param_col_x[3] + 0.01, row_bottom + 0.01,
+                     sprintf(">=%.0f", target_ess_param),
+                     adj = 0, cex = 0.85, col = col_text_secondary)
+
+                # Status indicator
+                status_val <- if (params_to_show$ess_marginal[i] >= target_ess_param) "pass"
+                             else if (params_to_show$ess_marginal[i] >= target_ess_param * 0.5) "warn"
+                             else "fail"
+
+                status_col <- status_colors[[status_val]]
+                symbols(param_table_right - 0.05, row_bottom + 0.01,
+                       circles = 0.006,
+                       fg = status_col, bg = status_col,
+                       add = TRUE, inches = FALSE)
+            }
+
+            # Border for parameter table
+            param_actual_bottom <- param_header_bottom - nrow(params_to_show) * 0.02
+            rect(param_table_left, param_actual_bottom, param_table_right, param_header_top,
+                 col = NA, border = col_border, lwd = 1)
+
+            # If there are more parameters not shown
+            if (nrow(params_below) > 15) {
+                text(0.5, param_actual_bottom - 0.02,
+                     sprintf("... and %d more parameters below threshold", nrow(params_below) - 15),
+                     cex = 0.8, col = col_text_secondary, font = 3)
+            }
+
+            # Adjust legend position based on parameter table
+            legend_y <- param_actual_bottom - 0.08
         } else {
-            "top 1%"
+            # No parameter table needed, keep original legend position
+            legend_y <- 0.15
         }
     } else {
-        "top 1%"
+        legend_y <- 0.15
     }
 
-    # Get outlier information
-    n_outliers <- if (!is.null(diagnostics$metrics$n_outliers$value)) {
-        diagnostics$metrics$n_outliers$value
-    } else if (!is.null(diagnostics$summary$outliers_removed)) {
-        diagnostics$summary$outliers_removed
-    } else {
-        0
-    }
-
-    # Create centered summary text
-    summary_base_y <- summary_y - 0.015
-    cex_summary <- 0.9
-
-    # Build the threshold information text
-    threshold_text <- sprintf("Selection Threshold: %s (%s) | Removed %d outliers",
-                             threshold_value, percentile_info, n_outliers)
-
-    # Calculate width and center the text
-    text_width <- strwidth(threshold_text, cex = cex_summary)
-    text_x <- 0.5 - text_width/2
-
-    # Render the threshold information
-    text(text_x, summary_base_y, threshold_text,
-         cex = cex_summary, col = col_text_primary, adj = 0)
-
-    # Legend (positioned well above footer)
-    legend_y <- 0.10
+    # Legend (positioned dynamically based on content above)
     legend_items <- c("Pass", "Warning", "Fail")
     legend_cols <- c(status_colors$pass, status_colors$warn, status_colors$fail)
 

@@ -41,9 +41,9 @@ plot_model_posteriors_detail <- function(quantiles_file,
   library(cowplot)
   library(jsonlite)
 
-  # Color scheme from plot_model_distributions
-  prior_color <- "#457b9d"      # Blue
-  posterior_color <- "#e63946"  # Red
+  # MOSAIC color palette
+  prior_color <- "#4a4a4a"      # Dark gray
+  posterior_color <- "#1f77b4"  # Blue (BFRS)
 
   if (verbose) cat("Loading data files...\n")
 
@@ -129,11 +129,11 @@ plot_model_posteriors_detail <- function(quantiles_file,
   # Load estimated_parameters for ordering
   data(estimated_parameters, package = "MOSAIC", envir = environment())
 
-  # Create output subdirectory for all plots
-  output_subdir <- file.path(output_dir, "posterior_distributions_detail")
-  if (!dir.exists(output_subdir)) {
-    dir.create(output_subdir, recursive = TRUE, showWarnings = FALSE)
+  # Create output directory if needed
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   }
+  output_subdir <- output_dir
 
   # Get unique parameters from quantiles (only posteriors have KL values)
   posterior_types <- c("posterior", "npe", "bfrs")
@@ -208,9 +208,29 @@ plot_model_posteriors_detail <- function(quantiles_file,
         "uniform" = dunif(x_vals,
                         min = params$min,
                         max = params$max),
-        "lognormal" = dlnorm(x_vals,
-                           meanlog = params$meanlog,
-                           sdlog = params$sdlog),
+        "lognormal" = {
+          # Handle both parameter naming conventions
+          meanlog_val <- params$meanlog %||%
+                         (if(!is.null(params$mean) && !is.null(params$sd)) {
+                           mu <- params$mean
+                           sigma <- params$sd
+                           log(mu^2 / sqrt(mu^2 + sigma^2))
+                         } else NULL)
+
+          sdlog_val <- params$sdlog %||%
+                       (if(!is.null(params$mean) && !is.null(params$sd)) {
+                         mu <- params$mean
+                         sigma <- params$sd
+                         sqrt(log(1 + sigma^2 / mu^2))
+                       } else NULL)
+
+          if (!is.null(meanlog_val) && !is.null(sdlog_val) &&
+              is.finite(meanlog_val) && is.finite(sdlog_val)) {
+            dlnorm(x_vals, meanlog = meanlog_val, sdlog = sdlog_val)
+          } else {
+            rep(0, length(x_vals))
+          }
+        },
         "gompertz" = {
           b <- params$b
           eta <- params$eta
@@ -234,15 +254,55 @@ plot_model_posteriors_detail <- function(quantiles_file,
     }
 
     # Get prior object with proper unwrapping
+    # Generate parameter name variants to handle naming inconsistencies
+    param_variants <- c(param_name)
+
+    # Add underscore variants for seasonality params (a1 → a_1_j)
+    if (grepl("^[ab]\\d$", param_name)) {
+      base <- substr(param_name, 1, 1)
+      num <- substr(param_name, 2, 2)
+      param_variants <- c(param_variants, paste0(base, "_", num, "_j"))
+    }
+
+    # Add non-underscore variants (a_1_j → a1)
+    if (grepl("^[ab]_\\d_j$", param_name)) {
+      param_variants <- c(param_variants,
+                         gsub("_j$", "", gsub("_", "", param_name)))
+    }
+
     prior_obj_raw <- NULL
-    if (param_name %in% names(priors_object$parameters_global)) {
-      prior_obj_raw <- priors_object$parameters_global[[param_name]]
-    } else {
-      # Check with and without location suffix
+
+    # Try global parameters first (with all variants)
+    for (variant in param_variants) {
+      if (!is.null(priors_object$parameters_global) &&
+          variant %in% names(priors_object$parameters_global)) {
+        prior_obj_raw <- priors_object$parameters_global[[variant]]
+        break
+      }
+    }
+
+    # Try location-specific parameters (with and without location suffix)
+    if (is.null(prior_obj_raw)) {
       base_param <- gsub("_[A-Z]{3}$", "", param_name)
+
+      # Generate variants for base parameter
+      base_variants <- c(base_param)
+      if (grepl("^[ab]\\d$", base_param)) {
+        base <- substr(base_param, 1, 1)
+        num <- substr(base_param, 2, 2)
+        base_variants <- c(base_variants, paste0(base, "_", num, "_j"))
+      }
+      if (grepl("^[ab]_\\d_j$", base_param)) {
+        base_variants <- c(base_variants,
+                          gsub("_j$", "", gsub("_", "", base_param)))
+      }
+
       if (!is.null(priors_object$parameters_location)) {
-        if (base_param %in% names(priors_object$parameters_location)) {
-          prior_obj_raw <- priors_object$parameters_location[[base_param]]
+        for (variant in base_variants) {
+          if (variant %in% names(priors_object$parameters_location)) {
+            prior_obj_raw <- priors_object$parameters_location[[variant]]
+            break
+          }
         }
       }
     }
@@ -275,14 +335,29 @@ plot_model_posteriors_detail <- function(quantiles_file,
       stop("weight_best column is not numeric. Check the results data.")
     }
 
-    # Use ESS values from convergence diagnostics if available
-    # Otherwise fall back to simple estimates
+    # Calculate ESS using perplexity method (1/sum(w^2)) directly from weights
     n_retained <- length(retained_samples)
     n_best <- length(best_samples)
 
-    # Default to sample sizes if ESS not available from diagnostics
-    ess_retained <- if (!is.null(ess_retained_global)) ess_retained_global else n_retained
-    ess_best <- if (!is.null(ess_best_global)) ess_best_global else n_best
+    # Calculate ESS for retained samples using perplexity method
+    if (!is.null(retained_weights)) {
+      # Normalize weights (they should already be normalized, but ensure)
+      w_norm_retained <- retained_weights / sum(retained_weights)
+      ess_retained <- 1 / sum(w_norm_retained^2)
+    } else {
+      # Fall back to sample size if no weights
+      ess_retained <- n_retained
+    }
+
+    # Calculate ESS for best subset using perplexity method
+    if (!is.null(posterior_weights) && length(posterior_weights) > 0) {
+      # Normalize weights (they should already be normalized, but ensure)
+      w_norm_best <- posterior_weights / sum(posterior_weights)
+      ess_best <- 1 / sum(w_norm_best^2)
+    } else {
+      # Fall back to sample size if no weights
+      ess_best <- n_best
+    }
 
     # Get quantiles and KL from the quantiles_df
     param_data <- quantiles_df %>% filter(parameter == param_name)
@@ -544,10 +619,21 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Create theoretical plot if both prior and posterior distributions available
     if (!is.null(posterior_dist_obj) && !is.null(prior_dist_obj)) {
+      if (verbose) {
+        cat(sprintf("  Creating theoretical distribution plot for %s\n", param_name))
+        cat(sprintf("    Prior distribution: %s\n", prior_dist_obj$distribution))
+        cat(sprintf("    Posterior distribution: %s\n", posterior_dist_obj$distribution))
+      }
+
       # Calculate densities using safe function
       x_seq <- seq(x_limits[1], x_limits[2], length.out = 400)
       prior_dens <- calc_density_safe(x_seq, prior_dist_obj)
       post_dens <- calc_density_safe(x_seq, posterior_dist_obj)
+
+      if (verbose && (all(prior_dens == 0) || all(post_dens == 0))) {
+        cat(sprintf("    WARNING: Zero densities detected (prior: %s, posterior: %s)\n",
+                    all(prior_dens == 0), all(post_dens == 0)))
+      }
 
       # Create separate data frames for cleaner plotting
       prior_data <- data.frame(x = x_seq, density = prior_dens)
@@ -585,6 +671,17 @@ plot_model_posteriors_detail <- function(quantiles_file,
         )
     } else {
       # Placeholder when no theoretical distributions available
+      if (verbose) {
+        cat(sprintf("  Theoretical distributions not available for %s\n", param_name))
+        cat(sprintf("    Prior dist obj: %s\n", !is.null(prior_dist_obj)))
+        cat(sprintf("    Posterior dist obj: %s\n", !is.null(posterior_dist_obj)))
+        if (!is.null(posteriors_obj)) {
+          cat(sprintf("    Posteriors object loaded: TRUE\n"))
+        } else {
+          cat(sprintf("    Posteriors object loaded: FALSE\n"))
+        }
+      }
+
       p_theoretical <- ggplot() +
         theme_void() +
         labs(title = "Prior vs Posterior (Theoretical)",

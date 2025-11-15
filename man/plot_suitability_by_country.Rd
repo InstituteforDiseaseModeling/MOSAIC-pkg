@@ -12,18 +12,15 @@ Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for sa
 }
 \value{
 A facet plot of predicted environmental suitability for all countries, filtered to
-years >= 2021. The plot includes smoothed suitability predictions and shaded regions
-indicating periods with cholera cases.
+years >= 2021. The plot includes suitability predictions with separate colors for
+historical (black) and future (orange) predictions.
 }
 \description{
 This function generates a facet plot of predicted environmental suitability for all countries
-over time, with shaded regions indicating cholera outbreaks. Requires that est_suitability()
-has been run first to generate the necessary prediction files.
+over time. Requires that est_suitability() has been run first to generate the necessary
+prediction files.
 }
 \details{
-The function merges data from two files created by est_suitability():
-\itemize{
-\item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
-\item data_psi_suitability.csv - Contains country names and outbreak indicators
-}
+The function reads pred_psi_suitability_week.csv created by est_suitability(),
+which contains the columns: iso_code, year, week, date, cases, cases_binary, and pred.
 }

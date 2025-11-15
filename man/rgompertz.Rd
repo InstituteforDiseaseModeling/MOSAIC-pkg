@@ -20,9 +20,3 @@ Numeric vector of length n containing random Gompertz variates.
 Generate random variates from a Gompertz distribution with parameters b and eta.
 Uses the inverse CDF method: Q(p) = (1/b) * log(1 + (-log(1-p))/eta)
 }
-\examples{
-# Generate 1000 random Gompertz variates
-x <- rgompertz(1000, b = 2, eta = 3)
-hist(x, breaks = 50, main = "Gompertz Distribution")
-
-}

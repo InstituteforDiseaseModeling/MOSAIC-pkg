@@ -42,7 +42,7 @@
 #' Vectors and matrices are supported. Matrices are flattened (column-major)
 #' in both \code{observed} and \code{estimated} before pairwise comparison.
 #'
-#' @seealso [calc_model_mse()], [calc_model_likelihood()], [calc_model_ppc()]
+#' @seealso [calc_model_mse()], [calc_model_likelihood()]
 #'
 #' @examples
 #' # Vector example

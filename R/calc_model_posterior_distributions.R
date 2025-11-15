@@ -71,15 +71,34 @@ calc_model_posterior_distributions <- function(
     if (verbose) message("Loading posterior quantiles from: ", quantiles_file)
     quantiles_all <- read.csv(quantiles_file, stringsAsFactors = FALSE)
 
-    # Process all quantile rows - let the user decide what to include in the file
-    quantiles <- quantiles_all
+    # Filter to only posterior rows if type column exists
+    # (quantiles file may contain both prior and posterior rows for comparison)
+    if ("type" %in% names(quantiles_all)) {
+        types_found <- unique(quantiles_all$type)
+        if (verbose) {
+            message("  Types found in file: ", paste(types_found, collapse = ", "))
+        }
+
+        # Keep only posterior rows for fitting
+        if ("posterior" %in% types_found) {
+            quantiles <- quantiles_all[quantiles_all$type == "posterior", ]
+            if (verbose) {
+                message("  Filtered to posterior rows: ", nrow(quantiles), " of ", nrow(quantiles_all))
+            }
+        } else {
+            # No posterior rows found, use all rows
+            quantiles <- quantiles_all
+            if (verbose) {
+                message("  No 'posterior' type found, using all rows")
+            }
+        }
+    } else {
+        # No type column, use all rows
+        quantiles <- quantiles_all
+    }
 
     if (verbose) {
         message("  Total rows to process: ", nrow(quantiles))
-        if ("type" %in% names(quantiles)) {
-            types_found <- unique(quantiles$type)
-            message("  Types found: ", paste(types_found, collapse = ", "))
-        }
     }
 
     if (nrow(quantiles) == 0) {
@@ -199,6 +218,36 @@ calc_model_posterior_distributions <- function(
             next
         }
 
+        # Apply bounds correction based on distribution type BEFORE fitting
+        # This ensures values are in the valid range for each distribution
+        if (dist_type == "beta") {
+            # Beta requires [0, 1]
+            mode_val <- max(0.001, min(0.999, mode_val))
+            q_low <- max(0.001, min(0.999, q_low))
+            q_high <- max(0.001, min(0.999, q_high))
+
+            # Ensure ordering
+            if (q_low >= q_high) {
+                q_low <- mode_val - 0.1
+                q_high <- mode_val + 0.1
+                q_low <- max(0.001, min(0.999, q_low))
+                q_high <- max(0.001, min(0.999, q_high))
+            }
+        } else if (dist_type %in% c("gamma", "lognormal")) {
+            # Gamma and lognormal require positive values
+            mode_val <- max(1e-6, mode_val)
+            q_low <- max(1e-6, q_low)
+            q_high <- max(1e-6, q_high)
+
+            # Ensure ordering
+            if (q_low >= q_high) {
+                q_low <- mode_val * 0.5
+                q_high <- mode_val * 1.5
+                q_low <- max(1e-6, q_low)
+                q_high <- max(q_low + 1e-6, q_high)
+            }
+        }
+
         # Fit distribution based on type
         fitted_dist <- NULL
         tryCatch({
@@ -263,10 +312,51 @@ calc_model_posterior_distributions <- function(
             fitted_dist <<- NULL
         })
 
-        # Skip if fitting failed
+        # Handle fitting failure by marking parameter with diagnostic information
         if (is.null(fitted_dist)) {
+
+            # Create failed marker for posteriors.json
+            failed_marker <- list(
+                distribution = "failed",
+                parameters = list(),
+                metadata = list(
+                    error = "Distribution fitting failed",
+                    attempted_distribution = dist_type,
+                    quantiles_used = list(
+                        q_low = q_low,
+                        q_med = q_med,
+                        q_high = q_high
+                    ),
+                    timestamp = as.character(Sys.time())
+                )
+            )
+
+            # Insert failed marker into posteriors structure
+            success_marker <- FALSE
+            if (param_scale == "global") {
+                if (!is.null(posteriors$parameters_global[[param_base]])) {
+                    posteriors$parameters_global[[param_base]] <- failed_marker
+                    success_marker <- TRUE
+                }
+            } else if (param_scale == "location" && !is.null(location)) {
+                if (!is.null(posteriors$parameters_location[[param_base]])) {
+                    if (!is.null(posteriors$parameters_location[[param_base]]$location[[location]])) {
+                        posteriors$parameters_location[[param_base]]$location[[location]] <- failed_marker
+                        success_marker <- TRUE
+                    }
+                }
+            }
+
             n_failed <- n_failed + 1
             failed_params <- c(failed_params, param_name)
+
+            if (verbose) {
+                if (success_marker) {
+                    message(sprintf("  [FAILED] %s - marked in posteriors.json", param_name))
+                } else {
+                    message(sprintf("  [FAILED] %s - could not find in structure", param_name))
+                }
+            }
             next
         }
 

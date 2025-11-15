@@ -22,13 +22,13 @@ and model calibration workflows.
 }
 \details{
 The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS" format
-to each message. Messages are printed to the console and, if an 'output_dir'
+to each message. Messages are printed to the console and, if a 'dir_output'
 variable exists in the calling environment, also appended to a 'run.log' file
-in that directory.
+in that directory (dir_output/run.log).
 
 This is particularly useful for:
 \itemize{
-\item Model calibration workflows
+\item Model calibration workflows (logs entire BFRS → NPE sequence)
 \item Long-running simulations
 \item Parallel processing tasks
 \item Debugging and progress tracking
@@ -43,11 +43,11 @@ log_msg("Starting analysis")
 log_msg("Processing \%d simulations with \%d cores", 100, 8)
 
 # With output directory for file logging
-output_dir <- tempdir()
-log_msg("Results saved to \%s", output_dir)
+dir_output <- tempdir()
+log_msg("Results saved to \%s", dir_output)
 
 # Check the log file
-log_file <- file.path(output_dir, "run.log")
+log_file <- file.path(dir_output, "run.log")
 if (file.exists(log_file)) {
   cat(readLines(log_file), sep = "\n")
 }
