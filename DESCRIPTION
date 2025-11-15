@@ -1,7 +1,7 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.5.3
+Version: 0.6.1
 Date: 2025-11-14
 Authors@R: c(
           person("John R", "Giles", 
@@ -42,48 +42,48 @@ Imports:
   ggplot2,
   ggrepel,
   glue,
+  graphics,
+  grDevices,
   grid,
   gridExtra,
   gtable,
   gtools,
+  hdf5r,
   httr,
   ISOweek,
   jsonlite,
   keras3,
   lubridate,
   magrittr,
+  methods,
   minpack.lm,
   parallel,
   patchwork,
   propvacc,
+  R.utils,
   raster,
+  RColorBrewer,
   readxl,
+  remotes,
   reshape2,
+  reticulate,
   rnaturalearth,
   rnaturalearthdata,
+  RhpcBLASctl,
+  scales,
   sf,
   slider,
   sp,
+  stats,
   stringr,
-  tidyr,
   tensorflow,
-  viridis,
-  zoo,
-  RColorBrewer,
-  remotes,
-  scales,
-  yaml,
-  hdf5r,
-  R.utils,
-  RhpcBLASctl,
-  reticulate
-Depends: 
-  R (>= 4.1.1),
-  stats, 
-  graphics,
-  grDevices,
+  tidyr,
   utils,
-  methods
+  viridis,
+  yaml,
+  zoo
+Depends:
+  R (>= 4.1.1)
 Suggests:
   testthat (>= 3.0.0),
   mobility,
