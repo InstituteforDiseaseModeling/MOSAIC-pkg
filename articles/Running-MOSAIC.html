@@ -76,9 +76,9 @@
 </h2>
 <p>MOSAIC (Metapopulation Outbreak Simulation with Agent-based
 Implementation for Cholera) simulates cholera transmission dynamics
-across Sub-Saharan Africa using the LASER (Light-agent Spatial model for
-ERadication) engine. This guide shows how to run models, customize
-parameters, and work with outputs.</p>
+using the LASER (Light-agent Spatial model for ERadication) engine. This
+guide shows how to run models using the core <code><a href="../reference/run_LASER.html">run_LASER()</a></code>
+function.</p>
 <p><strong>Before you begin</strong>: Complete the Installation vignette
 to set up MOSAIC and its dependencies.</p>
 <hr>
@@ -86,318 +86,259 @@ to set up MOSAIC and its dependencies.</p>
 <div class="section level2">
 <h2 id="quick-start">Quick Start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p>Load MOSAIC and run a simple simulation using default parameters:</p>
+<p>Load MOSAIC and run a single simulation using a pre-configured
+model:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run a 2-location simulation with default parameters</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">2</span>,</span>
+<span><span class="co"># Run one simulation with default parameters</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">123</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># View results structure</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">results</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co"># View model outputs</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">model</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Access results</span></span>
+<span><span class="va">cases</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span></span>
+<span><span class="va">deaths</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
 <h2 id="pre-configured-models">Pre-configured Models<a class="anchor" aria-label="anchor" href="#pre-configured-models"></a>
 </h2>
-<p>MOSAIC includes three pre-configured parameter sets for different
-scenarios:</p>
+<p>MOSAIC includes three pre-configured parameter sets:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 1. Default configuration (minimal 2-location example)</span></span>
-<span><span class="va">config_default</span></span>
-<span></span>
-<span><span class="co"># 2. Endemic scenario (stable transmission)</span></span>
-<span><span class="va">config_simulation_endemic</span></span>
-<span></span>
-<span><span class="co"># 3. Epidemic scenario (outbreak dynamics)</span></span>
-<span><span class="va">config_simulation_epidemic</span></span></code></pre></div>
-<p>Run any pre-configured model:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Run endemic scenario</span></span>
-<span><span class="va">results_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="single-location-simulations">Single-Location Simulations<a class="anchor" aria-label="anchor" href="#single-location-simulations"></a>
-</h2>
-<p>Use <code><a href="../reference/run_mosaic_iso.html">run_mosaic_iso()</a></code> for country-level simulations with
-ISO codes:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Democratic Republic of Congo (DRC)</span></span>
-<span><span class="va">results_cod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_mosaic_iso.html">run_mosaic_iso</a></span><span class="op">(</span></span>
-<span>  iso_code <span class="op">=</span> <span class="st">"COD"</span>,</span>
-<span>  date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
-<span>  date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">10</span>,</span>
+<code class="sourceCode R"><span><span class="co"># 1. Default configuration (40 African countries)</span></span>
+<span><span class="va">model_default</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">123</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Multiple countries (sequential)</span></span>
-<span><span class="va">countries</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span><span class="op">)</span>  <span class="co"># DRC, Angola, Tanzania</span></span>
-<span><span class="va">results_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">countries</span>, <span class="kw">function</span><span class="op">(</span><span class="va">iso</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/run_mosaic_iso.html">run_mosaic_iso</a></span><span class="op">(</span></span>
-<span>    iso_code <span class="op">=</span> <span class="va">iso</span>,</span>
-<span>    date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
-<span>    date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
-<span>    n_sim <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>    seed <span class="op">=</span> <span class="fl">123</span></span>
-<span>  <span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">results_list</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">countries</span></span></code></pre></div>
-<p><strong>Available ISO codes</strong>: See
-<code>MOSAIC::iso_codes</code> for all supported countries.</p>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="multi-location-simulations">Multi-Location Simulations<a class="anchor" aria-label="anchor" href="#multi-location-simulations"></a>
-</h2>
-<p>Use <code><a href="../reference/run_LASER.html">run_LASER()</a></code> with custom configurations for
-multi-location models:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Create configuration for three countries</span></span>
-<span><span class="va">config_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
-<span>  location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span><span class="op">)</span>,</span>
-<span>  date_start <span class="op">=</span> <span class="st">"2023-01-01"</span>,</span>
-<span>  date_stop <span class="op">=</span> <span class="st">"2025-12-31"</span>,</span>
-<span>  n_patch <span class="op">=</span> <span class="fl">3</span></span>
+<span><span class="co"># 2. Endemic scenario (stable transmission)</span></span>
+<span><span class="va">model_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run multi-location simulation</span></span>
-<span><span class="va">results_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_multi</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
+<span><span class="co"># 3. Epidemic scenario (outbreak dynamics)</span></span>
+<span><span class="va">model_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_simulation_epidemic</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">789</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p><strong>View configuration details:</strong></p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Examine a configuration</span></span>
+<span><span class="va">config_default</span><span class="op">$</span><span class="va">date_start</span>      <span class="co"># "2023-02-01"</span></span>
+<span><span class="va">config_default</span><span class="op">$</span><span class="va">date_stop</span>       <span class="co"># "2026-03-31"</span></span>
+<span><span class="va">config_default</span><span class="op">$</span><span class="va">location_name</span>   <span class="co"># Vector of 40 ISO codes</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">config_default</span><span class="op">)</span>         <span class="co"># 71 parameters</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
-<h2 id="customizing-model-parameters">Customizing Model Parameters<a class="anchor" aria-label="anchor" href="#customizing-model-parameters"></a>
+<h2 id="running-multiple-simulations">Running Multiple Simulations<a class="anchor" aria-label="anchor" href="#running-multiple-simulations"></a>
 </h2>
-<p>The <code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code> function creates configurations
-with custom parameters:</p>
+<p><code><a href="../reference/run_LASER.html">run_LASER()</a></code> executes <strong>one simulation per
+call</strong>. For multiple simulations, use loops:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Run 10 simulations with different seeds</span></span>
+<span><span class="va">results_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>    paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
+<span>    seed <span class="op">=</span> <span class="va">i</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Extract total cases from each simulation</span></span>
+<span><span class="va">total_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results_list</span>, <span class="kw">function</span><span class="op">(</span><span class="va">model</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Summary statistics across simulations</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span></span></code></pre></div>
 <div class="section level3">
-<h3 id="basic-customization">Basic Customization<a class="anchor" aria-label="anchor" href="#basic-customization"></a>
+<h3 id="parallel-execution">Parallel Execution<a class="anchor" aria-label="anchor" href="#parallel-execution"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Modify transmission parameters</span></span>
-<span><span class="va">custom_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
-<span>  location_name <span class="op">=</span> <span class="st">"COD"</span>,</span>
-<span>  date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
-<span>  date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
+<p>For faster execution of multiple simulations:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">parallel</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="co"># Transmission rates</span></span>
-<span>  beta_j0_hum <span class="op">=</span> <span class="fl">0.15</span>,     <span class="co"># Human-to-human transmission</span></span>
-<span>  beta_j0_env <span class="op">=</span> <span class="fl">0.25</span>,     <span class="co"># Environment-to-human transmission</span></span>
+<span><span class="co"># Detect available cores</span></span>
+<span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span></span>
 <span></span>
-<span>  <span class="co"># Population</span></span>
-<span>  N_j_initial <span class="op">=</span> <span class="fl">1000000</span>,</span>
+<span><span class="co"># Run simulations in parallel</span></span>
+<span><span class="va">cl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">makeCluster</a></span><span class="op">(</span><span class="va">n_cores</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/parallel/clusterApply.html" class="external-link">clusterEvalQ</a></span><span class="op">(</span><span class="va">cl</span>, <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="co"># Initial conditions</span></span>
-<span>  I_j_initial <span class="op">=</span> <span class="fl">10</span>,       <span class="co"># Initial infected</span></span>
+<span><span class="va">results_parallel</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/parallel/clusterApply.html" class="external-link">parLapply</a></span><span class="op">(</span><span class="va">cl</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">100</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>    paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
+<span>    seed <span class="op">=</span> <span class="va">i</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">results_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">custom_config</span>, n_sim <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="advanced-customization">Advanced Customization<a class="anchor" aria-label="anchor" href="#advanced-customization"></a>
-</h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Complex multi-patch configuration</span></span>
-<span><span class="va">advanced_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
-<span>  location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span>, <span class="st">"ZMB"</span><span class="op">)</span>,</span>
-<span>  date_start <span class="op">=</span> <span class="st">"2023-01-01"</span>,</span>
-<span>  date_stop <span class="op">=</span> <span class="st">"2026-12-31"</span>,</span>
-<span>  n_patch <span class="op">=</span> <span class="fl">4</span>,</span>
-<span></span>
-<span>  <span class="co"># Vaccination parameters</span></span>
-<span>  vaccination_rate <span class="op">=</span> <span class="fl">0.05</span>,</span>
-<span>  vaccine_efficacy <span class="op">=</span> <span class="fl">0.65</span>,</span>
-<span></span>
-<span>  <span class="co"># Mobility between locations (if available)</span></span>
-<span>  <span class="co"># mobility_matrix = custom_mobility,</span></span>
-<span></span>
-<span>  <span class="co"># Reporting parameters</span></span>
-<span>  reporting_rate <span class="op">=</span> <span class="fl">0.3</span>,</span>
-<span></span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p><strong>See function documentation</strong>:
-<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code> for all available parameters.</p>
+<span><span class="fu"><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">stopCluster</a></span><span class="op">(</span><span class="va">cl</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
 </div>
 <div class="section level2">
 <h2 id="understanding-model-outputs">Understanding Model Outputs<a class="anchor" aria-label="anchor" href="#understanding-model-outputs"></a>
 </h2>
+<p>The <code><a href="../reference/run_LASER.html">run_LASER()</a></code> function returns a Python object with
+results and metadata:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Run model</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Output structure</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">)</span></span>
+<span><span class="co"># $results   - Simulation outputs</span></span>
+<span><span class="co"># $params    - Parameters used</span></span>
+<span><span class="co"># $metadata  - Run information</span></span>
+<span></span>
+<span><span class="co"># Access time series data</span></span>
+<span><span class="va">expected_cases</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span></span>
+<span><span class="va">disease_deaths</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span></span>
+<span></span>
+<span><span class="co"># Dimensions: [n_locations x n_timesteps]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">expected_cases</span><span class="op">)</span>    <span class="co"># e.g., [40 x 1155]</span></span></code></pre></div>
 <div class="section level3">
-<h3 id="output-structure">Output Structure<a class="anchor" aria-label="anchor" href="#output-structure"></a>
+<h3 id="extracting-results">Extracting Results<a class="anchor" aria-label="anchor" href="#extracting-results"></a>
+</h3>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Total cases by location</span></span>
+<span><span class="va">total_cases_by_location</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Total cases across all locations</span></span>
+<span><span class="va">total_cases_all</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Peak cases by location</span></span>
+<span><span class="va">peak_cases_by_location</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">expected_cases</span>, <span class="fl">1</span>, <span class="va">max</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Peak timing by location</span></span>
+<span><span class="va">peak_time_by_location</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">expected_cases</span>, <span class="fl">1</span>, <span class="va">which.max</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Location names</span></span>
+<span><span class="va">locations</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">$</span><span class="va">location_name</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">total_cases_by_location</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">locations</span></span></code></pre></div>
+<hr>
+</div>
+</div>
+<div class="section level2">
+<h2 id="creating-custom-configurations">Creating Custom Configurations<a class="anchor" aria-label="anchor" href="#creating-custom-configurations"></a>
+</h2>
+<p>Use <code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code> to create custom parameter
+sets:</p>
+<div class="section level3">
+<h3 id="example-1-single-location">Example 1: Single Location<a class="anchor" aria-label="anchor" href="#example-1-single-location"></a>
 </h3>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Run model</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Output is a list with:</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span></span>
-<span><span class="co"># - patches: Time series for each location</span></span>
-<span><span class="co"># - params: Model parameters used</span></span>
-<span><span class="co"># - summary: Summary statistics</span></span>
-<span></span>
-<span><span class="co"># Access time series for first location</span></span>
-<span><span class="va">ts_data</span> <span class="op">&lt;-</span> <span class="va">results</span><span class="op">$</span><span class="va">patches</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">ts_data</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Columns include:</span></span>
-<span><span class="co"># - time: Simulation time step</span></span>
-<span><span class="co"># - S, E, I, R: Compartment sizes</span></span>
-<span><span class="co"># - cases: Daily incident cases</span></span>
-<span><span class="co"># - deaths: Daily deaths</span></span>
-<span><span class="co"># - cumulative_cases: Cumulative cases</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="extracting-key-metrics">Extracting Key Metrics<a class="anchor" aria-label="anchor" href="#extracting-key-metrics"></a>
-</h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Extract total cases across all simulations</span></span>
-<span><span class="va">total_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">patches</span>, <span class="kw">function</span><span class="op">(</span><span class="va">patch</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">patch</span><span class="op">$</span><span class="va">cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Peak timing</span></span>
-<span><span class="va">peak_time</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">patches</span>, <span class="kw">function</span><span class="op">(</span><span class="va">patch</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">patch</span><span class="op">$</span><span class="va">cases</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Attack rate</span></span>
-<span><span class="va">attack_rate</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">patches</span>, <span class="kw">function</span><span class="op">(</span><span class="va">patch</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">patch</span><span class="op">$</span><span class="va">cumulative_cases</span><span class="op">)</span> <span class="op">/</span> <span class="va">patch</span><span class="op">$</span><span class="va">N</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Mean total cases:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Mean attack rate:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">attack_rate</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="parallel-execution">Parallel Execution<a class="anchor" aria-label="anchor" href="#parallel-execution"></a>
-</h2>
-<p>For large-scale simulations, use
-<code><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults()</a></code> to enable parallel
-processing:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Configure parallel execution</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  n_cores <span class="op">=</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<code class="sourceCode R"><span><span class="co"># Create configuration for Democratic Republic of Congo</span></span>
+<span><span class="va">config_cod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
+<span>  date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
+<span>  date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
+<span>  location_name <span class="op">=</span> <span class="st">"COD"</span>,</span>
+<span>  N_j_initial <span class="op">=</span> <span class="fl">100000000</span>,</span>
+<span>  S_j_initial <span class="op">=</span> <span class="fl">50000000</span>,</span>
+<span>  I_j_initial <span class="op">=</span> <span class="fl">100</span>,</span>
+<span>  R_j_initial <span class="op">=</span> <span class="fl">49999900</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run 100 simulations in parallel</span></span>
-<span><span class="va">results_parallel</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">999</span></span>
+<span><span class="co"># Run simulation</span></span>
+<span><span class="va">model_cod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_cod</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><strong>Performance tip</strong>: Parallel execution is most
-beneficial for <code>n_sim &gt;= 10</code>.</p>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="stochastic-vs-deterministic">Stochastic vs Deterministic<a class="anchor" aria-label="anchor" href="#stochastic-vs-deterministic"></a>
-</h2>
-<p>MOSAIC runs stochastic simulations by default. Control randomness
-with the <code>seed</code> parameter:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Same seed = reproducible results</span></span>
-<span><span class="va">run1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span><span class="va">run2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span>, <span class="va">run2</span><span class="op">)</span>  <span class="co"># TRUE</span></span>
-<span></span>
-<span><span class="co"># Different seeds = different outcomes</span></span>
-<span><span class="va">run3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">456</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span>, <span class="va">run3</span><span class="op">)</span>  <span class="co"># FALSE</span></span>
-<span></span>
-<span><span class="co"># Multiple simulations capture stochastic variation</span></span>
-<span><span class="va">runs_many</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config_default</span>, n_sim <span class="op">=</span> <span class="fl">50</span>, seed <span class="op">=</span> <span class="fl">789</span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="working-with-model-configurations">Working with Model Configurations<a class="anchor" aria-label="anchor" href="#working-with-model-configurations"></a>
-</h2>
-<div class="section level3">
-<h3 id="viewing-configuration-details">Viewing Configuration Details<a class="anchor" aria-label="anchor" href="#viewing-configuration-details"></a>
-</h3>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Examine a configuration</span></span>
-<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="va">config_default</span></span>
-<span></span>
-<span><span class="co"># Key parameters</span></span>
-<span><span class="va">config</span><span class="op">$</span><span class="va">date_start</span></span>
-<span><span class="va">config</span><span class="op">$</span><span class="va">date_stop</span></span>
-<span><span class="va">config</span><span class="op">$</span><span class="va">location_name</span></span>
-<span><span class="va">config</span><span class="op">$</span><span class="va">N_j_initial</span>      <span class="co"># Population size</span></span>
-<span><span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span>      <span class="co"># Transmission parameters</span></span>
-<span></span>
-<span><span class="co"># See all parameters</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">config</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
-<h3 id="modifying-existing-configurations">Modifying Existing Configurations<a class="anchor" aria-label="anchor" href="#modifying-existing-configurations"></a>
+<h3 id="example-2-multiple-locations">Example 2: Multiple Locations<a class="anchor" aria-label="anchor" href="#example-2-multiple-locations"></a>
 </h3>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Start with a pre-configured model</span></span>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Three-country configuration</span></span>
+<span><span class="va">config_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
+<span>  date_start <span class="op">=</span> <span class="st">"2023-01-01"</span>,</span>
+<span>  date_stop <span class="op">=</span> <span class="st">"2025-12-31"</span>,</span>
+<span>  location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span><span class="op">)</span>,</span>
+<span>  <span class="co"># Additional required parameters depend on model setup</span></span>
+<span>  <span class="co"># See ?make_LASER_config for all options</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">model_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_multi</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><strong>Note</strong>: <code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code> has 71+
+parameters. Use <code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code> for complete
+documentation.</p>
+<hr>
+</div>
+</div>
+<div class="section level2">
+<h2 id="modifying-existing-configurations">Modifying Existing Configurations<a class="anchor" aria-label="anchor" href="#modifying-existing-configurations"></a>
+</h2>
+<p>Start with a pre-configured model and modify specific parameters:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Start with endemic configuration</span></span>
 <span><span class="va">config_modified</span> <span class="op">&lt;-</span> <span class="va">config_simulation_endemic</span></span>
 <span></span>
 <span><span class="co"># Modify specific parameters</span></span>
 <span><span class="va">config_modified</span><span class="op">$</span><span class="va">date_start</span> <span class="op">&lt;-</span> <span class="st">"2025-01-01"</span></span>
 <span><span class="va">config_modified</span><span class="op">$</span><span class="va">date_stop</span> <span class="op">&lt;-</span> <span class="st">"2026-12-31"</span></span>
-<span><span class="va">config_modified</span><span class="op">$</span><span class="va">vaccination_rate</span> <span class="op">&lt;-</span> <span class="fl">0.1</span></span>
+<span><span class="va">config_modified</span><span class="op">$</span><span class="va">seed</span> <span class="op">&lt;-</span> <span class="fl">999</span></span>
 <span></span>
 <span><span class="co"># Run with modifications</span></span>
-<span><span class="va">results_modified</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_modified</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">111</span></span>
+<span><span class="va">model_modified</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_modified</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">999</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
+<div class="section level2">
+<h2 id="controlling-randomness">Controlling Randomness<a class="anchor" aria-label="anchor" href="#controlling-randomness"></a>
+</h2>
+<p>Use the <code>seed</code> parameter for reproducibility:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Same seed = identical results</span></span>
+<span><span class="va">run1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">run2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, <span class="va">run2</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span>  <span class="co"># TRUE</span></span>
+<span></span>
+<span><span class="co"># Different seeds = different stochastic outcomes</span></span>
+<span><span class="va">run3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">456</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, <span class="va">run3</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span>  <span class="co"># FALSE</span></span></code></pre></div>
+<hr>
 </div>
 <div class="section level2">
-<h2 id="direct-python-interface-advanced">Direct Python Interface (Advanced)<a class="anchor" aria-label="anchor" href="#direct-python-interface-advanced"></a>
+<h2 id="working-with-specific-locations">Working with Specific Locations<a class="anchor" aria-label="anchor" href="#working-with-specific-locations"></a>
 </h2>
-<p>For advanced users, access the LASER Python engine directly:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Import laser-cholera Python module</span></span>
-<span><span class="va">lc</span> <span class="op">&lt;-</span> <span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/import.html" class="external-link">import</a></span><span class="op">(</span><span class="st">"laser_cholera.metapop.model"</span><span class="op">)</span></span>
+<p>To run models for specific countries, you can filter or create
+configurations:</p>
+<div class="section level3">
+<h3 id="option-1-use-existing-multi-country-config">Option 1: Use Existing Multi-Country Config<a class="anchor" aria-label="anchor" href="#option-1-use-existing-multi-country-config"></a>
+</h3>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># config_default includes 40 countries</span></span>
+<span><span class="co"># To analyze one country, extract from results after running</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run model directly</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="va">lc</span><span class="op">$</span><span class="fu">run_model</span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
-<span>  quiet <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
+<span><span class="co"># Find index for DRC (COD)</span></span>
+<span><span class="va">cod_index</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">$</span><span class="va">location_name</span> <span class="op">==</span> <span class="st">"COD"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Access raw Python outputs</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">)</span>     <span class="co"># Parameters</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">patches</span><span class="op">)</span>    <span class="co"># Patch data</span></span>
-<span><span class="va">model</span><span class="op">$</span><span class="va">metadata</span>          <span class="co"># Run metadata</span></span>
-<span></span>
-<span><span class="co"># Extract arrays</span></span>
-<span><span class="va">cases_array</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">patches</span><span class="op">$</span><span class="va">expected_cases</span></span>
-<span><span class="va">deaths_array</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">patches</span><span class="op">$</span><span class="va">disease_deaths</span></span></code></pre></div>
-<p><strong>When to use</strong>: Direct Python interface is useful for
-debugging or accessing outputs not returned by R wrapper functions.</p>
+<span><span class="co"># Extract DRC results</span></span>
+<span><span class="va">cod_cases</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">[</span><span class="va">cod_index</span>, <span class="op">]</span></span>
+<span><span class="va">cod_deaths</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span><span class="op">[</span><span class="va">cod_index</span>, <span class="op">]</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="option-2-create-single-country-config">Option 2: Create Single-Country Config<a class="anchor" aria-label="anchor" href="#option-2-create-single-country-config"></a>
+</h3>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Use make_LASER_config() to create country-specific configuration</span></span>
+<span><span class="co"># (See "Creating Custom Configurations" section above)</span></span></code></pre></div>
 <hr>
+</div>
 </div>
 <div class="section level2">
 <h2 id="common-workflows">Common Workflows<a class="anchor" aria-label="anchor" href="#common-workflows"></a>
@@ -405,65 +346,115 @@ debugging or accessing outputs not returned by R wrapper functions.</p>
 <div class="section level3">
 <h3 id="scenario-comparison">Scenario Comparison<a class="anchor" aria-label="anchor" href="#scenario-comparison"></a>
 </h3>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<p>Compare baseline vs. intervention scenarios:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Baseline scenario</span></span>
 <span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">100</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Intervention scenario (increased vaccination)</span></span>
+<span><span class="co"># Intervention scenario (modify parameters)</span></span>
 <span><span class="va">config_intervention</span> <span class="op">&lt;-</span> <span class="va">config_simulation_endemic</span></span>
-<span><span class="va">config_intervention</span><span class="op">$</span><span class="va">vaccination_rate</span> <span class="op">&lt;-</span> <span class="fl">0.15</span></span>
+<span><span class="co"># Modify intervention-related parameters here</span></span>
+<span><span class="co"># (e.g., vaccination rates, treatment coverage)</span></span>
 <span></span>
 <span><span class="va">intervention</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_intervention</span>,</span>
-<span>  n_sim <span class="op">=</span> <span class="fl">20</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">100</span>  <span class="co"># Same seed for paired comparison</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_intervention</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">100</span>  <span class="co"># Same seed for direct comparison</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Compare total cases</span></span>
-<span><span class="va">baseline_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">$</span><span class="va">patches</span>, <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">p</span><span class="op">$</span><span class="va">cases</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">intervention_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">intervention</span><span class="op">$</span><span class="va">patches</span>, <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">p</span><span class="op">$</span><span class="va">cases</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co"># Compare outcomes</span></span>
+<span><span class="va">baseline_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">intervention_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">intervention</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">reduction</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">baseline_cases</span> <span class="op">-</span> <span class="va">intervention_cases</span><span class="op">)</span> <span class="op">/</span> <span class="va">baseline_cases</span> <span class="op">*</span> <span class="fl">100</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Cases prevented:"</span>, <span class="va">reduction</span>, <span class="st">"%\n"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">cases_averted</span> <span class="op">&lt;-</span> <span class="va">baseline_cases</span> <span class="op">-</span> <span class="va">intervention_cases</span></span>
+<span><span class="va">percent_reduction</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">cases_averted</span> <span class="op">/</span> <span class="va">baseline_cases</span><span class="op">)</span> <span class="op">*</span> <span class="fl">100</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Cases averted:"</span>, <span class="va">cases_averted</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Percent reduction:"</span>, <span class="va">percent_reduction</span>, <span class="st">"%\n"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="sensitivity-analysis">Sensitivity Analysis<a class="anchor" aria-label="anchor" href="#sensitivity-analysis"></a>
 </h3>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Test range of transmission rates</span></span>
-<span><span class="va">beta_values</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.3</span>, by <span class="op">=</span> <span class="fl">0.05</span><span class="op">)</span></span>
+<p>Test model sensitivity to parameter values:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Test different transmission rates</span></span>
+<span><span class="va">beta_values</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.00001</span>, <span class="fl">0.0001</span>, length.out <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">sensitivity_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">beta_values</span>, <span class="kw">function</span><span class="op">(</span><span class="va">beta</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">config</span> <span class="op">&lt;-</span> <span class="va">config_default</span></span>
-<span>  <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span> <span class="op">&lt;-</span> <span class="va">beta</span></span>
+<span>  <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">beta</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">config</span><span class="op">$</span><span class="va">location_name</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, n_sim <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Extract total cases for each beta</span></span>
-<span><span class="va">total_cases_by_beta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">sensitivity_results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">r</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">r</span><span class="op">$</span><span class="va">patches</span>, <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">p</span><span class="op">$</span><span class="va">cases</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">total_cases_by_beta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">sensitivity_results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">model</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Visualize (if desired)</span></span>
+<span><span class="co"># Plot relationship</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">beta_values</span>, <span class="va">total_cases_by_beta</span>,</span>
 <span>     type <span class="op">=</span> <span class="st">"b"</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"Transmission rate (beta)"</span>,</span>
-<span>     ylab <span class="op">=</span> <span class="st">"Mean total cases"</span><span class="op">)</span></span></code></pre></div>
+<span>     xlab <span class="op">=</span> <span class="st">"Human transmission rate (beta)"</span>,</span>
+<span>     ylab <span class="op">=</span> <span class="st">"Total cases"</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Sensitivity to transmission parameter"</span><span class="op">)</span></span></code></pre></div>
 <hr>
 </div>
+</div>
+<div class="section level2">
+<h2 id="direct-python-interface-advanced">Direct Python Interface (Advanced)<a class="anchor" aria-label="anchor" href="#direct-python-interface-advanced"></a>
+</h2>
+<p>For advanced users who need direct access to the Python LASER
+module:</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Import laser-cholera Python module</span></span>
+<span><span class="va">lc</span> <span class="op">&lt;-</span> <span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/import.html" class="external-link">import</a></span><span class="op">(</span><span class="st">"laser_cholera.metapop.model"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Run model directly</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="va">lc</span><span class="op">$</span><span class="fu">run_model</span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
+<span>  quiet <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Access Python objects</span></span>
+<span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span></span>
+<span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span></span>
+<span><span class="va">model</span><span class="op">$</span><span class="va">params</span></span>
+<span><span class="va">model</span><span class="op">$</span><span class="va">metadata</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level2">
+<h2 id="output-options">Output Options<a class="anchor" aria-label="anchor" href="#output-options"></a>
+</h2>
+<p>Control where outputs are saved:</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Save outputs to specific directory</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
+<span>  outdir <span class="op">=</span> <span class="st">"/path/to/output"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Generate visualizations</span></span>
+<span><span class="va">model_viz</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
+<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
+<span>  visualize <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  pdf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  outdir <span class="op">=</span> <span class="st">"/path/to/figures"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<hr>
 </div>
 <div class="section level2">
 <h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
 </h2>
 <div class="section level3">
-<h3 id="check-python-environment">Check Python Environment<a class="anchor" aria-label="anchor" href="#check-python-environment"></a>
+<h3 id="check-dependencies">Check Dependencies<a class="anchor" aria-label="anchor" href="#check-dependencies"></a>
 </h3>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Verify laser-cholera is installed</span></span>
 <span><span class="fu"><a href="../reference/check_dependencies.html">check_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
@@ -479,12 +470,11 @@ debugging or accessing outputs not returned by R wrapper functions.</p>
 <p><strong>Issue</strong>:
 <code>Error: Python module laser_cholera not found</code>
 <strong>Solution</strong>: Run <code><a href="../reference/install_dependencies.html">install_dependencies()</a></code></p>
-<p><strong>Issue</strong>: Model runs slowly <strong>Solution</strong>:
-Enable parallel execution with
-<code>mosaic_control_defaults(parallel = TRUE)</code></p>
-<p><strong>Issue</strong>: Results vary between runs
+<p><strong>Issue</strong>: Results not reproducible
 <strong>Solution</strong>: Set a fixed seed:
-<code>run_LASER(..., seed = 123)</code></p>
+<code>run_LASER(paramfile = ..., seed = 123)</code></p>
+<p><strong>Issue</strong>: Slow execution <strong>Solution</strong>: Use
+parallel execution (see “Running Multiple Simulations” section)</p>
 <hr>
 </div>
 </div>
@@ -499,14 +489,11 @@ Enable parallel execution with
 <strong>Deployment</strong>: Deploy on VMs or clusters (Deployment
 vignette)</li>
 <li>
-<strong>Parameter Estimation</strong>: Use <code>est_*</code>
+<strong>Calibration</strong>: For Bayesian calibration workflows,
+see calibration documentation</li>
+<li>
+<strong>Parameter Estimation</strong>: Explore <code>est_*</code>
 functions for data-driven parameters</li>
-<li>
-<strong>Calibration</strong>: Bayesian parameter fitting with NPE
-workflows</li>
-<li>
-<strong>Data Processing</strong>: Process surveillance data with
-<code>process_*</code> functions</li>
 </ul>
 <hr>
 </div>
@@ -520,13 +507,13 @@ workflows</li>
 </li>
 <li>
 <strong>Function help</strong>: <code><a href="../reference/run_LASER.html">?run_LASER</a></code>,
-<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code>, <code><a href="../reference/run_mosaic_iso.html">?run_mosaic_iso</a></code>
+<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code>
 </li>
 <li>
 <strong>Report issues</strong>: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues" class="external-link uri">https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues</a>
 </li>
 <li>
-<strong>Example scripts</strong>: See <code>MOSAIC-pkg/model/</code>
+<strong>Examples</strong>: See <code>MOSAIC-pkg/model/</code>
 directory for complete workflows</li>
 </ul>
 </div>
