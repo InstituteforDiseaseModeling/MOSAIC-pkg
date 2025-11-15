@@ -28,10 +28,7 @@ ssh user@host 'bash -s' < vm/setup_mosaic.sh
 bash vm/setup_mosaic.sh
 ```
 
-**What it installs:** - System updates - R (\>= 4.1.1) from CRAN -
-Geospatial libraries (GDAL, PROJ, GEOS, UDUNITS) - Additional dev
-libraries (libcurl, libssl, libxml2, etc.) - Python 3.9+ - MOSAIC R
-package from GitHub - Python dependencies (laser-cholera)
+**Script contents:**
 
 ------------------------------------------------------------------------
 
@@ -46,8 +43,7 @@ If R \>= 4.1.1 is already installed on your VM, use
 ssh user@host 'bash -s' < vm/setup_mosaic_minimal.sh
 ```
 
-**What it installs:** - System libraries only (GDAL, PROJ, GEOS,
-UDUNITS, Python) - MOSAIC R package - Python dependencies
+**Script contents:**
 
 ------------------------------------------------------------------------
 

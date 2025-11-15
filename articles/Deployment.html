@@ -91,10 +91,7 @@ Ubuntu/Debian systems.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">ssh</span> user@host <span class="st">'bash -s'</span> <span class="op">&lt;</span> vm/setup_mosaic.sh</span></code></pre></div>
 <p><strong>Or run directly on VM:</strong></p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">bash</span> vm/setup_mosaic.sh</span></code></pre></div>
-<p><strong>What it installs:</strong> - System updates - R (&gt;= 4.1.1)
-from CRAN - Geospatial libraries (GDAL, PROJ, GEOS, UDUNITS) -
-Additional dev libraries (libcurl, libssl, libxml2, etc.) - Python 3.9+
-- MOSAIC R package from GitHub - Python dependencies (laser-cholera)</p>
+<p><strong>Script contents:</strong></p>
 <hr>
 </div>
 <div class="section level2">
@@ -104,9 +101,7 @@ Additional dev libraries (libcurl, libssl, libxml2, etc.) - Python 3.9+
 <code>vm/setup_mosaic_minimal.sh</code>:</p>
 <p><strong>Execute via SSH:</strong></p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">ssh</span> user@host <span class="st">'bash -s'</span> <span class="op">&lt;</span> vm/setup_mosaic_minimal.sh</span></code></pre></div>
-<p><strong>What it installs:</strong> - System libraries only (GDAL,
-PROJ, GEOS, UDUNITS, Python) - MOSAIC R package - Python
-dependencies</p>
+<p><strong>Script contents:</strong></p>
 <hr>
 </div>
 <div class="section level2">
