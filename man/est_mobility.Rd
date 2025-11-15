@@ -22,3 +22,11 @@ The function saves mobility matrices (M, D, N), travel probabilities (tau_j), an
 \description{
 This function estimates the departure probability (tau_i) and diffusion model (pi_ij) using flight data, distance matrices, and population sizes. It processes flight data, builds mobility and distance matrices, fits the mobility model, and saves the results in CSV format.
 }
+\note{
+This function requires the optional \code{mobility} package from GitHub.
+Install with: \code{remotes::install_github("COVID-19-Mobility-Data-Network/mobility")}
+
+The \code{mobility} package requires JAGS (>= 4.3.0) to be installed on your system.
+Most users will not need to regenerate mobility data, as pre-computed files are
+included in the package.
+}

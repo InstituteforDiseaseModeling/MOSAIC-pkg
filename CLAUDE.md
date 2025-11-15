@@ -120,6 +120,14 @@ Rscript -e "MOSAIC::install_dependencies()"
 - **reticulate configuration**: For Python environment management
 - Use `check_dependencies()` and `install_dependencies()` for setup
 
+### Optional Dependencies
+- **mobility package**: Optional GitHub package for regenerating mobility estimates
+  - Only needed if regenerating mobility data (most users won't need this)
+  - Requires JAGS (>= 4.3.0) system installation
+  - Pre-computed mobility files included in `model/input/`
+  - Install with: `remotes::install_github("COVID-19-Mobility-Data-Network/mobility")`
+  - Used by: `est_mobility()` function
+
 ## LASER Model Configuration
 
 ### Configuration Files
