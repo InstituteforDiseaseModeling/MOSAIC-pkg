@@ -36,9 +36,6 @@ Functions starting with run\_, make\_, or create\_
   : Run MOSAIC Calibration Workflow
 - [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
   : Run NPE Diagnostics
-- [`run_spatial_transmission_shiny_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_spatial_transmission_shiny_app.md)
-  : Launch an interactive viewer for site-specific
-  \\\beta\_{\text{hum}}\\
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
@@ -1137,9 +1134,6 @@ Other exported functions and internal helpers
   : Run MOSAIC Calibration Workflow
 - [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
   : Run NPE Diagnostics
-- [`run_spatial_transmission_shiny_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_spatial_transmission_shiny_app.md)
-  : Launch an interactive viewer for site-specific
-  \\\beta\_{\text{hum}}\\
 - [`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md)
   : Sample from Prior Distribution (Simplified)
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
