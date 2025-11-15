@@ -142,7 +142,7 @@ plot_model_convergence <- function(results_dir,
 
     # Extract metrics for quantile-based method
     metrics <- c(
-        ESS = safe_numeric(diagnostics$metrics$ess_all$value),
+        ESS = safe_numeric(diagnostics$metrics$ess_best$value),
         A = safe_numeric(diagnostics$metrics$A_B$value),
         CVw = safe_numeric(diagnostics$metrics$cvw_B$value),
         B_size = safe_numeric(diagnostics$metrics$B_size$value),
@@ -167,7 +167,7 @@ plot_model_convergence <- function(results_dir,
 
     # Extract status for quantile-based method
     status <- c(
-        ESS = safe_character(diagnostics$metrics$ess_all$status),
+        ESS = safe_character(diagnostics$metrics$ess_best$status),
         A = safe_character(diagnostics$metrics$A_B$status),
         CVw = safe_character(diagnostics$metrics$cvw_B$status),
         B_size = safe_character(diagnostics$metrics$B_size$status)
@@ -210,16 +210,16 @@ plot_model_convergence <- function(results_dir,
     diagnostic_lines <- c(
         sprintf("Retained: %d/%d", n_retained_all, n_total_original),
         "",  # Empty line for spacing
-        safe_sprintf("ESS: %.0f [target ≥ %.0f]",
+        safe_sprintf("ESS: %.0f [target >= %.0f]",
                      metrics["ESS"], targets["ESS_min"]),
         "",  # Empty line for spacing
-        safe_sprintf("A: %.3f [target ≥ %.3f]",
+        safe_sprintf("A: %.3f [target >= %.3f]",
                      metrics["A"], targets["A_min"]),
         "",  # Empty line for spacing
-        safe_sprintf("CVw: %.3f [target ≤ %.3f]",
+        safe_sprintf("CVw: %.3f [target <= %.3f]",
                      metrics["CVw"], targets["CVw_max"]),
         "",  # Empty line for spacing
-        safe_sprintf("B: %.0f [target ≥ %.0f]",
+        safe_sprintf("B: %.0f [target >= %.0f]",
                      metrics["B_size"], targets["B_min"])
     )
 
@@ -326,13 +326,13 @@ plot_model_convergence <- function(results_dir,
                        n_best_subset, n_retained_all, 100 * n_best_subset / n_retained_all))
 
         # Use safe_sprintf for metrics display
-        message(safe_sprintf("ESS: %.0f (target ≥ %.0f) - %s",
+        message(safe_sprintf("ESS: %.0f (target >= %.0f) - %s",
                             metrics["ESS"], targets["ESS_min"], toupper(status["ESS"])))
-        message(safe_sprintf("Agreement Index: %.3f (target ≥ %.3f) - %s",
+        message(safe_sprintf("Agreement Index: %.3f (target >= %.3f) - %s",
                             metrics["A"], targets["A_min"], toupper(status["A"])))
-        message(safe_sprintf("Weight CV: %.3f (target ≤ %.3f) - %s",
+        message(safe_sprintf("Weight CV: %.3f (target <= %.3f) - %s",
                             metrics["CVw"], targets["CVw_max"], toupper(status["CVw"])))
-        message(safe_sprintf("Retained Set Size: %.0f (target ≥ %.0f) - %s",
+        message(safe_sprintf("Retained Set Size: %.0f (target >= %.0f) - %s",
                             metrics["B_size"], targets["B_min"], toupper(status["B_size"])))
         message(sprintf("Overall Status: %s", safe_character(diagnostics$summary$convergence_status)))
     }

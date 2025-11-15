@@ -45,5 +45,5 @@ This can be \emph{negative} when the model underperforms the intercept-only base
 }
 }
 \seealso{
-\code{\link[=calc_model_mse]{calc_model_mse()}}, \code{\link[=calc_model_cor]{calc_model_cor()}}, \code{\link[=calc_model_rmse]{calc_model_rmse()}}, \code{\link[=calc_model_mae]{calc_model_mae()}}
+\code{\link[=calc_model_mse]{calc_model_mse()}}, \code{\link[=calc_model_cor]{calc_model_cor()}}
 }

@@ -1,71 +1,47 @@
 #' Fit Gompertz Distribution from Mode and Probability Interval
 #'
-#' This function estimates the parameters of a Gompertz distribution on \eqn{[0, \infty)}
-#' with pdf \eqn{f(x; b, \eta) = b \eta \exp(b x) \exp\{-\eta(\exp(b x) - 1)\}},
-#' given a target interior mode and a two-sided interval (default: central 95%).
-#' The interior mode condition is enforced by \eqn{\eta = b \exp(b\,\text{mode})},
-#' which holds exactly for the Gompertz mode \eqn{x^* = (1/b)\log(\eta/b)} when \eqn{\eta > b}.
+#' This function estimates the parameters of a Gompertz distribution on [0, Inf)
+#' with pdf f(x; b, eta) = b * eta * exp(b*x) * exp(-eta*(exp(b*x) - 1)),
+#' given a target interior mode and a two-sided interval (default: central 95 percent).
+#' The interior mode condition is enforced by eta = b * exp(b*mode), which holds
+#' exactly for the Gompertz mode when eta > b.
 #'
-#' Fitting proceeds by minimizing the sum of squared errors between the target
-#' interval bounds and the corresponding Gompertz quantiles, with \eqn{b>0} as the
-#' free parameter (optimized on the log-scale for numerical stability).
+#' @param mode_val Numeric greater than 0. Target mode of the distribution (very near zero is allowed).
+#' @param ci_lower Numeric greater than or equal to 0. Lower bound of the target interval (e.g., 2.5 percent quantile).
+#' @param ci_upper Numeric greater than ci_lower. Upper bound of the target interval (e.g., 97.5 percent quantile).
+#' @param probs Numeric length-2 vector in (0, 1). Probability levels for the target bounds. Defaults to c(0.025, 0.975).
+#' @param verbose Logical. If TRUE, prints a diagnostic summary.
 #'
-#' @param mode_val Numeric (> 0). Target mode of the distribution (very near zero is allowed).
-#' @param ci_lower Numeric (>= 0). Lower bound of the target interval (e.g., 2.5\% quantile).
-#' @param ci_upper Numeric (> ci_lower). Upper bound of the target interval (e.g., 97.5\% quantile).
-#' @param probs Numeric length-2 vector in (0, 1). Probability levels for the target bounds.
-#'   Defaults to \code{c(0.025, 0.975)}.
-#' @param verbose Logical. If \code{TRUE}, prints a diagnostic summary.
-#'
-#' @return A list with components:
+#' @return A list containing:
 #' \itemize{
-#'   \item \code{b}: Gompertz shape parameter.
-#'   \item \code{eta}: Gompertz rate parameter (satisfying \eqn{\eta = b \exp(b\,\text{mode})}).
-#'   \item \code{f0}: Density at zero, \eqn{f(0) = b\,\eta} (finite and positive).
-#'   \item \code{fitted_mode}: The implied mode (matches \code{mode_val} up to numeric error).
-#'   \item \code{fitted_ci}: Named vector of fitted quantiles at \code{probs}.
-#'   \item \code{fitted_mean}: Numerical estimate of \eqn{\mathbb{E}[X]} via quadrature.
-#'   \item \code{fitted_sd}: Numerical estimate of \eqn{\mathrm{sd}(X)} via quadrature.
-#'   \item \code{probs}: The probability levels used.
-#'   \item \code{input_mode}: Echo of \code{mode_val}.
-#'   \item \code{input_ci}: Echo of \code{c(lower = ci_lower, upper = ci_upper)}.
+#'   \item b: Gompertz shape parameter
+#'   \item eta: Gompertz rate parameter
+#'   \item f0: Density at zero (finite and positive)
+#'   \item fitted_mode: The implied mode (matches mode_val up to numeric error)
+#'   \item fitted_ci: Named vector of fitted quantiles at probs
+#'   \item fitted_mean: Numerical estimate of the expected value via quadrature
+#'   \item fitted_sd: Numerical estimate of the standard deviation via quadrature
+#'   \item probs: The probability levels used
+#'   \item input_mode: Echo of mode_val
+#'   \item input_ci: Echo of c(lower = ci_lower, upper = ci_upper)
 #' }
 #'
-#' @details
-#' \strong{Quantile function.} For \eqn{U \sim \mathrm{Uniform}(0,1)}, the inverse-CDF is
-#' \deqn{Q(p; b, \eta) = \frac{1}{b}\log\!\left(1 - \frac{\log(1-p)}{\eta}\right)
-#'      = \frac{1}{b}\log\!\left(1 + \frac{-\log(1-p)}{\eta}\right),}
-#' which we compute with \code{log1p} for stability. With the mode constraint
-#' \eqn{\eta(b) = b\,\exp(b\,\text{mode})}, the fit reduces to a 1D search over \eqn{b}.
-#'
-#' \strong{Interior mode.} For \eqn{\eta > b}, the mode is \eqn{x^* = (1/b)\log(\eta/b)}.
-#' Enforcing \eqn{\eta = b \exp(b\,\text{mode})} guarantees an interior mode at
-#' \code{mode_val} whenever \code{mode_val > 0}.
-#'
-#' \strong{Mean and SD.} Closed forms involve exponential integrals; here we
-#' compute mean and variance by numerical integration over \eqn{[0, Q(0.999999)]}.
-#'
 #' @examples
-#' # Example: very small positive quantity with near-zero mode and tight right tail
-#' fit <- fit_gompertz_from_ci(
+#' # Example: Fit Gompertz for small positive quantity
+#' result <- fit_gompertz_from_ci(
 #'   mode_val = 1e-8,
 #'   ci_lower = 1e-9,
 #'   ci_upper = 1e-6,
-#'   probs    = c(0.025, 0.975),
-#'   verbose  = TRUE
+#'   probs = c(0.025, 0.975)
 #' )
-#' str(fit)
+#' print(result)
 #'
-#' # Quick check: compare target vs. fitted quantiles
-#' fit$fitted_ci
-#'
-#' @seealso \code{\link{fit_gamma_from_ci}}
 #' @export
 fit_gompertz_from_ci <- function(mode_val,
-                                      ci_lower,
-                                      ci_upper,
-                                      probs    = c(0.025, 0.975),
-                                      verbose  = FALSE) {
+                                 ci_lower,
+                                 ci_upper,
+                                 probs    = c(0.025, 0.975),
+                                 verbose  = FALSE) {
 
      # ---- validate inputs ----
      if (!is.numeric(mode_val) || length(mode_val) != 1L || !is.finite(mode_val) || mode_val < 0) {
@@ -193,11 +169,6 @@ fit_gompertz_from_ci <- function(mode_val,
 #'
 #' @return Numeric vector of length n containing random Gompertz variates.
 #'
-#' @examples
-#' # Generate 1000 random Gompertz variates
-#' x <- rgompertz(1000, b = 2, eta = 3)
-#' hist(x, breaks = 50, main = "Gompertz Distribution")
-#'
 #' @export
 rgompertz <- function(n, b, eta) {
      # Input validation
@@ -210,10 +181,10 @@ rgompertz <- function(n, b, eta) {
      if (!is.numeric(eta) || length(eta) != 1L || !is.finite(eta) || eta <= 0) {
           stop("`eta` must be a single finite positive numeric value.")
      }
-     
+
      # Generate uniform random variates
      u <- runif(n)
-     
+
      # Apply inverse CDF transformation
      # Q(p) = (1/b) * log(1 + (-log(1-p))/eta)
      # Using log1p for numerical stability
@@ -231,11 +202,6 @@ rgompertz <- function(n, b, eta) {
 #'
 #' @return Numeric vector of density values.
 #'
-#' @examples
-#' x <- seq(0, 5, length.out = 100)
-#' y <- dgompertz(x, b = 2, eta = 3)
-#' plot(x, y, type = "l", main = "Gompertz PDF")
-#'
 #' @export
 dgompertz <- function(x, b, eta, log = FALSE) {
      # Input validation
@@ -245,11 +211,11 @@ dgompertz <- function(x, b, eta, log = FALSE) {
      if (!is.numeric(eta) || length(eta) != 1L || !is.finite(eta) || eta <= 0) {
           stop("`eta` must be a single finite positive numeric value.")
      }
-     
+
      # Compute density
      # f(x; b, eta) = b * eta * exp(b*x) * exp(-eta*(exp(b*x) - 1))
      dens <- ifelse(x < 0, 0, b * eta * exp(b * x) * exp(-eta * (exp(b * x) - 1)))
-     
+
      if (log) {
           return(log(dens))
      } else {
@@ -268,12 +234,7 @@ dgompertz <- function(x, b, eta, log = FALSE) {
 #' @param log.p Logical. If TRUE, return log probability.
 #'
 #' @return Numeric vector of probabilities.
-#'
-#' @examples
-#' q <- seq(0, 5, length.out = 100)
-#' p <- pgompertz(q, b = 2, eta = 3)
-#' plot(q, p, type = "l", main = "Gompertz CDF")
-#'
+
 #' @export
 pgompertz <- function(q, b, eta, lower.tail = TRUE, log.p = FALSE) {
      # Input validation
@@ -283,15 +244,15 @@ pgompertz <- function(q, b, eta, lower.tail = TRUE, log.p = FALSE) {
      if (!is.numeric(eta) || length(eta) != 1L || !is.finite(eta) || eta <= 0) {
           stop("`eta` must be a single finite positive numeric value.")
      }
-     
+
      # Compute CDF
      # F(x; b, eta) = 1 - exp(-eta * (exp(b*x) - 1))
      p <- ifelse(q < 0, 0, 1 - exp(-eta * (exp(b * q) - 1)))
-     
+
      if (!lower.tail) {
           p <- 1 - p
      }
-     
+
      if (log.p) {
           return(log(p))
      } else {
@@ -311,11 +272,6 @@ pgompertz <- function(q, b, eta, lower.tail = TRUE, log.p = FALSE) {
 #'
 #' @return Numeric vector of quantiles.
 #'
-#' @examples
-#' p <- seq(0.01, 0.99, length.out = 100)
-#' q <- qgompertz(p, b = 2, eta = 3)
-#' plot(p, q, type = "l", main = "Gompertz Quantile Function")
-#'
 #' @export
 qgompertz <- function(p, b, eta, lower.tail = TRUE, log.p = FALSE) {
      # Input validation
@@ -325,24 +281,24 @@ qgompertz <- function(p, b, eta, lower.tail = TRUE, log.p = FALSE) {
      if (!is.numeric(eta) || length(eta) != 1L || !is.finite(eta) || eta <= 0) {
           stop("`eta` must be a single finite positive numeric value.")
      }
-     
+
      if (log.p) {
           p <- exp(p)
      }
-     
+
      if (!lower.tail) {
           p <- 1 - p
      }
-     
+
      # Validate probabilities
      if (any(p < 0 | p > 1, na.rm = TRUE)) {
           stop("Probabilities must be in [0, 1].")
      }
-     
+
      # Compute quantiles
      # Q(p) = (1/b) * log(1 + (-log(1-p))/eta)
      # Using log1p for numerical stability
-     ifelse(p == 0, 0, 
+     ifelse(p == 0, 0,
             ifelse(p == 1, Inf,
                    (1 / b) * log1p((-log1p(-p)) / eta)))
 }

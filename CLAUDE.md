@@ -115,7 +115,6 @@ Rscript -e "MOSAIC::install_dependencies()"
 - Model execution: `lc$metapop$model$run_model(paramfile, seed)`
 
 ### System Dependencies
-- **JAGS**: Required for Bayesian analysis (rjags package)
 - **Geospatial libraries**: GDAL, PROJ, GEOS for spatial operations
 - **R packages**: Extensive dependencies listed in DESCRIPTION
 - **reticulate configuration**: For Python environment management
@@ -184,6 +183,48 @@ Rscript -e "covr::package_coverage()"
 - Examples provided for key functions
 - Package documentation built with pkgdown
 
+### NPE Output Handling (Performance Critical)
+
+**Background**: During BFRS sampling, ~40K simulations generate individual `out_NNNNNNN.parquet` files containing time series data. Only 1-5% of these simulations receive non-zero NPE weights.
+
+**Directory Structure**:
+```
+1_bfrs/
+├── simulations.parquet          # Metadata (18 MB, all simulations)
+├── convergence_results.parquet  # Convergence diagnostics
+├── priors.json                  # Parameter priors
+└── outputs/                     # Subdirectory for individual output files
+    ├── out_0000001.parquet     # Simulation 1 time series
+    ├── out_0000002.parquet     # Simulation 2 time series
+    └── ... (39,465 files)
+```
+
+**Optimized Workflow**:
+1. **During simulation**: Individual output files created in `outputs/` subdirectory
+2. **After simulation**: ISO codes mapped in-place to files in `outputs/`
+3. **During NPE training**: `.prepare_npe_data()` loads only weighted simulation files from `outputs/`
+4. **After NPE completes**: Entire `outputs/` directory removed to free disk space
+
+**Key Points**:
+- ❌ **DO NOT** combine individual files into `outputs.parquet` (this was removed - it created a 194 MB file just to filter to 2-5 MB)
+- ✅ **DO** organize output files in `outputs/` subdirectory (avoids 39K+ files cluttering the main directory)
+- ✅ **DO** keep individual files until NPE training completes
+- ✅ Entire `outputs/` directory is automatically removed after NPE completes (frees 50-200 MB disk space)
+- 🔧 For debugging: Comment out cleanup section in calibration script if you need to preserve files
+
+**Performance benefit**:
+- Old approach: 30-120 seconds to load and filter 45M rows from combined file
+- New approach: 0.1-0.5 seconds to load only weighted simulation files
+- **Speedup: 100-1200× faster (2-3 orders of magnitude)**
+
+**Code locations**:
+- Loading logic: `R/npe.R` in `.prepare_npe_data()` function (lines 893-896 for outputs/ path)
+- Calibration workflow: `local/calibration/calibration_test_17.R`
+  - Directory structure: lines 111-117
+  - Output file creation: line 457 (writes to outputs/ subdirectory)
+  - ISO mapping: lines 1077-1109 (reads from outputs/ subdirectory)
+  - Cleanup: lines 2403-2423 (removes entire outputs/ directory)
+
 ## Integration Points
 
 ### External Repositories
@@ -202,6 +243,5 @@ Rscript -e "covr::package_coverage()"
 
 - **Path setup is critical**: `set_root_directory()` must be called before `get_paths()`
 - **Python environment issues**: Use `remove_MOSAIC_python_env()` for troubleshooting
-- **JAGS installation**: Required for Bayesian functions, may need manual installation
 - **File naming typos**: Note `make_defaut_LASER_config.R` (should be "default") and `processs_suitability_data.R` (extra "s")
 - **Model workflow**: `model/LAUNCH.R` contains the complete data processing and modeling pipeline

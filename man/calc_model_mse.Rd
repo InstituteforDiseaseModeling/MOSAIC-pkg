@@ -75,5 +75,5 @@ calc_model_mse(Y, Yh, weights = w)
 
 }
 \seealso{
-\code{\link[=calc_model_cor]{calc_model_cor()}}, \code{\link[=calc_model_likelihood]{calc_model_likelihood()}}, \code{\link[=calc_model_ppc]{calc_model_ppc()}}
+\code{\link[=calc_model_cor]{calc_model_cor()}}, \code{\link[=calc_model_likelihood]{calc_model_likelihood()}}
 }

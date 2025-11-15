@@ -7,7 +7,7 @@
 #' @param json_files Vector of paths to JSON distribution files
 #' @param method_names Vector of method names corresponding to each JSON file (for legends and colors)
 #' @param output_dir Directory to save generated plots
-#' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#666666", "BFRS" = "#D55E00", "NPE" = "#0072B2"))
+#' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4", "NPE" = "#d00000"))
 #'
 #' @return Invisibly returns a list of generated plot objects
 #'
@@ -15,27 +15,27 @@
 #' \dontrun{
 #' # Compare three methods
 #' plot_model_distributions(
-#'   json_files = c("priors.json", "posteriors_bfrs.json", "posteriors_npe.json"),
+#'   json_files = c("priors.json", "posteriors_bfrs.json", "posterior/posteriors.json"),
 #'   method_names = c("Prior", "BFRS", "NPE"),
 #'   output_dir = "plots"
 #' )
 #'
 #' # Compare just prior and NPE
 #' plot_model_distributions(
-#'   json_files = c("priors.json", "posteriors_npe.json"),
+#'   json_files = c("priors.json", "posterior/posteriors.json"),
 #'   method_names = c("Prior", "NPE"),
 #'   output_dir = "plots"
 #' )
 #'
-#' # Use custom colors for better visibility
+#' # Use custom colors (MOSAIC defaults shown)
 #' plot_model_distributions(
-#'   json_files = c("priors.json", "posteriors_bfrs.json", "posteriors_npe.json"),
+#'   json_files = c("priors.json", "posteriors_bfrs.json", "posterior/posteriors.json"),
 #'   method_names = c("Prior", "BFRS", "NPE"),
 #'   output_dir = "plots",
 #'   custom_colors = c(
-#'     "Prior" = "#808080",  # Grey
-#'     "BFRS" = "#E31A1C",   # Red
-#'     "NPE" = "#1F78B4"     # Blue
+#'     "Prior" = "#4a4a4a",  # Dark gray
+#'     "BFRS" = "#1f77b4",   # Blue
+#'     "NPE" = "#d00000"     # Red
 #'   )
 #' )
 #' }
@@ -134,17 +134,18 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # Generate color scheme using standardized method names
   method_names <- names(methods_data)
 
-  # Pre-defined colors for common methods with high contrast
-  # Using colorblind-friendly palette with good distinguishability
+  # MOSAIC color scheme for calibration methods
+  # Consistent colors across all distribution and quantile plots
   standard_colors <- list(
-    "Prior" = "#666666",    # Medium grey (neutral baseline)
-    "Priors" = "#666666",   # Alternative naming
-    "BFRS" = "#D55E00",     # Vermillion (warm, stands out)
-    "Posterior" = "#D55E00", # Alternative naming for BFRS
-    "NPE" = "#0072B2",      # Blue (cool, contrasts with vermillion)
-    "MCMC" = "#CC79A7",     # Reddish purple
-    "ABC" = "#009E73",      # Bluish green
-    "SBC" = "#F0E442"       # Yellow
+    "Prior" = "#4a4a4a",    # Dark gray (neutral baseline)
+    "Priors" = "#4a4a4a",   # Alternative naming
+    "BFRS" = "#1f77b4",     # Blue (Bayesian retrospective)
+    "Posterior" = "#1f77b4", # Alternative naming for BFRS
+    "NPE" = "#d00000",      # Red (neural posterior estimation)
+    "SMC" = "#d00000",      # Red (sequential Monte Carlo - deprecated)
+    "MCMC" = "#CC79A7",     # Reddish purple (other methods)
+    "ABC" = "#009E73",      # Bluish green (other methods)
+    "SBC" = "#F0E442"       # Yellow (diagnostics)
   )
 
   # Fallback palette for methods not in standard list
@@ -348,15 +349,34 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
       if (!is.null(meanlog_val) && !is.null(sdlog_val) &&
           is.finite(meanlog_val) && is.finite(sdlog_val) && sdlog_val > 0) {
-        x_max <- qlnorm(0.99, meanlog_val, sdlog_val)
-        if (is.finite(x_max) && x_max > 0) {
-          x <- seq(0, x_max, length.out = 1000)
+
+        # Use quantile-based x-axis range for better coverage of extreme distributions
+        x_min <- qlnorm(0.001, meanlog_val, sdlog_val)  # 0.1st percentile
+        x_max <- qlnorm(0.999, meanlog_val, sdlog_val)  # 99.9th percentile
+
+        if (is.finite(x_max) && is.finite(x_min) && x_max > x_min) {
+          x <- seq(x_min, x_max, length.out = 1000)
           y <- dlnorm(x, meanlog_val, sdlog_val)
-          dist_str <- sprintf("LogNormal(%.2g, %.2g)", meanlog_val, sdlog_val)
-          mean_val <- if (!is.null(parameters$fitted_mean) || !is.null(parameters$mean)) {
-            as.numeric(parameters$fitted_mean %||% parameters$mean)
+
+          # Check if density is non-negligible (avoid flat lines from numerical precision issues)
+          max_density <- max(y, na.rm = TRUE)
+          if (is.finite(max_density) && max_density > 1e-10) {
+            # Only keep points where density is meaningful (above threshold)
+            # This prevents plotting of numerically negligible densities
+            keep_idx <- y > max_density * 1e-6
+            x <- x[keep_idx]
+            y <- y[keep_idx]
+
+            dist_str <- sprintf("LogNormal(%.2g, %.2g)", meanlog_val, sdlog_val)
+            mean_val <- if (!is.null(parameters$fitted_mean) || !is.null(parameters$mean)) {
+              as.numeric(parameters$fitted_mean %||% parameters$mean)
+            } else {
+              exp(meanlog_val + sdlog_val^2/2)
+            }
           } else {
-            exp(meanlog_val + sdlog_val^2/2)
+            # Density too small to plot meaningfully - return NULL
+            x <- NULL
+            y <- NULL
           }
         }
       }
@@ -436,22 +456,54 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       method_data <- methods_data[[method_name]]
       param_data <- NULL
 
-      # Try to get parameter from global parameters first
-      if (!is.null(method_data$parameters_global) &&
-          param_name %in% names(method_data$parameters_global)) {
-        param_data <- method_data$parameters_global[[param_name]]
+      # Generate parameter name variants to handle naming inconsistencies
+      # between priors, BFRS, and NPE (especially seasonality parameters)
+      param_variants <- c(param_name)
+
+      # Add underscore variants for seasonality params (a1 → a_1_j)
+      if (param_name %in% c("a1", "a2", "b1", "b2")) {
+        base <- substr(param_name, 1, 1)  # "a" or "b"
+        num <- substr(param_name, 2, 2)   # "1" or "2"
+        param_variants <- c(param_variants, paste0(base, "_", num, "_j"))
       }
 
-      # Try to get parameter from location-specific parameters
-      if (is.null(param_data) && !is.null(location) &&
-          !is.null(method_data$parameters_location) &&
-          param_name %in% names(method_data$parameters_location) &&
-          !is.null(method_data$parameters_location[[param_name]]$location) &&
-          location %in% names(method_data$parameters_location[[param_name]]$location)) {
-        param_data <- method_data$parameters_location[[param_name]]$location[[location]]
+      # Add non-underscore variants (a_1_j → a1)
+      if (grepl("^[ab]_\\d_j$", param_name)) {
+        param_variants <- c(param_variants,
+                           gsub("_j$", "", gsub("_", "", param_name)))
+      }
+
+      # Try to get parameter from global parameters first (try all variants)
+      for (variant in param_variants) {
+        if (!is.null(method_data$parameters_global) &&
+            variant %in% names(method_data$parameters_global)) {
+          param_data <- method_data$parameters_global[[variant]]
+          break
+        }
+      }
+
+      # Try to get parameter from location-specific parameters (try all variants)
+      if (is.null(param_data) && !is.null(location)) {
+        for (variant in param_variants) {
+          if (!is.null(method_data$parameters_location) &&
+              variant %in% names(method_data$parameters_location) &&
+              !is.null(method_data$parameters_location[[variant]]$location) &&
+              location %in% names(method_data$parameters_location[[variant]]$location)) {
+            param_data <- method_data$parameters_location[[variant]]$location[[location]]
+            break
+          }
+        }
       }
 
       if (!is.null(param_data) && !is.null(param_data$distribution)) {
+        # Skip failed distributions (marked by calc_model_posterior_distributions)
+        if (param_data$distribution == "failed") {
+          if (verbose) {
+            cat(sprintf("  Skipping %s for %s: distribution fitting failed\n",
+                       param_name, method_name))
+          }
+          next
+        }
         param_distributions[[method_name]] <- param_data
       }
     }
@@ -758,16 +810,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           param_name <- category_info$parameter_name[i]
           param_info <- category_info[i, ]
 
-          # Handle parameter name mapping for seasonality and derived parameters
-          prior_param_name <- switch(param_name,
-                                   "a_1_j" = "a1",
-                                   "a_2_j" = "a2",
-                                   "b_1_j" = "b1",
-                                   "b_2_j" = "b2",
-                                   "beta_j0_hum" = "beta_j0_tot",
-                                   param_name)
-
-          p <- create_multi_method_plot(prior_param_name, param_info, location = iso)
+          # Parameter name variants now handled within create_multi_method_plot()
+          # No need for external mapping
+          p <- create_multi_method_plot(param_name, param_info, location = iso)
           if (!is.null(p)) {
             category_plot_list[[param_name]] <- p
           }

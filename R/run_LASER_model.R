@@ -1,6 +1,8 @@
 #' Run LASER Model Simulation
 #'
 #' A wrapper function to execute a LASER model simulation via the Python interface (reticulate).
+#' Automatically suppresses NumPy divide-by-zero warnings that can occur during vaccination
+#' calculations when susceptible and exposed compartments are both zero.
 #'
 #' @param paramfile Character. Path to the LASER parameter file (e.g., YAML or JSON) used to configure the simulation.
 #' @param seed Integer. Random seed for reproducibility. Defaults to 123L.
@@ -42,6 +44,11 @@ run_LASER_model <- function(
      if (is.null(py_module)) {
           py_module <- reticulate::import("laser", convert = FALSE)
      }
+
+     # Suppress NumPy divide-by-zero warnings
+     warnings <- reticulate::import("warnings", convert = FALSE)
+     warnings$filterwarnings("ignore", message = "invalid value encountered in divide")
+     warnings$filterwarnings("ignore", category = reticulate::import("numpy", convert = FALSE)$VisibleDeprecationWarning)
 
      # Execute the model
      result <- py_module$metapop$model$run_model(

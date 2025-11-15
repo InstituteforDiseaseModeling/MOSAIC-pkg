@@ -29,6 +29,14 @@
 #' @param envelope_quantiles Numeric vector specifying the quantiles for confidence
 #'   intervals. Default is c(0.025, 0.25, 0.75, 0.975) for 50% and 95% CIs.
 #'   Must have an even number of elements to form pairs of (lower, upper) bounds.
+#' @param save_predictions Logical indicating whether to save prediction data to CSV files.
+#'   Default is FALSE. If TRUE, saves predictions_ensemble_{location}.csv for each location.
+#' @param parallel Logical indicating whether to use parallel computation. Default is FALSE.
+#'   When TRUE, simulations are run in parallel across multiple cores.
+#' @param n_cores Integer specifying number of cores to use for parallel computation.
+#'   Default is NULL (uses detectCores() - 1). Only used when parallel = TRUE.
+#' @param root_dir Character string specifying the root directory for MOSAIC project.
+#'   Required when parallel = TRUE. Workers need this to initialize PATHS correctly.
 #' @param verbose Logical indicating whether to print progress messages. Default is TRUE.
 #' @param plot_decomposed Logical indicating whether to create additional plots
 #'   showing decomposed uncertainty. Default is FALSE.
@@ -64,7 +72,8 @@
 #' plots <- plot_model_fit_stochastic_param(
 #'     configs = configs,
 #'     n_simulations_per_config = 20,
-#'     output_dir = "output/plots"
+#'     output_dir = "output/plots",
+#'     save_predictions = TRUE
 #' )
 #'
 #' # Mode 2: Using parameter seeds (typical calibration workflow)
@@ -76,8 +85,10 @@
 #'     PATHS = PATHS,
 #'     priors = priors,
 #'     sampling_args = list(sample_tau_i = FALSE),
-#'     output_dir = "output/plots"
+#'     output_dir = "output/plots",
+#'     save_predictions = TRUE  # Save predictions to CSV
 #' )
+#' # Saves: predictions_ensemble_ETH.csv (or other location names)
 #' }
 #'
 #' @export
@@ -86,6 +97,8 @@
 #' @importFrom scales comma
 #' @importFrom reticulate import
 #' @importFrom utils txtProgressBar setTxtProgressBar
+#' @importFrom parallel makeCluster stopCluster clusterEvalQ clusterExport clusterCall detectCores
+#' @importFrom pbapply pblapply
 plot_model_fit_stochastic_param <- function(
     configs = NULL,
     config = NULL,
@@ -97,6 +110,10 @@ plot_model_fit_stochastic_param <- function(
     sampling_args = list(),
     output_dir,
     envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+    save_predictions = FALSE,
+    parallel = FALSE,
+    n_cores = NULL,
+    root_dir = NULL,
     verbose = TRUE,
     plot_decomposed = FALSE) {
 
@@ -197,6 +214,15 @@ plot_model_fit_stochastic_param <- function(
         stop("envelope_quantiles must be in ascending order")
     }
 
+    # Validate parallel parameters
+    if (parallel && is.null(root_dir)) {
+        stop("root_dir is required when parallel = TRUE")
+    }
+
+    if (parallel && !is.null(n_cores) && n_cores < 1) {
+        stop("n_cores must be at least 1")
+    }
+
     # Create output directory
     if (!dir.exists(output_dir)) {
         dir.create(output_dir, recursive = TRUE)
@@ -237,17 +263,7 @@ plot_model_fit_stochastic_param <- function(
     }
 
     # ============================================================================
-    # Import laser-cholera
-    # ============================================================================
-
-    lc <- tryCatch({
-        reticulate::import("laser_cholera.metapop.model")
-    }, error = function(e) {
-        stop("Failed to import laser_cholera: ", e$message)
-    })
-
-    # ============================================================================
-    # Run all simulations
+    # Run all simulations (Parallel or Sequential)
     # ============================================================================
 
     if (verbose) message("\n=== Running Simulations ===")
@@ -256,54 +272,157 @@ plot_model_fit_stochastic_param <- function(
     cases_array <- array(NA, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
     deaths_array <- array(NA, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
 
-    # Progress bar
-    pb <- NULL
-    if (verbose) {
-        pb <- utils::txtProgressBar(min = 0, max = total_simulations, style = 3)
-    }
+    # Worker function (must be self-contained for parallel execution)
+    run_param_stoch_simulation <- function(task_info, param_configs_list) {
+        param_idx <- task_info$param_idx
+        stoch_idx <- task_info$stoch_idx
 
-    sim_counter <- 0
+        tryCatch({
+            # Import laser_cholera on worker
+            lc <- reticulate::import("laser_cholera.metapop.model")
 
-    # Loop through parameter sets
-    for (p in 1:n_param_sets) {
-        param_config <- param_configs[[p]]
+            # Get parameter configuration
+            param_config <- param_configs_list[[param_idx]]
 
-        # Generate stochastic seeds for this parameter set
-        # Use parameter index as base to ensure different seeds across param sets
-        stochastic_seeds <- (p * 1000) + 1:n_simulations_per_config
-
-        # Run stochastic simulations for this parameter set
-        for (s in 1:n_simulations_per_config) {
-            sim_counter <- sim_counter + 1
-
-            # Set seed for this run
-            param_config$seed <- stochastic_seeds[s]
+            # Generate stochastic seed
+            stochastic_seed <- (param_idx * 1000) + stoch_idx
+            param_config$seed <- stochastic_seed
 
             # Run model
-            tryCatch({
-                model <- lc$run_model(paramfile = param_config, quiet = TRUE)
+            model <- lc$run_model(paramfile = param_config, quiet = TRUE)
 
-                # Extract results
-                if (is.matrix(model$results$expected_cases)) {
-                    cases_array[,,p,s] <- model$results$expected_cases
-                    deaths_array[,,p,s] <- model$results$disease_deaths
-                } else {
-                    cases_array[1,,p,s] <- model$results$expected_cases
-                    deaths_array[1,,p,s] <- model$results$disease_deaths
-                }
+            # Return results with indices
+            list(
+                param_idx = param_idx,
+                stoch_idx = stoch_idx,
+                expected_cases = model$results$expected_cases,
+                disease_deaths = model$results$disease_deaths,
+                success = TRUE
+            )
 
-            }, error = function(e) {
-                # Leave as NA if simulation fails
-                if (verbose && sim_counter %% 10 == 0) {
-                    message("\n  Warning: Simulation failed (param ", p, ", stoch ", s, ")")
-                }
-            })
-
-            if (verbose) utils::setTxtProgressBar(pb, sim_counter)
-        }
+        }, error = function(e) {
+            list(
+                param_idx = param_idx,
+                stoch_idx = stoch_idx,
+                success = FALSE,
+                error = as.character(e)
+            )
+        })
     }
 
-    if (verbose) close(pb)
+    # Execute simulations (parallel or sequential)
+    if (parallel) {
+        # ========================================================================
+        # PARALLEL EXECUTION
+        # ========================================================================
+
+        # Create flattened task list
+        task_list <- expand.grid(
+            param_idx = 1:n_param_sets,
+            stoch_idx = 1:n_simulations_per_config
+        )
+
+        # Determine number of cores
+        n_cores_use <- if (is.null(n_cores)) {
+            max(1, parallel::detectCores() - 1)
+        } else {
+            n_cores
+        }
+
+        if (verbose) {
+            message("Setting up parallel cluster with ", n_cores_use, " cores...")
+        }
+
+        # Create cluster
+        cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
+
+        # Ensure cluster is stopped on exit
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+
+        # Setup workers
+        parallel::clusterEvalQ(cl, {
+            library(MOSAIC)
+            library(reticulate)
+        })
+
+        # Set root directory on workers
+        if (!is.null(root_dir)) {
+            parallel::clusterCall(cl, function(rd) {
+                MOSAIC::set_root_directory(rd)
+                MOSAIC::get_paths()
+            }, root_dir)
+        }
+
+        # Export param_configs to workers
+        parallel::clusterExport(cl, c("param_configs"), envir = environment())
+
+        # Run parallel simulations
+        if (verbose) {
+            message("Running ", total_simulations, " simulations on ", n_cores_use, " cores...")
+        }
+
+        results_list <- pbapply::pblapply(
+            split(task_list, seq(nrow(task_list))),
+            function(row) run_param_stoch_simulation(row, param_configs),
+            cl = cl
+        )
+
+        # Reconstruct arrays from parallel results
+        for (result in results_list) {
+            if (result$success) {
+                p <- result$param_idx
+                s <- result$stoch_idx
+
+                if (is.matrix(result$expected_cases)) {
+                    cases_array[,,p,s] <- result$expected_cases
+                    deaths_array[,,p,s] <- result$disease_deaths
+                } else {
+                    cases_array[1,,p,s] <- result$expected_cases
+                    deaths_array[1,,p,s] <- result$disease_deaths
+                }
+            }
+        }
+
+    } else {
+        # ========================================================================
+        # SEQUENTIAL EXECUTION
+        # ========================================================================
+
+        pb <- NULL
+        if (verbose) {
+            message("Running ", total_simulations, " simulations sequentially...")
+            pb <- utils::txtProgressBar(min = 0, max = total_simulations, style = 3)
+        }
+
+        sim_counter <- 0
+
+        for (p in 1:n_param_sets) {
+            for (s in 1:n_simulations_per_config) {
+                sim_counter <- sim_counter + 1
+
+                result <- run_param_stoch_simulation(
+                    list(param_idx = p, stoch_idx = s),
+                    param_configs
+                )
+
+                if (result$success) {
+                    if (is.matrix(result$expected_cases)) {
+                        cases_array[,,p,s] <- result$expected_cases
+                        deaths_array[,,p,s] <- result$disease_deaths
+                    } else {
+                        cases_array[1,,p,s] <- result$expected_cases
+                        deaths_array[1,,p,s] <- result$disease_deaths
+                    }
+                } else if (verbose && sim_counter %% 10 == 0) {
+                    message("\n  Warning: Simulation failed (param ", p, ", stoch ", s, ")")
+                }
+
+                if (verbose) utils::setTxtProgressBar(pb, sim_counter)
+            }
+        }
+
+        if (verbose) close(pb)
+    }
 
     # ============================================================================
     # Calculate statistics
@@ -459,6 +578,29 @@ plot_model_fit_stochastic_param <- function(
     }
 
     plot_data$metric <- factor(plot_data$metric, levels = c("Cases", "Deaths"))
+
+    # ============================================================================
+    # Save predictions to CSV (if requested)
+    # ============================================================================
+
+    if (save_predictions) {
+        if (verbose) message("\n=== Saving Predictions ===")
+
+        for (i in 1:n_locations) {
+            loc_name <- location_names[i]
+            loc_data <- plot_data[plot_data$location == loc_name,]
+
+            # Create filename
+            csv_file <- file.path(output_dir, paste0("predictions_ensemble_", loc_name, ".csv"))
+
+            # Save to CSV
+            write.csv(loc_data, csv_file, row.names = FALSE)
+
+            if (verbose) {
+                message("Predictions saved: ", csv_file)
+            }
+        }
+    }
 
     # ============================================================================
     # Create plots

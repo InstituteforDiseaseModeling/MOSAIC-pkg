@@ -21,9 +21,3 @@ Numeric vector of density values.
 \description{
 Compute the probability density function of a Gompertz distribution.
 }
-\examples{
-x <- seq(0, 5, length.out = 100)
-y <- dgompertz(x, b = 2, eta = 3)
-plot(x, y, type = "l", main = "Gompertz PDF")
-
-}

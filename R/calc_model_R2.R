@@ -20,7 +20,7 @@
 #'
 #' @return Scalar \eqn{R^2}. May be negative for \code{method="sse"} unless \code{bounded=TRUE}.
 #'
-#' @seealso [calc_model_mse()], [calc_model_cor()], [calc_model_rmse()], [calc_model_mae()]
+#' @seealso [calc_model_mse()], [calc_model_cor()]
 #' @export
 calc_model_R2 <- function(observed,
                           estimated,

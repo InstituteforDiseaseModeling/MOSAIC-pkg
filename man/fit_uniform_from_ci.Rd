@@ -46,7 +46,7 @@ For a uniform distribution U(min, max):
 \itemize{
 \item Mean = (min + max) / 2
 \item Variance = (max - min)² / 12
-\item Mode is undefined (any value in \link{min, max} is equally likely)
+\item Mode is undefined (any value in \\code{[min, max]} is equally likely)
 \item 95\% CI covers central 95\% of the range
 }
 

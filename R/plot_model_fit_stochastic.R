@@ -17,6 +17,14 @@
 #'   be saved. Directory will be created if it doesn't exist.
 #' @param envelope_quantiles Numeric vector of length 2 specifying the quantiles
 #'   for the confidence envelope. Default is c(0.1, 0.9) for 80% CI.
+#' @param save_predictions Logical indicating whether to save prediction data to CSV files.
+#'   Default is FALSE. If TRUE, saves predictions_stochastic_{location}.csv for each location.
+#' @param parallel Logical indicating whether to use parallel computation. Default is FALSE.
+#'   When TRUE, simulations are run in parallel across multiple cores.
+#' @param n_cores Integer specifying number of cores to use for parallel computation.
+#'   Default is NULL (uses detectCores() - 1). Only used when parallel = TRUE.
+#' @param root_dir Character string specifying the root directory for MOSAIC project.
+#'   Required when parallel = TRUE. Workers need this to initialize PATHS correctly.
 #' @param verbose Logical indicating whether to print progress messages. Default is TRUE.
 #'
 #' @return Invisibly returns a list containing:
@@ -53,8 +61,10 @@
 #'     config = best_config,
 #'     n_simulations = 100,
 #'     output_dir = "output/plots",
-#'     envelope_quantiles = c(0.1, 0.9)
+#'     envelope_quantiles = c(0.1, 0.9),
+#'     save_predictions = TRUE  # Save predictions to CSV
 #' )
+#' # Saves: predictions_stochastic_ETH.csv (or other location names)
 #'
 #' # Access individual plots
 #' plots$individual[["ETH"]]  # Individual location plot for Ethiopia
@@ -66,10 +76,16 @@
 #' @importFrom scales comma
 #' @importFrom reticulate import
 #' @importFrom utils txtProgressBar setTxtProgressBar
+#' @importFrom parallel makeCluster stopCluster clusterEvalQ clusterExport detectCores
+#' @importFrom pbapply pblapply
 plot_model_fit_stochastic <- function(config,
                                      n_simulations = 100,
                                      output_dir,
                                      envelope_quantiles = c(0.1, 0.9),
+                                     save_predictions = FALSE,
+                                     parallel = FALSE,
+                                     n_cores = NULL,
+                                     root_dir = NULL,
                                      verbose = TRUE) {
 
     # ============================================================================
@@ -90,6 +106,15 @@ plot_model_fit_stochastic <- function(config,
 
     if (n_simulations < 2) {
         stop("n_simulations must be at least 2")
+    }
+
+    # Validate parallel parameters
+    if (parallel && is.null(root_dir)) {
+        stop("root_dir is required when parallel = TRUE")
+    }
+
+    if (parallel && !is.null(n_cores) && n_cores < 1) {
+        stop("n_cores must be at least 1")
     }
 
     # Create output directory if it doesn't exist
@@ -138,61 +163,108 @@ plot_model_fit_stochastic <- function(config,
     }
 
     # ============================================================================
-    # Import laser-cholera
-    # ============================================================================
-
-    lc <- tryCatch({
-        reticulate::import("laser_cholera.metapop.model")
-    }, error = function(e) {
-        stop("Failed to import laser_cholera: ", e$message)
-    })
-
-    # ============================================================================
-    # Run multiple simulations
+    # Run multiple simulations (Parallel or Sequential)
     # ============================================================================
 
     if (verbose) message("\n=== Running Stochastic Simulations ===")
 
-    # Function to run single simulation
-    run_single_simulation <- function(seed_i) {
+    # Worker function (must be self-contained for parallel execution)
+    run_single_simulation <- function(seed_i, config_template) {
         tryCatch({
+            # Import laser_cholera on worker (each worker needs its own instance)
+            lc <- reticulate::import("laser_cholera.metapop.model")
+
             # Modify config with specific seed
-            config_i <- config
+            config_i <- config_template
             config_i$seed <- seed_i
 
-            # Run model (lc must be available in worker environment)
+            # Run model
             model <- lc$run_model(paramfile = config_i, quiet = TRUE)
 
             # Extract results
-            result <- list(
+            list(
                 expected_cases = model$results$expected_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE,
                 seed = seed_i
             )
 
-            return(result)
-
         }, error = function(e) {
-            return(list(success = FALSE, seed = seed_i, error = as.character(e)))
+            list(success = FALSE, seed = seed_i, error = as.character(e))
         })
     }
 
-    # Run simulations sequentially with progress updates
-    simulation_results <- list()
-    pb <- NULL
+    # Execute simulations (parallel or sequential)
+    if (parallel) {
+        # ========================================================================
+        # PARALLEL EXECUTION
+        # ========================================================================
 
-    if (verbose) {
-        message("Running ", n_simulations, " simulations...")
-        pb <- utils::txtProgressBar(min = 0, max = n_simulations, style = 3)
+        # Determine number of cores
+        n_cores_use <- if (is.null(n_cores)) {
+            max(1, parallel::detectCores() - 1)
+        } else {
+            n_cores
+        }
+
+        if (verbose) {
+            message("Setting up parallel cluster with ", n_cores_use, " cores...")
+        }
+
+        # Create cluster
+        cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
+
+        # Ensure cluster is stopped on exit
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+
+        # Setup workers
+        parallel::clusterEvalQ(cl, {
+            library(MOSAIC)
+            library(reticulate)
+        })
+
+        # Set root directory on workers if provided
+        if (!is.null(root_dir)) {
+            parallel::clusterCall(cl, function(rd) {
+                MOSAIC::set_root_directory(rd)
+                MOSAIC::get_paths()
+            }, root_dir)
+        }
+
+        # Export config to workers
+        parallel::clusterExport(cl, c("config"), envir = environment())
+
+        # Run parallel simulations
+        if (verbose) {
+            message("Running ", n_simulations, " simulations on ", n_cores_use, " cores...")
+        }
+
+        simulation_results <- pbapply::pblapply(
+            seeds,
+            function(s) run_single_simulation(s, config),
+            cl = cl
+        )
+
+    } else {
+        # ========================================================================
+        # SEQUENTIAL EXECUTION
+        # ========================================================================
+
+        simulation_results <- list()
+        pb <- NULL
+
+        if (verbose) {
+            message("Running ", n_simulations, " simulations sequentially...")
+            pb <- utils::txtProgressBar(min = 0, max = n_simulations, style = 3)
+        }
+
+        for (i in 1:n_simulations) {
+            simulation_results[[i]] <- run_single_simulation(seeds[i], config)
+            if (verbose) utils::setTxtProgressBar(pb, i)
+        }
+
+        if (verbose) close(pb)
     }
-
-    for (i in 1:n_simulations) {
-        simulation_results[[i]] <- run_single_simulation(seeds[i])
-        if (verbose) utils::setTxtProgressBar(pb, i)
-    }
-
-    if (verbose) close(pb)
 
     # ============================================================================
     # Filter successful simulations
@@ -352,6 +424,29 @@ plot_model_fit_stochastic <- function(config,
 
     # Convert metric to factor
     plot_data$metric <- factor(plot_data$metric, levels = c("Cases", "Deaths"))
+
+    # ============================================================================
+    # Save predictions to CSV (if requested)
+    # ============================================================================
+
+    if (save_predictions) {
+        if (verbose) message("\n=== Saving Predictions ===")
+
+        for (i in 1:n_locations) {
+            loc_name <- location_names[i]
+            loc_data <- plot_data[plot_data$location == loc_name,]
+
+            # Create filename
+            csv_file <- file.path(output_dir, paste0("predictions_stochastic_", loc_name, ".csv"))
+
+            # Save to CSV
+            write.csv(loc_data, csv_file, row.names = FALSE)
+
+            if (verbose) {
+                message("Predictions saved: ", csv_file)
+            }
+        }
+    }
 
     # ============================================================================
     # Create plots

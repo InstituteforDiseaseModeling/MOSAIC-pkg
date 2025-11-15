@@ -24,7 +24,7 @@ sample_parameters(
 \item{seed}{Random seed for reproducible sampling (required).}
 
 \item{sample_args}{Named list of logical values controlling which parameters to sample.
-Each element should be named as sample_\link{parameter} with a logical value.
+Each element should be named as \code{sample_[parameter]} with a logical value.
 Available options include:
 \itemize{
 \item sample_alpha_1: Population mixing within metapops (default TRUE)

@@ -18,7 +18,7 @@ plot_model_distributions(
 
 \item{output_dir}{Directory to save generated plots}
 
-\item{custom_colors}{Optional named vector of colors for each method (e.g., c("Prior" = "#666666", "BFRS" = "#D55E00", "NPE" = "#0072B2"))}
+\item{custom_colors}{Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4", "NPE" = "#d00000"))}
 }
 \value{
 Invisibly returns a list of generated plot objects
@@ -32,27 +32,27 @@ Parameters are organized by biological category and ordered consistently across 
 \dontrun{
 # Compare three methods
 plot_model_distributions(
-  json_files = c("priors.json", "posteriors_bfrs.json", "posteriors_npe.json"),
+  json_files = c("priors.json", "posteriors_bfrs.json", "posterior/posteriors.json"),
   method_names = c("Prior", "BFRS", "NPE"),
   output_dir = "plots"
 )
 
 # Compare just prior and NPE
 plot_model_distributions(
-  json_files = c("priors.json", "posteriors_npe.json"),
+  json_files = c("priors.json", "posterior/posteriors.json"),
   method_names = c("Prior", "NPE"),
   output_dir = "plots"
 )
 
-# Use custom colors for better visibility
+# Use custom colors (MOSAIC defaults shown)
 plot_model_distributions(
-  json_files = c("priors.json", "posteriors_bfrs.json", "posteriors_npe.json"),
+  json_files = c("priors.json", "posteriors_bfrs.json", "posterior/posteriors.json"),
   method_names = c("Prior", "BFRS", "NPE"),
   output_dir = "plots",
   custom_colors = c(
-    "Prior" = "#808080",  # Grey
-    "BFRS" = "#E31A1C",   # Red
-    "NPE" = "#1F78B4"     # Blue
+    "Prior" = "#4a4a4a",  # Dark gray
+    "BFRS" = "#1f77b4",   # Blue
+    "NPE" = "#d00000"     # Red
   )
 )
 }

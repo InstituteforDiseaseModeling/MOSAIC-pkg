@@ -341,9 +341,9 @@ calc_log_likelihood_gamma <- function(observed,
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics including the (floored) dispersion and total log-likelihood.
 #'
 #' @details
-#' If \code{k} is not supplied, it is estimated as \eqn{k = \bar x^2 / (s^2 - \bar x)} from
+#' If \code{k} is not supplied, it is estimated as \eqn{k = \bar{x}^2 / (s^2 - \bar{x})} from
 #' \code{observed}. When this estimate is finite, it is constrained to be at least \code{k_min}.
-#' If \code{s^2 \le \bar x}, the function uses the Poisson limit (\code{k = Inf}).
+#' If \eqn{s^2 \le \bar{x}}, the function uses the Poisson limit (\code{k = Inf}).
 #'
 #' @return A scalar representing the total log-likelihood (numeric).
 #' @export

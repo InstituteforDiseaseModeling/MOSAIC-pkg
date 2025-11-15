@@ -1,0 +1,98 @@
+url: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/
+template:
+  bootstrap: 5
+  bootswatch: flatly
+  bslib:
+    primary: "#0054A6"
+    link-color: "#0054A6"
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+
+reference:
+  - title: "Core Workflow"
+    desc: Main functions for running MOSAIC simulations
+    contents:
+    - run_LASER_model
+    - make_LASER_config
+    - sample_parameters
+    - check_dependencies
+    - install_dependencies
+    - set_root_directory
+    - get_paths
+
+  - title: "Model Execution"
+    desc: Functions starting with run_, make_, or create_
+    contents:
+    - matches("^run_")
+    - matches("^make_")
+    - matches("^create_")
+
+  - title: "Parameter Estimation"
+    desc: Estimation and fitting functions
+    contents:
+    - matches("^est_")
+    - matches("^fit_")
+    - matches("^sample_")
+
+  - title: "Calculations"
+    desc: Calculation functions
+    contents:
+    - matches("^calc_")
+
+  - title: "Data Processing"
+    desc: Processing and downloading data
+    contents:
+    - matches("^process_")
+    - matches("^download_")
+    - matches("^combine_")
+
+  - title: "Visualization"
+    desc: Plotting functions
+    contents:
+    - matches("^plot_")
+
+  - title: "Utility Functions"
+    desc: Helper and utility functions
+    contents:
+    - matches("^get_")
+    - matches("^check_")
+    - matches("^convert_")
+    - matches("^read_")
+    - matches("^write_")
+    - matches("^use_")
+    - matches("^attach_")
+    - matches("^detach_")
+    - matches("^lock_")
+    - matches("logit")
+    - log_msg
+
+  - title: "Distribution Functions"
+    desc: Gompertz distribution functions
+    contents:
+    - dgompertz
+    - pgompertz
+    - qgompertz
+    - rgompertz
+
+  - title: "Package Data"
+    desc: Built-in datasets
+    contents:
+    - matches("^config_")
+    - priors_default
+    - estimated_parameters
+    - epidemic_peaks
+    - matches("^iso_codes")
+
+  - title: "Internal & Other Functions"
+    desc: Other exported functions and internal helpers
+    contents:
+    - lacks_concepts("internal")
+
+authors:
+  John R Giles:
+    href: https://github.com/gilesjohnr
+  Christopher W Lorton:
+    href: https://github.com/ChristopherWLorton

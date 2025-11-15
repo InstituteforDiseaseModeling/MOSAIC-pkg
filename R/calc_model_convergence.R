@@ -150,8 +150,8 @@ calc_model_convergence <- function(PATHS,
 
     if (verbose) {
         message("Convergence metrics calculated:")
-        message("  ESS: ", round(ESS, 0), " (target ≥ ", ess_min, ") - ", toupper(status["ESS"]))
-        message("  Agreement: ", round(ag$A, 3), " (target ≥ ", A_min, ") - ", toupper(status["A"]))
+        message("  ESS: ", round(ESS, 0), " (target >= ", ess_min, ") - ", toupper(status["ESS"]))
+        message("  Agreement: ", round(ag$A, 3), " (target >= ", A_min, ") - ", toupper(status["A"]))
         message("  Retained: ", n_retained, " simulations")
         message("  Overall status: ", overall_status)
     }
@@ -189,17 +189,27 @@ calc_model_convergence <- function(PATHS,
             max_w_max = list(value = max_w_max, description = "Maximum allowed normalized weight")
         ),
         metrics = list(
+            # Legacy names for compatibility
             ess = list(value = ESS, description = "Effective sample size", status = status["ESS"]),
             agreement_index = list(value = ag$A, description = "Entropy-based model agreement", status = status["A"]),
             cvw = list(value = CVw, description = "Coefficient of variation of weights", status = status["CVw"]),
             retained_count = list(value = ag$B_size, description = "Number of models in retained set", status = status["B_size"]),
-            max_weight = list(value = max_w, description = "Maximum normalized weight", status = status["max_w"])
+            max_weight = list(value = max_w, description = "Maximum normalized weight", status = status["max_w"]),
+            # Expected names for plot_model_convergence_status
+            ess_retained = list(value = ESS, description = "Effective sample size for retained simulations", status = status["ESS"]),
+            B_size = list(value = ag$B_size, description = "Number of models in best subset", status = status["B_size"]),
+            ess_best = list(value = ESS, description = "Effective sample size in best subset", status = status["ESS"]),
+            A_B = list(value = ag$A, description = "Agreement index for best subset", status = status["A"]),
+            cvw_B = list(value = CVw, description = "Coefficient of variation for best subset", status = status["CVw"])
         ),
         summary = list(
             total_simulations = n_total,
             successful_simulations = n_successful,
             retained_simulations = n_retained,
-            convergence_status = overall_status
+            convergence_status = overall_status,
+            # Additional fields for plot_model_convergence_status compatibility
+            total_simulations_original = n_total,
+            n_successful = n_successful
         )
     )
 
@@ -232,6 +242,10 @@ calc_model_convergence <- function(PATHS,
         n_total = n_total,
         n_successful = n_successful,
         n_retained = n_retained,
+        n_best_subset = ag$B_size,
+        ESS = ESS,
+        A = ag$A,
+        CVw = CVw,
         files_written = files_written
     ))
 }
@@ -310,7 +324,7 @@ calc_model_aic_delta <- function(loglik) {
 #'         and you want smoother posterior plots and higher ESS.
 #'   \item \strong{Strong flattening:} \code{3–5}. Use sparingly; weights become
 #'         nearly uniform and discrimination drops. A practical target is to pick
-#'         \code{temperature} so that \code{max(normalized weight) \u2264 0.5}.
+#'         \code{temperature} so that \code{max(normalized weight)} \eqn{\le} \code{0.5}.
 #' }
 #'
 #' @examples

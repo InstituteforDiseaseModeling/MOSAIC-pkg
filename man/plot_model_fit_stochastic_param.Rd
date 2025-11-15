@@ -15,6 +15,10 @@ plot_model_fit_stochastic_param(
   sampling_args = list(),
   output_dir,
   envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+  save_predictions = FALSE,
+  parallel = FALSE,
+  n_cores = NULL,
+  root_dir = NULL,
   verbose = TRUE,
   plot_decomposed = FALSE
 )
@@ -54,6 +58,18 @@ be saved. Directory will be created if it doesn't exist.}
 \item{envelope_quantiles}{Numeric vector specifying the quantiles for confidence
 intervals. Default is c(0.025, 0.25, 0.75, 0.975) for 50\% and 95\% CIs.
 Must have an even number of elements to form pairs of (lower, upper) bounds.}
+
+\item{save_predictions}{Logical indicating whether to save prediction data to CSV files.
+Default is FALSE. If TRUE, saves predictions_ensemble_{location}.csv for each location.}
+
+\item{parallel}{Logical indicating whether to use parallel computation. Default is FALSE.
+When TRUE, simulations are run in parallel across multiple cores.}
+
+\item{n_cores}{Integer specifying number of cores to use for parallel computation.
+Default is NULL (uses detectCores() - 1). Only used when parallel = TRUE.}
+
+\item{root_dir}{Character string specifying the root directory for MOSAIC project.
+Required when parallel = TRUE. Workers need this to initialize PATHS correctly.}
 
 \item{verbose}{Logical indicating whether to print progress messages. Default is TRUE.}
 
@@ -97,7 +113,8 @@ configs <- list(config1, config2, config3)
 plots <- plot_model_fit_stochastic_param(
     configs = configs,
     n_simulations_per_config = 20,
-    output_dir = "output/plots"
+    output_dir = "output/plots",
+    save_predictions = TRUE
 )
 
 # Mode 2: Using parameter seeds (typical calibration workflow)
@@ -109,8 +126,10 @@ plots <- plot_model_fit_stochastic_param(
     PATHS = PATHS,
     priors = priors,
     sampling_args = list(sample_tau_i = FALSE),
-    output_dir = "output/plots"
+    output_dir = "output/plots",
+    save_predictions = TRUE  # Save predictions to CSV
 )
+# Saves: predictions_ensemble_ETH.csv (or other location names)
 }
 
 }

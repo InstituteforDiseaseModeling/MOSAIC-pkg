@@ -46,10 +46,30 @@ est_seasonal_dynamics <- function(PATHS,
      cholera_data <- cholera_data[!is.na(cholera_data$cases), ]
 
      cholera_data <- cholera_data[cholera_data$date_start >= date_start & cholera_data$date_stop < date_stop, ]
-     n_obs <- table(cholera_data$iso_code)
-     iso_codes_with_data <- names(n_obs[n_obs >= min_obs])
-     cholera_data <- cholera_data[cholera_data$iso_code %in% iso_codes_with_data, ]
-     iso_codes_no_data <- setdiff(iso_codes, iso_codes_with_data)
+
+     # Count observations AND check for non-zero cases (bugfix for all-zero countries)
+     cholera_summary <- cholera_data %>%
+          dplyr::group_by(iso_code) %>%
+          dplyr::summarize(
+               n_obs = dplyr::n(),
+               total_cases = sum(cases, na.rm = TRUE),
+               .groups = 'drop'
+          )
+
+     # Require BOTH sufficient observations AND non-zero cases
+     iso_codes_with_usable_data <- cholera_summary %>%
+          dplyr::filter(n_obs >= min_obs & total_cases > 0) %>%
+          dplyr::pull(iso_code)
+
+     cholera_data <- cholera_data[cholera_data$iso_code %in% iso_codes_with_usable_data, ]
+     iso_codes_no_data <- setdiff(iso_codes, iso_codes_with_usable_data)
+
+     # Log for diagnostics
+     message(sprintf("Countries with usable data: %d", length(iso_codes_with_usable_data)))
+     message(sprintf("Countries needing inference: %d", length(iso_codes_no_data)))
+     if (length(iso_codes_no_data) > 0) {
+          message(sprintf("  Will infer from neighbors: %s", paste(iso_codes_no_data, collapse=", ")))
+     }
 
      normalize_if_needed <- function(x, verbose = FALSE) {
           tryCatch({
@@ -136,7 +156,7 @@ est_seasonal_dynamics <- function(PATHS,
                                                          p = 365, beta0 = 0)
           fitted_precip <- normalize_if_needed(fitted_precip)
 
-          if (iso %in% iso_codes_with_data && n_obs >= min_obs) {
+          if (iso %in% iso_codes_with_usable_data && n_obs >= min_obs) {
 
                fit_c <- minpack.lm::nlsLM(
                     cases_scaled ~ MOSAIC::fourier_series_double(day_of_year, a1, b1, a2, b2, p = 365, beta0 = 0),
@@ -249,7 +269,7 @@ est_seasonal_dynamics <- function(PATHS,
           neighbors_within_cluster <- africa_with_clusters[
                africa_with_clusters$cluster == country_cluster &
                     africa_with_clusters$iso_a3 != country_iso_code_no_data &
-                    africa_with_clusters$iso_a3 %in% iso_codes_with_data &
+                    africa_with_clusters$iso_a3 %in% iso_codes_with_usable_data &
                     !(africa_with_clusters$iso_a3 %in% exclude_iso_codes), ]
 
           if (nrow(neighbors_within_cluster) > 0) {
@@ -288,7 +308,7 @@ est_seasonal_dynamics <- function(PATHS,
                     k_neighbors <- FNN::get.knnx(coords, coord_no_data, k = k_nn)
                     nearest_neighbors <- africa[k_neighbors$nn.index, ]
                     # Exclude any neighbors in the exclusion list
-                    neighbors_with_data <- nearest_neighbors[nearest_neighbors$iso_a3 %in% iso_codes_with_data &
+                    neighbors_with_data <- nearest_neighbors[nearest_neighbors$iso_a3 %in% iso_codes_with_usable_data &
                                                                   !(nearest_neighbors$iso_a3 %in% exclude_iso_codes), ]
                     if (nrow(neighbors_with_data) == 0) {
 

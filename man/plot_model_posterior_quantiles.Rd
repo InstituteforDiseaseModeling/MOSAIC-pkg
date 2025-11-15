@@ -49,3 +49,16 @@ The function creates:
 \item Saves plots as PNG files in the output directory
 }
 }
+\examples{
+\dontrun{
+# Single posterior file
+plot_model_posterior_quantiles("posterior_quantiles.csv")
+
+# Compare multiple sources
+plot_model_posterior_quantiles(
+  csv_files = c("bfrs_quantiles.csv", "npe_quantiles.csv"),
+  output_dir = "./comparison_plots"
+)
+}
+
+}

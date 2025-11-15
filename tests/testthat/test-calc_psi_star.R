@@ -71,6 +71,30 @@ testthat::test_that("warns when NA values are present", {
      )
 })
 
+testthat::test_that("warns when k is non-integer (default behavior)", {
+     expect_warning(
+          MOSAIC::calc_psi_star(psi = c(0.1, 0.5, 0.8), k = 2.744),
+          "`k` \\(2.744\\) is not an integer; rounding to 3"
+     )
+})
+
+testthat::test_that("does not warn when k is non-integer and warn_k_rounding=FALSE", {
+     expect_warning(
+          MOSAIC::calc_psi_star(psi = c(0.1, 0.5, 0.8), k = 2.744, warn_k_rounding = FALSE),
+          NA  # Should not produce any warnings
+     )
+})
+
+testthat::test_that("produces identical results regardless of warn_k_rounding setting", {
+     psi <- c(0.1, 0.5, 0.8, 0.3)
+     k_val <- 2.744
+
+     result_warn <- suppressWarnings(MOSAIC::calc_psi_star(psi, k = k_val, warn_k_rounding = TRUE))
+     result_nowarn <- MOSAIC::calc_psi_star(psi, k = k_val, warn_k_rounding = FALSE)
+
+     expect_equal(result_warn, result_nowarn, tolerance = 1e-10)
+})
+
 # 3. Clipping behavior tests
 testthat::test_that("clips out-of-bounds values correctly", {
      psi_bad <- c(-0.5, 1.5, 0.5)

@@ -7,7 +7,7 @@ PATHS <- MOSAIC::get_paths()
 
 # Use 2023-2025 dates to match WHO surveillance data
 date_start <- as.Date("2023-02-01")
-date_stop <- as.Date("2025-08-01")
+date_stop <- as.Date("2026-03-31")
 
 message("Set simulation time steps and locations")
 t <- seq.Date(date_start, date_stop, by = "day")

@@ -57,7 +57,9 @@ fit_beta_from_ci <- function(mode_val, ci_lower, ci_upper,
   }
   
   if (mode_val <= ci_lower || mode_val >= ci_upper) {
-    warning("Mode is outside the confidence interval - this may lead to poor fits")
+    if (verbose) {
+      warning("Mode is outside the confidence interval - this may lead to poor fits")
+    }
   }
   
   if (method == "moment_matching") {

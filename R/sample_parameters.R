@@ -10,7 +10,7 @@
 #' @param seed Random seed for reproducible sampling (required).
 #'
 #' @param sample_args Named list of logical values controlling which parameters to sample.
-#'   Each element should be named as sample_[parameter] with a logical value.
+#'   Each element should be named as \code{sample_[parameter]} with a logical value.
 #'   Available options include:
 #'   \itemize{
 #'     \item sample_alpha_1: Population mixing within metapops (default TRUE)
@@ -464,7 +464,30 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
               prior = dist_info,
               verbose = FALSE
             )
-            sampled_values[i] <- sampled_value
+
+            # Check if sampling returned NA (e.g., due to NA prior parameters)
+            if (is.na(sampled_value)) {
+              # Fall back to default config value
+              config_param_name <- PARAM_MAPPINGS[[param_name]]
+              if (is.null(config_param_name)) {
+                config_param_name <- param_name
+              }
+
+              if (config_param_name %in% names(config_sampled)) {
+                default_value <- config_sampled[[config_param_name]][i]
+                if (verbose) {
+                  message("Prior contains NA for ", param_name, " in ", iso,
+                         ", using default value: ", default_value)
+                }
+                sampled_values[i] <- default_value
+              } else {
+                warning("Cannot fall back to default for ", param_name, " in ", iso)
+                sampled_values[i] <- NA
+                failed_locations <<- c(failed_locations, iso)
+              }
+            } else {
+              sampled_values[i] <- sampled_value
+            }
           }, error = function(e) {
             warning("Failed to sample ", param_name, " for location ", iso, ": ", e$message)
             sampled_values[i] <- NA

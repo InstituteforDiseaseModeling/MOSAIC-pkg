@@ -38,15 +38,31 @@
 #'            Non-integers are rounded to nearest integer.
 #' @param eps Small positive number to clip \code{psi} away from \{0,1\} before \code{qlogis}.
 #' @param fill_method Character; one of \code{c("locf","linear")} controlling how NA gaps are filled.
+#' @param warn_k_rounding Logical; if \code{TRUE} (default), warns when \code{k} is rounded to nearest integer.
+#'                       Set to \code{FALSE} to suppress this warning.
 #'
 #' @return Numeric vector \eqn{\tilde\psi^{\star}_t} (same length as \code{psi}):
 #'         calibrated, offset, NA-filled, and smoothed if \code{z<1}.
+#'
+#' @examples
+#' # Basic usage with integer k (no warnings)
+#' psi <- c(0.1, 0.3, 0.7, 0.9, 0.5)
+#' result1 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2)
+#'
+#' # Non-integer k with warning (default behavior)
+#' result2 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2.744)
+#'
+#' # Non-integer k without warning
+#' result3 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2.744, warn_k_rounding = FALSE)
+#'
+#' # With EWMA smoothing
+#' result4 <- calc_psi_star(psi, a = 1.2, b = 0.5, k = 2, z = 0.8)
 #'
 #' @seealso \code{\link[stats]{qlogis}}, \code{\link[stats]{plogis}}, \code{\link[stats]{approx}}
 #'
 #' @export
 calc_psi_star <- function(psi, a = 1, b = 0, z = 1, k = 0, eps = 1e-6,
-                          fill_method = c("locf","linear")) {
+                          fill_method = c("locf","linear"), warn_k_rounding = TRUE) {
 
      fill_method <- match.arg(fill_method)
 
@@ -63,7 +79,7 @@ calc_psi_star <- function(psi, a = 1, b = 0, z = 1, k = 0, eps = 1e-6,
 
      # Round k to nearest integer
      k_int <- as.integer(round(k))
-     if (!isTRUE(all.equal(k, k_int))) {
+     if (!isTRUE(all.equal(k, k_int)) && warn_k_rounding) {
           warning(sprintf("`k` (%.3f) is not an integer; rounding to %d.", k, k_int))
      }
      if (abs(k_int) >= n) {

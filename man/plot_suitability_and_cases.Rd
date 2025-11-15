@@ -14,7 +14,7 @@ Must include MODEL_INPUT (for reading prediction files) and DOCS_FIGURES (for sa
 }
 \value{
 A combined plot showing both cholera case bars and smoothed suitability predictions
-for the specified country, filtered to years >= 2021.
+for the specified country.
 }
 \description{
 This function plots the reported cholera cases and predicted environmental suitability
@@ -22,9 +22,6 @@ for a specific country over time, with shaded regions indicating cholera outbrea
 Requires that est_suitability() has been run first to generate prediction files.
 }
 \details{
-The function merges data from two files created by est_suitability():
-\itemize{
-\item pred_psi_suitability_week.csv - Contains smoothed predictions (pred_smooth)
-\item data_psi_suitability.csv - Contains case counts and outbreak indicators
-}
+The function reads pred_psi_suitability_day.csv created by est_suitability(),
+which contains: date, cases, pred, pred_smooth, and iso_code columns.
 }

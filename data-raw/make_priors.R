@@ -15,7 +15,7 @@ j <- MOSAIC::iso_codes_mosaic
 
 priors_default <- list(
      metadata = list(
-          version = "7.0.0",
+          version = "9.0.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -874,7 +874,7 @@ initial_conditions_V1_V2 <- est_initial_V1_V2(
      PATHS = PATHS,
      priors = priors_default,
      config = config_default,
-     n_samples = 1000,
+     n_samples = 100,
      t0 = date_start,
      variance_inflation = 0,
      parallel = TRUE,
@@ -957,9 +957,9 @@ variance_inflation_E_I <- c(
      "KEN" = 40,   # Kenya: Good surveillance
      "LBR" = 100,  # Liberia: Better data quality
      "MLI" = 80,  # Mali: Some data limitations
-     "MOZ" = 10,  # Mozambique: Variable data quality
+     "MOZ" = 30,  # Mozambique: Moderate uncertainty increase
      "MRT" = 130,  # Mauritania: Limited resources
-     "MWI" = 5,   # Malawi: Relatively good data
+     "MWI" = 30,   # Malawi: Moderate uncertainty increase
      "NAM" = 80,   # Namibia: Good health systems (default)
      "NER" = 130,  # Niger: Limited resources
      "NGA" = 80,   # Nigeria: Large system, better data
@@ -974,8 +974,8 @@ variance_inflation_E_I <- c(
      "TZA" = 90,   # Tanzania: Moderate data quality
      "UGA" = 80,   # Uganda: Good health systems
      "ZAF" = 40,   # South Africa: Excellent surveillance
-     "ZMB" = 50,   # Zambia: Good surveillance system
-     "ZWE" = 5   # Zimbabwe: Economic challenges
+     "ZMB" = 30,   # Zambia: Good surveillance system
+     "ZWE" = 30   # Zimbabwe: Moderate uncertainty increase
 )
 
 # Use location-specific variance inflation with single function call
@@ -983,7 +983,7 @@ initial_conditions_E_I <- est_initial_E_I(
      PATHS = PATHS,
      priors = priors_default,
      config = config_default,
-     n_samples = 1000,
+     n_samples = 100,
      t0 = date_start,
      lookback_days = 3,
      variance_inflation = variance_inflation_E_I,  # Named vector for location-specific values
@@ -1031,6 +1031,91 @@ initial_conditions_E_I <- est_initial_E_I(
                }
           }
      }
+
+
+# =============================================================================
+# POST-ESTIMATION ADJUSTMENT: Lower mean initial E/I for specific countries
+# =============================================================================
+
+# Countries showing systematic overestimation of initial conditions
+# Apply scaling factors to reduce mean E and I while preserving relative uncertainty
+
+adjustment_factors_E_I <- list(
+     MOZ = 0.3,  # Reduce Mozambique initial E/I to 30% of estimated
+     MWI = 0.2,  # Reduce Malawi initial E/I to 20% of estimated
+     ZWE = 0.15  # Reduce Zimbabwe initial E/I to 15% of estimated
+)
+
+cat("\nApplying post-estimation mean adjustments for initial E and I:\n")
+
+for (iso in names(adjustment_factors_E_I)) {
+     scaling_factor <- adjustment_factors_E_I[[iso]]
+
+     # Adjust prop_E_initial
+     if (!is.null(priors_default$parameters_location$prop_E_initial$location[[iso]])) {
+          old_params_E <- priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters
+          old_mean_E <- old_params_E$shape1 / (old_params_E$shape1 + old_params_E$shape2)
+
+          # Calculate new mean (scaled down)
+          new_mean_E <- old_mean_E * scaling_factor
+
+          # Preserve relative uncertainty (CV)
+          # CV = sqrt(variance) / mean for Beta distribution
+          old_var_E <- (old_params_E$shape1 * old_params_E$shape2) /
+                       ((old_params_E$shape1 + old_params_E$shape2)^2 *
+                        (old_params_E$shape1 + old_params_E$shape2 + 1))
+          old_cv_E <- sqrt(old_var_E) / old_mean_E
+
+          # Fit new Beta with scaled mean and same CV
+          new_var_E <- (new_mean_E * old_cv_E)^2
+
+          # Beta parameters from mean and variance
+          common_term_E <- new_mean_E * (1 - new_mean_E) / new_var_E - 1
+          new_shape1_E <- max(0.01, new_mean_E * common_term_E)
+          new_shape2_E <- max(0.01, (1 - new_mean_E) * common_term_E)
+
+          priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters <- list(
+               shape1 = new_shape1_E,
+               shape2 = new_shape2_E
+          )
+
+          cat(sprintf("  %s E: %.6f -> %.6f (%.0f%% reduction)\n",
+                      iso, old_mean_E, new_mean_E, (1 - scaling_factor) * 100))
+     }
+
+     # Adjust prop_I_initial
+     if (!is.null(priors_default$parameters_location$prop_I_initial$location[[iso]])) {
+          old_params_I <- priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters
+          old_mean_I <- old_params_I$shape1 / (old_params_I$shape1 + old_params_I$shape2)
+
+          # Calculate new mean (scaled down)
+          new_mean_I <- old_mean_I * scaling_factor
+
+          # Preserve relative uncertainty (CV)
+          old_var_I <- (old_params_I$shape1 * old_params_I$shape2) /
+                       ((old_params_I$shape1 + old_params_I$shape2)^2 *
+                        (old_params_I$shape1 + old_params_I$shape2 + 1))
+          old_cv_I <- sqrt(old_var_I) / old_mean_I
+
+          # Fit new Beta with scaled mean and same CV
+          new_var_I <- (new_mean_I * old_cv_I)^2
+
+          # Beta parameters from mean and variance
+          common_term_I <- new_mean_I * (1 - new_mean_I) / new_var_I - 1
+          new_shape1_I <- max(0.01, new_mean_I * common_term_I)
+          new_shape2_I <- max(0.01, (1 - new_mean_I) * common_term_I)
+
+          priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters <- list(
+               shape1 = new_shape1_I,
+               shape2 = new_shape2_I
+          )
+
+          cat(sprintf("  %s I: %.6f -> %.6f (%.0f%% reduction)\n",
+                      iso, old_mean_I, new_mean_I, (1 - scaling_factor) * 100))
+     }
+}
+
+cat("\nPost-estimation adjustments complete.\n")
 
 
 # Update default priors with estimated initial conditions for R
@@ -1086,7 +1171,7 @@ initial_conditions_R <- est_initial_R(
      PATHS = PATHS,
      priors = priors_default,
      config = config_default,
-     n_samples = 1000,
+     n_samples = 100,
      t0 = date_start,
      disaggregate = TRUE,
      variance_inflation = variance_inflation_R,  # Named vector for location-specific values
@@ -1177,7 +1262,7 @@ initial_conditions_S <- est_initial_S(
      PATHS = PATHS,
      priors = priors_default,
      config = config_default,
-     n_samples = 1000,
+     n_samples = 100,
      t0 = date_start,
      variance_inflation = variance_inflation_S,  # Named vector for location-specific values
      verbose = FALSE,
@@ -1225,7 +1310,7 @@ for (loc in names(initial_conditions_S$parameters_location$prop_S_initial$parame
 # Add mu_j_baseline priors from disease mortality data
 # This is the baseline IFR for the threshold-dependent IFR model
 
-mu_inflation <- 0.2  # Inflate mu variance
+mu_inflation <- 0.1  # Inflate mu variance
 
 # Load disease mortality parameter data
 mu_file <- file.path(PATHS$MODEL_INPUT, "param_mu_disease_mortality.csv")
@@ -1303,8 +1388,8 @@ if (file.exists(mu_file)) {
                     # where σ = proportion symptomatic ≈ 0.24
                     #       ρ = reporting rate ≈ 0.63
 
-                    sigma_mean <- 0.25  # Proportion symptomatic
-                    rho_mean <- 0.66    # Average reporting rate
+                    sigma_mean <- 0.24  # Proportion symptomatic
+                    rho_mean <- 0.63    # Average reporting rate
 
                     # Calculate adjustment factor
                     cfr_to_ifr_adjustment <- sigma_mean * rho_mean  # ≈ 0.15
@@ -1533,7 +1618,7 @@ for (iso in j) {
           distribution = "lognormal",
           parameters = list(
                meanlog = 0,     # Mean ~1.16, median = 1.0 (no transformation)
-               sdlog = 0.6      # 95% CI: [0.30, 3.30], allows more flexible shape changes
+               sdlog = 0.9      # 95% CI: [0.30, 3.30], allows more flexible shape changes
           )
      )
 }
@@ -1549,7 +1634,7 @@ for (iso in j) {
           distribution = "normal",
           parameters = list(
                mean = 0,        # Centered at no offset
-               sd = 1.25        # 95% CI: [-2.45, 2.45], allows larger baseline shifts
+               sd = 2.0       # 95% CI: [-2.45, 2.45], allows larger baseline shifts
           )
      )
 }
@@ -1564,7 +1649,7 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_z$location[[iso]] <- list(
           distribution = "beta",
           parameters = list(
-               shape1 = 3,      # Mean: 0.75, Mode: 1.0
+               shape1 = 1,      # Mean: 0.75, Mode: 1.0
                shape2 = 1       # 95% CI: [0.21, 1.00], allows more smoothing flexibility
           )
      )
@@ -1581,9 +1666,9 @@ for (iso in j) {
           distribution = "truncnorm",
           parameters = list(
                mean = 0,        # Centered at no offset
-               sd = 15,         # Standard deviation of 15 days (increased from 10)
-               a = -60,         # Lower bound: -60 days (increased from -45)
-               b = 60           # Upper bound: +60 days (increased from 45)
+               sd = 25,         # Standard deviation of 15 days (increased from 10)
+               a = -90,         # Lower bound: -60 days (increased from -45)
+               b = 90           # Upper bound: +60 days (increased from 45)
           )
      )
 }

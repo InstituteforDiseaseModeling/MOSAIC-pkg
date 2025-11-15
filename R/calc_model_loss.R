@@ -42,7 +42,7 @@
 #'         dimensionless correlation term. Choose \code{alpha}, \code{beta} to balance scales.
 #' }
 #'
-#' @seealso [calc_model_mse()], [calc_model_cor()], [calc_model_likelihood()], [calc_model_ppc()]
+#' @seealso [calc_model_mse()], [calc_model_cor()], [calc_model_likelihood()]
 #'
 #' @examples
 #' set.seed(3)
