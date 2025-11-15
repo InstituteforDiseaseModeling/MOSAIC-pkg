@@ -9,7 +9,9 @@
 #'
 #' @details This function creates a Shiny app that allows users to explore cholera incidence data across AFRO countries from 1970 to 2024. Users can choose between viewing cases, deaths, or CFR and can select specific countries for visualization. The app generates bar plots for cases and deaths, and point plots with error bars for CFR.
 #'
-#' @importFrom shiny fluidPage sidebarLayout sidebarPanel mainPanel radioButtons checkboxGroupInput plotOutput uiOutput fluidPage
+#' @note This function requires the optional \code{shiny} package.
+#'   Install with: \code{install.packages("shiny")}
+#'
 #' @importFrom ggplot2 ggplot geom_bar geom_hline geom_vline geom_errorbar geom_point theme_minimal labs scale_y_sqrt scale_x_discrete theme element_text
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom grDevices adjustcolor
@@ -27,7 +29,15 @@
 #' @export
 run_WHO_annual_data_app <- function(PATHS) {
 
-     requireNamespace('shiny')
+     # Check for optional shiny package
+     if (!requireNamespace("shiny", quietly = TRUE)) {
+          stop(
+               "The 'shiny' package is required but not installed.\n",
+               "Install with: install.packages('shiny')",
+               call. = FALSE
+          )
+     }
+
      requireNamespace('ggplot2')
      requireNamespace('RColorBrewer')
      requireNamespace('grDevices')

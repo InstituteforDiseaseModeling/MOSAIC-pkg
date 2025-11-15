@@ -18,6 +18,10 @@ This function launches a Shiny app that visualizes cholera cases, deaths, and ca
 \details{
 This function creates a Shiny app that allows users to explore cholera incidence data across AFRO countries from 1970 to 2024. Users can choose between viewing cases, deaths, or CFR and can select specific countries for visualization. The app generates bar plots for cases and deaths, and point plots with error bars for CFR.
 }
+\note{
+This function requires the optional \code{shiny} package.
+Install with: \code{install.packages("shiny")}
+}
 \examples{
 \dontrun{
 # Define paths for processed data
