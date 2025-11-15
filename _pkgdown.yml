@@ -15,13 +15,21 @@ reference:
   - title: "Core Workflow"
     desc: Main functions for running MOSAIC simulations
     contents:
-    - run_LASER_model
+    - run_LASER
+    - run_mosaic_iso
+    - run_MOSAIC
     - make_LASER_config
     - sample_parameters
     - check_dependencies
     - install_dependencies
     - set_root_directory
     - get_paths
+
+  - title: "Configuration & Control"
+    desc: Functions for configuring MOSAIC execution settings
+    contents:
+    - mosaic_control_defaults
+    - mosaic_io_presets
 
   - title: "Model Execution"
     desc: Functions starting with run_, make_, or create_

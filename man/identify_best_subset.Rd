@@ -6,7 +6,7 @@
 \usage{
 identify_best_subset(
   results,
-  min_B = 100,
+  min_B = 30,
   target_ESS_B = 50,
   target_A = 0.95,
   target_CVw = 0.5,
@@ -24,7 +24,9 @@ identify_best_subset(
 \item Other columns containing parameter values
 }}
 
-\item{min_B}{Integer minimum number of simulations to include even if percentile is smaller (default: 100)}
+\item{min_B}{Integer minimum number of simulations to include even if percentile is smaller (default: 30)
+This ensures enough samples for stable convergence metrics (ESS, A, CVw).
+Can be lowered for small datasets, but values < 20 may give unstable results.}
 
 \item{target_ESS_B}{Numeric target minimum ESS for the subset using Kish formula (default: 50)}
 
@@ -66,7 +68,7 @@ This subset will be used to define priors for Neural Posterior Estimation (NPE).
 # Identify best subset from calibration results
 best_subset <- identify_best_subset(
   results = calibration_results,
-  min_B = 100,
+  min_B = 30,              # Minimum 30 simulations for stable metrics
   target_ESS_B = 50,
   target_A = 0.95,
   target_CVw = 0.5,

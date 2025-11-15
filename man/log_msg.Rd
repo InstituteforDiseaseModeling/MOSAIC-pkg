@@ -24,7 +24,8 @@ and model calibration workflows.
 The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS" format
 to each message. Messages are printed to the console and, if a 'dir_output'
 variable exists in the calling environment, also appended to a 'run.log' file
-in that directory (dir_output/run.log).
+in that directory (dir_output/run.log). If the directory does not exist, it
+will be created automatically.
 
 This is particularly useful for:
 \itemize{

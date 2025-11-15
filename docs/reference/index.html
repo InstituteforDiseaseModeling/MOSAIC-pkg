@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,8 +18,8 @@
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Default-MOSAIC-parameters.html">Default parameters for running MOSIAC</a></li>
-    <li><a class="dropdown-item" href="../articles/Project-setup.html">Project setup</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
+    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -49,10 +49,22 @@
 
       <dl><dt>
 
-          <code><a href="run_LASER_model.html">run_LASER_model()</a></code>
+          <code><a href="run_LASER.html">run_LASER()</a></code> <code><a href="run_LASER.html">run_laser()</a></code>
 
         </dt>
         <dd>Run LASER Model Simulation</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
       </dl><dl><dt>
 
           <code><a href="make_LASER_config.html">make_LASER_config()</a></code>
@@ -90,6 +102,29 @@
         </dt>
         <dd>Generate Directory Paths for the MOSAIC Project</dd>
       </dl></div><div class="section level2">
+      <h2 id="configuration-control">Configuration &amp; Control<a class="anchor" aria-label="anchor" href="#configuration-control"></a></h2>
+
+      <div class="section-desc"><p>Functions for configuring MOSAIC execution settings</p></div>
+
+
+    </div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="mosaic_control_defaults.html">mosaic_control_defaults()</a></code>
+
+        </dt>
+        <dd>Build Complete MOSAIC Control Structure</dd>
+      </dl><dl><dt>
+
+          <code><a href="mosaic_io_presets.html">mosaic_io_presets()</a></code>
+
+        </dt>
+        <dd>Get Pre-configured I/O Settings</dd>
+      </dl></div><div class="section level2">
       <h2 id="model-execution">Model Execution<a class="anchor" aria-label="anchor" href="#model-execution"></a></h2>
 
       <div class="section-desc"><p>Functions starting with run_, make_, or create_</p></div>
@@ -102,10 +137,16 @@
 
       <dl><dt>
 
-          <code><a href="run_LASER_model.html">run_LASER_model()</a></code>
+          <code><a href="run_LASER.html">run_LASER()</a></code> <code><a href="run_LASER.html">run_laser()</a></code>
 
         </dt>
         <dd>Run LASER Model Simulation</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
       </dl><dl><dt>
 
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code>
@@ -114,16 +155,16 @@
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
       </dl><dl><dt>
 
+          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
+      </dl><dl><dt>
+
           <code><a href="run_npe_diagnostics.html">run_npe_diagnostics()</a></code>
 
         </dt>
         <dd>Run NPE Diagnostics</dd>
-      </dl><dl><dt>
-
-          <code><a href="run_spatial_transmission_shiny_app.html">run_spatial_transmission_shiny_app()</a></code>
-
-        </dt>
-        <dd>Launch an interactive viewer for site-specific \(\beta_{\text{hum}}\)</dd>
       </dl><dl><dt>
 
           <code><a href="make_LASER_config.html">make_LASER_config()</a></code>
@@ -1063,12 +1104,6 @@
 
       <dl><dt>
 
-          <code><a href="effective_aic_alternatives.html">get_effective_aic_range_chisq()</a></code> <code><a href="effective_aic_alternatives.html">get_effective_aic_range_likelihood()</a></code> <code><a href="effective_aic_alternatives.html">get_effective_aic_range_empirical()</a></code>
-
-        </dt>
-        <dd>Alternative Theoretically-Grounded Approaches for Effective AIC Range</dd>
-      </dl><dl><dt>
-
           <code><a href="get_DMI_forecast.html">get_DMI_forecast()</a></code>
 
         </dt>
@@ -1954,12 +1989,6 @@
         <dd>Combine WHO and GTFCC Vaccination Data</dd>
       </dl><dl><dt>
 
-          <code><a href="compare_distributions.html">compare_distributions()</a></code>
-
-        </dt>
-        <dd>Compare beta and gamma fitting approaches</dd>
-      </dl><dl><dt>
-
           <code><a href="config_default.html">config_default</a></code>
 
         </dt>
@@ -2096,12 +2125,6 @@
 
         </dt>
         <dd>Downscale weekly values to a daily time series</dd>
-      </dl><dl><dt>
-
-          <code><a href="effective_aic_alternatives.html">get_effective_aic_range_chisq()</a></code> <code><a href="effective_aic_alternatives.html">get_effective_aic_range_likelihood()</a></code> <code><a href="effective_aic_alternatives.html">get_effective_aic_range_empirical()</a></code>
-
-        </dt>
-        <dd>Alternative Theoretically-Grounded Approaches for Effective AIC Range</dd>
       </dl><dl><dt>
 
           <code><a href="epidemic_peaks.html">epidemic_peaks</a></code>
@@ -2330,12 +2353,6 @@
 
         </dt>
         <dd>Generate a Grid of Points Within a Country's Shapefile Based on Number of Points</dd>
-      </dl><dl><dt>
-
-          <code><a href="generate_test_data_for_ess.html">generate_test_data_for_ess()</a></code>
-
-        </dt>
-        <dd>Generate Synthetic Data for Testing calc_model_ess_parameter</dd>
       </dl><dl><dt>
 
           <code><a href="get_DMI_forecast.html">get_DMI_forecast()</a></code>
@@ -2708,6 +2725,18 @@
 
         </dt>
         <dd>Get Template for Parameter Values</dd>
+      </dl><dl><dt>
+
+          <code><a href="mosaic_control_defaults.html">mosaic_control_defaults()</a></code>
+
+        </dt>
+        <dd>Build Complete MOSAIC Control Structure</dd>
+      </dl><dl><dt>
+
+          <code><a href="mosaic_io_presets.html">mosaic_io_presets()</a></code>
+
+        </dt>
+        <dd>Get Pre-configured I/O Settings</dd>
       </dl><dl><dt>
 
           <code><a href="pgompertz.html">pgompertz()</a></code>
@@ -3166,10 +3195,16 @@
         <dd>Generate Random Gompertz Variates</dd>
       </dl><dl><dt>
 
-          <code><a href="run_LASER_model.html">run_LASER_model()</a></code>
+          <code><a href="run_LASER.html">run_LASER()</a></code> <code><a href="run_LASER.html">run_laser()</a></code>
 
         </dt>
         <dd>Run LASER Model Simulation</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
       </dl><dl><dt>
 
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code>
@@ -3178,16 +3213,16 @@
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
       </dl><dl><dt>
 
+          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
+      </dl><dl><dt>
+
           <code><a href="run_npe_diagnostics.html">run_npe_diagnostics()</a></code>
 
         </dt>
         <dd>Run NPE Diagnostics</dd>
-      </dl><dl><dt>
-
-          <code><a href="run_spatial_transmission_shiny_app.html">run_spatial_transmission_shiny_app()</a></code>
-
-        </dt>
-        <dd>Launch an interactive viewer for site-specific \(\beta_{\text{hum}}\)</dd>
       </dl><dl><dt>
 
           <code><a href="sample_from_prior.html">sample_from_prior()</a></code>
@@ -3218,18 +3253,6 @@
 
         </dt>
         <dd>Store Sampling Metadata in Config</dd>
-      </dl><dl><dt>
-
-          <code><a href="test_beta_fitting.html">test_beta_fitting()</a></code>
-
-        </dt>
-        <dd>Test the beta fitting function with vaccine effectiveness parameters</dd>
-      </dl><dl><dt>
-
-          <code><a href="test_gamma_fitting.html">test_gamma_fitting()</a></code>
-
-        </dt>
-        <dd>Test the gamma fitting function with vaccine effectiveness parameters</dd>
       </dl><dl><dt>
 
           <code><a href="train_npe.html">train_npe()</a></code>

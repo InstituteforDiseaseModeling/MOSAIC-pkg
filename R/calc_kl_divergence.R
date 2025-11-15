@@ -145,8 +145,13 @@ calc_kl_divergence <- function(samples1,
      }
 
      # Compute weighted kernel density estimates
-     dens1 <- density(samples1, weights = weights1, from = x_min, to = x_max, n = n_points)
-     dens2 <- density(samples2, weights = weights2, from = x_min, to = x_max, n = n_points)
+     # Suppress expected warning about bandwidth not using weights (known R limitation)
+     dens1 <- suppressWarnings(
+          density(samples1, weights = weights1, from = x_min, to = x_max, n = n_points)
+     )
+     dens2 <- suppressWarnings(
+          density(samples2, weights = weights2, from = x_min, to = x_max, n = n_points)
+     )
 
      # Ensure densities are positive (add small epsilon for numerical stability)
      p <- pmax(dens1$y, eps)

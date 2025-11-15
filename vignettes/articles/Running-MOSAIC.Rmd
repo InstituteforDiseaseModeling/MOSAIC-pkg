@@ -230,11 +230,11 @@ cat("Mean attack rate:", mean(attack_rate), "\n")
 
 ## Parallel Execution
 
-For large-scale simulations, use `mosaic_control()` to enable parallel processing:
+For large-scale simulations, use `mosaic_control_defaults()` to enable parallel processing:
 
 ```{r parallel}
 # Configure parallel execution
-ctrl <- mosaic_control(
+ctrl <- mosaic_control_defaults(
   parallel = TRUE,
   n_cores = parallel::detectCores() - 1,
   verbose = TRUE
@@ -420,7 +420,7 @@ reticulate::py_config()
 **Solution**: Run `install_dependencies()`
 
 **Issue**: Model runs slowly
-**Solution**: Enable parallel execution with `mosaic_control(parallel = TRUE)`
+**Solution**: Enable parallel execution with `mosaic_control_defaults(parallel = TRUE)`
 
 **Issue**: Results vary between runs
 **Solution**: Set a fixed seed: `run_LASER(..., seed = 123)`

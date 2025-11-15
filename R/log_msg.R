@@ -12,7 +12,8 @@
 #' The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS" format
 #' to each message. Messages are printed to the console and, if a 'dir_output'
 #' variable exists in the calling environment, also appended to a 'run.log' file
-#' in that directory (dir_output/run.log).
+#' in that directory (dir_output/run.log). If the directory does not exist, it
+#' will be created automatically.
 #'
 #' This is particularly useful for:
 #' \itemize{
@@ -52,6 +53,12 @@ log_msg <- function(msg, ...) {
   # Check if dir_output exists in the calling environment
   if (exists("dir_output", envir = parent.frame())) {
     dir_output <- get("dir_output", envir = parent.frame())
+
+    # Create directory if it doesn't exist
+    if (!dir.exists(dir_output)) {
+      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+    }
+
     log_file <- file.path(dir_output, "run.log")
     cat(log_entry, "\n", file = log_file, append = TRUE)
   }

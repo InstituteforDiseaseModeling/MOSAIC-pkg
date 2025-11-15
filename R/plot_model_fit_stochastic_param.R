@@ -359,6 +359,10 @@ plot_model_fit_stochastic_param <- function(
         # Run parallel simulations
         if (verbose) {
             message("Running ", total_simulations, " simulations on ", n_cores_use, " cores...")
+            # Simple progress bar with block character (no color codes)
+            # style = 1: Shows elapsed and remaining time with percentage
+            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+            on.exit(pbapply::pboptions(pbo), add = TRUE)
         }
 
         results_list <- pbapply::pblapply(
@@ -388,40 +392,40 @@ plot_model_fit_stochastic_param <- function(
         # SEQUENTIAL EXECUTION
         # ========================================================================
 
-        pb <- NULL
         if (verbose) {
             message("Running ", total_simulations, " simulations sequentially...")
-            pb <- utils::txtProgressBar(min = 0, max = total_simulations, style = 3)
+            # Simple progress bar with block character (no color codes)
+            # style = 1: Shows elapsed and remaining time with percentage
+            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+            on.exit(pbapply::pboptions(pbo), add = TRUE)
         }
 
-        sim_counter <- 0
+        # Create flattened task list for sequential execution with progress bar
+        task_list <- expand.grid(
+            param_idx = 1:n_param_sets,
+            stoch_idx = 1:n_simulations_per_config
+        )
 
-        for (p in 1:n_param_sets) {
-            for (s in 1:n_simulations_per_config) {
-                sim_counter <- sim_counter + 1
+        results_list <- pbapply::pblapply(
+            split(task_list, seq(nrow(task_list))),
+            function(row) run_param_stoch_simulation(row, param_configs)
+        )
 
-                result <- run_param_stoch_simulation(
-                    list(param_idx = p, stoch_idx = s),
-                    param_configs
-                )
+        # Reconstruct arrays from sequential results
+        for (result in results_list) {
+            if (result$success) {
+                p <- result$param_idx
+                s <- result$stoch_idx
 
-                if (result$success) {
-                    if (is.matrix(result$expected_cases)) {
-                        cases_array[,,p,s] <- result$expected_cases
-                        deaths_array[,,p,s] <- result$disease_deaths
-                    } else {
-                        cases_array[1,,p,s] <- result$expected_cases
-                        deaths_array[1,,p,s] <- result$disease_deaths
-                    }
-                } else if (verbose && sim_counter %% 10 == 0) {
-                    message("\n  Warning: Simulation failed (param ", p, ", stoch ", s, ")")
+                if (is.matrix(result$expected_cases)) {
+                    cases_array[,,p,s] <- result$expected_cases
+                    deaths_array[,,p,s] <- result$disease_deaths
+                } else {
+                    cases_array[1,,p,s] <- result$expected_cases
+                    deaths_array[1,,p,s] <- result$disease_deaths
                 }
-
-                if (verbose) utils::setTxtProgressBar(pb, sim_counter)
             }
         }
-
-        if (verbose) close(pb)
     }
 
     # ============================================================================
