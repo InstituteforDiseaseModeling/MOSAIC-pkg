@@ -1055,7 +1055,7 @@ prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
                "Please install it with: install.packages('data.table')")
      }
 
-     require(data.table)
+     # All required packages loaded via NAMESPACE
 
      n_sims <- length(sim_ids)
      n_locations <- length(unique(outputs$j))
@@ -1152,7 +1152,7 @@ prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
 .prepare_observation_matrix_standard <- function(outputs, sim_ids) {
      # Standard (non-chunked) processing - fast but memory-intensive
 
-     require(data.table)
+     # All required packages loaded via NAMESPACE
 
      # Ensure outputs is a data.frame before converting to data.table
      if (!is.data.frame(outputs)) {
@@ -1320,7 +1320,8 @@ prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
      torch <- reticulate::import("torch")
 
      # Save PyTorch model
-     model_path <- file.path(output_dir, "npe_model.pt")
+     # Expand tilde and normalize path for Python compatibility
+     model_path <- normalizePath(file.path(output_dir, "npe_model.pt"), mustWork = FALSE)
      torch$save(
           list(
                model_state_dict = model$state_dict(),
