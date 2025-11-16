@@ -647,6 +647,270 @@
 }
 
 # =============================================================================
+# WEIGHT CALCULATIONS
+# =============================================================================
+
+#' Calculate Adaptive Gibbs Weights
+#'
+#' Unified adaptive weight calculation using Gibbs tempering with automatic
+#' effective range tuning to prevent numerical underflow.
+#'
+#' @param likelihood Numeric vector of log-likelihood values
+#' @param weight_floor Minimum weight for any model (default: 1e-15)
+#'   Prevents numerical underflow by ensuring worst model gets at least this weight
+#' @param min_effective_range Minimum allowed effective AIC range (optional)
+#'   If specified, constrains temperature to ensure discrimination isn't too weak
+#' @param max_effective_range Maximum allowed effective AIC range (optional)
+#'   If specified, constrains temperature to prevent overly aggressive selection
+#' @param verbose Logical, print diagnostics
+#'
+#' @return List containing:
+#'   - weights: Normalized weight vector (sum = 1)
+#'   - temperature: Gibbs temperature used
+#'   - effective_range: Effective AIC range used for temperature calculation
+#'   - metrics: List with ESS_kish, ESS_perplexity, actual_range, n_valid, n_outliers
+#'
+#' @details
+#' Algorithm:
+#' 1. Convert likelihood to AIC: aic = -2 * likelihood
+#' 2. Calculate delta_aic from best model
+#' 3. Remove outliers using Tukey IQR method (1.5 * IQR)
+#' 4. Calculate adaptive effective range to ensure w_min >= weight_floor
+#' 5. Apply optional min/max constraints
+#' 6. Calculate temperature: 0.5 * (effective_range / actual_range)
+#' 7. Compute Gibbs weights via calc_model_weights_gibbs
+#'
+#' Edge cases:
+#' - All likelihoods identical: Returns uniform weights
+#' - Actual range < 1e-6: Returns uniform weights
+#' - Too few valid samples (< 2): Returns uniform weights
+#' - Outlier filtering fails: Uses all valid samples
+#'
+#' @noRd
+.mosaic_calc_adaptive_gibbs_weights <- function(
+  likelihood,
+  weight_floor = 1e-15,
+  min_effective_range = NULL,
+  max_effective_range = NULL,
+  verbose = FALSE
+) {
+
+  # ===========================================================================
+  # Input validation
+  # ===========================================================================
+
+  if (!is.numeric(likelihood) || length(likelihood) == 0) {
+    stop(".mosaic_calc_adaptive_gibbs_weights: likelihood must be non-empty numeric vector",
+         call. = FALSE)
+  }
+
+  if (weight_floor <= 0 || weight_floor >= 1) {
+    stop(".mosaic_calc_adaptive_gibbs_weights: weight_floor must be in (0, 1)",
+         call. = FALSE)
+  }
+
+  n_total <- length(likelihood)
+
+  # ===========================================================================
+  # Filter to valid likelihoods
+  # ===========================================================================
+
+  valid_idx <- is.finite(likelihood) & !is.na(likelihood)
+  n_valid <- sum(valid_idx)
+
+  if (n_valid == 0) {
+    warning(".mosaic_calc_adaptive_gibbs_weights: No valid likelihoods, returning uniform weights",
+            call. = FALSE)
+    return(list(
+      weights = rep(1.0 / n_total, n_total),
+      temperature = NA_real_,
+      effective_range = NA_real_,
+      metrics = list(
+        ESS_kish = n_total,
+        ESS_perplexity = n_total,
+        actual_range = NA_real_,
+        n_valid = 0,
+        n_outliers = 0
+      )
+    ))
+  }
+
+  if (n_valid < 2) {
+    warning(".mosaic_calc_adaptive_gibbs_weights: Only ", n_valid,
+            " valid likelihood(s), returning uniform weights", call. = FALSE)
+    return(list(
+      weights = rep(1.0 / n_total, n_total),
+      temperature = NA_real_,
+      effective_range = NA_real_,
+      metrics = list(
+        ESS_kish = n_total,
+        ESS_perplexity = n_total,
+        actual_range = NA_real_,
+        n_valid = n_valid,
+        n_outliers = 0
+      )
+    ))
+  }
+
+  # ===========================================================================
+  # Calculate AIC and delta AIC
+  # ===========================================================================
+
+  aic <- numeric(n_total)
+  aic[valid_idx] <- -2 * likelihood[valid_idx]
+  aic[!valid_idx] <- Inf
+
+  best_aic <- min(aic[valid_idx])
+  delta_aic <- aic - best_aic
+
+  # ===========================================================================
+  # Outlier removal using Tukey IQR method
+  # ===========================================================================
+
+  q1 <- stats::quantile(delta_aic[valid_idx], 0.25, na.rm = TRUE)
+  q3 <- stats::quantile(delta_aic[valid_idx], 0.75, na.rm = TRUE)
+  iqr <- q3 - q1
+  outlier_threshold <- q3 + 1.5 * iqr
+
+  reasonable_idx <- valid_idx & delta_aic <= outlier_threshold
+  n_reasonable <- sum(reasonable_idx)
+  n_outliers <- n_valid - n_reasonable
+
+  # If outlier filtering removes too many points, keep all valid
+  if (n_reasonable < 10 && n_valid >= 10) {
+    reasonable_idx <- valid_idx
+    n_reasonable <- n_valid
+    n_outliers <- 0
+    if (verbose) {
+      message("  Outlier filtering removed too many points, using all valid samples")
+    }
+  }
+
+  # Calculate actual range from reasonable samples
+  actual_range <- diff(range(delta_aic[reasonable_idx], na.rm = TRUE))
+
+  # ===========================================================================
+  # Check for uniform case
+  # ===========================================================================
+
+  if (actual_range < 1e-6) {
+    # All models essentially identical
+    if (verbose) {
+      message("  All models have nearly identical likelihood (range < 1e-6)")
+      message("  Returning uniform weights")
+    }
+    return(list(
+      weights = rep(1.0 / n_total, n_total),
+      temperature = 1.0,  # Arbitrary, not used
+      effective_range = 0.0,
+      metrics = list(
+        ESS_kish = n_total,
+        ESS_perplexity = n_total,
+        actual_range = actual_range,
+        n_valid = n_valid,
+        n_outliers = n_outliers
+      )
+    ))
+  }
+
+  # ===========================================================================
+  # Calculate adaptive effective range
+  # ===========================================================================
+
+  # Find worst delta_aic in reasonable group
+  max_delta_aic <- max(delta_aic[reasonable_idx], na.rm = TRUE)
+
+  # Calculate effective_range needed to keep worst weight >= floor
+  # From: exp(-max_delta_aic / (2*temp)) >= floor
+  # Solve for effective_range:
+  #   temp = 0.5 * (effective_range / actual_range)
+  #   exp(-max_delta_aic / (2 * 0.5 * (effective_range / actual_range))) >= floor
+  #   exp(-max_delta_aic * actual_range / effective_range) >= floor
+  #   -max_delta_aic * actual_range / effective_range >= log(floor)
+  #   effective_range >= -max_delta_aic * actual_range / log(floor)
+  effective_range_adaptive <- actual_range * max_delta_aic / (-log(weight_floor))
+
+  # Apply optional constraints
+  effective_range <- effective_range_adaptive
+  constraint_applied <- "none"
+
+  if (!is.null(min_effective_range) && effective_range < min_effective_range) {
+    effective_range <- min_effective_range
+    constraint_applied <- "min"
+  }
+
+  if (!is.null(max_effective_range) && effective_range > max_effective_range) {
+    effective_range <- max_effective_range
+    constraint_applied <- "max"
+  }
+
+  # ===========================================================================
+  # Calculate temperature and weights
+  # ===========================================================================
+
+  temperature <- 0.5 * (effective_range / actual_range)
+
+  # Calculate Gibbs weights using existing function
+  weights <- calc_model_weights_gibbs(
+    x = delta_aic,
+    temperature = temperature,
+    verbose = FALSE
+  )
+
+  # ===========================================================================
+  # Calculate ESS metrics
+  # ===========================================================================
+
+  ESS_kish <- calc_model_ess(weights, method = "kish")
+  ESS_perplexity <- calc_model_ess(weights, method = "perplexity")
+
+  # ===========================================================================
+  # Verbose diagnostics
+  # ===========================================================================
+
+  if (verbose) {
+    message("Adaptive Gibbs Weight Calculation:")
+    message("  Total models: ", n_total)
+    message("  Valid models: ", n_valid)
+    message("  Outliers removed: ", n_outliers)
+    message("  Actual ΔAIC range: ", sprintf("%.2f", actual_range))
+    message("  Max ΔAIC (reasonable): ", sprintf("%.2f", max_delta_aic))
+    message("  Weight floor: ", sprintf("%.2e", weight_floor))
+    message("  Adaptive effective range: ", sprintf("%.2f", effective_range_adaptive))
+
+    if (constraint_applied != "none") {
+      message("  Constraint applied: ", constraint_applied)
+      message("  Final effective range: ", sprintf("%.2f", effective_range))
+    } else {
+      message("  Effective range (final): ", sprintf("%.2f", effective_range))
+    }
+
+    message("  Temperature: ", sprintf("%.4f", temperature))
+    message("  ESS (Kish): ", sprintf("%.1f", ESS_kish))
+    message("  ESS (Perplexity): ", sprintf("%.1f", ESS_perplexity))
+  }
+
+  # ===========================================================================
+  # Return results
+  # ===========================================================================
+
+  list(
+    weights = weights,
+    temperature = temperature,
+    effective_range = effective_range,
+    metrics = list(
+      ESS_kish = ESS_kish,
+      ESS_perplexity = ESS_perplexity,
+      actual_range = actual_range,
+      n_valid = n_valid,
+      n_outliers = n_outliers,
+      effective_range_adaptive = effective_range_adaptive,
+      constraint_applied = constraint_applied
+    )
+  )
+}
+
+# =============================================================================
 # EXECUTION
 # =============================================================================
 

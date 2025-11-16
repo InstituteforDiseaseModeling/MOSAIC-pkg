@@ -1322,85 +1322,90 @@ run_MOSAIC <- function(config,
   log_msg("\nMarked %d simulations as best subset", sum(results$is_best_subset))
 
   # ===========================================================================
-  # CALCULATE ANALYSIS WEIGHTS (TWO-TIER STRUCTURE)
+  # CALCULATE ANALYSIS WEIGHTS (UNIFIED ADAPTIVE METHOD)
   # ===========================================================================
 
-  log_msg("\nCalculating analysis weights for plotting and posterior estimation...")
+  log_msg("\nCalculating analysis weights using adaptive Gibbs method...")
 
   # Initialize weight columns
+  results$weight_all <- 0
   results$weight_retained <- 0
   results$weight_best <- 0
 
-  # Calculate weights for RETAINED models
-  if (sum(results$is_retained) > 0) {
-    retained_aic <- -2 * results$likelihood[results$is_retained]
-    best_retained_aic <- min(retained_aic)
-    delta_retained <- retained_aic - best_retained_aic
+  # ---------------------------------------------------------------------------
+  # Weight ALL valid simulations (for NPE continuous_all strategy)
+  # ---------------------------------------------------------------------------
 
-    # Outlier removal
-    q1 <- stats::quantile(delta_retained, 0.25)
-    q3 <- stats::quantile(delta_retained, 0.75)
-    iqr <- q3 - q1
-    outlier_threshold <- q3 + 1.5 * iqr
-    non_outlier_idx <- delta_retained <= outlier_threshold
+  if (sum(results$is_valid) > 0) {
+    log_msg("\n--- ALL Simulations (Valid) ---")
 
-    if (sum(non_outlier_idx) > 10) {
-      actual_range <- diff(range(delta_retained[non_outlier_idx]))
-    } else {
-      actual_range <- iqr
-    }
-
-    # Moderate temperature for retained models
-    effective_aic_retained <- 30
-    gibbs_temp_retained <- 0.5 * (effective_aic_retained / actual_range)
-
-    retained_weights <- calc_model_weights_gibbs(
-      x = delta_retained,
-      temperature = gibbs_temp_retained,
-      verbose = FALSE
+    all_result <- .mosaic_calc_adaptive_gibbs_weights(
+      likelihood = results$likelihood[results$is_valid],
+      weight_floor = control$weights$floor,
+      min_effective_range = control$weights$min_effective_range_all,
+      max_effective_range = control$weights$max_effective_range_all,
+      verbose = control$io$verbose_weights
     )
 
-    results$weight_retained[results$is_retained] <- retained_weights
+    results$weight_all[results$is_valid] <- all_result$weights
 
-    log_msg("  Retained models: %d", sum(results$is_retained))
-    log_msg("  Retained ESS: %.1f", 1/sum(retained_weights^2))
+    log_msg("  Valid simulations: %d", sum(results$is_valid))
+    log_msg("  Adaptive effective range: %.1f (actual range: %.1f)",
+            all_result$effective_range, all_result$metrics$actual_range)
+    log_msg("  Temperature: %.4f", all_result$temperature)
+    log_msg("  ESS (Kish): %.1f", all_result$metrics$ESS_kish)
+    log_msg("  ESS (Perplexity): %.1f", all_result$metrics$ESS_perplexity)
   }
 
-  # Calculate weights for BEST subset
-  if (sum(results$is_best_subset) > 0) {
-    best_aic <- -2 * results$likelihood[results$is_best_subset]
-    best_best_aic <- min(best_aic)
-    delta_best <- best_aic - best_best_aic
+  # ---------------------------------------------------------------------------
+  # Weight RETAINED models (for plotting, ensemble predictions)
+  # ---------------------------------------------------------------------------
 
-    # Outlier removal
-    q1_best <- stats::quantile(delta_best, 0.25)
-    q3_best <- stats::quantile(delta_best, 0.75)
-    iqr_best <- q3_best - q1_best
-    outlier_threshold_best <- q3_best + 1.5 * iqr_best
-    non_outlier_idx_best <- delta_best <= outlier_threshold_best
+  if (sum(results$is_retained) > 0) {
+    log_msg("\n--- RETAINED Subset ---")
 
-    if (sum(non_outlier_idx_best) > 10) {
-      actual_range_best <- diff(range(delta_best[non_outlier_idx_best]))
-    } else {
-      actual_range_best <- iqr_best
-    }
-
-    # Strong focus for best subset (Burnham & Anderson 2002)
-    effective_aic_best <- 4
-    gibbs_temp_best <- 0.5 * (effective_aic_best / actual_range_best)
-
-    best_weights <- calc_model_weights_gibbs(
-      x = delta_best,
-      temperature = gibbs_temp_best,
-      verbose = FALSE
+    retained_result <- .mosaic_calc_adaptive_gibbs_weights(
+      likelihood = results$likelihood[results$is_retained],
+      weight_floor = control$weights$floor,
+      min_effective_range = control$weights$min_effective_range_retained,
+      max_effective_range = control$weights$max_effective_range_retained,
+      verbose = control$io$verbose_weights
     )
 
-    results$weight_best[results$is_best_subset] <- best_weights
-    ESS_best <- 1/sum(best_weights^2)
+    results$weight_retained[results$is_retained] <- retained_result$weights
 
-    log_msg("  Best subset: %d models", sum(results$is_best_subset))
-    log_msg("  Best subset ESS: %.1f", ESS_best)
-    log_msg("  Best subset Gibbs temperature: %.4f", gibbs_temp_best)
+    log_msg("  Retained simulations: %d", sum(results$is_retained))
+    log_msg("  Adaptive effective range: %.1f (actual range: %.1f)",
+            retained_result$effective_range, retained_result$metrics$actual_range)
+    log_msg("  Temperature: %.4f", retained_result$temperature)
+    log_msg("  ESS (Kish): %.1f", retained_result$metrics$ESS_kish)
+    log_msg("  ESS (Perplexity): %.1f", retained_result$metrics$ESS_perplexity)
+  }
+
+  # ---------------------------------------------------------------------------
+  # Weight BEST subset (for NPE priors, posterior inference)
+  # ---------------------------------------------------------------------------
+
+  if (sum(results$is_best_subset) > 0) {
+    log_msg("\n--- BEST Subset ---")
+
+    best_result <- .mosaic_calc_adaptive_gibbs_weights(
+      likelihood = results$likelihood[results$is_best_subset],
+      weight_floor = control$weights$floor,
+      min_effective_range = control$weights$min_effective_range_best,
+      max_effective_range = control$weights$max_effective_range_best,
+      verbose = control$io$verbose_weights
+    )
+
+    results$weight_best[results$is_best_subset] <- best_result$weights
+    ESS_best <- best_result$metrics$ESS_kish
+
+    log_msg("  Best subset simulations: %d", sum(results$is_best_subset))
+    log_msg("  Adaptive effective range: %.1f (actual range: %.1f)",
+            best_result$effective_range, best_result$metrics$actual_range)
+    log_msg("  Temperature: %.4f", best_result$temperature)
+    log_msg("  ESS (Kish): %.1f", best_result$metrics$ESS_kish)
+    log_msg("  ESS (Perplexity): %.1f", best_result$metrics$ESS_perplexity)
   }
 
   # Save subset selection summary
@@ -2507,6 +2512,7 @@ mosaic_control_defaults <- function(calibration = NULL,
                            fine_tuning = NULL,
                            npe = NULL,
                            predictions = NULL,
+                           weights = NULL,
                            parallel = NULL,
                            io = NULL,
                            paths = NULL) {
@@ -2572,7 +2578,7 @@ mosaic_control_defaults <- function(calibration = NULL,
   # Default NPE settings
   default_npe <- list(
     enable = FALSE,
-    weight_strategy = "continuous_all"
+    weight_strategy = "continuous_best"  # Use BFRS best weights (consistent with prior definition)
   )
 
   # Default prediction settings
@@ -2582,16 +2588,34 @@ mosaic_control_defaults <- function(calibration = NULL,
     ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
   )
 
+  # Default weight calculation settings
+  default_weights <- list(
+    floor = 1e-15,                          # Minimum weight to prevent underflow
+
+    # Constraints for ALL valid simulations (for NPE continuous_all strategy)
+    min_effective_range_all = NULL,        # NULL = fully adaptive
+    max_effective_range_all = NULL,        # NULL = no upper bound
+
+    # Constraints for RETAINED subset (for plotting, ensemble predictions)
+    min_effective_range_retained = NULL,   # NULL = fully adaptive
+    max_effective_range_retained = NULL,   # NULL = no upper bound
+
+    # Constraints for BEST subset (for NPE priors, posterior inference)
+    min_effective_range_best = NULL,       # NULL = fully adaptive
+    max_effective_range_best = NULL        # NULL = no upper bound
+  )
+
   # Default I/O settings
   default_io <- list(
     format = "parquet",
     compression = "zstd",
     compression_level = 3L,
-    load_method = "streaming"  # "streaming" (memory-safe) or "rbind" (legacy)
+    load_method = "streaming",         # "streaming" (memory-safe) or "rbind" (legacy)
+    verbose_weights = FALSE            # Print detailed weight calculation diagnostics
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → targets → fine_tuning → npe → predictions → parallel → io → paths
+  # Order follows workflow: calibration → sampling → targets → fine_tuning → npe → predictions → weights → parallel → io → paths
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
@@ -2599,6 +2623,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     fine_tuning = if (is.null(fine_tuning)) default_fine_tuning else modifyList(default_fine_tuning, fine_tuning),
     npe = if (is.null(npe)) default_npe else modifyList(default_npe, npe),
     predictions = if (is.null(predictions)) default_predictions else modifyList(default_predictions, predictions),
+    weights = if (is.null(weights)) default_weights else modifyList(default_weights, weights),
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),
     io = if (is.null(io)) default_io else modifyList(default_io, io),
     paths = if (is.null(paths)) default_paths else modifyList(default_paths, paths)
@@ -2652,17 +2677,27 @@ mosaic_run_defaults <- function() {
     ),
     npe = list(
       enable = FALSE,
-      weight_strategy = "continuous_all"
+      weight_strategy = "continuous_best"
     ),
     predictions = list(
       best_model_n_sims = 100L,
       ensemble_n_param_sets = 50L,
       ensemble_n_sims_per_param = 10L
     ),
+    weights = list(
+      floor = 1e-15,
+      min_effective_range_all = NULL,
+      max_effective_range_all = NULL,
+      min_effective_range_retained = NULL,
+      max_effective_range_retained = NULL,
+      min_effective_range_best = NULL,
+      max_effective_range_best = NULL
+    ),
     io = list(
       format = "parquet",
       compression = "zstd",
-      compression_level = 3L
+      compression_level = 3L,
+      verbose_weights = FALSE
     )
   )
 }
