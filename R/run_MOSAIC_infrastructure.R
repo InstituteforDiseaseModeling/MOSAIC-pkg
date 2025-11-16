@@ -50,98 +50,6 @@
   })
 }
 
-#' Safe File Locking for Multi-User Environments
-#'
-#' Implements advisory file locking to prevent race conditions.
-#' Uses flock() on Unix systems.
-#'
-#' @param lockfile Path to lock file
-#' @param timeout_sec Maximum seconds to wait for lock
-#' @return Lock handle (file connection), or NULL if failed
-#' @noRd
-.mosaic_acquire_lock <- function(lockfile, timeout_sec = 30) {
-  if (.Platform$OS.type != "unix") {
-    # Windows: no flock, use simpler approach
-    return(.mosaic_acquire_lock_windows(lockfile, timeout_sec))
-  }
-
-  start_time <- Sys.time()
-  lock_acquired <- FALSE
-  lock_con <- NULL
-
-  while (!lock_acquired && difftime(Sys.time(), start_time, units = "secs") < timeout_sec) {
-    tryCatch({
-      # Create lock file if doesn't exist
-      if (!file.exists(lockfile)) {
-        file.create(lockfile)
-      }
-
-      # Open file connection
-      lock_con <- file(lockfile, open = "r+")
-
-      # Try to acquire exclusive lock (non-blocking)
-      # Note: R doesn't have native flock, use system call
-      lock_result <- system2("flock",
-                            args = c("--nonblock", "--exclusive",
-                                    as.integer(lock_con), "true"),
-                            stdout = FALSE, stderr = FALSE)
-
-      if (lock_result == 0) {
-        lock_acquired <- TRUE
-      } else {
-        close(lock_con)
-        lock_con <- NULL
-        Sys.sleep(0.1)  # Wait before retry
-      }
-    }, error = function(e) {
-      if (!is.null(lock_con)) {
-        try(close(lock_con), silent = TRUE)
-        lock_con <- NULL
-      }
-      Sys.sleep(0.1)
-    })
-  }
-
-  if (!lock_acquired) {
-    warning("Failed to acquire lock on ", lockfile, " after ", timeout_sec, " seconds",
-            call. = FALSE, immediate. = TRUE)
-    return(NULL)
-  }
-
-  lock_con
-}
-
-#' Release File Lock
-#' @param lock_con Lock handle from .mosaic_acquire_lock()
-#' @noRd
-.mosaic_release_lock <- function(lock_con) {
-  if (!is.null(lock_con) && inherits(lock_con, "connection")) {
-    try(close(lock_con), silent = TRUE)
-  }
-  invisible(TRUE)
-}
-
-#' Windows Lock Implementation (Simpler Fallback)
-#' @noRd
-.mosaic_acquire_lock_windows <- function(lockfile, timeout_sec) {
-  start_time <- Sys.time()
-
-  while (difftime(Sys.time(), start_time, units = "secs") < timeout_sec) {
-    if (!file.exists(lockfile)) {
-      tryCatch({
-        writeLines(as.character(Sys.getpid()), lockfile)
-        return(lockfile)  # Return path as "handle"
-      }, error = function(e) {
-        Sys.sleep(0.1)
-      })
-    } else {
-      Sys.sleep(0.1)
-    }
-  }
-
-  NULL
-}
-
 #' NFS-Safe Atomic Write
 #'
 #' Implements truly atomic write for network filesystems.
@@ -280,57 +188,6 @@
 # RESOURCE MANAGEMENT
 # =============================================================================
 
-#' Setup Signal Handlers for Graceful Shutdown
-#'
-#' Registers handlers for SIGTERM/SIGINT to save state before exit.
-#' Critical for cluster schedulers that send SIGTERM before SIGKILL.
-#'
-#' @param state_file Path to state file
-#' @param state State object to save
-#' @param cleanup_func Optional cleanup function
-#' @noRd
-.mosaic_register_signal_handlers <- function(state_file, state, cleanup_func = NULL) {
-  if (.Platform$OS.type != "unix") {
-    return(invisible(NULL))
-  }
-
-  # Create handler function
-  signal_handler <- function() {
-    message("\nReceived termination signal. Saving state...")
-
-    # Save state
-    tryCatch({
-      .mosaic_save_state_safe(state, state_file)
-      message("State saved successfully")
-    }, error = function(e) {
-      message("Failed to save state: ", e$message)
-    })
-
-    # Run cleanup
-    if (!is.null(cleanup_func)) {
-      tryCatch({
-        cleanup_func()
-        message("Cleanup completed")
-      }, error = function(e) {
-        message("Cleanup failed: ", e$message)
-      })
-    }
-
-    # Exit
-    quit(save = "no", status = 143)  # 128 + 15 (SIGTERM)
-  }
-
-  # Register for SIGTERM and SIGINT
-  tryCatch({
-    # Note: R's signal handling is limited; this is best-effort
-    options(mosaic.signal_handler = signal_handler)
-    invisible(TRUE)
-  }, error = function(e) {
-    warning("Could not register signal handlers: ", e$message, call. = FALSE)
-    invisible(FALSE)
-  })
-}
-
 #' Check If BLAS Threading Control Available
 #'
 #' Validates BLAS threading can be controlled.
@@ -451,16 +308,6 @@
     return(NA_real_)
   }
   min(finite_x, na.rm = na.rm)
-}
-
-#' Safe Max with Empty Check
-#' @noRd
-.mosaic_safe_max <- function(x, na.rm = TRUE) {
-  finite_x <- x[is.finite(x)]
-  if (length(finite_x) == 0) {
-    return(NA_real_)
-  }
-  max(finite_x, na.rm = na.rm)
 }
 
 #' Safe Parse of Simulation ID from Filename

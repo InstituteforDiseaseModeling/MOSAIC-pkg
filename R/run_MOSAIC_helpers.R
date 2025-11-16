@@ -281,49 +281,6 @@
   .mosaic_atomic_write(obj, path, write_func)
 }
 
-#' Write Results with Format Selection (NFS-Safe)
-#' @noRd
-.mosaic_write_results <- function(df, path, io) {
-  # Check disk space
-  estimated_mb <- (nrow(df) * 1024) / (1024^2)
-  if (!.mosaic_check_disk_space(dirname(path), required_mb = estimated_mb * 2)) {
-    stop("Insufficient disk space for results write: ", path, call. = FALSE)
-  }
-
-  # Determine full path with extension
-  if (io$format == "csv") {
-    if (io$compression == "gzip") {
-      full_path <- paste0(path, ".csv.gz")
-      write_func <- function(data, file) {
-        utils::write.csv(data, gzfile(file), row.names = FALSE)
-      }
-    } else {
-      full_path <- paste0(path, ".csv")
-      write_func <- function(data, file) {
-        utils::write.csv(data, file, row.names = FALSE)
-      }
-    }
-  } else {  # parquet
-    full_path <- paste0(path, ".parquet")
-    write_func <- function(data, file) {
-      if (io$compression %in% c("none", "uncompressed")) {
-        arrow::write_parquet(data, file, compression = "uncompressed")
-      } else if (is.null(io$compression_level) || io$compression != "zstd") {
-        arrow::write_parquet(data, file, compression = io$compression)
-      } else {
-        arrow::write_parquet(data, file,
-          compression = io$compression,
-          compression_level = io$compression_level)
-      }
-    }
-  }
-
-  # Use NFS-safe atomic write
-  .mosaic_atomic_write(df, full_path, write_func)
-
-  invisible(full_path)
-}
-
 # =============================================================================
 # RESULT LOADING AND COMBINING
 # =============================================================================
