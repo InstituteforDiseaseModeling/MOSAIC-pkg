@@ -7,25 +7,40 @@
 #' Get NPE Importance Weights
 #'
 #' @description
-#' Retrieves or creates importance weights for NPE training from BFRS results.
-#' This function selects the appropriate pre-calculated BFRS weights or creates
-#' binary versions of them, avoiding recalculation issues.
+#' Retrieves NPE weights from pre-calculated BFRS weight columns.
+#' All weight calculations are performed in BFRS stage using adaptive method.
+#' This function simply selects the appropriate column based on strategy.
 #'
-#' @param bfrs_results BFRS results object containing weight_retained and weight_best
+#' @param bfrs_results BFRS results object containing weight columns:
+#'   - weight_all: Weights for all valid simulations
+#'   - weight_retained: Weights for retained subset
+#'   - weight_best: Weights for best subset
+#'   - Subset mask columns: is_valid, is_retained, is_best_subset
+#'
 #' @param strategy Weight strategy:
-#'   "continuous_all" - Gibbs weights for all simulations (effective AIC range = 25)
-#'   "binary_all" - Equal weights for all simulations
-#'   "continuous_retained" - Use BFRS continuous weights for retained subset
-#'   "binary_retained" - Equal weights for all retained simulations
-#'   "continuous_best" - Use BFRS continuous weights for best subset
-#'   "binary_best" - Equal weights for all best subset simulations
+#'   - "continuous_all": Use weight_all column (all valid simulations)
+#'   - "binary_all": Equal weights for all simulations
+#'   - "continuous_retained": Use weight_retained column
+#'   - "binary_retained": Equal weights within retained subset
+#'   - "continuous_best": Use weight_best column (DEFAULT)
+#'   - "binary_best": Equal weights within best subset
+#'
 #' @param verbose Print weight statistics
 #'
-#' @return Vector of normalized weights
+#' @return Vector of normalized weights (length = nrow(bfrs_results))
+#'
+#' @details
+#' Weight calculation is now unified in BFRS stage using adaptive Gibbs method.
+#' This eliminates redundant recalculation and ensures consistency between
+#' BFRS and NPE posterior estimates.
+#'
+#' The adaptive method automatically adjusts effective AIC range to prevent
+#' numerical underflow while maintaining discrimination among models.
+#'
 #' @export
 get_npe_weights <- function(
     bfrs_results,
-    strategy = "binary_best",
+    strategy = "continuous_best",
     verbose = FALSE
 ) {
 
@@ -39,242 +54,169 @@ get_npe_weights <- function(
              paste(valid_strategies, collapse = ", "))
     }
 
+    n_sims <- nrow(bfrs_results)
+
     # =========================================================================
     # Strategy: binary_all (equal weights for all simulations)
     # =========================================================================
+
     if (strategy == "binary_all") {
-        n_sims <- nrow(bfrs_results)
         weights <- rep(1.0 / n_sims, n_sims)
 
         if (verbose) {
             message("NPE Weight Strategy: binary_all")
-            message("  Using all simulations with equal weights")
+            message("  Equal weights for all simulations")
             message("  Total simulations: ", n_sims)
-            message("  Weight per simulation: ", sprintf("%.6f", 1.0 / n_sims))
-            message("  ESS = ", n_sims, " (maximum for uniform weights)")
+            message("  ESS = ", n_sims, " (maximum for uniform)")
         }
 
         return(weights)
     }
 
     # =========================================================================
-    # Strategy: continuous_all (Gibbs weights for all simulations)
+    # Strategy: continuous_all (use BFRS weight_all column)
     # =========================================================================
+
     if (strategy == "continuous_all") {
-        # Extract likelihoods for all simulations
-        # BFRS results use 'likelihood' field (contains log-likelihood by default)
-        if (!"likelihood" %in% names(bfrs_results)) {
-            stop("bfrs_results must contain 'likelihood' field for continuous_all strategy")
+        if (!"weight_all" %in% names(bfrs_results)) {
+            stop("bfrs_results missing 'weight_all' column. ",
+                 "Ensure BFRS stage calculated weights for all simulations.")
         }
 
-        likelihoods <- bfrs_results$likelihood
-        n_sims <- length(likelihoods)
-
-        # Convert to AIC
-        aic <- -2 * likelihoods
-        valid_idx <- is.finite(aic) & !is.na(aic)
-
-        if (sum(valid_idx) == 0) {
-            warning("No valid likelihoods for continuous_all, using equal weights")
-            weights <- rep(1.0 / n_sims, n_sims)
-            return(weights)
-        }
-
-        # Calculate delta AIC from best
-        best_aic <- min(aic[valid_idx])
-        delta_aic <- aic - best_aic
-
-        # Remove outliers using Tukey's method
-        q1 <- quantile(delta_aic[valid_idx], 0.25, na.rm = TRUE)
-        q3 <- quantile(delta_aic[valid_idx], 0.75, na.rm = TRUE)
-        iqr <- q3 - q1
-        outlier_threshold <- q3 + 1.5 * iqr
-
-        reasonable_idx <- valid_idx & delta_aic <= outlier_threshold
-        if (sum(reasonable_idx) < 10) {
-            reasonable_idx <- valid_idx  # Keep all if too few
-        }
-
-        # Calculate adaptive effective AIC range to prevent weight underflow
-        # Find effective_range such that worst simulation gets weight >= floor
-        actual_range <- diff(range(delta_aic[reasonable_idx], na.rm = TRUE))
-
-        if (actual_range < 1e-6) {
-            # All models essentially identical
-            weights <- rep(1.0 / n_sims, n_sims)
-        } else {
-            # Set floor: minimum weight for any simulation (prevents underflow)
-            weight_floor <- 1e-15
-
-            # Find worst delta_AIC in group
-            max_delta_aic <- max(delta_aic[reasonable_idx], na.rm = TRUE)
-
-            # Calculate effective_range needed to keep worst weight >= floor
-            # From: exp(-max_delta_aic / (2*temp)) >= floor
-            # Solve: effective_range = actual_range * max_delta_aic / (-log(floor))
-            effective_range <- actual_range * max_delta_aic / (-log(weight_floor))
-            temperature <- 0.5 * (effective_range / actual_range)
-
-            if (verbose) {
-                message("  Adaptive effective range calculation:")
-                message("    Actual range: ", sprintf("%.1f", actual_range))
-                message("    Max delta AIC: ", sprintf("%.1f", max_delta_aic))
-                message("    Weight floor: ", sprintf("%.2e", weight_floor))
-                message("    → Effective range: ", sprintf("%.1f", effective_range))
-            }
-
-            # Calculate Gibbs weights
-            weights <- .calc_gibbs_weights(aic, temperature)
-        }
+        weights <- bfrs_results$weight_all
 
         if (verbose) {
-            eff_n <- calc_model_ess(weights, method = "kish")
-            perplexity_ess <- calc_model_ess(weights, method = "perplexity")
+            ess_kish <- calc_model_ess(weights, method = "kish")
+            ess_perp <- calc_model_ess(weights, method = "perplexity")
+            n_nonzero <- sum(weights > 0)
 
             message("NPE Weight Strategy: continuous_all")
-            message("  Using all simulations with continuous Gibbs weights")
+            message("  Using BFRS weight_all column")
             message("  Total simulations: ", n_sims)
-            message("  Valid simulations: ", sum(valid_idx))
-            message("  ESS (Kish) = ", sprintf("%.1f", eff_n))
-            message("  ESS (Perplexity) = ", sprintf("%.1f", perplexity_ess))
-            message("  Temperature = ", sprintf("%.4f", temperature))
-            message("  Effective AIC range = ", effective_range)
+            message("  Non-zero weights: ", n_nonzero)
+            message("  ESS (Kish): ", sprintf("%.1f", ess_kish))
+            message("  ESS (Perplexity): ", sprintf("%.1f", ess_perp))
         }
 
         return(weights)
     }
 
     # =========================================================================
-    # Strategy: retained or best subset (binary or continuous)
+    # Strategy: continuous_retained (use BFRS weight_retained column)
     # =========================================================================
 
-    # Identify subset mask
-    if (grepl("retained", strategy)) {
+    if (strategy == "continuous_retained") {
+        if (!"weight_retained" %in% names(bfrs_results)) {
+            stop("bfrs_results missing 'weight_retained' column")
+        }
+
+        weights <- bfrs_results$weight_retained
+
+        if (verbose) {
+            ess_kish <- calc_model_ess(weights, method = "kish")
+            ess_perp <- calc_model_ess(weights, method = "perplexity")
+            n_nonzero <- sum(weights > 0)
+
+            message("NPE Weight Strategy: continuous_retained")
+            message("  Using BFRS weight_retained column")
+            message("  Total simulations: ", n_sims)
+            message("  Retained subset: ", n_nonzero)
+            message("  ESS (Kish): ", sprintf("%.1f", ess_kish))
+            message("  ESS (Perplexity): ", sprintf("%.1f", ess_perp))
+        }
+
+        return(weights)
+    }
+
+    # =========================================================================
+    # Strategy: continuous_best (use BFRS weight_best column)
+    # =========================================================================
+
+    if (strategy == "continuous_best") {
+        if (!"weight_best" %in% names(bfrs_results)) {
+            stop("bfrs_results missing 'weight_best' column")
+        }
+
+        weights <- bfrs_results$weight_best
+
+        if (verbose) {
+            ess_kish <- calc_model_ess(weights, method = "kish")
+            ess_perp <- calc_model_ess(weights, method = "perplexity")
+            n_nonzero <- sum(weights > 0)
+
+            message("NPE Weight Strategy: continuous_best")
+            message("  Using BFRS weight_best column")
+            message("  Total simulations: ", n_sims)
+            message("  Best subset: ", n_nonzero)
+            message("  ESS (Kish): ", sprintf("%.1f", ess_kish))
+            message("  ESS (Perplexity): ", sprintf("%.1f", ess_perp))
+        }
+
+        return(weights)
+    }
+
+    # =========================================================================
+    # Strategy: binary_retained (equal weights within retained subset)
+    # =========================================================================
+
+    if (strategy == "binary_retained") {
         if (!"is_retained" %in% names(bfrs_results)) {
-            stop("bfrs_results must contain 'is_retained' field for retained strategies")
+            stop("bfrs_results missing 'is_retained' column")
         }
+
         subset_mask <- bfrs_results$is_retained
-        subset_name <- "retained"
-        effective_range <- 25  # Standard for retained subset
-    } else {
-        if (!"is_best_subset" %in% names(bfrs_results)) {
-            stop("bfrs_results must contain 'is_best_subset' field for best strategies")
+        subset_size <- sum(subset_mask)
+
+        if (subset_size == 0) {
+            stop("No simulations in retained subset")
         }
-        subset_mask <- bfrs_results$is_best_subset
-        subset_name <- "best"
-        effective_range <- 4  # Tighter for best subset
-    }
 
-    subset_size <- sum(subset_mask)
-    n_sims <- nrow(bfrs_results)
-
-    if (subset_size == 0) {
-        stop("No simulations in ", subset_name, " subset. Check BFRS filtering.")
-    }
-
-    # Initialize weights (zero for simulations outside subset)
-    weights <- rep(0, n_sims)
-
-    # Calculate weights for subset
-    if (grepl("binary", strategy)) {
-        # Binary: equal weights within subset
+        weights <- rep(0, n_sims)
         weights[subset_mask] <- 1.0 / subset_size
-        weight_type <- "binary"
 
         if (verbose) {
-            message("NPE Weight Strategy: ", strategy)
-            message("  Using ", subset_name, " subset (", subset_size, " simulations)")
-            message("  Weight type: binary (equal weights)")
-            message("  Weight per simulation: ", sprintf("%.6f", 1.0 / subset_size))
-            message("  ESS = ", subset_size, " (maximum for uniform weights)")
+            message("NPE Weight Strategy: binary_retained")
+            message("  Equal weights within retained subset")
+            message("  Total simulations: ", n_sims)
+            message("  Retained subset: ", subset_size)
+            message("  ESS = ", subset_size, " (maximum for uniform)")
         }
 
-    } else {
-        # Continuous: recalculate Gibbs weights from likelihoods
-        if (!"likelihood" %in% names(bfrs_results)) {
-            stop("bfrs_results must contain 'likelihood' field for continuous strategies")
-        }
-
-        # Extract likelihoods for subset
-        likelihoods <- bfrs_results$likelihood[subset_mask]
-
-        # Convert to AIC
-        aic <- -2 * likelihoods
-        valid_idx <- is.finite(aic) & !is.na(aic)
-
-        if (sum(valid_idx) == 0) {
-            warning("No valid likelihoods in ", subset_name, " subset, using equal weights")
-            weights[subset_mask] <- 1.0 / subset_size
-        } else {
-            # Calculate delta AIC from best
-            best_aic <- min(aic[valid_idx])
-            delta_aic <- aic - best_aic
-
-            # Remove outliers using Tukey's method
-            q1 <- quantile(delta_aic[valid_idx], 0.25, na.rm = TRUE)
-            q3 <- quantile(delta_aic[valid_idx], 0.75, na.rm = TRUE)
-            iqr <- q3 - q1
-            outlier_threshold <- q3 + 1.5 * iqr
-
-            reasonable_idx <- valid_idx & delta_aic <= outlier_threshold
-            if (sum(reasonable_idx) < 10) {
-                reasonable_idx <- valid_idx  # Keep all if too few
-            }
-
-            # Calculate adaptive effective AIC range to prevent weight underflow
-            actual_range <- diff(range(delta_aic[reasonable_idx], na.rm = TRUE))
-
-            if (actual_range < 1e-6) {
-                # All models essentially identical
-                weights[subset_mask] <- 1.0 / subset_size
-                effective_range_adaptive <- NA
-                temperature <- NA
-                max_delta_aic <- NA
-                weight_floor <- NA
-            } else {
-                # Set floor: minimum weight for any simulation (prevents underflow)
-                weight_floor <- 1e-15
-
-                # Find worst delta_AIC in subset
-                max_delta_aic <- max(delta_aic[reasonable_idx], na.rm = TRUE)
-
-                # Calculate effective_range needed to keep worst weight >= floor
-                # From: exp(-max_delta_aic / (2*temp)) >= floor
-                # Solve: effective_range = actual_range * max_delta_aic / (-log(floor))
-                effective_range_adaptive <- actual_range * max_delta_aic / (-log(weight_floor))
-                temperature <- 0.5 * (effective_range_adaptive / actual_range)
-
-                # Calculate Gibbs weights for subset
-                subset_weights <- .calc_gibbs_weights(aic, temperature)
-
-                # Assign to full weight vector
-                weights[subset_mask] <- subset_weights
-            }
-        }
-
-        weight_type <- "continuous"
-
-        if (verbose) {
-            eff_n <- calc_model_ess(weights, method = "kish")
-            perplexity_ess <- calc_model_ess(weights, method = "perplexity")
-
-            message("NPE Weight Strategy: ", strategy)
-            message("  Using ", subset_name, " subset (", subset_size, " simulations)")
-            message("  Weight type: continuous (Gibbs weights)")
-            if (!is.na(effective_range_adaptive)) {
-                message("  Adaptive effective range calculation:")
-                message("    Actual range: ", sprintf("%.1f", actual_range))
-                message("    Max delta AIC: ", sprintf("%.1f", max_delta_aic))
-                message("    Weight floor: ", sprintf("%.2e", weight_floor))
-                message("    → Effective range: ", sprintf("%.1f", effective_range_adaptive))
-                message("  Temperature = ", sprintf("%.4f", temperature))
-            }
-            message("  ESS (Kish) = ", sprintf("%.1f", eff_n))
-            message("  ESS (Perplexity) = ", sprintf("%.1f", perplexity_ess))
-        }
+        return(weights)
     }
 
-    return(weights)
+    # =========================================================================
+    # Strategy: binary_best (equal weights within best subset)
+    # =========================================================================
+
+    if (strategy == "binary_best") {
+        if (!"is_best_subset" %in% names(bfrs_results)) {
+            stop("bfrs_results missing 'is_best_subset' column")
+        }
+
+        subset_mask <- bfrs_results$is_best_subset
+        subset_size <- sum(subset_mask)
+
+        if (subset_size == 0) {
+            stop("No simulations in best subset")
+        }
+
+        weights <- rep(0, n_sims)
+        weights[subset_mask] <- 1.0 / subset_size
+
+        if (verbose) {
+            message("NPE Weight Strategy: binary_best")
+            message("  Equal weights within best subset")
+            message("  Total simulations: ", n_sims)
+            message("  Best subset: ", subset_size)
+            message("  ESS = ", subset_size, " (maximum for uniform)")
+        }
+
+        return(weights)
+    }
+
+    # Should never reach here due to validation above
+    stop("Unknown strategy: ", strategy)
 }
 
 #' Calculate NPE Importance Weights (Deprecated)
