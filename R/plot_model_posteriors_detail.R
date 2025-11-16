@@ -366,8 +366,10 @@ plot_model_posteriors_detail <- function(quantiles_file,
     kl_divergence <- posterior_data$kl[1]
     param_description <- param_info$description
 
-    # Determine x-axis limits
-    x_range <- range(c(prior_samples, retained_samples, best_samples), na.rm = TRUE)
+    # Determine x-axis limits (use only finite values to prevent Inf/-Inf in limits)
+    all_samples <- c(prior_samples, retained_samples, best_samples)
+    finite_samples <- all_samples[is.finite(all_samples)]
+    x_range <- range(finite_samples)
     x_padding <- diff(x_range) * 0.05
     x_limits <- c(x_range[1] - x_padding, x_range[2] + x_padding)
 
