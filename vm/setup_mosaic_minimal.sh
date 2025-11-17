@@ -61,7 +61,8 @@ fi
 
 # MOSAIC R package
 echo "[2/3] Installing MOSAIC R package..."
-Rscript -e "remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg')"
+Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
+  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
 
 # Python dependencies
 echo "[3/3] Installing Python dependencies..."
