@@ -128,7 +128,7 @@ cat('Geospatial packages installed successfully\n')
 # Now install MOSAIC with all dependencies
 echo "[7/7] Installing MOSAIC R package..."
 sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
-  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"
+  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
 
 # Install Python dependencies
 echo "[7/7] Installing Python dependencies..."
