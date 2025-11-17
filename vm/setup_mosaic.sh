@@ -1,9 +1,16 @@
 #!/bin/bash
 set -e  # Exit on any error
 
+# Create timestamped log file
+LOG_FILE="mosaic_install_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee -a "$LOG_FILE")
+exec 2>&1
+
 echo "======================================"
 echo "MOSAIC VM Setup Script"
 echo "======================================"
+echo "Logging to: $LOG_FILE"
+echo ""
 
 # Update system
 echo "[1/7] Updating system packages..."
@@ -74,10 +81,47 @@ else
   echo "Python $PYTHON_VERSION detected (OK)"
 fi
 
-# Install R packages system-wide (non-interactive)
-echo "[6/7] Installing MOSAIC R package..."
+# Install critical geospatial R packages first (these often fail)
+echo "[6/7] Installing critical geospatial R packages..."
+sudo Rscript -e "
+options(repos = c(CRAN = 'https://cloud.r-project.org'))
+
+# Install remotes
+if (!requireNamespace('remotes', quietly = TRUE)) {
+  install.packages('remotes')
+}
+
+# Install geospatial packages one by one with error checking
+cat('Installing sf...\n')
+if (!requireNamespace('sf', quietly = TRUE)) {
+  install.packages('sf', configure.args = '--with-proj-lib=/usr/lib')
+  if (!requireNamespace('sf', quietly = TRUE)) {
+    stop('Failed to install sf package')
+  }
+}
+
+cat('Installing terra...\n')
+if (!requireNamespace('terra', quietly = TRUE)) {
+  install.packages('terra')
+  if (!requireNamespace('terra', quietly = TRUE)) {
+    stop('Failed to install terra package')
+  }
+}
+
+cat('Installing raster...\n')
+if (!requireNamespace('raster', quietly = TRUE)) {
+  install.packages('raster')
+  if (!requireNamespace('raster', quietly = TRUE)) {
+    stop('Failed to install raster package')
+  }
+}
+
+cat('Geospatial packages installed successfully\n')
+"
+
+# Now install MOSAIC with all dependencies
+echo "[7/7] Installing MOSAIC R package..."
 sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
-  if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); \
   remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'always')"
 
 # Install Python dependencies
@@ -104,11 +148,13 @@ if [ $? -eq 0 ]; then
   echo "======================================"
   echo "Installation complete and verified!"
   echo "======================================"
+  echo "Full log saved to: $LOG_FILE"
 else
   echo ""
   echo "======================================"
   echo "Installation completed with errors"
   echo "Please check the output above"
   echo "======================================"
+  echo "Full log saved to: $LOG_FILE"
   exit 1
 fi
