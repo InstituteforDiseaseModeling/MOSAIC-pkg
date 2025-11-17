@@ -27,7 +27,7 @@ sudo apt-get update
 sudo apt-get install -y r-base r-base-dev
 
 # Install system dependencies for geospatial operations and R packages
-echo "[4/7] Installing system libraries (GDAL, PROJ, GEOS, Arrow, HDF5)..."
+echo "[4/7] Installing system libraries (GDAL, PROJ, GEOS, HDF5)..."
 sudo apt-get install -y \
   gdal-bin libgdal-dev \
   libproj-dev proj-bin \
@@ -43,9 +43,11 @@ sudo apt-get install -y \
   libpng-dev \
   libtiff5-dev \
   libjpeg-dev \
-  libarrow-dev \
   libhdf5-dev \
   zlib1g-dev
+
+# Note: libarrow-dev removed - arrow R package will compile from source
+# This takes longer but avoids repository configuration issues
 
 # Install Python 3.9+
 echo "[5/7] Installing Python 3.9+..."

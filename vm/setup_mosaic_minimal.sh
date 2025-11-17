@@ -26,10 +26,12 @@ sudo apt-get install -y \
   libpng-dev \
   libtiff5-dev \
   libjpeg-dev \
-  libarrow-dev \
   libhdf5-dev \
   zlib1g-dev \
   python3 python3-pip python3-venv python3-dev
+
+# Note: libarrow-dev removed - arrow R package will compile from source
+# This takes longer but avoids repository configuration issues
 
 # Verify Python version
 PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
