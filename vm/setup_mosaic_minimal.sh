@@ -1,9 +1,16 @@
 #!/bin/bash
 set -e
 
+# Create timestamped log file
+LOG_FILE="mosaic_install_minimal_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee -a "$LOG_FILE")
+exec 2>&1
+
 echo "======================================"
 echo "MOSAIC Minimal Setup (R pre-installed)"
 echo "======================================"
+echo "Logging to: $LOG_FILE"
+echo ""
 
 # System libraries
 echo "[1/3] Installing system dependencies..."
@@ -78,11 +85,13 @@ if [ $? -eq 0 ]; then
   echo "======================================"
   echo "Installation complete and verified!"
   echo "======================================"
+  echo "Full log saved to: $LOG_FILE"
 else
   echo ""
   echo "======================================"
   echo "Installation completed with errors"
   echo "Please check the output above"
   echo "======================================"
+  echo "Full log saved to: $LOG_FILE"
   exit 1
 fi
