@@ -127,14 +127,24 @@
             est_cases = est_cases,
             obs_deaths = obs_deaths,
             est_deaths = est_deaths,
-            add_max_terms = FALSE,
-            add_peak_timing = FALSE,
-            add_peak_magnitude = FALSE,
-            add_cumulative_total = FALSE,
-            add_wis = FALSE,
-            weight_cases = 1.0,
-            weight_deaths = 1.0,
-            enable_guardrails = FALSE
+            add_max_terms = control$likelihood$add_max_terms,
+            add_peak_timing = control$likelihood$add_peak_timing,
+            add_peak_magnitude = control$likelihood$add_peak_magnitude,
+            add_cumulative_total = control$likelihood$add_cumulative_total,
+            add_wis = control$likelihood$add_wis,
+            weight_cases = control$likelihood$weight_cases,
+            weight_deaths = control$likelihood$weight_deaths,
+            weight_max_terms = control$likelihood$weight_max_terms,
+            weight_peak_timing = control$likelihood$weight_peak_timing,
+            weight_peak_magnitude = control$likelihood$weight_peak_magnitude,
+            weight_cumulative_total = control$likelihood$weight_cumulative_total,
+            weight_wis = control$likelihood$weight_wis,
+            sigma_peak_time = control$likelihood$sigma_peak_time,
+            sigma_peak_log = control$likelihood$sigma_peak_log,
+            penalty_unmatched_peak = control$likelihood$penalty_unmatched_peak,
+            enable_guardrails = control$likelihood$enable_guardrails,
+            floor_likelihood = control$likelihood$floor_likelihood,
+            guardrail_verbose = control$likelihood$guardrail_verbose
           )
         } else {
           NA_real_
@@ -635,8 +645,8 @@ run_MOSAIC <- function(config,
   if (!is.numeric(n_iterations) || n_iterations < 1) {
     stop("control$calibration$n_iterations must be a positive integer", call. = FALSE)
   }
-  if (!is.null(n_simulations) && (!is.numeric(n_simulations) || n_simulations < 1)) {
-    stop("control$calibration$n_simulations must be NULL (auto mode) or a positive integer", call. = FALSE)
+  if (!is.null(n_simulations) && !is.character(n_simulations) && (!is.numeric(n_simulations) || n_simulations < 1)) {
+    stop("control$calibration$n_simulations must be NULL, 'auto', or a positive integer", call. = FALSE)
   }
 
   # Validate sampling_args
@@ -682,34 +692,13 @@ run_MOSAIC <- function(config,
   cluster_metadata <- .mosaic_get_cluster_metadata()
 
   sim_params <- list(
-    adaptive_sampling = list(
-      calibration_batch_size = control$calibration$batch_size,
-      min_calibration_batches = control$calibration$min_batches,
-      max_calibration_batches = control$calibration$max_batches,
-      target_r_squared = control$calibration$target_r2,
-      fine_tuning_batch_sizes = control$fine_tuning$batch_sizes,
-      max_simulations = control$calibration$max_simulations,
-      target_ESS_param = control$targets$ESS_param
-    ),
+    control = control,  # Complete control object for reproducibility
     n_iterations = n_iterations,
-    n_cores = control$parallel$n_cores,
     iso_code = iso_code,
     timestamp = Sys.time(),
     R_version = R.version.string,
     MOSAIC_version = as.character(utils::packageVersion("MOSAIC")),
-    cluster_metadata = cluster_metadata,  # Added: cluster/HPC info
-    convergence_params = list(
-      parameter_ess = list(target_ESS_param = control$targets$ESS_param),
-      subset_optimization = list(
-        target_ESS_best = control$targets$ESS_best,
-        min_subset_size = control$targets$B_min,
-        max_percentile = control$targets$percentile_max
-      )
-    ),
-    npe_config = if (isTRUE(control$npe$enable)) list(
-      weight_strategy = control$npe$weight_strategy
-    ) else NULL,
-    io_config = control$io,
+    cluster_metadata = cluster_metadata,
     paths = list(
       dir_output = dirs$root,
       dir_setup = dirs$setup,
@@ -747,10 +736,9 @@ run_MOSAIC <- function(config,
     stop("No estimated parameters found for ESS tracking")
   }
 
-  log_msg("Parameter detection:")
-  log_msg("  Total config columns: %d", length(param_names_all))
-  log_msg("  Estimated parameters to track: %d", length(param_names_estimated))
-  log_msg("Locations detected: %s", paste(config$location_name, collapse = ', '))
+  log_msg("Parameters: %d estimated (of %d total) | Locations: %s",
+          length(param_names_estimated), length(param_names_all),
+          paste(config$location_name, collapse = ', '))
 
   # ===========================================================================
   # SETUP PARALLEL CLUSTER (OR SEQUENTIAL EXECUTION)
@@ -964,8 +952,41 @@ run_MOSAIC <- function(config,
       current_phase <- decision$phase
       current_batch_size <- decision$batch_size
 
+      # Update phase from decision
+      if (!identical(state$phase, current_phase)) {
+        old_phase <- state$phase
+        state$phase <- current_phase
+        # Reset batch counter for new phase
+        state$phase_batch_count <- 0L
+        state$phase_last <- current_phase
+        log_msg("  ✓ Phase transition: %s → %s", toupper(old_phase), toupper(state$phase))
+      }
+
+      # BUG FIX #5: If batch size is 0, we're done
+      if (current_batch_size <= 0) {
+        log_msg("No additional simulations needed (batch_size = 0)")
+        break
+      }
+
+      # Increment phase batch counter (tracks batches within current phase)
+      state$phase_batch_count <- state$phase_batch_count + 1L
+
       batch_start <- state$total_sims_run + 1L
-      batch_end <- min(state$total_sims_run + current_batch_size, control$calibration$max_simulations)
+      batch_end <- state$total_sims_run + current_batch_size
+
+      # BUG FIX #4: Enforce reserved simulations for fine-tuning phase
+      if (identical(current_phase, "predictive")) {
+        # Leave 250 simulations reserved for fine-tuning
+        reserved_sims <- 250L
+        max_for_predictive <- control$calibration$max_simulations - reserved_sims
+        if (batch_end > max_for_predictive) {
+          batch_end <- max_for_predictive
+          log_msg("Capping predictive batch to leave %d reserved for fine-tuning", reserved_sims)
+        }
+      }
+
+      # Final cap at max_simulations
+      batch_end <- min(batch_end, control$calibration$max_simulations)
       sim_ids <- batch_start:batch_end
 
       log_msg(paste(rep("-", 60), collapse = ""))
@@ -1070,11 +1091,12 @@ run_MOSAIC <- function(config,
     q1 <- stats::quantile(valid_ll, 0.25, na.rm = TRUE)
     q3 <- stats::quantile(valid_ll, 0.75, na.rm = TRUE)
     iqr <- q3 - q1
-    lower_threshold <- q1 - 1.5 * iqr
-    upper_threshold <- q3 + 1.5 * iqr
+    iqr_mult <- control$weights$iqr_multiplier
+    lower_threshold <- q1 - iqr_mult * iqr
+    upper_threshold <- q3 + iqr_mult * iqr
     results$is_outlier[results$is_valid] <- valid_ll < lower_threshold | valid_ll > upper_threshold
 
-    log_msg("  Outlier detection (Tukey IQR):")
+    log_msg("  Outlier detection (Tukey IQR, multiplier = %.1f):", iqr_mult)
     log_msg("    - Outliers: %d (%.1f%%)", sum(results$is_outlier),
             100 * sum(results$is_outlier) / sum(results$is_valid))
   }
@@ -1120,6 +1142,7 @@ run_MOSAIC <- function(config,
       param_names = param_names_estimated,
       likelihood_col = "likelihood",
       n_grid = 100,
+      method = control$targets$ESS_method,
       verbose = TRUE
     )
   }
@@ -1128,15 +1151,12 @@ run_MOSAIC <- function(config,
   if (!is.null(ess_results)) {
     ess_output_file <- file.path(dirs$bfrs_diag, "parameter_ess.csv")
     write.csv(ess_results, ess_output_file, row.names = FALSE)
-    log_msg("Parameter ESS results saved to: %s", basename(ess_output_file))
-
-    # Display summary
-    log_msg("\nParameter ESS Summary:")
-    log_msg("  Total parameters: %d", nrow(ess_results))
-    log_msg("  Mean ESS: %.1f", mean(ess_results$ess_marginal, na.rm = TRUE))
-    log_msg("  Median ESS: %.1f", median(ess_results$ess_marginal, na.rm = TRUE))
-    log_msg("  Min ESS: %.1f", min(ess_results$ess_marginal, na.rm = TRUE))
-    log_msg("  Max ESS: %.1f", max(ess_results$ess_marginal, na.rm = TRUE))
+    log_msg("Parameter ESS summary (%d params): Mean=%.1f, Median=%.1f, Min=%.1f, Max=%.1f",
+            nrow(ess_results),
+            mean(ess_results$ess_marginal, na.rm = TRUE),
+            median(ess_results$ess_marginal, na.rm = TRUE),
+            min(ess_results$ess_marginal, na.rm = TRUE),
+            max(ess_results$ess_marginal, na.rm = TRUE))
 
     # Identify parameters needing more samples
     low_ess <- ess_results[ess_results$ess_marginal < control$targets$ESS_param, ]
@@ -1265,44 +1285,38 @@ run_MOSAIC <- function(config,
       CVw_final <- NA_real_
       gibbs_temperature_final <- 1
     } else {
-      delta_final <- aic_final - best_aic_final
-
-      # Dynamic Gibbs temperature (FIXED: Issue 1.3 - use safer threshold)
-      effective_range <- get_effective_aic_range(percentile_used)
-      actual_range <- diff(range(delta_final[is.finite(delta_final)]))
-      # Use 1e-6 threshold instead of machine epsilon (more practical)
-      if (!is.finite(actual_range) || actual_range < 1e-6) {
-        gibbs_temperature_final <- 1.0
-        log_msg("  WARNING: Actual range too small (%.2e), using default temperature", actual_range)
-      } else {
-        gibbs_temperature_final <- 0.5 * (effective_range / actual_range)
-      }
-
-      # Calculate weights
-      weights_final <- calc_model_weights_gibbs(
-        x = delta_final,
-        temperature = gibbs_temperature_final,
+      # Use unified adaptive weight method for consistency with weight_best column
+      # Note: top_subset_final is the data frame of selected simulations at this point
+      weight_result_final <- .mosaic_calc_adaptive_gibbs_weights(
+        likelihood = top_subset_final$likelihood,
+        weight_floor = control$weights$floor,
         verbose = FALSE
       )
+
+      weights_final <- weight_result_final$weights
       w_tilde_final <- weights_final
       w_final <- weights_final * length(weights_final)
 
-      # Calculate metrics
-      ESS_B_final <- calc_model_ess(w_tilde_final, method = "kish")
+      # Calculate metrics (use control ESS_method)
+      ESS_B_final <- calc_model_ess(w_tilde_final, method = control$targets$ESS_method)
       ag_final <- calc_model_agreement_index(w_final)
       A_final <- ag_final$A
       CVw_final <- calc_model_cvw(w_final)
+      gibbs_temperature_final <- weight_result_final$temperature
+
+      log_msg("  Subset selection weights (unified adaptive method):")
+      log_msg("    Adaptive effective range: %.1f (actual range: %.1f)",
+              weight_result_final$effective_range, weight_result_final$metrics$actual_range)
+      log_msg("    Temperature: %.4f", weight_result_final$temperature)
     }
   }
 
-  log_msg("\nFinal subset for NPE prior definition:")
-  log_msg("  Convergence tier: %s", convergence_tier)
-  log_msg("  Selected percentile: %.1f%%", percentile_used)
-  log_msg("  Number of simulations: %d", n_top_final)
-  log_msg("  ESS_B: %s", if(is.finite(ESS_B_final)) sprintf("%.1f", ESS_B_final) else "NA")
-  log_msg("  Agreement index (A): %s", if(is.finite(A_final)) sprintf("%.3f", A_final) else "NA")
-  log_msg("  Coefficient of variation (CVw): %s", if(is.finite(CVw_final)) sprintf("%.3f", CVw_final) else "NA")
-  log_msg("  Gibbs temperature: %.4f", gibbs_temperature_final)
+  log_msg("\nFinal subset (%s): %.1f%% (n=%d) | ESS_B=%s, A=%s, CVw=%s, T=%.4f",
+          convergence_tier, percentile_used, n_top_final,
+          if(is.finite(ESS_B_final)) sprintf("%.1f", ESS_B_final) else "NA",
+          if(is.finite(A_final)) sprintf("%.3f", A_final) else "NA",
+          if(is.finite(CVw_final)) sprintf("%.3f", CVw_final) else "NA",
+          gibbs_temperature_final)
 
   # Check convergence based on tier used
   if (convergence_tier != "fallback") {
@@ -1342,19 +1356,15 @@ run_MOSAIC <- function(config,
     all_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_valid],
       weight_floor = control$weights$floor,
-      min_effective_range = control$weights$min_effective_range_all,
-      max_effective_range = control$weights$max_effective_range_all,
       verbose = control$io$verbose_weights
     )
 
     results$weight_all[results$is_valid] <- all_result$weights
 
-    log_msg("  Valid simulations: %d", sum(results$is_valid))
-    log_msg("  Adaptive effective range: %.1f (actual range: %.1f)",
-            all_result$effective_range, all_result$metrics$actual_range)
-    log_msg("  Temperature: %.4f", all_result$temperature)
-    log_msg("  ESS (Kish): %.1f", all_result$metrics$ESS_kish)
-    log_msg("  ESS (Perplexity): %.1f", all_result$metrics$ESS_perplexity)
+    log_msg("  n=%d | Range: %.1f (actual: %.1f) | T=%.4f | ESS: %.1f (Kish), %.1f (Perp)",
+            sum(results$is_valid), all_result$effective_range,
+            all_result$metrics$actual_range, all_result$temperature,
+            all_result$metrics$ESS_kish, all_result$metrics$ESS_perplexity)
   }
 
   # ---------------------------------------------------------------------------
@@ -1367,19 +1377,15 @@ run_MOSAIC <- function(config,
     retained_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_retained],
       weight_floor = control$weights$floor,
-      min_effective_range = control$weights$min_effective_range_retained,
-      max_effective_range = control$weights$max_effective_range_retained,
       verbose = control$io$verbose_weights
     )
 
     results$weight_retained[results$is_retained] <- retained_result$weights
 
-    log_msg("  Retained simulations: %d", sum(results$is_retained))
-    log_msg("  Adaptive effective range: %.1f (actual range: %.1f)",
-            retained_result$effective_range, retained_result$metrics$actual_range)
-    log_msg("  Temperature: %.4f", retained_result$temperature)
-    log_msg("  ESS (Kish): %.1f", retained_result$metrics$ESS_kish)
-    log_msg("  ESS (Perplexity): %.1f", retained_result$metrics$ESS_perplexity)
+    log_msg("  n=%d | Range: %.1f (actual: %.1f) | T=%.4f | ESS: %.1f (Kish), %.1f (Perp)",
+            sum(results$is_retained), retained_result$effective_range,
+            retained_result$metrics$actual_range, retained_result$temperature,
+            retained_result$metrics$ESS_kish, retained_result$metrics$ESS_perplexity)
   }
 
   # ---------------------------------------------------------------------------
@@ -1392,20 +1398,16 @@ run_MOSAIC <- function(config,
     best_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_best_subset],
       weight_floor = control$weights$floor,
-      min_effective_range = control$weights$min_effective_range_best,
-      max_effective_range = control$weights$max_effective_range_best,
       verbose = control$io$verbose_weights
     )
 
     results$weight_best[results$is_best_subset] <- best_result$weights
     ESS_best <- best_result$metrics$ESS_kish
 
-    log_msg("  Best subset simulations: %d", sum(results$is_best_subset))
-    log_msg("  Adaptive effective range: %.1f (actual range: %.1f)",
-            best_result$effective_range, best_result$metrics$actual_range)
-    log_msg("  Temperature: %.4f", best_result$temperature)
-    log_msg("  ESS (Kish): %.1f", best_result$metrics$ESS_kish)
-    log_msg("  ESS (Perplexity): %.1f", best_result$metrics$ESS_perplexity)
+    log_msg("  n=%d | Range: %.1f (actual: %.1f) | T=%.4f | ESS: %.1f (Kish), %.1f (Perp)",
+            sum(results$is_best_subset), best_result$effective_range,
+            best_result$metrics$actual_range, best_result$temperature,
+            best_result$metrics$ESS_kish, best_result$metrics$ESS_perplexity)
   }
 
   # Save subset selection summary
@@ -1443,7 +1445,7 @@ run_MOSAIC <- function(config,
 
   if (n_retained > 0) {
     retained_weights_norm <- results$weight_retained[results$is_retained]
-    ess_retained <- 1 / sum(retained_weights_norm^2)
+    ess_retained <- calc_model_ess(retained_weights_norm, method = control$targets$ESS_method)
   } else {
     ess_retained <- NA_real_
   }
@@ -1512,6 +1514,7 @@ run_MOSAIC <- function(config,
       target_ess_param_prop = control$targets$ESS_param_prop,
 
       # Settings
+      ess_method = control$targets$ESS_method,
       temperature = gibbs_temperature_final,
       verbose = TRUE
     )
@@ -1620,9 +1623,8 @@ run_MOSAIC <- function(config,
   })
 
   if (!is.null(posterior_quantiles)) {
-    log_msg("Posterior quantiles complete:")
-    log_msg("  - Parameters processed: %d", nrow(posterior_quantiles))
-    log_msg("  - File created: posterior_quantiles.csv")
+    log_msg("Posterior quantiles: %d parameters → posterior_quantiles.csv",
+            nrow(posterior_quantiles))
 
     # Generate posterior quantiles plots
     if (control$paths$plots) {
@@ -1661,8 +1663,7 @@ run_MOSAIC <- function(config,
   })
 
   if (!is.null(posterior_analysis)) {
-    log_msg("Posterior distributions complete:")
-    log_msg("  - File created: posteriors.json")
+    log_msg("Posterior distributions → posteriors.json")
 
     # Generate posterior distribution plots
     if (control$paths$plots) {
@@ -1805,19 +1806,16 @@ run_MOSAIC <- function(config,
         param_weights <- NULL
       }
 
-      log_msg("Using %d parameter sets from best subset for ensemble uncertainty",
-              length(param_seeds))
-
       if (length(param_weights) > 0) {
-        log_msg("Using weighted ensemble with weights ranging from %.4f to %.4f",
-                min(param_weights), max(param_weights))
+        log_msg("Ensemble uncertainty: %d param sets (weights: %.4f-%.4f) × %d sims = %d total",
+                length(param_seeds), min(param_weights), max(param_weights),
+                control$predictions$ensemble_n_sims_per_param,
+                length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
+      } else {
+        log_msg("Ensemble uncertainty: %d param sets × %d sims = %d total",
+                length(param_seeds), control$predictions$ensemble_n_sims_per_param,
+                length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
       }
-
-      log_msg("  Using %d stochastic simulations per parameter set",
-              control$predictions$ensemble_n_sims_per_param)
-      log_msg("  Total simulations: %d param sets × %d sims = %d",
-              length(param_seeds), control$predictions$ensemble_n_sims_per_param,
-              length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
 
       tryCatch({
         plot_model_fit_stochastic_param(
@@ -1983,11 +1981,9 @@ run_MOSAIC <- function(config,
 
     # Check if NPE succeeded
     if (!is.null(posterior_samples)) {
-      log_msg("\nNPE completed successfully:")
-      log_msg("  - Posterior samples: %d", nrow(posterior_samples))
-      log_msg("  - Parameters estimated: %d", length(npe_data$param_names))
-      log_msg("  - Architecture tier: %s", arch_spec$tier)
-      log_msg("  - Transforms: %d", arch_spec$n_transforms)
+      log_msg("\nNPE complete: %d samples × %d params | %s tier (%d transforms)",
+              nrow(posterior_samples), length(npe_data$param_names),
+              arch_spec$tier, arch_spec$n_transforms)
 
       # Check diagnostics
       if (!is.null(diagnostics)) {
@@ -2260,14 +2256,17 @@ run_MOSAIC <- function(config,
           selected_log_probs <- posterior_log_probs[sample_indices]
           param_weights <- exp(selected_log_probs - max(selected_log_probs))
           param_weights <- param_weights / sum(param_weights)
-          log_msg("  Using weighted parameter sets based on posterior probabilities")
         }
 
-        log_msg("  Using %d stochastic simulations per parameter set",
-                control$predictions$ensemble_n_sims_per_param)
-        log_msg("  Total simulations: %d param sets × %d sims = %d",
-                n_param_sets, control$predictions$ensemble_n_sims_per_param,
-                n_param_sets * control$predictions$ensemble_n_sims_per_param)
+        if (!is.null(param_weights)) {
+          log_msg("  NPE ensemble: %d param sets (weighted) × %d sims = %d total",
+                  n_param_sets, control$predictions$ensemble_n_sims_per_param,
+                  n_param_sets * control$predictions$ensemble_n_sims_per_param)
+        } else {
+          log_msg("  NPE ensemble: %d param sets × %d sims = %d total",
+                  n_param_sets, control$predictions$ensemble_n_sims_per_param,
+                  n_param_sets * control$predictions$ensemble_n_sims_per_param)
+        }
 
         stochastic_param_plots <- plot_model_fit_stochastic_param(
           configs = param_configs,
@@ -2328,12 +2327,11 @@ run_MOSAIC <- function(config,
   runtime <- difftime(Sys.time(), start_time, units = "mins")
 
   log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("CALIBRATION COMPLETE - SUMMARY")
+  log_msg("CALIBRATION COMPLETE")
   log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("Total batches run: %d", state$batch_number)
-  log_msg("Total simulations: %d", state$total_sims_run)
-  log_msg("Convergence achieved: %s", ifelse(isTRUE(state$converged), "YES", "NO"))
-  log_msg("Total runtime: %.2f minutes", as.numeric(runtime))
+  log_msg("%d batches | %d simulations | Converged: %s | Runtime: %.2f min",
+          state$batch_number, state$total_sims_run,
+          ifelse(isTRUE(state$converged), "YES", "NO"), as.numeric(runtime))
 
   invisible(list(
     dirs = dirs,
@@ -2368,6 +2366,7 @@ run_mosaic <- run_MOSAIC
 #' \enumerate{
 #'   \item \code{calibration}: How to run (simulations, iterations, batch sizes)
 #'   \item \code{sampling}: What to sample (which parameters to vary)
+#'   \item \code{likelihood}: How to score model fit (likelihood components and weights)
 #'   \item \code{targets}: When to stop (ESS convergence thresholds)
 #'   \item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
 #'   \item \code{npe}: Post-calibration stage (neural posterior estimation)
@@ -2395,7 +2394,21 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 #'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
 #'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-#'     \item \code{sample_alpha_1}: Sample first dose efficacy (default: FALSE)
+#'     \item \code{sample_alpha_1}: Sample first dose efficacy (default: TRUE)
+#'     \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
+#'   }
+#'
+#' @param likelihood List of likelihood calculation settings (how to score model fit). Default is:
+#'   \itemize{
+#'     \item \code{add_max_terms}: Add negative binomial time-series likelihood (default: FALSE)
+#'     \item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
+#'     \item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
+#'     \item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
+#'     \item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
+#'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
+#'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
+#'     \item \code{enable_guardrails}: Enable sanity checks (default: FALSE)
+#'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
 #' @param targets List of convergence targets (when to stop). Default is:
@@ -2407,6 +2420,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{CVw_best}: Target CV of weights (default: 0.5)
 #'     \item \code{B_min}: Minimum best subset size (default: 30)
 #'     \item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
+#'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 #'   }
 #'
 #' @param fine_tuning List of fine-tuning batch sizes (advanced calibration). Default is:
@@ -2492,22 +2506,39 @@ run_mosaic <- run_MOSAIC
 #'   )
 #' )
 #'
+#' # Enable peak timing and magnitude penalties in likelihood
+#' ctrl <- mosaic_control_defaults(
+#'   likelihood = list(
+#'     add_peak_timing = TRUE,
+#'     add_peak_magnitude = TRUE,
+#'     weight_peak_timing = 0.5,
+#'     weight_peak_magnitude = 0.5
+#'   )
+#' )
+#'
+#' # Use perplexity method for ESS calculations
+#' ctrl <- mosaic_control_defaults(
+#'   targets = list(ESS_method = "perplexity")
+#' )
+#'
 #' # Full workflow configuration (demonstrates logical order)
 #' ctrl <- mosaic_control_defaults(
-#'   calibration = list(n_simulations = NULL, n_iterations = 3),  # How to run
-#'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),    # What to sample
-#'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),      # When to stop
-#'   fine_tuning = list(batch_sizes = list(final = 200)),         # Advanced calibration
-#'   npe = list(enable = TRUE, weight_strategy = "best_subset"),  # Post-calibration
-#'   parallel = list(enable = TRUE, n_cores = 16),                # Infrastructure
-#'   io = mosaic_io_presets("default"),                           # Output format
-#'   paths = list(clean_output = FALSE, plots = TRUE)             # File management
+#'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
+#'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
+#'   likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
+#'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
+#'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
+#'   npe = list(enable = TRUE, weight_strategy = "best_subset"),      # Post-calibration
+#'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
+#'   io = mosaic_io_presets("default"),                               # Output format
+#'   paths = list(clean_output = FALSE, plots = TRUE)                 # File management
 #' )
 #'
 #' @export
 #' @rdname mosaic_control_defaults
 mosaic_control_defaults <- function(calibration = NULL,
                            sampling = NULL,
+                           likelihood = NULL,
                            targets = NULL,
                            fine_tuning = NULL,
                            npe = NULL,
@@ -2529,14 +2560,93 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Default sampling settings
+  # All parameters enabled by default - users can selectively disable
   default_sampling <- list(
-    sample_tau_i = TRUE,
-    sample_mobility_gamma = TRUE,
-    sample_mobility_omega = TRUE,
-    sample_mu_j = TRUE,
-    sample_iota = TRUE,
-    sample_gamma_2 = TRUE,
-    sample_alpha_1 = FALSE
+    # === GLOBAL PARAMETERS (21) ===
+    # Transmission dynamics
+    sample_iota = TRUE,              # Environmental contamination rate
+    sample_epsilon = TRUE,           # Latent period rate
+    sample_gamma_1 = TRUE,           # Recovery rate (symptomatic)
+    sample_gamma_2 = TRUE,           # Recovery rate (asymptomatic)
+    sample_rho = TRUE,               # Proportion symptomatic
+
+    # Mobility
+    sample_mobility_gamma = TRUE,    # Gravity model exponent
+    sample_mobility_omega = TRUE,    # Mobility rate
+
+    # Vaccine efficacy
+    sample_alpha_1 = TRUE,           # Vaccine efficacy (1 dose)
+    sample_alpha_2 = TRUE,           # Vaccine efficacy (2 doses)
+    sample_omega_1 = TRUE,           # Waning rate (1 dose)
+    sample_omega_2 = TRUE,           # Waning rate (2 doses)
+    sample_phi_1 = TRUE,             # Vaccine coverage (1 dose)
+    sample_phi_2 = TRUE,             # Vaccine coverage (2 doses)
+
+    # Reporting/observation
+    sample_sigma = TRUE,             # Reporting rate
+    sample_kappa = TRUE,             # Overdispersion parameter
+
+    # Environmental decay
+    sample_decay_days_long = TRUE,   # Long-term environmental decay
+    sample_decay_days_short = TRUE,  # Short-term environmental decay
+    sample_decay_shape_1 = TRUE,     # Decay shape parameter 1
+    sample_decay_shape_2 = TRUE,     # Decay shape parameter 2
+
+    # Advanced parameters
+    sample_zeta_1 = TRUE,            # Advanced parameter 1
+    sample_zeta_2 = TRUE,            # Advanced parameter 2
+
+    # === LOCATION-SPECIFIC PARAMETERS (13) ===
+    # Transmission and seasonality
+    sample_beta_j0_tot = TRUE,       # Baseline transmission rate by location
+    sample_p_beta = TRUE,            # Proportion of seasonality
+    sample_tau_i = TRUE,             # Rainfall effect timing
+    sample_theta_j = TRUE,           # Temperature seasonal effect
+    sample_mu_j = TRUE,              # Baseline rate by location
+
+    # Climate relationship
+    sample_a1 = TRUE,                # Temperature coefficient 1
+    sample_a2 = TRUE,                # Temperature coefficient 2
+    sample_b1 = TRUE,                # Rainfall coefficient 1
+    sample_b2 = TRUE,                # Rainfall coefficient 2
+
+    # Psi-star calibration
+    sample_psi_star_a = TRUE,        # Psi-star parameter a
+    sample_psi_star_b = TRUE,        # Psi-star parameter b
+    sample_psi_star_z = TRUE,        # Psi-star parameter z
+    sample_psi_star_k = TRUE,        # Psi-star parameter k
+
+    # === INITIAL CONDITIONS (1) ===
+    sample_initial_conditions = TRUE  # Initial compartment proportions
+  )
+
+  # Default likelihood calculation settings
+  default_likelihood <- list(
+    # === Toggle components ===
+    add_max_terms = FALSE,           # Negative binomial time-series likelihood (baseline always included)
+    add_peak_timing = FALSE,         # Gaussian penalty on peak timing mismatch
+    add_peak_magnitude = FALSE,      # Log-normal penalty on peak magnitude mismatch
+    add_cumulative_total = FALSE,    # Penalty on cumulative case/death mismatch
+    add_wis = FALSE,                 # Weighted Interval Score (probabilistic scoring)
+
+    # === Component weights ===
+    weight_cases = 1.0,              # Weight for cases vs deaths
+    weight_deaths = 1.0,             # Weight for deaths vs cases
+    weight_max_terms = 0.5,          # Weight for time-series likelihood
+    weight_peak_timing = 0.5,        # Weight for peak timing penalty
+    weight_peak_magnitude = 0.5,     # Weight for peak magnitude penalty
+    weight_cumulative_total = 0.3,   # Weight for cumulative mismatch
+    weight_wis = 0.8,                # Weight for WIS score
+
+    # === Peak controls ===
+    sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)
+    sigma_peak_log = 0.5,            # Std dev for log peak magnitude
+    penalty_unmatched_peak = -3,     # Penalty when peak not detected
+
+    # === Guardrails ===
+    enable_guardrails = FALSE,       # Enable sanity checks on model output
+    floor_likelihood = -999999999,   # Floor value for invalid likelihoods
+    guardrail_verbose = FALSE        # Print guardrail diagnostics
   )
 
   # Default parallel settings
@@ -2572,7 +2682,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     A_best = 0.95,
     CVw_best = 0.5,
     B_min = 30,
-    percentile_max = 5.0
+    percentile_max = 5.0,
+    ESS_method = "kish"           # ESS calculation method: "kish" or "perplexity"
   )
 
   # Default NPE settings
@@ -2590,19 +2701,8 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default weight calculation settings
   default_weights <- list(
-    floor = 1e-15,                          # Minimum weight to prevent underflow
-
-    # Constraints for ALL valid simulations (for NPE continuous_all strategy)
-    min_effective_range_all = NULL,        # NULL = fully adaptive
-    max_effective_range_all = NULL,        # NULL = no upper bound
-
-    # Constraints for RETAINED subset (for plotting, ensemble predictions)
-    min_effective_range_retained = NULL,   # NULL = fully adaptive
-    max_effective_range_retained = NULL,   # NULL = no upper bound
-
-    # Constraints for BEST subset (for NPE priors, posterior inference)
-    min_effective_range_best = NULL,       # NULL = fully adaptive
-    max_effective_range_best = NULL        # NULL = no upper bound
+    floor = 1e-15,        # Minimum weight to prevent underflow (research-backed optimal value)
+    iqr_multiplier = 1.5  # Tukey IQR outlier detection multiplier (1.5 = standard, 3.0 = extreme outliers only)
   )
 
   # Default I/O settings
@@ -2615,10 +2715,11 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → targets → fine_tuning → npe → predictions → weights → parallel → io → paths
+  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → npe → predictions → weights → parallel → io → paths
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
+    likelihood = if (is.null(likelihood)) default_likelihood else modifyList(default_likelihood, likelihood),
     targets = if (is.null(targets)) default_targets else modifyList(default_targets, targets),
     fine_tuning = if (is.null(fine_tuning)) default_fine_tuning else modifyList(default_fine_tuning, fine_tuning),
     npe = if (is.null(npe)) default_npe else modifyList(default_npe, npe),
@@ -2686,12 +2787,7 @@ mosaic_run_defaults <- function() {
     ),
     weights = list(
       floor = 1e-15,
-      min_effective_range_all = NULL,
-      max_effective_range_all = NULL,
-      min_effective_range_retained = NULL,
-      max_effective_range_retained = NULL,
-      min_effective_range_best = NULL,
-      max_effective_range_best = NULL
+      iqr_multiplier = 1.5
     ),
     io = list(
       format = "parquet",

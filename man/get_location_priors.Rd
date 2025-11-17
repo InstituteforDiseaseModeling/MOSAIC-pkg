@@ -4,13 +4,13 @@
 \alias{get_location_priors}
 \title{Get Location-Specific Priors}
 \usage{
-get_location_priors(priors = NULL, iso)
+get_location_priors(iso, priors = NULL)
 }
 \arguments{
+\item{iso}{Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).}
+
 \item{priors}{A priors list object in the format of MOSAIC::priors_default.
 If NULL, will use MOSAIC::priors_default.}
-
-\item{iso}{Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).}
 }
 \value{
 A priors list object with the same structure as the input, containing:

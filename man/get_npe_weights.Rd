@@ -4,26 +4,42 @@
 \alias{get_npe_weights}
 \title{Get NPE Importance Weights}
 \usage{
-get_npe_weights(bfrs_results, strategy = "binary_best", verbose = FALSE)
+get_npe_weights(bfrs_results, strategy = "continuous_best", verbose = FALSE)
 }
 \arguments{
-\item{bfrs_results}{BFRS results object containing weight_retained and weight_best}
+\item{bfrs_results}{BFRS results object containing weight columns:
+\itemize{
+\item weight_all: Weights for all valid simulations
+\item weight_retained: Weights for retained subset
+\item weight_best: Weights for best subset
+\item Subset mask columns: is_valid, is_retained, is_best_subset
+}}
 
 \item{strategy}{Weight strategy:
-"continuous_all" - Gibbs weights for all simulations (effective AIC range = 25)
-"binary_all" - Equal weights for all simulations
-"continuous_retained" - Use BFRS continuous weights for retained subset
-"binary_retained" - Equal weights for all retained simulations
-"continuous_best" - Use BFRS continuous weights for best subset
-"binary_best" - Equal weights for all best subset simulations}
+\itemize{
+\item "continuous_all": Use weight_all column (all valid simulations)
+\item "binary_all": Equal weights for all simulations
+\item "continuous_retained": Use weight_retained column
+\item "binary_retained": Equal weights within retained subset
+\item "continuous_best": Use weight_best column (DEFAULT)
+\item "binary_best": Equal weights within best subset
+}}
 
 \item{verbose}{Print weight statistics}
 }
 \value{
-Vector of normalized weights
+Vector of normalized weights (length = nrow(bfrs_results))
 }
 \description{
-Retrieves or creates importance weights for NPE training from BFRS results.
-This function selects the appropriate pre-calculated BFRS weights or creates
-binary versions of them, avoiding recalculation issues.
+Retrieves NPE weights from pre-calculated BFRS weight columns.
+All weight calculations are performed in BFRS stage using adaptive method.
+This function simply selects the appropriate column based on strategy.
+}
+\details{
+Weight calculation is now unified in BFRS stage using adaptive Gibbs method.
+This eliminates redundant recalculation and ensures consistency between
+BFRS and NPE posterior estimates.
+
+The adaptive method automatically adjusts effective AIC range to prevent
+numerical underflow while maintaining discrimination among models.
 }

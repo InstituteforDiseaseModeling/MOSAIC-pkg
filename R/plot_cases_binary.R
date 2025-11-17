@@ -1,6 +1,3 @@
-library(dplyr)
-library(ggplot2)
-
 #' Plot Binary Environmental Suitability Indicator with Case Data
 #'
 #' This function creates a visualization showing cholera case counts over time with shaded regions
@@ -42,8 +39,6 @@ library(ggplot2)
 #'
 #' @export
 plot_cases_binary <- function(PATHS) {
-
-     require(dplyr)
 
      # Load processed suitability data with pre-computed cases_binary indicators
      message("Loading processed suitability data...")

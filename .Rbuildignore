@@ -9,5 +9,6 @@ src/
 docs/
 pkgdown/
 ^vignettes/articles$
+^vignettes/articles/generate_running_mosaic_figures\.R$
 ^\.github$
 ^claude$

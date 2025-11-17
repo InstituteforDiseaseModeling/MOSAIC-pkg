@@ -370,7 +370,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
     all_samples <- c(prior_samples, retained_samples, best_samples)
     finite_samples <- all_samples[is.finite(all_samples)]
     x_range <- range(finite_samples)
-    x_padding <- diff(x_range) * 0.05
+    # Use 10% padding to accommodate histogram bin edges (prevents geom_bar warnings)
+    x_padding <- diff(x_range) * 0.10
     x_limits <- c(x_range[1] - x_padding, x_range[2] + x_padding)
 
     # Create data frames (filter out invalid values to prevent ggplot warnings)

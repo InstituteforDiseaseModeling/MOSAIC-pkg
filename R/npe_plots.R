@@ -1508,9 +1508,7 @@ plot_npe_training_loss <- function(
     log_scale = FALSE,
     verbose = TRUE
 ) {
-    require(ggplot2)
-    require(dplyr)
-    require(tidyr)
+    # All required packages loaded via NAMESPACE
 
     log_msg <- function(msg, ...) {
         if (verbose) {

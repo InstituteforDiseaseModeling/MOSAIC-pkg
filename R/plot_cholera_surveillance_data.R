@@ -37,8 +37,7 @@ plot_cholera_surveillance_data <- function(PATHS, iso) {
      if (!requireNamespace("dplyr", quietly = TRUE))   stop("Package 'dplyr' required.")
      if (!requireNamespace("patchwork", quietly = TRUE)) stop("Package 'patchwork' required.")
 
-     library(ggplot2)
-     library(dplyr)
+     # All required packages loaded via NAMESPACE
 
      # Read combined weekly and daily data
      weekly_file <- file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_surveillance_weekly_combined.csv")

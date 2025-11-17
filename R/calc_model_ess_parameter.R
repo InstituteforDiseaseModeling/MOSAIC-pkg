@@ -9,6 +9,7 @@
 #' @param param_names Character vector of parameter names to analyze (required)
 #' @param likelihood_col Character name of the column containing log-likelihood values (default: "likelihood")
 #' @param n_grid Integer number of grid points for KDE evaluation (default: 100)
+#' @param method Character string specifying ESS calculation method: "kish" (default) or "perplexity"
 #' @param verbose Logical whether to print progress messages (default: FALSE)
 #'
 #' @return Data frame with columns:
@@ -40,8 +41,12 @@ calc_model_ess_parameter <- function(
     param_names,
     likelihood_col = "likelihood",
     n_grid = 100,
+    method = c("kish", "perplexity"),
     verbose = FALSE
 ) {
+
+    # Validate method parameter
+    method <- match.arg(method)
     
     # ==========================================================================
     # Input validation
@@ -167,9 +172,9 @@ calc_model_ess_parameter <- function(
     # Global importance weights
     w_global <- exp(log_lik_centered)
     w_global <- w_global / sum(w_global)
-    
-    # Global ESS using standard formula
-    ess_global <- 1 / sum(w_global^2)
+
+    # Global ESS using specified method
+    ess_global <- calc_model_ess(w_global, method = method)
     
     if (verbose) {
         log_msg("Global ESS: %.1f (%.1f%% of samples)",
@@ -343,10 +348,10 @@ calc_model_ess_parameter <- function(
         
         # Normalize
         w_marginal <- weight_ratio / sum(weight_ratio)
-        
-        # Calculate marginal ESS
-        ess_marginal_raw <- 1 / sum(w_marginal^2)
-        
+
+        # Calculate marginal ESS using specified method
+        ess_marginal_raw <- calc_model_ess(w_marginal, method = method)
+
         # Scale back to sample size
         # The grid-based ESS needs to be scaled by the ratio of samples to grid points
         ess_marginal <- ess_marginal_raw * (length(param_vals_clean) / n_grid)

@@ -260,7 +260,6 @@ plot_vaccine_effectiveness <- function(PATHS) {
 
      # ========== COMBINE PLOTS ==========
      if (requireNamespace("patchwork", quietly = TRUE)) {
-          library(patchwork)
           # One-dose plot
           combined_plot_1 <- p_decay_1 + (p_phi_1 / p_omega_1) + plot_layout(widths = c(3, 2))
           # Two-dose plot

@@ -7,10 +7,12 @@
 mosaic_control_defaults(
   calibration = NULL,
   sampling = NULL,
+  likelihood = NULL,
   targets = NULL,
   fine_tuning = NULL,
   npe = NULL,
   predictions = NULL,
+  weights = NULL,
   parallel = NULL,
   io = NULL,
   paths = NULL
@@ -36,7 +38,21 @@ mosaic_control_defaults(
 \item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 \item \code{sample_iota}: Sample importation rate (default: TRUE)
 \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-\item \code{sample_alpha_1}: Sample first dose efficacy (default: FALSE)
+\item \code{sample_alpha_1}: Sample first dose efficacy (default: TRUE)
+\item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
+}}
+
+\item{likelihood}{List of likelihood calculation settings (how to score model fit). Default is:
+\itemize{
+\item \code{add_max_terms}: Add negative binomial time-series likelihood (default: FALSE)
+\item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
+\item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
+\item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
+\item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
+\item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
+\item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
+\item \code{enable_guardrails}: Enable sanity checks (default: FALSE)
+\item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 
 \item{targets}{List of convergence targets (when to stop). Default is:
@@ -48,6 +64,7 @@ mosaic_control_defaults(
 \item \code{CVw_best}: Target CV of weights (default: 0.5)
 \item \code{B_min}: Minimum best subset size (default: 30)
 \item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
+\item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 }}
 
 \item{fine_tuning}{List of fine-tuning batch sizes (advanced calibration). Default is:
@@ -102,6 +119,7 @@ calibration strategy, parameter sampling, parallelization, and output options.
 \enumerate{
 \item \code{calibration}: How to run (simulations, iterations, batch sizes)
 \item \code{sampling}: What to sample (which parameters to vary)
+\item \code{likelihood}: How to score model fit (likelihood components and weights)
 \item \code{targets}: When to stop (ESS convergence thresholds)
 \item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
 \item \code{npe}: Post-calibration stage (neural posterior estimation)
@@ -151,16 +169,32 @@ ctrl <- mosaic_control_defaults(
   )
 )
 
+# Enable peak timing and magnitude penalties in likelihood
+ctrl <- mosaic_control_defaults(
+  likelihood = list(
+    add_peak_timing = TRUE,
+    add_peak_magnitude = TRUE,
+    weight_peak_timing = 0.5,
+    weight_peak_magnitude = 0.5
+  )
+)
+
+# Use perplexity method for ESS calculations
+ctrl <- mosaic_control_defaults(
+  targets = list(ESS_method = "perplexity")
+)
+
 # Full workflow configuration (demonstrates logical order)
 ctrl <- mosaic_control_defaults(
-  calibration = list(n_simulations = NULL, n_iterations = 3),  # How to run
-  sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),    # What to sample
-  targets = list(ESS_param = 500, ESS_param_prop = 0.95),      # When to stop
-  fine_tuning = list(batch_sizes = list(final = 200)),         # Advanced calibration
-  npe = list(enable = TRUE, weight_strategy = "best_subset"),  # Post-calibration
-  parallel = list(enable = TRUE, n_cores = 16),                # Infrastructure
-  io = mosaic_io_presets("default"),                           # Output format
-  paths = list(clean_output = FALSE, plots = TRUE)             # File management
+  calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
+  sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
+  likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
+  targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
+  fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
+  npe = list(enable = TRUE, weight_strategy = "best_subset"),      # Post-calibration
+  parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
+  io = mosaic_io_presets("default"),                               # Output format
+  paths = list(clean_output = FALSE, plots = TRUE)                 # File management
 )
 
 }

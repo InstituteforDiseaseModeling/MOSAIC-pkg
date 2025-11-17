@@ -33,7 +33,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,6 +86,7 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <span>  targets <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fine_tuning <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  npe <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  predictions <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  io <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  paths <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -138,6 +139,13 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <dd><p>List of NPE settings (post-calibration stage). Default is:</p><ul><li><p><code>enable</code>: Enable NPE training (default: FALSE)</p></li>
 <li><p><code>weight_strategy</code>: NPE weight strategy (default: "continuous_all")</p></li>
 </ul></dd>
+
+
+<dt id="arg-predictions">predictions<a class="anchor" aria-label="anchor" href="#arg-predictions"></a></dt>
+<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>best_model_n_sims</code>: Stochastic runs for best model (default: 100L)</p></li>
+<li><p><code>ensemble_n_param_sets</code>: Number of parameter sets in ensemble (default: 50L)</p></li>
+<li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 10L)</p></li>
+</ul><p>Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)</p></dd>
 
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
