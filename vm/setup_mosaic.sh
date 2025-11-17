@@ -23,7 +23,8 @@ sudo apt-get install -y \
   git \
   ca-certificates \
   build-essential \
-  gfortran
+  gfortran \
+  cmake
 
 # Install R and dependencies
 echo "[3/7] Installing R (>= 4.1.1)..."
@@ -51,10 +52,9 @@ sudo apt-get install -y \
   libtiff5-dev \
   libjpeg-dev \
   libhdf5-dev \
-  zlib1g-dev \
-  libabsl-dev
+  zlib1g-dev
 
-# Note: libabsl-dev is required for s2 R package (dependency of sf)
+# Note: cmake (installed above) allows s2 R package to build Abseil from source
 # Note: libarrow-dev removed - arrow R package will compile from source
 # This takes longer but avoids repository configuration issues
 
