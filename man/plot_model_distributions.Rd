@@ -8,7 +8,8 @@ plot_model_distributions(
   json_files,
   method_names,
   output_dir,
-  custom_colors = NULL
+  custom_colors = NULL,
+  verbose = FALSE
 )
 }
 \arguments{

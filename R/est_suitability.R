@@ -132,10 +132,7 @@ est_suitability <- function(PATHS,
                             train_prop = 0.6 # Proportion for training in initial split
 ) {
 
-     require(keras3)
-     require(tidyr)
-     require(ggplot2)
-     require(dplyr)
+     # All required packages loaded via NAMESPACE
 
 
      message("Loading merged suitability data...")

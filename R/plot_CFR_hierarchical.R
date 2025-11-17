@@ -61,11 +61,9 @@ plot_CFR_hierarchical <- function(
     if (!requireNamespace("scales", quietly = TRUE)) {
         stop("Package 'scales' is required. Please install it using: install.packages('scales')")
     }
-    
-    # Load necessary libraries
-    require(ggplot2)
-    require(scales)
-    
+
+    # All required packages loaded via NAMESPACE
+
     # Check that model outputs exist
     estimates_file <- file.path(PATHS$MODEL_INPUT, "cfr_hierarchical_estimates.csv")
     trend_file <- file.path(PATHS$MODEL_INPUT, "cfr_temporal_trend.csv")

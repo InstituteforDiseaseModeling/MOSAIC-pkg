@@ -23,6 +23,7 @@ calc_convergence_diagnostics(
   target_percentile_max = 5,
   target_ess_param = 300,
   target_ess_param_prop = 0.95,
+  ess_method = c("kish", "perplexity"),
   temperature = 1,
   verbose = TRUE
 )
@@ -70,6 +71,10 @@ parameter ESS metrics are omitted.}
 
 \item{target_ess_param_prop}{Numeric target proportion of parameters that must
 meet ESS threshold (default 0.95, meaning 95\%)}
+
+\item{ess_method}{Character string specifying ESS calculation method: "kish" (default)
+or "perplexity". This should match the method used for all ESS calculations in the
+workflow.}
 
 \item{temperature}{Numeric temperature parameter used for weight scaling
 (default 1, for documentation purposes)}
@@ -155,7 +160,8 @@ diagnostics <- calc_convergence_diagnostics(
     target_A_best = 0.95,
     target_cvw_best = 0.5,
     target_B_min = 100,
-    target_percentile_max = 5.0
+    target_percentile_max = 5.0,
+    ess_method = "kish"
 )
 
 # Save to JSON

@@ -32,6 +32,9 @@
 #' @param target_ess_param_prop Numeric target proportion of parameters that must
 #'   meet ESS threshold (default 0.95, meaning 95%)
 #'
+#' @param ess_method Character string specifying ESS calculation method: "kish" (default)
+#'   or "perplexity". This should match the method used for all ESS calculations in the
+#'   workflow.
 #' @param temperature Numeric temperature parameter used for weight scaling
 #'   (default 1, for documentation purposes)
 #' @param verbose Logical indicating whether to print diagnostic messages
@@ -104,7 +107,8 @@
 #'     target_A_best = 0.95,
 #'     target_cvw_best = 0.5,
 #'     target_B_min = 100,
-#'     target_percentile_max = 5.0
+#'     target_percentile_max = 5.0,
+#'     ess_method = "kish"
 #' )
 #'
 #' # Save to JSON
@@ -146,6 +150,7 @@ calc_convergence_diagnostics <- function(
     target_ess_param_prop = 0.95,
 
     # Settings
+    ess_method = c("kish", "perplexity"),
     temperature = 1,
     verbose = TRUE
 ) {
@@ -176,6 +181,9 @@ calc_convergence_diagnostics <- function(
         stopifnot("param_ess_results must have 'ess_marginal' column" =
                   "ess_marginal" %in% names(param_ess_results))
     }
+
+    # Validate and normalize ess_method
+    ess_method <- match.arg(ess_method)
 
     # ============================================================================
     # Calculate individual metric statuses
@@ -328,6 +336,7 @@ calc_convergence_diagnostics <- function(
             optimization_tier = convergence_tier,
             percentile_used = percentile_used,
             temperature = temperature,
+            ess_method = ess_method,
             description = "BFRS convergence with post-hoc optimization"
         ),
 

@@ -152,6 +152,16 @@
     return(NULL)
   }
 
+  # BUG FIX #1: Add missing phase tracking fields for backward compatibility
+  if (is.null(state$phase_batch_count)) {
+    state$phase_batch_count <- 0L
+    message("Added missing phase_batch_count field (legacy state file)")
+  }
+  if (is.null(state$phase_last)) {
+    state$phase_last <- NULL
+    message("Added missing phase_last field (legacy state file)")
+  }
+
   state
 }
 

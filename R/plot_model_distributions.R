@@ -41,11 +41,9 @@
 #' }
 #'
 #' @export
-plot_model_distributions <- function(json_files, method_names, output_dir, custom_colors = NULL) {
+plot_model_distributions <- function(json_files, method_names, output_dir, custom_colors = NULL, verbose = FALSE) {
 
-  library(ggplot2)
-  library(dplyr)
-  library(cowplot)
+  # All required packages loaded via NAMESPACE
 
   # Save current warning setting
   old_warn <- getOption("warn")
@@ -293,6 +291,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # Helper function to calculate distribution density
   calc_distribution_density <- function(dist_data, param_name, param_info) {
     x <- NULL; y <- NULL; dist_str <- NULL; mean_val <- NULL
+    failure_reason <- NULL  # Track why density calculation failed
 
     distribution <- dist_data$distribution
     parameters <- dist_data$parameters
@@ -347,36 +346,55 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
                      sqrt(log(1 + sigma^2 / mu^2))
                    } else NULL)
 
-      if (!is.null(meanlog_val) && !is.null(sdlog_val) &&
-          is.finite(meanlog_val) && is.finite(sdlog_val) && sdlog_val > 0) {
-
+      if (is.null(meanlog_val) || is.null(sdlog_val)) {
+        failure_reason <- "lognormal: meanlog or sdlog is NULL"
+      } else if (!is.finite(meanlog_val) || !is.finite(sdlog_val)) {
+        failure_reason <- sprintf("lognormal: non-finite params (meanlog=%.4g, sdlog=%.4g)", meanlog_val, sdlog_val)
+      } else if (sdlog_val <= 0) {
+        failure_reason <- sprintf("lognormal: sdlog <= 0 (%.4g)", sdlog_val)
+      } else {
         # Use quantile-based x-axis range for better coverage of extreme distributions
         x_min <- qlnorm(0.001, meanlog_val, sdlog_val)  # 0.1st percentile
         x_max <- qlnorm(0.999, meanlog_val, sdlog_val)  # 99.9th percentile
 
-        if (is.finite(x_max) && is.finite(x_min) && x_max > x_min) {
+        if (!is.finite(x_min) || !is.finite(x_max)) {
+          failure_reason <- sprintf("lognormal: non-finite quantiles (x_min=%.4g, x_max=%.4g)", x_min, x_max)
+        } else if (x_max <= x_min) {
+          failure_reason <- sprintf("lognormal: x_max <= x_min (%.4g <= %.4g)", x_max, x_min)
+        } else {
           x <- seq(x_min, x_max, length.out = 1000)
           y <- dlnorm(x, meanlog_val, sdlog_val)
 
           # Check if density is non-negligible (avoid flat lines from numerical precision issues)
           max_density <- max(y, na.rm = TRUE)
-          if (is.finite(max_density) && max_density > 1e-10) {
-            # Only keep points where density is meaningful (above threshold)
-            # This prevents plotting of numerically negligible densities
-            keep_idx <- y > max_density * 1e-6
-            x <- x[keep_idx]
-            y <- y[keep_idx]
-
-            dist_str <- sprintf("LogNormal(%.2g, %.2g)", meanlog_val, sdlog_val)
-            mean_val <- if (!is.null(parameters$fitted_mean) || !is.null(parameters$mean)) {
-              as.numeric(parameters$fitted_mean %||% parameters$mean)
-            } else {
-              exp(meanlog_val + sdlog_val^2/2)
-            }
-          } else {
-            # Density too small to plot meaningfully - return NULL
+          if (!is.finite(max_density)) {
+            failure_reason <- "lognormal: max_density is not finite"
             x <- NULL
             y <- NULL
+          } else if (max_density <= 0) {
+            failure_reason <- sprintf("lognormal: max_density is zero or negative (%.4g)", max_density)
+            x <- NULL
+            y <- NULL
+          } else {
+            # Very lenient filtering: keep points with density > 1e-12 × max
+            # This allows plotting of very diffuse/wide distributions with low peak density
+            # while still filtering out numerical noise near zero
+            keep_idx <- y > max_density * 1e-12
+            if (sum(keep_idx) == 0) {
+              failure_reason <- "lognormal: all points filtered out (y < threshold)"
+              x <- NULL
+              y <- NULL
+            } else {
+              x <- x[keep_idx]
+              y <- y[keep_idx]
+
+              dist_str <- sprintf("LogNormal(%.2g, %.2g)", meanlog_val, sdlog_val)
+              mean_val <- if (!is.null(parameters$fitted_mean) || !is.null(parameters$mean)) {
+                as.numeric(parameters$fitted_mean %||% parameters$mean)
+              } else {
+                exp(meanlog_val + sdlog_val^2/2)
+              }
+            }
           }
         }
       }
@@ -440,7 +458,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       }
     }
 
-    return(list(x = x, y = y, dist_str = dist_str, mean_val = mean_val))
+    return(list(x = x, y = y, dist_str = dist_str, mean_val = mean_val, failure_reason = failure_reason))
   }
 
   # =========================================================================
@@ -499,12 +517,20 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         # Skip failed distributions (marked by calc_model_posterior_distributions)
         if (param_data$distribution == "failed") {
           if (verbose) {
-            cat(sprintf("  Skipping %s for %s: distribution fitting failed\n",
+            cat(sprintf("  [SKIP] %s (%s): Distribution fitting failed\n",
                        param_name, method_name))
           }
           next
         }
         param_distributions[[method_name]] <- param_data
+      } else {
+        if (verbose && is.null(param_data)) {
+          cat(sprintf("  [MISSING] %s (%s): Parameter not found in JSON\n",
+                     param_name, method_name))
+        } else if (verbose && is.null(param_data$distribution)) {
+          cat(sprintf("  [MISSING] %s (%s): Distribution field is NULL\n",
+                     param_name, method_name))
+        }
       }
     }
 
@@ -517,10 +543,26 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       result <- calc_distribution_density(param_distributions[[method_name]], param_name, param_info)
       if (!is.null(result$x) && !is.null(result$y)) {
         method_results[[method_name]] <- result
+      } else {
+        if (verbose) {
+          dist_type <- param_distributions[[method_name]]$distribution
+          if (!is.null(result$failure_reason)) {
+            cat(sprintf("  [DENSITY FAIL] %s (%s): %s\n",
+                       param_name, method_name, result$failure_reason))
+          } else {
+            cat(sprintf("  [DENSITY FAIL] %s (%s): calc_distribution_density returned NULL for %s distribution\n",
+                       param_name, method_name, dist_type))
+          }
+        }
       }
     }
 
-    if (length(method_results) == 0) return(NULL)
+    if (length(method_results) == 0) {
+      if (verbose) {
+        cat(sprintf("  [NO PLOT] %s: No valid densities calculated for any method\n", param_name))
+      }
+      return(NULL)
+    }
 
     # Create combined plot data
     plot_data <- data.frame()
@@ -530,7 +572,11 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
       # Remove non-finite values
       finite_mask <- is.finite(result$x) & is.finite(result$y) & result$y > 0
-      if (sum(finite_mask) >= 10) {
+      n_finite <- sum(finite_mask)
+
+      # Lenient threshold: need at least 5 points for a meaningful plot
+      # (reduced from 10 to allow plotting of distributions with extreme tails)
+      if (n_finite >= 5) {
         method_data_df <- data.frame(
           x = result$x[finite_mask],
           y = result$y[finite_mask],
@@ -538,10 +584,20 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           stringsAsFactors = FALSE
         )
         plot_data <- rbind(plot_data, method_data_df)
+      } else {
+        if (verbose) {
+          cat(sprintf("  [FILTERED] %s (%s): Only %d finite points (need ≥5)\n",
+                     param_name, method_name, n_finite))
+        }
       }
     }
 
-    if (nrow(plot_data) == 0) return(NULL)
+    if (nrow(plot_data) == 0) {
+      if (verbose) {
+        cat(sprintf("  [NO PLOT] %s: No data survived finite value filtering\n", param_name))
+      }
+      return(NULL)
+    }
 
     # Ensure method factor levels are in the order they appear in method_names
     available_methods <- intersect(names(methods_data), unique(plot_data$method))

@@ -1,12 +1,12 @@
 #' Get Location-Specific Priors
 #'
-#' Extracts priors for specific location(s) from a priors object while maintaining 
-#' the exact structure of MOSAIC::priors_default. Keeps all global parameters and 
+#' Extracts priors for specific location(s) from a priors object while maintaining
+#' the exact structure of MOSAIC::priors_default. Keeps all global parameters and
 #' filters location-specific parameters to only include the requested location(s).
 #'
+#' @param iso Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).
 #' @param priors A priors list object in the format of MOSAIC::priors_default.
 #'   If NULL, will use MOSAIC::priors_default.
-#' @param iso Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).
 #'
 #' @return A priors list object with the same structure as the input, containing:
 #'   \itemize{
@@ -52,7 +52,7 @@
 #'   seed = 123
 #' )
 #' }
-get_location_priors <- function(priors = NULL, iso) {
+get_location_priors <- function(iso, priors = NULL) {
   
   # ============================================================================
   # Input validation

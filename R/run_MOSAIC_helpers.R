@@ -369,10 +369,15 @@
 #' @note "algo" mode is deprecated alias for "auto"
 #' @noRd
 .mosaic_normalize_n_sims <- function(n_sims) {
+  # Handle NULL as auto mode (for backward compatibility)
+  if (is.null(n_sims)) {
+    return(list(mode = "auto", fixed_target = NA_integer_))
+  }
+
   if (is.character(n_sims)) {
     v <- tolower(n_sims)
     if (!v %in% c("auto", "algo")) {
-      stop("n_sims must be 'auto' or a positive integer, got: ", n_sims,
+      stop("n_sims must be NULL, 'auto', or a positive integer, got: ", n_sims,
            call. = FALSE)
     }
     # Warn about deprecated alias
@@ -383,7 +388,7 @@
   } else if (is.numeric(n_sims) && length(n_sims) == 1L && is.finite(n_sims) && n_sims > 0) {
     list(mode = "fixed", fixed_target = as.integer(n_sims))
   } else {
-    stop("n_sims must be 'auto' or a positive integer", call. = FALSE)
+    stop("n_sims must be NULL, 'auto', or a positive integer", call. = FALSE)
   }
 }
 
@@ -401,8 +406,6 @@
     bfrs_post = file.path(dir_output, "1_bfrs/posterior"),
     bfrs_plots = file.path(dir_output, "1_bfrs/plots"),
     bfrs_plots_diag = file.path(dir_output, "1_bfrs/plots/diagnostics"),
-    bfrs_plots_params = file.path(dir_output, "1_bfrs/plots/parameters"),
-    bfrs_plots_params_detail = file.path(dir_output, "1_bfrs/plots/parameters/detail"),
     bfrs_plots_post = file.path(dir_output, "1_bfrs/plots/posterior"),
     bfrs_plots_pred = file.path(dir_output, "1_bfrs/plots/predictions"),
     results = file.path(dir_output, "3_results")
@@ -447,7 +450,10 @@
     converged = FALSE,
     predictive_done = FALSE,
     mode = nspec$mode,
-    fixed_target = nspec$fixed_target
+    fixed_target = nspec$fixed_target,
+    # BUG FIX #1: Track phase iterations to prevent premature phase transitions
+    phase_batch_count = 0L,
+    phase_last = NULL
   )
 }
 
@@ -467,13 +473,20 @@
 #' @noRd
 .mosaic_decide_next_batch <- function(state, control, ess_tracking) {
 
+  # Phase tracking is now managed in main loop
+  # This function just decides what to do next
+
   # Calibration phase
   if (identical(state$phase, "calibration") && !isTRUE(state$calibration_done)) {
-    return(list(phase = "calibration", batch_size = control$calibration$batch_size))
+    return(list(
+      phase = "calibration",
+      batch_size = control$calibration$batch_size
+    ))
   }
 
   # Predictive batch
-  if (!isTRUE(state$predictive_done)) {
+  # BUG FIX #3: Require calibration_done to be TRUE before running predictive
+  if (isTRUE(state$calibration_done) && !isTRUE(state$predictive_done)) {
     res <- tryCatch({
       calc_bookend_batch_size(
         ess_history = ess_tracking,
@@ -484,20 +497,46 @@
       )
     }, error = function(e) NULL)
 
+    # Log predictive batch calculation details
+    if (!is.null(res) && !is.null(res$model) && res$batch_size > 0) {
+      log_msg("Predictive batch calculation:")
+      log_msg("  Model: %s (R² = %.4f)", res$model, res$r_squared)
+      log_msg("  Current ESS: %.1f → Target: %d", res$current_ess, res$target_ess)
+      log_msg("  Predicted batch size: %d sims (safety factor: %.2f)",
+              res$batch_size, res$safety_factor)
+      log_msg("  Expected total after batch: %d sims", res$total_predicted)
+    }
+
     size <- if (is.null(res) || res$batch_size <= 0) {
+      if (!is.null(res) && !is.null(res$message)) {
+        log_msg("Predictive batch: %s", res$message)
+      }
       500L
     } else {
       as.integer(res$batch_size)
     }
 
-    return(list(phase = "predictive", batch_size = size))
+    return(list(
+      phase = "predictive",
+      batch_size = size
+    ))
   }
 
   # Fine-tuning phase (5-tier adaptive)
+  # BUG FIX #3: Use threshold_ess (percentile-based) instead of min_ess for consistency
   gap <- NA_real_
   if (length(ess_tracking)) {
-    cur_min <- tail(vapply(ess_tracking, `[[`, numeric(1), "min_ess"), 1)
-    gap <- control$targets$ESS_param - cur_min
+    cur_threshold <- tail(vapply(ess_tracking, `[[`, numeric(1), "threshold_ess"), 1)
+    gap <- control$targets$ESS_param - cur_threshold
+  }
+
+  # BUG FIX #5: If gap is negative or zero, we're done (or very close)
+  if (!is.na(gap) && gap <= 0) {
+    return(list(
+      phase = "fine_tuning",
+      batch_size = 0L,
+      message = "Target ESS achieved or exceeded"
+    ))
   }
 
   bs <- control$fine_tuning$batch_sizes
@@ -515,7 +554,10 @@
     bs$final
   }
 
-  list(phase = "fine_tuning", batch_size = as.integer(size))
+  list(
+    phase = "fine_tuning",
+    batch_size = as.integer(size)
+  )
 }
 
 #' ESS Check and Update State
@@ -547,10 +589,6 @@
     return(state)
   }
 
-  log_msg("  Loaded %d simulations in %.1f seconds (%.0f sims/sec)",
-          nrow(ess_check_results), as.numeric(load_time),
-          nrow(ess_check_results) / max(1, as.numeric(load_time)))
-
   # Skip ESS calculation if insufficient samples
   # calc_model_ess_parameter requires at least 50 samples for KDE
   if (nrow(ess_check_results) < 50) {
@@ -558,12 +596,13 @@
     return(state)
   }
 
-  # Calculate ESS
+  # Calculate ESS using specified method from control
   ess_current <- tryCatch({
     calc_model_ess_parameter(
       results = ess_check_results,
       param_names = param_names_est,
       likelihood_col = "likelihood",
+      method = control$targets$ess_method,
       verbose = FALSE
     )
   }, error = function(e) {
@@ -599,10 +638,20 @@
     max_ess = max(ess_current$ess_marginal, na.rm = TRUE)
   )
 
+  # Report current ESS status
+  log_msg("  ESS at %.0f%% percentile: %.1f (target: %d, min: %.1f)",
+          percentile_cutoff * 100,
+          threshold_ess,
+          control$targets$ESS_param,
+          min(ess_current$ess_marginal, na.rm = TRUE))
+
   # Calibration R² check
+  # ESS is calculated for ALL batches (data accumulates from batch 1)
+  # But calibration model fitting only starts when we have min_batches data points
+  # This ensures the model uses data from ALL batches (1, 2, 3, ..., N)
   if (identical(state$phase, "calibration") &&
       !isTRUE(state$calibration_done) &&
-      state$calib_batches >= control$calibration$min_batches &&
+      state$batch_number >= control$calibration$min_batches &&
       length(state$ess_tracking) >= control$calibration$min_batches) {
 
     ess_df <- data.frame(
@@ -610,23 +659,97 @@
       threshold_ess = vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess")
     )
 
-    ess_lm <- stats::lm(threshold_ess ~ sims, data = ess_df)
-    r2 <- summary(ess_lm)$r.squared
+    # Fit sqrt-linear model: ESS ~ sqrt(n) is typical scaling for importance sampling
+    ess_df$sqrt_sims <- sqrt(ess_df$sims)
+    ess_lm <- stats::lm(threshold_ess ~ sqrt_sims, data = ess_df)
+    lm_summary <- summary(ess_lm)
+    r2 <- lm_summary$r.squared
+    coef <- stats::coef(ess_lm)
+    intercept <- coef[1]
+    slope <- coef[2]
+
     state$calib_batches <- state$calib_batches + 1L
     state$calib_r2 <- r2
 
-    log_msg("Calibration R² = %.4f (target %.2f)", r2, control$calibration$target_r2)
-
-    if (r2 >= control$calibration$target_r2 ||
-        state$calib_batches >= control$calibration$max_batches) {
-      state$phase <- "predictive"
-      state$calibration_done <- TRUE
-      log_msg("  → Calibration complete, proceeding to predictive batch")
+    # Calculate estimated simulations to reach target ESS
+    # Model: ESS = intercept + slope × sqrt(n)
+    # Solving for n: n = ((target_ess - intercept) / slope)^2
+    target_ess <- control$targets$ESS_param
+    est_sims <- if (slope > 0 && (target_ess - intercept) > 0) {
+      ((target_ess - intercept) / slope)^2
+    } else {
+      NA_real_
     }
 
-  } else if (identical(state$phase, "predictive")) {
+    # Print model fit diagnostics
+    log_msg("Calibration convergence check (batch %d):", state$batch_number)
+    if (!is.na(est_sims)) {
+      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: %d",
+              intercept, slope, r2, control$calibration$target_r2, round(est_sims))
+    } else {
+      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: N/A",
+              intercept, slope, r2, control$calibration$target_r2)
+    }
+    log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
+            nrow(ess_df), state$batch_number, min(ess_df$sims), max(ess_df$sims))
+
+    # Check if calibration should end
+    if (r2 >= control$calibration$target_r2 ||
+        state$batch_number >= control$calibration$max_batches) {
+
+      # Calculate remaining gap
+      current_n <- nrow(ess_check_results)
+      remaining_sims <- if (!is.na(est_sims) && est_sims > current_n) {
+        est_sims - current_n
+      } else {
+        0
+      }
+
+      # Decide whether to end calibration or continue
+      # Check max_batches FIRST to ensure hard limit is enforced
+      if (state$batch_number >= control$calibration$max_batches) {
+        # Hit max batches limit - always exit regardless of R² or gap
+        state$calibration_done <- TRUE
+        if (r2 < control$calibration$target_r2) {
+          log_msg("  → Calibration complete: reached max_batches (%d) before R² converged (%.4f < %.2f)",
+                  control$calibration$max_batches, r2, control$calibration$target_r2)
+        } else {
+          log_msg("  → Calibration complete: reached max_batches (%d)",
+                  control$calibration$max_batches)
+        }
+        if (remaining_sims > 0) {
+          log_msg("    Estimated gap: %d sims → proceeding to predictive phase", ceiling(remaining_sims))
+        }
+
+      } else if (threshold_ess >= target_ess) {
+        # Already at or above target ESS
+        # Don't log here - convergence check will announce it
+        state$calibration_done <- TRUE
+
+      } else if (remaining_sims > 0 && remaining_sims < control$calibration$batch_size) {
+        # Small gap remaining - continue calibration instead of transitioning
+        log_msg("  → Calibration R² achieved, but gap is small")
+        log_msg("    Current: %d sims | Estimated need: %d sims | Gap: %d sims",
+                current_n, round(est_sims), ceiling(remaining_sims))
+        log_msg("    Continuing calibration (gap < batch_size)")
+        # Don't set calibration_done, continue with one more batch
+
+      } else {
+        # R² converged and gap is large enough for predictive phase
+        state$calibration_done <- TRUE
+        log_msg("  → Calibration complete: R² converged")
+        if (remaining_sims > 0) {
+          log_msg("    Estimated gap: %d sims → proceeding to predictive batch", ceiling(remaining_sims))
+        }
+      }
+    }
+
+  # BUG FIX #1: Only mark predictive as done after at least one batch has run
+  } else if (identical(state$phase, "predictive") &&
+             !is.null(state$phase_batch_count) &&
+             state$phase_batch_count >= 1) {
     state$predictive_done <- TRUE
-    state$phase <- "fine_tuning"
+    log_msg("  → Predictive batch complete, proceeding to fine-tuning")
   }
 
   # Check convergence
@@ -657,41 +780,36 @@
 #'
 #' @param likelihood Numeric vector of log-likelihood values
 #' @param weight_floor Minimum weight for any model (default: 1e-15)
-#'   Prevents numerical underflow by ensuring worst model gets at least this weight
-#' @param min_effective_range Minimum allowed effective AIC range (optional)
-#'   If specified, constrains temperature to ensure discrimination isn't too weak
-#' @param max_effective_range Maximum allowed effective AIC range (optional)
-#'   If specified, constrains temperature to prevent overly aggressive selection
+#'   Prevents numerical underflow by ensuring worst model gets at least this weight.
+#'   Research-backed value: 10× above machine epsilon, safe up to ΔAIC = 69.
 #' @param verbose Logical, print diagnostics
 #'
 #' @return List containing:
 #'   - weights: Normalized weight vector (sum = 1)
 #'   - temperature: Gibbs temperature used
 #'   - effective_range: Effective AIC range used for temperature calculation
-#'   - metrics: List with ESS_kish, ESS_perplexity, actual_range, n_valid, n_outliers
+#'   - metrics: List with ESS_kish, ESS_perplexity, actual_range, n_valid
 #'
 #' @details
 #' Algorithm:
 #' 1. Convert likelihood to AIC: aic = -2 * likelihood
 #' 2. Calculate delta_aic from best model
-#' 3. Remove outliers using Tukey IQR method (1.5 * IQR)
-#' 4. Calculate adaptive effective range to ensure w_min >= weight_floor
-#' 5. Apply optional min/max constraints
-#' 6. Calculate temperature: 0.5 * (effective_range / actual_range)
-#' 7. Compute Gibbs weights via calc_model_weights_gibbs
+#' 3. Calculate adaptive effective range to ensure w_min >= weight_floor
+#' 4. Calculate inverse temperature: eta = actual_range / effective_range
+#' 5. Compute Gibbs weights via calc_model_weights_gibbs
+#'
+#' The adaptive method automatically adjusts to prevent numerical underflow while
+#' maintaining discrimination among models. No manual tuning required.
 #'
 #' Edge cases:
 #' - All likelihoods identical: Returns uniform weights
 #' - Actual range < 1e-6: Returns uniform weights
 #' - Too few valid samples (< 2): Returns uniform weights
-#' - Outlier filtering fails: Uses all valid samples
 #'
 #' @noRd
 .mosaic_calc_adaptive_gibbs_weights <- function(
   likelihood,
   weight_floor = 1e-15,
-  min_effective_range = NULL,
-  max_effective_range = NULL,
   verbose = FALSE
 ) {
 
@@ -729,8 +847,7 @@
         ESS_kish = n_total,
         ESS_perplexity = n_total,
         actual_range = NA_real_,
-        n_valid = 0,
-        n_outliers = 0
+        n_valid = 0
       )
     ))
   }
@@ -746,8 +863,7 @@
         ESS_kish = n_total,
         ESS_perplexity = n_total,
         actual_range = NA_real_,
-        n_valid = n_valid,
-        n_outliers = 0
+        n_valid = n_valid
       )
     ))
   }
@@ -764,30 +880,10 @@
   delta_aic <- aic - best_aic
 
   # ===========================================================================
-  # Outlier removal using Tukey IQR method
+  # Calculate AIC range
   # ===========================================================================
 
-  q1 <- stats::quantile(delta_aic[valid_idx], 0.25, na.rm = TRUE)
-  q3 <- stats::quantile(delta_aic[valid_idx], 0.75, na.rm = TRUE)
-  iqr <- q3 - q1
-  outlier_threshold <- q3 + 1.5 * iqr
-
-  reasonable_idx <- valid_idx & delta_aic <= outlier_threshold
-  n_reasonable <- sum(reasonable_idx)
-  n_outliers <- n_valid - n_reasonable
-
-  # If outlier filtering removes too many points, keep all valid
-  if (n_reasonable < 10 && n_valid >= 10) {
-    reasonable_idx <- valid_idx
-    n_reasonable <- n_valid
-    n_outliers <- 0
-    if (verbose) {
-      message("  Outlier filtering removed too many points, using all valid samples")
-    }
-  }
-
-  # Calculate actual range from reasonable samples
-  actual_range <- diff(range(delta_aic[reasonable_idx], na.rm = TRUE))
+  actual_range <- diff(range(delta_aic[valid_idx], na.rm = TRUE))
 
   # ===========================================================================
   # Check for uniform case
@@ -807,8 +903,7 @@
         ESS_kish = n_total,
         ESS_perplexity = n_total,
         actual_range = actual_range,
-        n_valid = n_valid,
-        n_outliers = n_outliers
+        n_valid = n_valid
       )
     ))
   }
@@ -817,8 +912,8 @@
   # Calculate adaptive effective range
   # ===========================================================================
 
-  # Find worst delta_aic in reasonable group
-  max_delta_aic <- max(delta_aic[reasonable_idx], na.rm = TRUE)
+  # Find worst delta_aic across all valid models
+  max_delta_aic <- max(delta_aic[valid_idx], na.rm = TRUE)
 
   # Calculate effective_range needed to keep worst weight >= floor
   # From: exp(-max_delta_aic / (2*temp)) >= floor
@@ -828,32 +923,28 @@
   #   exp(-max_delta_aic * actual_range / effective_range) >= floor
   #   -max_delta_aic * actual_range / effective_range >= log(floor)
   #   effective_range >= -max_delta_aic * actual_range / log(floor)
-  effective_range_adaptive <- actual_range * max_delta_aic / (-log(weight_floor))
-
-  # Apply optional constraints
-  effective_range <- effective_range_adaptive
-  constraint_applied <- "none"
-
-  if (!is.null(min_effective_range) && effective_range < min_effective_range) {
-    effective_range <- min_effective_range
-    constraint_applied <- "min"
-  }
-
-  if (!is.null(max_effective_range) && effective_range > max_effective_range) {
-    effective_range <- max_effective_range
-    constraint_applied <- "max"
-  }
+  effective_range <- actual_range * max_delta_aic / (-log(weight_floor))
 
   # ===========================================================================
-  # Calculate temperature and weights
+  # Calculate inverse temperature (eta) and weights
   # ===========================================================================
 
+  # calc_model_weights_gibbs uses inverse temperature (eta) in: w ∝ exp(-eta * x)
+  # We want: exp(-max_delta_aic * eta) >= floor
+  # Therefore: eta = -log(floor) / max_delta_aic
+  #
+  # Alternatively, from temp = 0.5 * (effective_range / actual_range):
+  # eta = 1/(2*temp) = actual_range / effective_range
+  eta <- actual_range / effective_range
+
+  # For diagnostics, also calculate equivalent "temperature" in textbook sense
+  # (not used in weight calculation, just for reporting)
   temperature <- 0.5 * (effective_range / actual_range)
 
-  # Calculate Gibbs weights using existing function
+  # Calculate Gibbs weights using inverse temperature
   weights <- calc_model_weights_gibbs(
     x = delta_aic,
-    temperature = temperature,
+    temperature = eta,  # Note: this parameter is actually inverse temperature
     verbose = FALSE
   )
 
@@ -872,19 +963,10 @@
     message("Adaptive Gibbs Weight Calculation:")
     message("  Total models: ", n_total)
     message("  Valid models: ", n_valid)
-    message("  Outliers removed: ", n_outliers)
     message("  Actual ΔAIC range: ", sprintf("%.2f", actual_range))
-    message("  Max ΔAIC (reasonable): ", sprintf("%.2f", max_delta_aic))
+    message("  Max ΔAIC: ", sprintf("%.2f", max_delta_aic))
     message("  Weight floor: ", sprintf("%.2e", weight_floor))
-    message("  Adaptive effective range: ", sprintf("%.2f", effective_range_adaptive))
-
-    if (constraint_applied != "none") {
-      message("  Constraint applied: ", constraint_applied)
-      message("  Final effective range: ", sprintf("%.2f", effective_range))
-    } else {
-      message("  Effective range (final): ", sprintf("%.2f", effective_range))
-    }
-
+    message("  Adaptive effective range: ", sprintf("%.2f", effective_range))
     message("  Temperature: ", sprintf("%.4f", temperature))
     message("  ESS (Kish): ", sprintf("%.1f", ESS_kish))
     message("  ESS (Perplexity): ", sprintf("%.1f", ESS_perplexity))
@@ -902,10 +984,7 @@
       ESS_kish = ESS_kish,
       ESS_perplexity = ESS_perplexity,
       actual_range = actual_range,
-      n_valid = n_valid,
-      n_outliers = n_outliers,
-      effective_range_adaptive = effective_range_adaptive,
-      constraint_applied = constraint_applied
+      n_valid = n_valid
     )
   )
 }

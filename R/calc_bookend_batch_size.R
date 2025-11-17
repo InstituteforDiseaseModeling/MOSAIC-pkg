@@ -106,6 +106,18 @@ calc_bookend_batch_size <- function(ess_history,
 
     total_needed <- ceiling(total_needed)
 
+    # BUG FIX #5: Check if we're already past the predicted requirement
+    if (total_needed <= current_n) {
+        return(list(
+            phase = "complete",
+            batch_size = 0,
+            message = sprintf(
+                "Calibration already at/exceeded predicted requirement (current=%d, predicted=%d)",
+                current_n, total_needed
+            )
+        ))
+    }
+
     # Calculate predictive batch size
     # Total = current + predictive_batch + reserved_fine_tuning
     predictive_batch_size <- total_needed - current_n - reserved_sims
@@ -129,22 +141,28 @@ calc_bookend_batch_size <- function(ess_history,
     # Apply bounds
     predictive_batch_size <- max(0, predictive_batch_size)
 
+    # BUG FIX #5: Additional safety check for negative/zero batch size
+    if (predictive_batch_size <= 0) {
+        return(list(
+            phase = "complete",
+            batch_size = 0,
+            message = sprintf(
+                "Predicted batch size <= 0 after safety adjustments (gap_to_target=%.1f)",
+                gap_to_target
+            )
+        ))
+    }
+
     # Check against maximum
     if (current_n + predictive_batch_size + reserved_sims > max_total_sims) {
         predictive_batch_size <- max_total_sims - current_n - reserved_sims
     }
 
     # Predict ESS after the batch
-    if (best_model == "linear") {
-        predicted_ess <- predict(best_fit,
-            newdata = data.frame(n_sims = current_n + predictive_batch_size))
-    } else if (best_model == "sqrt") {
-        predicted_ess <- predict(best_fit,
-            newdata = data.frame(n_sims = sqrt(current_n + predictive_batch_size)))
-    } else {
-        predicted_ess <- predict(best_fit,
-            newdata = data.frame(n_sims = log(current_n + predictive_batch_size)))
-    }
+    # BUG FIX #2: Models expect raw n_sims, not pre-transformed values
+    # The model formula already applies the transformation (sqrt or log)
+    predicted_ess <- predict(best_fit,
+        newdata = data.frame(n_sims = current_n + predictive_batch_size))
 
     return(list(
         phase = "predictive",

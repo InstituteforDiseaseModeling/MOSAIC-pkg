@@ -57,8 +57,7 @@ plot_model_posterior_quantiles <- function(csv_files,
         stop("Package 'tools' is required but not installed.")
     }
 
-    library(ggplot2)
-    library(dplyr)
+    # All required packages loaded via NAMESPACE
 
     # Check files exist
     for (file in csv_files) {

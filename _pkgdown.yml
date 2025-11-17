@@ -11,6 +11,14 @@ navbar:
     left:  [intro, reference, articles, news]
     right: [search, github]
 
+articles:
+  - title: "Getting Started"
+    navbar: ~
+    contents:
+    - Installation
+    - Running-MOSAIC
+    - Deployment
+
 reference:
   - title: "Core Workflow"
     desc: Main functions for running MOSAIC simulations
