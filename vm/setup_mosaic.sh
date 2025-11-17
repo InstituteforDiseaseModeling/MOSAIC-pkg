@@ -102,9 +102,11 @@ if (!requireNamespace('sf', quietly = TRUE)) {
   }
 }
 
-cat('Installing terra...\n')
+cat('Installing terra (version compatible with GEOS 3.8)...\n')
 if (!requireNamespace('terra', quietly = TRUE)) {
-  install.packages('terra')
+  # Ubuntu 20.04 has GEOS 3.8, but current terra requires GEOS 3.10+
+  # Install terra 1.7-71 (last version compatible with GEOS 3.8)
+  remotes::install_version('terra', version = '1.7.71', repos = 'https://cloud.r-project.org')
   if (!requireNamespace('terra', quietly = TRUE)) {
     stop('Failed to install terra package')
   }
