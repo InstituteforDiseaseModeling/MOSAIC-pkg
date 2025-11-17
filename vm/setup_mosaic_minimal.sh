@@ -35,8 +35,10 @@ sudo apt-get install -y \
   libjpeg-dev \
   libhdf5-dev \
   zlib1g-dev \
+  libabsl-dev \
   python3 python3-pip python3-venv python3-dev
 
+# Note: libabsl-dev is required for s2 R package (dependency of sf)
 # Note: libarrow-dev removed - arrow R package will compile from source
 # This takes longer but avoids repository configuration issues
 
