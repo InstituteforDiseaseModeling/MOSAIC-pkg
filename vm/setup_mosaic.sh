@@ -132,7 +132,7 @@ sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 
 # Install Python dependencies
 echo "[7/7] Installing Python dependencies..."
-sudo Rscript -e "MOSAIC::install_dependencies()"
+sudo Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
 
 # Verify installation
 echo ""

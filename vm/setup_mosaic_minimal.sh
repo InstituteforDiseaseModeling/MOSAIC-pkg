@@ -66,7 +66,7 @@ Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 
 # Python dependencies
 echo "[3/3] Installing Python dependencies..."
-Rscript -e "MOSAIC::install_dependencies()"
+Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
 
 # Verify installation
 echo ""
