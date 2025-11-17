@@ -112,9 +112,11 @@ if (!requireNamespace('terra', quietly = TRUE)) {
   }
 }
 
-cat('Installing raster...\n')
+cat('Installing raster (version compatible with terra 1.7-71)...\n')
 if (!requireNamespace('raster', quietly = TRUE)) {
-  install.packages('raster')
+  # Latest raster requires terra >= 1.8.5, but we have terra 1.7-71
+  # Install raster 3.6-26 (compatible with terra 1.7-71)
+  remotes::install_version('raster', version = '3.6.26', repos = 'https://cloud.r-project.org')
   if (!requireNamespace('raster', quietly = TRUE)) {
     stop('Failed to install raster package')
   }
