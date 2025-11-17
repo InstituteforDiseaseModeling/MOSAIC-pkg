@@ -51,8 +51,10 @@ sudo apt-get install -y \
   libtiff5-dev \
   libjpeg-dev \
   libhdf5-dev \
-  zlib1g-dev
+  zlib1g-dev \
+  libabsl-dev
 
+# Note: libabsl-dev is required for s2 R package (dependency of sf)
 # Note: libarrow-dev removed - arrow R package will compile from source
 # This takes longer but avoids repository configuration issues
 
