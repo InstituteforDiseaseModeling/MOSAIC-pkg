@@ -12,6 +12,19 @@ echo "======================================"
 echo "Logging to: $LOG_FILE"
 echo ""
 
+# Check OS version
+OS_VERSION=$(lsb_release -rs 2>/dev/null || echo "unknown")
+echo "Detected OS: Ubuntu $OS_VERSION"
+echo ""
+
+# Clean up previous failed installations
+echo "[0/3] Cleaning up previous installation attempts..."
+rm -rf ~/.local/share/r-miniconda 2>/dev/null || true
+rm -rf ~/.virtualenvs 2>/dev/null || true
+rm -rf ~/.conda 2>/dev/null || true
+echo "Cleanup complete"
+echo ""
+
 # System libraries
 echo "[1/3] Installing system dependencies..."
 sudo apt-get update
@@ -88,13 +101,29 @@ if [ $? -eq 0 ]; then
   echo "======================================"
   echo "Installation complete and verified!"
   echo "======================================"
-  echo "Full log saved to: $LOG_FILE"
+  echo ""
+  echo "Installation Summary:"
+  echo "  - R version: $(R --version | head -1)"
+  echo "  - Python version: $(python3 --version)"
+  echo "  - MOSAIC R package: $(Rscript -e "cat(as.character(packageVersion('MOSAIC')))" 2>/dev/null)"
+  echo "  - Python environment: ~/.virtualenvs/r-mosaic"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"
+  echo "  2. View documentation: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/"
+  echo ""
+  echo "Full installation log saved to: $LOG_FILE"
 else
   echo ""
   echo "======================================"
   echo "Installation completed with errors"
-  echo "Please check the output above"
   echo "======================================"
-  echo "Full log saved to: $LOG_FILE"
+  echo ""
+  echo "Troubleshooting steps:"
+  echo "  1. Review the full log: cat $LOG_FILE"
+  echo "  2. Re-run this script (it will clean up previous attempts)"
+  echo "  3. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"
+  echo ""
+  echo "Full installation log saved to: $LOG_FILE"
   exit 1
 fi

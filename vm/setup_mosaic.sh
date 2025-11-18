@@ -12,6 +12,29 @@ echo "======================================"
 echo "Logging to: $LOG_FILE"
 echo ""
 
+# Check OS version
+OS_VERSION=$(lsb_release -rs 2>/dev/null || echo "unknown")
+OS_CODENAME=$(lsb_release -cs 2>/dev/null || echo "unknown")
+echo "Detected OS: Ubuntu $OS_VERSION ($OS_CODENAME)"
+
+if [ "$OS_VERSION" != "20.04" ]; then
+  echo "WARNING: This script is optimized for Ubuntu 20.04"
+  echo "You are running Ubuntu $OS_VERSION - installation may encounter issues"
+  echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
+  sleep 5
+fi
+echo ""
+
+# Clean up previous failed installations
+echo "[0/7] Cleaning up previous installation attempts..."
+rm -rf ~/.local/share/r-miniconda 2>/dev/null || true
+rm -rf ~/.virtualenvs 2>/dev/null || true
+rm -rf ~/.conda 2>/dev/null || true
+sudo rm -rf /root/.local/share/r-miniconda 2>/dev/null || true
+sudo rm -rf /root/.virtualenvs 2>/dev/null || true
+echo "Cleanup complete"
+echo ""
+
 # Update system
 echo "[1/7] Updating system packages..."
 sudo apt-get update
@@ -154,13 +177,32 @@ if [ $? -eq 0 ]; then
   echo "======================================"
   echo "Installation complete and verified!"
   echo "======================================"
-  echo "Full log saved to: $LOG_FILE"
+  echo ""
+  echo "Installation Summary:"
+  echo "  - R version: $(R --version | head -1)"
+  echo "  - Python version: $(python3 --version)"
+  echo "  - MOSAIC R package: $(Rscript -e "cat(as.character(packageVersion('MOSAIC')))" 2>/dev/null)"
+  echo "  - Python environment: ~/.virtualenvs/r-mosaic"
+  echo "  - Conda location: ~/.local/share/r-miniconda"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"
+  echo "  2. View documentation: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/"
+  echo "  3. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"
+  echo ""
+  echo "Full installation log saved to: $LOG_FILE"
 else
   echo ""
   echo "======================================"
   echo "Installation completed with errors"
-  echo "Please check the output above"
   echo "======================================"
-  echo "Full log saved to: $LOG_FILE"
+  echo ""
+  echo "Please check the error messages above and try the following:"
+  echo "  1. Review the full log: cat $LOG_FILE"
+  echo "  2. Check system requirements: Ubuntu 20.04, 8GB RAM, 20GB disk"
+  echo "  3. Re-run this script (it will clean up previous attempts)"
+  echo "  4. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"
+  echo ""
+  echo "Full installation log saved to: $LOG_FILE"
   exit 1
 fi
