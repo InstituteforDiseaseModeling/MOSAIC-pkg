@@ -1,7 +1,7 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.6.17
+Version: 0.6.18
 Date: 2025-11-17
 Authors@R: c(
           person("John R", "Giles", 
@@ -26,7 +26,6 @@ LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Remotes:
-  COVID-19-Mobility-Data-Network/mobility,
   gilesjohnr/propvacc
 Imports:
   arrow,
