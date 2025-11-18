@@ -857,7 +857,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
       for (category in categories_available) {
         category_info <- location_params_info %>%
-          filter(category == !!category) %>%
+          filter(category == .env$category) %>%
           arrange(order)
 
         category_plot_list <- list()
