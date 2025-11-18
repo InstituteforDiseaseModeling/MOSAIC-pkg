@@ -13,7 +13,8 @@ set -e
 # ==============================================================================
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_FILE="mosaic_ETH_${TIMESTAMP}.log"
+OUTPUT_DIR="$HOME/MOSAIC/output/ETH"
+LOG_FILE="${OUTPUT_DIR}/mosaic_ETH_${TIMESTAMP}.log"
 TMUX_SESSION="mosaic-eth"
 
 echo "========================================"
@@ -49,8 +50,8 @@ echo "[1/4] Setting up directory structure..."
 mkdir -p ~/MOSAIC
 cd ~/MOSAIC
 
-# Create output directory
-mkdir -p ~/MOSAIC/output/ETH
+# Create output directory (ensures log file can be written)
+mkdir -p "$OUTPUT_DIR"
 
 echo "  ✓ Directory structure ready"
 echo ""
@@ -187,5 +188,5 @@ echo "========================================"
 echo "MOSAIC ETH Run Complete"
 echo "========================================"
 echo "Log file: $LOG_FILE"
-echo "Output directory: ~/MOSAIC/output/ETH"
+echo "Output directory: $OUTPUT_DIR"
 echo ""
