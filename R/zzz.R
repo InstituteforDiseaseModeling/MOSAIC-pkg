@@ -64,18 +64,22 @@
           if (file.exists(mosaic_python)) {
                Sys.setenv(RETICULATE_PYTHON = mosaic_python)
 
-               # CRITICAL: Set LD_LIBRARY_PATH to include conda's lib directory
-               # This ensures reticulate uses conda's libstdc++ and other system libraries
-               # Fixes GLIBCXX version errors on older Linux systems (e.g., Ubuntu 20.04)
-               # where conda packages require newer glibc/libstdc++ than system provides
-               mosaic_lib_dir <- file.path(mosaic_env_dir, "lib")
-               if (dir.exists(mosaic_lib_dir) && .Platform$OS.type == "unix") {
-                    current_ld_path <- Sys.getenv("LD_LIBRARY_PATH", unset = "")
-                    if (current_ld_path == "") {
-                         Sys.setenv(LD_LIBRARY_PATH = mosaic_lib_dir)
-                    } else if (!grepl(mosaic_lib_dir, current_ld_path, fixed = TRUE)) {
-                         # Prepend conda lib to existing LD_LIBRARY_PATH
-                         Sys.setenv(LD_LIBRARY_PATH = paste(mosaic_lib_dir, current_ld_path, sep = ":"))
+               # CRITICAL FIX for GLIBCXX version errors on older Linux (e.g., Ubuntu 20.04)
+               # When R embeds Python via reticulate, Python C extensions (pyarrow, numba, etc.)
+               # need libstdc++ with GLIBCXX_3.4.29+, but Ubuntu 20.04 only has 3.4.28.
+               #
+               # Setting LD_LIBRARY_PATH doesn't work because R has already loaded system libstdc++.
+               # Solution: Use dyn.load() to explicitly preload conda's libstdc++ BEFORE reticulate
+               # initializes Python. This way, Python extensions use the preloaded version.
+               if (.Platform$OS.type == "unix") {
+                    mosaic_libstdcxx <- file.path(mosaic_env_dir, "lib", "libstdc++.so.6")
+                    if (file.exists(mosaic_libstdcxx)) {
+                         tryCatch({
+                              dyn.load(mosaic_libstdcxx, local = FALSE, now = TRUE)
+                         }, error = function(e) {
+                              # Silently ignore - may already be loaded or system incompatible
+                              # check_dependencies() will catch any resulting import errors
+                         })
                     }
                }
           }
