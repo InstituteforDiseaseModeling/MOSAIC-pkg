@@ -41,7 +41,19 @@ install_dependencies <- function(force = FALSE) {
      conda_path <- Sys.which("conda")
      conda_path_reticulate <- reticulate::miniconda_path()
 
-     if (nzchar(conda_path) || nzchar(conda_path_reticulate)) {
+     # Check if conda binary actually exists (not just if path is non-empty)
+     conda_binary_exists <- FALSE
+     if (nzchar(conda_path)) {
+          conda_binary_exists <- TRUE
+     } else if (nzchar(conda_path_reticulate)) {
+          # Check if conda binary exists in the miniconda path
+          potential_conda <- file.path(conda_path_reticulate, "bin", "conda")
+          if (file.exists(potential_conda)) {
+               conda_binary_exists <- TRUE
+          }
+     }
+
+     if (conda_binary_exists) {
 
           cli::cli_alert_success("Conda is available at: {conda_path} {conda_path_reticulate}")
 
@@ -49,7 +61,7 @@ install_dependencies <- function(force = FALSE) {
 
           cli::cli_alert_warning("No conda installation found. Installing Miniconda...")
           reticulate::install_miniconda(force)
-          new_conda_path <- reticulate::miniconda_path(force)
+          new_conda_path <- reticulate::miniconda_path()
           cli::cli_alert_success("Miniconda installed at: {new_conda_path}")
      }
 
