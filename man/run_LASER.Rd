@@ -34,7 +34,7 @@ run_laser(
 
 \item{outdir}{Character. Directory where LASER outputs (e.g., logs, results) will be written. Defaults to a temporary directory.}
 
-\item{py_module}{Python module. An optional pre-loaded reticulate LASER module. If NULL, the module is imported via reticulate::import("laser").}
+\item{py_module}{Python module. An optional pre-loaded reticulate LASER module. If NULL, the module is imported via reticulate::import("laser_cholera.metapop.model").}
 }
 \value{
 A Python object (reticulate) representing the LASER model simulation results.
