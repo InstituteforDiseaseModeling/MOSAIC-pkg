@@ -241,8 +241,8 @@ plot_model_fit_stochastic <- function(config,
             }, root_dir)
         }
 
-        # Export config to workers
-        parallel::clusterExport(cl, c("config"), envir = environment())
+        # Export config and worker function to workers
+        parallel::clusterExport(cl, c("config", "run_single_simulation"), envir = environment())
 
         # Run parallel simulations
         if (verbose) {
@@ -286,7 +286,17 @@ plot_model_fit_stochastic <- function(config,
     n_successful <- length(successful_results)
 
     if (n_successful == 0) {
-        stop("All simulations failed. Check model configuration.")
+        # Show sample error messages for debugging
+        failed_with_errors <- simulation_results[sapply(simulation_results, function(x) !is.null(x$error))]
+        if (length(failed_with_errors) > 0) {
+            sample_errors <- unique(sapply(failed_with_errors[1:min(3, length(failed_with_errors))],
+                                          function(x) x$error))
+            error_msg <- paste0("All simulations failed. Sample errors:\n  ",
+                              paste(sample_errors, collapse = "\n  "))
+            stop(error_msg)
+        } else {
+            stop("All simulations failed. Check model configuration.")
+        }
     }
 
     if (verbose) {
