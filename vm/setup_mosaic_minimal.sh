@@ -74,7 +74,7 @@ fi
 
 # MOSAIC R package
 echo "[2/3] Installing MOSAIC R package..."
-Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
+sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
   remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
 
 # Python dependencies
@@ -148,7 +148,16 @@ fi
 # Verify installation
 echo ""
 echo "Verifying installation..."
-Rscript -e "
+
+# Use wrapper script on Ubuntu 20.04 if it was created
+if [ "$OS_VERSION" = "20.04" ] && [ -x "$HOME/bin/r-mosaic-Rscript" ]; then
+  export PATH="$HOME/bin:$PATH"
+  R_CMD="r-mosaic-Rscript"
+else
+  R_CMD="Rscript"
+fi
+
+$R_CMD -e "
   library(MOSAIC)
   result <- tryCatch({
     MOSAIC::check_dependencies()
