@@ -602,7 +602,7 @@
       results = ess_check_results,
       param_names = param_names_est,
       likelihood_col = "likelihood",
-      method = control$targets$ess_method,
+      method = control$targets$ESS_method,
       verbose = FALSE
     )
   }, error = function(e) {

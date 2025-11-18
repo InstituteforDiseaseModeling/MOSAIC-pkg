@@ -286,18 +286,7 @@ sample_parameters <- function(
     cat(paste(rep("=", 50), collapse = ""), "\n", sep = "")
   }
 
-  # ============================================================================
-  # Store sampling metadata for later retrieval
-  # ============================================================================
-
-  # Store sampling flags in the config for later use in matrix reconstruction
-  # This enables convert_matrix_to_config to respect original sampling intent
-  config_sampled$`__sampling_metadata__` <- sampling_flags
-
-  if (verbose) {
-    cat("Stored sampling metadata for", length(sampling_flags), "parameters\n")
-  }
-
+  # Config is clean and ready for LASER - no R-specific metadata added
   return(config_sampled)
 }
 
