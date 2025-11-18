@@ -117,9 +117,9 @@ for f in "${candidates[@]}"; do
     break
   fi
 done
-# Ensure conda's lib directory is first for libexpat and other Python deps
-if [ -d "$HOME/.virtualenvs/r-mosaic/lib" ]; then
-  export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Preload libexpat from conda environment to avoid system's old version
+if [ -f "$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1" ]; then
+  export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1${LD_PRELOAD:+:$LD_PRELOAD}"
 fi
 # Set R library path to include user library
 export R_LIBS_USER="$HOME/R/library"
@@ -145,9 +145,9 @@ for f in "${candidates[@]}"; do
     break
   fi
 done
-# Ensure conda's lib directory is first for libexpat and other Python deps
-if [ -d "$HOME/.virtualenvs/r-mosaic/lib" ]; then
-  export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Preload libexpat from conda environment to avoid system's old version
+if [ -f "$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1" ]; then
+  export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1${LD_PRELOAD:+:$LD_PRELOAD}"
 fi
 # Set R library path to include user library
 export R_LIBS_USER="$HOME/R/library"
