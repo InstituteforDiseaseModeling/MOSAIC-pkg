@@ -19,8 +19,6 @@ dependencies:
   # Neural Posterior Estimation (NPE) dependencies
   - pytorch::pytorch=2.5.1  # Core PyTorch with MPS (Apple) and CUDA support
   - scikit-learn=1.5.2     # Used for StandardScaler in NPE training
-  # Mac-specific optimizations (automatically selected on Mac)
-  - libblas=*=*accelerate  # Use Apple's Accelerate framework on Mac
   - pip:
       - sbi==0.23.2        # Simulation-based inference toolkit (latest stable)
       - lampe              # Alternative NPE toolkit with better GPU support
