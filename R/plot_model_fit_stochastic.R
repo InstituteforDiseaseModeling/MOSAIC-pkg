@@ -181,13 +181,20 @@ plot_model_fit_stochastic <- function(config,
             # Run model
             model <- lc$run_model(paramfile = config_i, quiet = TRUE)
 
-            # Extract results
-            list(
+            # Extract results before cleanup
+            result <- list(
                 expected_cases = model$results$expected_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE,
                 seed = seed_i
             )
+
+            # Cleanup Python objects to prevent accumulation across tasks
+            gc(verbose = FALSE)
+            reticulate::py_gc()
+
+            # Return results
+            result
 
         }, error = function(e) {
             list(success = FALSE, seed = seed_i, error = as.character(e))
