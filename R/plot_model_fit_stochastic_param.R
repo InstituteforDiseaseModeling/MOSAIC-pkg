@@ -291,14 +291,21 @@ plot_model_fit_stochastic_param <- function(
             # Run model
             model <- lc$run_model(paramfile = param_config, quiet = TRUE)
 
-            # Return results with indices
-            list(
+            # Extract results before cleanup
+            result <- list(
                 param_idx = param_idx,
                 stoch_idx = stoch_idx,
                 expected_cases = model$results$expected_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE
             )
+
+            # Cleanup Python objects to prevent accumulation across tasks
+            gc(verbose = FALSE)
+            reticulate::py_gc()
+
+            # Return results
+            result
 
         }, error = function(e) {
             list(
