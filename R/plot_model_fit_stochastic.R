@@ -219,6 +219,9 @@ plot_model_fit_stochastic <- function(config,
 
         # Setup workers
         parallel::clusterEvalQ(cl, {
+            # Set library path for VM user installation
+            .libPaths(c('~/R/library', .libPaths()))
+
             library(MOSAIC)
             library(reticulate)
         })
