@@ -133,7 +133,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
   posterior_types <- c("posterior", "npe", "bfrs")
   params_with_posteriors <- quantiles_df %>%
     filter(type %in% posterior_types, !is.na(kl)) %>%
-    pull(parameter) %>%
+    dplyr::pull(parameter) %>%
     unique()
 
   if (verbose) cat("Found", length(params_with_posteriors), "parameters with posteriors\n")
@@ -869,7 +869,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
         # Get base parameter names for this category
         cat_params_base <- location_params_info %>%
           filter(category == cat) %>%
-          pull(parameter_name)
+          dplyr::pull(parameter_name)
 
         # Find matching parameters for this location
         cat_params <- c()

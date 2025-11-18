@@ -682,7 +682,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
     for (category in global_categories) {
       category_info <- global_params_info %>%
-        filter(category == !!category) %>%
+        filter(category == .env$category) %>%
         arrange(order)
 
       category_plot_list <- list()
