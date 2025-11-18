@@ -117,6 +117,10 @@ for f in "${candidates[@]}"; do
     break
   fi
 done
+# Ensure conda's lib directory is first for libexpat and other Python deps
+if [ -d "$HOME/.virtualenvs/r-mosaic/lib" ]; then
+  export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 # Set R library path to include user library
 export R_LIBS_USER="$HOME/R/library"
 # If we later want to hard-pin Python for reticulate:
@@ -141,6 +145,10 @@ for f in "${candidates[@]}"; do
     break
   fi
 done
+# Ensure conda's lib directory is first for libexpat and other Python deps
+if [ -d "$HOME/.virtualenvs/r-mosaic/lib" ]; then
+  export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 # Set R library path to include user library
 export R_LIBS_USER="$HOME/R/library"
 [ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
