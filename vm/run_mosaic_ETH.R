@@ -20,9 +20,12 @@ library(MOSAIC)
 
 MOSAIC::attach_mosaic_env(silent = FALSE)
 
+
 # Create output directory and set up logging
 dir_output <- path.expand("~/MOSAIC/output/ETH")
 if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
+
+set_root_directory("~/MOSAIC")
 
 log_file <- file.path(dir_output, paste0("mosaic_ETH_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
 log_con <- file(log_file, open = "wt")
