@@ -47,11 +47,18 @@ check_dependencies <- function() {
      }
 
      # -----------------------------------------------------------------------
-     # Activate the conda environment using reticulate and get the configuration.
+     # Properly initialize Python environment using attach_mosaic_env
+     # This ensures Python is initialized correctly, especially in non-interactive sessions
      # -----------------------------------------------------------------------
 
-     Sys.setenv(RETICULATE_PYTHON = paths$norm)
-     reticulate::use_condaenv(paths$norm, required = TRUE)
+     tryCatch({
+          MOSAIC::attach_mosaic_env(silent = TRUE)
+     }, error = function(e) {
+          cli::cli_alert_danger("Failed to attach Python environment: {e$message}")
+          cli::cli_text("To diagnose: {.run MOSAIC::check_python_env()}")
+          cli::cli_text("To reinstall: {.run MOSAIC::install_dependencies(force=TRUE)}")
+          return(invisible(NULL))
+     })
 
 
      # -----------------------------------------------------------------------
