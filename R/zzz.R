@@ -63,6 +63,21 @@
           # and check_python_env() in .onAttach will provide clear error
           if (file.exists(mosaic_python)) {
                Sys.setenv(RETICULATE_PYTHON = mosaic_python)
+
+               # CRITICAL: Set LD_LIBRARY_PATH to include conda's lib directory
+               # This ensures reticulate uses conda's libstdc++ and other system libraries
+               # Fixes GLIBCXX version errors on older Linux systems (e.g., Ubuntu 20.04)
+               # where conda packages require newer glibc/libstdc++ than system provides
+               mosaic_lib_dir <- file.path(mosaic_env_dir, "lib")
+               if (dir.exists(mosaic_lib_dir) && .Platform$OS.type == "unix") {
+                    current_ld_path <- Sys.getenv("LD_LIBRARY_PATH", unset = "")
+                    if (current_ld_path == "") {
+                         Sys.setenv(LD_LIBRARY_PATH = mosaic_lib_dir)
+                    } else if (!grepl(mosaic_lib_dir, current_ld_path, fixed = TRUE)) {
+                         # Prepend conda lib to existing LD_LIBRARY_PATH
+                         Sys.setenv(LD_LIBRARY_PATH = paste(mosaic_lib_dir, current_ld_path, sep = ":"))
+                    }
+               }
           }
      }
 
