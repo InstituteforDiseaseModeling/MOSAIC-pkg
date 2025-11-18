@@ -47,6 +47,12 @@ plot_model_posteriors_detail <- function(quantiles_file,
   }
   quantiles_df <- read.csv(quantiles_file, stringsAsFactors = FALSE)
 
+  # Ensure kl column exists (safety check for older CSV files)
+  if (!"kl" %in% names(quantiles_df)) {
+    quantiles_df$kl <- NA_real_
+    warning("'kl' column missing from quantiles file - added with NA values")
+  }
+
   # Load results data
   if (!file.exists(results_file)) {
     stop("Results file not found: ", results_file)
