@@ -7,6 +7,10 @@
 # - NPE enabled for posterior inference
 # ==============================================================================
 #
+# SETUP ON VM:
+# git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg.git ~/MOSAIC/MOSAIC-pkg
+# git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-data.git ~/MOSAIC/MOSAIC-data
+#
 # RUN ON VM WITH:
 # r-mosaic-Rscript ~/MOSAIC/MOSAIC-pkg/vm/run_mosaic_ETH.R
 #
