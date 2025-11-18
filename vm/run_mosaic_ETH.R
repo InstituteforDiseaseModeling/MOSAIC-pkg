@@ -48,18 +48,18 @@ config_ETH <- get_location_config(iso="ETH")
 
 control_ETH <- mosaic_control_defaults()
 
-control_ETH$calibration$n_simulations <- 10000
+control_ETH$calibration$n_simulations <- 'auto'
 control_ETH$calibration$n_iterations <- 5
 control_ETH$calibration$batch_size <- 1000
 control_ETH$calibration$min_batches <- 5
 control_ETH$calibration$max_batches <- 10
 control_ETH$calibration$max_simulations <- 1e+06
 
-control_ETH$parallel$enable <- FALSE
-control_ETH$parallel$n_cores <- 50
+control_ETH$parallel$enable <- TRUE
+control_ETH$parallel$n_cores <- 116
 
-control_ETH$targets$ESS_param <- 1000
-control_ETH$targets$ESS_param_prop <- 0.99
+control_ETH$targets$ESS_param <- 500
+control_ETH$targets$ESS_param_prop <- 0.975
 control_ETH$targets$ESS_best <- 100
 control_ETH$targets$ess_method <- 'perplexity'
 
@@ -72,8 +72,8 @@ control_ETH$sampling$sample_mobility_omega <- FALSE   # Mobility rate
 control_ETH$likelihood$weight_cases <- 1
 control_ETH$likelihood$weight_deaths <- 0.05
 
-control_ETH$predictions$best_model_n_sims <- 1000
-control_ETH$predictions$ensemble_n_sims_per_param <- 100
+control_ETH$predictions$best_model_n_sims <- 500
+control_ETH$predictions$ensemble_n_sims_per_param <- 50
 
 control_ETH$npe$enable <- TRUE
 control_ETH$npe$weight_strategy <- "continuous_retained"

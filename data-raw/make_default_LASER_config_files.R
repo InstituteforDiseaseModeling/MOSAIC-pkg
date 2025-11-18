@@ -123,7 +123,7 @@ mu_j_slope <- rep(0, length(j))
 names(mu_j_slope) <- j
 
 # Initialize mu_j_epidemic_factor to 0.5 (50% increase during epidemics by default)
-mu_j_epidemic_factor <- rep(0.5, length(j))
+mu_j_epidemic_factor <- rep(0, length(j))
 names(mu_j_epidemic_factor) <- j
 
 message("Created mu_j_baseline, mu_j_slope, and mu_j_epidemic_factor parameters from mu_jt")

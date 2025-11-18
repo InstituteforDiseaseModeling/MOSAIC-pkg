@@ -1389,7 +1389,7 @@ if (file.exists(mu_file)) {
                     #       ρ = reporting rate ≈ 0.63
 
                     sigma_mean <- 0.24  # Proportion symptomatic
-                    rho_mean <- 0.63    # Average reporting rate
+                    rho_mean <- 0.75 * mean(c(0.5, 0.75))    # Average reporting rate
 
                     # Calculate adjustment factor
                     cfr_to_ifr_adjustment <- sigma_mean * rho_mean  # ≈ 0.15
