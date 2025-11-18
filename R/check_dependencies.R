@@ -153,7 +153,7 @@ check_dependencies <- function() {
 
                tryCatch({
 
-                    module <- reticulate::import(pkg_import_name, delay_load = TRUE)
+                    module <- reticulate::import(pkg_import_name, delay_load = FALSE)
                     version <- module[["__version__"]]
 
                     # Show both the expected spec and actual version
@@ -173,7 +173,7 @@ check_dependencies <- function() {
                     }
 
                }, error = function(e) {
-                    cli::cli_alert_danger("{pkg_import_name} cannot be found in the Python environment (from spec: {pkg_spec}).")
+                    cli::cli_alert_danger("{pkg_import_name} cannot be imported: {e$message}")
                })
           }
 
