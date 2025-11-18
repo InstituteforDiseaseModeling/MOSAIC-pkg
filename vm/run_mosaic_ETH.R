@@ -7,6 +7,17 @@
 # - 5 iterations with adaptive batch sizing
 # - NPE enabled for posterior inference
 # ==============================================================================
+#
+# COPY-PASTE COMMAND FOR VM (SSH):
+# curl -sSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/launch_mosaic_ETH.sh | bash
+#
+# Or manual approach:
+# git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg.git ~/MOSAIC/MOSAIC-pkg
+# cd ~/MOSAIC/MOSAIC-pkg/vm
+# chmod +x launch_mosaic_ETH.sh
+# ./launch_mosaic_ETH.sh
+#
+# ==============================================================================
 
 # Set library path for VM user installation
 .libPaths(c('~/R/library', .libPaths()))
