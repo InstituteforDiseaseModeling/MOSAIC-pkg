@@ -57,6 +57,7 @@ Imports:
   minpack.lm,
   parallel,
   patchwork,
+  pbapply,
   propvacc,
   R.utils,
   raster,
