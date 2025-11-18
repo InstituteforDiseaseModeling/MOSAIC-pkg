@@ -772,6 +772,9 @@ run_MOSAIC <- function(config,
     parallel::clusterExport(cl, varlist = c(".root_dir_val"), envir = environment())
 
     parallel::clusterEvalQ(cl, {
+      # Set library path for VM user installation
+      .libPaths(c('~/R/library', .libPaths()))
+
       library(MOSAIC)
       library(reticulate)
       library(arrow)
