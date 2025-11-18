@@ -1,3 +1,16 @@
+# ==============================================================================
+# MOSAIC ETH Production Calibration
+# ==============================================================================
+# VM-compatible script for production-level Ethiopia calibration
+# - Works with minimal setup (VM installation)
+# - High ESS convergence targets (1000 per param, 99% convergence)
+# - 5 iterations with adaptive batch sizing
+# - NPE enabled for posterior inference
+# ==============================================================================
+
+# Set library path for VM user installation
+.libPaths(c('~/R/library', .libPaths()))
+
 # Load required packages
 library(MOSAIC)
 
