@@ -99,6 +99,16 @@ check_dependencies <- function() {
 
      env_yml_path <- system.file("py", "environment.yml", package = pkgname)
 
+     # Track capabilities
+     core_working <- TRUE
+     suitability_working <- TRUE
+     npe_working <- TRUE
+
+     # Define package categories
+     core_packages <- c("laser_cholera", "laser_core", "numpy", "h5py", "pyarrow")
+     suitability_packages <- c("tensorflow", "keras")
+     npe_packages <- c("torch", "sbi", "lampe", "zuko", "sklearn")
+
      if (file.exists(env_yml_path)) {
 
           env_specs <- yaml::read_yaml(env_yml_path)
@@ -125,13 +135,8 @@ check_dependencies <- function() {
           for (pkg_spec in pkg_names) {
 
                # Extract package name from version specifications
-               # Handle patterns like: "numpy=2.1.3", "sbi==0.23.2", "pytorch::pytorch=2.5.1"
                pkg_import_name <- pkg_spec
-
-               # Remove channel prefix if present (e.g., "pytorch::pytorch" -> "pytorch")
                pkg_import_name <- sub("^[^:]+::", "", pkg_import_name)
-
-               # Extract base package name (remove version specs)
                pkg_import_name <- sub("[=><!].*$", "", pkg_import_name)
 
                # Handle special import name mappings
@@ -151,12 +156,22 @@ check_dependencies <- function() {
                if (grepl("^https?://", pkg_spec)) next
                if (grepl("^libblas", pkg_import_name)) next
 
+               # Determine package category
+               pkg_category <- "other"
+               if (pkg_import_name %in% core_packages) {
+                    pkg_category <- "core"
+               } else if (pkg_import_name %in% suitability_packages) {
+                    pkg_category <- "suitability"
+               } else if (pkg_import_name %in% npe_packages) {
+                    pkg_category <- "npe"
+               }
+
                tryCatch({
 
                     module <- reticulate::import(pkg_import_name, delay_load = FALSE)
                     version <- module[["__version__"]]
 
-                    # Show both the expected spec and actual version
+                    # Show version with expected
                     if (grepl("[=><!]", pkg_spec)) {
                          expected <- sub("^[^=><!]+", "", pkg_spec)
                          cli::cli_alert_success("{pkg_import_name}: {version} (expected {expected})")
@@ -173,7 +188,19 @@ check_dependencies <- function() {
                     }
 
                }, error = function(e) {
-                    cli::cli_alert_danger("{pkg_import_name} cannot be imported: {e$message}")
+                    # Mark capability as broken
+                    if (pkg_category == "core") {
+                         core_working <<- FALSE
+                         cli::cli_alert_danger("{pkg_import_name} [CORE] cannot be imported: {e$message}")
+                    } else if (pkg_category == "suitability") {
+                         suitability_working <<- FALSE
+                         cli::cli_alert_warning("{pkg_import_name} [suitability] cannot be imported: {e$message}")
+                    } else if (pkg_category == "npe") {
+                         npe_working <<- FALSE
+                         cli::cli_alert_warning("{pkg_import_name} [NPE] cannot be imported: {e$message}")
+                    } else {
+                         cli::cli_alert_warning("{pkg_import_name} cannot be imported: {e$message}")
+                    }
                })
           }
 
@@ -188,52 +215,14 @@ check_dependencies <- function() {
      cli::cli_h2("Checking R package dependencies")
      cli::cli_alert_success("{R.version.string}")
 
-     if (!requireNamespace("tensorflow", quietly = TRUE)) {
-          cli::cli_alert_danger("The 'tensorflow' package is required but not installed. Please install it with install.packages('tensorflow').")
-          return(invisible(NULL))
-     } else {
-          cli::cli_alert_success("tensorflow: {as.character(packageVersion('tensorflow'))}")
+     # Note: R keras3/tensorflow packages are optional
+     # MOSAIC uses reticulate::import() directly, so R wrapper packages don't matter
+     if (requireNamespace("tensorflow", quietly = TRUE)) {
+          cli::cli_alert_info("tensorflow R package: {as.character(packageVersion('tensorflow'))} (optional)")
      }
 
-     if (!requireNamespace("keras3", quietly = TRUE)) {
-          cli::cli_alert_danger("The 'keras3' package is required but not installed. Please install it with install.packages('keras3').")
-          return(invisible(NULL))
-     } else {
-          cli::cli_alert_success("keras3: {as.character(packageVersion('keras3'))}")
-     }
-
-     # -----------------------------------------------------------------------
-     # Keras3 backend check.
-     # -----------------------------------------------------------------------
-
-     backend_name <- tryCatch({
-          keras3::config_backend()
-     }, error = function(e) {
-          cli::cli_alert_danger("keras3 backend is not available or failed to load. {e$message}")
-          return(invisible(NULL))
-     })
-
-     if (!is.null(backend_name)) {
-          cli::cli_alert_success("keras3 backend detected.")
-     } else {
-          cli::cli_alert_danger("keras3 is not connected to a valid backend. Run keras::install_keras() or MOSAIC::install_dependencies(force = TRUE).")
-          return(invisible(NULL))
-     }
-
-     tf_info <- tryCatch(
-
-          unlist(tensorflow::tf_config()),
-          error = function(e) {
-               cli::cli_alert_danger("Cannot confirm tensorflow backend: {e$message}")
-               return(invisible(NULL))
-          }
-     )
-
-     if (!is.null(tf_info) && as.logical(tf_info["available"])) {
-          cli::cli_alert_success("keras3 backend: tensorflow {tf_info[['version_str']]}")
-          cli::cli_alert_success("keras3 backend Python path: {tf_info[['python']]}")
-     } else {
-          cli::cli_alert_danger("TensorFlow backend does not appear to be available.")
+     if (requireNamespace("keras3", quietly = TRUE)) {
+          cli::cli_alert_info("keras3 R package: {as.character(packageVersion('keras3'))} (optional)")
      }
 
      # -----------------------------------------------------------------------
@@ -251,7 +240,39 @@ check_dependencies <- function() {
           print(config)
           cli::cli_text(paste0("RETICULATE_PYTHON: ", Sys.getenv('RETICULATE_PYTHON')))
           cli::cli_text("")
-          cli::cli_alert_success("All dependencies are confirmed. Your R session is ready to go!")
+
+          # -----------------------------------------------------------------------
+          # Capabilities Summary
+          # -----------------------------------------------------------------------
+
+          cli::cli_h2("Capabilities Summary")
+
+          if (core_working) {
+               cli::cli_alert_success("Core functionality: laser-cholera simulations, data processing")
+          } else {
+               cli::cli_alert_danger("Core functionality: BROKEN - laser-cholera cannot run")
+          }
+
+          if (suitability_working) {
+               cli::cli_alert_success("Suitability estimation: TensorFlow/Keras available")
+          } else {
+               cli::cli_alert_warning("Suitability estimation: Limited - TensorFlow/Keras import issues")
+               cli::cli_text("   Pre-computed suitability maps can still be used")
+          }
+
+          if (npe_working) {
+               cli::cli_alert_success("Neural Posterior Estimation: PyTorch/sbi/lampe available")
+          } else {
+               cli::cli_alert_warning("Neural Posterior Estimation: Limited - Some packages missing")
+               cli::cli_text("   Other calibration methods still available (BFRS, etc.)")
+          }
+
+          cli::cli_text("")
+          if (core_working) {
+               cli::cli_alert_success("MOSAIC is ready for use!")
+          } else {
+               cli::cli_alert_danger("MOSAIC installation needs attention - core packages failing")
+          }
 
      } else {
 
