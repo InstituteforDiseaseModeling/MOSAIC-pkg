@@ -355,6 +355,9 @@ calc_npe_diagnostics <- function(
 
         cl <- parallel::makeCluster(n_cores)
         parallel::clusterEvalQ(cl, {
+            # Set library path for VM user installation
+            .libPaths(c('~/R/library', .libPaths()))
+
             library(MOSAIC)  # Auto-attaches r-mosaic via .onAttach() hook
             library(reticulate)
             library(dplyr)
