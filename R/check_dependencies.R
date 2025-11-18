@@ -19,18 +19,8 @@ check_dependencies <- function() {
           cli::cli_alert_danger("The 'reticulate' package is required but not installed. Please install it with install.packages('reticulate').")
           return()
      }
-     if (!requireNamespace("keras3", quietly = TRUE)) {
-          cli::cli_alert_danger("The 'keras3' package is required but not installed. Please install it with install.packages('keras3').")
-          return()
-     }
-     if (!requireNamespace("tensorflow", quietly = TRUE)) {
-          cli::cli_alert_danger("The 'tensorflow' package is required but not installed. Please install it with install.packages('tensorflow').")
-          return()
-     }
 
      reticulate <- getNamespace("reticulate")
-     keras3     <- getNamespace("keras3")
-     tensorflow <- getNamespace("tensorflow")
 
      # -----------------------------------------------------------------------
      # Get the desired Python environment paths using MOSAIC::get_python_paths()
