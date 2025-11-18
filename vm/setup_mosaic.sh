@@ -130,9 +130,9 @@ echo "[7/7] Installing MOSAIC R package..."
 sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
   remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
 
-# Install Python dependencies
+# Install Python dependencies (run as user, not root)
 echo "[7/7] Installing Python dependencies..."
-sudo Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
+Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
 
 # Verify installation
 echo ""
