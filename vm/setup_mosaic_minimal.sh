@@ -78,8 +78,44 @@ Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
   remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
 
 # Python dependencies
-echo "[3/3] Installing Python dependencies..."
+echo "[3/4] Installing Python dependencies..."
 Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
+
+# Configure R wrapper for Ubuntu 20.04 GLIBCXX compatibility
+echo "[4/4] Configuring R wrapper for Ubuntu 20.04 compatibility..."
+if [ "$OS_VERSION" = "20.04" ]; then
+  # Verify conda library has required GLIBCXX symbols
+  if strings ~/.virtualenvs/r-mosaic/lib/libstdc++.so.6 | grep -q 'GLIBCXX_3\.4\.29'; then
+    echo "  ✓ Conda library has GLIBCXX_3.4.29+ symbols"
+
+    # Create ~/bin directory
+    mkdir -p ~/bin
+
+    # Create R wrapper script
+    cat > ~/bin/r-mosaic-R <<'EOF'
+#!/usr/bin/env bash
+# R wrapper that preloads newer C++ runtime from Python environment
+# This fixes GLIBCXX version conflicts on Ubuntu 20.04
+export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
+export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib:${LD_LIBRARY_PATH}"
+exec R "$@"
+EOF
+    chmod +x ~/bin/r-mosaic-R
+
+    # Add ~/bin to PATH if not already there
+    if ! grep -q 'export PATH="$HOME/bin:$PATH"' ~/.bashrc; then
+      echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+    fi
+
+    echo "  ✓ Created r-mosaic-R wrapper at ~/bin/r-mosaic-R"
+    echo "  ✓ Added ~/bin to PATH in ~/.bashrc"
+  else
+    echo "  ⚠ Warning: Conda library missing GLIBCXX_3.4.29+ symbols"
+    echo "  This may cause import errors with some Python packages"
+  fi
+else
+  echo "  Skipping wrapper creation (only needed for Ubuntu 20.04)"
+fi
 
 # Verify installation
 echo ""
@@ -108,9 +144,24 @@ if [ $? -eq 0 ]; then
   echo "  - MOSAIC R package: $(Rscript -e "cat(as.character(packageVersion('MOSAIC')))" 2>/dev/null)"
   echo "  - Python environment: ~/.virtualenvs/r-mosaic"
   echo ""
-  echo "Next steps:"
-  echo "  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"
-  echo "  2. View documentation: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/"
+
+  if [ "$OS_VERSION" = "20.04" ]; then
+    echo "Ubuntu 20.04 detected - Using r-mosaic-R wrapper:"
+    echo "  - The 'r-mosaic-R' command preloads compatible C++ libraries"
+    echo "  - This fixes GLIBCXX version conflicts with Python packages"
+    echo "  - Use 'r-mosaic-R' instead of 'R' for MOSAIC work"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Reload shell: source ~/.bashrc"
+    echo "  2. Test wrapper: r-mosaic-R -e 'library(MOSAIC); MOSAIC::check_dependencies()'"
+    echo "  3. Run your scripts: r-mosaic-R -f your_script.R"
+    echo "  4. Interactive session: r-mosaic-R"
+  else
+    echo "Next steps:"
+    echo "  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"
+  fi
+
+  echo "  5. View documentation: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/"
   echo ""
   echo "Full installation log saved to: $LOG_FILE"
 else
