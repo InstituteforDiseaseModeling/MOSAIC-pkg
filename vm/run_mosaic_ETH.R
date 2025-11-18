@@ -39,14 +39,9 @@ cat("===========================================================================
 
 start_time <- Sys.time()
 
-# Load default priors and config from package
-# Note: For location-specific calibration, clone MOSAIC-data and use:
-# set_root_directory("~/MOSAIC")
-# priors_ETH <- get_location_priors(iso="ETH")
-# config_ETH <- get_location_config(iso="ETH")
-priors_ETH <- priors_default
-config_ETH <- config_default
-config_ETH$iso <- "ETH"  # Set target country
+
+priors_ETH <- get_location_priors(iso="ETH")
+config_ETH <- get_location_config(iso="ETH")
 
 control_ETH <- mosaic_control_defaults()
 
