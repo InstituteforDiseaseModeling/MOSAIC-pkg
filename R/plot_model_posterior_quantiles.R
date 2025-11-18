@@ -175,6 +175,11 @@ plot_model_posterior_quantiles <- function(csv_files,
     # Combine all data
     combined_data <- dplyr::bind_rows(all_data)
 
+    # Ensure param_type exists in combined data (safety check)
+    if (!"param_type" %in% names(combined_data)) {
+        combined_data$param_type <- "global"
+    }
+
     if (verbose) {
         n_params <- length(unique(combined_data$parameter))
         n_global <- sum(combined_data$param_type == "global" & !duplicated(paste(combined_data$parameter, combined_data$type)))
