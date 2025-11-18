@@ -72,12 +72,39 @@ train_npe <- function(
           }
      }
 
+     # CRITICAL: Set BLAS threads to 1 BEFORE importing PyTorch
+     # This prevents OpenMP/MKL threading conflicts on clusters
+     # PyTorch initializes BLAS/MKL on import, which can hang/deadlock
+     # if R has already set BLAS threads differently
+     if (exists(".mosaic_set_blas_threads", envir = asNamespace("MOSAIC"), inherits = FALSE)) {
+          if (verbose) message("  Setting BLAS threads to 1 (prevents PyTorch conflicts)...")
+          MOSAIC:::.mosaic_set_blas_threads(1L)
+     }
+
+     # Also set environment variables as backup (in case .mosaic_set_blas_threads fails)
+     Sys.setenv(
+          OMP_NUM_THREADS = "1",
+          MKL_NUM_THREADS = "1",
+          OPENBLAS_NUM_THREADS = "1",
+          NUMEXPR_NUM_THREADS = "1"
+     )
+
      # Import Python modules (this will fail gracefully if environment not available)
-     if (verbose) message("  Importing Python modules (torch, numpy, zuko)...")
+     if (verbose) {
+          message("  Importing Python modules (torch, numpy, zuko)...")
+          message("    (This may take 30-60 seconds on cluster filesystems...)")
+     }
+
+     import_start_time <- Sys.time()
      tryCatch({
           torch <- reticulate::import("torch")
           np <- reticulate::import("numpy")
           zuko <- reticulate::import("zuko")
+
+          import_duration <- as.numeric(difftime(Sys.time(), import_start_time, units = "secs"))
+          if (verbose) {
+               message(sprintf("    Successfully imported in %.1f seconds", import_duration))
+          }
      }, error = function(e) {
           stop(paste0(
                "Failed to import required Python modules.\n\n",
