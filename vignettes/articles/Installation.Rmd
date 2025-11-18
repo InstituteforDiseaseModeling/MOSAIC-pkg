@@ -199,6 +199,27 @@ r-mosaic-R                                                     # Interactive
 
 **Note**: Ubuntu 22.04+ do not need this workaround. The wrappers only affect R/Rscript sessions started through them, not system-wide installations.
 
+**Optional: Mobility package for regenerating mobility estimates:**
+
+The `mobility` package is only needed if you want to regenerate mobility estimates from scratch. Most users can skip this - pre-computed mobility files are included in `model/input/`.
+
+```{r mobility-install}
+# Only install if you need to regenerate mobility data
+# Requires JAGS system library
+
+# macOS:
+# brew install jags
+
+# Ubuntu/Debian:
+# sudo apt-get install -y jags libjags-dev
+
+# Then install R packages:
+install.packages("rjags")
+remotes::install_github("COVID-19-Mobility-Data-Network/mobility")
+```
+
+**When is this needed?** Only if you're calling `MOSAIC::est_mobility()` to regenerate mobility matrices. Otherwise, use the pre-computed files included with the package.
+
 ---
 
 ## Next Steps
