@@ -4,21 +4,22 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.12
+  - python=3.11            # Python 3.12 too new for Ubuntu 20.04 compatible packages
   - pip
-  # Core dependencies (use >= for compatibility with older systems)
-  - numpy>=1.26,<3         # Required by laser-cholera and NPE
-  - pyarrow>=14            # Required for parquet I/O in R
+  # Pin to older versions compatible with Ubuntu 20.04 (GLIBCXX_3.4.28)
+  # These versions were released when Ubuntu 20.04 was current
+  - numpy=1.24.3           # Last 1.x series, pre-dates numpy 2.0 ABI break
+  - pyarrow=14.0.1         # 2024 Q1 release, compatible with older systems
   # LASER dependencies
-  - numba>=0.58            # Required by laser-cholera for JIT compilation
-  - llvmlite>=0.41         # Required by numba
+  - numba=0.58.1           # Compatible with numpy 1.24
+  - llvmlite=0.41.1        # Required by numba 0.58
   # TensorFlow/Keras for suitability estimation
-  - tensorflow>=2.15       # Used by est_suitability.R for LSTM models
-  - h5py>=3.9              # Required for saving Keras models
-  - packaging>=24          # Python dependency management
+  - tensorflow=2.15.0      # Last 2.15.x, widely compatible
+  - h5py=3.10.0            # Compatible with tensorflow 2.15
+  - packaging=24.0         # Python dependency management
   # Neural Posterior Estimation (NPE) dependencies
-  - pytorch::pytorch>=2.0  # Core PyTorch with MPS (Apple) and CUDA support
-  - scikit-learn>=1.3      # Used for StandardScaler in NPE training
+  - pytorch::pytorch=2.1.2 # 2023 release, Ubuntu 20.04 compatible
+  - scikit-learn=1.3.2     # 2023 release
   - pip:
       - sbi>=0.23          # Simulation-based inference toolkit
       - lampe              # Alternative NPE toolkit with better GPU support
