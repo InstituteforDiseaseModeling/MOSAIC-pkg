@@ -6,25 +6,23 @@ channels:
 dependencies:
   - python=3.12
   - pip
-  # System libraries (ensures compatibility with older Linux systems)
-  - libstdcxx-ng           # C++ standard library (fixes GLIBCXX errors on Ubuntu 20.04)
-  # Core dependencies
-  - numpy=2.1.3            # Required by laser-cholera and NPE
-  - pyarrow=18.1.0         # Required for parquet I/O in R
+  # Core dependencies (use >= for compatibility with older systems)
+  - numpy>=1.26,<3         # Required by laser-cholera and NPE
+  - pyarrow>=14            # Required for parquet I/O in R
   # LASER dependencies
-  - numba=0.61.0           # Required by laser-cholera for JIT compilation
-  - llvmlite=0.44.0        # Required by numba
+  - numba>=0.58            # Required by laser-cholera for JIT compilation
+  - llvmlite>=0.41         # Required by numba
   # TensorFlow/Keras for suitability estimation
-  - tensorflow=2.18.0      # Used by est_suitability.R for LSTM models
-  - h5py=3.12.1            # Required for saving Keras models
-  - packaging=24.2         # Python dependency management
+  - tensorflow>=2.15       # Used by est_suitability.R for LSTM models
+  - h5py>=3.9              # Required for saving Keras models
+  - packaging>=24          # Python dependency management
   # Neural Posterior Estimation (NPE) dependencies
-  - pytorch::pytorch=2.5.1  # Core PyTorch with MPS (Apple) and CUDA support
-  - scikit-learn=1.5.2     # Used for StandardScaler in NPE training
+  - pytorch::pytorch>=2.0  # Core PyTorch with MPS (Apple) and CUDA support
+  - scikit-learn>=1.3      # Used for StandardScaler in NPE training
   - pip:
-      - sbi==0.23.2        # Simulation-based inference toolkit (latest stable)
+      - sbi>=0.23          # Simulation-based inference toolkit
       - lampe              # Alternative NPE toolkit with better GPU support
       - zuko               # Normalizing flows library (required by lampe)
-      - keras==3.7.0       # Latest Keras 3 compatible with TF 2.18
+      - keras>=3.6         # Keras 3 compatible with TensorFlow 2.15+
       - laser-core==0.4.0
       - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.9.1/laser_cholera-0.9.1-py3-none-any.whl
