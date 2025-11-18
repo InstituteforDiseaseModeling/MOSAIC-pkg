@@ -48,14 +48,14 @@ config_ETH <- get_location_config(iso="ETH")
 
 control_ETH <- mosaic_control_defaults()
 
-control_ETH$calibration$n_simulations <- 'auto'
+control_ETH$calibration$n_simulations <- 10000
 control_ETH$calibration$n_iterations <- 5
 control_ETH$calibration$batch_size <- 1000
 control_ETH$calibration$min_batches <- 5
 control_ETH$calibration$max_batches <- 10
 control_ETH$calibration$max_simulations <- 1e+06
 
-control_ETH$parallel$enable <- TRUE
+control_ETH$parallel$enable <- FALSE
 control_ETH$parallel$n_cores <- 50
 
 control_ETH$targets$ESS_param <- 1000
