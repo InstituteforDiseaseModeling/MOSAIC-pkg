@@ -132,33 +132,72 @@ set_root_directory("~/MOSAIC")
 
 **Ubuntu 20.04 GLIBCXX compatibility:**
 
-Ubuntu 20.04 has an older C++ standard library (GLIBCXX_3.4.28) that conflicts with some Python packages requiring GLIBCXX_3.4.29+. The solution is to use an R wrapper that preloads the compatible library from the Python environment.
+Ubuntu 20.04 has an older C++ standard library (GLIBCXX_3.4.28) that conflicts with some Python packages requiring GLIBCXX_3.4.29+. The solution is to use R wrappers that preload the compatible library from the Python environment before R starts.
 
 This is automatically configured by the `vm/setup_mosaic_minimal.sh` script. For manual installations:
 
 ```{sh ubuntu-wrapper}
-# 1. Verify conda library has required symbols
-strings ~/.virtualenvs/r-mosaic/lib/libstdc++.so.6 | grep -E 'GLIBCXX_3\.4\.29|GLIBCXX_3\.4\.3[0-9]'
-
-# 2. Create R wrapper script
+# 1. Create ~/bin directory
 mkdir -p ~/bin
+
+# 2. Create R wrapper (for interactive sessions)
 cat > ~/bin/r-mosaic-R <<'EOF'
 #!/usr/bin/env bash
-export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
-export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib:${LD_LIBRARY_PATH}"
+# Find a modern libstdc++ inside common reticulate env locations
+candidates=(
+  "$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-reticulate/lib/libstdc++.so.6"
+)
+for f in "${candidates[@]}"; do
+  if [ -f "$f" ] && strings "$f" 2>/dev/null | grep -q "GLIBCXX_3\.4\.29"; then
+    export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"
+    export LD_LIBRARY_PATH="$(dirname "$f")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    break
+  fi
+done
+[ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
 exec R "$@"
 EOF
 chmod +x ~/bin/r-mosaic-R
 
-# 3. Add to PATH
+# 3. Create Rscript wrapper (for batch jobs)
+cat > ~/bin/r-mosaic-Rscript <<'EOF'
+#!/usr/bin/env bash
+# Same preload logic for Rscript
+candidates=(
+  "$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-reticulate/lib/libstdc++.so.6"
+)
+for f in "${candidates[@]}"; do
+  if [ -f "$f" ] && strings "$f" 2>/dev/null | grep -q "GLIBCXX_3\.4\.29"; then
+    export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"
+    export LD_LIBRARY_PATH="$(dirname "$f")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    break
+  fi
+done
+[ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
+exec Rscript "$@"
+EOF
+chmod +x ~/bin/r-mosaic-Rscript
+
+# 4. Add to PATH
 echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 
-# 4. Use r-mosaic-R instead of R
-r-mosaic-R -e 'library(MOSAIC); check_dependencies()'
+# 5. Use wrappers instead of R/Rscript
+r-mosaic-Rscript -e 'library(MOSAIC); check_dependencies()'  # Batch
+r-mosaic-R                                                     # Interactive
 ```
 
-**Note**: Ubuntu 22.04+ do not need this workaround. The wrapper only affects R sessions started with `r-mosaic-R`, not system-wide R installations.
+**Why both wrappers?**
+- `r-mosaic-R`: For interactive R sessions
+- `r-mosaic-Rscript`: For batch jobs and scripts (e.g., `r-mosaic-Rscript my_analysis.R`)
+
+**How it works**: The wrappers check multiple common Python environment locations and only set `LD_PRELOAD` if they find a library with GLIBCXX_3.4.29+ symbols. This makes the wrappers robust to different installation methods (virtualenvs, miniconda, reticulate auto-install).
+
+**Note**: Ubuntu 22.04+ do not need this workaround. The wrappers only affect R/Rscript sessions started through them, not system-wide installations.
 
 ---
 
