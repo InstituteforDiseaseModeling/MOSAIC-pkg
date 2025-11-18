@@ -130,6 +130,36 @@ getOption("root_directory")
 set_root_directory("~/MOSAIC")
 ```
 
+**Ubuntu 20.04 GLIBCXX compatibility:**
+
+Ubuntu 20.04 has an older C++ standard library (GLIBCXX_3.4.28) that conflicts with some Python packages requiring GLIBCXX_3.4.29+. The solution is to use an R wrapper that preloads the compatible library from the Python environment.
+
+This is automatically configured by the `vm/setup_mosaic_minimal.sh` script. For manual installations:
+
+```{sh ubuntu-wrapper}
+# 1. Verify conda library has required symbols
+strings ~/.virtualenvs/r-mosaic/lib/libstdc++.so.6 | grep -E 'GLIBCXX_3\.4\.29|GLIBCXX_3\.4\.3[0-9]'
+
+# 2. Create R wrapper script
+mkdir -p ~/bin
+cat > ~/bin/r-mosaic-R <<'EOF'
+#!/usr/bin/env bash
+export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
+export LD_LIBRARY_PATH="$HOME/.virtualenvs/r-mosaic/lib:${LD_LIBRARY_PATH}"
+exec R "$@"
+EOF
+chmod +x ~/bin/r-mosaic-R
+
+# 3. Add to PATH
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# 4. Use r-mosaic-R instead of R
+r-mosaic-R -e 'library(MOSAIC); check_dependencies()'
+```
+
+**Note**: Ubuntu 22.04+ do not need this workaround. The wrapper only affects R sessions started with `r-mosaic-R`, not system-wide R installations.
+
 ---
 
 ## Next Steps
