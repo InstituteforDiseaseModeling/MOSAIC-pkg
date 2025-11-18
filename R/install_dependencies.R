@@ -60,7 +60,7 @@ install_dependencies <- function(force = FALSE) {
      } else {
 
           cli::cli_alert_warning("No conda installation found. Installing Miniconda...")
-          reticulate::install_miniconda(force)
+          reticulate::install_miniconda(force = force)
           new_conda_path <- reticulate::miniconda_path()
           cli::cli_alert_success("Miniconda installed at: {new_conda_path}")
      }
