@@ -196,6 +196,13 @@
         }
       }
     }
+
+    # Explicit garbage collection to prevent Python object buildup
+    # Run every 10 iterations to balance cleanup vs overhead
+    if (j %% 10 == 0) {
+      gc(verbose = FALSE)
+      reticulate::py_gc()
+    }
   }
 
   # Trim output matrix to actual size used
