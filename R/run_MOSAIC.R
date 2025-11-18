@@ -2683,7 +2683,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     CVw_best = 0.5,
     B_min = 30,
     percentile_max = 5.0,
-    ESS_method = "kish"           # ESS calculation method: "kish" or "perplexity"
+    ESS_method = "perplexity"     # ESS calculation method: "kish" or "perplexity"
   )
 
   # Default NPE settings
