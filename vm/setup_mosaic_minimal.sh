@@ -74,12 +74,24 @@ fi
 
 # MOSAIC R package
 echo "[2/3] Installing MOSAIC R package..."
-sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
-  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
+# Install to user library to avoid permission issues
+# This is more portable and doesn't require sudo
+mkdir -p ~/R/library
+Rscript -e "
+  .libPaths(c('~/R/library', .libPaths()))
+  options(repos = c(CRAN = 'https://cloud.r-project.org'))
+  remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg',
+                         dependencies = TRUE,
+                         upgrade = 'never',
+                         lib = '~/R/library')
+"
 
 # Python dependencies
 echo "[3/4] Installing Python dependencies..."
-Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
+Rscript -e "
+  .libPaths(c('~/R/library', .libPaths()))
+  MOSAIC::install_dependencies(force = TRUE)
+"
 
 # Configure R wrapper for Ubuntu 20.04 GLIBCXX compatibility
 echo "[4/4] Configuring R wrapper for Ubuntu 20.04 compatibility..."
@@ -105,6 +117,8 @@ for f in "${candidates[@]}"; do
     break
   fi
 done
+# Set R library path to include user library
+export R_LIBS_USER="$HOME/R/library"
 # If we later want to hard-pin Python for reticulate:
 [ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
 exec R "$@"
@@ -127,6 +141,8 @@ for f in "${candidates[@]}"; do
     break
   fi
 done
+# Set R library path to include user library
+export R_LIBS_USER="$HOME/R/library"
 [ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
 exec Rscript "$@"
 EOF
@@ -158,6 +174,7 @@ else
 fi
 
 $R_CMD -e "
+  .libPaths(c('~/R/library', .libPaths()))
   library(MOSAIC)
   result <- tryCatch({
     MOSAIC::check_dependencies()
@@ -178,8 +195,15 @@ if [ $? -eq 0 ]; then
   echo "Installation Summary:"
   echo "  - R version: $(R --version | head -1)"
   echo "  - Python version: $(python3 --version)"
-  echo "  - MOSAIC R package: $(Rscript -e "cat(as.character(packageVersion('MOSAIC')))" 2>/dev/null)"
+  echo "  - MOSAIC R package: Installed to ~/R/library"
   echo "  - Python environment: ~/.virtualenvs/r-mosaic"
+  echo ""
+
+  # Set R_LIBS_USER permanently
+  if ! grep -q "R_LIBS_USER" ~/.Renviron 2>/dev/null; then
+    echo "R_LIBS_USER=~/R/library" >> ~/.Renviron
+    echo "  ✓ Added R_LIBS_USER to ~/.Renviron"
+  fi
   echo ""
 
   if [ "$OS_VERSION" = "20.04" ]; then
