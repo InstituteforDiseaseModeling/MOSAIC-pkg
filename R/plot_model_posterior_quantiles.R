@@ -225,7 +225,7 @@ plot_model_posterior_quantiles <- function(csv_files,
 
     if ("global" %in% plot_types) {
         global_data <- combined_data %>%
-            filter(param_type == "global") %>%
+            filter(.data$param_type == "global") %>%
             arrange(parameter)
 
         if (nrow(global_data) > 0) {
@@ -318,7 +318,7 @@ plot_model_posterior_quantiles <- function(csv_files,
 
     if ("location" %in% plot_types) {
         loc_data <- combined_data %>%
-            filter(param_type == "location") %>%
+            filter(.data$param_type == "location") %>%
             arrange(parameter)
 
         if (nrow(loc_data) > 0) {
