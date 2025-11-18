@@ -2,20 +2,13 @@
 # MOSAIC ETH Production Calibration
 # ==============================================================================
 # VM-compatible script for production-level Ethiopia calibration
-# - Works with minimal setup (VM installation)
 # - High ESS convergence targets (1000 per param, 99% convergence)
 # - 5 iterations with adaptive batch sizing
 # - NPE enabled for posterior inference
 # ==============================================================================
 #
-# COPY-PASTE COMMAND FOR VM (SSH):
-# curl -sSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/launch_mosaic_ETH.sh | bash
-#
-# Or manual approach:
-# git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg.git ~/MOSAIC/MOSAIC-pkg
-# cd ~/MOSAIC/MOSAIC-pkg/vm
-# chmod +x launch_mosaic_ETH.sh
-# ./launch_mosaic_ETH.sh
+# RUN ON VM WITH:
+# r-mosaic-Rscript ~/MOSAIC/MOSAIC-pkg/vm/run_mosaic_ETH.R
 #
 # ==============================================================================
 
@@ -27,14 +20,28 @@ library(MOSAIC)
 
 MOSAIC::attach_mosaic_env(silent = FALSE)
 
-# Set root directory (adjust path as needed)
+# Set root directory
 set_root_directory("~/MOSAIC")
-
-# Get standard MOSAIC paths
 PATHS <- get_paths()
 
+# Create output directory and set up logging
 dir_output <- "~/MOSAIC/output/ETH"
 if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
+
+log_file <- file.path(dir_output, paste0("mosaic_ETH_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".log"))
+log_con <- file(log_file, open = "wt")
+sink(log_con, type = "output", split = TRUE)  # Split = TRUE shows output in console too
+sink(log_con, type = "message")
+
+cat("==============================================================================\n")
+cat("MOSAIC ETH Production Calibration\n")
+cat("==============================================================================\n")
+cat("Start time:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+cat("Log file:", log_file, "\n")
+cat("Output directory:", dir_output, "\n")
+cat("==============================================================================\n\n")
+
+start_time <- Sys.time()
 
 
 priors_ETH <- get_location_priors(iso="ETH")
@@ -47,7 +54,7 @@ control_ETH$calibration$n_iterations <- 5
 control_ETH$calibration$batch_size <- 1000
 control_ETH$calibration$min_batches <- 5
 control_ETH$calibration$max_batches <- 10
-control_ETH$calibration$max_simulations <- 50000
+control_ETH$calibration$max_simulations <- 1e+06
 
 control_ETH$parallel$enable <- TRUE
 control_ETH$parallel$n_cores <- parallel::detectCores() - 4
@@ -82,4 +89,22 @@ result_ETH <- run_MOSAIC(
      control = control_ETH,
      resume = FALSE
 )
+
+# Report completion and runtime
+end_time <- Sys.time()
+runtime <- difftime(end_time, start_time, units = "hours")
+
+cat("\n==============================================================================\n")
+cat("MOSAIC ETH Calibration Complete\n")
+cat("==============================================================================\n")
+cat("End time:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n")
+cat("Total runtime:", round(runtime, 2), "hours\n")
+cat("Log file:", log_file, "\n")
+cat("Output directory:", dir_output, "\n")
+cat("==============================================================================\n")
+
+# Close log file
+sink(type = "message")
+sink(type = "output")
+close(log_con)
 
