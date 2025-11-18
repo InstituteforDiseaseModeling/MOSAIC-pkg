@@ -53,7 +53,7 @@ control_ETH$calibration$max_batches <- 10
 control_ETH$calibration$max_simulations <- 1e+06
 
 control_ETH$parallel$enable <- TRUE
-control_ETH$parallel$n_cores <- parallel::detectCores() - 4
+control_ETH$parallel$n_cores <- 50
 
 control_ETH$targets$ESS_param <- 1000
 control_ETH$targets$ESS_param_prop <- 0.99
