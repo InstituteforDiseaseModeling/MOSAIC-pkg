@@ -89,6 +89,8 @@
 
 .onAttach <- function(libname, pkgname) {
 
+     pkg_version <- utils::packageVersion("MOSAIC")
+
      packageStartupMessage(
           "\n",
           " __  __   ___   ____     _     ___  ____       __      ___    _____  _____   _____ ___\n",
@@ -98,7 +100,9 @@
           "|_|  |_| \\___/ |____//_/   \\_\\|___|\\____|          /_____//_/  |_|/____//_____//_/ |_|\n",
           "\n",
           "Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation\n",
-          "for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!\n"
+          "for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!\n",
+          "\n",
+          "Version: ", as.character(pkg_version), "\n"
      )
 
      # Only actively attach Python in interactive sessions
