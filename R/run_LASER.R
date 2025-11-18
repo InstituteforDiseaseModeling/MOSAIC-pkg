@@ -9,7 +9,7 @@
 #' @param visualize Logical. If TRUE, generate and display visualizations during the run. Defaults to FALSE.
 #' @param pdf Logical. If TRUE, save visualizations as PDF files. Defaults to FALSE.
 #' @param outdir Character. Directory where LASER outputs (e.g., logs, results) will be written. Defaults to a temporary directory.
-#' @param py_module Python module. An optional pre-loaded reticulate LASER module. If NULL, the module is imported via reticulate::import("laser_cholera").
+#' @param py_module Python module. An optional pre-loaded reticulate LASER module. If NULL, the module is imported via reticulate::import("laser_cholera.metapop.model").
 #'
 #' @return A Python object (reticulate) representing the LASER model simulation results.
 #'
@@ -42,7 +42,7 @@ run_LASER <- function(
 
      # Import LASER Python module if not provided
      if (is.null(py_module)) {
-          py_module <- reticulate::import("laser_cholera", convert = FALSE)
+          py_module <- reticulate::import("laser_cholera.metapop.model", convert = FALSE)
      }
 
      # Suppress NumPy divide-by-zero warnings
@@ -51,7 +51,7 @@ run_LASER <- function(
      warnings$filterwarnings("ignore", category = reticulate::import("numpy", convert = FALSE)$VisibleDeprecationWarning)
 
      # Execute the model
-     result <- py_module$metapop$model$run_model(
+     result <- py_module$run_model(
           paramfile = paramfile,
           seed      = as.integer(seed),
           visualize = visualize,
