@@ -408,6 +408,13 @@ run_npe_diagnostics <- function(
 .load_npe_model <- function(model_dir) {
     # Load saved NPE model
 
+    # Set BLAS threads before importing PyTorch
+    if (exists(".mosaic_set_blas_threads", envir = asNamespace("MOSAIC"), inherits = FALSE)) {
+        MOSAIC:::.mosaic_set_blas_threads(1L)
+    }
+    Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+               OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
+
     torch <- reticulate::import("torch")
 
     model_file <- file.path(model_dir, "npe_model.pt")
