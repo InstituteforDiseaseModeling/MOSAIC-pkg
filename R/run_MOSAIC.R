@@ -2371,31 +2371,9 @@ run_MOSAIC <- function(config,
       # Clean up NPE plotting artifacts
       gc(verbose = FALSE)
 
-      # =========================================================================
-      # CLEANUP OUTPUT FILES
-      # =========================================================================
-
-      log_msg(paste0("\n", paste(rep("=", 80), collapse = "")))
-      log_msg("CLEANING UP TIME SERIES FILES")
-      log_msg(paste(rep("=", 80), collapse = ""))
-
-      outputs_dir <- file.path(dirs$bfrs_out, "outputs")
-      if (dir.exists(outputs_dir)) {
-        output_files <- list.files(outputs_dir, pattern = "^out_.*\\.parquet$",
-                                   full.names = TRUE)
-        file_sizes_mb <- sum(file.size(output_files)) / 1024^2
-
-        log_msg("Removing %d individual output files (%.1f MB total)",
-                length(output_files), file_sizes_mb)
-        log_msg("Removing directory: %s", basename(outputs_dir))
-
-        unlink(outputs_dir, recursive = TRUE)
-
-        log_msg("Cleanup completed. Disk space freed: %.1f MB", file_sizes_mb)
-        log_msg("Note: BFRS metadata (simulations.parquet) preserved for future analysis")
-      } else {
-        log_msg("No outputs directory found to clean up")
-      }
+      # NOTE: Timeseries files are preserved in 1_bfrs/outputs/timeseries/
+      # These files allow fast loading of specific simulation subsets for analysis
+      # without needing to read/filter a large combined file.
     }
 
   } else {
