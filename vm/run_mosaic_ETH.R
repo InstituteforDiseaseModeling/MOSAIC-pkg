@@ -18,6 +18,12 @@
 # Load required packages
 library(MOSAIC)
 
+# Ensure no debug mode is active (from previous sessions)
+if (isdebugged(calc_convergence_diagnostics)) {
+  undebug(calc_convergence_diagnostics)
+}
+options(error = NULL)  # Disable error recovery browser
+
 MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
@@ -48,19 +54,19 @@ config_ETH <- get_location_config(iso="ETH")
 
 control_ETH <- mosaic_control_defaults()
 
-control_ETH$calibration$n_simulations <- 'auto'
-control_ETH$calibration$n_iterations <- 3
-control_ETH$calibration$batch_size <- 500
-control_ETH$calibration$min_batches <- 5
+control_ETH$calibration$n_simulations <- 1000
+control_ETH$calibration$n_iterations <- 1
+control_ETH$calibration$batch_size <- 200
+control_ETH$calibration$min_batches <- 3
 control_ETH$calibration$max_batches <- 10
 control_ETH$calibration$max_simulations <- 1e+06
 
 control_ETH$parallel$enable <- TRUE
-control_ETH$parallel$n_cores <- 116
+control_ETH$parallel$n_cores <- parallel::detectCores()-1
 
-control_ETH$targets$ESS_param <- 150
-control_ETH$targets$ESS_param_prop <- 0.975
-control_ETH$targets$ESS_best <- 50
+control_ETH$targets$ESS_param <- 100
+control_ETH$targets$ESS_param_prop <- 0.9
+control_ETH$targets$ESS_best <- 30
 control_ETH$targets$ess_method <- 'perplexity'
 
 control_ETH$fine_tuning$batch_sizes <- lapply(control_ETH$fine_tuning$batch_sizes, function(x) x*5)
@@ -72,8 +78,8 @@ control_ETH$sampling$sample_mobility_omega <- FALSE   # Mobility rate
 control_ETH$likelihood$weight_cases <- 1
 control_ETH$likelihood$weight_deaths <- 0.05
 
-control_ETH$predictions$best_model_n_sims <- 50
-control_ETH$predictions$ensemble_n_sims_per_param <- 10
+control_ETH$predictions$best_model_n_sims <- 30
+control_ETH$predictions$ensemble_n_sims_per_param <- 5
 
 control_ETH$npe$enable <- TRUE
 control_ETH$npe$weight_strategy <- "continuous_retained"
@@ -88,6 +94,12 @@ result_ETH <- run_MOSAIC(
      control = control_ETH,
      resume = FALSE
 )
+
+dir_output = dir_output
+config = config_ETH
+priors = priors_ETH
+control = control_ETH
+resume = FALSE
 
 # Report completion and runtime
 end_time <- Sys.time()
