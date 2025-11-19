@@ -324,8 +324,8 @@ est_WASH_coverage <- function(PATHS) {
           theme_minimal() +
           theme(
                plot.title = element_text(size = 16, face = "bold"),
-               axis.ticks.x = element_line(size = 0.5),
-               axis.ticks.y = element_line(size = 0.5),
+               axis.ticks.x = element_line(linewidth = 0.5),
+               axis.ticks.y = element_line(linewidth = 0.5),
                axis.title.y = element_text(size = 14, margin = margin(r = 20), lineheight = 1.2),  # Lineheight for wrapping
                panel.grid.minor = element_blank(),
                panel.grid.major.x = element_blank(),

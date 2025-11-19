@@ -127,7 +127,7 @@ plot_vaccine_effectiveness <- function(PATHS) {
 
      p_phi_1 <- ggplot(df_phi_1, aes(x = x, y = density)) +
           geom_area(fill = color_one_dose, alpha = 0.1) +
-          geom_line(size = 1.2) +
+          geom_line(linewidth = 1.2) +
           geom_vline(xintercept = phi_1_mean, linewidth = 1) +
           geom_vline(xintercept = phi_1_low, color = color_one_dose, linewidth = 0.9, linetype = 2) +
           geom_vline(xintercept = phi_1_high, color = color_one_dose, linewidth = 0.9, linetype = 2) +
@@ -150,7 +150,7 @@ plot_vaccine_effectiveness <- function(PATHS) {
 
      p_omega_1 <- ggplot(df_omega_1, aes(x = x, y = density)) +
           geom_area(fill = color_one_dose, alpha = 0.1) +
-          geom_line(size = 1.2) +
+          geom_line(linewidth = 1.2) +
           geom_vline(xintercept = omega_1_mean, linewidth = 1) +
           geom_vline(xintercept = omega_1_low, color = color_one_dose, linewidth = 0.9, linetype = 2) +
           geom_vline(xintercept = omega_1_high, color = color_one_dose, linewidth = 0.9, linetype = 2) +
@@ -219,7 +219,7 @@ plot_vaccine_effectiveness <- function(PATHS) {
 
      p_phi_2 <- ggplot(df_phi_2, aes(x = x, y = density)) +
           geom_area(fill = color_two_dose, alpha = 0.1) +
-          geom_line(size = 1.2) +
+          geom_line(linewidth = 1.2) +
           geom_vline(xintercept = phi_2_mean, linewidth = 1) +
           geom_vline(xintercept = phi_2_low, color = color_two_dose, linewidth = 0.9, linetype = 2) +
           geom_vline(xintercept = phi_2_high, color = color_two_dose, linewidth = 0.9, linetype = 2) +
@@ -242,7 +242,7 @@ plot_vaccine_effectiveness <- function(PATHS) {
 
      p_omega_2 <- ggplot(df_omega_2, aes(x = x, y = density)) +
           geom_area(fill = color_two_dose, alpha = 0.1) +
-          geom_line(size = 1.2) +
+          geom_line(linewidth = 1.2) +
           geom_vline(xintercept = omega_2_mean, linewidth = 1) +
           geom_vline(xintercept = omega_2_low, color = color_two_dose, linewidth = 0.9, linetype = 2) +
           geom_vline(xintercept = omega_2_high, color = color_two_dose, linewidth = 0.9, linetype = 2) +

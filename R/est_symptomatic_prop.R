@@ -54,9 +54,9 @@ est_symptomatic_prop <- function(PATHS) {
           ggplot(df_samples, aes(x = x)) +
           geom_histogram(aes(y = ..density..), bins = 35, fill = "#1B4F72", color='white', alpha = 0.5) +
           #stat_function(fun = dbeta, args = list(shape1 = prm$shape1, shape2 = prm$shape2), color = "black", size = 1) +
-          geom_line(data = df_beta, aes(x = x, y = y), color = "black", size = 1) +  # Plot Beta distribution
-          geom_vline(xintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", size = 0.25) +
-          geom_vline(xintercept = ci[2], linetype = "dashed", color = "grey20", size = 0.25) +
+          geom_line(data = df_beta, aes(x = x, y = y), color = "black", linewidth = 1) +  # Plot Beta distribution
+          geom_vline(xintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          geom_vline(xintercept = ci[2], linetype = "dashed", color = "grey20", linewidth = 0.25) +
           labs(title = "A", x = "", y = "") +
           scale_x_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
           scale_y_continuous(expand=c(0.005, 0.005)) +
@@ -64,7 +64,7 @@ est_symptomatic_prop <- function(PATHS) {
           theme(
                legend.position = "none",
                panel.grid.major.y = element_blank(),
-               panel.grid.major.x = element_line(color='grey80', size=0.25),
+               panel.grid.major.x = element_line(color='grey80', linewidth=0.25),
                panel.grid.minor = element_blank(),
                axis.title.x = element_text(margin = margin(t = 30), hjust=0.3),
                plot.margin = unit(c(0.25, 0.25, 0, 0), "inches")
@@ -106,7 +106,7 @@ est_symptomatic_prop <- function(PATHS) {
           theme(
                legend.position = "none",
                panel.grid.major.y = element_blank(),
-               panel.grid.major.x = element_line(color='grey80', size=0.25),
+               panel.grid.major.x = element_line(color='grey80', linewidth=0.25),
                panel.grid.minor = element_blank(),
                axis.title.x = element_text(margin = margin(t = 30), hjust=0.3),
                axis.title.y = element_text(margin = margin(r = 15)),

@@ -95,8 +95,8 @@ plot_CFR_by_country <- function(PATHS) {
 
      if (nrow(beta_density) > 0) {
           p3 <- ggplot2::ggplot(beta_density, ggplot2::aes(x = x, y = density, color = country)) +
-               ggplot2::geom_line(size = 1.25) +
-               ggplot2::geom_line(data=beta_density[beta_density$country == "AFRO Region",], size = 1.25) +
+               ggplot2::geom_line(linewidth = 1.25) +
+               ggplot2::geom_line(data=beta_density[beta_density$country == "AFRO Region",], linewidth = 1.25) +
                ggplot2::scale_color_manual(values = pal[selected_countries]) +
                ggplot2::scale_x_continuous(expand = c(0.005, 0.005)) +
                ggplot2::scale_y_continuous(expand = c(0.005, 0.005)) +
