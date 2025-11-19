@@ -615,31 +615,31 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
     # Determine x-axis formatting
     x_scale <- if (param_info$category == "initial_conditions" && param_name %in% c("prop_E_initial", "prop_I_initial")) {
-      scale_x_continuous(labels = scales::scientific)
+      ggplot2::scale_x_continuous(labels = scales::scientific)
     } else if (grepl("beta.*transmission", param_name)) {
-      scale_x_continuous(labels = scales::scientific)
+      ggplot2::scale_x_continuous(labels = scales::scientific)
     } else {
-      scale_x_continuous()
+      ggplot2::scale_x_continuous()
     }
 
     # Create plot
-    p <- ggplot(plot_data, aes(x = x, y = y, color = method, fill = method)) +
-      geom_area(alpha = 0.25, position = "identity") +  # Slightly lower alpha for better overlap visibility
-      geom_line(linewidth = 1.2) +  # Thicker lines for better distinguishability
-      scale_color_manual(values = method_colors[available_methods], name = "Method") +
-      scale_fill_manual(values = method_colors[available_methods], name = "Method") +
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = x, y = y, color = method, fill = method)) +
+      ggplot2::geom_area(alpha = 0.25, position = "identity") +  # Slightly lower alpha for better overlap visibility
+      ggplot2::geom_line(linewidth = 1.2) +  # Thicker lines for better distinguishability
+      ggplot2::scale_color_manual(values = method_colors[available_methods], name = "Method") +
+      ggplot2::scale_fill_manual(values = method_colors[available_methods], name = "Method") +
       x_scale +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(size = 9, hjust = 0.5, color = "gray50", face = "italic"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_text(size = 9),
-        panel.grid.minor = element_blank(),
-        panel.grid.major = element_line(color = "gray90"),
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, face = "bold", hjust = 0.5),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0.5, color = "gray50", face = "italic"),
+        axis.title.y = ggplot2::element_blank(),
+        axis.title.x = ggplot2::element_text(size = 9),
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.grid.major = ggplot2::element_line(color = "gray90"),
         legend.position = "none"  # Remove legend from individual plots
       ) +
-      labs(
+      ggplot2::labs(
         title = paste0(param_info$display_name, " (", param_name, ")"),
         subtitle = subtitle_str,
         x = param_info$units
@@ -652,7 +652,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           !param_distributions[[method_name]]$distribution %in% c("uniform")) {
         x_range <- range(plot_data$x, na.rm = TRUE)
         if (result$mean_val >= x_range[1] && result$mean_val <= x_range[2]) {
-          p <- p + geom_vline(xintercept = result$mean_val, linetype = "dashed",
+          p <- p + ggplot2::geom_vline(xintercept = result$mean_val, linetype = "dashed",
                              color = method_colors[method_name], alpha = 0.5)
         }
       }
@@ -728,16 +728,16 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           y = rep(c(0, 1), length(method_colors)),
           method = factor(rep(names(method_colors), each = 2), levels = names(method_colors))
         )
-        legend_plot <- ggplot(legend_data, aes(x = x, y = y, color = method, fill = method)) +
-          geom_area(alpha = 0.3) +
-          scale_color_manual(values = method_colors, name = "Method") +
-          scale_fill_manual(values = method_colors, name = "Method") +
-          theme_void() +
-          theme(legend.position = "top",
+        legend_plot <- ggplot2::ggplot(legend_data, ggplot2::aes(x = x, y = y, color = method, fill = method)) +
+          ggplot2::geom_area(alpha = 0.3) +
+          ggplot2::scale_color_manual(values = method_colors, name = "Method") +
+          ggplot2::scale_fill_manual(values = method_colors, name = "Method") +
+          ggplot2::theme_void() +
+          ggplot2::theme(legend.position = "top",
                 legend.direction = "horizontal",
                 legend.justification = "center",
-                legend.text = element_text(size = 12),
-                legend.key.size = unit(1.2, "cm"))
+                legend.text = ggplot2::element_text(size = 12),
+                legend.key.size = grid::unit(1.2, "cm"))
 
         # Extract just the legend
         legend_grob <- cowplot::get_legend(legend_plot)
@@ -897,16 +897,16 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
             y = rep(c(0, 1), length(method_colors)),
             method = factor(rep(names(method_colors), each = 2), levels = names(method_colors))
           )
-          legend_plot <- ggplot(legend_data, aes(x = x, y = y, color = method, fill = method)) +
-            geom_area(alpha = 0.3) +
-            scale_color_manual(values = method_colors, name = "Method") +
-            scale_fill_manual(values = method_colors, name = "Method") +
-            theme_void() +
-            theme(legend.position = "top",
+          legend_plot <- ggplot2::ggplot(legend_data, ggplot2::aes(x = x, y = y, color = method, fill = method)) +
+            ggplot2::geom_area(alpha = 0.3) +
+            ggplot2::scale_color_manual(values = method_colors, name = "Method") +
+            ggplot2::scale_fill_manual(values = method_colors, name = "Method") +
+            ggplot2::theme_void() +
+            ggplot2::theme(legend.position = "top",
                   legend.direction = "horizontal",
                   legend.justification = "center",
-                  legend.text = element_text(size = 12),
-                  legend.key.size = unit(1.2, "cm"))
+                  legend.text = ggplot2::element_text(size = 12),
+                  legend.key.size = grid::unit(1.2, "cm"))
 
           legend_grob <- cowplot::get_legend(legend_plot)
 

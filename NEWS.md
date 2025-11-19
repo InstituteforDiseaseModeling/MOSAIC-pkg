@@ -1,3 +1,13 @@
+# MOSAIC 0.10.2
+
+## Bug Fixes
+
+* Fixed missing namespace prefixes in `plot_model_distributions()`
+  - Added explicit `ggplot2::` prefixes to `scale_x_continuous()` and all other ggplot2 functions
+  - Fixes "could not find function 'scale_x_continuous'" error in `create_multi_method_plot()`
+  - Fixed in three locations: main plot creation and two legend plot sections
+  - Also added `grid::unit()` prefix for grid package function
+
 # MOSAIC 0.10.1
 
 ## Bug Fixes
