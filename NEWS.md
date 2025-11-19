@@ -6,11 +6,13 @@
   - Moved `run_mosaic_iso()` to `deprecated/` directory (use `run_MOSAIC()` directly)
   - Stripped ESS calculation: removed conditional skipping, verbose summaries
   - Stripped convergence diagnostics: removed section banners, verbose logging
-  - Stripped posterior sections: removed verbose progress, set verbose=FALSE in all functions
+  - Stripped posterior sections: removed verbose progress, set verbose=FALSE everywhere
+  - Stripped PPC sections: removed conditional checks, verbose status messages
+  - Stripped parameter uncertainty: removed ensemble logging
   - Pattern applied: calculate → write → log filepath (no defensive checks)
-  - Removed ALL section banners (80x '=' lines)
-  - **In progress**: Optimization, weights, PPC, and NPE sections next
-  - Function being reduced from 1700+ lines to ~800-900 lines
+  - Removed ~50+ section banners and 100+ verbose log messages
+  - **Remaining**: NPE section (66 log_msg calls), optimization/weights sections
+  - Progress: ~400 lines removed so far (1700 → ~1300 lines)
 
 ## Deprecations
 
