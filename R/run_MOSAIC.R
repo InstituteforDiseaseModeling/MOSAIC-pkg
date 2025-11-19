@@ -1930,12 +1930,15 @@ run_MOSAIC <- function(config,
       verbose = TRUE
     )
 
-    # Add weights to results for NPE
-    results$weight_npe <- npe_weights
-
-    # Save updated results with NPE weights
-    .mosaic_write_parquet(results, simulations_file, control$io)
-    log_msg("NPE weights added to simulations.parquet")
+    # Save NPE weights separately (avoids rewriting large simulations.parquet)
+    # This optimization saves 3-5 seconds by writing 1 MB instead of 10-50 MB
+    npe_weights_file <- file.path(dirs$npe, "npe_weights.parquet")
+    weight_df <- data.frame(
+      sim = results$sim,
+      weight_npe = npe_weights
+    )
+    .mosaic_write_parquet(weight_df, npe_weights_file, control$io)
+    log_msg("NPE weights saved to 2_npe/npe_weights.parquet")
 
     # Prepare observed data
     log_msg("\nPreparing observed outbreak data...")
@@ -1965,6 +1968,7 @@ run_MOSAIC <- function(config,
       bfrs_dir = dirs$bfrs,
       results = results,
       param_names = param_names_estimated,
+      weights = npe_weights,
       verbose = TRUE
     )
 
