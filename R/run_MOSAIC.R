@@ -1513,96 +1513,36 @@ run_MOSAIC <- function(config,
   best_results <- results[results$is_best_subset, ]
   n_best <- nrow(best_results)
 
-  # Validate convergence diagnostic inputs before calling function
-  # This ensures graceful handling when convergence not reached
-  diagnostics_valid <- TRUE
-  diagnostics_issues <- character()
+  # Calculate convergence diagnostics
+  # (Function has its own validation - will fail with clear error if inputs invalid)
+  diagnostics <- calc_convergence_diagnostics(
+    # Metrics
+    n_total = nrow(results),
+    n_successful = sum(is.finite(results$likelihood)),
+    n_retained = n_retained,
+    n_best_subset = n_best,
+    ess_retained = ess_retained,
+    ess_best = ESS_B_final,
+    A_best = A_final,
+    cvw_best = CVw_final,
+    percentile_used = percentile_used,
+    convergence_tier = convergence_tier,
+    param_ess_results = ess_results,
 
-  # Check if n_best is valid
-  if (!is.numeric(n_best) || length(n_best) != 1 || n_best < 0) {
-    diagnostics_valid <- FALSE
-    diagnostics_issues <- c(diagnostics_issues, sprintf("n_best invalid: %s", n_best))
-  }
+    # Targets
+    target_ess_best = control$targets$ESS_best,
+    target_A_best = control$targets$A_best,
+    target_cvw_best = control$targets$CVw_best,
+    target_B_min = control$targets$B_min,
+    target_percentile_max = control$targets$percentile_max,
+    target_ess_param = control$targets$ESS_param,
+    target_ess_param_prop = control$targets$ESS_param_prop,
 
-  # Check if n_best <= n_retained
-  if (is.numeric(n_best) && is.numeric(n_retained) && n_best > n_retained) {
-    diagnostics_valid <- FALSE
-    diagnostics_issues <- c(diagnostics_issues,
-                           sprintf("n_best (%d) > n_retained (%d)", n_best, n_retained))
-  }
-
-  # Check if metrics are finite
-  if (!is.finite(ESS_B_final)) {
-    diagnostics_valid <- FALSE
-    diagnostics_issues <- c(diagnostics_issues, "ESS_B_final is not finite")
-  }
-
-  if (!is.finite(A_final)) {
-    diagnostics_valid <- FALSE
-    diagnostics_issues <- c(diagnostics_issues, "A_final is not finite")
-  }
-
-  if (!is.finite(CVw_final)) {
-    diagnostics_valid <- FALSE
-    diagnostics_issues <- c(diagnostics_issues, "CVw_final is not finite")
-  }
-
-  # Calculate convergence diagnostics if inputs are valid
-  if (diagnostics_valid) {
-    diagnostics <- calc_convergence_diagnostics(
-      # Metrics
-      n_total = nrow(results),
-      n_successful = sum(is.finite(results$likelihood)),
-      n_retained = n_retained,
-      n_best_subset = n_best,
-      ess_retained = ess_retained,
-      ess_best = ESS_B_final,
-      A_best = A_final,
-      cvw_best = CVw_final,
-      percentile_used = percentile_used,
-      convergence_tier = convergence_tier,
-      param_ess_results = ess_results,
-
-      # Targets
-      target_ess_best = control$targets$ESS_best,
-      target_A_best = control$targets$A_best,
-      target_cvw_best = control$targets$CVw_best,
-      target_B_min = control$targets$B_min,
-      target_percentile_max = control$targets$percentile_max,
-      target_ess_param = control$targets$ESS_param,
-      target_ess_param_prop = control$targets$ESS_param_prop,
-
-      # Settings
-      ess_method = control$targets$ESS_method,
-      temperature = gibbs_temperature_final,
-      verbose = TRUE
-    )
-  } else {
-    # Create minimal diagnostics structure with NA values
-    log_msg("\n⚠ WARNING: Cannot calculate convergence diagnostics")
-    log_msg("  Issues detected:")
-    for (issue in diagnostics_issues) {
-      log_msg("    - %s", issue)
-    }
-    log_msg("  Proceeding with NA diagnostics (convergence not reached)")
-
-    diagnostics <- list(
-      converged = FALSE,
-      status = "FAIL",
-      issues = diagnostics_issues,
-      n_total = nrow(results),
-      n_successful = sum(is.finite(results$likelihood)),
-      n_retained = n_retained,
-      n_best_subset = if(is.numeric(n_best)) n_best else NA_integer_,
-      ess_retained = ess_retained,
-      ess_best = ESS_B_final,
-      A_best = A_final,
-      cvw_best = CVw_final,
-      percentile_used = percentile_used,
-      convergence_tier = convergence_tier,
-      message = "Convergence diagnostics could not be calculated due to insufficient data"
-    )
-  }
+    # Settings
+    ess_method = control$targets$ESS_method,
+    temperature = gibbs_temperature_final,
+    verbose = TRUE
+  )
 
   # Save convergence results (parquet) - FIXED: Issue 1.2 (safe min)
   best_aic_val <- .mosaic_safe_min(-2 * results$likelihood[is.finite(results$likelihood)])
@@ -1637,27 +1577,19 @@ run_MOSAIC <- function(config,
 
   # Generate convergence plots
   if (control$paths$plots) {
-    tryCatch({
-      plot_model_convergence(
-        results_dir = dirs$bfrs_diag,
-        plots_dir = dirs$bfrs_plots_diag,
-        verbose = TRUE
-      )
-      log_msg("Convergence plots created successfully")
-    }, error = function(e) {
-      log_msg("ERROR creating convergence plots: %s", e$message)
-    })
+    plot_model_convergence(
+      results_dir = dirs$bfrs_diag,
+      plots_dir = dirs$bfrs_plots_diag,
+      verbose = TRUE
+    )
+    log_msg("Convergence plots created successfully")
 
-    tryCatch({
-      plot_model_convergence_status(
-        results_dir = dirs$bfrs_diag,
-        plots_dir = dirs$bfrs_plots_diag,
-        verbose = TRUE
-      )
-      log_msg("Convergence status table created successfully")
-    }, error = function(e) {
-      log_msg("ERROR creating convergence status table: %s", e$message)
-    })
+    plot_model_convergence_status(
+      results_dir = dirs$bfrs_diag,
+      plots_dir = dirs$bfrs_plots_diag,
+      verbose = TRUE
+    )
+    log_msg("Convergence status table created successfully")
   }
 
   # Clean up plotting artifacts
@@ -1672,39 +1604,28 @@ run_MOSAIC <- function(config,
   log_msg(paste(rep("=", 80), collapse = ""))
 
   # Calculate posterior quantiles
-  posterior_quantiles <- tryCatch({
-    calc_model_posterior_quantiles(
-      results = results,
-      probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
-      output_dir = dirs$bfrs_post,
-      verbose = TRUE
-    )
-  }, error = function(e) {
-    log_msg("ERROR calculating posterior quantiles: %s", e$message)
-    NULL
-  })
+  posterior_quantiles <- calc_model_posterior_quantiles(
+    results = results,
+    probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
+    output_dir = dirs$bfrs_post,
+    verbose = TRUE
+  )
 
-  if (!is.null(posterior_quantiles)) {
-    log_msg("Posterior quantiles: %d parameters → posterior_quantiles.csv",
+  log_msg("Posterior quantiles: %d parameters → posterior_quantiles.csv",
             nrow(posterior_quantiles))
 
-    # Generate posterior quantiles plots
-    if (control$paths$plots) {
-      log_msg(paste(rep("=", 80), collapse = ""))
-      log_msg("GENERATING POSTERIOR QUANTILES PLOTS")
-      log_msg(paste(rep("=", 80), collapse = ""))
+  # Generate posterior quantiles plots
+  if (control$paths$plots) {
+    log_msg(paste(rep("=", 80), collapse = ""))
+    log_msg("GENERATING POSTERIOR QUANTILES PLOTS")
+    log_msg(paste(rep("=", 80), collapse = ""))
 
-      tryCatch({
-        plot_model_posterior_quantiles(
-          csv_files = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-          output_dir = dirs$bfrs_plots_post,
-          verbose = TRUE
-        )
-        log_msg("Posterior quantiles plots created successfully")
-      }, error = function(e) {
-        log_msg("ERROR creating posterior quantiles plots: %s", e$message)
-      })
-    }
+    plot_model_posterior_quantiles(
+      csv_files = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
+      output_dir = dirs$bfrs_plots_post,
+      verbose = TRUE
+    )
+    log_msg("Posterior quantiles plots created successfully")
   }
 
   # Calculate posterior distributions
@@ -1712,49 +1633,34 @@ run_MOSAIC <- function(config,
   log_msg("CALCULATING POSTERIOR DISTRIBUTIONS")
   log_msg(paste(rep("=", 80), collapse = ""))
 
-  posterior_analysis <- tryCatch({
-    calc_model_posterior_distributions(
+  calc_model_posterior_distributions(
+    quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
+    priors_file = file.path(dirs$setup, "priors.json"),
+    output_dir = dirs$bfrs_post,
+    verbose = TRUE
+  )
+
+  log_msg("Posterior distributions → posteriors.json")
+
+  # Generate posterior distribution plots
+  if (control$paths$plots) {
+    plot_model_distributions(
+      json_files = c(file.path(dirs$setup, "priors.json"),
+                    file.path(dirs$bfrs_post, "posteriors.json")),
+      method_names = c("Prior", "Posterior"),
+      output_dir = dirs$bfrs_plots_post
+    )
+    log_msg("Posterior distribution plots created successfully")
+
+    plot_model_posteriors_detail(
       quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
+      results_file = file.path(dirs$bfrs_out, "simulations.parquet"),
       priors_file = file.path(dirs$setup, "priors.json"),
-      output_dir = dirs$bfrs_post,
+      posteriors_file = file.path(dirs$bfrs_post, "posteriors.json"),
+      output_dir = file.path(dirs$bfrs_plots_post, "detail"),
       verbose = TRUE
     )
-  }, error = function(e) {
-    log_msg("ERROR calculating posterior distributions: %s", e$message)
-    NULL
-  })
-
-  if (!is.null(posterior_analysis)) {
-    log_msg("Posterior distributions → posteriors.json")
-
-    # Generate posterior distribution plots
-    if (control$paths$plots) {
-      tryCatch({
-        plot_model_distributions(
-          json_files = c(file.path(dirs$setup, "priors.json"),
-                        file.path(dirs$bfrs_post, "posteriors.json")),
-          method_names = c("Prior", "Posterior"),
-          output_dir = dirs$bfrs_plots_post
-        )
-        log_msg("Posterior distribution plots created successfully")
-      }, error = function(e) {
-        log_msg("ERROR creating posterior distribution plots: %s", e$message)
-      })
-
-      tryCatch({
-        plot_model_posteriors_detail(
-          quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-          results_file = file.path(dirs$bfrs_out, "simulations.parquet"),
-          priors_file = file.path(dirs$setup, "priors.json"),
-          posteriors_file = file.path(dirs$bfrs_post, "posteriors.json"),
-          output_dir = file.path(dirs$bfrs_plots_post, "detail"),
-          verbose = TRUE
-        )
-        log_msg("Detailed posterior plots created successfully")
-      }, error = function(e) {
-        log_msg("ERROR creating detailed posterior plots: %s", e$message)
-      })
-    }
+    log_msg("Detailed posterior plots created successfully")
   }
 
   # Clean up plotting artifacts
@@ -1779,57 +1685,41 @@ run_MOSAIC <- function(config,
     # Re-run best model for detailed analysis
     log_msg("Re-running best model for PPC and detailed plots")
 
-    config_best <- tryCatch({
-      sample_parameters(
-        PATHS = PATHS,
-        priors = priors,
-        config = config,
-        seed = best_seed_sim,
-        sample_args = sampling_args,
-        verbose = FALSE
+    config_best <- sample_parameters(
+      PATHS = PATHS,
+      priors = priors,
+      config = config,
+      seed = best_seed_sim,
+      sample_args = sampling_args,
+      verbose = FALSE
+    )
+
+    # Save best configuration
+    jsonlite::write_json(config_best, file.path(dirs$bfrs_cfg, "config_best.json"),
+                        pretty = TRUE, auto_unbox = TRUE)
+
+    # Import laser-cholera
+    lc <- reticulate::import("laser_cholera.metapop.model")
+
+    # Run best model
+    best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
+
+    if (control$paths$plots) {
+      # Generate stochastic fit plot for best model
+      log_msg("Generating best model fit with stochastic uncertainty...")
+      log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
+      plot_model_fit_stochastic(
+        config = config_best,
+        n_simulations = control$predictions$best_model_n_sims,
+        output_dir = dirs$bfrs_plots_pred,
+        envelope_quantiles = c(0.025, 0.975),
+        save_predictions = TRUE,
+        parallel = TRUE,
+        n_cores = control$parallel$n_cores,
+        root_dir = root_dir,
+        verbose = TRUE
       )
-    }, error = function(e) {
-      log_msg("ERROR sampling best model parameters: %s", e$message)
-      NULL
-    })
-
-    if (!is.null(config_best)) {
-      # Save best configuration
-      jsonlite::write_json(config_best, file.path(dirs$bfrs_cfg, "config_best.json"),
-                          pretty = TRUE, auto_unbox = TRUE)
-
-      # Import laser-cholera
-      lc <- reticulate::import("laser_cholera.metapop.model")
-
-      # Run best model
-      best_model <- tryCatch({
-        lc$run_model(paramfile = config_best, quiet = TRUE)
-      }, error = function(e) {
-        log_msg("ERROR running best model: %s", e$message)
-        NULL
-      })
-
-      if (!is.null(best_model) && control$paths$plots) {
-        # Generate stochastic fit plot for best model
-        log_msg("Generating best model fit with stochastic uncertainty...")
-        log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
-        tryCatch({
-          plot_model_fit_stochastic(
-            config = config_best,
-            n_simulations = control$predictions$best_model_n_sims,
-            output_dir = dirs$bfrs_plots_pred,
-            envelope_quantiles = c(0.025, 0.975),
-            save_predictions = TRUE,
-            parallel = TRUE,
-            n_cores = control$parallel$n_cores,
-            root_dir = root_dir,
-            verbose = TRUE
-          )
-          log_msg("Best model stochastic fit plot generated successfully")
-        }, error = function(e) {
-          log_msg("ERROR generating best model stochastic fit plot: %s", e$message)
-        })
-      }
+      log_msg("Best model stochastic fit plot generated successfully")
     }
   } else {
     log_msg("WARNING: No best model identified")
@@ -1873,27 +1763,23 @@ run_MOSAIC <- function(config,
                 length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
       }
 
-      tryCatch({
-        plot_model_fit_stochastic_param(
-          config = config,
-          parameter_seeds = param_seeds,
-          parameter_weights = param_weights,
-          n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
-          envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
-          PATHS = PATHS,
-          priors = priors,
-          sampling_args = sampling_args,
-          output_dir = dirs$bfrs_plots_pred,
-          save_predictions = TRUE,
-          parallel = TRUE,
-          n_cores = control$parallel$n_cores,
-          root_dir = root_dir,
-          verbose = TRUE
-        )
-        log_msg("Parameter + stochastic uncertainty plots generated successfully")
-      }, error = function(e) {
-        log_msg("ERROR generating parameter + stochastic plots: %s", e$message)
-      })
+      plot_model_fit_stochastic_param(
+        config = config,
+        parameter_seeds = param_seeds,
+        parameter_weights = param_weights,
+        n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
+        envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+        PATHS = PATHS,
+        priors = priors,
+        sampling_args = sampling_args,
+        output_dir = dirs$bfrs_plots_pred,
+        save_predictions = TRUE,
+        parallel = TRUE,
+        n_cores = control$parallel$n_cores,
+        root_dir = root_dir,
+        verbose = TRUE
+      )
+      log_msg("Parameter + stochastic uncertainty plots generated successfully")
     } else {
       log_msg("WARNING: No models in best subset for parameter uncertainty analysis")
     }
@@ -1909,17 +1795,13 @@ run_MOSAIC <- function(config,
     log_msg(paste(rep("=", 80), collapse = ""))
 
     # Generate PPC plots using predictions from stochastic functions
-    tryCatch({
-      plot_model_ppc(
-        predictions_dir = dirs$bfrs_plots_pred,
-        output_dir = dirs$bfrs_plots,
-        by_location = "both",
-        verbose = TRUE
-      )
-      log_msg("PPC plots created successfully")
-    }, error = function(e) {
-      log_msg("ERROR creating PPC plots: %s", e$message)
-    })
+    plot_model_ppc(
+      predictions_dir = dirs$bfrs_plots_pred,
+      output_dir = dirs$bfrs_plots,
+      by_location = "both",
+      verbose = TRUE
+    )
+    log_msg("PPC plots created successfully")
   }
 
   # Clean up plotting artifacts
@@ -2078,101 +1960,95 @@ run_MOSAIC <- function(config,
       colnames(posterior_samples) <- param_names_npe
     }
 
-    # Check if NPE succeeded
-    if (!is.null(posterior_samples)) {
-      log_msg("\nNPE complete: %d samples × %d params | %s tier (%d transforms)",
-              nrow(posterior_samples), length(param_names_npe),
-              arch_spec$tier, arch_spec$n_transforms)
+    log_msg("\nNPE complete: %d samples × %d params | %s tier (%d transforms)",
+            nrow(posterior_samples), length(param_names_npe),
+            arch_spec$tier, arch_spec$n_transforms)
 
-      # Check diagnostics
-      if (!is.null(diagnostics)) {
-        if (!is.null(diagnostics$sbc_ranks)) {
-          coverage_50 <- mean(diagnostics$sbc_ranks >= 0.25 & diagnostics$sbc_ranks <= 0.75, na.rm = TRUE)
-          log_msg("  - Coverage at 50%% CI: %.1f%%", coverage_50 * 100)
-        }
-        log_msg("  - Coverage at 95%% CI: %.1f%%", diagnostics$diagnostics$overall_coverage * 100)
-        log_msg("  - SBC KS p-value: %.3f", diagnostics$diagnostics$overall_sbc_ks_pvalue)
-        log_msg("  - Model calibration: %s",
-                ifelse(needs_retraining, "Needs improvement", "Good"))
+    # Check diagnostics
+    if (!is.null(diagnostics)) {
+      if (!is.null(diagnostics$sbc_ranks)) {
+        coverage_50 <- mean(diagnostics$sbc_ranks >= 0.25 & diagnostics$sbc_ranks <= 0.75, na.rm = TRUE)
+        log_msg("  - Coverage at 50%% CI: %.1f%%", coverage_50 * 100)
       }
-
-      # Check that log_probs were saved
-      if (!is.null(posterior_log_probs)) {
-        log_msg("  - Log probabilities saved for SMC: YES")
-      } else {
-        log_msg("  - WARNING: Log probabilities NOT saved - SMC will not be possible")
-      }
-
-      # Log rejection sampling diagnostics
-      if (!is.null(posterior_result$rejection_info)) {
-        info <- posterior_result$rejection_info
-        log_msg("")
-        log_msg("=== Rejection Sampling Summary ===")
-        log_msg("  - Samples requested: %d", info$requested)
-        log_msg("  - Samples achieved: %d", info$achieved)
-        log_msg("  - Total drawn: %d", info$total_drawn)
-        log_msg("  - Rejection rate: %.2f%%", info$rejection_rate * 100)
-        log_msg("  - Attempts: %d", info$n_attempts)
-
-        if (info$rejection_rate > 0.10) {
-          log_msg("  - ⚠ Warning: High rejection rate suggests model calibration issues")
-          log_msg("    Consider retraining with wider bounds or different architecture")
-        } else if (info$rejection_rate > 0) {
-          log_msg("  - ✓ Rejection rate acceptable (<10%%)")
-        } else {
-          log_msg("  - ✓ All samples within bounds!")
-        }
-      }
-
-      # Create NPE result object
-      npe_result <- list(
-        posterior_samples = posterior_samples,
-        posterior_log_probs = posterior_log_probs,
-        posterior_quantiles = posterior_quantiles,
-        param_names = param_names_npe,
-        architecture = arch_spec,
-        diagnostics = diagnostics,
-        model = npe_model
-      )
-
-      # Create NPE configuration with posterior medians
-      log_msg("\nCreating NPE configuration...")
-      config_npe <- create_config_npe(
-        posterior_result = npe_result,
-        config_base = config,
-        output_file = file.path(dirs$npe, "config_npe.json"),
-        use_median = TRUE,
-        verbose = TRUE
-      )
-
-      # Fit posterior distributions
-      log_msg("\nFitting posterior distributions...")
-      posteriors_npe <- fit_posterior_distributions(
-        posterior_samples = posterior_samples,
-        priors_file = file.path(dirs$setup, "priors.json"),
-        output_file = file.path(npe_dirs$posterior, "posteriors.json"),
-        verbose = TRUE
-      )
-
-      # Save NPE summary
-      npe_summary <- list(
-        n_posterior_samples = nrow(posterior_samples),
-        param_names = param_names_npe,
-        architecture = arch_spec,
-        diagnostics = diagnostics,
-        has_log_probs = !is.null(posterior_log_probs),
-        rejection_info = posterior_result$rejection_info,
-        timestamp = Sys.time()
-      )
-
-      saveRDS(npe_summary, file.path(dirs$npe, "npe_summary.rds"))
-
-      log_msg("\n=== NPE STAGE COMPLETE ===")
-      log_msg("Results saved in: %s/", basename(dirs$npe))
-
-    } else {
-      log_msg("\nERROR: NPE failed to generate posterior samples")
+      log_msg("  - Coverage at 95%% CI: %.1f%%", diagnostics$diagnostics$overall_coverage * 100)
+      log_msg("  - SBC KS p-value: %.3f", diagnostics$diagnostics$overall_sbc_ks_pvalue)
+      log_msg("  - Model calibration: %s",
+              ifelse(needs_retraining, "Needs improvement", "Good"))
     }
+
+    # Check that log_probs were saved
+    if (!is.null(posterior_log_probs)) {
+      log_msg("  - Log probabilities saved for SMC: YES")
+    } else {
+      log_msg("  - WARNING: Log probabilities NOT saved - SMC will not be possible")
+    }
+
+    # Log rejection sampling diagnostics
+    if (!is.null(posterior_result$rejection_info)) {
+      info <- posterior_result$rejection_info
+      log_msg("")
+      log_msg("=== Rejection Sampling Summary ===")
+      log_msg("  - Samples requested: %d", info$requested)
+      log_msg("  - Samples achieved: %d", info$achieved)
+      log_msg("  - Total drawn: %d", info$total_drawn)
+      log_msg("  - Rejection rate: %.2f%%", info$rejection_rate * 100)
+      log_msg("  - Attempts: %d", info$n_attempts)
+
+      if (info$rejection_rate > 0.10) {
+        log_msg("  - ⚠ Warning: High rejection rate suggests model calibration issues")
+        log_msg("    Consider retraining with wider bounds or different architecture")
+      } else if (info$rejection_rate > 0) {
+        log_msg("  - ✓ Rejection rate acceptable (<10%%)")
+      } else {
+        log_msg("  - ✓ All samples within bounds!")
+      }
+    }
+
+    # Create NPE result object
+    npe_result <- list(
+      posterior_samples = posterior_samples,
+      posterior_log_probs = posterior_log_probs,
+      posterior_quantiles = posterior_quantiles,
+      param_names = param_names_npe,
+      architecture = arch_spec,
+      diagnostics = diagnostics,
+      model = npe_model
+    )
+
+    # Create NPE configuration with posterior medians
+    log_msg("\nCreating NPE configuration...")
+    config_npe <- create_config_npe(
+      posterior_result = npe_result,
+      config_base = config,
+      output_file = file.path(dirs$npe, "config_npe.json"),
+      use_median = TRUE,
+      verbose = TRUE
+    )
+
+    # Fit posterior distributions
+    log_msg("\nFitting posterior distributions...")
+    posteriors_npe <- fit_posterior_distributions(
+      posterior_samples = posterior_samples,
+      priors_file = file.path(dirs$setup, "priors.json"),
+      output_file = file.path(npe_dirs$posterior, "posteriors.json"),
+      verbose = TRUE
+    )
+
+    # Save NPE summary
+    npe_summary <- list(
+      n_posterior_samples = nrow(posterior_samples),
+      param_names = param_names_npe,
+      architecture = arch_spec,
+      diagnostics = diagnostics,
+      has_log_probs = !is.null(posterior_log_probs),
+      rejection_info = posterior_result$rejection_info,
+      timestamp = Sys.time()
+    )
+
+    saveRDS(npe_summary, file.path(dirs$npe, "npe_summary.rds"))
+
+    log_msg("\n=== NPE STAGE COMPLETE ===")
+    log_msg("Results saved in: %s/", basename(dirs$npe))
 
     # =========================================================================
     # PLOT NPE DIAGNOSTICS
@@ -2245,18 +2121,14 @@ run_MOSAIC <- function(config,
       }
 
       if (length(quantile_files) > 0) {
-        tryCatch({
-          plot_model_posterior_quantiles(
-            csv_files = quantile_files,
-            output_dir = npe_dirs$plots,
-            plot_types = "both",
-            verbose = TRUE
-          )
-          log_msg("Posterior quantile plots created successfully")
-          log_msg("  - Comparing: Prior (from BFRS), BFRS Posterior, and NPE")
-        }, error = function(e) {
-          log_msg("ERROR creating posterior quantile plots: %s", e$message)
-        })
+        plot_model_posterior_quantiles(
+          csv_files = quantile_files,
+          output_dir = npe_dirs$plots,
+          plot_types = "both",
+          verbose = TRUE
+        )
+        log_msg("Posterior quantile plots created successfully")
+        log_msg("  - Comparing: Prior (from BFRS), BFRS Posterior, and NPE")
       }
 
       # Plot overlaid posterior distributions
@@ -2285,17 +2157,13 @@ run_MOSAIC <- function(config,
       }
 
       if (length(json_files) >= 2) {
-        tryCatch({
-          plot_model_distributions(
-            json_files = json_files,
-            method_names = method_names,
-            output_dir = npe_dirs$plots
-          )
-          log_msg("Overlaid posterior distribution plots created successfully")
-          log_msg("  - Comparing: %s", paste(method_names, collapse = ", "))
-        }, error = function(e) {
-          log_msg("ERROR creating overlaid distribution plots: %s", e$message)
-        })
+        plot_model_distributions(
+          json_files = json_files,
+          method_names = method_names,
+          output_dir = npe_dirs$plots
+        )
+        log_msg("Overlaid posterior distribution plots created successfully")
+        log_msg("  - Comparing: %s", paste(method_names, collapse = ", "))
       }
     }
 
