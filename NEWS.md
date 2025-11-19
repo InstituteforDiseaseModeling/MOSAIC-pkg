@@ -12,9 +12,10 @@
   - Stripped NPE section: removed 66 log_msg calls, verbose diagnostics, section banners
   - Stripped POST-HOC optimization: removed tier-by-tier logging, convergence messages
   - Stripped WEIGHTS section: removed detailed ESS/temperature logging
+  - Removed all major section banners (80× '=' decorative headers)
   - Pattern applied: calculate → write → log filepath (no defensive checks)
-  - Removed 90+ section banners and 170+ verbose log messages
-  - Total reduction: ~670 lines removed (2441 → 1771 core function)
+  - Total: removed 180+ verbose log_msg calls and 90+ section banners
+  - **Result: 284 lines removed (2441 → 2157 lines, 12% reduction)**
 
 ## Deprecations
 

@@ -528,11 +528,7 @@ run_MOSAIC <- function(config,
 
   # ===========================================================================
   # SETUP PATHS
-  # ===========================================================================
-
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("MOSAIC-LASER Calibration — run_mosaic()")
-  log_msg(paste(rep("=", 80), collapse = ""))
+  log_msg("Starting MOSAIC calibration")
 
   # Set root directory and get paths
   set_root_directory(root_dir)
@@ -716,10 +712,7 @@ run_MOSAIC <- function(config,
     .mosaic_init_state(control, param_names_estimated, nspec)
   }
 
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("ADAPTIVE SIMULATION — Mode: %s", toupper(state$mode))
-  log_msg(paste(rep("=", 80), collapse = ""))
-
+  log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
 
   # ===========================================================================
@@ -925,13 +918,9 @@ run_MOSAIC <- function(config,
 
   # ===========================================================================
   # COMBINE RESULTS AND ADD FLAGS
-  # ===========================================================================
+  log_msg("Combining simulation files")
 
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("COMBINING SIMULATION OUTPUT FILES")
-  log_msg(paste(rep("=", 80), collapse = ""))
-
-  # Get list of simulation files before loading
+  # Get list of simulation files
   parquet_files <- list.files(dirs$bfrs_params, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
 
   # Load and combine all simulation files
