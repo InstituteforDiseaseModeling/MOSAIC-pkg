@@ -138,7 +138,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
   # Get unique parameters from quantiles (only posteriors have KL values)
   posterior_types <- c("posterior", "npe", "bfrs")
   params_with_posteriors <- quantiles_df %>%
-    filter(type %in% posterior_types, !is.na(.data$kl)) %>%
+    dplyr::filter(type %in% posterior_types, !is.na(kl)) %>%
     dplyr::pull(parameter) %>%
     unique()
 
@@ -360,10 +360,10 @@ plot_model_posteriors_detail <- function(quantiles_file,
     }
 
     # Get quantiles and KL from the quantiles_df
-    param_data <- quantiles_df %>% filter(parameter == param_name)
+    param_data <- quantiles_df %>% dplyr::filter(parameter == param_name)
     posterior_types <- c("posterior", "npe", "bfrs")
-    posterior_data <- param_data %>% filter(type %in% posterior_types)
-    prior_data <- param_data %>% filter(type == "prior")
+    posterior_data <- param_data %>% dplyr::filter(type %in% posterior_types)
+    prior_data <- param_data %>% dplyr::filter(type == "prior")
 
     if (nrow(posterior_data) == 0 || nrow(prior_data) == 0) {
       return(NULL)
@@ -757,8 +757,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
   # Get global parameters ordered by estimated_parameters
   global_params_info <- estimated_parameters %>%
-    filter(scale == "global") %>%
-    arrange(order)
+    dplyr::filter(scale == "global") %>%
+    dplyr::arrange(order)
 
   # Filter for global parameters with posteriors
   global_params <- intersect(global_params_info$parameter_name, params_with_posteriors)
@@ -767,7 +767,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
     # Group by category
     for (cat in unique(global_params_info$category)) {
       cat_params_info <- global_params_info %>%
-        filter(category == cat, parameter_name %in% global_params)
+        dplyr::filter(category == cat, parameter_name %in% global_params)
 
       if (nrow(cat_params_info) > 0) {
         if (verbose) cat("  Processing category:", cat, "\n")
@@ -859,8 +859,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Get location-specific parameters
     location_params_info <- estimated_parameters %>%
-      filter(scale == "location") %>%
-      arrange(order)
+      dplyr::filter(scale == "location") %>%
+      dplyr::arrange(order)
 
     # Find parameters for this location
     location_params <- params_with_posteriors[
@@ -874,7 +874,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
       for (cat in unique(location_params_info$category)) {
         # Get base parameter names for this category
         cat_params_base <- location_params_info %>%
-          filter(category == cat) %>%
+          dplyr::filter(category == cat) %>%
           dplyr::pull(parameter_name)
 
         # Find matching parameters for this location
@@ -898,7 +898,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
             # Get parameter info
             base_name <- gsub(paste0("_", iso, "$"), "", param_name)
             param_info <- location_params_info %>%
-              filter(parameter_name == base_name) %>%
+              dplyr::filter(parameter_name == base_name) %>%
               slice(1)
 
             if (nrow(param_info) == 0) {
