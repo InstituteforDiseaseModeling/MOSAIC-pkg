@@ -1,3 +1,12 @@
+# MOSAIC 0.9.1
+
+## Bug Fixes
+
+* Fixed premature cleanup of `ess_results` variable in `run_MOSAIC()`
+  - Removed cleanup at line 1204 that occurred before `calc_convergence_diagnostics()` call
+  - Variable is now retained until after convergence diagnostics are calculated
+  - Fixes "object 'ess_results' not found" error at runtime
+
 # MOSAIC 0.9.0
 
 ## Breaking Changes
