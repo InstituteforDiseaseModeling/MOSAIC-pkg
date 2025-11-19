@@ -9,10 +9,10 @@
   - Stripped posterior sections: removed verbose progress, set verbose=FALSE everywhere
   - Stripped PPC sections: removed conditional checks, verbose status messages
   - Stripped parameter uncertainty: removed ensemble logging
+  - Stripped NPE section: removed 66 log_msg calls, verbose diagnostics, section banners
   - Pattern applied: calculate → write → log filepath (no defensive checks)
-  - Removed ~50+ section banners and 100+ verbose log messages
-  - **Remaining**: NPE section (66 log_msg calls), optimization/weights sections
-  - Progress: ~400 lines removed so far (1700 → ~1300 lines)
+  - Removed 80+ section banners and 150+ verbose log messages
+  - Progress: ~570 lines removed (2441 → 1871 core, plus helpers)
 
 ## Deprecations
 
