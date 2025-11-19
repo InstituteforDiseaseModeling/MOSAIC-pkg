@@ -1,3 +1,18 @@
+# MOSAIC 0.10.0
+
+## Breaking Changes
+
+* **Major refactor: Lean run_MOSAIC() - work in progress**
+  - Moved `run_mosaic_iso()` to `deprecated/` directory (use `run_MOSAIC()` directly)
+  - Stripped ESS calculation section: removed conditional skipping, verbose summaries
+  - Pattern: just calculate → write → log filepath (no defensive checks)
+  - **More sections being stripped**: This is phase 1 of aggressive simplification
+  - Function will be ~50% shorter when complete
+
+## Deprecations
+
+* `run_mosaic_iso()` - Use `run_MOSAIC()` with `get_location_config()` and `get_location_priors()` instead
+
 # MOSAIC 0.9.1
 
 ## Bug Fixes

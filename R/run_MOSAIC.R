@@ -284,159 +284,7 @@
 # PUBLIC API FUNCTIONS
 # =============================================================================
 
-#' Run MOSAIC Calibration by ISO Code (Simple Interface)
-#'
-#' @description
-#' **This is the recommended interface for most users.** Simplified wrapper that loads
-#' default config and priors for specified ISO codes and runs the full MOSAIC calibration.
-#'
-#' For advanced customization (custom configs, non-standard locations), use [run_mosaic()] directly.
-#'
-#' Executes the full MOSAIC calibration workflow:
-#' \enumerate{
-#'   \item Adaptive calibration with R² convergence detection
-#'   \item Single predictive batch (calculated from calibration phase)
-#'   \item Adaptive fine-tuning with 5-tier batch sizing
-#'   \item Post-hoc subset optimization for NPE priors
-#'   \item Posterior quantile and distribution estimation
-#'   \item Posterior predictive checks and uncertainty quantification
-#'   \item Optional: Neural Posterior Estimation (NPE) stage
-#' }
-#'
-#' @param iso_code Character vector of ISO3 codes (e.g., \code{"ETH"} or \code{c("ETH", "KEN", "TZA")}).
-#'   Determines which locations to model. Config and priors are automatically loaded for these locations.
-#' @param dir_output Character. Output directory for this calibration run (REQUIRED).
-#'   All results will be saved here. Must be unique per run.
-#' @param control Control list created with [mosaic_control_defaults()]. If \code{NULL}, uses defaults.
-#'   Common settings:
-#'   \itemize{
-#'     \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed
-#'     \item \code{calibration$n_iterations}: Iterations per simulation (default: 3)
-#'     \item \code{parallel$enable}: Enable parallel execution (default: FALSE)
-#'     \item \code{parallel$n_cores}: Number of cores (default: 1)
-#'   }
-#' @param resume Logical. If \code{TRUE}, continues from existing checkpoint. Default: FALSE.
-#'
-#' @return Invisibly returns a list with:
-#' \describe{
-#'   \item{dirs}{Named list of output directories}
-#'   \item{files}{Named list of key output files}
-#'   \item{summary}{Named list with run statistics}
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' # === SIMPLE USAGE ===
-#'
-#' # Single location with defaults
-#' run_mosaic_iso("ETH", "./output")
-#'
-#' # Multiple locations
-#' run_mosaic_iso(c("ETH", "KEN", "TZA"), "./output")
-#'
-#' # === WITH CONTROL SETTINGS ===
-#'
-#' # Parallel execution with 8 cores
-#' run_mosaic_iso(
-#'   iso_code = "ETH",
-#'   dir_output = "./output",
-#'   control = mosaic_control_defaults(
-#'     parallel = list(enable = TRUE, n_cores = 8)
-#'   )
-#' )
-#'
-#' # Fixed mode: exactly 5000 simulations, 5 iterations each
-#' run_mosaic_iso(
-#'   iso_code = "ETH",
-#'   dir_output = "./output",
-#'   control = mosaic_control_defaults(
-#'     calibration = list(
-#'       n_simulations = 5000,
-#'       n_iterations = 5
-#'     )
-#'   )
-#' )
-#'
-#' # Auto mode with custom maximum
-#' run_mosaic_iso(
-#'   iso_code = "ETH",
-#'   dir_output = "./output",
-#'   control = mosaic_control_defaults(
-#'     calibration = list(
-#'       n_simulations = NULL,  # NULL = auto mode
-#'       max_simulations = 50000,
-#'       batch_size = 1000
-#'     ),
-#'     parallel = list(enable = TRUE, n_cores = 16)
-#'   )
-#' )
-#'
-#' # === SAMPLE SPECIFIC PARAMETERS ===
-#'
-#' # Only sample transmission and recovery, hold others fixed
-#' run_mosaic_iso(
-#'   iso_code = "ETH",
-#'   dir_output = "./output",
-#'   control = mosaic_control_defaults(
-#'     sampling = list(
-#'       sample_tau_i = TRUE,
-#'       sample_mobility_gamma = FALSE,
-#'       sample_mobility_omega = FALSE,
-#'       sample_mu_j = TRUE,
-#'       sample_iota = FALSE,
-#'       sample_gamma_2 = FALSE,
-#'       sample_alpha_1 = FALSE
-#'     )
-#'   )
-#' )
-#' }
-#'
-#' @seealso [run_mosaic()] for advanced usage with custom configs
-#' @seealso [mosaic_control_defaults()] for building control structures
-#' @export
-run_mosaic_iso <- function(iso_code,
-                           dir_output,
-                           control = NULL,
-                           resume = FALSE) {
-
-  # Input validation
-  if (missing(iso_code) || is.null(iso_code)) {
-    stop("iso_code is required", call. = FALSE)
-  }
-  if (!is.character(iso_code) || length(iso_code) == 0) {
-    stop("iso_code must be a character vector with at least one ISO3 code", call. = FALSE)
-  }
-  if (missing(dir_output) || is.null(dir_output)) {
-    stop("dir_output is required", call. = FALSE)
-  }
-
-  # Load default config and priors for specified locations
-  log_msg("Loading default config for: %s", paste(iso_code, collapse = ", "))
-  config <- get_location_config(iso = iso_code)
-
-  log_msg("Loading default priors for: %s", paste(iso_code, collapse = ", "))
-  priors <- get_location_priors(iso = iso_code)
-
-  # Use mosaic_control_defaults() defaults if control not provided
-  if (is.null(control)) {
-    control <- mosaic_control_defaults()
-  }
-
-  # Call main run_MOSAIC() function
-  run_MOSAIC(
-    config = config,
-    priors = priors,
-    dir_output = dir_output,
-    control = control,
-    resume = resume
-  )
-}
-
-#' @rdname run_mosaic_iso
-#' @export
-run_MOSAIC_iso <- run_mosaic_iso
-
-#' Run MOSAIC Calibration Workflow (Advanced Interface)
+#' Run MOSAIC Calibration Workflow
 #'
 #' @description
 #' **Advanced interface with full control over model specification.**
@@ -1146,60 +994,19 @@ run_MOSAIC <- function(config,
   # PARAMETER-SPECIFIC ESS
   # ===========================================================================
 
-  # Initialize to NULL (will be calculated if enough samples available)
-  ess_results <- NULL
+  log_msg("Calculating parameter ESS")
+  ess_results <- calc_model_ess_parameter(
+    results = results,
+    param_names = param_names_estimated,
+    likelihood_col = "likelihood",
+    n_grid = 100,
+    method = control$targets$ESS_method,
+    verbose = FALSE
+  )
 
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("CALCULATING PARAMETER-SPECIFIC ESS")
-  log_msg(paste(rep("=", 80), collapse = ""))
-
-  # Check if we have enough samples
-  n_valid <- sum(!is.na(results$likelihood) & is.finite(results$likelihood))
-
-  if (n_valid < 50) {
-    log_msg("Skipping parameter-specific ESS: %d valid samples (need at least 50)", n_valid)
-    ess_results <- NULL
-  } else {
-    log_msg("Calculating marginal ESS for each parameter...")
-    ess_results <- calc_model_ess_parameter(
-      results = results,
-      param_names = param_names_estimated,
-      likelihood_col = "likelihood",
-      n_grid = 100,
-      method = control$targets$ESS_method,
-      verbose = TRUE
-    )
-  }
-
-  # Save ESS results to CSV (if calculated)
-  if (!is.null(ess_results)) {
-    ess_output_file <- file.path(dirs$bfrs_diag, "parameter_ess.csv")
-    write.csv(ess_results, ess_output_file, row.names = FALSE)
-    log_msg("Parameter ESS summary (%d params): Mean=%.1f, Median=%.1f, Min=%.1f, Max=%.1f",
-            nrow(ess_results),
-            mean(ess_results$ess_marginal, na.rm = TRUE),
-            median(ess_results$ess_marginal, na.rm = TRUE),
-            min(ess_results$ess_marginal, na.rm = TRUE),
-            max(ess_results$ess_marginal, na.rm = TRUE))
-
-    # Identify parameters needing more samples
-    low_ess <- ess_results[ess_results$ess_marginal < control$targets$ESS_param, ]
-    if (nrow(low_ess) > 0) {
-      log_msg("\nParameters with ESS < %d (%d):", control$targets$ESS_param, nrow(low_ess))
-      for (i in 1:min(10, nrow(low_ess))) {
-      log_msg("  %s: ESS = %.1f",
-              low_ess$parameter[i],
-              low_ess$ess_marginal[i])
-    }
-      if (nrow(low_ess) > 10) {
-        log_msg("  ... and %d more", nrow(low_ess) - 10)
-      }
-    } else {
-      log_msg("\nAll parameters have ESS >= %d (well converged)", control$targets$ESS_param)
-    }
-  }
-
-  log_msg(paste(rep("=", 80), collapse = ""))
+  ess_file <- file.path(dirs$bfrs_diag, "parameter_ess.csv")
+  write.csv(ess_results, ess_file, row.names = FALSE)
+  log_msg("Saved %s", ess_file)
 
   # ===========================================================================
   # POST-HOC SUBSET OPTIMIZATION
