@@ -612,6 +612,9 @@ calc_npe_architecture <- function(
 #'   (NULL = load from file). Preferred when results are already available to
 #'   avoid redundant file I/O. Must contain columns: sim, likelihood, and parameter columns.
 #' @param param_names Character vector of parameter names to extract (NULL = auto-detect)
+#' @param weights Optional numeric vector of NPE weights for each simulation
+#'   (NULL = extract from results$weight_npe, then results$weight_best, then uniform).
+#'   Passing weights explicitly avoids needing to add weight_npe column to results.
 #' @param verbose Logical, print progress messages (default: TRUE)
 #' @param chunk_size Integer, chunk size for processing large datasets (NULL = auto)
 #'
@@ -655,17 +658,18 @@ calc_npe_architecture <- function(
 #'     param_names = c("beta_env", "beta_hum", "tau_i")
 #' )
 #'
-#' # Optimized usage (pass pre-loaded results)
+#' # Optimized usage (pass pre-loaded results and weights)
 #' results <- arrow::read_parquet("path/to/1_bfrs/outputs/simulations.parquet")
-#' results$weight_npe <- get_npe_weights(results, strategy = "continuous_best")
+#' npe_weights <- get_npe_weights(results, strategy = "continuous_best")
 #' npe_data <- prepare_npe_data(
 #'     bfrs_dir = "path/to/1_bfrs",
 #'     results = results,
-#'     param_names = c("beta_env", "beta_hum", "tau_i")
+#'     param_names = c("beta_env", "beta_hum", "tau_i"),
+#'     weights = npe_weights
 #' )
 #' }
 prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
-                             verbose = TRUE, chunk_size = NULL) {
+                             weights = NULL, verbose = TRUE, chunk_size = NULL) {
 
      if (verbose) {
           message("\n=== NPE Data Preparation ===")
@@ -798,13 +802,21 @@ prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
      parameters <- as.matrix(results[, param_names, drop = FALSE])
      colnames(parameters) <- param_names  # Ensure column names are set
 
-     # Extract weights
-     if ("weight_npe" %in% colnames(results)) {
-          weights <- results$weight_npe
-     } else if ("weight_best" %in% colnames(results)) {
-          weights <- results$weight_best
+     # Extract weights (priority: passed parameter > weight_npe column > weight_best column > uniform)
+     if (is.null(weights)) {
+          if ("weight_npe" %in% colnames(results)) {
+               weights <- results$weight_npe
+          } else if ("weight_best" %in% colnames(results)) {
+               weights <- results$weight_best
+          } else {
+               weights <- rep(1.0 / nrow(results), nrow(results))
+          }
      } else {
-          weights <- rep(1.0 / nrow(results), nrow(results))
+          # Validate that passed weights match number of results
+          if (length(weights) != nrow(results)) {
+               stop("Length of weights (", length(weights),
+                    ") does not match number of results (", nrow(results), ")")
+          }
      }
 
      # CRITICAL: Free results memory immediately after extraction
