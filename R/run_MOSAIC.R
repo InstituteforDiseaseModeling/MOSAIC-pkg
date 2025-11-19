@@ -2795,7 +2795,8 @@ mosaic_run_defaults <- function() {
       A_best = 0.95,
       CVw_best = 0.5,
       B_min = 30,
-      percentile_max = 5.0
+      percentile_max = 5.0,
+      ESS_method = "perplexity"
     ),
     npe = list(
       enable = FALSE,

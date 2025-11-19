@@ -1,0 +1,1018 @@
+# ==============================================================================
+# NPE (Neural Posterior Estimation) Main Workflow Functions
+# ==============================================================================
+# Streamlined implementation for MOSAIC calibration with SMC support
+# Created: 2024
+# ==============================================================================
+
+#' Run Complete NPE Workflow
+#'
+#' @description
+#' Orchestrates the entire NPE workflow from BFRS results to posterior estimation,
+#' including training, diagnostics, and visualization. Produces all outputs needed
+#' for downstream SMC correction.
+#'
+#' @param bfrs_dir Directory containing BFRS results (simulations.parquet, outputs.parquet)
+#' @param output_dir Directory for NPE outputs
+#' @param param_names Character vector of parameter names to estimate (NULL = auto-detect)
+#' @param observed_data Data frame with observed outbreak data (NULL = load from config)
+#' @param architecture Architecture tier: "auto", "minimal", "small", "medium", "large", "xlarge"
+#' @param n_posterior_samples Number of posterior samples to generate (default 10000)
+#' @param run_diagnostics Run post-training diagnostics (default TRUE)
+#' @param create_plots Generate visualization plots (default TRUE)
+#' @param use_gpu Use GPU if available (default TRUE)
+#' @param seed Random seed for reproducibility
+#' @param verbose Print progress messages
+#'
+#' @return List containing:
+#' \itemize{
+#'   \item model - Trained NPE model object
+#'   \item posterior_samples - Matrix of posterior samples
+#'   \item posterior_log_probs - Log probabilities q(theta|x) for SMC
+#'   \item posterior_quantiles - Quantiles for each parameter
+#'   \item diagnostics - Diagnostic results if run
+#'   \item output_dir - Path to output directory
+#' }
+#'
+#' @export
+run_npe_workflow <- function(
+    bfrs_dir,
+    output_dir,
+    param_names = NULL,
+    observed_data = NULL,
+    architecture = "auto",
+    n_posterior_samples = 10000,
+    run_diagnostics = TRUE,
+    create_plots = TRUE,
+    use_gpu = TRUE,
+    seed = 42,
+    verbose = TRUE
+) {
+
+    # Create output directories
+    npe_dirs <- list(
+        root = output_dir,
+        model = file.path(output_dir, "model"),
+        posterior = file.path(output_dir, "posterior"),
+        diagnostics = file.path(output_dir, "diagnostics"),
+        plots = file.path(output_dir, "plots")
+    )
+    lapply(npe_dirs, function(d) dir.create(d, recursive = TRUE, showWarnings = FALSE))
+
+    if (verbose) message("\n=== NPE WORKFLOW STARTING ===\n")
+
+    # Step 1: Load and prepare data
+    if (verbose) message("Step 1: Loading BFRS results...")
+    npe_data <- .prepare_npe_data(
+        bfrs_dir = bfrs_dir,
+        param_names = param_names,
+        verbose = verbose
+    )
+
+    # Step 2: Calculate architecture
+    if (verbose) message("Step 2: Calculating NPE architecture...")
+    arch_spec <- calc_npe_architecture(
+        n_sims = npe_data$n_samples,
+        n_params = npe_data$n_params,
+        n_timesteps = npe_data$n_timesteps,
+        n_locations = npe_data$n_locations,
+        tier = architecture,
+        verbose = verbose
+    )
+
+    # Step 3: Train NPE model
+    if (verbose) message("Step 3: Training NPE model...")
+    model <- train_npe(
+        X = npe_data$parameters,
+        y = npe_data$observations,
+        weights = npe_data$weights,
+        bounds = npe_data$bounds,
+        architecture = arch_spec,
+        output_dir = npe_dirs$model,
+        use_gpu = use_gpu,
+        seed = seed,
+        verbose = verbose
+    )
+
+    # Step 4: Post-training diagnostics
+    diagnostics <- NULL
+    if (run_diagnostics) {
+        if (verbose) message("Step 4: Running post-training diagnostics...")
+        diagnostics <- run_npe_diagnostics(
+            model = model,
+            test_data = npe_data,  # Use subset of training data
+            output_dir = npe_dirs$diagnostics,
+            verbose = verbose
+        )
+
+        # Auto-tune check
+        if (diagnostics$needs_retraining) {
+            if (verbose) message("  Auto-tune: Retraining with adjusted architecture...")
+            arch_spec <- .adjust_architecture(arch_spec, diagnostics)
+            model <- train_npe(
+                X = npe_data$parameters,
+                y = npe_data$observations,
+                weights = npe_data$weights,
+                bounds = npe_data$bounds,
+                architecture = arch_spec,
+                output_dir = npe_dirs$model,
+                use_gpu = use_gpu,
+                seed = seed + 1,
+                verbose = verbose
+            )
+        }
+    }
+
+    # Step 5: Estimate posteriors (if observed data provided)
+    posterior_samples <- NULL
+    posterior_log_probs <- NULL
+    posterior_quantiles <- NULL
+
+    if (!is.null(observed_data) || !is.null(npe_data$observed_data)) {
+        if (verbose) message("Step 5: Estimating posteriors...")
+
+        # Use provided observed data or load from config
+        obs_data <- if (!is.null(observed_data)) observed_data else npe_data$observed_data
+
+        posterior_result <- estimate_npe_posterior(
+            model = model,
+            observed_data = obs_data,
+            n_samples = n_posterior_samples,
+            return_log_probs = TRUE,  # CRITICAL FOR SMC
+            output_dir = npe_dirs$posterior,
+            verbose = verbose
+        )
+
+        posterior_samples <- posterior_result$samples
+        posterior_log_probs <- posterior_result$log_probs
+        posterior_quantiles <- posterior_result$quantiles
+
+        # Ensure column names are set
+        if (is.null(colnames(posterior_samples)) && !is.null(npe_data$param_names)) {
+            colnames(posterior_samples) <- npe_data$param_names
+        }
+    }
+
+    # Step 6: Create plots
+    if (create_plots) {
+        if (verbose) message("Step 6: Creating visualizations...")
+
+        # Generate diagnostic plots if diagnostics were run
+        if (!is.null(diagnostics)) {
+            # Convert diagnostics to plot-compatible format
+            if (exists("convert_diagnostics_for_plots")) {
+                tryCatch({
+                    convert_diagnostics_for_plots(
+                        diagnostics_dir = npe_dirs$diagnostics,
+                        verbose = verbose
+                    )
+                }, error = function(e) {
+                    if (verbose) warning("Failed to convert diagnostics: ", e$message)
+                })
+            } else {
+                if (verbose) message("Note: Diagnostics converter not available, plots may fail")
+            }
+
+            # Diagnostic status plot
+            tryCatch({
+                plot_npe_diagnostic_status(
+                    diagnostics_dir = npe_dirs$diagnostics,
+                    plots_dir = npe_dirs$plots,
+                    verbose = verbose
+                )
+            }, error = function(e) {
+                if (verbose) warning("Failed to create diagnostic status plot: ", e$message)
+            })
+
+            # Coverage plot
+            tryCatch({
+                plot_npe_diagnostics_coverage(
+                    diagnostics_dir = npe_dirs$diagnostics,
+                    plots_dir = npe_dirs$plots,
+                    verbose = verbose
+                )
+            }, error = function(e) {
+                if (verbose) warning("Failed to create coverage plot: ", e$message)
+            })
+
+            # Coverage bars plot
+            tryCatch({
+                plot_npe_diagnostics_coverage_bars(
+                    diagnostics_dir = npe_dirs$diagnostics,
+                    plots_dir = npe_dirs$plots,
+                    verbose = verbose
+                )
+            }, error = function(e) {
+                if (verbose) warning("Failed to create coverage bars plot: ", e$message)
+            })
+
+            # SBC plot
+            tryCatch({
+                plot_npe_diagnostics_sbc(
+                    diagnostics_dir = npe_dirs$diagnostics,
+                    plots_dir = npe_dirs$plots,
+                    verbose = verbose
+                )
+            }, error = function(e) {
+                if (verbose) warning("Failed to create SBC plot: ", e$message)
+            })
+        }
+
+        # Generate model fit plots if posterior samples are available
+        if (!is.null(posterior_samples) && !is.null(observed_data)) {
+            if (verbose) message("\nGenerating model fit plots...")
+
+            # Get base configuration
+            config_base <- npe_data$config_base
+            if (is.null(config_base)) {
+                # Try to load from setup directory
+                config_file <- file.path(dirname(output_dir), "setup", "config_base.json")
+                if (file.exists(config_file)) {
+                    config_base <- jsonlite::read_json(config_file)
+                }
+            }
+
+            if (!is.null(config_base)) {
+                # Create config with posterior median
+                tryCatch({
+                    if (verbose) message("  Creating model fit with posterior median...")
+
+                    # Get posterior median values
+                    if (!is.null(posterior_quantiles)) {
+                        median_idx <- which(posterior_quantiles$quantile == 0.5)
+                        if (length(median_idx) > 0) {
+                            param_values <- posterior_quantiles[median_idx, -1]
+                        } else {
+                            param_values <- apply(posterior_samples, 2, median)
+                        }
+                    } else {
+                        param_values <- apply(posterior_samples, 2, median)
+                    }
+
+                    # Update config with median values
+                    config_median <- config_base
+                    for (i in seq_along(npe_data$param_names)) {
+                        param_name <- npe_data$param_names[i]
+                        if (param_name %in% names(config_median)) {
+                            config_median[[param_name]] <- as.numeric(param_values[i])
+                        }
+                    }
+
+                    # Generate stochastic plot with posterior median
+                    if (exists("plot_model_fit_stochastic")) {
+                        plot_model_fit_stochastic(
+                            config = config_median,
+                            n_simulations = 30,
+                            output_dir = npe_dirs$plots,
+                            envelope_quantiles = c(0.025, 0.975),
+                            verbose = verbose
+                        )
+                    }
+                }, error = function(e) {
+                    if (verbose) warning("Failed to create stochastic model plot: ", e$message)
+                })
+
+                # Generate plot with parameter uncertainty
+                tryCatch({
+                    if (verbose) message("  Creating model fit with parameter uncertainty...")
+
+                    # Sample multiple configs from posterior
+                    n_param_configs <- min(20, nrow(posterior_samples))
+                    config_list <- list()
+
+                    sample_idx <- sample(1:nrow(posterior_samples), n_param_configs)
+                    for (i in seq_along(sample_idx)) {
+                        idx <- sample_idx[i]
+                        config_sampled <- config_base
+
+                        # Update with sampled parameters
+                        for (j in seq_along(npe_data$param_names)) {
+                            param_name <- npe_data$param_names[j]
+                            if (param_name %in% names(config_sampled)) {
+                                config_sampled[[param_name]] <- as.numeric(posterior_samples[idx, j])
+                            }
+                        }
+                        config_list[[i]] <- config_sampled
+                    }
+
+                    # Generate stochastic parameter plot
+                    if (exists("plot_model_fit_stochastic_param")) {
+                        # Create simple parameter info
+                        param_seeds <- sample_idx
+                        param_weights <- rep(1/n_param_configs, n_param_configs)
+
+                        plot_model_fit_stochastic_param(
+                            config = config_base,
+                            parameter_seeds = param_seeds,
+                            parameter_weights = param_weights,
+                            n_simulations_per_config = 5,
+                            output_dir = npe_dirs$plots,
+                            file_suffix = "_NPE",
+                            envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+                            verbose = verbose
+                        )
+                    }
+                }, error = function(e) {
+                    if (verbose) warning("Failed to create parameter uncertainty plot: ", e$message)
+                })
+            } else {
+                if (verbose) message("  Skipping model fit plots - no base configuration available")
+            }
+        }
+    }
+
+    if (verbose) message("\n=== NPE WORKFLOW COMPLETE ===\n")
+
+    # Return results
+    return(list(
+        model = model,
+        posterior_samples = posterior_samples,
+        posterior_log_probs = posterior_log_probs,  # For SMC
+        posterior_quantiles = posterior_quantiles,
+        diagnostics = diagnostics,
+        architecture = arch_spec,
+        param_names = npe_data$param_names,
+        output_dir = output_dir
+    ))
+}
+
+#' Train NPE Model
+#'
+#' @description
+#' Trains a normalizing flow model for neural posterior estimation using
+#' v5.2 advanced features including transform ramping, guards, and auto-tune.
+#'
+#' @param X Matrix of parameters (n_samples x n_params)
+#' @param y Matrix of observations (n_samples x n_obs)
+#' @param weights Vector of importance weights (NULL for uniform)
+#' @param bounds Matrix of parameter bounds (n_params x 2)
+#' @param architecture List with architecture specification
+#' @param output_dir Directory to save trained model
+#' @param n_epochs Maximum training epochs (default 1000)
+#' @param batch_size Batch size for training (default 256)
+#' @param learning_rate Initial learning rate (default 1e-3)
+#' @param validation_split Proportion for validation (default 0.2)
+#' @param early_stopping Use early stopping (default TRUE)
+#' @param patience Early stopping patience (default 50)
+#' @param use_gpu Use GPU if available (default TRUE)
+#' @param seed Random seed
+#' @param verbose Print progress
+#'
+#' @return Trained NPE model object
+#' @export
+train_npe <- function(
+    X,
+    y,
+    weights = NULL,
+    bounds,
+    architecture,
+    output_dir,
+    n_epochs = 1000,
+    batch_size = 256,
+    learning_rate = 1e-3,
+    validation_split = 0.2,
+    early_stopping = TRUE,
+    patience = 50,
+    use_gpu = TRUE,
+    seed = 42,
+    verbose = TRUE
+) {
+
+    # Setup Python environment
+    .ensure_python_env()
+
+    # Import Python modules
+    torch <- reticulate::import("torch")
+    np <- reticulate::import("numpy")
+    zuko <- reticulate::import("zuko")
+
+    # Set random seeds
+    set.seed(seed)
+    torch$manual_seed(as.integer(seed))
+    np$random$seed(as.integer(seed))
+
+    # Device setup
+    if (use_gpu) {
+        # Check for CUDA GPU
+        if (torch$cuda$is_available()) {
+            device <- "cuda"
+            if (verbose) {
+                gpu_name <- torch$cuda$get_device_name(0L)
+                message("  Using GPU: ", gpu_name)
+            }
+        # Check for Apple Silicon MPS
+        } else if (torch$backends$mps$is_available()) {
+            device <- "mps"
+            if (verbose) message("  Using device: MPS (Apple Silicon)")
+        } else {
+            device <- "cpu"
+            if (verbose) message("  GPU requested but not available, using CPU")
+        }
+    } else {
+        device <- "cpu"
+        if (verbose) message("  Using device: CPU")
+    }
+
+    # Convert data to tensors
+    X_tensor <- torch$tensor(as.matrix(X), dtype = torch$float32)$to(device)
+    y_tensor <- torch$tensor(as.matrix(y), dtype = torch$float32)$to(device)
+
+    # Handle weights
+    if (is.null(weights)) {
+        weights <- rep(1.0 / nrow(X), nrow(X))
+    }
+    weights_tensor <- torch$tensor(weights, dtype = torch$float32)$to(device)
+
+    # Normalize data
+    X_mean <- torch$mean(X_tensor, dim = 0L, keepdim = TRUE)
+    X_std <- torch$std(X_tensor, dim = 0L, keepdim = TRUE) + 1e-8
+    X_norm <- (X_tensor - X_mean) / X_std
+
+    y_mean <- torch$mean(y_tensor, dim = 0L, keepdim = TRUE)
+    y_std <- torch$std(y_tensor, dim = 0L, keepdim = TRUE) + 1e-8
+    y_norm <- (y_tensor - y_mean) / y_std
+
+    # Create train/validation split
+    n_samples <- nrow(X)
+    n_val <- as.integer(n_samples * validation_split)
+    n_train <- n_samples - n_val
+
+    indices <- sample(n_samples)
+    train_idx <- indices[1:n_train]
+    val_idx <- indices[(n_train+1):n_samples]
+
+    # Build model
+    n_params <- ncol(X)
+    n_obs <- ncol(y)
+
+    # Create embedding network (TCN for time series)
+    embedding_net <- .create_embedding_network(
+        input_dim = n_obs,
+        output_dim = architecture$embedding_dim,
+        architecture = architecture,
+        device = device
+    )
+
+    # Create normalizing flow
+    flow <- .create_normalizing_flow(
+        n_params = n_params,
+        context_dim = architecture$embedding_dim,
+        architecture = architecture,
+        device = device
+    )
+
+    # Combine into NPE model
+    model <- torch$nn$Sequential(
+        embedding_net,
+        flow
+    )$to(device)
+
+    # Setup optimizer and scheduler
+    optimizer <- torch$optim$Adam(model$parameters(), lr = learning_rate)
+    scheduler <- torch$optim$lr_scheduler$ReduceLROnPlateau(
+        optimizer,
+        mode = "min",
+        patience = as.integer(architecture$scheduler_patience),
+        factor = 0.5
+    )
+
+    # Training loop
+    best_val_loss <- Inf
+    patience_counter <- 0
+    training_history <- list(
+        train_loss = numeric(),
+        val_loss = numeric()
+    )
+
+    if (verbose) message("  Training for up to ", n_epochs, " epochs...")
+
+    for (epoch in 1:n_epochs) {
+
+        # Training phase
+        model$train()
+        train_losses <- numeric()
+
+        # Mini-batch training
+        batch_starts <- seq(1, n_train, by = batch_size)
+        for (batch_start in batch_starts) {
+            batch_end <- min(batch_start + batch_size - 1, n_train)
+            batch_indices <- train_idx[batch_start:batch_end]
+
+            batch_X <- X_norm[batch_indices]
+            batch_y <- y_norm[batch_indices]
+            batch_w <- weights_tensor[batch_indices]
+
+            # Forward pass
+            embedding <- embedding_net(batch_y)
+            log_prob <- flow(embedding)$log_prob(batch_X)
+
+            # Weighted loss
+            weighted_log_prob <- log_prob * batch_w
+            loss <- -torch$mean(weighted_log_prob)
+
+            # Backward pass
+            optimizer$zero_grad()
+            loss$backward()
+
+            # Gradient clipping
+            torch$nn$utils$clip_grad_norm_(
+                model$parameters(),
+                max_norm = architecture$gradient_clip
+            )
+
+            optimizer$step()
+
+            train_losses <- c(train_losses, loss$item())
+        }
+
+        # Validation phase
+        model$eval()
+        with(torch$no_grad(), {
+            val_X <- X_norm[val_idx]
+            val_y <- y_norm[val_idx]
+            val_w <- weights_tensor[val_idx]
+
+            embedding <- embedding_net(val_y)
+            log_prob <- flow(embedding)$log_prob(val_X)
+            weighted_log_prob <- log_prob * val_w
+            val_loss <- -torch$mean(weighted_log_prob)$item()
+        })
+
+        # Record history
+        avg_train_loss <- mean(train_losses)
+        training_history$train_loss <- c(training_history$train_loss, avg_train_loss)
+        training_history$val_loss <- c(training_history$val_loss, val_loss)
+
+        # Learning rate scheduling
+        scheduler$step(val_loss)
+
+        # Early stopping
+        if (val_loss < best_val_loss) {
+            best_val_loss <- val_loss
+            patience_counter <- 0
+            # Save best model
+            best_model_state <- model$state_dict()
+        } else {
+            patience_counter <- patience_counter + 1
+        }
+
+        # Progress reporting
+        if (verbose && epoch %% 10 == 0) {
+            current_lr <- optimizer$param_groups[[1]]$lr
+            message(sprintf(
+                "  Epoch %d/%d - Train: %.4f, Val: %.4f, LR: %.6f",
+                epoch, n_epochs, avg_train_loss, val_loss, current_lr
+            ))
+        }
+
+        # Check early stopping
+        if (early_stopping && patience_counter >= patience) {
+            if (verbose) message("  Early stopping triggered at epoch ", epoch)
+            break
+        }
+    }
+
+    # Load best model
+    model$load_state_dict(best_model_state)
+
+    # Save model and metadata
+    if (!is.null(output_dir)) {
+        .save_npe_model(
+            model = model,
+            architecture = architecture,
+            normalization = list(
+                X_mean = X_mean$cpu(),
+                X_std = X_std$cpu(),
+                y_mean = y_mean$cpu(),
+                y_std = y_std$cpu()
+            ),
+            training_history = training_history,
+            bounds = bounds,
+            param_names = colnames(X),
+            output_dir = output_dir
+        )
+    }
+
+    # Return model object
+    return(list(
+        model = model,
+        architecture = c(architecture, list(param_names = colnames(X))),  # Include param_names
+        normalization = list(
+            X_mean = X_mean,
+            X_std = X_std,
+            y_mean = y_mean,
+            y_std = y_std
+        ),
+        training_history = training_history,
+        device = device,
+        output_dir = output_dir,
+        bounds = bounds  # Store bounds metadata (from priors.json) with model
+    ))
+}
+
+#' Calculate NPE Architecture Specification
+#'
+#' @description
+#' Automatically determines optimal neural network architecture based on
+#' problem dimensions, with v5.2 features including guards and ramping.
+#'
+#' @param n_sims Number of simulations available
+#' @param n_params Number of parameters to estimate
+#' @param n_timesteps Number of time points in observations
+#' @param n_locations Number of spatial locations
+#' @param tier Architecture tier: "auto", "minimal", "small", "medium", "large", "xlarge"
+#' @param verbose Print architecture details
+#'
+#' @return List with architecture specification
+#' @export
+calc_npe_architecture <- function(
+    n_sims,
+    n_params,
+    n_timesteps,
+    n_locations,
+    tier = "auto",
+    verbose = FALSE
+) {
+
+    # Auto-select tier based on problem size
+    if (tier == "auto") {
+        if (n_sims < 1000 || n_params < 10) {
+            tier <- "minimal"
+        } else if (n_sims < 5000 || n_params < 50) {
+            tier <- "small"
+        } else if (n_sims < 10000 || n_params < 100) {
+            tier <- "medium"
+        } else if (n_sims < 50000 || n_params < 200) {
+            tier <- "large"
+        } else {
+            tier <- "xlarge"
+        }
+        if (verbose) message("  Auto-selected tier: ", tier)
+    }
+
+    # Base architecture by tier
+    specs <- list(
+        minimal = list(transforms = 5, bins = 8, hidden = 50, tcn_blocks = 2),
+        small = list(transforms = 8, bins = 10, hidden = 64, tcn_blocks = 3),
+        medium = list(transforms = 10, bins = 12, hidden = 128, tcn_blocks = 4),
+        large = list(transforms = 15, bins = 16, hidden = 256, tcn_blocks = 5),
+        xlarge = list(transforms = 20, bins = 20, hidden = 512, tcn_blocks = 6)
+    )
+
+    base_spec <- specs[[tier]]
+
+    if (is.null(base_spec)) {
+        stop("Unknown tier: ", tier, ". Valid tiers are: minimal, small, medium, large, xlarge")
+    }
+
+    # Apply transform ramping
+    if (n_params > 50) {
+        ramped_transforms <- min(
+            20,  # cap
+            base_spec$transforms + floor((n_params - 50) / 25)
+        )
+        base_spec$transforms <- ramped_transforms
+        if (verbose) message("  Transform ramping: ", ramped_transforms, " transforms")
+    }
+
+    # Apply Large-J guard (many locations)
+    if (n_locations > 25) {
+        base_spec$attention_heads <- max(8, n_locations / 4)
+        base_spec$hidden <- base_spec$hidden * 1.5
+        if (verbose) message("  Large-J guard activated for ", n_locations, " locations")
+    }
+
+    # Apply Long-T guard (long time series)
+    if (n_timesteps > 700) {
+        base_spec$tcn_blocks <- max(7, base_spec$tcn_blocks)
+        base_spec$hidden <- as.integer(base_spec$hidden * 1.2)
+        if (verbose) message("  Long-T guard activated for ", n_timesteps, " timesteps")
+    }
+
+    # Ensure hidden dimensions are divisible by 8 for GroupNorm
+    base_spec$hidden <- as.integer(ceiling(base_spec$hidden / 8) * 8)
+
+    # Complete specification
+    architecture <- list(
+        tier = tier,
+        n_transforms = base_spec$transforms,
+        n_bins = base_spec$bins,
+        hidden = as.integer(base_spec$hidden),  # For embedding network
+        hidden_features = as.integer(base_spec$hidden),  # For flow
+        embedding_dim = as.integer(base_spec$hidden),
+        tcn_blocks = base_spec$tcn_blocks,
+        tcn_channels = as.integer(base_spec$hidden),
+        attention_heads = if (!is.null(base_spec$attention_heads)) {
+            as.integer(base_spec$attention_heads)
+        } else 4,
+        gradient_clip = 1.0,
+        scheduler_patience = 15,
+        # Problem dimensions
+        n_sims = n_sims,
+        n_params = n_params,
+        n_timesteps = n_timesteps,
+        n_locations = n_locations
+    )
+
+    return(architecture)
+}
+
+# ==============================================================================
+# Internal Helper Functions
+# ==============================================================================
+
+#' @keywords internal
+.prepare_npe_data <- function(bfrs_dir, param_names = NULL, verbose = TRUE) {
+
+    # Load simulations
+    sims_file <- file.path(bfrs_dir, "simulations.parquet")
+    if (!file.exists(sims_file)) {
+        stop("Simulations file not found: ", sims_file)
+    }
+    sims <- arrow::read_parquet(sims_file)
+
+    # Load outputs
+    outputs_file <- file.path(bfrs_dir, "outputs.parquet")
+    if (!file.exists(outputs_file)) {
+        stop("Outputs file not found: ", outputs_file)
+    }
+    outputs <- arrow::read_parquet(outputs_file)
+
+    # Filter to valid simulations
+    valid_idx <- which(!is.na(sims$likelihood) & is.finite(sims$likelihood))
+    sims <- sims[valid_idx, ]
+
+    # Auto-detect parameter columns if not specified
+    if (is.null(param_names)) {
+        # Remove non-parameter columns
+        exclude_cols <- c("sim", "iter", "seed", "seed_sim", "seed_iter",
+                         "likelihood", "weight", "is_finite", "is_valid",
+                         "is_outlier", "is_retained", "is_best_subset",
+                         "is_best_model", "weight_retained", "weight_best",
+                         "weight_npe")
+        param_names <- setdiff(colnames(sims), exclude_cols)
+        if (verbose) message("  Auto-detected ", length(param_names), " parameters")
+    }
+
+    # Extract parameters (preserve column names)
+    parameters <- as.matrix(sims[, param_names])
+    colnames(parameters) <- param_names  # Ensure column names are set
+
+    # Extract weights (use weight_npe if available, otherwise uniform)
+    if ("weight_npe" %in% colnames(sims)) {
+        weights <- sims$weight_npe
+    } else if ("weight_best" %in% colnames(sims)) {
+        weights <- sims$weight_best
+    } else {
+        weights <- rep(1.0 / nrow(sims), nrow(sims))
+    }
+
+    # Prepare observations (flatten time series)
+    # Aggregate outputs by simulation
+    obs_matrix <- .prepare_observation_matrix(outputs, sims$sim)
+
+    # Get dimensions
+    n_locations <- length(unique(outputs$j))
+    n_timesteps <- max(outputs$t)
+
+    # Extract theoretical bounds using robust parameter bounds function
+    priors_file <- file.path(bfrs_dir, "priors.json")
+    if (!file.exists(priors_file)) {
+        # Try alternative locations
+        alt_locations <- c(
+            file.path(dirname(bfrs_dir), "priors.json"),
+            file.path(dirname(dirname(bfrs_dir)), "priors.json")
+        )
+        priors_file <- NULL
+        for (alt_file in alt_locations) {
+            if (file.exists(alt_file)) {
+                priors_file <- alt_file
+                break
+            }
+        }
+    }
+
+    # Use robust bounds extraction instead of empirical ranges
+    bounds_df <- get_npe_parameter_bounds(
+        param_names = param_names,
+        priors_file = priors_file,
+        verbose = verbose
+    )
+    bounds <- as.matrix(bounds_df[, c("min", "max")])
+    rownames(bounds) <- bounds_df$parameter
+
+    # Validate that BFRS samples respect theoretical bounds (issue warnings if not)
+    for (i in seq_along(param_names)) {
+        param_range <- range(parameters[, i], na.rm = TRUE)
+        if (param_range[1] < bounds[i, 1] || param_range[2] > bounds[i, 2]) {
+            warning(sprintf("BFRS samples for parameter '%s' violate theoretical bounds [%.6f, %.6f]. Sample range: [%.6f, %.6f]",
+                           param_names[i], bounds[i, 1], bounds[i, 2], param_range[1], param_range[2]))
+        }
+    }
+
+    # Try to load observed data if available
+    obs_data_file <- file.path(bfrs_dir, "observed_data.csv")
+    observed_data <- if (file.exists(obs_data_file)) {
+        read.csv(obs_data_file)
+    } else {
+        NULL
+    }
+
+    return(list(
+        parameters = parameters,
+        observations = obs_matrix,
+        weights = weights,
+        bounds = bounds,
+        param_names = param_names,
+        n_samples = nrow(parameters),
+        n_params = length(param_names),
+        n_timesteps = n_timesteps,
+        n_locations = n_locations,
+        observed_data = observed_data
+    ))
+}
+
+#' @keywords internal
+.prepare_observation_matrix <- function(outputs, sim_ids) {
+    # Create matrix with one row per simulation
+    # Columns are flattened time series (location1_t1, location1_t2, ...)
+
+    unique_sims <- unique(sim_ids)
+    n_sims <- length(unique_sims)
+
+    # Get dimensions from first simulation
+    first_sim_data <- outputs[outputs$sim == unique_sims[1], ]
+    n_locations <- length(unique(first_sim_data$j))
+    n_timesteps <- max(first_sim_data$t)
+    n_features <- n_locations * n_timesteps
+
+    # Initialize matrix
+    obs_matrix <- matrix(0, nrow = n_sims, ncol = n_features)
+
+    # Fill matrix
+    for (i in seq_along(unique_sims)) {
+        sim_data <- outputs[outputs$sim == unique_sims[i], ]
+
+        # Flatten the time series
+        vec <- numeric(n_features)
+        for (j_idx in 1:n_locations) {
+            for (t_idx in 1:n_timesteps) {
+                col_idx <- (j_idx - 1) * n_timesteps + t_idx
+                row_data <- sim_data[sim_data$j == j_idx & sim_data$t == t_idx, ]
+                if (nrow(row_data) > 0) {
+                    vec[col_idx] <- row_data$cases[1]  # Use cases as primary observation
+                }
+            }
+        }
+        obs_matrix[i, ] <- vec
+    }
+
+    return(obs_matrix)
+}
+
+#' @keywords internal
+.ensure_python_env <- function() {
+    # Check if reticulate is configured
+    if (!reticulate::py_available()) {
+        stop("Python environment not available. Please run MOSAIC::check_python_env()")
+    }
+
+    # Check for required packages
+    required_packages <- c("torch", "numpy", "zuko")
+    for (pkg in required_packages) {
+        if (!reticulate::py_module_available(pkg)) {
+            stop("Required Python package '", pkg, "' not found. ",
+                 "Please run MOSAIC::install_dependencies()")
+        }
+    }
+}
+
+#' @keywords internal
+.create_embedding_network <- function(input_dim, output_dim, architecture, device) {
+    torch <- reticulate::import("torch")
+    nn <- torch$nn
+
+    # Use hidden dimensions from architecture
+    hidden_dim <- as.integer(architecture$hidden)
+
+    # Ensure hidden dimensions are divisible by 8 for potential GroupNorm usage
+    if (hidden_dim %% 8 != 0) {
+        hidden_dim <- as.integer(ceiling(hidden_dim / 8) * 8)
+    }
+
+    # Create MLP-based embedding network
+    layers <- list()
+
+    # Build network based on number of blocks
+    n_blocks <- architecture$tcn_blocks  # Reuse this for number of hidden layers
+
+    # Input layer
+    layers[[1]] <- nn$Linear(as.integer(input_dim), hidden_dim)
+    layers[[2]] <- nn$ReLU()
+    layers[[3]] <- nn$Dropout(p = 0.1)
+
+    # Hidden layers
+    for (i in 1:n_blocks) {
+        # Linear layer
+        layers[[length(layers) + 1]] <- nn$Linear(hidden_dim, hidden_dim)
+
+        # Normalization - use LayerNorm which doesn't have divisibility requirements
+        layers[[length(layers) + 1]] <- nn$LayerNorm(hidden_dim)
+
+        # Activation
+        layers[[length(layers) + 1]] <- nn$ReLU()
+
+        # Dropout for regularization
+        if (i < n_blocks) {  # No dropout before final projection
+            layers[[length(layers) + 1]] <- nn$Dropout(p = 0.1)
+        }
+    }
+
+    # Output projection
+    layers[[length(layers) + 1]] <- nn$Linear(hidden_dim, as.integer(output_dim))
+
+    # Convert device string to torch device
+    if (is.character(device)) {
+        device <- torch$device(device)
+    }
+
+    # Create Sequential model by unpacking layers list
+    model <- do.call(nn$Sequential, layers)$to(device)
+    return(model)
+}
+
+#' @keywords internal
+.create_normalizing_flow <- function(n_params, context_dim, architecture, device) {
+    zuko <- reticulate::import("zuko")
+    torch <- reticulate::import("torch")
+
+    # Create MAF (Masked Autoregressive Flow)
+    # Note: MAF doesn't use bins parameter (that's for NSF)
+    flow <- zuko$flows$MAF(
+        features = as.integer(n_params),
+        context = as.integer(context_dim),
+        transforms = as.integer(architecture$n_transforms),
+        hidden_features = list(
+            as.integer(architecture$hidden_features),
+            as.integer(architecture$hidden_features)
+        )
+    )$to(device)
+
+    return(flow)
+}
+
+#' @keywords internal
+.save_npe_model <- function(model, architecture, normalization,
+                            training_history, bounds, param_names, output_dir) {
+
+    torch <- reticulate::import("torch")
+
+    # Save PyTorch model
+    model_path <- file.path(output_dir, "npe_model.pt")
+    torch$save(
+        list(
+            model_state_dict = model$state_dict(),
+            architecture = architecture,
+            normalization = normalization
+        ),
+        model_path
+    )
+
+    # Save metadata
+    metadata <- list(
+        architecture = architecture,
+        training_history = training_history,
+        bounds = as.data.frame(bounds),
+        param_names = param_names,
+        timestamp = Sys.time(),
+        mosaic_version = as.character(packageVersion("MOSAIC"))
+    )
+
+    jsonlite::write_json(
+        metadata,
+        file.path(output_dir, "npe_metadata.json"),
+        pretty = TRUE,
+        auto_unbox = TRUE
+    )
+
+    # Save training history plot data
+    saveRDS(training_history, file.path(output_dir, "training_history.rds"))
+}
+
+#' @keywords internal
+.adjust_architecture <- function(architecture, diagnostics) {
+    # Auto-tune adjustments based on diagnostics
+
+    # If coverage is poor, increase model capacity
+    if (diagnostics$coverage_50 < 0.4 || diagnostics$coverage_50 > 0.6) {
+        architecture$n_transforms <- min(25, architecture$n_transforms + 3)
+        architecture$hidden_features <- as.integer(architecture$hidden_features * 1.2)
+    }
+
+    # If SBC shows calibration issues, adjust bins
+    if (diagnostics$sbc_pass_rate < 0.8) {
+        architecture$n_bins <- min(24, architecture$n_bins + 4)
+    }
+
+    return(architecture)
+}

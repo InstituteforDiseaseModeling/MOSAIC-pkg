@@ -1,0 +1,406 @@
+# ==============================================================================
+# NPE Plotting Functions
+# ==============================================================================
+# Functions for visualizing NPE training, diagnostics, and posteriors
+# ==============================================================================
+
+#' Plot NPE Training History
+#'
+#' @description
+#' Creates plots showing training and validation loss over epochs.
+#'
+#' @param model NPE model object with training history
+#' @param output_dir Directory to save plots
+#' @param file_name Name for output file
+#' @param width Plot width in inches
+#' @param height Plot height in inches
+#'
+#' @return ggplot object (invisibly)
+#' @export
+plot_npe_training <- function(
+    model,
+    output_dir = NULL,
+    file_name = "npe_training_history.pdf",
+    width = 8,
+    height = 6
+) {
+
+    # Extract training history
+    history <- model$training_history
+
+    if (is.null(history) || length(history$train_loss) == 0) {
+        warning("No training history available")
+        return(invisible(NULL))
+    }
+
+    # Prepare data for plotting
+    epochs <- 1:length(history$train_loss)
+    plot_data <- data.frame(
+        epoch = rep(epochs, 2),
+        loss = c(history$train_loss, history$val_loss),
+        type = rep(c("Training", "Validation"), each = length(epochs))
+    )
+
+    # Create plot
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = epoch, y = loss, color = type)) +
+        ggplot2::geom_line(size = 1) +
+        ggplot2::geom_point(size = 0.5, alpha = 0.5) +
+        ggplot2::scale_color_manual(values = c("Training" = "#2E86AB", "Validation" = "#A23B72")) +
+        ggplot2::scale_y_log10() +
+        ggplot2::labs(
+            title = "NPE Training History",
+            x = "Epoch",
+            y = "Loss (log scale)",
+            color = "Dataset"
+        ) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 14, face = "bold"),
+            legend.position = "top"
+        )
+
+    # Save if requested
+    if (!is.null(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+        output_path <- file.path(output_dir, file_name)
+        ggplot2::ggsave(output_path, p, width = width, height = height)
+        message("Training plot saved to: ", output_path)
+    }
+
+    return(invisible(p))
+}
+
+#' Plot NPE Diagnostics
+#'
+#' @description
+#' Creates diagnostic plots including coverage and SBC results.
+#'
+#' @param diagnostics Diagnostic results from run_npe_diagnostics
+#' @param output_dir Directory to save plots
+#' @param file_name Name for output file
+#' @param width Plot width in inches
+#' @param height Plot height in inches
+#'
+#' @return List of ggplot objects (invisibly)
+#' @export
+plot_npe_diagnostics <- function(
+    diagnostics,
+    output_dir = NULL,
+    file_name = "npe_diagnostics.pdf",
+    width = 10,
+    height = 8
+) {
+
+    plots <- list()
+
+    # Coverage plot
+    if (!is.null(diagnostics$coverage)) {
+        plots$coverage <- .plot_coverage(diagnostics$coverage)
+    }
+
+    # SBC plot
+    if (!is.null(diagnostics$sbc)) {
+        plots$sbc <- .plot_sbc(diagnostics$sbc)
+    }
+
+    # Combine plots
+    if (length(plots) > 0) {
+        combined <- cowplot::plot_grid(
+            plotlist = plots,
+            ncol = 1,
+            rel_heights = c(1, 1)
+        )
+
+        # Save if requested
+        if (!is.null(output_dir)) {
+            dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+            output_path <- file.path(output_dir, file_name)
+            ggplot2::ggsave(output_path, combined, width = width, height = height)
+            message("Diagnostic plots saved to: ", output_path)
+        }
+    }
+
+    return(invisible(plots))
+}
+
+#' Plot NPE Posteriors
+#'
+#' @description
+#' Creates density plots comparing prior and posterior distributions.
+#'
+#' @param samples Matrix of posterior samples
+#' @param param_names Names of parameters
+#' @param priors Prior distributions (optional)
+#' @param output_dir Directory to save plots
+#' @param file_name Name for output file
+#' @param width Plot width in inches
+#' @param height Plot height in inches
+#' @param n_cols Number of columns in plot grid
+#'
+#' @return ggplot object (invisibly)
+#' @export
+plot_npe_posteriors <- function(
+    samples,
+    param_names = NULL,
+    priors = NULL,
+    output_dir = NULL,
+    file_name = "npe_posteriors.pdf",
+    width = 12,
+    height = 10,
+    n_cols = 4
+) {
+
+    # Set parameter names
+    if (is.null(param_names)) {
+        param_names <- colnames(samples)
+        if (is.null(param_names)) {
+            param_names <- paste0("param_", 1:ncol(samples))
+        }
+    }
+
+    n_params <- length(param_names)
+    plots <- list()
+
+    for (i in 1:n_params) {
+        param <- param_names[i]
+        param_samples <- samples[, i]
+
+        # Create density data
+        dens <- density(param_samples)
+        plot_data <- data.frame(
+            x = dens$x,
+            y = dens$y,
+            type = "Posterior"
+        )
+
+        # Add prior if available
+        if (!is.null(priors) && param %in% names(priors)) {
+            prior <- priors[[param]]
+            prior_x <- seq(min(dens$x), max(dens$x), length.out = 200)
+            prior_y <- .evaluate_prior_density(prior_x, prior)
+
+            prior_data <- data.frame(
+                x = prior_x,
+                y = prior_y,
+                type = "Prior"
+            )
+
+            plot_data <- rbind(plot_data, prior_data)
+        }
+
+        # Create plot
+        p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = x, y = y, color = type)) +
+            ggplot2::geom_line(size = 1) +
+            ggplot2::scale_color_manual(values = c("Prior" = "#999999", "Posterior" = "#2E86AB")) +
+            ggplot2::labs(
+                title = param,
+                x = NULL,
+                y = "Density"
+            ) +
+            ggplot2::theme_minimal() +
+            ggplot2::theme(
+                plot.title = ggplot2::element_text(size = 10),
+                legend.position = if (i == 1) "top" else "none",
+                legend.title = ggplot2::element_blank()
+            )
+
+        plots[[i]] <- p
+    }
+
+    # Combine plots
+    n_rows <- ceiling(n_params / n_cols)
+    combined <- cowplot::plot_grid(
+        plotlist = plots,
+        ncol = n_cols,
+        nrow = n_rows
+    )
+
+    # Add overall title
+    titled <- cowplot::ggdraw() +
+        cowplot::draw_plot(combined, 0, 0, 1, 0.95) +
+        cowplot::draw_label("NPE Posterior Distributions", x = 0.5, y = 0.98, size = 14, fontface = "bold")
+
+    # Save if requested
+    if (!is.null(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+        output_path <- file.path(output_dir, file_name)
+        ggplot2::ggsave(output_path, titled, width = width, height = height)
+        message("Posterior plots saved to: ", output_path)
+    }
+
+    return(invisible(titled))
+}
+
+#' Plot NPE Coverage Bars
+#'
+#' @description
+#' Creates bar plots showing coverage by parameter.
+#'
+#' @param diagnostics Diagnostic results with coverage information
+#' @param output_dir Directory to save plots
+#' @param file_name Name for output file
+#' @param width Plot width in inches
+#' @param height Plot height in inches
+#'
+#' @return ggplot object (invisibly)
+#' @export
+plot_npe_coverage_bars <- function(
+    diagnostics,
+    output_dir = NULL,
+    file_name = "npe_coverage_bars.pdf",
+    width = 10,
+    height = 6
+) {
+
+    if (is.null(diagnostics$coverage) ||
+        is.null(diagnostics$coverage$coverage_50_by_param)) {
+        warning("No per-parameter coverage data available")
+        return(invisible(NULL))
+    }
+
+    # Prepare data
+    param_names <- names(diagnostics$coverage$coverage_50_by_param)
+    n_params <- length(param_names)
+
+    plot_data <- data.frame(
+        parameter = rep(param_names, 2),
+        coverage = c(
+            diagnostics$coverage$coverage_50_by_param,
+            diagnostics$coverage$coverage_80_by_param
+        ),
+        CI = rep(c("50%", "80%"), each = n_params),
+        expected = rep(c(0.5, 0.8), each = n_params)
+    )
+
+    # Create plot
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = parameter, y = coverage, fill = CI)) +
+        ggplot2::geom_bar(stat = "identity", position = "dodge") +
+        ggplot2::geom_hline(
+            data = data.frame(CI = c("50%", "80%"), expected = c(0.5, 0.8)),
+            ggplot2::aes(yintercept = expected),
+            linetype = "dashed",
+            color = "red"
+        ) +
+        ggplot2::scale_fill_manual(values = c("50%" = "#2E86AB", "80%" = "#A23B72")) +
+        ggplot2::scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
+        ggplot2::labs(
+            title = "NPE Coverage by Parameter",
+            subtitle = "Red lines show expected coverage",
+            x = "Parameter",
+            y = "Coverage",
+            fill = "Credible Interval"
+        ) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 14, face = "bold"),
+            axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+            legend.position = "top"
+        )
+
+    # Save if requested
+    if (!is.null(output_dir)) {
+        dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+        output_path <- file.path(output_dir, file_name)
+        ggplot2::ggsave(output_path, p, width = width, height = height)
+        message("Coverage bars saved to: ", output_path)
+    }
+
+    return(invisible(p))
+}
+
+# ==============================================================================
+# Internal Plotting Functions
+# ==============================================================================
+
+#' @keywords internal
+.plot_coverage <- function(coverage_results) {
+
+    # Create coverage comparison plot
+    plot_data <- data.frame(
+        CI = c("50%", "80%"),
+        observed = c(coverage_results$coverage_50, coverage_results$coverage_80),
+        expected = c(0.5, 0.8)
+    )
+
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = CI)) +
+        ggplot2::geom_bar(ggplot2::aes(y = observed, fill = "Observed"),
+                         stat = "identity", alpha = 0.7) +
+        ggplot2::geom_point(ggplot2::aes(y = expected, color = "Expected"),
+                           size = 4) +
+        ggplot2::geom_errorbar(ggplot2::aes(
+            ymin = expected - 0.05,
+            ymax = expected + 0.05
+        ), width = 0.2, color = "red") +
+        ggplot2::scale_fill_manual(values = c("Observed" = "#2E86AB")) +
+        ggplot2::scale_color_manual(values = c("Expected" = "red")) +
+        ggplot2::scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
+        ggplot2::labs(
+            title = "Coverage Analysis",
+            x = "Credible Interval",
+            y = "Coverage"
+        ) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 12, face = "bold"),
+            legend.position = "top",
+            legend.title = ggplot2::element_blank()
+        )
+
+    return(p)
+}
+
+#' @keywords internal
+.plot_sbc <- function(sbc_results) {
+
+    if (is.null(sbc_results$ranks)) {
+        return(NULL)
+    }
+
+    # Flatten ranks for histogram
+    ranks_vec <- as.vector(sbc_results$ranks)
+    ranks_vec <- ranks_vec[!is.na(ranks_vec)]
+
+    plot_data <- data.frame(rank = ranks_vec)
+
+    # Create histogram
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = rank)) +
+        ggplot2::geom_histogram(bins = 20, fill = "#2E86AB", alpha = 0.7) +
+        ggplot2::geom_hline(
+            yintercept = length(ranks_vec) / 20,
+            linetype = "dashed",
+            color = "red"
+        ) +
+        ggplot2::labs(
+            title = "Simulation-Based Calibration",
+            subtitle = paste("Pass rate:", sprintf("%.1f%%", sbc_results$pass_rate * 100)),
+            x = "Rank",
+            y = "Count"
+        ) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 12, face = "bold")
+        )
+
+    return(p)
+}
+
+#' @keywords internal
+.evaluate_prior_density <- function(x, prior) {
+    # Evaluate prior density at points x
+
+    if (prior$distribution == "beta") {
+        y <- dbeta(x, prior$alpha, prior$beta)
+    } else if (prior$distribution == "gamma") {
+        y <- dgamma(x, shape = prior$shape, rate = prior$rate)
+    } else if (prior$distribution == "lognormal") {
+        y <- dlnorm(x, meanlog = prior$meanlog, sdlog = prior$sdlog)
+    } else if (prior$distribution == "normal") {
+        y <- dnorm(x, mean = prior$mean, sd = prior$sd)
+    } else if (prior$distribution == "uniform") {
+        y <- dunif(x, min = prior$min, max = prior$max)
+    } else {
+        y <- rep(0, length(x))
+    }
+
+    return(y)
+}
