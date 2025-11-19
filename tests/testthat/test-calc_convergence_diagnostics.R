@@ -64,7 +64,7 @@ test_that("Status calculations work correctly for individual metrics", {
           ess_retained = 450,
           ess_best = 280,          # 93% of target (300) → pass (≥80%)
           A_best = 0.92,           # 97% of target (0.95) → pass (≥90%)
-          cvw_best = 0.55,         # 110% of target (0.5) → warn (≤120%)
+          cvw_best = 0.7,          # 140% of target (0.5) → warn (>120%, ≤200%)
           percentile_used = 4.8,   # Below target (5.0) → pass
           convergence_tier = "tier_3",
           target_ess_best = 300,
@@ -79,7 +79,7 @@ test_that("Status calculations work correctly for individual metrics", {
      expect_equal(diag$metrics$B_size$status, "pass")      # 500 ≥ 100
      expect_equal(diag$metrics$ess_best$status, "pass")    # 280 ≥ 300*0.8
      expect_equal(diag$metrics$A_B$status, "pass")         # 0.92 ≥ 0.95*0.9
-     expect_equal(diag$metrics$cvw_B$status, "warn")       # 0.55 ≤ 0.5*1.2 but > 0.5*1.0
+     expect_equal(diag$metrics$cvw_B$status, "warn")       # 0.7 > 0.5*1.2 but ≤ 0.5*2.0
      expect_equal(diag$metrics$ess_retained$status, "-")   # Informational only
 
      # Overall status should be WARN (has one warn, no fails)
@@ -113,7 +113,7 @@ test_that("Overall status reflects worst individual status", {
           ess_retained = 450,
           ess_best = 250,      # 83% of 300 → pass
           A_best = 0.95,       # Meets target
-          cvw_best = 0.55,     # 110% of 0.5 → warn
+          cvw_best = 0.7,      # 140% of 0.5 → warn (>120%, ≤200%)
           percentile_used = 4.0,
           convergence_tier = "tier_3",
           verbose = FALSE
@@ -321,31 +321,31 @@ test_that("Diagnostics structure is complete and correctly formatted", {
 
 test_that("Helper function .calc_status works correctly", {
      # Higher is better
-     expect_equal(.calc_status(300, 300, "higher", 0.8, 0.5), "pass")    # Meets target
-     expect_equal(.calc_status(250, 300, "higher", 0.8, 0.5), "warn")    # 83%, between thresholds
-     expect_equal(.calc_status(140, 300, "higher", 0.8, 0.5), "fail")    # 47%, below warn
+     expect_equal(MOSAIC:::.calc_status(300, 300, "higher", 0.8, 0.5), "pass")    # Meets target
+     expect_equal(MOSAIC:::.calc_status(200, 300, "higher", 0.8, 0.5), "warn")    # 67%, between thresholds (50-80%)
+     expect_equal(MOSAIC:::.calc_status(140, 300, "higher", 0.8, 0.5), "fail")    # 47%, below warn
 
      # Lower is better
-     expect_equal(.calc_status(0.4, 0.5, "lower", 1.2, 2.0), "pass")     # Better than target
-     expect_equal(.calc_status(0.55, 0.5, "lower", 1.2, 2.0), "warn")    # 110%, between thresholds
-     expect_equal(.calc_status(1.2, 0.5, "lower", 1.2, 2.0), "fail")     # 240%, above warn
+     expect_equal(MOSAIC:::.calc_status(0.4, 0.5, "lower", 1.2, 2.0), "pass")     # Better than target
+     expect_equal(MOSAIC:::.calc_status(0.7, 0.5, "lower", 1.2, 2.0), "warn")     # 140%, between thresholds
+     expect_equal(MOSAIC:::.calc_status(1.2, 0.5, "lower", 1.2, 2.0), "fail")     # 240%, above warn
 
      # Non-finite values
-     expect_equal(.calc_status(NA_real_, 300, "higher", 0.8, 0.5), "fail")
-     expect_equal(.calc_status(Inf, 300, "higher", 0.8, 0.5), "fail")
-     expect_equal(.calc_status(-Inf, 300, "higher", 0.8, 0.5), "fail")
+     expect_equal(MOSAIC:::.calc_status(NA_real_, 300, "higher", 0.8, 0.5), "fail")
+     expect_equal(MOSAIC:::.calc_status(Inf, 300, "higher", 0.8, 0.5), "fail")
+     expect_equal(MOSAIC:::.calc_status(-Inf, 300, "higher", 0.8, 0.5), "fail")
 })
 
 
 test_that("Helper function .calc_percentile_status works correctly", {
-     expect_equal(.calc_percentile_status(4.0, 5.0), "pass")    # Below target
-     expect_equal(.calc_percentile_status(5.0, 5.0), "pass")    # Meets target
-     expect_equal(.calc_percentile_status(6.5, 5.0), "warn")    # 130%, between thresholds
-     expect_equal(.calc_percentile_status(10.0, 5.0), "fail")   # 200%, above warn
+     expect_equal(MOSAIC:::.calc_percentile_status(4.0, 5.0), "pass")    # Below target
+     expect_equal(MOSAIC:::.calc_percentile_status(5.0, 5.0), "pass")    # Meets target
+     expect_equal(MOSAIC:::.calc_percentile_status(6.5, 5.0), "warn")    # 130%, between thresholds
+     expect_equal(MOSAIC:::.calc_percentile_status(10.0, 5.0), "fail")   # 200%, above warn
 
      # Non-finite values
-     expect_equal(.calc_percentile_status(NA_real_, 5.0), "fail")
-     expect_equal(.calc_percentile_status(Inf, 5.0), "fail")
+     expect_equal(MOSAIC:::.calc_percentile_status(NA_real_, 5.0), "fail")
+     expect_equal(MOSAIC:::.calc_percentile_status(Inf, 5.0), "fail")
 })
 
 

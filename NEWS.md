@@ -1,3 +1,13 @@
+# MOSAIC 0.8.8
+
+## Bug Fixes
+
+* Fixed test failures in `test-calc_convergence_diagnostics.R`
+  - Corrected threshold expectations for "lower is better" metrics (CVw)
+  - Changed test values to properly demonstrate warn status (within 120-200% of target)
+  - Updated helper function tests to use `MOSAIC:::` for internal function access
+  - All 70 tests now pass
+
 # MOSAIC (development version)
 
 ## New Features
