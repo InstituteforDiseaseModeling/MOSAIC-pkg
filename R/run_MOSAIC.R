@@ -1008,18 +1008,8 @@ run_MOSAIC <- function(config,
   write.csv(ess_results, ess_file, row.names = FALSE)
   log_msg("Saved %s", ess_file)
 
-  # ===========================================================================
-  # POST-HOC SUBSET OPTIMIZATION
-  # ===========================================================================
+  log_msg("Optimizing subset selection")
 
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("POST-HOC OPTIMIZATION: FINDING OPTIMAL SUBSET FOR NPE PRIORS")
-  log_msg(paste(rep("=", 80), collapse = ""))
-
-  log_msg("\nTrying tiered criteria for optimal subset selection...")
-  log_msg("  Max search percentile: %.1f%%", control$targets$percentile_max)
-
-  # Define tiered criteria for post-hoc optimization
   subset_tiers <- get_default_subset_tiers(
     target_ESS_best = control$targets$ESS_best,
     target_A = control$targets$A_best,
@@ -1027,16 +1017,11 @@ run_MOSAIC <- function(config,
     n_tiers = 15
   )
 
-  # Try each tier in order until convergence
   optimal_subset_result <- NULL
   tier_used <- NULL
 
   for (tier_name in names(subset_tiers)) {
     tier <- subset_tiers[[tier_name]]
-
-    log_msg("\n--- Trying %s tier ---", tier$name)
-    log_msg("  Criteria: A≥%.2f, CVw≤%.2f, ESS_B≥%.0f",
-            tier$A, tier$CVw, tier$ESS_B)
 
     tier_result <- identify_best_subset(
       results = results,
@@ -1051,57 +1036,30 @@ run_MOSAIC <- function(config,
     )
 
     if (tier_result$converged) {
-      log_msg("  ✓ CONVERGED: %.1f%% (%d simulations)",
-              tier_result$percentile_used,
-              tier_result$n_selected)
-      log_msg("    Metrics: ESS_B=%.1f, A=%.3f, CVw=%.3f",
-              tier_result$metrics$ESS_B,
-              tier_result$metrics$A,
-              tier_result$metrics$CVw)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
-
-      # Clean up tier definition before breaking (converged case)
       rm(tier)
-
       break
     } else {
-      log_msg("  ✗ Not converged")
-
-      # CRITICAL: Clean up failed tier result immediately to prevent accumulation
       rm(tier_result)
       rm(tier)
     }
   }
 
-  # Clean up tier definitions after loop completes
-  if (exists("subset_tiers")) {
-    rm(subset_tiers)
-  }
+  if (exists("subset_tiers")) rm(subset_tiers)
   gc(verbose = FALSE)
 
-  # Decide which subset to use
   if (!is.null(optimal_subset_result)) {
-    log_msg("\n✓ OPTIMIZATION SUCCESS: Converged with %s criteria", tier_used)
-    log_msg("  Using %.1f%% (%d simulations) for NPE priors",
-            optimal_subset_result$percentile_used,
-            optimal_subset_result$n_selected)
-
     top_subset_final <- optimal_subset_result$subset
     percentile_used <- optimal_subset_result$percentile_used
     n_top_final <- optimal_subset_result$n_selected
     convergence_tier <- tier_used
 
   } else {
-    log_msg("\n⚠ No tier achieved convergence")
-    log_msg("  Falling back to maximum allowed: top %.1f%%", control$targets$percentile_max)
-
     fallback_percentile <- control$targets$percentile_max
     n_top_final <- ceiling(nrow(results) * fallback_percentile / 100)
     results_ranked_final <- results[order(results$likelihood, decreasing = TRUE), ]
     top_subset_final <- results_ranked_final[1:n_top_final, ]
-
-    # Clean up sorted copy immediately (no longer needed after subsetting)
     rm(results_ranked_final)
 
     percentile_used <- fallback_percentile
@@ -1182,96 +1140,45 @@ run_MOSAIC <- function(config,
   # Update best subset column
   results$is_best_subset <- FALSE
   results$is_best_subset[results$sim %in% top_subset_final$sim] <- TRUE
-  log_msg("\nMarked %d simulations as best subset", sum(results$is_best_subset))
+  log_msg("Calculating weights")
 
-  # ===========================================================================
-  # CALCULATE ANALYSIS WEIGHTS (UNIFIED ADAPTIVE METHOD)
-  # ===========================================================================
-
-  log_msg("\nCalculating analysis weights using adaptive Gibbs method...")
-
-  # Initialize weight columns
   results$weight_all <- 0
   results$weight_retained <- 0
   results$weight_best <- 0
 
-  # ---------------------------------------------------------------------------
-  # Weight ALL valid simulations (for NPE continuous_all strategy)
-  # ---------------------------------------------------------------------------
-
   if (sum(results$is_valid) > 0) {
-    log_msg("\n--- ALL Simulations (Valid) ---")
-
     all_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_valid],
       weight_floor = control$weights$floor,
-      verbose = control$io$verbose_weights
+      verbose = FALSE
     )
-
     results$weight_all[results$is_valid] <- all_result$weights
-
-    log_msg("  n=%d | Range: %.1f (actual: %.1f) | T=%.4f | ESS: %.1f (Kish), %.1f (Perp)",
-            sum(results$is_valid), all_result$effective_range,
-            all_result$metrics$actual_range, all_result$temperature,
-            all_result$metrics$ESS_kish, all_result$metrics$ESS_perplexity)
-
-    # Clean up weight result object (only needed weights, now extracted)
     rm(all_result)
   }
 
-  # ---------------------------------------------------------------------------
-  # Weight RETAINED models (for plotting, ensemble predictions)
-  # ---------------------------------------------------------------------------
-
   if (sum(results$is_retained) > 0) {
-    log_msg("\n--- RETAINED Subset ---")
-
     retained_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_retained],
       weight_floor = control$weights$floor,
-      verbose = control$io$verbose_weights
+      verbose = FALSE
     )
-
     results$weight_retained[results$is_retained] <- retained_result$weights
-
-    log_msg("  n=%d | Range: %.1f (actual: %.1f) | T=%.4f | ESS: %.1f (Kish), %.1f (Perp)",
-            sum(results$is_retained), retained_result$effective_range,
-            retained_result$metrics$actual_range, retained_result$temperature,
-            retained_result$metrics$ESS_kish, retained_result$metrics$ESS_perplexity)
-
-    # Clean up weight result object (only needed weights, now extracted)
     rm(retained_result)
   }
 
-  # ---------------------------------------------------------------------------
-  # Weight BEST subset (for NPE priors, posterior inference)
-  # ---------------------------------------------------------------------------
-
   if (sum(results$is_best_subset) > 0) {
-    log_msg("\n--- BEST Subset ---")
-
     best_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_best_subset],
       weight_floor = control$weights$floor,
-      verbose = control$io$verbose_weights
+      verbose = FALSE
     )
-
     results$weight_best[results$is_best_subset] <- best_result$weights
     ESS_best <- best_result$metrics$ESS_kish
-
-    log_msg("  n=%d | Range: %.1f (actual: %.1f) | T=%.4f | ESS: %.1f (Kish), %.1f (Perp)",
-            sum(results$is_best_subset), best_result$effective_range,
-            best_result$metrics$actual_range, best_result$temperature,
-            best_result$metrics$ESS_kish, best_result$metrics$ESS_perplexity)
-
-    # Clean up weight result object (only needed weights, now extracted)
     rm(best_result)
   }
 
-  # Force garbage collection after all weight calculations
   gc(verbose = FALSE)
 
-  # Save subset selection summary
   subset_summary <- data.frame(
     max_search_percentile = control$targets$percentile_max,
     optimal_percentile = percentile_used,
@@ -1286,19 +1193,12 @@ run_MOSAIC <- function(config,
   )
   summary_file <- file.path(dirs$bfrs_diag, "subset_selection_summary.csv")
   write.csv(subset_summary, summary_file, row.names = FALSE)
-  log_msg("Subset selection summary saved to: %s", basename(summary_file))
+  log_msg("Saved %s", summary_file)
 
-  # Re-save simulations.parquet with weight columns
   .mosaic_write_parquet(results, simulations_file, control$io)
-  log_msg("Updated simulations.parquet with weight columns")
+  log_msg("Saved %s", simulations_file)
 
-  # ===========================================================================
-  # CONVERGENCE ANALYSIS
-  # ===========================================================================
-
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("CONVERGENCE ANALYSIS")
-  log_msg(paste(rep("=", 80), collapse = ""))
+  log_msg("Calculating convergence diagnostics")
 
   # Calculate metrics for retained models
   retained_results <- results[results$is_retained, ]
