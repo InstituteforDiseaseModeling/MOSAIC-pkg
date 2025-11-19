@@ -19,7 +19,7 @@
 #' Validate and Merge Control Settings
 #' @noRd
 .mosaic_validate_and_merge_control <- function(control) {
-  def <- mosaic_run_defaults()
+  def <- mosaic_control_defaults()
 
   # Deep merge user control into defaults
   for (nm in names(control)) {
