@@ -411,6 +411,13 @@ calc_npe_weights <- function(
 #' @export
 load_npe_model <- function(model_dir, device = "cpu") {
 
+    # CRITICAL: Set BLAS threads to 1 BEFORE importing PyTorch
+    if (exists(".mosaic_set_blas_threads", envir = asNamespace("MOSAIC"), inherits = FALSE)) {
+        MOSAIC:::.mosaic_set_blas_threads(1L)
+    }
+    Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+               OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
+
     torch <- reticulate::import("torch")
 
     # Load model file
@@ -669,6 +676,10 @@ load_npe_model <- function(model_dir, device = "cpu") {
     # Clean up Python/PyTorch resources
 
     tryCatch({
+        # Set BLAS threads before importing PyTorch (even for cleanup)
+        if (exists(".mosaic_set_blas_threads", envir = asNamespace("MOSAIC"), inherits = FALSE)) {
+            MOSAIC:::.mosaic_set_blas_threads(1L)
+        }
         torch <- reticulate::import("torch")
         if (torch$cuda$is_available()) {
             torch$cuda$empty_cache()

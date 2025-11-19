@@ -58,6 +58,20 @@ estimate_npe_posterior <- function(
 
     if (verbose) message("Estimating NPE posterior...")
 
+    # CRITICAL: Set BLAS threads to 1 BEFORE importing PyTorch
+    # This prevents OpenMP/MKL threading conflicts on clusters
+    if (exists(".mosaic_set_blas_threads", envir = asNamespace("MOSAIC"), inherits = FALSE)) {
+        MOSAIC:::.mosaic_set_blas_threads(1L)
+    }
+
+    # Also set environment variables as backup
+    Sys.setenv(
+        OMP_NUM_THREADS = "1",
+        MKL_NUM_THREADS = "1",
+        OPENBLAS_NUM_THREADS = "1",
+        NUMEXPR_NUM_THREADS = "1"
+    )
+
     # Extract model components
     npe_model <- model$model
     normalization <- model$normalization
