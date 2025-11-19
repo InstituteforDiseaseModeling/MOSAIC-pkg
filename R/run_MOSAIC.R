@@ -1146,6 +1146,9 @@ run_MOSAIC <- function(config,
   # PARAMETER-SPECIFIC ESS
   # ===========================================================================
 
+  # Initialize to NULL (will be calculated if enough samples available)
+  ess_results <- NULL
+
   log_msg(paste(rep("=", 80), collapse = ""))
   log_msg("CALCULATING PARAMETER-SPECIFIC ESS")
   log_msg(paste(rep("=", 80), collapse = ""))
@@ -1807,18 +1810,6 @@ run_MOSAIC <- function(config,
       })
 
       if (!is.null(best_model) && control$paths$plots) {
-        # Generate PPC plots
-        tryCatch({
-          plot_model_ppc(
-            model = best_model,
-            output_dir = dirs$bfrs_plots_diag,
-            verbose = TRUE
-          )
-          log_msg("PPC plots created successfully")
-        }, error = function(e) {
-          log_msg("ERROR creating PPC plots: %s", e$message)
-        })
-
         # Generate stochastic fit plot for best model
         log_msg("Generating best model fit with stochastic uncertainty...")
         log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
@@ -1906,6 +1897,29 @@ run_MOSAIC <- function(config,
     } else {
       log_msg("WARNING: No models in best subset for parameter uncertainty analysis")
     }
+  }
+
+  # ===========================================================================
+  # POSTERIOR PREDICTIVE CHECKS (PPC)
+  # ===========================================================================
+
+  if (control$paths$plots) {
+    log_msg(paste(rep("=", 80), collapse = ""))
+    log_msg("GENERATING POSTERIOR PREDICTIVE CHECK PLOTS")
+    log_msg(paste(rep("=", 80), collapse = ""))
+
+    # Generate PPC plots using predictions from stochastic functions
+    tryCatch({
+      plot_model_ppc(
+        predictions_dir = dirs$bfrs_plots_pred,
+        output_dir = dirs$bfrs_plots,
+        by_location = "both",
+        verbose = TRUE
+      )
+      log_msg("PPC plots created successfully")
+    }, error = function(e) {
+      log_msg("ERROR creating PPC plots: %s", e$message)
+    })
   }
 
   # Clean up plotting artifacts

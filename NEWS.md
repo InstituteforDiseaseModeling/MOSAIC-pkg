@@ -1,3 +1,12 @@
+# MOSAIC 0.8.9
+
+## Bug Fixes
+
+* Fixed uninitialized variable in `run_MOSAIC()`
+  - Added defensive initialization of `ess_results` to NULL before parameter-specific ESS calculation
+  - Prevents "object not found" error when debugging or if code execution is interrupted
+  - Variable is properly set later based on sample availability (lines 1161 or 1164)
+
 # MOSAIC 0.8.8
 
 ## Bug Fixes
