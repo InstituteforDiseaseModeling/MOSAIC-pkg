@@ -1,3 +1,12 @@
+# MOSAIC 0.10.4
+
+## Bug Fixes
+
+* Fixed missing namespace prefixes in `plot_npe_training_loss()`
+  - Added explicit `ggplot2::` prefixes to all ggplot2 functions throughout the function
+  - Fixes "could not find function 'facet_wrap'" error during NPE training visualization
+  - Fixed throughout lines 1585-1768 including: `facet_wrap`, `ggplot`, `aes`, `geom_smooth`, `geom_line`, `geom_vline`, `geom_point`, `geom_text`, `labs`, `theme_minimal`, `theme`, and all theme element functions
+
 # MOSAIC 0.10.3
 
 ## Bug Fixes

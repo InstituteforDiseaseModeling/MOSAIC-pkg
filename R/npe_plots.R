@@ -1582,31 +1582,31 @@ plot_npe_training_loss <- function(
     val_data <- plot_data[plot_data$loss_type == "Validation",]
 
     # Use facet_wrap for two panels with free y scales
-    p <- ggplot(plot_data, aes(x = epoch, y = loss)) +
-        facet_wrap(~ loss_type, ncol = 1, scales = "free_y")
+    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = epoch, y = loss)) +
+        ggplot2::facet_wrap(~ loss_type, ncol = 1, scales = "free_y")
 
     # Add loss curves with specific colors
     if (smooth_curves) {
         # Use loess smoothing for cleaner curves
         p <- p +
-            geom_smooth(data = train_data, method = "loess", span = 0.1,
+            ggplot2::geom_smooth(data = train_data, method = "loess", span = 0.1,
                        se = FALSE, size = 1.2, color = "#2E86AB") +
-            geom_smooth(data = val_data, method = "loess", span = 0.1,
+            ggplot2::geom_smooth(data = val_data, method = "loess", span = 0.1,
                        se = FALSE, size = 1.2, color = "#28A745") +
-            geom_line(data = train_data, alpha = 0.3, size = 0.5, color = "#2E86AB") +
-            geom_line(data = val_data, alpha = 0.3, size = 0.5, color = "#28A745")
+            ggplot2::geom_line(data = train_data, alpha = 0.3, size = 0.5, color = "#2E86AB") +
+            ggplot2::geom_line(data = val_data, alpha = 0.3, size = 0.5, color = "#28A745")
     } else {
         # Show raw curves
         p <- p +
-            geom_line(data = train_data, size = 1, color = "#2E86AB") +
-            geom_line(data = val_data, size = 1, color = "#28A745")
+            ggplot2::geom_line(data = train_data, size = 1, color = "#2E86AB") +
+            ggplot2::geom_line(data = val_data, size = 1, color = "#28A745")
     }
 
     # Add vertical reference lines
     p <- p +
-        geom_vline(xintercept = best_val_epoch,
+        ggplot2::geom_vline(xintercept = best_val_epoch,
                   linetype = "dashed", alpha = 0.4, color = "#FF8C00") +
-        geom_vline(xintercept = n_epochs,
+        ggplot2::geom_vline(xintercept = n_epochs,
                   linetype = "dashed", alpha = 0.4, color = "#DC3545")
 
     # Add best validation loss point (ideal stop)
@@ -1627,11 +1627,11 @@ plot_npe_training_loss <- function(
         )
 
         p <- p +
-            geom_point(data = best_point_data,
-                      aes(x = epoch, y = loss),
+            ggplot2::geom_point(data = best_point_data,
+                      ggplot2::aes(x = epoch, y = loss),
                       color = "#FF8C00", size = 4, shape = 17) +  # Triangle for ideal stop
-            geom_point(data = best_point_train,
-                      aes(x = epoch, y = loss),
+            ggplot2::geom_point(data = best_point_train,
+                      ggplot2::aes(x = epoch, y = loss),
                       color = "#FF8C00", size = 4, shape = 17)  # Triangle in training panel too
     }
 
@@ -1648,11 +1648,11 @@ plot_npe_training_loss <- function(
     )
 
     p <- p +
-        geom_point(data = actual_stop_train,
-                  aes(x = epoch, y = loss),
+        ggplot2::geom_point(data = actual_stop_train,
+                  ggplot2::aes(x = epoch, y = loss),
                   color = "#DC3545", size = 4, shape = 15) +  # Square for actual stop
-        geom_point(data = actual_stop_val,
-                  aes(x = epoch, y = loss),
+        ggplot2::geom_point(data = actual_stop_val,
+                  ggplot2::aes(x = epoch, y = loss),
                   color = "#DC3545", size = 4, shape = 15)
 
     # Add labels at the top of each panel
@@ -1680,12 +1680,12 @@ plot_npe_training_loss <- function(
 
         # Add the labels (aligned to left of lines)
         p <- p +
-            geom_text(data = train_labels,
-                     aes(x = x, y = y, label = label),
+            ggplot2::geom_text(data = train_labels,
+                     ggplot2::aes(x = x, y = y, label = label),
                      color = train_labels$color,
                      vjust = 1.5, hjust = 1, size = 3) +
-            geom_text(data = val_labels,
-                     aes(x = x, y = y, label = label),
+            ggplot2::geom_text(data = val_labels,
+                     ggplot2::aes(x = x, y = y, label = label),
                      color = val_labels$color,
                      vjust = 1.5, hjust = 1, size = 3)
     } else {
@@ -1705,12 +1705,12 @@ plot_npe_training_loss <- function(
         )
 
         p <- p +
-            geom_text(data = train_label,
-                     aes(x = x, y = y, label = label),
+            ggplot2::geom_text(data = train_label,
+                     ggplot2::aes(x = x, y = y, label = label),
                      color = "#DC3545",
                      vjust = 1.5, hjust = 1, size = 3) +
-            geom_text(data = val_label,
-                     aes(x = x, y = y, label = label),
+            ggplot2::geom_text(data = val_label,
+                     ggplot2::aes(x = x, y = y, label = label),
                      color = "#DC3545",
                      vjust = 1.5, hjust = 1, size = 3)
     }
@@ -1743,29 +1743,29 @@ plot_npe_training_loss <- function(
 
     # Styling
     p <- p +
-        labs(
+        ggplot2::labs(
             title = "NPE Model Training History",
             subtitle = subtitle_text,
             x = "Epoch",
             y = "Loss (Negative Log-Likelihood)"
         ) +
-        theme_minimal() +
-        theme(
-            plot.title = element_text(size = 14, face = "bold"),
-            plot.subtitle = element_text(size = 9, color = "grey40"),
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 14, face = "bold"),
+            plot.subtitle = ggplot2::element_text(size = 9, color = "grey40"),
             legend.position = "none",
-            panel.grid.major = element_line(size = 0.3, color = "grey85"),
-            panel.grid.minor = element_blank(),
-            axis.title = element_text(face = "bold"),
-            strip.text = element_text(face = "bold", size = 11),
-            strip.background = element_rect(fill = "grey95", color = "grey80")
+            panel.grid.major = ggplot2::element_line(size = 0.3, color = "grey85"),
+            panel.grid.minor = ggplot2::element_blank(),
+            axis.title = ggplot2::element_text(face = "bold"),
+            strip.text = ggplot2::element_text(face = "bold", size = 11),
+            strip.background = ggplot2::element_rect(fill = "grey95", color = "grey80")
         )
 
     # Save plot if requested
     if (!is.null(output_file)) {
         log_msg("Saving plot to: %s", output_file)
         dir.create(dirname(output_file), showWarnings = FALSE, recursive = TRUE)
-        ggsave(output_file, plot = p, width = plot_width, height = plot_height, dpi = 300)
+        ggplot2::ggsave(output_file, plot = p, width = plot_width, height = plot_height, dpi = 300)
         log_msg("Training loss plot saved successfully")
     }
 
