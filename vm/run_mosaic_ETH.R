@@ -54,7 +54,7 @@ config_ETH <- get_location_config(iso="ETH")
 
 control_ETH <- mosaic_control_defaults()
 
-control_ETH$calibration$n_simulations <- 1000
+control_ETH$calibration$n_simulations <- 100
 control_ETH$calibration$n_iterations <- 1
 control_ETH$calibration$batch_size <- 200
 control_ETH$calibration$min_batches <- 3
