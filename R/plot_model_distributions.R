@@ -831,7 +831,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
       # Save plot
       filename <- paste0("distributions_global_", paste(names(methods_data), collapse = "_"), ".pdf")
-      ggsave(file.path(output_dir, filename), p_global,
+      ggplot2::ggsave(file.path(output_dir, filename), p_global,
              width = 12, height = plot_height, limitsize = FALSE)
       plots$global <- p_global
       cat(paste0("  Saved: ", filename, "\n"))
@@ -977,7 +977,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
         # Save plot
         filename <- paste0("distributions_", iso, "_", paste(names(methods_data), collapse = "_"), ".pdf")
-        ggsave(file.path(output_dir, filename), p_location,
+        ggplot2::ggsave(file.path(output_dir, filename), p_location,
                width = 12, height = plot_height, limitsize = FALSE)
         plots[[paste0("location_", iso)]] <- p_location
         cat(paste0("  Saved: ", filename, "\n"))
