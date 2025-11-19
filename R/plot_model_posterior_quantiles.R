@@ -225,8 +225,8 @@ plot_model_posterior_quantiles <- function(csv_files,
 
     if ("global" %in% plot_types) {
         global_data <- combined_data %>%
-            filter(.data$param_type == "global") %>%
-            arrange(parameter)
+            dplyr::filter(param_type == "global") %>%
+            dplyr::arrange(parameter)
 
         if (nrow(global_data) > 0) {
             if (verbose) message("Creating global parameters plot...")
@@ -239,12 +239,12 @@ plot_model_posterior_quantiles <- function(csv_files,
             if ("description" %in% names(global_data) && !all(is.na(global_data$description))) {
                 # Use first description found for each parameter (they might differ across sources)
                 desc_lookup <- global_data %>%
-                    filter(!is.na(description) & description != "") %>%
-                    group_by(parameter) %>%
-                    summarise(display_desc = first(description), .groups = 'drop')
+                    dplyr::filter(!is.na(description) & description != "") %>%
+                    dplyr::group_by(parameter) %>%
+                    dplyr::summarise(display_desc = dplyr::first(description), .groups = 'drop')
 
                 global_data <- global_data %>%
-                    left_join(desc_lookup, by = "parameter")
+                    dplyr::left_join(desc_lookup, by = "parameter")
 
                 # Create display label but keep grouping by parameter only
                 global_data$display_label <- ifelse(
@@ -318,8 +318,8 @@ plot_model_posterior_quantiles <- function(csv_files,
 
     if ("location" %in% plot_types) {
         loc_data <- combined_data %>%
-            filter(.data$param_type == "location") %>%
-            arrange(parameter)
+            dplyr::filter(param_type == "location") %>%
+            dplyr::arrange(parameter)
 
         if (nrow(loc_data) > 0) {
             # Get unique locations
@@ -332,8 +332,8 @@ plot_model_posterior_quantiles <- function(csv_files,
                 # Create a plot for each location
                 for (location_code in unique_locations) {
                     location_data <- loc_data %>%
-                        filter(location == location_code) %>%
-                        arrange(parameter)
+                        dplyr::filter(location == location_code) %>%
+                        dplyr::arrange(parameter)
 
                     if (nrow(location_data) > 0) {
                         if (verbose) message(sprintf("  Processing location: %s (%d parameters)",
@@ -344,12 +344,12 @@ plot_model_posterior_quantiles <- function(csv_files,
 
                         if ("description" %in% names(location_data) && !all(is.na(location_data$description))) {
                             desc_lookup <- location_data %>%
-                                filter(!is.na(description) & description != "") %>%
-                                group_by(parameter) %>%
-                                summarise(display_desc = first(description), .groups = 'drop')
+                                dplyr::filter(!is.na(description) & description != "") %>%
+                                dplyr::group_by(parameter) %>%
+                                dplyr::summarise(display_desc = dplyr::first(description), .groups = 'drop')
 
                             location_data <- location_data %>%
-                                left_join(desc_lookup, by = "parameter")
+                                dplyr::left_join(desc_lookup, by = "parameter")
 
                             location_data$display_label <- ifelse(
                                 !is.na(location_data$display_desc),

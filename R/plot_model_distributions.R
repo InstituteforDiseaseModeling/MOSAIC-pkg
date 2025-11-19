@@ -669,8 +669,8 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
   # Get global parameters from estimated_parameters, ordered appropriately
   global_params_info <- estimated_parameters %>%
-    filter(scale == "global") %>%
-    arrange(order)
+    dplyr::filter(scale == "global") %>%
+    dplyr::arrange(order)
 
   # Check if any method has global parameters
   has_global <- any(sapply(methods_data, function(x) !is.null(x$parameters_global)))
@@ -682,8 +682,8 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
     for (category in global_categories) {
       category_info <- global_params_info %>%
-        filter(category == .env$category) %>%
-        arrange(order)
+        dplyr::filter(category == .env$category) %>%
+        dplyr::arrange(order)
 
       category_plot_list <- list()
 
@@ -847,8 +847,8 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
     # Get location-specific parameters organized by category
     location_params_info <- estimated_parameters %>%
-      filter(scale == "location") %>%
-      arrange(order)
+      dplyr::filter(scale == "location") %>%
+      dplyr::arrange(order)
 
     for (iso in location_codes) {
       # Organize plots by category
@@ -857,8 +857,8 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
       for (category in categories_available) {
         category_info <- location_params_info %>%
-          filter(category == .env$category) %>%
-          arrange(order)
+          dplyr::filter(category == .env$category) %>%
+          dplyr::arrange(order)
 
         category_plot_list <- list()
 
