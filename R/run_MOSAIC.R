@@ -287,8 +287,7 @@
 #' Run MOSAIC Calibration Workflow
 #'
 #' @description
-#' **Advanced interface with full control over model specification.**
-#' For most users, [run_mosaic_iso()] provides a simpler interface.
+#' **Complete Bayesian calibration workflow with full control over model specification.**
 #'
 #' This function accepts pre-configured config and priors objects, allowing:
 #' \itemize{
@@ -417,7 +416,6 @@
 #' run_MOSAIC(custom_config, custom_priors, "./output")
 #' }
 #'
-#' @seealso [run_mosaic_iso()] for simple interface with ISO codes
 #' @seealso [mosaic_control_defaults()] for building control structures
 #' @export
 run_MOSAIC <- function(config,
