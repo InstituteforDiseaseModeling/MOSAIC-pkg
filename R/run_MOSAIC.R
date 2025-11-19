@@ -201,7 +201,7 @@
     # Run every 10 iterations to balance cleanup vs overhead
     if (j %% 10 == 0) {
       gc(verbose = FALSE)
-      reticulate::py_gc()
+      reticulate::import("gc")$collect()
     }
   }
 
@@ -275,7 +275,7 @@
   # This prevents accumulation across thousands of simulations in large batches
   # In predictive phase with 70K+ sims, this prevents finalizer queue saturation
   gc(verbose = FALSE)
-  reticulate::py_gc()
+  reticulate::import("gc")$collect()
 
   return(file.exists(output_file))
 }
