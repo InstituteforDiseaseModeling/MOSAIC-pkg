@@ -571,16 +571,14 @@
   log_msg("Checking ESS convergence...")
   load_start <- Sys.time()
 
+  # Use efficient streaming method (same as final results loading)
+  # This is much faster and more memory-efficient than rbindlist for large datasets
   ess_check_results <- tryCatch({
-    as.data.frame(data.table::rbindlist(
-      lapply(files, function(f) {
-        tryCatch({
-          data.table::as.data.table(arrow::read_parquet(f))
-        }, error = function(e) NULL)
-      }),
-      use.names = TRUE,
-      fill = TRUE
-    ))
+    .mosaic_load_and_combine_results(
+      dir_params = dirs$bfrs_params,
+      method = "streaming",
+      verbose = FALSE
+    )
   }, error = function(e) NULL)
 
   load_time <- difftime(Sys.time(), load_start, units = "secs")
