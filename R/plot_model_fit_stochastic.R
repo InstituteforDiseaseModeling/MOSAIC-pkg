@@ -191,7 +191,7 @@ plot_model_fit_stochastic <- function(config,
 
             # Cleanup Python objects to prevent accumulation across tasks
             gc(verbose = FALSE)
-            reticulate::py_gc()
+            reticulate::import("gc")$collect()
 
             # Return results
             result
