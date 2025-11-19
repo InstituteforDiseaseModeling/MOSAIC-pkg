@@ -1526,43 +1526,27 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   if (control$npe$enable) {
-    log_msg(paste(rep("=", 80), collapse = ""))
-    log_msg("STAGE 2: NEURAL POSTERIOR ESTIMATION")
-    log_msg(paste(rep("=", 80), collapse = ""))
-
-    # Select NPE weights from BFRS results
-    log_msg("\nSelecting NPE weights from BFRS results...")
-    log_msg("Using strategy: %s", control$npe$weight_strategy)
+    log_msg("Starting NPE")
 
     npe_weights <- get_npe_weights(
       bfrs_results = results,
       strategy = control$npe$weight_strategy,
-      verbose = TRUE
+      verbose = FALSE
     )
 
-    # Save NPE weights separately (avoids rewriting large simulations.parquet)
-    # This optimization saves 3-5 seconds by writing 1 MB instead of 10-50 MB
     npe_weights_file <- file.path(dirs$npe, "npe_weights.parquet")
     weight_df <- data.frame(
       sim = results$sim,
       weight_npe = npe_weights
     )
     .mosaic_write_parquet(weight_df, npe_weights_file, control$io)
-    log_msg("NPE weights saved to 2_npe/npe_weights.parquet")
+    log_msg("Saved %s", npe_weights_file)
 
-    # Prepare observed data
-    log_msg("\nPreparing observed outbreak data...")
-    observed_data <- get_npe_observed_data(config, verbose = TRUE)
+    observed_data <- get_npe_observed_data(config, verbose = FALSE)
+    observed_file <- file.path(dirs$npe, "observed_data.csv")
+    write.csv(observed_data, observed_file, row.names = FALSE)
+    log_msg("Saved %s", observed_file)
 
-    # Save observed data
-    write.csv(observed_data, file.path(dirs$npe, "observed_data.csv"), row.names = FALSE)
-    log_msg("  Observed data saved: %d locations, %d time points",
-            length(unique(observed_data$j)), max(observed_data$t))
-
-    # Run complete NPE workflow
-    log_msg("\n=== NPE WORKFLOW STARTING ===\n")
-
-    # Create NPE output directories
     npe_dirs <- list(
       root = dirs$npe,
       model = file.path(dirs$npe, "model"),
@@ -1572,29 +1556,25 @@ run_MOSAIC <- function(config,
     )
     lapply(npe_dirs, function(d) dir.create(d, recursive = TRUE, showWarnings = FALSE))
 
-    # Step 1: Load and prepare NPE data from BFRS results
-    log_msg("Loading BFRS results for NPE...")
+    log_msg("Preparing NPE data")
     npe_data <- prepare_npe_data(
       bfrs_dir = dirs$bfrs,
       results = results,
       param_names = param_names_estimated,
       weights = npe_weights,
-      verbose = TRUE
+      verbose = FALSE
     )
 
-    # Step 2: Calculate NPE architecture
-    log_msg("Calculating NPE architecture...")
     arch_spec <- calc_npe_architecture(
       n_sims = npe_data$n_samples,
       n_params = npe_data$n_params,
       n_timesteps = npe_data$n_timesteps,
       n_locations = npe_data$n_locations,
       tier = "large",
-      verbose = TRUE
+      verbose = FALSE
     )
 
-    # Step 3: Train NPE model
-    log_msg("Training NPE model...")
+    log_msg("Training NPE model")
     npe_model <- train_npe(
       X = npe_data$parameters,
       y = npe_data$observations,
@@ -1604,24 +1584,16 @@ run_MOSAIC <- function(config,
       output_dir = npe_dirs$model,
       use_gpu = FALSE,
       seed = 42,
-      verbose = TRUE
+      verbose = FALSE
     )
 
-    # CRITICAL MEMORY OPTIMIZATION: Extract needed components before cleanup
-    # npe_data contains ~2 GB of training data (parameters + observations matrices)
-    # We only need small metadata for downstream operations
     param_names_npe <- npe_data$param_names
     n_params_npe <- npe_data$n_params
     n_samples_npe <- npe_data$n_samples
-
-    # Remove large training data immediately after training completes
-    # This frees ~500 MB to 2 GB of memory
     rm(npe_data)
     gc(verbose = FALSE)
-    log_msg("  NPE training data freed from memory")
 
-    # Step 4: Run post-training diagnostics using comprehensive SBC
-    log_msg("Running post-training diagnostics (SBC)...")
+    log_msg("Running NPE diagnostics")
     diagnostics <- calc_npe_diagnostics(
       n_sbc_sims = 10,
       model = npe_model,
@@ -1633,92 +1605,32 @@ run_MOSAIC <- function(config,
       n_npe_samples = 100,
       probs = c(0.025, 0.25, 0.75, 0.975),
       output_dir = npe_dirs$diagnostics,
-      verbose = TRUE,
+      verbose = FALSE,
       parallel = FALSE,
       n_cores = 6
     )
 
-    # Check if model needs retraining based on diagnostics
-    needs_retraining <- (diagnostics$diagnostics$overall_coverage < 0.85 ||
-                        diagnostics$diagnostics$overall_coverage > 1.05 ||
-                        diagnostics$diagnostics$overall_sbc_ks_pvalue < 0.01)
-
-    if (needs_retraining) {
-      log_msg("  Warning: Diagnostics suggest model may need retraining")
-      log_msg("    - Overall coverage: %.1f%% (target: 95%%)",
-              diagnostics$diagnostics$overall_coverage * 100)
-      log_msg("    - SBC KS p-value: %.3f", diagnostics$diagnostics$overall_sbc_ks_pvalue)
-    }
-
-    # Step 5: Estimate posteriors with observed data
-    log_msg("Estimating posteriors...")
+    log_msg("Estimating posteriors")
     posterior_result <- estimate_npe_posterior(
       model = npe_model,
       observed_data = observed_data,
       n_samples = 10000,
       return_log_probs = TRUE,
       output_dir = npe_dirs$posterior,
-      verbose = TRUE,
+      verbose = FALSE,
       rejection_sampling = TRUE,
       max_rejection_rate = 0.20,
       max_attempts = 10
     )
 
-    # Extract results
     posterior_samples <- posterior_result$samples
     posterior_log_probs <- posterior_result$log_probs
     posterior_quantiles <- posterior_result$quantiles
 
-    # Ensure column names are set
     if (is.null(colnames(posterior_samples)) && !is.null(param_names_npe)) {
       colnames(posterior_samples) <- param_names_npe
     }
 
-    log_msg("\nNPE complete: %d samples × %d params | %s tier (%d transforms)",
-            nrow(posterior_samples), length(param_names_npe),
-            arch_spec$tier, arch_spec$n_transforms)
-
-    # Check diagnostics
-    if (!is.null(diagnostics)) {
-      if (!is.null(diagnostics$sbc_ranks)) {
-        coverage_50 <- mean(diagnostics$sbc_ranks >= 0.25 & diagnostics$sbc_ranks <= 0.75, na.rm = TRUE)
-        log_msg("  - Coverage at 50%% CI: %.1f%%", coverage_50 * 100)
-      }
-      log_msg("  - Coverage at 95%% CI: %.1f%%", diagnostics$diagnostics$overall_coverage * 100)
-      log_msg("  - SBC KS p-value: %.3f", diagnostics$diagnostics$overall_sbc_ks_pvalue)
-      log_msg("  - Model calibration: %s",
-              ifelse(needs_retraining, "Needs improvement", "Good"))
-    }
-
-    # Check that log_probs were saved
-    if (!is.null(posterior_log_probs)) {
-      log_msg("  - Log probabilities saved for SMC: YES")
-    } else {
-      log_msg("  - WARNING: Log probabilities NOT saved - SMC will not be possible")
-    }
-
-    # Log rejection sampling diagnostics
-    if (!is.null(posterior_result$rejection_info)) {
-      info <- posterior_result$rejection_info
-      log_msg("")
-      log_msg("=== Rejection Sampling Summary ===")
-      log_msg("  - Samples requested: %d", info$requested)
-      log_msg("  - Samples achieved: %d", info$achieved)
-      log_msg("  - Total drawn: %d", info$total_drawn)
-      log_msg("  - Rejection rate: %.2f%%", info$rejection_rate * 100)
-      log_msg("  - Attempts: %d", info$n_attempts)
-
-      if (info$rejection_rate > 0.10) {
-        log_msg("  - ⚠ Warning: High rejection rate suggests model calibration issues")
-        log_msg("    Consider retraining with wider bounds or different architecture")
-      } else if (info$rejection_rate > 0) {
-        log_msg("  - ✓ Rejection rate acceptable (<10%%)")
-      } else {
-        log_msg("  - ✓ All samples within bounds!")
-      }
-    }
-
-    # Create NPE result object
     npe_result <- list(
       posterior_samples = posterior_samples,
       posterior_log_probs = posterior_log_probs,
@@ -1729,26 +1641,21 @@ run_MOSAIC <- function(config,
       model = npe_model
     )
 
-    # Create NPE configuration with posterior medians
-    log_msg("\nCreating NPE configuration...")
     config_npe <- create_config_npe(
       posterior_result = npe_result,
       config_base = config,
       output_file = file.path(dirs$npe, "config_npe.json"),
       use_median = TRUE,
-      verbose = TRUE
+      verbose = FALSE
     )
 
-    # Fit posterior distributions
-    log_msg("\nFitting posterior distributions...")
     posteriors_npe <- fit_posterior_distributions(
       posterior_samples = posterior_samples,
       priors_file = file.path(dirs$setup, "priors.json"),
       output_file = file.path(npe_dirs$posterior, "posteriors.json"),
-      verbose = TRUE
+      verbose = FALSE
     )
 
-    # Save NPE summary
     npe_summary <- list(
       n_posterior_samples = nrow(posterior_samples),
       param_names = param_names_npe,
@@ -1758,95 +1665,65 @@ run_MOSAIC <- function(config,
       rejection_info = posterior_result$rejection_info,
       timestamp = Sys.time()
     )
-
-    saveRDS(npe_summary, file.path(dirs$npe, "npe_summary.rds"))
-
-    log_msg("\n=== NPE STAGE COMPLETE ===")
-    log_msg("Results saved in: %s/", basename(dirs$npe))
-
-    # =========================================================================
-    # PLOT NPE DIAGNOSTICS
-    # =========================================================================
+    npe_summary_file <- file.path(dirs$npe, "npe_summary.rds")
+    saveRDS(npe_summary, npe_summary_file)
+    log_msg("Saved %s", npe_summary_file)
 
     if (control$paths$plots && !is.null(diagnostics)) {
-      # Plot NPE convergence status table
       plot_npe_convergence_status(
         npe_dir = dirs$npe,
         output_dir = npe_dirs$plots,
         coverage_targets = list("50" = 0.50, "95" = 0.95),
         ks_threshold = 0.05,
         show_param_details = 15,
-        verbose = TRUE
+        verbose = FALSE
       )
 
-      # Plot coverage histograms
       plot_npe_diagnostics_coverage(
         diagnostics = diagnostics,
         plots_dir = npe_dirs$plots,
         max_params_per_page = 40,
-        verbose = TRUE
+        verbose = FALSE
       )
 
-      # Plot coverage bar plots
       plot_npe_diagnostics_coverage_bars(
         diagnostics = diagnostics,
         plots_dir = npe_dirs$plots,
-        verbose = TRUE
+        verbose = FALSE
       )
 
-      # Plot SBC test results
       plot_npe_diagnostics_sbc(
         diagnostics = diagnostics,
         plots_dir = npe_dirs$plots,
         max_params_per_page = 40,
-        verbose = TRUE
+        verbose = FALSE
       )
 
-      # Plot NPE training loss curves
-      log_msg("\nGenerating NPE training loss visualization...")
-      training_plot <- plot_npe_training_loss(
+      plot_npe_training_loss(
         npe_dirs = npe_dirs,
         output_file = file.path(npe_dirs$plots, "npe_training_loss.png"),
         plot_height = 8,
         show_best_epoch = TRUE,
         smooth_curves = FALSE,
         log_scale = FALSE,
-        verbose = TRUE
+        verbose = FALSE
       )
-      log_msg("NPE training loss plot saved")
 
-      # =========================================================================
-      # Plot posterior distributions (caterpillar and detailed)
-      # =========================================================================
-
-      log_msg("\nGenerating posterior quantile plots...")
-
-      # Collect quantile files for comparison
       quantile_files <- c()
-
       bfrs_quantiles <- file.path(dirs$bfrs_post, "posterior_quantiles.csv")
-      if (file.exists(bfrs_quantiles)) {
-        quantile_files <- c(quantile_files, bfrs_quantiles)
-      }
+      if (file.exists(bfrs_quantiles)) quantile_files <- c(quantile_files, bfrs_quantiles)
 
       npe_quantiles <- file.path(npe_dirs$posterior, "posterior_quantiles.csv")
-      if (file.exists(npe_quantiles)) {
-        quantile_files <- c(quantile_files, npe_quantiles)
-      }
+      if (file.exists(npe_quantiles)) quantile_files <- c(quantile_files, npe_quantiles)
 
       if (length(quantile_files) > 0) {
         plot_model_posterior_quantiles(
           csv_files = quantile_files,
           output_dir = npe_dirs$plots,
           plot_types = "both",
-          verbose = TRUE
+          verbose = FALSE
         )
-        log_msg("Posterior quantile plots created successfully")
-        log_msg("  - Comparing: Prior (from BFRS), BFRS Posterior, and NPE")
       }
-
-      # Plot overlaid posterior distributions
-      log_msg("\nGenerating overlaid posterior distribution plots...")
 
       priors_json <- file.path(dirs$setup, "priors.json")
       posteriors_bfrs_json <- file.path(dirs$bfrs_post, "posteriors.json")
@@ -1876,22 +1753,11 @@ run_MOSAIC <- function(config,
           method_names = method_names,
           output_dir = npe_dirs$plots
         )
-        log_msg("Overlaid posterior distribution plots created successfully")
-        log_msg("  - Comparing: %s", paste(method_names, collapse = ", "))
       }
     }
 
-    # =========================================================================
-    # PLOT MODEL FIT WITH NPE POSTERIOR ESTIMATES
-    # =========================================================================
-
     if (control$paths$plots && !is.null(config_npe)) {
-      log_msg("\n=== GENERATING STOCHASTIC MODEL PLOTS WITH NPE ESTIMATES ===")
-
-      log_msg("Plotting model fit using NPE posterior median values...")
-      log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
-
-      stochastic_plots_median <- plot_model_fit_stochastic(
+      plot_model_fit_stochastic(
         config = config_npe,
         n_simulations = control$predictions$best_model_n_sims,
         output_dir = npe_dirs$plots,
@@ -1900,16 +1766,10 @@ run_MOSAIC <- function(config,
         parallel = TRUE,
         n_cores = control$parallel$n_cores,
         root_dir = root_dir,
-        verbose = TRUE
+        verbose = FALSE
       )
 
-      log_msg("Stochastic plots saved to: %s/", basename(npe_dirs$plots))
-
-      # Generate parameter uncertainty plots using multiple NPE posterior samples
-      log_msg("\nGenerating stochastic plots with parameter uncertainty...")
-
       n_param_sets <- control$predictions$ensemble_n_param_sets
-      log_msg("  Using %d parameter sets from NPE posterior", n_param_sets)
       param_configs <- list()
 
       if (nrow(posterior_samples) >= n_param_sets) {
@@ -1929,9 +1789,6 @@ run_MOSAIC <- function(config,
           param_configs[[i]] <- config_sample
         }
 
-        log_msg("  Using %d parameter sets from NPE posterior", n_param_sets)
-
-        # Use posterior weights based on log probabilities
         param_weights <- NULL
         if (!is.null(posterior_log_probs)) {
           selected_log_probs <- posterior_log_probs[sample_indices]
@@ -1939,17 +1796,7 @@ run_MOSAIC <- function(config,
           param_weights <- param_weights / sum(param_weights)
         }
 
-        if (!is.null(param_weights)) {
-          log_msg("  NPE ensemble: %d param sets (weighted) × %d sims = %d total",
-                  n_param_sets, control$predictions$ensemble_n_sims_per_param,
-                  n_param_sets * control$predictions$ensemble_n_sims_per_param)
-        } else {
-          log_msg("  NPE ensemble: %d param sets × %d sims = %d total",
-                  n_param_sets, control$predictions$ensemble_n_sims_per_param,
-                  n_param_sets * control$predictions$ensemble_n_sims_per_param)
-        }
-
-        stochastic_param_plots <- plot_model_fit_stochastic_param(
+        plot_model_fit_stochastic_param(
           configs = param_configs,
           parameter_weights = param_weights,
           n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
@@ -1959,41 +1806,21 @@ run_MOSAIC <- function(config,
           parallel = TRUE,
           n_cores = control$parallel$n_cores,
           root_dir = root_dir,
-          verbose = TRUE,
+          verbose = FALSE,
           plot_decomposed = FALSE
         )
-
-        log_msg("Stochastic parameter plots saved to: %s/", basename(npe_dirs$plots))
-      } else {
-        log_msg("  Insufficient posterior samples for parameter uncertainty analysis")
       }
 
-      # Clean up NPE plotting artifacts
       gc(verbose = FALSE)
-
-      # NOTE: Timeseries files are preserved in 1_bfrs/outputs/timeseries/
-      # These files allow fast loading of specific simulation subsets for analysis
-      # without needing to read/filter a large combined file.
     }
 
   } else {
-    log_msg(paste0("\n", paste(rep("=", 80), collapse = "")))
-    log_msg("STAGE 2: NEURAL POSTERIOR ESTIMATION SKIPPED (control$npe$enable = FALSE)")
-    log_msg(paste(rep("=", 80), collapse = ""))
+    log_msg("NPE skipped")
   }
 
-  # ===========================================================================
-  # RETURN SUMMARY
-  # ===========================================================================
-
   runtime <- difftime(Sys.time(), start_time, units = "mins")
-
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("CALIBRATION COMPLETE")
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("%d batches | %d simulations | Converged: %s | Runtime: %.2f min",
-          state$batch_number, state$total_sims_run,
-          ifelse(isTRUE(state$converged), "YES", "NO"), as.numeric(runtime))
+  log_msg("Calibration complete: %d batches, %d simulations, %.2f min",
+          state$batch_number, state$total_sims_run, as.numeric(runtime))
 
   invisible(list(
     dirs = dirs,
