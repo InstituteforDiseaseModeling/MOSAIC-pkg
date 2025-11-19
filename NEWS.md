@@ -1,3 +1,13 @@
+# MOSAIC 0.10.1
+
+## Bug Fixes
+
+* Fixed missing namespace prefixes in `plot_model_posterior_quantiles()`
+  - Added explicit `ggplot2::` prefixes to all ggplot2 functions
+  - Fixes "could not find function 'geom_errorbar'" error
+  - Functions not imported in NAMESPACE now called with explicit prefix
+  - Affects both global and location-specific plotting sections
+
 # MOSAIC 0.10.0
 
 ## Breaking Changes

@@ -260,22 +260,22 @@ plot_model_posterior_quantiles <- function(csv_files,
             has_50_ci <- all(c("q0.25", "q0.75") %in% names(global_data))
 
             # Create the plot - group by param_label (parameter name), display with display_label
-            p_global <- ggplot(global_data, aes(x = q_median, y = type, color = type)) +
-                geom_errorbar(aes(xmin = q_lower, xmax = q_upper),
-                             orientation = "y", position = position_dodge(width = 0.3),
+            p_global <- ggplot2::ggplot(global_data, ggplot2::aes(x = q_median, y = type, color = type)) +
+                ggplot2::geom_errorbar(ggplot2::aes(xmin = q_lower, xmax = q_upper),
+                             orientation = "y", position = ggplot2::position_dodge(width = 0.3),
                              width = 0, linewidth = 0.4, alpha = 0.6) +
-                {if(has_50_ci) geom_errorbar(aes(xmin = q0.25, xmax = q0.75),
-                             orientation = "y", position = position_dodge(width = 0.3),
+                {if(has_50_ci) ggplot2::geom_errorbar(ggplot2::aes(xmin = q0.25, xmax = q0.75),
+                             orientation = "y", position = ggplot2::position_dodge(width = 0.3),
                              width = 0, linewidth = 1.2)} +
-                geom_point(position = position_dodge(width = 0.3), size = 2.5) +
-                scale_color_manual(values = color_values) +
-                facet_wrap(~ param_label, scales = "free_x", ncol = 2,
-                          labeller = labeller(param_label = function(x) {
+                ggplot2::geom_point(position = ggplot2::position_dodge(width = 0.3), size = 2.5) +
+                ggplot2::scale_color_manual(values = color_values) +
+                ggplot2::facet_wrap(~ param_label, scales = "free_x", ncol = 2,
+                          labeller = ggplot2::labeller(param_label = function(x) {
                               # Use display_label for facet titles
                               lookup <- setNames(global_data$display_label, global_data$param_label)
                               lookup[x]
                           })) +
-                labs(
+                ggplot2::labs(
                     title = "Global Parameters - Posterior Quantiles",
                     subtitle = if(has_50_ci) "Median with 50% (thick) and outer (thin) Credible Intervals"
                               else "Median and outer Credible Intervals",
@@ -283,19 +283,19 @@ plot_model_posterior_quantiles <- function(csv_files,
                     y = "Estimation Type",
                     color = "Estimation Type"
                 ) +
-                theme_bw() +
-                theme(
-                    plot.title = element_text(size = 14, face = "bold"),
-                    plot.subtitle = element_text(size = 11),
-                    axis.text.y = element_text(size = 10),
-                    axis.text.x = element_text(size = 9),
+                ggplot2::theme_bw() +
+                ggplot2::theme(
+                    plot.title = ggplot2::element_text(size = 14, face = "bold"),
+                    plot.subtitle = ggplot2::element_text(size = 11),
+                    axis.text.y = ggplot2::element_text(size = 10),
+                    axis.text.x = ggplot2::element_text(size = 9),
                     legend.position = if(length(estimation_types) > 1) "bottom" else "none",
-                    panel.grid.major.y = element_line(color = "gray90", linetype = "dashed"),
-                    panel.grid.minor = element_blank(),
-                    strip.text = element_text(size = 10),
-                    strip.background = element_rect(fill = "gray95")
+                    panel.grid.major.y = ggplot2::element_line(color = "gray90", linetype = "dashed"),
+                    panel.grid.minor = ggplot2::element_blank(),
+                    strip.text = ggplot2::element_text(size = 10),
+                    strip.background = ggplot2::element_rect(fill = "gray95")
                 ) +
-                geom_vline(xintercept = 0, linetype = "dashed", color = "gray50", alpha = 0.5)
+                ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "gray50", alpha = 0.5)
 
             plot_list$global <- p_global
 
@@ -305,7 +305,7 @@ plot_model_posterior_quantiles <- function(csv_files,
             plot_width <- 16
 
             output_file <- file.path(output_dir, "posterior_quantiles_global.png")
-            ggsave(output_file, p_global, width = plot_width, height = plot_height,
+            ggplot2::ggsave(output_file, p_global, width = plot_width, height = plot_height,
                    units = "in", dpi = 600, bg = "white")
 
             if (verbose) message(sprintf("  Saved: %s", basename(output_file)))
@@ -362,21 +362,21 @@ plot_model_posterior_quantiles <- function(csv_files,
 
                         has_50_ci_loc <- all(c("q0.25", "q0.75") %in% names(location_data))
 
-                        p_location <- ggplot(location_data, aes(x = q_median, y = type, color = type)) +
-                            geom_errorbar(aes(xmin = q_lower, xmax = q_upper),
-                                         orientation = "y", position = position_dodge(width = 0.3),
+                        p_location <- ggplot2::ggplot(location_data, ggplot2::aes(x = q_median, y = type, color = type)) +
+                            ggplot2::geom_errorbar(ggplot2::aes(xmin = q_lower, xmax = q_upper),
+                                         orientation = "y", position = ggplot2::position_dodge(width = 0.3),
                                          width = 0, linewidth = 0.4, alpha = 0.6) +
-                            {if(has_50_ci_loc) geom_errorbar(aes(xmin = q0.25, xmax = q0.75),
-                                         orientation = "y", position = position_dodge(width = 0.3),
+                            {if(has_50_ci_loc) ggplot2::geom_errorbar(ggplot2::aes(xmin = q0.25, xmax = q0.75),
+                                         orientation = "y", position = ggplot2::position_dodge(width = 0.3),
                                          width = 0, linewidth = 1.2)} +
-                            geom_point(position = position_dodge(width = 0.3), size = 2.5) +
-                            scale_color_manual(values = color_values) +
-                            facet_wrap(~ param_label, scales = "free_x", ncol = 2,
-                                      labeller = labeller(param_label = function(x) {
+                            ggplot2::geom_point(position = ggplot2::position_dodge(width = 0.3), size = 2.5) +
+                            ggplot2::scale_color_manual(values = color_values) +
+                            ggplot2::facet_wrap(~ param_label, scales = "free_x", ncol = 2,
+                                      labeller = ggplot2::labeller(param_label = function(x) {
                                           lookup <- setNames(location_data$display_label, location_data$param_label)
                                           lookup[x]
                                       })) +
-                            labs(
+                            ggplot2::labs(
                                 title = sprintf("%s - Location-Specific Parameters", location_code),
                                 subtitle = if(has_50_ci_loc) "Median with 50% (thick) and outer (thin) Credible Intervals"
                                           else "Median and outer Credible Intervals",
@@ -384,19 +384,19 @@ plot_model_posterior_quantiles <- function(csv_files,
                                 y = "Estimation Type",
                                 color = "Estimation Type"
                             ) +
-                            theme_bw() +
-                            theme(
-                                plot.title = element_text(size = 14, face = "bold"),
-                                plot.subtitle = element_text(size = 11),
-                                axis.text.y = element_text(size = 10),
-                                axis.text.x = element_text(size = 9),
+                            ggplot2::theme_bw() +
+                            ggplot2::theme(
+                                plot.title = ggplot2::element_text(size = 14, face = "bold"),
+                                plot.subtitle = ggplot2::element_text(size = 11),
+                                axis.text.y = ggplot2::element_text(size = 10),
+                                axis.text.x = ggplot2::element_text(size = 9),
                                 legend.position = if(length(estimation_types) > 1) "bottom" else "none",
-                                panel.grid.major.y = element_line(color = "gray90", linetype = "dashed"),
-                                panel.grid.minor = element_blank(),
-                                strip.text = element_text(size = 10),
-                                strip.background = element_rect(fill = "gray95")
+                                panel.grid.major.y = ggplot2::element_line(color = "gray90", linetype = "dashed"),
+                                panel.grid.minor = ggplot2::element_blank(),
+                                strip.text = ggplot2::element_text(size = 10),
+                                strip.background = ggplot2::element_rect(fill = "gray95")
                             ) +
-                            geom_vline(xintercept = 0, linetype = "dashed", color = "gray50", alpha = 0.5)
+                            ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "gray50", alpha = 0.5)
 
                         # Store plot with location-specific key
                         plot_list[[location_code]] <- p_location
@@ -407,7 +407,7 @@ plot_model_posterior_quantiles <- function(csv_files,
                         plot_width_loc <- 16
 
                         output_file_loc <- file.path(output_dir, sprintf("posterior_quantiles_%s.png", location_code))
-                        ggsave(output_file_loc, p_location, width = plot_width_loc, height = plot_height_loc,
+                        ggplot2::ggsave(output_file_loc, p_location, width = plot_width_loc, height = plot_height_loc,
                                units = "in", dpi = 600, bg = "white")
 
                         if (verbose) message(sprintf("  Saved: %s", basename(output_file_loc)))
