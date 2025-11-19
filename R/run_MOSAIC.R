@@ -271,6 +271,12 @@
     }
   }
 
+  # CRITICAL: Cleanup Python objects after EACH simulation completes
+  # This prevents accumulation across thousands of simulations in large batches
+  # In predictive phase with 70K+ sims, this prevents finalizer queue saturation
+  gc(verbose = FALSE)
+  reticulate::py_gc()
+
   return(file.exists(output_file))
 }
 
