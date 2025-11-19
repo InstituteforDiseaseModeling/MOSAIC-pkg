@@ -81,7 +81,7 @@ plot_vibrio_decay_rate <- function(PATHS, decay_days_short = 3, decay_days_long 
      png(filename = output_file, width = 9.5, height = 5, units = "in", res = 600)
 
      p <- ggplot(df, aes(x = psi, y = Days, color = Model)) +
-          geom_line(size = 2) +
+          geom_line(linewidth = 2) +
           scale_color_manual(
                values = c("Linear" = "#1f77b4",    # Dark blue
                           "Concave" = "#2ca02c",   # Dark green

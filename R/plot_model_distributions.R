@@ -399,9 +399,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         }
       }
     } else if (distribution == "uniform" && !is.null(parameters)) {
-      min_val <- as.numeric(parameters$min)
-      max_val <- as.numeric(parameters$max)
-      if (!is.null(min_val) && !is.null(max_val) && !is.na(min_val) && !is.na(max_val) &&
+      min_val <- if (!is.null(parameters$min)) as.numeric(parameters$min) else NA_real_
+      max_val <- if (!is.null(parameters$max)) as.numeric(parameters$max) else NA_real_
+      if (!is.na(min_val) && !is.na(max_val) &&
           is.finite(min_val) && is.finite(max_val) && max_val > min_val) {
         buffer <- (max_val - min_val) * 0.1
         x <- seq(min_val - buffer, max_val + buffer, length.out = 1000)
@@ -410,9 +410,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         mean_val <- (min_val + max_val) / 2
       }
     } else if (distribution == "normal" && !is.null(parameters)) {
-      mean_param <- as.numeric(parameters$mean)
-      sd_param <- as.numeric(parameters$sd)
-      if (!is.null(mean_param) && !is.null(sd_param) && !is.na(mean_param) && !is.na(sd_param) &&
+      mean_param <- if (!is.null(parameters$mean)) as.numeric(parameters$mean) else NA_real_
+      sd_param <- if (!is.null(parameters$sd)) as.numeric(parameters$sd) else NA_real_
+      if (!is.na(mean_param) && !is.na(sd_param) &&
           is.finite(mean_param) && is.finite(sd_param) && sd_param > 0) {
         x <- seq(mean_param - 4*sd_param, mean_param + 4*sd_param, length.out = 1000)
         y <- dnorm(x, mean_param, sd_param)
@@ -420,9 +420,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         mean_val <- mean_param
       }
     } else if (distribution == "gompertz" && !is.null(parameters)) {
-      b_param <- as.numeric(parameters$b)
-      eta_param <- as.numeric(parameters$eta)
-      if (!is.null(b_param) && !is.null(eta_param) && !is.na(b_param) && !is.na(eta_param) &&
+      b_param <- if (!is.null(parameters$b)) as.numeric(parameters$b) else NA_real_
+      eta_param <- if (!is.null(parameters$eta)) as.numeric(parameters$eta) else NA_real_
+      if (!is.na(b_param) && !is.na(eta_param) &&
           is.finite(b_param) && is.finite(eta_param) &&
           b_param > 0 && eta_param > 0) {
         tryCatch({

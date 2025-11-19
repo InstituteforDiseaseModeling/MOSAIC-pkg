@@ -1590,16 +1590,16 @@ plot_npe_training_loss <- function(
         # Use loess smoothing for cleaner curves
         p <- p +
             ggplot2::geom_smooth(data = train_data, method = "loess", span = 0.1,
-                       se = FALSE, size = 1.2, color = "#2E86AB") +
+                       se = FALSE, linewidth = 1.2, color = "#2E86AB") +
             ggplot2::geom_smooth(data = val_data, method = "loess", span = 0.1,
-                       se = FALSE, size = 1.2, color = "#28A745") +
-            ggplot2::geom_line(data = train_data, alpha = 0.3, size = 0.5, color = "#2E86AB") +
-            ggplot2::geom_line(data = val_data, alpha = 0.3, size = 0.5, color = "#28A745")
+                       se = FALSE, linewidth = 1.2, color = "#28A745") +
+            ggplot2::geom_line(data = train_data, alpha = 0.3, linewidth = 0.5, color = "#2E86AB") +
+            ggplot2::geom_line(data = val_data, alpha = 0.3, linewidth = 0.5, color = "#28A745")
     } else {
         # Show raw curves
         p <- p +
-            ggplot2::geom_line(data = train_data, size = 1, color = "#2E86AB") +
-            ggplot2::geom_line(data = val_data, size = 1, color = "#28A745")
+            ggplot2::geom_line(data = train_data, linewidth = 1, color = "#2E86AB") +
+            ggplot2::geom_line(data = val_data, linewidth = 1, color = "#28A745")
     }
 
     # Add vertical reference lines
@@ -1754,7 +1754,7 @@ plot_npe_training_loss <- function(
             plot.title = ggplot2::element_text(size = 14, face = "bold"),
             plot.subtitle = ggplot2::element_text(size = 9, color = "grey40"),
             legend.position = "none",
-            panel.grid.major = ggplot2::element_line(size = 0.3, color = "grey85"),
+            panel.grid.major = ggplot2::element_line(linewidth = 0.3, color = "grey85"),
             panel.grid.minor = ggplot2::element_blank(),
             axis.title = ggplot2::element_text(face = "bold"),
             strip.text = ggplot2::element_text(face = "bold", size = 11),

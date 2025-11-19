@@ -66,7 +66,7 @@ plot_africa_map <- function(PATHS) {
                                                  stringr::str_wrap("Cholera outbreak in past 5 years", 18))) +
           ggplot2::theme_minimal(base_size = 13) +
           ggplot2::theme(
-               panel.grid.major = ggplot2::element_line(size = 0.25),
+               panel.grid.major = ggplot2::element_line(linewidth = 0.25),
                legend.position = "right",
                legend.title = ggplot2::element_blank(),
                legend.text = ggplot2::element_text(size = 10.5),

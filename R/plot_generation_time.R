@@ -29,16 +29,16 @@ plot_generation_time <- function(PATHS) {
      # Create the base plot for day-wise gamma distribution
      base_plot <- ggplot2::ggplot(day_data, aes(x = x, y = y)) +
           geom_bar(stat = "identity", aes(y = y), fill = "dodgerblue", color = "white", width = 0.99) +  # Per-day probabilities as bars
-          geom_line(color = 'black', size = 1.5) +  # Gamma distribution line
-          geom_vline(xintercept = mean_val, linetype = "solid", color = "#E41A1C", size = 1.25) +  # Mean line
-          geom_vline(xintercept = upper_bound, linetype = "dashed", color = "#E41A1C", size = 0.75) +  # Upper CI line
-          geom_vline(xintercept = lower_bound, linetype = "dashed", color = "#E41A1C", size = 0.75) +  # Lower CI line
+          geom_line(color = 'black', linewidth = 1.5) +  # Gamma distribution line
+          geom_vline(xintercept = mean_val, linetype = "solid", color = "#E41A1C", linewidth = 1.25) +  # Mean line
+          geom_vline(xintercept = upper_bound, linetype = "dashed", color = "#E41A1C", linewidth = 0.75) +  # Upper CI line
+          geom_vline(xintercept = lower_bound, linetype = "dashed", color = "#E41A1C", linewidth = 0.75) +  # Lower CI line
           labs(title = 'A', x = 'Day', y = 'Probability') +
           theme_minimal(base_size = 16) +
           theme(axis.title.x = element_text(margin = margin(t = 10)),
                 axis.title.y = element_text(margin = margin(r = 10)),
                 panel.grid.minor = element_blank(),  # Remove minor gridlines
-                panel.grid.major = element_line(color = "grey70", size = 0.1)) +
+                panel.grid.major = element_line(color = "grey70", linewidth = 0.1)) +
           scale_y_continuous(expand = c(0.001, 0.001)) +
           scale_x_continuous(breaks = seq(0, max(day_data$x), by = 7), limits = c(0, max(day_data$x)), expand = c(0.001, 0.001))  # Align gridlines with weeks
 
@@ -50,7 +50,7 @@ plot_generation_time <- function(PATHS) {
           theme(axis.title.x = element_text(margin = margin(t = 10)),
                 axis.title.y = element_text(margin = margin(r = 10)),
                 panel.grid.minor = element_blank(),  # Remove minor gridlines
-                panel.grid.major = element_line(color = "grey70", size = 0.1)) +
+                panel.grid.major = element_line(color = "grey70", linewidth = 0.1)) +
           scale_y_continuous(expand = c(0.001, 0.001)) +
           scale_x_continuous(breaks = seq(1, max(day_data$x)/7, by = 1), limits = c(0, max(day_data$x)/7), expand = c(0.001, 0.001))  # Adjust breaks to match shifted bars
 

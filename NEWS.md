@@ -1,3 +1,20 @@
+# MOSAIC 0.10.6
+
+## Bug Fixes
+
+* **CRITICAL: Fixed NA handling error in `calc_distribution_density()`**
+  - Fixed "missing value where TRUE/FALSE needed" error in `plot_model_distributions()`
+  - Replaced unsafe `as.numeric(NULL)` pattern with explicit `NA_real_` conversion
+  - Fixed for uniform, normal, and gompertz distributions (lines 402-427)
+  - Prevents crashes when parameter bounds are NULL
+
+* **Fixed all ggplot2 3.4.0+ deprecation warnings**
+  - Replaced deprecated `size=` with `linewidth=` in `geom_line()` (14 instances)
+  - Replaced deprecated `size=` with `linewidth=` in `geom_smooth()` (2 instances)
+  - Replaced deprecated `size=` with `linewidth=` in `element_line()` (10 instances)
+  - Replaced deprecated `size=` with `linewidth=` in `geom_vline()` (6 instances)
+  - Fixed across 10 files: plot_generation_time.R, plot_vibrio_decay_rate.R, est_symptomatic_prop.R, plot_suspected_cases.R, plot_CFR_by_country.R, plot_vaccine_effectiveness.R, est_WASH_coverage.R, npe_plots.R, plot_africa_map.R, plot_model_distributions.R
+
 # MOSAIC 0.10.5
 
 ## Bug Fixes

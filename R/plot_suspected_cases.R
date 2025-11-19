@@ -35,9 +35,9 @@ plot_suspected_cases <- function(PATHS) {
      txt_low <- "Low estimate: All settings"
      p1 <- ggplot(df_all, aes(x = x)) +
           geom_histogram(aes(y = ..density..), bins = 50, fill = "#3498db", color = 'white', alpha = 0.5) +
-          geom_line(data = df_beta_all, aes(x = x, y = y), color = "black", size = 1) +
-          geom_vline(xintercept = ci_all[c(1,3)], linetype = "dashed", color = "grey20", size = 0.25) +
-          geom_vline(xintercept = ci_all[2], linetype = "solid", color = "grey20", size = 0.5) +
+          geom_line(data = df_beta_all, aes(x = x, y = y), color = "black", linewidth = 1) +
+          geom_vline(xintercept = ci_all[c(1,3)], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          geom_vline(xintercept = ci_all[2], linetype = "solid", color = "grey20", linewidth = 0.5) +
           labs(title = "A", y = "Density", x = "") +
           scale_x_continuous(limits = c(0, 1.3), breaks = seq(0, 1, 0.25), expand = c(0, 0)) +
           scale_y_continuous(expand = c(0.005, 0.005)) +
@@ -45,7 +45,7 @@ plot_suspected_cases <- function(PATHS) {
           theme(
                legend.position = "none",
                panel.grid.major.y = element_blank(),
-               panel.grid.major.x = element_line(color = 'grey80', size = 0.25),
+               panel.grid.major.x = element_line(color = 'grey80', linewidth = 0.25),
                panel.grid.minor = element_blank(),
                axis.title.x = element_text(margin = margin(t = 25)),
                axis.title.y = element_text(margin = margin(r = 25)),
@@ -68,9 +68,9 @@ plot_suspected_cases <- function(PATHS) {
      txt_high <- "High estimate: During outbreaks"
      p2 <- ggplot(df_outbreak, aes(x = x)) +
           geom_histogram(aes(y = ..density..), bins = 50, fill = "#c0392b", color = 'white', alpha = 0.5) +
-          geom_line(data = df_beta_outbreak, aes(x = x, y = y), color = "black", size = 1) +
-          geom_vline(xintercept = ci_outbreak[c(1,3)], linetype = "dashed", color = "grey20", size = 0.25) +
-          geom_vline(xintercept = ci_outbreak[2], linetype = "solid", color = "grey20", size = 0.5) +
+          geom_line(data = df_beta_outbreak, aes(x = x, y = y), color = "black", linewidth = 1) +
+          geom_vline(xintercept = ci_outbreak[c(1,3)], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          geom_vline(xintercept = ci_outbreak[2], linetype = "solid", color = "grey20", linewidth = 0.5) +
           labs(title = "B", y = "Density", x = expression("Proportion of suspected cases that are true infections (" * rho * ")")) +
           scale_x_continuous(limits = c(0, 1.3), breaks = seq(0, 1, 0.25), expand = c(0, 0)) +
           scale_y_continuous(expand = c(0.005, 0.005)) +
@@ -78,7 +78,7 @@ plot_suspected_cases <- function(PATHS) {
           theme(
                legend.position = "none",
                panel.grid.major.y = element_blank(),
-               panel.grid.major.x = element_line(color = 'grey80', size = 0.25),
+               panel.grid.major.x = element_line(color = 'grey80', linewidth = 0.25),
                panel.grid.minor = element_blank(),
                axis.title.x = element_text(margin = margin(t = 25), hjust = -0.1),
                axis.title.y = element_text(margin = margin(r = 25)),
