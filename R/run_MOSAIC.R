@@ -1441,119 +1441,71 @@ run_MOSAIC <- function(config,
   # POSTERIOR PREDICTIVE CHECKS
   # ===========================================================================
 
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("POSTERIOR PREDICTIVE CHECKS")
-  log_msg(paste(rep("=", 80), collapse = ""))
-
-  # Find best model
+  log_msg("Running posterior predictive checks")
   best_idx <- which.max(results$likelihood)
-  if (length(best_idx) > 0) {
-    best_seed_sim <- results$seed_sim[best_idx]
-    best_likelihood <- results$likelihood[best_idx]
-    log_msg("Best model identified: sim %d (seed %d) with likelihood %.2f",
-            results$sim[best_idx], best_seed_sim, best_likelihood)
+  best_seed_sim <- results$seed_sim[best_idx]
 
-    # Re-run best model for detailed analysis
-    log_msg("Re-running best model for PPC and detailed plots")
+  config_best <- sample_parameters(
+    PATHS = PATHS,
+    priors = priors,
+    config = config,
+    seed = best_seed_sim,
+    sample_args = sampling_args,
+    verbose = FALSE
+  )
 
-    config_best <- sample_parameters(
-      PATHS = PATHS,
-      priors = priors,
-      config = config,
-      seed = best_seed_sim,
-      sample_args = sampling_args,
+  config_best_file <- file.path(dirs$bfrs_cfg, "config_best.json")
+  jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE)
+  log_msg("Saved %s", config_best_file)
+
+  lc <- reticulate::import("laser_cholera.metapop.model")
+  best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
+
+  if (control$paths$plots) {
+    plot_model_fit_stochastic(
+      config = config_best,
+      n_simulations = control$predictions$best_model_n_sims,
+      output_dir = dirs$bfrs_plots_pred,
+      envelope_quantiles = c(0.025, 0.975),
+      save_predictions = TRUE,
+      parallel = TRUE,
+      n_cores = control$parallel$n_cores,
+      root_dir = root_dir,
       verbose = FALSE
     )
-
-    # Save best configuration
-    jsonlite::write_json(config_best, file.path(dirs$bfrs_cfg, "config_best.json"),
-                        pretty = TRUE, auto_unbox = TRUE)
-
-    # Import laser-cholera
-    lc <- reticulate::import("laser_cholera.metapop.model")
-
-    # Run best model
-    best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
-
-    if (control$paths$plots) {
-      # Generate stochastic fit plot for best model
-      log_msg("Generating best model fit with stochastic uncertainty...")
-      log_msg("  Using %d stochastic simulations", control$predictions$best_model_n_sims)
-      plot_model_fit_stochastic(
-        config = config_best,
-        n_simulations = control$predictions$best_model_n_sims,
-        output_dir = dirs$bfrs_plots_pred,
-        envelope_quantiles = c(0.025, 0.975),
-        save_predictions = TRUE,
-        parallel = TRUE,
-        n_cores = control$parallel$n_cores,
-        root_dir = root_dir,
-        verbose = TRUE
-      )
-      log_msg("Best model stochastic fit plot generated successfully")
-    }
-  } else {
-    log_msg("WARNING: No best model identified")
   }
-
-  # Clean up best model plotting artifacts
-  gc(verbose = FALSE)
 
   # ===========================================================================
   # PARAMETER + STOCHASTIC UNCERTAINTY PLOTS
   # ===========================================================================
 
   if (control$paths$plots && sum(results$is_best_subset) > 0) {
-    log_msg(paste(rep("=", 80), collapse = ""))
-    log_msg("GENERATING PARAMETER + STOCHASTIC UNCERTAINTY PLOTS")
-    log_msg(paste(rep("=", 80), collapse = ""))
-
-    # Use best subset for parameter uncertainty
     best_subset_results <- results[results$is_best_subset == TRUE, ]
+    param_seeds <- best_subset_results$seed_sim
+    param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
 
-    if (nrow(best_subset_results) > 0) {
-      # Get parameter seeds and weights
-      param_seeds <- best_subset_results$seed_sim
-      param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
-
-      # Ensure weights sum to 1
-      if (length(param_weights) > 0) {
-        param_weights <- param_weights / sum(param_weights)
-      } else {
-        param_weights <- NULL
-      }
-
-      if (length(param_weights) > 0) {
-        log_msg("Ensemble uncertainty: %d param sets (weights: %.4f-%.4f) × %d sims = %d total",
-                length(param_seeds), min(param_weights), max(param_weights),
-                control$predictions$ensemble_n_sims_per_param,
-                length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
-      } else {
-        log_msg("Ensemble uncertainty: %d param sets × %d sims = %d total",
-                length(param_seeds), control$predictions$ensemble_n_sims_per_param,
-                length(param_seeds) * control$predictions$ensemble_n_sims_per_param)
-      }
-
-      plot_model_fit_stochastic_param(
-        config = config,
-        parameter_seeds = param_seeds,
-        parameter_weights = param_weights,
-        n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
-        envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
-        PATHS = PATHS,
-        priors = priors,
-        sampling_args = sampling_args,
-        output_dir = dirs$bfrs_plots_pred,
-        save_predictions = TRUE,
-        parallel = TRUE,
-        n_cores = control$parallel$n_cores,
-        root_dir = root_dir,
-        verbose = TRUE
-      )
-      log_msg("Parameter + stochastic uncertainty plots generated successfully")
+    if (length(param_weights) > 0) {
+      param_weights <- param_weights / sum(param_weights)
     } else {
-      log_msg("WARNING: No models in best subset for parameter uncertainty analysis")
+      param_weights <- NULL
     }
+
+    plot_model_fit_stochastic_param(
+      config = config,
+      parameter_seeds = param_seeds,
+      parameter_weights = param_weights,
+      n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
+      envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+      PATHS = PATHS,
+      priors = priors,
+      sampling_args = sampling_args,
+      output_dir = dirs$bfrs_plots_pred,
+      save_predictions = TRUE,
+      parallel = TRUE,
+      n_cores = control$parallel$n_cores,
+      root_dir = root_dir,
+      verbose = FALSE
+    )
   }
 
   # ===========================================================================
@@ -1561,22 +1513,13 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   if (control$paths$plots) {
-    log_msg(paste(rep("=", 80), collapse = ""))
-    log_msg("GENERATING POSTERIOR PREDICTIVE CHECK PLOTS")
-    log_msg(paste(rep("=", 80), collapse = ""))
-
-    # Generate PPC plots using predictions from stochastic functions
     plot_model_ppc(
       predictions_dir = dirs$bfrs_plots_pred,
       output_dir = dirs$bfrs_plots,
       by_location = "both",
-      verbose = TRUE
+      verbose = FALSE
     )
-    log_msg("PPC plots created successfully")
   }
-
-  # Clean up plotting artifacts
-  gc(verbose = FALSE)
 
   # ===========================================================================
   # STAGE 2: NEURAL POSTERIOR ESTIMATION (NPE)
