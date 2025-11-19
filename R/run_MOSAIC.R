@@ -1196,6 +1196,11 @@ run_MOSAIC <- function(config,
     }
   }
 
+  # Clean up ESS results (no longer needed after CSV write and logging)
+  if (exists("ess_results")) {
+    rm(ess_results)
+  }
+
   log_msg(paste(rep("=", 80), collapse = ""))
 
   # ===========================================================================
@@ -1250,11 +1255,25 @@ run_MOSAIC <- function(config,
               tier_result$metrics$CVw)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
+
+      # Clean up tier definition before breaking (converged case)
+      rm(tier)
+
       break
     } else {
       log_msg("  ✗ Not converged")
+
+      # CRITICAL: Clean up failed tier result immediately to prevent accumulation
+      rm(tier_result)
+      rm(tier)
     }
   }
+
+  # Clean up tier definitions after loop completes
+  if (exists("subset_tiers")) {
+    rm(subset_tiers)
+  }
+  gc(verbose = FALSE)
 
   # Decide which subset to use
   if (!is.null(optimal_subset_result)) {
@@ -1276,6 +1295,10 @@ run_MOSAIC <- function(config,
     n_top_final <- ceiling(nrow(results) * fallback_percentile / 100)
     results_ranked_final <- results[order(results$likelihood, decreasing = TRUE), ]
     top_subset_final <- results_ranked_final[1:n_top_final, ]
+
+    # Clean up sorted copy immediately (no longer needed after subsetting)
+    rm(results_ranked_final)
+
     percentile_used <- fallback_percentile
     convergence_tier <- "fallback"
   }
@@ -1386,6 +1409,9 @@ run_MOSAIC <- function(config,
             sum(results$is_valid), all_result$effective_range,
             all_result$metrics$actual_range, all_result$temperature,
             all_result$metrics$ESS_kish, all_result$metrics$ESS_perplexity)
+
+    # Clean up weight result object (only needed weights, now extracted)
+    rm(all_result)
   }
 
   # ---------------------------------------------------------------------------
@@ -1407,6 +1433,9 @@ run_MOSAIC <- function(config,
             sum(results$is_retained), retained_result$effective_range,
             retained_result$metrics$actual_range, retained_result$temperature,
             retained_result$metrics$ESS_kish, retained_result$metrics$ESS_perplexity)
+
+    # Clean up weight result object (only needed weights, now extracted)
+    rm(retained_result)
   }
 
   # ---------------------------------------------------------------------------
@@ -1429,7 +1458,13 @@ run_MOSAIC <- function(config,
             sum(results$is_best_subset), best_result$effective_range,
             best_result$metrics$actual_range, best_result$temperature,
             best_result$metrics$ESS_kish, best_result$metrics$ESS_perplexity)
+
+    # Clean up weight result object (only needed weights, now extracted)
+    rm(best_result)
   }
+
+  # Force garbage collection after all weight calculations
+  gc(verbose = FALSE)
 
   # Save subset selection summary
   subset_summary <- data.frame(
@@ -1622,6 +1657,9 @@ run_MOSAIC <- function(config,
     })
   }
 
+  # Clean up plotting artifacts
+  gc(verbose = FALSE)
+
   # ===========================================================================
   # POSTERIOR QUANTILES AND DISTRIBUTIONS
   # ===========================================================================
@@ -1716,6 +1754,9 @@ run_MOSAIC <- function(config,
     }
   }
 
+  # Clean up plotting artifacts
+  gc(verbose = FALSE)
+
   # ===========================================================================
   # POSTERIOR PREDICTIVE CHECKS
   # ===========================================================================
@@ -1803,6 +1844,9 @@ run_MOSAIC <- function(config,
     log_msg("WARNING: No best model identified")
   }
 
+  # Clean up best model plotting artifacts
+  gc(verbose = FALSE)
+
   # ===========================================================================
   # PARAMETER + STOCHASTIC UNCERTAINTY PLOTS
   # ===========================================================================
@@ -1863,6 +1907,9 @@ run_MOSAIC <- function(config,
       log_msg("WARNING: No models in best subset for parameter uncertainty analysis")
     }
   }
+
+  # Clean up plotting artifacts
+  gc(verbose = FALSE)
 
   # ===========================================================================
   # STAGE 2: NEURAL POSTERIOR ESTIMATION (NPE)
@@ -1946,6 +1993,19 @@ run_MOSAIC <- function(config,
       verbose = TRUE
     )
 
+    # CRITICAL MEMORY OPTIMIZATION: Extract needed components before cleanup
+    # npe_data contains ~2 GB of training data (parameters + observations matrices)
+    # We only need small metadata for downstream operations
+    param_names_npe <- npe_data$param_names
+    n_params_npe <- npe_data$n_params
+    n_samples_npe <- npe_data$n_samples
+
+    # Remove large training data immediately after training completes
+    # This frees ~500 MB to 2 GB of memory
+    rm(npe_data)
+    gc(verbose = FALSE)
+    log_msg("  NPE training data freed from memory")
+
     # Step 4: Run post-training diagnostics using comprehensive SBC
     log_msg("Running post-training diagnostics (SBC)...")
     diagnostics <- calc_npe_diagnostics(
@@ -1955,7 +2015,7 @@ run_MOSAIC <- function(config,
       PATHS = PATHS,
       priors = priors,
       config_base = config,
-      param_names = npe_data$param_names,
+      param_names = param_names_npe,
       n_npe_samples = 100,
       probs = c(0.025, 0.25, 0.75, 0.975),
       output_dir = npe_dirs$diagnostics,
@@ -1996,14 +2056,14 @@ run_MOSAIC <- function(config,
     posterior_quantiles <- posterior_result$quantiles
 
     # Ensure column names are set
-    if (is.null(colnames(posterior_samples)) && !is.null(npe_data$param_names)) {
-      colnames(posterior_samples) <- npe_data$param_names
+    if (is.null(colnames(posterior_samples)) && !is.null(param_names_npe)) {
+      colnames(posterior_samples) <- param_names_npe
     }
 
     # Check if NPE succeeded
     if (!is.null(posterior_samples)) {
       log_msg("\nNPE complete: %d samples × %d params | %s tier (%d transforms)",
-              nrow(posterior_samples), length(npe_data$param_names),
+              nrow(posterior_samples), length(param_names_npe),
               arch_spec$tier, arch_spec$n_transforms)
 
       # Check diagnostics
@@ -2051,7 +2111,7 @@ run_MOSAIC <- function(config,
         posterior_samples = posterior_samples,
         posterior_log_probs = posterior_log_probs,
         posterior_quantiles = posterior_quantiles,
-        param_names = npe_data$param_names,
+        param_names = param_names_npe,
         architecture = arch_spec,
         diagnostics = diagnostics,
         model = npe_model
@@ -2079,7 +2139,7 @@ run_MOSAIC <- function(config,
       # Save NPE summary
       npe_summary <- list(
         n_posterior_samples = nrow(posterior_samples),
-        param_names = npe_data$param_names,
+        param_names = param_names_npe,
         architecture = arch_spec,
         diagnostics = diagnostics,
         has_log_probs = !is.null(posterior_log_probs),
@@ -2307,6 +2367,9 @@ run_MOSAIC <- function(config,
       } else {
         log_msg("  Insufficient posterior samples for parameter uncertainty analysis")
       }
+
+      # Clean up NPE plotting artifacts
+      gc(verbose = FALSE)
 
       # =========================================================================
       # CLEANUP OUTPUT FILES
@@ -2749,74 +2812,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),
     io = if (is.null(io)) default_io else modifyList(default_io, io),
     paths = if (is.null(paths)) default_paths else modifyList(default_paths, paths)
-  )
-}
-
-#' Get Default MOSAIC Run Settings (Internal)
-#'
-#' @description
-#' Internal function that returns default control settings.
-#' Used by `.mosaic_validate_and_merge_control()`.
-#'
-#' @return Named list with default settings for paths, parallel, calibration, fine_tuning, targets, npe, and io
-#' @noRd
-mosaic_run_defaults <- function() {
-  list(
-    paths = list(
-      clean_output = FALSE,
-      plots = TRUE
-    ),
-    parallel = list(
-      enable = FALSE,
-      n_cores = 1L,
-      type = "PSOCK",
-      progress = TRUE
-    ),
-    calibration = list(
-      batch_size = 500L,
-      min_batches = 5L,
-      max_batches = 8L,
-      target_r2 = 0.90,
-      max_simulations = 100000L
-    ),
-    fine_tuning = list(
-      batch_sizes = list(
-        massive = 1000L,
-        large = 750L,
-        standard = 500L,
-        precision = 350L,
-        final = 250L
-      )
-    ),
-    targets = list(
-      ESS_param = 500,
-      ESS_param_prop = 0.95,
-      ESS_best = 100,
-      A_best = 0.95,
-      CVw_best = 0.5,
-      B_min = 30,
-      percentile_max = 5.0,
-      ESS_method = "perplexity"
-    ),
-    npe = list(
-      enable = FALSE,
-      weight_strategy = "continuous_best"
-    ),
-    predictions = list(
-      best_model_n_sims = 100L,
-      ensemble_n_param_sets = 50L,
-      ensemble_n_sims_per_param = 10L
-    ),
-    weights = list(
-      floor = 1e-15,
-      iqr_multiplier = 1.5
-    ),
-    io = list(
-      format = "parquet",
-      compression = "zstd",
-      compression_level = 3L,
-      verbose_weights = FALSE
-    )
   )
 }
 
