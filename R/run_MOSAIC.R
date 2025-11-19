@@ -1370,81 +1370,56 @@ run_MOSAIC <- function(config,
 
   convergence_file <- file.path(dirs$bfrs_diag, "convergence_results.parquet")
   .mosaic_write_parquet(convergence_results_df, convergence_file, control$io)
-  log_msg("Saved convergence results to: convergence_results.parquet")
+  log_msg("Saved %s", convergence_file)
 
-  # Save diagnostics JSON
   diagnostics_file <- file.path(dirs$bfrs_diag, "convergence_diagnostics.json")
   jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE)
-  log_msg("Saved convergence diagnostics to: convergence_diagnostics.json")
+  log_msg("Saved %s", diagnostics_file)
 
-  # Generate convergence plots
   if (control$paths$plots) {
     plot_model_convergence(
       results_dir = dirs$bfrs_diag,
       plots_dir = dirs$bfrs_plots_diag,
-      verbose = TRUE
+      verbose = FALSE
     )
-    log_msg("Convergence plots created successfully")
-
     plot_model_convergence_status(
       results_dir = dirs$bfrs_diag,
       plots_dir = dirs$bfrs_plots_diag,
-      verbose = TRUE
+      verbose = FALSE
     )
-    log_msg("Convergence status table created successfully")
   }
-
-  # Clean up plotting artifacts
-  gc(verbose = FALSE)
 
   # ===========================================================================
   # POSTERIOR QUANTILES AND DISTRIBUTIONS
   # ===========================================================================
 
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("CALCULATING POSTERIOR QUANTILES")
-  log_msg(paste(rep("=", 80), collapse = ""))
-
-  # Calculate posterior quantiles
+  log_msg("Calculating posterior quantiles")
   posterior_quantiles <- calc_model_posterior_quantiles(
     results = results,
     probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
     output_dir = dirs$bfrs_post,
-    verbose = TRUE
+    verbose = FALSE
   )
+  log_msg("Saved %s", file.path(dirs$bfrs_post, "posterior_quantiles.csv"))
 
-  log_msg("Posterior quantiles: %d parameters → posterior_quantiles.csv",
-            nrow(posterior_quantiles))
-
-  # Generate posterior quantiles plots
   if (control$paths$plots) {
-    log_msg(paste(rep("=", 80), collapse = ""))
-    log_msg("GENERATING POSTERIOR QUANTILES PLOTS")
-    log_msg(paste(rep("=", 80), collapse = ""))
-
     plot_model_posterior_quantiles(
       csv_files = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
       output_dir = dirs$bfrs_plots_post,
-      verbose = TRUE
+      verbose = FALSE
     )
-    log_msg("Posterior quantiles plots created successfully")
   }
 
   # Calculate posterior distributions
-  log_msg(paste(rep("=", 80), collapse = ""))
-  log_msg("CALCULATING POSTERIOR DISTRIBUTIONS")
-  log_msg(paste(rep("=", 80), collapse = ""))
-
+  log_msg("Calculating posterior distributions")
   calc_model_posterior_distributions(
     quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
     priors_file = file.path(dirs$setup, "priors.json"),
     output_dir = dirs$bfrs_post,
-    verbose = TRUE
+    verbose = FALSE
   )
+  log_msg("Saved %s", file.path(dirs$bfrs_post, "posteriors.json"))
 
-  log_msg("Posterior distributions → posteriors.json")
-
-  # Generate posterior distribution plots
   if (control$paths$plots) {
     plot_model_distributions(
       json_files = c(file.path(dirs$setup, "priors.json"),
@@ -1452,21 +1427,15 @@ run_MOSAIC <- function(config,
       method_names = c("Prior", "Posterior"),
       output_dir = dirs$bfrs_plots_post
     )
-    log_msg("Posterior distribution plots created successfully")
-
     plot_model_posteriors_detail(
       quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
       results_file = file.path(dirs$bfrs_out, "simulations.parquet"),
       priors_file = file.path(dirs$setup, "priors.json"),
       posteriors_file = file.path(dirs$bfrs_post, "posteriors.json"),
       output_dir = file.path(dirs$bfrs_plots_post, "detail"),
-      verbose = TRUE
+      verbose = FALSE
     )
-    log_msg("Detailed posterior plots created successfully")
   }
-
-  # Clean up plotting artifacts
-  gc(verbose = FALSE)
 
   # ===========================================================================
   # POSTERIOR PREDICTIVE CHECKS
