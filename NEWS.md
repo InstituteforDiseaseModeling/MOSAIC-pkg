@@ -10,9 +10,11 @@
   - Stripped PPC sections: removed conditional checks, verbose status messages
   - Stripped parameter uncertainty: removed ensemble logging
   - Stripped NPE section: removed 66 log_msg calls, verbose diagnostics, section banners
+  - Stripped POST-HOC optimization: removed tier-by-tier logging, convergence messages
+  - Stripped WEIGHTS section: removed detailed ESS/temperature logging
   - Pattern applied: calculate → write → log filepath (no defensive checks)
-  - Removed 80+ section banners and 150+ verbose log messages
-  - Progress: ~570 lines removed (2441 → 1871 core, plus helpers)
+  - Removed 90+ section banners and 170+ verbose log messages
+  - Total reduction: ~670 lines removed (2441 → 1771 core function)
 
 ## Deprecations
 
