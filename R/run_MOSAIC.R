@@ -1199,11 +1199,6 @@ run_MOSAIC <- function(config,
     }
   }
 
-  # Clean up ESS results (no longer needed after CSV write and logging)
-  if (exists("ess_results")) {
-    rm(ess_results)
-  }
-
   log_msg(paste(rep("=", 80), collapse = ""))
 
   # ===========================================================================
