@@ -1,3 +1,12 @@
+# MOSAIC 0.10.5
+
+## Bug Fixes
+
+* Fixed broken documentation links to deprecated `run_mosaic_iso()`
+  - Removed references to `run_mosaic_iso()` in `run_MOSAIC()` documentation
+  - Fixes roxygen2 warnings about unresolvable links
+  - Updated @description and removed @seealso reference
+
 # MOSAIC 0.10.4
 
 ## Bug Fixes

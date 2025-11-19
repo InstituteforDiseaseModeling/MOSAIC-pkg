@@ -8,6 +8,7 @@ prepare_npe_data(
   bfrs_dir,
   results = NULL,
   param_names = NULL,
+  weights = NULL,
   verbose = TRUE,
   chunk_size = NULL
 )
@@ -25,6 +26,10 @@ prepare_npe_data(
 avoid redundant file I/O. Must contain columns: sim, likelihood, and parameter columns.}
 
 \item{param_names}{Character vector of parameter names to extract (NULL = auto-detect)}
+
+\item{weights}{Optional numeric vector of NPE weights for each simulation
+(NULL = extract from results$weight_npe, then results$weight_best, then uniform).
+Passing weights explicitly avoids needing to add weight_npe column to results.}
 
 \item{verbose}{Logical, print progress messages (default: TRUE)}
 
@@ -76,13 +81,14 @@ npe_data <- prepare_npe_data(
     param_names = c("beta_env", "beta_hum", "tau_i")
 )
 
-# Optimized usage (pass pre-loaded results)
+# Optimized usage (pass pre-loaded results and weights)
 results <- arrow::read_parquet("path/to/1_bfrs/outputs/simulations.parquet")
-results$weight_npe <- get_npe_weights(results, strategy = "continuous_best")
+npe_weights <- get_npe_weights(results, strategy = "continuous_best")
 npe_data <- prepare_npe_data(
     bfrs_dir = "path/to/1_bfrs",
     results = results,
-    param_names = c("beta_env", "beta_hum", "tau_i")
+    param_names = c("beta_env", "beta_hum", "tau_i"),
+    weights = npe_weights
 )
 }
 }

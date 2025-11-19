@@ -3,7 +3,7 @@
 \name{run_MOSAIC}
 \alias{run_MOSAIC}
 \alias{run_mosaic}
-\title{Run MOSAIC Calibration Workflow (Advanced Interface)}
+\title{Run MOSAIC Calibration Workflow}
 \usage{
 run_MOSAIC(config, priors, dir_output, control = NULL, resume = FALSE)
 
@@ -42,8 +42,7 @@ Invisibly returns a list with:
 }
 }
 \description{
-\strong{Advanced interface with full control over model specification.}
-For most users, \code{\link[=run_mosaic_iso]{run_mosaic_iso()}} provides a simpler interface.
+\strong{Complete Bayesian calibration workflow with full control over model specification.}
 
 This function accepts pre-configured config and priors objects, allowing:
 \itemize{
@@ -152,7 +151,5 @@ run_MOSAIC(custom_config, custom_priors, "./output")
 
 }
 \seealso{
-\code{\link[=run_mosaic_iso]{run_mosaic_iso()}} for simple interface with ISO codes
-
 \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for building control structures
 }
