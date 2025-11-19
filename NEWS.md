@@ -1,3 +1,12 @@
+# MOSAIC 0.10.3
+
+## Bug Fixes
+
+* Fixed missing `ggsave()` namespace prefix in `plot_model_distributions()`
+  - Added explicit `ggplot2::ggsave()` prefix at two save locations
+  - Fixes "could not find function 'ggsave'" error when saving plots
+  - Fixed for both global parameters plot (line 834) and location-specific plots (line 980)
+
 # MOSAIC 0.10.2
 
 ## Bug Fixes
