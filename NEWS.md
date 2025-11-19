@@ -2,12 +2,15 @@
 
 ## Breaking Changes
 
-* **Major refactor: Lean run_MOSAIC() - work in progress**
+* **Major refactor: Lean run_MOSAIC() - aggressive simplification**
   - Moved `run_mosaic_iso()` to `deprecated/` directory (use `run_MOSAIC()` directly)
-  - Stripped ESS calculation section: removed conditional skipping, verbose summaries
-  - Pattern: just calculate → write → log filepath (no defensive checks)
-  - **More sections being stripped**: This is phase 1 of aggressive simplification
-  - Function will be ~50% shorter when complete
+  - Stripped ESS calculation: removed conditional skipping, verbose summaries
+  - Stripped convergence diagnostics: removed section banners, verbose logging
+  - Stripped posterior sections: removed verbose progress, set verbose=FALSE in all functions
+  - Pattern applied: calculate → write → log filepath (no defensive checks)
+  - Removed ALL section banners (80x '=' lines)
+  - **In progress**: Optimization, weights, PPC, and NPE sections next
+  - Function being reduced from 1700+ lines to ~800-900 lines
 
 ## Deprecations
 
