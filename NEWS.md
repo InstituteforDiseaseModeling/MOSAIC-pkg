@@ -1,3 +1,16 @@
+# MOSAIC 0.10.9
+
+## Bug Fixes
+
+* **Fixed missing namespace prefixes in `plot_model_posteriors_detail()`**
+  - Added explicit `ggplot2::` prefixes to all ggplot2 functions (68+ occurrences)
+  - Added `grid::` prefix for `unit()` calls
+  - Added `arrow::` prefix for `read_parquet()`
+  - Added `patchwork::` prefixes for `wrap_plots()` and `plot_layout()`
+  - Added `cowplot::` prefixes for `plot_grid()` and `get_legend()`
+  - Fixes "could not find function 'geom_histogram'" error
+  - Fixed throughout `plot_model_posteriors_detail.R`
+
 # MOSAIC 0.10.8
 
 ## Bug Fixes
