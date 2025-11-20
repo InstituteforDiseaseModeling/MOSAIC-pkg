@@ -1676,12 +1676,14 @@ run_MOSAIC <- function(config,
           param_configs[[i]] <- config_sample
         }
 
-        param_weights <- NULL
-        if (!is.null(posterior_log_probs)) {
-          selected_log_probs <- posterior_log_probs[sample_indices]
-          param_weights <- exp(selected_log_probs - max(selected_log_probs))
-          param_weights <- param_weights / sum(param_weights)
-        }
+        # CRITICAL: Use uniform weights for posterior predictive sampling
+        # When samples are drawn directly from p(θ|x_obs) (as NPE does),
+        # the sampling distribution already encodes the posterior.
+        # Using density as weights would cause double-weighting: [p(θ|x)]²
+        # This over-emphasizes high-density regions and under-represents uncertainty.
+        # For posterior predictive: p(y|x) ≈ (1/N) Σ p(y|θ_i) where θ_i ~ p(θ|x)
+        # Density weights are ONLY correct for importance sampling from q(θ) ≠ p(θ|x)
+        param_weights <- NULL  # NULL → uniform weights in plot_model_fit_stochastic_param
 
         plot_model_fit_stochastic_param(
           configs = param_configs,

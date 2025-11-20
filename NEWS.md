@@ -1,3 +1,19 @@
+# MOSAIC 0.10.10
+
+## Bug Fixes
+
+* **CRITICAL: Fixed incorrect weighting in NPE ensemble predictions**
+  - Removed density-based weighting that caused double-weighting artifact
+  - NPE samples are drawn directly from posterior p(θ|x), so uniform weights are correct
+  - Using density as weights was creating effective distribution [p(θ|x)]²
+  - This over-emphasized high-density regions and under-represented uncertainty
+  - Now uses uniform weights (NULL) for proper posterior predictive sampling
+  - Fixed at lines 1679-1686 in `run_MOSAIC.R`
+  - **Impact:** NPE ensemble predictions should now have appropriate uncertainty bands
+  - **Theory:** For posterior predictive p(y|x) ≈ (1/N) Σ p(y|θᵢ) where θᵢ ~ p(θ|x)
+  - Density weights only correct for importance sampling from q(θ) ≠ p(θ|x)
+  - See `claude/npe_weighting_analysis.md` for complete theoretical analysis
+
 # MOSAIC 0.10.9
 
 ## Bug Fixes
