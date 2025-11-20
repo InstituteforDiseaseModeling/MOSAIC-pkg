@@ -1,3 +1,14 @@
+# MOSAIC 0.10.14
+
+## Bug Fixes
+
+* **Fixed sprintf formatting errors in convergence diagnostic plots**
+  - Fixed "Error formatting: ESS: %.0f [target >= %.0f]" messages in convergence_diagnostic.pdf
+  - **Root cause**: Using single brackets `metrics["ESS"]` returns named vector element, not just value
+  - **Solution**: Changed to double brackets `metrics[["ESS"]]` to extract raw values
+  - Fixed in both `plot_model_convergence.R` (lines 214-223, 330-336) and `plot_model_convergence_loss.R` (lines 108-114)
+  - All convergence metrics (ESS, A, CVw, B) now format correctly in diagnostic text
+
 # MOSAIC 0.10.13
 
 ## Bug Fixes

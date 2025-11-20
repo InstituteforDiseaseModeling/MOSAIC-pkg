@@ -211,16 +211,16 @@ plot_model_convergence <- function(results_dir,
         sprintf("Retained: %d/%d", n_retained_all, n_total_original),
         "",  # Empty line for spacing
         safe_sprintf("ESS: %.0f [target >= %.0f]",
-                     metrics["ESS"], targets["ESS_min"]),
+                     metrics[["ESS"]], targets[["ESS_min"]]),
         "",  # Empty line for spacing
         safe_sprintf("A: %.3f [target >= %.3f]",
-                     metrics["A"], targets["A_min"]),
+                     metrics[["A"]], targets[["A_min"]]),
         "",  # Empty line for spacing
         safe_sprintf("CVw: %.3f [target <= %.3f]",
-                     metrics["CVw"], targets["CVw_max"]),
+                     metrics[["CVw"]], targets[["CVw_max"]]),
         "",  # Empty line for spacing
         safe_sprintf("B: %.0f [target >= %.0f]",
-                     metrics["B_size"], targets["B_min"])
+                     metrics[["B_size"]], targets[["B_min"]])
     )
 
     # ============================================================================
@@ -327,13 +327,13 @@ plot_model_convergence <- function(results_dir,
 
         # Use safe_sprintf for metrics display
         message(safe_sprintf("ESS: %.0f (target >= %.0f) - %s",
-                            metrics["ESS"], targets["ESS_min"], toupper(status["ESS"])))
+                            metrics[["ESS"]], targets[["ESS_min"]], toupper(status[["ESS"]])))
         message(safe_sprintf("Agreement Index: %.3f (target >= %.3f) - %s",
-                            metrics["A"], targets["A_min"], toupper(status["A"])))
+                            metrics[["A"]], targets[["A_min"]], toupper(status[["A"]])))
         message(safe_sprintf("Weight CV: %.3f (target <= %.3f) - %s",
-                            metrics["CVw"], targets["CVw_max"], toupper(status["CVw"])))
+                            metrics[["CVw"]], targets[["CVw_max"]], toupper(status[["CVw"]])))
         message(safe_sprintf("Retained Set Size: %.0f (target >= %.0f) - %s",
-                            metrics["B_size"], targets["B_min"], toupper(status["B_size"])))
+                            metrics[["B_size"]], targets[["B_min"]], toupper(status[["B_size"]])))
         message(sprintf("Overall Status: %s", safe_character(diagnostics$summary$convergence_status)))
     }
 
