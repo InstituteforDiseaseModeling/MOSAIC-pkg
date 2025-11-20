@@ -443,12 +443,12 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         })
       }
     } else if (distribution == "truncnorm" && !is.null(parameters)) {
-      mean_param <- as.numeric(parameters$mean)
-      sd_param <- as.numeric(parameters$sd)
-      a_bound <- as.numeric(parameters$a %||% -45)
-      b_bound <- as.numeric(parameters$b %||% 45)
+      mean_param <- if (!is.null(parameters$mean)) as.numeric(parameters$mean) else NA_real_
+      sd_param <- if (!is.null(parameters$sd)) as.numeric(parameters$sd) else NA_real_
+      a_bound <- if (!is.null(parameters$a)) as.numeric(parameters$a) else -45
+      b_bound <- if (!is.null(parameters$b)) as.numeric(parameters$b) else 45
 
-      if (!is.null(mean_param) && !is.null(sd_param) && !is.na(mean_param) && !is.na(sd_param) &&
+      if (!is.na(mean_param) && !is.na(sd_param) &&
           is.finite(mean_param) && is.finite(sd_param) && sd_param > 0 &&
           is.finite(a_bound) && is.finite(b_bound) && b_bound > a_bound) {
         x <- seq(a_bound, b_bound, length.out = 1000)

@@ -1,3 +1,13 @@
+# MOSAIC 0.10.7
+
+## Bug Fixes
+
+* **CRITICAL: Fixed remaining NA handling error in `calc_distribution_density()`**
+  - Fixed "missing value where TRUE/FALSE needed" error for truncated normal distribution
+  - Completed NA handling fix missed in v0.10.6
+  - Fixed truncnorm distribution at lines 446-453 in `plot_model_distributions.R`
+  - Now all distribution types properly handle NULL parameters
+
 # MOSAIC 0.10.6
 
 ## Bug Fixes
