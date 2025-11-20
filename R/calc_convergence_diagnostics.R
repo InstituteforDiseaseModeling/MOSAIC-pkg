@@ -192,6 +192,16 @@ calc_convergence_diagnostics <- function(
         warn_threshold = 0.5
     )
 
+    # B_size upper bound: Must not exceed percentile_max of retained set
+    max_B_size <- n_retained * (target_percentile_max / 100)
+    status_B_size_upper <- .calc_status(
+        value = n_best_subset,
+        target = max_B_size,
+        direction = "lower",     # Must be BELOW target
+        pass_threshold = 1.0,    # Must not exceed limit
+        warn_threshold = 1.2     # Warn if within 20% of exceeding
+    )
+
     # ESS_best: Effective sample size in best subset
     status_ess_best <- .calc_status(
         value = ess_best,
@@ -252,6 +262,7 @@ calc_convergence_diagnostics <- function(
     # Collect all statuses (exclude info-only metrics)
     all_statuses <- c(
         status_B_size,
+        status_B_size_upper,
         status_ess_best,
         status_A_best,
         status_cvw_best,
@@ -296,8 +307,12 @@ calc_convergence_diagnostics <- function(
                 " (target <= ", target_percentile_max, "%) - ", toupper(status_percentile))
         message("")
         message("Best Subset Metrics:")
-        message("  Size (B): ", n_best_subset,
+        message("  Size (B) - Lower: ", n_best_subset,
                 " (target >= ", target_ess_best, ") - ", toupper(status_B_size))
+        message("  Size (B) - Upper: ", n_best_subset,
+                " (target <= ", round(max_B_size, 0),
+                " = ", n_retained, "*", target_percentile_max, "%) - ",
+                toupper(status_B_size_upper))
         message("  ESS_B: ", round(ess_best, 1),
                 " (target >= ", target_ess_best, ") - ", toupper(status_ess_best))
         message("  A_B: ", round(A_best, 3),
@@ -359,11 +374,19 @@ calc_convergence_diagnostics <- function(
         ),
 
         metrics = list(
-            # B_size - number in best subset
+            # B_size - number in best subset (lower bound)
             B_size = list(
                 value = n_best_subset,
-                description = "Number of simulations in best subset",
+                description = "Number of simulations in best subset (lower bound)",
                 status = status_B_size
+            ),
+
+            # B_size_upper - upper bound on best subset size
+            B_size_upper = list(
+                value = n_best_subset,
+                target = max_B_size,
+                description = "Best subset size must not exceed percentile_max of retained set",
+                status = status_B_size_upper
             ),
 
             # ess_best - ESS within best subset

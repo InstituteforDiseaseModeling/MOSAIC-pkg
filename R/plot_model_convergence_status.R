@@ -130,10 +130,10 @@ plot_model_convergence_status <- function(results_dir,
 
 
     # Process metrics in specific order for better table organization
-    # Order: ESS_retained, Subset Selection, B_size, ESS_best, A_B, cvw_B
+    # Order: ESS_retained, Subset Selection, B_size_upper, B_size, ESS_best, A_B, cvw_B
     if (verbose) message("Processing metrics in specified order...")
 
-    metric_order <- c("ess_retained", "B_size", "ess_best", "A_B", "cvw_B")
+    metric_order <- c("ess_retained", "B_size_upper", "B_size", "ess_best", "A_B", "cvw_B")
 
     for (metric_name in metric_order) {
         # Skip if metric doesn't exist
@@ -172,6 +172,15 @@ plot_model_convergence_status <- function(results_dir,
         } else if (metric_name == "cvw_B") {
             # cvw_B uses cvw_best target
             target_value <- paste("<=", diagnostics$targets$cvw_best$value)
+        } else if (metric_name == "B_size_upper") {
+            # B_size_upper uses custom format: "value (n_retained*percentile%)"
+            n_retained <- diagnostics$summary$retained_simulations
+            percentile_max <- diagnostics$targets$percentile_max$value
+            max_B_size <- round(n_retained * (percentile_max / 100), 0)
+            target_value <- sprintf("<= %s (%s*%.0f%%)",
+                                   format(max_B_size, big.mark = ","),
+                                   format(n_retained, big.mark = ","),
+                                   percentile_max)
         } else if (metric_name == "B_size") {
             # B_size uses ess_best target (same as ESS_B)
             target_value <- paste(">=", diagnostics$targets$ess_best$value)
@@ -199,6 +208,7 @@ plot_model_convergence_status <- function(results_dir,
             "ess_best" = "ESS_B",
             "A_B" = "A_B",
             "cvw_B" = "CV_B",
+            "B_size_upper" = "Best Subset Size Limit",
             "B_size" = "Best Subset (B)",
             metric_name
         )
@@ -210,6 +220,7 @@ plot_model_convergence_status <- function(results_dir,
             "ess_best" = expression(bold(ESS[B])),
             "A_B" = expression(bold(A[B])),
             "cvw_B" = expression(bold(CV[B])),
+            "B_size_upper" = expression(bold("Best Subset Size Limit")),
             "B_size" = expression(bold("Best Subset (B)")),
             NULL
         )
@@ -221,7 +232,8 @@ plot_model_convergence_status <- function(results_dir,
             "ess_best" = "Effective sample size in best subset",
             "A_B" = "Agreement between simulations in best subset",
             "cvw_B" = "Variability of weights in best subset",
-            "B_size" = "Number of simulations in best performing subset",
+            "B_size_upper" = "Upper limit on best subset size (must not exceed percentile_max of retained)",
+            "B_size" = "Number of simulations in best performing subset (lower bound)",
             # Fallback to provided description or metric name
             if (!is.null(metric$description)) metric$description else metric_name
         )
@@ -407,8 +419,8 @@ plot_model_convergence_status <- function(results_dir,
     if (verbose) message("Successfully processed ", nrow(metrics_data), " metrics")
 
     # --- Create plot ------------------------------------------------------------
-    # Increased height to accommodate parameter table and footer
-    pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 14)
+    # Increased height to accommodate parameter table, new B_size_upper row, and footer
+    pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 15)
 
     # Set up plot area with minimal margins (reduced bottom margin since no URL)
     par(mar = c(2, 1, 3, 1), xpd = TRUE, family = "sans")
