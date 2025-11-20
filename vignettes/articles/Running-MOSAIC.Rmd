@@ -6,8 +6,15 @@ title: "Running MOSAIC"
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = FALSE
+  eval = TRUE,
+  cache = TRUE,
+  cache.path = "cache/"
 )
+
+# Create figures directory if it doesn't exist
+if (!dir.exists("figures")) {
+  dir.create("figures", recursive = TRUE)
+}
 ```
 
 ## Overview
@@ -59,6 +66,8 @@ cat(sprintf("  Locations: %d\n", n_locations))
 cat(sprintf("  Time steps: %d\n", n_timesteps))
 
 # Plot epidemic time series by location
+png("figures/running_mosaic_epidemic.png", width = 800, height = 600, res = 120)
+
 colors <- c("#009ADE", "#FF1F5B", "#00CD6C")  # Blue, Pink, Green
 par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 
@@ -75,6 +84,9 @@ par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
 plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
 legend("bottom", legend = locations, col = colors, lty = 1, lwd = 2,
        horiz = TRUE, bty = "n", xpd = TRUE)
+
+dev.off()
+cat("Saved: figures/running_mosaic_epidemic.png\n")
 ```
 
 ```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "100%"}
@@ -109,6 +121,8 @@ cat(sprintf("  Total cases: %s\n", format(total_cases_endemic, big.mark = ",")))
 cat(sprintf("  Total deaths: %s\n", format(total_deaths_endemic, big.mark = ",")))
 
 # Plot endemic time series by location
+png("figures/running_mosaic_endemic.png", width = 800, height = 600, res = 120)
+
 colors <- c("#00CD6C", "#AF58BA", "#009ADE")  # Green, Purple, Blue
 par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 
@@ -125,6 +139,9 @@ par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
 plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
 legend("bottom", legend = locations, col = colors, lty = 1, lwd = 2,
        horiz = TRUE, bty = "n", xpd = TRUE)
+
+dev.off()
+cat("Saved: figures/running_mosaic_endemic.png\n")
 ```
 
 ```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "100%"}
