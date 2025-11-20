@@ -33,8 +33,11 @@ Most users should start with **Basic**.
 Install the R package from GitHub and let it automatically set up Python dependencies. This is sufficient for running models with pre-configured parameters and data.
 
 ```{r basic-install}
+# Install remotes if not already installed
+if (!require("remotes")) install.packages("remotes")
+
 # Install MOSAIC R package
-devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg")
+remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg", upgrade = "never", force = TRUE)
 
 # Load and install Python dependencies
 library(MOSAIC)
@@ -100,8 +103,8 @@ git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 ### Install and Configure
 
 ```{r dev-install}
-# Install R package from source
-devtools::install("~/MOSAIC/MOSAIC-pkg")
+# Install R package from source (upgrade = "never" avoids prompts)
+devtools::install("~/MOSAIC/MOSAIC-pkg", upgrade = "never")
 
 # Set up Python and paths
 library(MOSAIC)
@@ -115,7 +118,7 @@ check_dependencies()
 # Verify
 PATHS <- get_paths()
 config <- MOSAIC::config_default
-results <- run_LASER(config, seed = 123, quiet = TRUE)
+results <- run_LASER(config, seed = 123)
 ```
 
 ### Development Workflow
