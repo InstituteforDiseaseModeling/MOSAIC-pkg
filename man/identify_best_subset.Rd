@@ -13,6 +13,7 @@ identify_best_subset(
   min_percentile = 0.001,
   max_percentile = 30,
   precision = 0.1,
+  ess_method = c("kish", "perplexity"),
   verbose = FALSE
 )
 }
@@ -28,7 +29,7 @@ identify_best_subset(
 This ensures enough samples for stable convergence metrics (ESS, A, CVw).
 Can be lowered for small datasets, but values < 20 may give unstable results.}
 
-\item{target_ESS_B}{Numeric target minimum ESS for the subset using Kish formula (default: 50)}
+\item{target_ESS_B}{Numeric target minimum ESS for the subset (default: 50)}
 
 \item{target_A}{Numeric target minimum agreement index (default: 0.95)}
 
@@ -45,6 +46,8 @@ E.g., 30 means at most the top 30\% will be considered.}
 
 \item{precision}{Numeric precision for binary search convergence as a percentage (default: 0.1)
 The search stops when the range is smaller than this value.}
+
+\item{ess_method}{Character string specifying ESS calculation method: "kish" (default) or "perplexity"}
 
 \item{verbose}{Logical whether to print progress messages (default: FALSE)}
 }
