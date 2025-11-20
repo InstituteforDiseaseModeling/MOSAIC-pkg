@@ -1513,7 +1513,20 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
         result$mean <- mean(samples)
         result$variance <- var(samples)
 
-    } else {  # normal
+    } else if (dist_type == "uniform") {
+        # Fit uniform distribution using sample range
+        # NPE posteriors for bounded parameters often remain approximately uniform
+        min_val <- min(samples, na.rm = TRUE)
+        max_val <- max(samples, na.rm = TRUE)
+
+        # Add small buffer to ensure all samples are within bounds
+        range_buffer <- (max_val - min_val) * 0.01
+        result$min <- min_val - range_buffer
+        result$max <- max_val + range_buffer
+        result$mean <- mean(samples)
+        result$variance <- var(samples)
+
+    } else {  # normal (default fallback)
         result$mean <- mean(samples)
         result$sd <- sd(samples)
         result$variance <- var(samples)
