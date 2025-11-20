@@ -250,21 +250,22 @@ deaths_long <- deaths_df %>%
 
 # Define publication-quality color palette (OS GeoDataViz Qualitative 3b)
 # Source: https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit
-location_colors <- c("#00CD6C", "#AF58BA", "#FFC61E")[seq_len(n_loc)]
+location_colors <- c("#00CD6C", "#AF58BA", "#009ADE")[seq_len(n_loc)]
 names(location_colors) <- j
+
 
 # Create cases plot
 p_cases <- ggplot(cases_long, aes(x = date, y = cases, color = location)) +
-     geom_line(linewidth = 1.2) +
+     geom_line(linewidth = 1) +
      scale_color_manual(values = location_colors, name = "Location") +
      scale_y_continuous(labels = scales::comma, expand = c(0.02, 0)) +
      scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
      labs(
-          title = "Expected Cholera Cases",
-          x = "Date",
+          title = "Endemic Transmission Simulation",
+          x = "",
           y = "Expected Cases"
      ) +
-     theme_classic(base_size = 14) +
+     theme_classic(base_size = 13) +
      theme(
           plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
           axis.title = element_text(face = "bold", size = 13),
@@ -280,19 +281,19 @@ p_cases <- ggplot(cases_long, aes(x = date, y = cases, color = location)) +
 
 # Create deaths plot
 p_deaths <- ggplot(deaths_long, aes(x = date, y = deaths, color = location)) +
-     geom_line(linewidth = 1.2) +
+     geom_line(linewidth = 1) +
      scale_color_manual(values = location_colors, name = "Location") +
      scale_y_continuous(labels = scales::comma, expand = c(0.02, 0)) +
      scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
      labs(
-          title = "Expected Cholera Deaths",
-          x = "Date",
+          title = "",
+          x = "",
           y = "Expected Deaths"
      ) +
      theme_classic(base_size = 14) +
      theme(
-          plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
-          axis.title = element_text(face = "bold", size = 13),
+          plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+          axis.title = element_text(face = "bold", size = 12),
           axis.text = element_text(size = 11),
           legend.position = "right",
           legend.title = element_text(face = "bold", size = 12),
@@ -303,8 +304,41 @@ p_deaths <- ggplot(deaths_long, aes(x = date, y = deaths, color = location)) +
           panel.grid.minor = element_blank()
      )
 
-# Combine plots vertically using cowplot
-p_combined <- cowplot::plot_grid(p_cases, p_deaths, ncol = 1, align = "v")
+# Extract legend from one plot (before removing it)
+legend <- cowplot::get_legend(
+     p_cases +
+          theme(
+               legend.position = "bottom",
+               legend.direction = "horizontal",
+               legend.box = "horizontal",
+               legend.title = element_text(face = "bold", size = 12, margin = margin(r = 10)),
+               legend.text = element_text(size = 11),
+               legend.key.width = unit(1.5, "lines"),
+               legend.key.height = unit(1, "lines"),
+               legend.margin = margin(t = 5)
+          )
+)
+
+# Remove legends from both plots
+p_cases_no_legend <- p_cases + theme(legend.position = "none")
+p_deaths_no_legend <- p_deaths + theme(legend.position = "none")
+
+# Combine plots vertically without legends
+p_plots <- cowplot::plot_grid(
+     p_cases_no_legend,
+     p_deaths_no_legend,
+     ncol = 1,
+     align = "v",
+     rel_heights = c(1, 1)
+)
+
+# Add shared legend below
+p_combined <- cowplot::plot_grid(
+     p_plots,
+     legend,
+     ncol = 1,
+     rel_heights = c(10, 1)
+)
 
 # Display combined plot
 print(p_combined)
