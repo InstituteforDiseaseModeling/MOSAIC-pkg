@@ -905,7 +905,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
             base_name <- gsub(paste0("_", iso, "$"), "", param_name)
             param_info <- location_params_info %>%
               dplyr::filter(parameter_name == base_name) %>%
-              slice(1)
+              dplyr::slice(1)
 
             if (nrow(param_info) == 0) {
               param_info <- data.frame(
