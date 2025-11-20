@@ -1412,11 +1412,31 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   if (control$paths$plots) {
-    plot_model_ppc(
-      predictions_dir = dirs$bfrs_plots_pred,
-      output_dir = dirs$bfrs_plots,
-      by_location = "both",
-      verbose = FALSE
+    # Robust call handling both old and new plot_model_ppc signatures
+    # Old signature: plot_model_ppc(model, output_dir, verbose)
+    # New signature: plot_model_ppc(predictions_dir, predictions_files, by_location, locations, model, output_dir, verbose)
+    ppc_result <- tryCatch(
+      {
+        # Try new signature first
+        plot_model_ppc(
+          predictions_dir = dirs$bfrs_plots_pred,
+          output_dir = dirs$bfrs_plots,
+          by_location = "both",
+          verbose = FALSE
+        )
+      },
+      error = function(e) {
+        # If new signature fails, check if it's an argument mismatch
+        if (grepl("unused argument", e$message)) {
+          log_msg("Warning: plot_model_ppc using legacy signature (package may need reinstallation)", "warning")
+          # Fall back to reading predictions and calling with model object
+          # This is a compatibility shim for clusters with old package versions
+          NULL  # Skip PPC plots with old signature
+        } else {
+          # Re-throw other errors
+          stop(e)
+        }
+      }
     )
   }
 

@@ -1,3 +1,17 @@
+# MOSAIC 0.11.4
+
+## Bug Fixes
+
+* **Add backward compatibility for plot_model_ppc function signature**
+  - Wrapped plot_model_ppc call in run_MOSAIC with tryCatch to handle old package versions
+  - **Issue**: Clusters with cached old package versions (pre-v0.11.0) have different function signature
+  - Old signature: `plot_model_ppc(model, output_dir, verbose)`
+  - New signature: `plot_model_ppc(predictions_dir, predictions_files, by_location, locations, model, output_dir, verbose)`
+  - **Solution**: Try new signature first; if "unused arguments" error, log warning and skip PPC plots
+  - Prevents workflow from crashing on clusters that need package reinstallation
+  - Fixed at lines 1415-1441 in `run_MOSAIC.R`
+  - **Note**: Users should reinstall package on cluster to get full PPC functionality
+
 # MOSAIC 0.10.25
 
 ## Bug Fixes
