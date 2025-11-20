@@ -11,7 +11,7 @@
 #' @param min_B Integer minimum number of simulations to include even if percentile is smaller (default: 30)
 #'   This ensures enough samples for stable convergence metrics (ESS, A, CVw).
 #'   Can be lowered for small datasets, but values < 20 may give unstable results.
-#' @param target_ESS_B Numeric target minimum ESS for the subset using Kish formula (default: 50)
+#' @param target_ESS_B Numeric target minimum ESS for the subset (default: 50)
 #' @param target_A Numeric target minimum agreement index (default: 0.95)
 #' @param target_CVw Numeric target maximum coefficient of variation (default: 0.5)
 #' @param min_percentile Numeric minimum percentile to consider (default: 0.001)
@@ -23,6 +23,7 @@
 #'   E.g., 30 means at most the top 30% will be considered.
 #' @param precision Numeric precision for binary search convergence as a percentage (default: 0.1)
 #'   The search stops when the range is smaller than this value.
+#' @param ess_method Character string specifying ESS calculation method: "kish" (default) or "perplexity"
 #' @param verbose Logical whether to print progress messages (default: FALSE)
 #'
 #' @return A list containing:
@@ -60,12 +61,16 @@ identify_best_subset <- function(
     min_percentile = 0.001,
     max_percentile = 30,
     precision = 0.1,
+    ess_method = c("kish", "perplexity"),
     verbose = FALSE
 ) {
 
     # ==========================================================================
     # Input validation
     # ==========================================================================
+
+    # Validate and normalize ess_method
+    ess_method <- match.arg(ess_method)
 
     if (!is.data.frame(results)) {
         stop("results must be a data frame")
@@ -151,8 +156,8 @@ identify_best_subset <- function(
         w_tilde <- weights  # Already normalized
         w <- weights * length(weights)  # Unnormalized for consistency with other functions
 
-        # Calculate all metrics using Kish formula for ESS
-        ESS_B <- calc_model_ess(w_tilde, method = "kish")
+        # Calculate all metrics using specified ESS method
+        ESS_B <- calc_model_ess(w_tilde, method = ess_method)
         ag <- calc_model_agreement_index(w)
         A <- ag$A
         CVw <- calc_model_cvw(w)

@@ -1019,6 +1019,7 @@ run_MOSAIC <- function(config,
       min_percentile = 0.001,
       max_percentile = control$targets$percentile_max,
       precision = 0.001,
+      ess_method = control$targets$ESS_method,
       verbose = FALSE
     )
 
