@@ -1,3 +1,16 @@
+# MOSAIC 0.10.15
+
+## Bug Fixes
+
+* **CRITICAL: Fixed "subscript out of bounds" error in convergence diagnostic plots**
+  - Fixed regression from v0.10.14 where `targets[["ESS_min"]]` would error if element missing
+  - **Root cause**: `safe_numeric()` returned `numeric(0)` for NULL inputs, causing elements to be dropped from vectors
+  - **Solution 1**: Enhanced `safe_numeric()` to check for NULL and empty vectors before conversion
+  - **Solution 2**: Changed extraction from `[[` to `as.numeric(x["name"])` for safe handling of missing elements
+  - `[[` throws error on missing elements; `as.numeric(x["name"])` returns NA safely
+  - Fixed in both `plot_model_convergence.R` and `plot_model_convergence_loss.R`
+  - Now properly handles cases where JSON diagnostics may have missing target values
+
 # MOSAIC 0.10.14
 
 ## Bug Fixes

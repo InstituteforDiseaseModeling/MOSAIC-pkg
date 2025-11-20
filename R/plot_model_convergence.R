@@ -133,6 +133,8 @@ plot_model_convergence <- function(results_dir,
 
     # Extract metrics and targets from diagnostics with safe conversion
     safe_numeric <- function(x, default = NA_real_) {
+        if (is.null(x)) return(default)
+        if (length(x) == 0) return(default)
         tryCatch(as.numeric(x), error = function(e) default, warning = function(w) default)
     }
 
@@ -211,16 +213,16 @@ plot_model_convergence <- function(results_dir,
         sprintf("Retained: %d/%d", n_retained_all, n_total_original),
         "",  # Empty line for spacing
         safe_sprintf("ESS: %.0f [target >= %.0f]",
-                     metrics[["ESS"]], targets[["ESS_min"]]),
+                     as.numeric(metrics["ESS"]), as.numeric(targets["ESS_min"])),
         "",  # Empty line for spacing
         safe_sprintf("A: %.3f [target >= %.3f]",
-                     metrics[["A"]], targets[["A_min"]]),
+                     as.numeric(metrics["A"]), as.numeric(targets["A_min"])),
         "",  # Empty line for spacing
         safe_sprintf("CVw: %.3f [target <= %.3f]",
-                     metrics[["CVw"]], targets[["CVw_max"]]),
+                     as.numeric(metrics["CVw"]), as.numeric(targets["CVw_max"])),
         "",  # Empty line for spacing
         safe_sprintf("B: %.0f [target >= %.0f]",
-                     metrics[["B_size"]], targets[["B_min"]])
+                     as.numeric(metrics["B_size"]), as.numeric(targets["B_min"]))
     )
 
     # ============================================================================
@@ -327,13 +329,13 @@ plot_model_convergence <- function(results_dir,
 
         # Use safe_sprintf for metrics display
         message(safe_sprintf("ESS: %.0f (target >= %.0f) - %s",
-                            metrics[["ESS"]], targets[["ESS_min"]], toupper(status[["ESS"]])))
+                            as.numeric(metrics["ESS"]), as.numeric(targets["ESS_min"]), as.character(status["ESS"])))
         message(safe_sprintf("Agreement Index: %.3f (target >= %.3f) - %s",
-                            metrics[["A"]], targets[["A_min"]], toupper(status[["A"]])))
+                            as.numeric(metrics["A"]), as.numeric(targets["A_min"]), as.character(status["A"])))
         message(safe_sprintf("Weight CV: %.3f (target <= %.3f) - %s",
-                            metrics[["CVw"]], targets[["CVw_max"]], toupper(status[["CVw"]])))
+                            as.numeric(metrics["CVw"]), as.numeric(targets["CVw_max"]), as.character(status["CVw"])))
         message(safe_sprintf("Retained Set Size: %.0f (target >= %.0f) - %s",
-                            metrics[["B_size"]], targets[["B_min"]], toupper(status[["B_size"]])))
+                            as.numeric(metrics["B_size"]), as.numeric(targets["B_min"]), as.character(status["B_size"])))
         message(sprintf("Overall Status: %s", safe_character(diagnostics$summary$convergence_status)))
     }
 
