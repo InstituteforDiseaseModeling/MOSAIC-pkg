@@ -1,3 +1,12 @@
+# MOSAIC 0.10.12
+
+## Bug Fixes
+
+* **Fixed missing dplyr namespace prefix in `plot_model_posteriors_detail()`**
+  - Added explicit `dplyr::` prefix to `slice()` function call
+  - Fixes "could not find function 'slice'" error
+  - Fixed at line 908 in `plot_model_posteriors_detail.R`
+
 # MOSAIC 0.10.11
 
 ## Bug Fixes
