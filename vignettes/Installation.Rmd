@@ -40,9 +40,30 @@ devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg")
 library(MOSAIC)
 install_dependencies()
 
+# Check Python environment and dependencies
+check_python_env()
+check_dependencies()
+
 # Verify installation
 config <- config_default
 results <- run_LASER(config, n_sim = 2, seed = 123)
+```
+
+**Successful installation output:**
+
+When MOSAIC loads successfully, you should see:
+
+```
+ __  __   ___   ____     _     ___  ____       __      ___    _____  _____   _____ ___
+|  \/  | / _ \ / ___|   / \   |_ _|/ ___|   __/ /_    / /    /   |  / ___/ / ____// __ \
+| |\/| || | | |\___ \  / _ \   | || |      /_  __/   / /    / /| |  \__ \ / __/  / /_/ /
+| |  | || |_| | ___) |/ ___ \  | || |___    /_/     / /___ / ___ | ___/ // /___ / _, _/
+|_|  |_| \___/ |____//_/   \_\|___|\____|          /_____//_/  |_|/____//_____//_/ |_|
+
+Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation
+for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!
+
+Version: 0.11.25
 ```
 
 ---
@@ -86,6 +107,10 @@ devtools::install("~/MOSAIC/MOSAIC-pkg")
 library(MOSAIC)
 install_dependencies()
 set_root_directory("~/MOSAIC")
+
+# Check Python environment and dependencies
+check_python_env()
+check_dependencies()
 
 # Verify
 PATHS <- get_paths()
@@ -134,7 +159,11 @@ remotes::install_github("COVID-19-Mobility-Data-Network/mobility")
 
 **Python issues:**
 ```{r troubleshoot-python}
-# Check Python configuration
+# Check Python environment and dependencies
+check_python_env()
+check_dependencies()
+
+# Check detailed Python configuration
 reticulate::py_config()
 
 # Reset if needed
