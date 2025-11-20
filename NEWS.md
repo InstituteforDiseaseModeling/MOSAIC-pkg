@@ -1,14 +1,22 @@
-# MOSAIC 0.10.16
+# MOSAIC 0.10.19
 
 ## Bug Fixes
 
 * **Fixed missing derived parameters (beta_j0_hum, beta_j0_env) in distribution plots**
-  - Added handling for "derived" distribution type in `calc_model_posterior_distributions()`
+  - Changed distribution type from "derived" to "gamma" in estimated_parameters source data
   - Derived rate parameters (beta_j0_hum, beta_j0_env) now fitted with gamma distributions
   - **Background**: beta_j0_hum = p_beta × beta_j0_tot, beta_j0_env = (1 - p_beta) × beta_j0_tot
-  - Previously marked as "failed" because "derived" type was unhandled
+  - Previously marked as "failed" because "derived" distribution type was unhandled
   - Now appear in distributions_ETH_Prior_Posterior.pdf alongside beta_j0_tot and p_beta
-  - Fixed at lines 303-314 in `calc_model_posterior_distributions.R`
+  - Fixed at line 289 in `data-raw/make_estimated_parameters_inventory.R`
+
+# MOSAIC 0.10.17
+
+## Bug Fixes
+
+* **Fixed plot_model_convergence diagnostic text formatting**
+  - Corrected convergence metrics display in diagnostic plots
+  - Fixed in `R/plot_model_convergence.R`
 
 # MOSAIC 0.10.15
 

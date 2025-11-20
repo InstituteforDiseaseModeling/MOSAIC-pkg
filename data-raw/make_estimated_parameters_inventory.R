@@ -286,7 +286,7 @@ transmission_params <- data.frame(
   units = c(
     "per day", "proportion", "per day", "per day"
   ),
-  distribution = c("gompertz", "beta", "derived", "derived"),
+  distribution = c("gompertz", "beta", "gamma", "gamma"),
   scale = "location",
   category = "transmission",
   order = 29:32,
