@@ -54,17 +54,23 @@ cat(sprintf("  Total deaths: %s\n", format(total_deaths_epidemic, big.mark = ","
 cat(sprintf("  Locations: %d\n", n_locations))
 cat(sprintf("  Time steps: %d\n", n_timesteps))
 
-# Plot epidemic time series (aggregate across all locations)
-total_cases_by_time <- colSums(cases_epidemic, na.rm = TRUE)
+# Plot epidemic time series by location
+colors <- c("#009ADE", "#FF1F5B", "#00CD6C")  # Blue, Pink, Green
+par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 
-plot(total_cases_by_time,
-     type = "l",
-     col = "#d00000",
-     lwd = 2,
-     xlab = "Time step",
-     ylab = "Total cases",
-     main = "Epidemic Scenario: Aggregate Case Trajectory")
-grid()
+matplot(t(cases_epidemic), type = "l", lty = 1, lwd = 2, col = colors,
+        xlab = "", ylab = "Expected Cases",
+        main = "Epidemic Transmission Simulation")
+grid(col = "gray90")
+
+matplot(t(deaths_epidemic), type = "l", lty = 1, lwd = 2, col = colors,
+        xlab = "Time step", ylab = "Expected Deaths", main = "")
+grid(col = "gray90")
+
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+legend("bottom", legend = locations, col = colors, lty = 1, lwd = 2,
+       horiz = TRUE, bty = "n", xpd = TRUE)
 ```
 
 ```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "100%"}
@@ -94,17 +100,23 @@ cat(sprintf("Endemic Scenario Results:\n"))
 cat(sprintf("  Total cases: %s\n", format(total_cases_endemic, big.mark = ",")))
 cat(sprintf("  Total deaths: %s\n", format(total_deaths_endemic, big.mark = ",")))
 
-# Plot endemic time series (aggregate across all locations)
-total_cases_by_time_endemic <- colSums(cases_endemic, na.rm = TRUE)
+# Plot endemic time series by location
+colors <- c("#00CD6C", "#AF58BA", "#009ADE")  # Green, Purple, Blue
+par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 
-plot(total_cases_by_time_endemic,
-     type = "l",
-     col = "#1f77b4",
-     lwd = 2,
-     xlab = "Time step",
-     ylab = "Total cases",
-     main = "Endemic Scenario: Aggregate Case Trajectory")
-grid()
+matplot(t(cases_endemic), type = "l", lty = 1, lwd = 2, col = colors,
+        xlab = "", ylab = "Expected Cases",
+        main = "Endemic Transmission Simulation")
+grid(col = "gray90")
+
+matplot(t(deaths_endemic), type = "l", lty = 1, lwd = 2, col = colors,
+        xlab = "Time step", ylab = "Expected Deaths", main = "")
+grid(col = "gray90")
+
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+legend("bottom", legend = locations, col = colors, lty = 1, lwd = 2,
+       horiz = TRUE, bty = "n", xpd = TRUE)
 ```
 
 ```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "100%"}
