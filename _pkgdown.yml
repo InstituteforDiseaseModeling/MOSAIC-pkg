@@ -11,14 +11,13 @@ navbar:
     left:  [intro, reference, articles, news]
     right: [search, github]
 
-# Articles will be auto-discovered from vignettes/articles/
-# articles:
-#   - title: "Getting Started"
-#     navbar: ~
-#     contents:
-#     - Installation
-#     - Running MOSAIC
-#     - Deployment
+articles:
+- title: "Getting Started"
+  desc: "Installation and basic usage"
+  contents:
+  - Installation
+  - Running-MOSAIC
+  - Deployment
 
 reference:
   - title: "Core Workflow"
