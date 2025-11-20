@@ -35,12 +35,16 @@ model_epidemic <- run_LASER(
   seed = 123
 )
 
-# Extract time series results
-cases_epidemic <- model_epidemic$results$expected_cases
-deaths_epidemic <- model_epidemic$results$disease_deaths
+# Extract time series results (convert Python objects to R matrices)
+cases_epidemic <- as.matrix(model_epidemic$patches$expected_cases)
+deaths_epidemic <- as.matrix(model_epidemic$patches$disease_deaths)
+
+# Remove first row (time index) and transpose to [location × time]
+cases_epidemic <- t(cases_epidemic[-1, ])
+deaths_epidemic <- t(deaths_epidemic[-1, ])
 
 # Get metadata
-locations <- model_epidemic$params$location_name
+locations <- c("FOO", "BAR", "BAZ")  # From config_simulation_epidemic
 n_locations <- length(locations)
 n_timesteps <- ncol(cases_epidemic)
 
@@ -88,9 +92,13 @@ model_endemic <- run_LASER(
   seed = 123
 )
 
-# Extract time series results
-cases_endemic <- model_endemic$results$expected_cases
-deaths_endemic <- model_endemic$results$disease_deaths
+# Extract time series results (convert Python objects to R matrices)
+cases_endemic <- as.matrix(model_endemic$patches$expected_cases)
+deaths_endemic <- as.matrix(model_endemic$patches$disease_deaths)
+
+# Remove first row (time index) and transpose to [location × time]
+cases_endemic <- t(cases_endemic[-1, ])
+deaths_endemic <- t(deaths_endemic[-1, ])
 
 # Calculate total burden
 total_cases_endemic <- sum(cases_endemic, na.rm = TRUE)
