@@ -8,8 +8,8 @@
   - When dist_type="uniform", function fell through to normal case, setting mean/sd instead of min/max
   - Result: NPE posteriors.json had `{distribution: "uniform", parameters: []}`
   - Plotting function couldn't plot uniform without min/max parameters → NPE curves missing
-  - **Solution**: Added uniform case to calculate min/max from sample range with 1% buffer
-  - Fixed at lines 1516-1527 in `npe_posterior.R`
+  - **Solution**: Calculate min/max from 1% and 99% quantiles (robust to outliers) + 1% buffer
+  - Fixed at lines 1516-1528 in `npe_posterior.R`
   - **Impact**: NPE posteriors now appear in distribution plots (Prior vs BFRS vs NPE)
 
 # MOSAIC 0.10.20
