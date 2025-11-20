@@ -48,7 +48,7 @@ ssh user@host 'bash -s' < ~/MOSAIC/MOSAIC-pkg/vm/setup_mosaic.sh
 
 ### Script Contents
 
-```{bash, code=readLines('../../vm/setup_mosaic.sh'), eval=FALSE}
+```{bash, code=readLines('../vm/setup_mosaic.sh'), eval=FALSE}
 ```
 
 ---
