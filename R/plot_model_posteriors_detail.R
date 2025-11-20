@@ -57,7 +57,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
   if (!file.exists(results_file)) {
     stop("Results file not found: ", results_file)
   }
-  results_full <- read_parquet(results_file)
+  results_full <- arrow::read_parquet(results_file)
 
   # Access different subsets
   results_all <- results_full  # All simulations
@@ -404,64 +404,64 @@ plot_model_posteriors_detail <- function(quantiles_file,
     }
 
     # Panel 1: Unweighted Prior Samples
-    p_prior <- ggplot() +
-      geom_histogram(data = df_prior,
-                    aes(x = x, y = after_stat(density)),
+    p_prior <- ggplot2::ggplot() +
+      ggplot2::geom_histogram(data = df_prior,
+                    ggplot2::aes(x = x, y = ggplot2::after_stat(density)),
                     bins = 50, fill = prior_color, alpha = 0.6, color = "white") +
-      labs(title = "Prior Samples",
+      ggplot2::labs(title = "Prior Samples",
            subtitle = paste("n =", length(prior_samples)),
            x = NULL, y = "Density") +
-      scale_x_continuous(limits = x_limits) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, hjust = 0),
-        plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-        panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0.02, 0.1, 0.1, 0.1), "cm"),  # Reduced top margin
-        axis.text.x = element_blank(),
-        axis.title.y = element_text(size = 10)
+      ggplot2::scale_x_continuous(limits = x_limits) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, hjust = 0),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.margin = grid::unit(c(0.02, 0.1, 0.1, 0.1), "cm"),  # Reduced top margin
+        axis.text.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_text(size = 10)
       )
 
     # Panel 2: Unweighted Retained Samples
-    p_retained <- ggplot() +
-      geom_histogram(data = df_retained,
-                    aes(x = x, y = after_stat(density)),
+    p_retained <- ggplot2::ggplot() +
+      ggplot2::geom_histogram(data = df_retained,
+                    ggplot2::aes(x = x, y = ggplot2::after_stat(density)),
                     bins = 50, fill = posterior_color, alpha = 0.4, color = "white") +
-      labs(title = "Retained Samples (Unweighted)",
+      ggplot2::labs(title = "Retained Samples (Unweighted)",
            subtitle = paste("n =", length(retained_samples)),
            x = NULL, y = "Density") +
-      scale_x_continuous(limits = x_limits) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, hjust = 0),
-        plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-        panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
-        axis.text.x = element_blank(),
-        axis.title.y = element_text(size = 10)
+      ggplot2::scale_x_continuous(limits = x_limits) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, hjust = 0),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.margin = grid::unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
+        axis.text.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_text(size = 10)
       )
 
     # Panel 3: Weighted Retained Samples (if weights exist)
     if (!is.null(df_retained_weighted)) {
-      p_retained_weighted <- ggplot() +
-        geom_histogram(data = df_retained_weighted,
-                      aes(x = x, y = after_stat(density), weight = w),
+      p_retained_weighted <- ggplot2::ggplot() +
+        ggplot2::geom_histogram(data = df_retained_weighted,
+                      ggplot2::aes(x = x, y = ggplot2::after_stat(density), weight = w),
                       bins = 50, fill = posterior_color, alpha = 0.5, color = "white") +
-        geom_density(data = df_retained_weighted,
-                    aes(x = x, weight = w),
+        ggplot2::geom_density(data = df_retained_weighted,
+                    ggplot2::aes(x = x, weight = w),
                     color = posterior_color, linewidth = 1.0, alpha = 0.6) +
-        labs(title = "Retained Samples (Weighted)",
+        ggplot2::labs(title = "Retained Samples (Weighted)",
              subtitle = paste("ESS =", round(ess_retained, 1)),
              x = NULL, y = "Density") +
-        scale_x_continuous(limits = x_limits) +
-        theme_minimal() +
-        theme(
-          plot.title = element_text(size = 11, hjust = 0),
-          plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-          panel.grid.minor = element_blank(),
-          plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
-          axis.text.x = element_blank(),
-          axis.title.y = element_text(size = 10)
+        ggplot2::scale_x_continuous(limits = x_limits) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(size = 11, hjust = 0),
+          plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+          panel.grid.minor = ggplot2::element_blank(),
+          plot.margin = grid::unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
+          axis.text.x = ggplot2::element_blank(),
+          axis.title.y = ggplot2::element_text(size = 10)
         )
     } else {
       # Create empty placeholder if no weights
@@ -469,44 +469,44 @@ plot_model_posteriors_detail <- function(quantiles_file,
     }
 
     # Panel 4: Unweighted Best Subset Samples
-    p_best_unweighted <- ggplot() +
-      geom_histogram(data = df_best,
-                    aes(x = x, y = after_stat(density)),
+    p_best_unweighted <- ggplot2::ggplot() +
+      ggplot2::geom_histogram(data = df_best,
+                    ggplot2::aes(x = x, y = ggplot2::after_stat(density)),
                     bins = 50, fill = posterior_color, alpha = 0.6, color = "white") +
-      labs(title = "Best Subset (Unweighted)",
+      ggplot2::labs(title = "Best Subset (Unweighted)",
            subtitle = paste("n =", length(best_samples)),
            x = NULL, y = "Density") +
-      scale_x_continuous(limits = x_limits) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, hjust = 0),
-        plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-        panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
-        axis.text.x = element_blank(),
-        axis.title.y = element_text(size = 10)
+      ggplot2::scale_x_continuous(limits = x_limits) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, hjust = 0),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.margin = grid::unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
+        axis.text.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_text(size = 10)
       )
 
     # Panel 5: Weighted Best Subset Samples
-    p_best_weighted <- ggplot() +
-      geom_histogram(data = df_best_weighted,
-                    aes(x = x, y = after_stat(density), weight = w),
+    p_best_weighted <- ggplot2::ggplot() +
+      ggplot2::geom_histogram(data = df_best_weighted,
+                    ggplot2::aes(x = x, y = ggplot2::after_stat(density), weight = w),
                     bins = 50, fill = posterior_color, alpha = 0.8, color = "white") +
-      geom_density(data = df_best_weighted,
-                  aes(x = x, weight = w),
+      ggplot2::geom_density(data = df_best_weighted,
+                  ggplot2::aes(x = x, weight = w),
                   color = posterior_color, linewidth = 1.2, alpha = 0.8) +
-      labs(title = "Best Subset (Weighted)",
+      ggplot2::labs(title = "Best Subset (Weighted)",
            subtitle = paste("Effective Sample Size =", round(ess_best, 1)),
            x = NULL, y = "Density") +
-      scale_x_continuous(limits = x_limits) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, hjust = 0),
-        plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-        panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
-        axis.text.x = element_blank(),
-        axis.title.y = element_text(size = 10)
+      ggplot2::scale_x_continuous(limits = x_limits) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, hjust = 0),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.margin = grid::unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
+        axis.text.x = ggplot2::element_blank(),
+        axis.title.y = ggplot2::element_text(size = 10)
       )
 
     # Panel 6: Caterpillar plot
@@ -532,49 +532,49 @@ plot_model_posteriors_detail <- function(quantiles_file,
                 get_quantile_safe(posterior_data, "q0.975"))
     )
 
-    p_caterpillar <- ggplot(caterpillar_data, aes(x = distribution, y = median)) +
-      geom_errorbar(aes(ymin = q2.75, ymax = q97.5),
+    p_caterpillar <- ggplot2::ggplot(caterpillar_data, ggplot2::aes(x = distribution, y = median)) +
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = q2.75, ymax = q97.5),
                     width = 0.15, linewidth = 0.6,
                     color = c(prior_color, posterior_color)) +
-      geom_errorbar(aes(ymin = q25, ymax = q75),
+      ggplot2::geom_errorbar(ggplot2::aes(ymin = q25, ymax = q75),
                     width = 0.08, linewidth = 1.2,
                     color = c(prior_color, posterior_color)) +
-      geom_point(size = 3, color = c(prior_color, posterior_color)) +
-      labs(title = "Quantiles",
+      ggplot2::geom_point(size = 3, color = c(prior_color, posterior_color)) +
+      ggplot2::labs(title = "Quantiles",
            x = NULL, y = NULL) +
-      scale_y_continuous(limits = x_limits) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, hjust = 0),
-        panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
-        axis.text.y = element_text(size = 10),
-        axis.text.x = element_blank()
+      ggplot2::scale_y_continuous(limits = x_limits) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, hjust = 0),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.margin = grid::unit(c(0.1, 0.1, 0.1, 0.1), "cm"),
+        axis.text.y = ggplot2::element_text(size = 10),
+        axis.text.x = ggplot2::element_blank()
       ) +
-      coord_flip()
+      ggplot2::coord_flip()
 
     # Panel 7: Probability distributions (empirical)
-    p_distributions <- ggplot() +
-      geom_density(data = df_prior,
-                  aes(x = x),
+    p_distributions <- ggplot2::ggplot() +
+      ggplot2::geom_density(data = df_prior,
+                  ggplot2::aes(x = x),
                   fill = prior_color, color = prior_color,
                   alpha = 0.3, linewidth = 0.8) +
-      geom_density(data = df_best_weighted,
-                  aes(x = x, weight = w),
+      ggplot2::geom_density(data = df_best_weighted,
+                  ggplot2::aes(x = x, weight = w),
                   fill = posterior_color, color = posterior_color,
                   alpha = 0.3, linewidth = 1.0) +
-      labs(title = "Prior vs Posterior (Empirical)",
+      ggplot2::labs(title = "Prior vs Posterior (Empirical)",
            subtitle = paste("Kullback-Leibler divergence =", round(kl_divergence, 3)),
            x = "Value", y = "Density") +
-      scale_x_continuous(limits = x_limits) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 11, hjust = 0),
-        plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-        panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0.1, 0.1, 0.2, 0.1), "cm"),
-        axis.title = element_text(size = 10),
-        axis.text = element_text(size = 9)
+      ggplot2::scale_x_continuous(limits = x_limits) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 11, hjust = 0),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+        panel.grid.minor = ggplot2::element_blank(),
+        plot.margin = grid::unit(c(0.1, 0.1, 0.2, 0.1), "cm"),
+        axis.title = ggplot2::element_text(size = 10),
+        axis.text = ggplot2::element_text(size = 9)
       )
 
     # Panel 8: Theoretical distributions from posteriors.json
@@ -652,18 +652,18 @@ plot_model_posteriors_detail <- function(quantiles_file,
       prior_data <- data.frame(x = x_seq, density = prior_dens)
       post_data <- data.frame(x = x_seq, density = post_dens)
 
-      p_theoretical <- ggplot() +
+      p_theoretical <- ggplot2::ggplot() +
         # Prior distribution
-        geom_area(data = prior_data, aes(x = x, y = density),
+        ggplot2::geom_area(data = prior_data, ggplot2::aes(x = x, y = density),
                   fill = prior_color, alpha = 0.3) +
-        geom_line(data = prior_data, aes(x = x, y = density),
+        ggplot2::geom_line(data = prior_data, ggplot2::aes(x = x, y = density),
                   color = prior_color, linewidth = 0.8) +
         # Posterior distribution
-        geom_area(data = post_data, aes(x = x, y = density),
+        ggplot2::geom_area(data = post_data, ggplot2::aes(x = x, y = density),
                   fill = posterior_color, alpha = 0.3) +
-        geom_line(data = post_data, aes(x = x, y = density),
+        ggplot2::geom_line(data = post_data, ggplot2::aes(x = x, y = density),
                   color = posterior_color, linewidth = 1.0) +
-        labs(title = "Prior vs Posterior (Theoretical)",
+        ggplot2::labs(title = "Prior vs Posterior (Theoretical)",
              subtitle = paste("Distribution:",
                               if (!is.null(posterior_dist_obj$distribution)) {
                                 tools::toTitleCase(as.character(posterior_dist_obj$distribution))
@@ -671,15 +671,15 @@ plot_model_posteriors_detail <- function(quantiles_file,
                                 "Unknown"
                               }),
              x = "Value", y = "Density") +
-        scale_x_continuous(limits = x_limits) +
-        theme_minimal() +
-        theme(
-          plot.title = element_text(size = 11, hjust = 0),
-          plot.subtitle = element_text(size = 9, hjust = 0, color = "gray50"),
-          panel.grid.minor = element_blank(),
-          plot.margin = unit(c(0.1, 0.1, 0.2, 0.1), "cm"),
-          axis.title = element_text(size = 10),
-          axis.text = element_text(size = 9),
+        ggplot2::scale_x_continuous(limits = x_limits) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(size = 11, hjust = 0),
+          plot.subtitle = ggplot2::element_text(size = 9, hjust = 0, color = "gray50"),
+          panel.grid.minor = ggplot2::element_blank(),
+          plot.margin = grid::unit(c(0.1, 0.1, 0.2, 0.1), "cm"),
+          axis.title = ggplot2::element_text(size = 10),
+          axis.text = ggplot2::element_text(size = 9),
           legend.position = "none"
         )
     } else {
@@ -695,14 +695,14 @@ plot_model_posteriors_detail <- function(quantiles_file,
         }
       }
 
-      p_theoretical <- ggplot() +
-        theme_void() +
-        labs(title = "Prior vs Posterior (Theoretical)",
+      p_theoretical <- ggplot2::ggplot() +
+        ggplot2::theme_void() +
+        ggplot2::labs(title = "Prior vs Posterior (Theoretical)",
              subtitle = "Not available") +
-        theme(
-          plot.title = element_text(size = 11, hjust = 0.5, color = "gray50"),
-          plot.subtitle = element_text(size = 9, hjust = 0.5, color = "gray50"),
-          plot.margin = unit(c(0.1, 0.1, 0.2, 0.1), "cm")
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(size = 11, hjust = 0.5, color = "gray50"),
+          plot.subtitle = ggplot2::element_text(size = 9, hjust = 0.5, color = "gray50"),
+          plot.margin = grid::unit(c(0.1, 0.1, 0.2, 0.1), "cm")
         )
     }
 
@@ -714,14 +714,14 @@ plot_model_posteriors_detail <- function(quantiles_file,
       param_description
     }
 
-    col_title <- ggplot() +
-      theme_void() +
-      labs(title = param_name,
+    col_title <- ggplot2::ggplot() +
+      ggplot2::theme_void() +
+      ggplot2::labs(title = param_name,
            subtitle = wrapped_description) +
-      theme(
-        plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(size = 10, hjust = 0.5, color = "gray50", lineheight = 0.9),
-        plot.margin = unit(c(0.05, 0.2, -0.05, 0.2), "cm")  # Reduced top/bottom margins
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5, color = "gray50", lineheight = 0.9),
+        plot.margin = grid::unit(c(0.05, 0.2, -0.05, 0.2), "cm")  # Reduced top/bottom margins
       )
 
     # Combine panels vertically
@@ -729,12 +729,12 @@ plot_model_posteriors_detail <- function(quantiles_file,
     if (!is.null(p_retained_weighted)) {
       panels_only <- p_prior / p_retained / p_retained_weighted / p_best_unweighted /
                      p_best_weighted / p_caterpillar / p_distributions / p_theoretical +
-        plot_layout(heights = c(1, 1, 1, 1, 1, 0.5, 1.2, 1.2))
+        patchwork::plot_layout(heights = c(1, 1, 1, 1, 1, 0.5, 1.2, 1.2))
     } else {
       # Original layout without retained weighted
       panels_only <- p_prior / p_retained / p_best_unweighted / p_best_weighted /
                      p_caterpillar / p_distributions / p_theoretical +
-        plot_layout(heights = c(1, 1, 1, 1, 0.5, 1.2, 1.2))
+        patchwork::plot_layout(heights = c(1, 1, 1, 1, 0.5, 1.2, 1.2))
     }
 
     # Adjust title height based on description length
@@ -745,7 +745,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
     }
 
     combined_panels <- col_title / panels_only +
-      plot_layout(heights = c(title_height, 1 - title_height))
+      patchwork::plot_layout(heights = c(title_height, 1 - title_height))
 
     return(combined_panels)
   }
@@ -785,15 +785,15 @@ plot_model_posteriors_detail <- function(quantiles_file,
         if (length(cat_panels) > 0) {
           # Combine panels horizontally
           n_params <- length(cat_panels)
-          combined_panels <- wrap_plots(cat_panels, ncol = n_params)
+          combined_panels <- patchwork::wrap_plots(cat_panels, ncol = n_params)
 
           # Add overall title
-          title_plot <- ggplot() +
-            theme_void() +
-            labs(title = paste("Global Parameters -", tools::toTitleCase(gsub("_", " ", cat)))) +
-            theme(
-              plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-              plot.margin = unit(c(0.2, 0, 0.1, 0), "cm")
+          title_plot <- ggplot2::ggplot() +
+            ggplot2::theme_void() +
+            ggplot2::labs(title = paste("Global Parameters -", tools::toTitleCase(gsub("_", " ", cat)))) +
+            ggplot2::theme(
+              plot.title = ggplot2::element_text(size = 16, face = "bold", hjust = 0.5),
+              plot.margin = grid::unit(c(0.2, 0, 0.1, 0), "cm")
             )
 
           # Add legend
@@ -803,25 +803,25 @@ plot_model_posteriors_detail <- function(quantiles_file,
             dist = factor(c("Prior", "Posterior"), levels = c("Prior", "Posterior"))
           )
 
-          p_legend <- ggplot(legend_data, aes(x = x, y = y, fill = dist)) +
-            geom_point(size = 5, shape = 22, stroke = 0.7) +
-            scale_fill_manual(values = c("Prior" = prior_color, "Posterior" = posterior_color),
+          p_legend <- ggplot2::ggplot(legend_data, ggplot2::aes(x = x, y = y, fill = dist)) +
+            ggplot2::geom_point(size = 5, shape = 22, stroke = 0.7) +
+            ggplot2::scale_fill_manual(values = c("Prior" = prior_color, "Posterior" = posterior_color),
                               name = NULL) +
-            theme_void() +
-            theme(
+            ggplot2::theme_void() +
+            ggplot2::theme(
               legend.position = "top",
               legend.direction = "horizontal",
-              legend.text = element_text(size = 11),
-              legend.spacing.x = unit(0.5, "cm")
+              legend.text = ggplot2::element_text(size = 11),
+              legend.spacing.x = grid::unit(0.5, "cm")
             )
 
-          legend_grob <- get_legend(p_legend)
-          legend_wrapper <- ggplot() +
-            theme_void() +
-            annotation_custom(legend_grob, xmin = 0.4, xmax = 0.6, ymin = 0.5, ymax = 1)
+          legend_grob <- cowplot::get_legend(p_legend)
+          legend_wrapper <- ggplot2::ggplot() +
+            ggplot2::theme_void() +
+            ggplot2::annotation_custom(legend_grob, xmin = 0.4, xmax = 0.6, ymin = 0.5, ymax = 1)
 
           # Final combination
-          final_plot <- plot_grid(
+          final_plot <- cowplot::plot_grid(
             title_plot,
             combined_panels,
             legend_wrapper,
@@ -834,7 +834,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
           plot_width <- 4 * n_params + 2
           plot_height <- 18  # Increased for additional retained weighted panel
 
-          ggsave(file.path(output_subdir, filename), final_plot,
+          ggplot2::ggsave(file.path(output_subdir, filename), final_plot,
                  width = min(plot_width, 20), height = plot_height, limitsize = FALSE)
           created_files <- c(created_files, filename)
           if (verbose) cat("    Saved:", filename, "\n")
@@ -920,15 +920,15 @@ plot_model_posteriors_detail <- function(quantiles_file,
           if (length(cat_panels) > 0) {
             # Combine panels
             n_params <- length(cat_panels)
-            combined_panels <- wrap_plots(cat_panels, ncol = n_params)
+            combined_panels <- patchwork::wrap_plots(cat_panels, ncol = n_params)
 
             # Add title
-            title_plot <- ggplot() +
-              theme_void() +
-              labs(title = paste(iso, "-", tools::toTitleCase(gsub("_", " ", cat)))) +
-              theme(
-                plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-                plot.margin = unit(c(0.2, 0, 0.1, 0), "cm")
+            title_plot <- ggplot2::ggplot() +
+              ggplot2::theme_void() +
+              ggplot2::labs(title = paste(iso, "-", tools::toTitleCase(gsub("_", " ", cat)))) +
+              ggplot2::theme(
+                plot.title = ggplot2::element_text(size = 16, face = "bold", hjust = 0.5),
+                plot.margin = grid::unit(c(0.2, 0, 0.1, 0), "cm")
               )
 
             # Add legend
@@ -938,25 +938,25 @@ plot_model_posteriors_detail <- function(quantiles_file,
               dist = factor(c("Prior", "Posterior"), levels = c("Prior", "Posterior"))
             )
 
-            p_legend <- ggplot(legend_data, aes(x = x, y = y, fill = dist)) +
-              geom_point(size = 5, shape = 22, stroke = 0.7) +
-              scale_fill_manual(values = c("Prior" = prior_color, "Posterior" = posterior_color),
+            p_legend <- ggplot2::ggplot(legend_data, ggplot2::aes(x = x, y = y, fill = dist)) +
+              ggplot2::geom_point(size = 5, shape = 22, stroke = 0.7) +
+              ggplot2::scale_fill_manual(values = c("Prior" = prior_color, "Posterior" = posterior_color),
                                 name = NULL) +
-              theme_void() +
-              theme(
+              ggplot2::theme_void() +
+              ggplot2::theme(
                 legend.position = "top",
                 legend.direction = "horizontal",
-                legend.text = element_text(size = 11),
-                legend.spacing.x = unit(0.5, "cm")
+                legend.text = ggplot2::element_text(size = 11),
+                legend.spacing.x = grid::unit(0.5, "cm")
               )
 
-            legend_grob <- get_legend(p_legend)
-            legend_wrapper <- ggplot() +
-              theme_void() +
-              annotation_custom(legend_grob, xmin = 0.4, xmax = 0.6, ymin = 0.5, ymax = 1)
+            legend_grob <- cowplot::get_legend(p_legend)
+            legend_wrapper <- ggplot2::ggplot() +
+              ggplot2::theme_void() +
+              ggplot2::annotation_custom(legend_grob, xmin = 0.4, xmax = 0.6, ymin = 0.5, ymax = 1)
 
             # Final combination
-            final_plot <- plot_grid(
+            final_plot <- cowplot::plot_grid(
               title_plot,
               combined_panels,
               legend_wrapper,
@@ -969,7 +969,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
             plot_width <- 4 * n_params + 2
             plot_height <- 18  # Increased for additional retained weighted panel
 
-            ggsave(file.path(output_subdir, filename), final_plot,
+            ggplot2::ggsave(file.path(output_subdir, filename), final_plot,
                    width = min(plot_width, 20), height = plot_height, limitsize = FALSE)
             created_files <- c(created_files, filename)
             if (verbose) cat("    Saved:", filename, "\n")
