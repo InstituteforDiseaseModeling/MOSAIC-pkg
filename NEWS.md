@@ -1,3 +1,15 @@
+# MOSAIC 0.10.8
+
+## Bug Fixes
+
+* **Fixed inappropriate hard-coded bounds for truncated normal distribution**
+  - Replaced arbitrary -45/45 defaults with -Inf/Inf to match fitting function behavior
+  - Added intelligent plotting range selection for infinite bounds
+  - Use mean ± 4sd for plotting range when bounds are infinite (covers 99.99%)
+  - Properly handle one-sided truncation (e.g., a=-Inf, b=10)
+  - Format display strings to show "Inf" for infinite bounds
+  - Fixed at lines 445-481 in `plot_model_distributions.R`
+
 # MOSAIC 0.10.7
 
 ## Bug Fixes
