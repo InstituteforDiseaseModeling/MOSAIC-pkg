@@ -158,11 +158,14 @@ plot_model_convergence <- function(results_dir,
     n_retained_all <- safe_numeric(diagnostics$summary$retained_simulations) %||% n_draws
     n_best_subset <- safe_numeric(diagnostics$summary$best_subset_simulations) %||% sum(retained)
 
-    # Safely extract targets
+    # Safely extract targets (handle both schemas: _min/_max and _best)
     targets <- c(
-        ESS_min = safe_numeric(diagnostics$targets$ess_min$value),
-        A_min = safe_numeric(diagnostics$targets$A_min$value),
-        CVw_max = safe_numeric(diagnostics$targets$cvw_max$value),
+        ESS_min = safe_numeric(diagnostics$targets$ess_min$value) %||%
+                  safe_numeric(diagnostics$targets$ess_best$value),
+        A_min = safe_numeric(diagnostics$targets$A_min$value) %||%
+                safe_numeric(diagnostics$targets$A_best$value),
+        CVw_max = safe_numeric(diagnostics$targets$cvw_max$value) %||%
+                  safe_numeric(diagnostics$targets$cvw_best$value),
         B_min = safe_numeric(diagnostics$targets$B_min$value),
         max_w_max = safe_numeric(diagnostics$targets$max_w_max$value)
     )
@@ -203,24 +206,25 @@ plot_model_convergence <- function(results_dir,
     # Format metrics for display in lower right with safe formatting
     safe_sprintf <- function(fmt, ...) {
         args <- list(...)
-        # Replace NA values with "NA" string for display
-        args <- lapply(args, function(x) if(is.na(x)) "NA" else x)
+        # Check if any arguments are NA - if so, replace format with NA placeholders
+        has_na <- sapply(args, is.na)
+        if (any(has_na)) {
+            # Extract the label from the format string (e.g., "ESS:" from "ESS: %.0f...")
+            label <- sub(":.*$", ":", fmt)
+            return(paste0(label, " NA"))
+        }
         tryCatch(do.call(sprintf, c(list(fmt), args)),
                 error = function(e) paste("Error formatting:", fmt))
     }
 
     diagnostic_lines <- c(
         sprintf("Retained: %d/%d", n_retained_all, n_total_original),
-        "",  # Empty line for spacing
         safe_sprintf("ESS: %.0f [target >= %.0f]",
                      as.numeric(metrics["ESS"]), as.numeric(targets["ESS_min"])),
-        "",  # Empty line for spacing
         safe_sprintf("A: %.3f [target >= %.3f]",
                      as.numeric(metrics["A"]), as.numeric(targets["A_min"])),
-        "",  # Empty line for spacing
         safe_sprintf("CVw: %.3f [target <= %.3f]",
                      as.numeric(metrics["CVw"]), as.numeric(targets["CVw_max"])),
-        "",  # Empty line for spacing
         safe_sprintf("B: %.0f [target >= %.0f]",
                      as.numeric(metrics["B_size"]), as.numeric(targets["B_min"]))
     )

@@ -300,6 +300,18 @@ calc_model_posterior_distributions <- function(
                     ci_upper = q_high,
                     verbose = FALSE
                 )
+            } else if (dist_type == "derived") {
+                # Derived parameters (e.g., beta_j0_hum, beta_j0_env) are rate parameters
+                # Fit gamma distribution to empirical posterior quantiles
+                fitted_dist <- fit_gamma_from_ci(
+                    mode_val = mode_val,
+                    ci_lower = q_low,
+                    ci_upper = q_high,
+                    verbose = FALSE
+                )
+                if (verbose) {
+                    message("  Fitted gamma distribution to derived parameter ", param_name)
+                }
             } else {
                 if (verbose) {
                     message("  Warning: Unknown distribution type '", dist_type, "' for ", param_name)
