@@ -166,7 +166,8 @@ plot_model_convergence <- function(results_dir,
                 safe_numeric(diagnostics$targets$A_best$value),
         CVw_max = safe_numeric(diagnostics$targets$cvw_max$value) %||%
                   safe_numeric(diagnostics$targets$cvw_best$value),
-        B_min = safe_numeric(diagnostics$targets$B_min$value),
+        B_min = safe_numeric(diagnostics$targets$B_min$value) %||%
+                safe_numeric(diagnostics$targets$ess_best$value),
         max_w_max = safe_numeric(diagnostics$targets$max_w_max$value)
     )
 

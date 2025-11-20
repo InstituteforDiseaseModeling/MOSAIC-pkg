@@ -21,10 +21,10 @@
 #'   \code{ess_marginal} containing parameter-specific ESS values. If NULL,
 #'   parameter ESS metrics are omitted.
 #'
-#' @param target_ess_best Numeric target ESS for the best subset (default 300)
+#' @param target_ess_best Numeric target for both subset size and ESS (default 300).
+#'   Both B_size and ESS_B must be >= target_ess_best.
 #' @param target_A_best Numeric target agreement index (default 0.95)
 #' @param target_cvw_best Numeric target coefficient of variation (default 0.5)
-#' @param target_B_min Integer minimum acceptable size for best subset (default 100)
 #' @param target_percentile_max Numeric maximum percentile for subset selection
 #'   (default 5.0, meaning top 5%)
 #' @param target_ess_param Numeric target ESS for individual parameters (default 300)
@@ -104,7 +104,6 @@
 #'     target_ess_best = 300,
 #'     target_A_best = 0.95,
 #'     target_cvw_best = 0.5,
-#'     target_B_min = 100,
 #'     target_percentile_max = 5.0,
 #'     ess_method = "kish"
 #' )
@@ -141,7 +140,6 @@ calc_convergence_diagnostics <- function(
     target_ess_best = 300,
     target_A_best = 0.95,
     target_cvw_best = 0.5,
-    target_B_min = 100,
     target_percentile_max = 5.0,
     target_ess_param = 300,
     target_ess_param_prop = 0.95,
@@ -185,10 +183,10 @@ calc_convergence_diagnostics <- function(
     # Calculate individual metric statuses
     # ============================================================================
 
-    # B_size: Number of simulations in best subset
+    # B_size: Number of simulations in best subset (must be >= ESS_best)
     status_B_size <- .calc_status(
         value = n_best_subset,
-        target = target_B_min,
+        target = target_ess_best,
         direction = "higher",
         pass_threshold = 1.0,    # Must meet minimum
         warn_threshold = 0.5
@@ -299,7 +297,7 @@ calc_convergence_diagnostics <- function(
         message("")
         message("Best Subset Metrics:")
         message("  Size (B): ", n_best_subset,
-                " (target >= ", target_B_min, ") - ", toupper(status_B_size))
+                " (target >= ", target_ess_best, ") - ", toupper(status_B_size))
         message("  ESS_B: ", round(ess_best, 1),
                 " (target >= ", target_ess_best, ") - ", toupper(status_ess_best))
         message("  A_B: ", round(A_best, 3),
@@ -334,13 +332,9 @@ calc_convergence_diagnostics <- function(
         ),
 
         targets = list(
-            B_min = list(
-                value = target_B_min,
-                description = "Minimum best subset size"
-            ),
             ess_best = list(
                 value = target_ess_best,
-                description = "Target ESS for best subset"
+                description = "Target for both subset size and ESS (B_size and ESS_B must both be >= this)"
             ),
             A_best = list(
                 value = target_A_best,

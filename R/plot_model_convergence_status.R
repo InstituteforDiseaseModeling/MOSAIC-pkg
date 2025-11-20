@@ -173,8 +173,8 @@ plot_model_convergence_status <- function(results_dir,
             # cvw_B uses cvw_best target
             target_value <- paste("<=", diagnostics$targets$cvw_best$value)
         } else if (metric_name == "B_size") {
-            # B_size uses B_min target
-            target_value <- paste(">=", diagnostics$targets$B_min$value)
+            # B_size uses ess_best target (same as ESS_B)
+            target_value <- paste(">=", diagnostics$targets$ess_best$value)
         } else {
             target_value <- "-"
         }
