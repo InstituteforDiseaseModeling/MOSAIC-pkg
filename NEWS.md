@@ -1,3 +1,14 @@
+# MOSAIC 0.10.11
+
+## Bug Fixes
+
+* **Fixed S7 class conflict with patchwork operators in `plot_model_posteriors_detail()`**
+  - Replaced `/` operator with explicit `patchwork::wrap_plots(ncol=1)` calls
+  - Fixes "Can't find method for generic `/(e1, e2)`" error from S7 class system
+  - S7 was intercepting the patchwork `/` operator between ggplot objects
+  - Using explicit `wrap_plots()` avoids operator dispatch conflicts
+  - Fixed at lines 727-754 in `plot_model_posteriors_detail.R`
+
 # MOSAIC 0.10.10
 
 ## Bug Fixes

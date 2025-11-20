@@ -725,16 +725,20 @@ plot_model_posteriors_detail <- function(quantiles_file,
       )
 
     # Combine panels vertically
-    # Include retained weighted panel if it exists
+    # Use wrap_plots instead of `/` operator to avoid S7 class conflicts
     if (!is.null(p_retained_weighted)) {
-      panels_only <- p_prior / p_retained / p_retained_weighted / p_best_unweighted /
-                     p_best_weighted / p_caterpillar / p_distributions / p_theoretical +
-        patchwork::plot_layout(heights = c(1, 1, 1, 1, 1, 0.5, 1.2, 1.2))
+      panels_only <- patchwork::wrap_plots(
+        p_prior, p_retained, p_retained_weighted, p_best_unweighted,
+        p_best_weighted, p_caterpillar, p_distributions, p_theoretical,
+        ncol = 1
+      ) + patchwork::plot_layout(heights = c(1, 1, 1, 1, 1, 0.5, 1.2, 1.2))
     } else {
       # Original layout without retained weighted
-      panels_only <- p_prior / p_retained / p_best_unweighted / p_best_weighted /
-                     p_caterpillar / p_distributions / p_theoretical +
-        patchwork::plot_layout(heights = c(1, 1, 1, 1, 0.5, 1.2, 1.2))
+      panels_only <- patchwork::wrap_plots(
+        p_prior, p_retained, p_best_unweighted, p_best_weighted,
+        p_caterpillar, p_distributions, p_theoretical,
+        ncol = 1
+      ) + patchwork::plot_layout(heights = c(1, 1, 1, 1, 0.5, 1.2, 1.2))
     }
 
     # Adjust title height based on description length
@@ -744,8 +748,10 @@ plot_model_posteriors_detail <- function(quantiles_file,
       0.05  # Standard height (reduced from 0.06)
     }
 
-    combined_panels <- col_title / panels_only +
-      patchwork::plot_layout(heights = c(title_height, 1 - title_height))
+    combined_panels <- patchwork::wrap_plots(
+      col_title, panels_only,
+      ncol = 1
+    ) + patchwork::plot_layout(heights = c(title_height, 1 - title_height))
 
     return(combined_panels)
   }
