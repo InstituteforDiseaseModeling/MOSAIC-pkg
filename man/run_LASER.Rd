@@ -6,8 +6,9 @@
 \title{Run LASER Model Simulation}
 \usage{
 run_LASER(
-  paramfile,
+  config,
   seed = 123L,
+  quiet = FALSE,
   visualize = FALSE,
   pdf = FALSE,
   outdir = tempdir(),
@@ -15,8 +16,9 @@ run_LASER(
 )
 
 run_laser(
-  paramfile,
+  config,
   seed = 123L,
+  quiet = FALSE,
   visualize = FALSE,
   pdf = FALSE,
   outdir = tempdir(),
@@ -24,9 +26,11 @@ run_laser(
 )
 }
 \arguments{
-\item{paramfile}{Character. Path to the LASER parameter file (e.g., YAML or JSON) used to configure the simulation.}
+\item{config}{Character or list. Either a path to a LASER configuration file (YAML/JSON) or a configuration list object.}
 
 \item{seed}{Integer. Random seed for reproducibility. Defaults to 123L.}
+
+\item{quiet}{Logical. If TRUE, suppress the progress bar during model execution. Defaults to FALSE.}
 
 \item{visualize}{Logical. If TRUE, generate and display visualizations during the run. Defaults to FALSE.}
 
@@ -46,13 +50,21 @@ calculations when susceptible and exposed compartments are both zero.
 }
 \examples{
 \dontrun{
-# Run with default settings:
+# Run with config file path:
 result <- run_LASER(
-  paramfile = "path/to/laser_params.yml",
+  config    = "path/to/laser_params.yml",
   seed      = 20250418L,
+  quiet     = FALSE,
   visualize = FALSE,
   pdf       = FALSE,
   outdir    = "./laser_output"
+)
+
+# Run with config object:
+result <- run_LASER(
+  config = config_default,
+  seed   = 123L,
+  quiet  = TRUE
 )
 
 # Inspect results:

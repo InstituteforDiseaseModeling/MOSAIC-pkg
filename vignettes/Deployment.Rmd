@@ -97,7 +97,7 @@ ctrl <- mosaic_control_defaults(
   n_cores = parallel::detectCores() - 1
 )
 
-results <- run_LASER(
+results <- run_MOSAIC(
   config = config_default,
   control = ctrl,
   n_sim = 100,
