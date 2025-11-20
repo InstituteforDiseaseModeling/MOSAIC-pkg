@@ -267,8 +267,8 @@ plot_vaccination_maps <- function(PATHS, data_source = "WHO") {
 
      # Barplot for doses_distributed_cumulative
      bar_plot_doses <-
-          ggplot(bar_data_doses, aes(x = doses_distributed_cumulative, y = country)) +
-          ggplot2::geom_bar(stat = "identity", aes(fill = doses_distributed_cumulative)) +
+          ggplot2::ggplot(bar_data_doses, ggplot2::aes(x = doses_distributed_cumulative, y = country)) +
+          ggplot2::geom_bar(stat = "identity", ggplot2::aes(fill = doses_distributed_cumulative)) +
           color_scale_doses +  # Use the same color scale for consistency
           ggplot2::scale_x_continuous(
                breaks = scale_breaks_doses,    # Define where ticks appear
@@ -291,8 +291,8 @@ plot_vaccination_maps <- function(PATHS, data_source = "WHO") {
 
      # Barplot for prop_vaccinated
      bar_plot_prop <-
-          ggplot(bar_data_prop, aes(x = prop_vaccinated, y = country)) +
-          ggplot2::geom_bar(stat = "identity", aes(fill = prop_vaccinated)) +
+          ggplot2::ggplot(bar_data_prop, ggplot2::aes(x = prop_vaccinated, y = country)) +
+          ggplot2::geom_bar(stat = "identity", ggplot2::aes(fill = prop_vaccinated)) +
           color_scale_prop +  # Use the same color scale for consistency
           ggplot2::scale_x_continuous(
                breaks = scale_breaks_prop,    # Define where ticks appear
@@ -315,23 +315,30 @@ plot_vaccination_maps <- function(PATHS, data_source = "WHO") {
 
 
      # Combine map and barplot for doses_distributed_cumulative
-     combined_doses <- map_plot_doses +
-          bar_plot_doses +
-          patchwork::plot_layout(widths = c(3, 2)) +  # Adjust widths as needed
+     combined_doses <- patchwork::wrap_plots(
+          map_plot_doses,
+          bar_plot_doses,
+          widths = c(3, 2)
+     ) +
           patchwork::plot_annotation(title = "A")
 
      # Combine map and barplot for prop_vaccinated
-     combined_prop <- map_plot_prop +
-          bar_plot_prop +
-          patchwork::plot_layout(widths = c(3, 2)) +  # Adjust widths as needed
+     combined_prop <- patchwork::wrap_plots(
+          map_plot_prop,
+          bar_plot_prop,
+          widths = c(3, 2)
+     ) +
           patchwork::plot_annotation(title = "B",
                           theme = ggplot2::theme(
                                plot.title = ggplot2::element_text(size = 12, face = 'bold', hjust = 0)
                           ))
 
      # Arrange both combined plots vertically
-     final_combined_plot <- combined_doses / combined_prop +
-          patchwork::plot_layout(nrow = 2) +
+     final_combined_plot <- patchwork::wrap_plots(
+          combined_doses,
+          combined_prop,
+          ncol = 1
+     ) +
           patchwork::plot_annotation(
                title = glue::glue("Reported OCV doses distributed as of {format(Sys.Date(), '%B %d, %Y')}"),
                subtitle = "",
