@@ -43,8 +43,8 @@ model_epidemic <- run_LASER(
 )
 
 # Extract time series results (convert Python objects to R matrices)
-cases_epidemic <- as.matrix(model_epidemic$patches$expected_cases)
-deaths_epidemic <- as.matrix(model_epidemic$patches$disease_deaths)
+cases_epidemic <- as.matrix(model_epidemic$results$expected_cases)
+deaths_epidemic <- as.matrix(model_epidemic$results$disease_deaths)
 
 # Remove first row (time index) and transpose to [location × time]
 cases_epidemic <- t(cases_epidemic[-1, ])
@@ -105,8 +105,8 @@ model_endemic <- run_LASER(
 )
 
 # Extract time series results (convert Python objects to R matrices)
-cases_endemic <- as.matrix(model_endemic$patches$expected_cases)
-deaths_endemic <- as.matrix(model_endemic$patches$disease_deaths)
+cases_endemic <- as.matrix(model_endemic$results$expected_cases)
+deaths_endemic <- as.matrix(model_endemic$results$disease_deaths)
 
 # Remove first row (time index) and transpose to [location × time]
 cases_endemic <- t(cases_endemic[-1, ])
