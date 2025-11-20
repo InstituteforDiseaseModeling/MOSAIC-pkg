@@ -113,7 +113,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_epidemic.png\n")
 ```
 
-```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "90%"}
+```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
 knitr::include_graphics("figures/running_mosaic_epidemic.png")
 ```
 
@@ -192,7 +192,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_endemic.png\n")
 ```
 
-```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "90%"}
+```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
 knitr::include_graphics("figures/running_mosaic_endemic.png")
 ```
 
@@ -205,4 +205,3 @@ knitr::include_graphics("figures/running_mosaic_endemic.png")
 - **Package documentation**: `help(package = "MOSAIC")`
 - **Function help**: `?run_LASER`, `?make_LASER_config`
 - **Report issues**: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues
-- **Examples**: See `MOSAIC-pkg/model/` directory for complete workflows
