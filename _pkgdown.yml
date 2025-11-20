@@ -10,6 +10,16 @@ navbar:
   structure:
     left:  [intro, reference, articles, news]
     right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Installation
+        href: articles/Installation.html
+      - text: Running MOSAIC
+        href: articles/Running-MOSAIC.html
+      - text: Deployment
+        href: articles/Deployment.html
 
 articles:
 - title: "Getting Started"
