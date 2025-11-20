@@ -118,6 +118,9 @@ sim_args <- list(
      gamma_2          = 0.1,
      epsilon          = 0.0003,
      mu_jt            = mu_jt,
+     chi_endemic      = 0.5,       # PPV during endemic periods
+     chi_epidemic     = 0.75,      # PPV during epidemic periods
+     epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
      rho              = 0.52,
      sigma            = 0.24,
      longitude        = longitude,
@@ -136,6 +139,10 @@ sim_args <- list(
      beta_j0_env      = baseline_beta * 0.5,
      theta_j          = theta_j,
      psi_jt           = psi_jt,
+     psi_star_a       = rep(1, n_loc),    # Identity gain (no calibration)
+     psi_star_b       = rep(0, n_loc),    # No offset
+     psi_star_z       = rep(1, n_loc),    # No smoothing (use raw psi_jt)
+     psi_star_k       = rep(0, n_loc),    # No time lag
      zeta_1           = 7.5,
      zeta_2           = 2.5,
      kappa            = 1e5,
@@ -194,22 +201,121 @@ exp_deaths_mat <- if (is.matrix(exp_deaths)) exp_deaths else as.matrix(exp_death
 if (nrow(exp_cases_mat) != n_loc) exp_cases_mat  <- t(exp_cases_mat[-1,])
 if (nrow(exp_deaths_mat) != n_loc) exp_deaths_mat <- t(exp_deaths_mat[-1,])
 
-# Basic base‑R visualisation ---------------------------------------------- #
+# Publication-quality ggplot2 visualisation ------------------------------- #
 
-op <- par(no.readonly = TRUE)
-on.exit(par(op), add = TRUE)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(cowplot)
 
-par(mfrow = c(2, 1), mar = c(4, 4, 3, 2) + 0.1)
+# Prepare data in long format for ggplot
+cases_df <- as.data.frame(t(exp_cases_mat))
+colnames(cases_df) <- j
+cases_df$date <- t
 
-matplot(t, t(exp_cases_mat), type = "l", lty = 1, lwd = 2,
-        xlab = "Date", ylab = "Expected cases",
-        main = "Expected cholera cases")
-legend("topright", legend = j, col = seq_len(n_loc), lty = 1, lwd = 2, bty = "n")
+cases_long <- cases_df %>%
+     tidyr::pivot_longer(cols = -date, names_to = "location", values_to = "cases")
 
-matplot(t, t(exp_deaths_mat), type = "l", lty = 1, lwd = 2,
-        xlab = "Date", ylab = "Expected deaths",
-        main = "Expected cholera deaths")
-legend("topright", legend = j, col = seq_len(n_loc), lty = 1, lwd = 2, bty = "n")
+deaths_df <- as.data.frame(t(exp_deaths_mat))
+colnames(deaths_df) <- j
+deaths_df$date <- t
+
+deaths_long <- deaths_df %>%
+     tidyr::pivot_longer(cols = -date, names_to = "location", values_to = "deaths")
+
+# Define publication-quality color palette (OS GeoDataViz custom selection)
+# Source: https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit
+location_colors <- c("#009ADE", "#FF1F5B", "#00CD6C")[seq_len(n_loc)]
+names(location_colors) <- j
+
+# Create cases plot
+p_cases <- ggplot(cases_long, aes(x = date, y = cases, color = location)) +
+     geom_line(linewidth = 1) +
+     scale_color_manual(values = location_colors, name = "Location") +
+     scale_y_continuous(labels = scales::comma, expand = c(0.02, 0)) +
+     scale_x_date(date_labels = "%Y-%m", date_breaks = "2 months") +
+     labs(
+          title = "Epidemic Transmission Simulation",
+          x = "",
+          y = "Expected Cases"
+     ) +
+     theme_classic(base_size = 13) +
+     theme(
+          plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+          axis.title = element_text(face = "bold", size = 13),
+          axis.text = element_text(size = 11),
+          legend.position = "right",
+          legend.title = element_text(face = "bold", size = 12),
+          legend.text = element_text(size = 11),
+          legend.background = element_blank(),
+          legend.key.height = unit(1.2, "lines"),
+          panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+          panel.grid.minor = element_blank()
+     )
+
+# Create deaths plot
+p_deaths <- ggplot(deaths_long, aes(x = date, y = deaths, color = location)) +
+     geom_line(linewidth = 1) +
+     scale_color_manual(values = location_colors, name = "Location") +
+     scale_y_continuous(labels = scales::comma, expand = c(0.02, 0)) +
+     scale_x_date(date_labels = "%Y-%m", date_breaks = "2 months") +
+     labs(
+          title = "",
+          x = "",
+          y = "Expected Deaths"
+     ) +
+     theme_classic(base_size = 14) +
+     theme(
+          plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+          axis.title = element_text(face = "bold", size = 12),
+          axis.text = element_text(size = 11),
+          legend.position = "right",
+          legend.title = element_text(face = "bold", size = 12),
+          legend.text = element_text(size = 11),
+          legend.background = element_blank(),
+          legend.key.height = unit(1.2, "lines"),
+          panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+          panel.grid.minor = element_blank()
+     )
+
+# Extract legend from one plot (before removing it)
+legend <- cowplot::get_legend(
+     p_cases +
+          theme(
+               legend.position = "bottom",
+               legend.direction = "horizontal",
+               legend.box = "horizontal",
+               legend.title = element_text(face = "bold", size = 12, margin = margin(r = 10)),
+               legend.text = element_text(size = 11),
+               legend.key.width = unit(1.5, "lines"),
+               legend.key.height = unit(1, "lines"),
+               legend.margin = margin(t = 5)
+          )
+)
+
+# Remove legends from both plots
+p_cases_no_legend <- p_cases + theme(legend.position = "none")
+p_deaths_no_legend <- p_deaths + theme(legend.position = "none")
+
+# Combine plots vertically without legends
+p_plots <- cowplot::plot_grid(
+     p_cases_no_legend,
+     p_deaths_no_legend,
+     ncol = 1,
+     align = "v",
+     rel_heights = c(1, 1)
+)
+
+# Add shared legend below
+p_combined <- cowplot::plot_grid(
+     p_plots,
+     legend,
+     ncol = 1,
+     rel_heights = c(10, 1)
+)
+
+# Display combined plot
+print(p_combined)
 
 
 
