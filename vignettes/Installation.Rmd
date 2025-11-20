@@ -17,23 +17,22 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-MOSAIC has three installation levels depending on your needs:
+MOSAIC has two installation levels depending on your needs:
 
-| Setup                | Purpose                             | Requirements                   |
-|:---------------------|:------------------------------------|:-------------------------------|
-| **Quick Start**      | Run pre-configured models           | R + internet                   |
-| **Standard**         | Process data & run prior models     | R + git + system libraries     |
-| **Developer**        | Contribute code & full development  | All above + dev tools          |
+| Setup            | Purpose                                          | Requirements                   |
+|:-----------------|:-------------------------------------------------|:-------------------------------|
+| **Basic**        | Run models with pre-configured data              | R + internet                   |
+| **Developer**    | Full access: data collection, prior estimation, development | R + git + system libraries     |
 
-Most users should start with **Quick Start**.
+Most users should start with **Basic**.
 
 ---
 
-## Quick Start
+## Basic Setup
 
-Install the R package from GitHub and let it automatically set up Python dependencies. This is sufficient for running models with pre-configured parameters.
+Install the R package from GitHub and let it automatically set up Python dependencies. This is sufficient for running models with pre-configured parameters and data.
 
-```{r quick-install}
+```{r basic-install}
 # Install MOSAIC R package
 devtools::install_github("InstituteforDiseaseModeling/MOSAIC-pkg")
 
@@ -48,33 +47,38 @@ results <- run_LASER(config, n_sim = 2, seed = 123)
 
 ---
 
-## Standard Setup
+## Developer Setup
 
-Clone the full repository structure for data processing and parameter estimation. Requires system dependencies (GDAL, PROJ, GEOS, UDUNITS).
+Clone the full repository structure for data processing, parameter estimation, and code development. Requires system dependencies (GDAL, PROJ, GEOS, UDUNITS).
 
 **Note**: We recommend creating a `~/MOSAIC` directory to organize all MOSAIC repositories in one location.
 
+### Install System Dependencies
+
 **macOS:**
-```{sh std-macos}
+```{sh dev-macos}
 brew install gdal proj geos udunits
 ```
 
 **Ubuntu/Debian:**
-```{sh std-ubuntu}
+```{sh dev-ubuntu}
 sudo apt-get install -y gdal-bin libgdal-dev libproj-dev libgeos-dev libudunits2-dev
 ```
 
-**Clone repositories:**
-```{sh std-clone}
+### Clone Repositories
+
+```{sh dev-clone}
 mkdir -p ~/MOSAIC && cd ~/MOSAIC
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
 git clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git
+git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 ```
 
-**Install and configure:**
-```{r std-install}
+### Install and Configure
+
+```{r dev-install}
 # Install R package from source
 devtools::install("~/MOSAIC/MOSAIC-pkg")
 
@@ -89,19 +93,8 @@ config <- config_default
 results <- run_LASER(config, n_sim = 2, seed = 123)
 ```
 
----
+### Development Workflow
 
-## Developer Setup
-
-Same as Standard Setup, plus optional data scraping repository and development tools.
-
-**Clone additional repository (optional):**
-```{sh dev-clone}
-cd ~/MOSAIC
-git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
-```
-
-**Development workflow:**
 ```{r dev-workflow}
 # Load for development
 devtools::load_all("~/MOSAIC/MOSAIC-pkg")
@@ -114,28 +107,7 @@ devtools::document()
 pkgdown::build_site()
 ```
 
----
-
-## Troubleshooting
-
-**Python issues:**
-```{r troubleshoot}
-# Check Python configuration
-reticulate::py_config()
-
-# Reset if needed
-remove_MOSAIC_python_env()
-install_dependencies()
-```
-
-**Path issues (Standard/Developer only):**
-```{r paths}
-# Check and reset root directory
-getOption("root_directory")
-set_root_directory("~/MOSAIC")
-```
-
-**Optional: Mobility package for regenerating mobility estimates:**
+### Optional: Mobility Package
 
 The `mobility` package is only needed if you want to regenerate mobility estimates from scratch. Most users can skip this - pre-computed mobility files are included in `model/input/`.
 
@@ -155,6 +127,27 @@ remotes::install_github("COVID-19-Mobility-Data-Network/mobility")
 ```
 
 **When is this needed?** Only if you're calling `MOSAIC::est_mobility()` to regenerate mobility matrices. Otherwise, use the pre-computed files included with the package.
+
+---
+
+## Troubleshooting
+
+**Python issues:**
+```{r troubleshoot-python}
+# Check Python configuration
+reticulate::py_config()
+
+# Reset if needed
+remove_MOSAIC_python_env()
+install_dependencies()
+```
+
+**Path issues (Developer only):**
+```{r troubleshoot-paths}
+# Check and reset root directory
+getOption("root_directory")
+set_root_directory("~/MOSAIC")
+```
 
 ---
 
