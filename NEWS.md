@@ -1,3 +1,15 @@
+# MOSAIC 0.10.16
+
+## Bug Fixes
+
+* **Fixed missing derived parameters (beta_j0_hum, beta_j0_env) in distribution plots**
+  - Added handling for "derived" distribution type in `calc_model_posterior_distributions()`
+  - Derived rate parameters (beta_j0_hum, beta_j0_env) now fitted with gamma distributions
+  - **Background**: beta_j0_hum = p_beta × beta_j0_tot, beta_j0_env = (1 - p_beta) × beta_j0_tot
+  - Previously marked as "failed" because "derived" type was unhandled
+  - Now appear in distributions_ETH_Prior_Posterior.pdf alongside beta_j0_tot and p_beta
+  - Fixed at lines 303-314 in `calc_model_posterior_distributions.R`
+
 # MOSAIC 0.10.15
 
 ## Bug Fixes
