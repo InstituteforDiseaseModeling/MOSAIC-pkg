@@ -27,7 +27,6 @@
 
 library(MOSAIC)
 library(jsonlite)
-library(reticulate)
 
 
 seed <- as.integer(999999999)
@@ -37,7 +36,7 @@ set.seed(seed)
 # --------------------------- 1. Time & locations --------------------------- #
 
 date_start <- as.Date("2020-01-01")
-date_stop  <- as.Date("2024-12-31")         # 15 years
+date_stop  <- as.Date("2024-12-31")
 
 t          <- seq.Date(date_start, date_stop, by = "day")
 T_len      <- length(t)
@@ -227,22 +226,87 @@ exp_deaths_mat <- if (is.matrix(exp_deaths)) exp_deaths else as.matrix(exp_death
 if (nrow(exp_cases_mat) != n_loc) exp_cases_mat  <- t(exp_cases_mat[-1,])
 if (nrow(exp_deaths_mat) != n_loc) exp_deaths_mat <- t(exp_deaths_mat[-1,])
 
-# Basic base‑R visualisation ---------------------------------------------- #
+# Publication-quality ggplot2 visualisation ------------------------------- #
 
-op <- par(no.readonly = TRUE)
-on.exit(par(op), add = TRUE)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(cowplot)
 
-par(mfrow = c(2, 1), mar = c(4, 4, 3, 2) + 0.1)
+# Prepare data in long format for ggplot
+cases_df <- as.data.frame(t(exp_cases_mat))
+colnames(cases_df) <- j
+cases_df$date <- t
 
-matplot(t, t(exp_cases_mat), type = "l", lty = 1, lwd = 2,
-        xlab = "Date", ylab = "Expected cases",
-        main = "Expected cholera cases")
-legend("topright", legend = j, col = seq_len(n_loc), lty = 1, lwd = 2, bty = "n")
+cases_long <- cases_df %>%
+     tidyr::pivot_longer(cols = -date, names_to = "location", values_to = "cases")
 
-matplot(t, t(exp_deaths_mat), type = "l", lty = 1, lwd = 2,
-        xlab = "Date", ylab = "Expected deaths",
-        main = "Expected cholera deaths")
-legend("topright", legend = j, col = seq_len(n_loc), lty = 1, lwd = 2, bty = "n")
+deaths_df <- as.data.frame(t(exp_deaths_mat))
+colnames(deaths_df) <- j
+deaths_df$date <- t
+
+deaths_long <- deaths_df %>%
+     tidyr::pivot_longer(cols = -date, names_to = "location", values_to = "deaths")
+
+# Define publication-quality color palette (ColorBrewer Dark2)
+location_colors <- RColorBrewer::brewer.pal(n = max(3, n_loc), name = "Dark2")[seq_len(n_loc)]
+names(location_colors) <- j
+
+# Create cases plot
+p_cases <- ggplot(cases_long, aes(x = date, y = cases, color = location)) +
+     geom_line(linewidth = 1.2) +
+     scale_color_manual(values = location_colors, name = "Location") +
+     scale_y_continuous(labels = scales::comma, expand = c(0.02, 0)) +
+     scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+     labs(
+          title = "Expected Cholera Cases",
+          x = "Date",
+          y = "Expected Cases"
+     ) +
+     theme_classic(base_size = 14) +
+     theme(
+          plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+          axis.title = element_text(face = "bold", size = 13),
+          axis.text = element_text(size = 11),
+          legend.position = "right",
+          legend.title = element_text(face = "bold", size = 12),
+          legend.text = element_text(size = 11),
+          legend.background = element_rect(fill = "white", color = "gray80"),
+          legend.key.height = unit(1.2, "lines"),
+          panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+          panel.grid.minor = element_blank()
+     )
+
+# Create deaths plot
+p_deaths <- ggplot(deaths_long, aes(x = date, y = deaths, color = location)) +
+     geom_line(linewidth = 1.2) +
+     scale_color_manual(values = location_colors, name = "Location") +
+     scale_y_continuous(labels = scales::comma, expand = c(0.02, 0)) +
+     scale_x_date(date_labels = "%Y", date_breaks = "1 year") +
+     labs(
+          title = "Expected Cholera Deaths",
+          x = "Date",
+          y = "Expected Deaths"
+     ) +
+     theme_classic(base_size = 14) +
+     theme(
+          plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+          axis.title = element_text(face = "bold", size = 13),
+          axis.text = element_text(size = 11),
+          legend.position = "right",
+          legend.title = element_text(face = "bold", size = 12),
+          legend.text = element_text(size = 11),
+          legend.background = element_rect(fill = "white", color = "gray80"),
+          legend.key.height = unit(1.2, "lines"),
+          panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+          panel.grid.minor = element_blank()
+     )
+
+# Combine plots vertically using cowplot
+p_combined <- cowplot::plot_grid(p_cases, p_deaths, ncol = 1, align = "v")
+
+# Display combined plot
+print(p_combined)
 
 config_simulation_endemic <- sim_config
 usethis::use_data(config_simulation_endemic, overwrite = TRUE)
