@@ -479,7 +479,7 @@ plot_model_convergence_status <- function(results_dir,
     row_height <- (table_top - table_bottom) / (n_rows + 1)  # +1 for header
 
     # Column positions and widths (adjusted for wider Metric and Description columns)
-    col_x <- c(table_left, 0.20, 0.60, 0.74, 0.85, table_right)
+    col_x <- c(table_left, 0.20, 0.65, 0.77, 0.88, table_right)
     col_widths <- diff(col_x)
 
     # Draw header
