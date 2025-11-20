@@ -203,7 +203,10 @@ plot_model_convergence <- function(results_dir,
     # Prepare convergence diagnostics text for annotation
     # ============================================================================
 
-    # Note: Diagnostic lines annotation removed - metrics still printed to console in verbose mode
+    # Create simple metrics annotation for lower right corner
+    n_best <- as.numeric(metrics["B_size"])
+    metrics_text <- sprintf("Total: %d\nRetained: %d\nBest subset: %d",
+                           n_total_original, n_retained_all, n_best)
 
     # ============================================================================
     # Create footnote with metric definitions
@@ -258,6 +261,14 @@ plot_model_convergence <- function(results_dir,
                          y = best_ll - (max(plot_data$loglik) - min(plot_data$loglik)) * 0.03,
                          label = sprintf("%.2f", best_ll),
                          hjust = 0.5, vjust = -3, size = 3.25, color = "#2E8B57", fontface = "bold") +
+        # Metrics annotation in lower right corner
+        ggplot2::annotate("text",
+                         x = n_draws * 0.98,  # Position at 98% of x-axis
+                         y = min(plot_data$loglik, na.rm = TRUE) +
+                             (max(plot_data$loglik, na.rm = TRUE) - min(plot_data$loglik, na.rm = TRUE)) * 0.08,
+                         label = metrics_text,
+                         hjust = 1, vjust = 0, size = 3.5, color = "black",
+                         lineheight = 1.1, family = "sans") +
         # Theme and styling
         ggplot2::theme_classic(base_size = 12) +
         ggplot2::theme(
