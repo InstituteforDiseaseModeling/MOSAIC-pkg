@@ -208,7 +208,7 @@ plot_model_convergence_status <- function(results_dir,
             "ess_best" = "ESS_B",
             "A_B" = "A_B",
             "cvw_B" = "CV_B",
-            "B_size_upper" = "Best Subset Size Limit",
+            "B_size_upper" = "Best Subset (B) Limit",
             "B_size" = "Best Subset (B)",
             metric_name
         )
@@ -220,7 +220,7 @@ plot_model_convergence_status <- function(results_dir,
             "ess_best" = expression(bold(ESS[B])),
             "A_B" = expression(bold(A[B])),
             "cvw_B" = expression(bold(CV[B])),
-            "B_size_upper" = expression(bold("Best Subset Size Limit")),
+            "B_size_upper" = expression(bold("Best Subset (B) Limit")),
             "B_size" = expression(bold("Best Subset (B)")),
             NULL
         )
@@ -478,8 +478,8 @@ plot_model_convergence_status <- function(results_dir,
     n_rows <- nrow(metrics_data)
     row_height <- (table_top - table_bottom) / (n_rows + 1)  # +1 for header
 
-    # Column positions and widths (adjusted to give more space to Value column)
-    col_x <- c(table_left, 0.18, 0.58, 0.74, 0.84, table_right)
+    # Column positions and widths (adjusted for wider Metric and Description columns)
+    col_x <- c(table_left, 0.20, 0.60, 0.74, 0.85, table_right)
     col_widths <- diff(col_x)
 
     # Draw header
