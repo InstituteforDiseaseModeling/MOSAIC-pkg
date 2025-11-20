@@ -205,20 +205,20 @@ plot_model_convergence <- function(results_dir,
 
     # Create simple metrics annotation for lower right corner
     n_best <- as.numeric(metrics["B_size"])
-    metrics_text <- sprintf("Total: %d\nRetained: %d\nBest subset: %d",
-                           n_total_original, n_retained_all, n_best)
+    pct_retained <- 100 * n_retained_all / n_total_original
+    pct_best <- 100 * n_best / n_total_original
+    metrics_text <- sprintf("Total: %d\nRetained: %d (%.1f%%)\nBest subset: %d (%.1f%%)",
+                           n_total_original, n_retained_all, pct_retained, n_best, pct_best)
 
     # ============================================================================
     # Create footnote with metric definitions
     # ============================================================================
 
     # Footnote defining the three displayed metrics
-    top_percentile <- (diagnostics$settings$top_percentile %||% 0.01) * 100
-
     footnote_lines <- c(
         "Total: All simulations submitted to calibration",
         "Retained: Simulations passing outlier removal (finite, non-outlier likelihoods)",
-        sprintf("Best subset: Top %.1f%% of retained simulations by likelihood", top_percentile)
+        "Best subset: Subset of best fitting models by likelihood"
     )
 
     footnote_text <- paste(footnote_lines, collapse = "\n")
