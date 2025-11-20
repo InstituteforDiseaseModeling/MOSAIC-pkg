@@ -1012,7 +1012,7 @@ run_MOSAIC <- function(config,
 
     tier_result <- identify_best_subset(
       results = results,
-      min_B = control$targets$B_min,
+      min_B = tier$ESS_B,  # Use tier-specific ESS target as minimum count
       target_ESS_B = tier$ESS_B,
       target_A = tier$A,
       target_CVw = tier$CVw,
@@ -1235,7 +1235,6 @@ run_MOSAIC <- function(config,
     target_ess_best = control$targets$ESS_best,
     target_A_best = control$targets$A_best,
     target_cvw_best = control$targets$CVw_best,
-    target_B_min = control$targets$B_min,
     target_percentile_max = control$targets$percentile_max,
     target_ess_param = control$targets$ESS_param,
     target_ess_param_prop = control$targets$ESS_param_prop,
@@ -1806,10 +1805,9 @@ run_mosaic <- run_MOSAIC
 #'   \itemize{
 #'     \item \code{ESS_param}: Target ESS per parameter (default: 500)
 #'     \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-#'     \item \code{ESS_best}: Target ESS for best subset (default: 100)
+#'     \item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
 #'     \item \code{A_best}: Target agreement index (default: 0.95)
 #'     \item \code{CVw_best}: Target CV of weights (default: 0.5)
-#'     \item \code{B_min}: Minimum best subset size (default: 30)
 #'     \item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 #'   }
@@ -2072,7 +2070,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     ESS_best = 100,
     A_best = 0.95,
     CVw_best = 0.5,
-    B_min = 30,
     percentile_max = 5.0,
     ESS_method = "perplexity"     # ESS calculation method: "kish" or "perplexity"
   )
