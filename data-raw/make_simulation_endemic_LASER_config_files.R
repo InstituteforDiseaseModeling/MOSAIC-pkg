@@ -248,8 +248,9 @@ deaths_df$date <- t
 deaths_long <- deaths_df %>%
      tidyr::pivot_longer(cols = -date, names_to = "location", values_to = "deaths")
 
-# Define publication-quality color palette (ColorBrewer Dark2)
-location_colors <- RColorBrewer::brewer.pal(n = max(3, n_loc), name = "Dark2")[seq_len(n_loc)]
+# Define publication-quality color palette (OS GeoDataViz Qualitative 3b)
+# Source: https://github.com/OrdnanceSurvey/GeoDataViz-Toolkit
+location_colors <- c("#00CD6C", "#AF58BA", "#FFC61E")[seq_len(n_loc)]
 names(location_colors) <- j
 
 # Create cases plot
