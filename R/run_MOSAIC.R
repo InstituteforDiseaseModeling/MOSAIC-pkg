@@ -1019,7 +1019,7 @@ run_MOSAIC <- function(config,
       min_percentile = 0.001,
       max_percentile = control$targets$percentile_max,
       precision = 0.001,
-      ess_method = control$targets$ESS_method,
+      ess_method = 'kish', # Leave as kish, this is intentional because it is more conservative when forming the best subset, but using perplexity elsewhere for reporting
       verbose = FALSE
     )
 
@@ -1212,13 +1212,6 @@ run_MOSAIC <- function(config,
   retained_results <- results[results$is_retained, ]
   n_retained <- nrow(retained_results)
 
-  if (n_retained > 0) {
-    retained_weights_norm <- results$weight_retained[results$is_retained]
-    ess_retained <- calc_model_ess(retained_weights_norm, method = control$targets$ESS_method)
-  } else {
-    ess_retained <- NA_real_
-  }
-
   # Best subset metrics already calculated above
   best_results <- results[results$is_best_subset, ]
   n_best <- nrow(best_results)
@@ -1231,7 +1224,6 @@ run_MOSAIC <- function(config,
     n_successful = sum(is.finite(results$likelihood)),
     n_retained = n_retained,
     n_best_subset = n_best,
-    ess_retained = ess_retained,
     ess_best = ESS_B_final,
     A_best = A_final,
     cvw_best = CVw_final,
