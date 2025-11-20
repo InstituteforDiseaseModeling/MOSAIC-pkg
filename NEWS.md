@@ -1,3 +1,16 @@
+# MOSAIC 0.10.20
+
+## Bug Fixes
+
+* **CRITICAL: Fixed derived parameters not added to posteriors.json**
+  - Modified `calc_model_posterior_distributions()` to dynamically add parameters missing from priors template
+  - Derived parameters (beta_j0_hum, beta_j0_env) now correctly added to posteriors.json
+  - **Root cause**: Function used priors.json as template, which only contains sampled parameters
+  - **Solution**: Dynamically create parameter structure for derived parameters not in priors
+  - Handles multiple locations correctly (adds each location as it's processed)
+  - Fixed at lines 391-420 in `calc_model_posterior_distributions.R`
+  - **Result**: beta_j0_hum and beta_j0_env now appear in distributions_ETH_Prior_Posterior.pdf
+
 # MOSAIC 0.10.19
 
 ## Bug Fixes

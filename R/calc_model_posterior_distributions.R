@@ -391,10 +391,31 @@ calc_model_posterior_distributions <- function(
         } else if (param_scale == "location" && !is.null(location)) {
             # Update location-specific parameter
             if (!is.null(posteriors$parameters_location[[param_base]])) {
+                # Parameter structure exists - add or update location
                 if (!is.null(posteriors$parameters_location[[param_base]]$location[[location]])) {
+                    # Location exists - update it
+                    posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
+                    success <- TRUE
+                } else {
+                    # Location doesn't exist - add it (handles derived params with multiple locations)
                     posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
                     success <- TRUE
                 }
+            } else {
+                # Parameter doesn't exist in priors template (e.g., derived parameters)
+                # Create structure dynamically and add to posteriors
+                if (verbose) {
+                    message(sprintf("  Adding derived parameter '%s' to posteriors structure", param_base))
+                }
+
+                # Initialize parameter structure with location slot
+                posteriors$parameters_location[[param_base]] <- list(
+                    location = list()
+                )
+
+                # Add the fitted distribution for this location
+                posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
+                success <- TRUE
             }
         }
 
