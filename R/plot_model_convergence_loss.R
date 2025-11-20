@@ -46,6 +46,8 @@ plot_model_convergence_loss <- function(results_dir,
 
      # --- Safe extractors --------------------------------------------------------
      safe_numeric <- function(x, default = NA_real_) {
+          if (is.null(x)) return(default)
+          if (length(x) == 0) return(default)
           out <- suppressWarnings(as.numeric(x)); ifelse(is.na(out), default, out)
      }
      safe_character <- function(x, default = "unknown") {
@@ -105,13 +107,13 @@ plot_model_convergence_loss <- function(results_dir,
 
      diagnostic_lines <- c(
           sprintf("Finite-loss: %d/%d", n_successful, n_draws),
-          safe_sprintf("ESS (all): %.0f [target >= %.0f]", metrics[["ESS_all"]], targets[["ESS_min"]]),
+          safe_sprintf("ESS (all): %.0f [target >= %.0f]", as.numeric(metrics["ESS_all"]), as.numeric(targets["ESS_min"])),
           "",
           sprintf("Best subset (B): top %.1f%%", 100*top_pct_lab),
-          sprintf("B = %s [target >= 50]", format(metrics[["B_size"]])),
-          safe_sprintf("  A = %.3f [target >= %.3f]", metrics[["A_B"]],   targets[["A_min"]]),
-          safe_sprintf("  CVw = %.3f [target <= %.3f]", metrics[["CVw_B"]], targets[["CVw_max"]]),
-          if (is.finite(metrics[["loss_threshold"]])) sprintf("  Loss threshold: <= %.4f", metrics[["loss_threshold"]]) else NULL
+          sprintf("B = %s [target >= 50]", format(as.numeric(metrics["B_size"]))),
+          safe_sprintf("  A = %.3f [target >= %.3f]", as.numeric(metrics["A_B"]), as.numeric(targets["A_min"])),
+          safe_sprintf("  CVw = %.3f [target <= %.3f]", as.numeric(metrics["CVw_B"]), as.numeric(targets["CVw_max"])),
+          if (is.finite(as.numeric(metrics["loss_threshold"]))) sprintf("  Loss threshold: <= %.4f", as.numeric(metrics["loss_threshold"])) else NULL
      )
 
      # --- Footnote ---------------------------------------------------------------
