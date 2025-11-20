@@ -16,7 +16,7 @@ articles:
     navbar: ~
     contents:
     - Installation
-    - Running-MOSAIC
+    - Running MOSAIC
     - Deployment
 
 reference:
@@ -24,7 +24,6 @@ reference:
     desc: Main functions for running MOSAIC simulations
     contents:
     - run_LASER
-    - run_mosaic_iso
     - run_MOSAIC
     - make_LASER_config
     - sample_parameters
