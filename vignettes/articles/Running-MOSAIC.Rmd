@@ -1,5 +1,10 @@
 ---
 title: "Running MOSAIC"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Running MOSAIC}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
@@ -33,7 +38,7 @@ MOSAIC includes pre-configured parameter sets for different transmission scenari
 
 The epidemic configuration simulates outbreak dynamics with explosive growth patterns typical of cholera epidemics.
 
-```{r epidemic-example}
+```{r epidemic-example, eval=TRUE, echo=TRUE}
 library(MOSAIC)
 
 # Run epidemic scenario
@@ -46,36 +51,8 @@ model_epidemic <- run_LASER(
 cases_epidemic <- as.matrix(model_epidemic$results$expected_cases)
 deaths_epidemic <- as.matrix(model_epidemic$results$disease_deaths)
 
-# Diagnostic: Check if data manipulation is still needed
-cat(sprintf("Raw cases dimensions: %d rows × %d cols\n",
-            nrow(cases_epidemic), ncol(cases_epidemic)))
-
-# Check if first row is time index (sequential integers starting from 0)
-first_row_is_time <- all(cases_epidemic[1, ] == seq(0, ncol(cases_epidemic) - 1))
-if (first_row_is_time) {
-  cat("First row is time index, removing...\n")
-  cases_epidemic <- cases_epidemic[-1, ]
-  deaths_epidemic <- deaths_epidemic[-1, ]
-} else {
-  cat("First row is data, keeping...\n")
-}
-
-# Check if we need to transpose to [location × time]
-needs_transpose <- nrow(cases_epidemic) > ncol(cases_epidemic)
-if (needs_transpose) {
-  cat(sprintf("Transposing from [%d × %d] to [location × time]...\n",
-              nrow(cases_epidemic), ncol(cases_epidemic)))
-  cases_epidemic <- t(cases_epidemic)
-  deaths_epidemic <- t(deaths_epidemic)
-} else {
-  cat("Data already in [location × time] format\n")
-}
-
-cat(sprintf("Final cases dimensions: %d locations × %d timesteps\n\n",
-            nrow(cases_epidemic), ncol(cases_epidemic)))
-
 # Get metadata
-locations <- c("FOO", "BAR", "BAZ")  # From config_simulation_epidemic
+locations <- config_simulation_epidemic$location_name
 n_locations <- length(locations)
 n_timesteps <- ncol(cases_epidemic)
 
@@ -98,11 +75,9 @@ par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 matplot(t(cases_epidemic), type = "l", lty = 1, lwd = 2, col = colors,
         xlab = "", ylab = "Expected Cases",
         main = "Epidemic Transmission Simulation")
-grid(col = "gray90")
 
 matplot(t(deaths_epidemic), type = "l", lty = 1, lwd = 2, col = colors,
         xlab = "Time step", ylab = "Expected Deaths", main = "")
-grid(col = "gray90")
 
 par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
 plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
@@ -121,7 +96,7 @@ knitr::include_graphics("figures/running_mosaic_epidemic.png")
 
 The endemic configuration simulates stable, persistent transmission patterns with seasonal fluctuations.
 
-```{r endemic-example}
+```{r endemic-example, eval=TRUE, echo=TRUE}
 # Run endemic scenario
 model_endemic <- run_LASER(
   paramfile = config_simulation_endemic,
@@ -131,34 +106,6 @@ model_endemic <- run_LASER(
 # Extract time series results (convert Python objects to R matrices)
 cases_endemic <- as.matrix(model_endemic$results$expected_cases)
 deaths_endemic <- as.matrix(model_endemic$results$disease_deaths)
-
-# Diagnostic: Check if data manipulation is still needed
-cat(sprintf("Raw cases dimensions: %d rows × %d cols\n",
-            nrow(cases_endemic), ncol(cases_endemic)))
-
-# Check if first row is time index
-first_row_is_time <- all(cases_endemic[1, ] == seq(0, ncol(cases_endemic) - 1))
-if (first_row_is_time) {
-  cat("First row is time index, removing...\n")
-  cases_endemic <- cases_endemic[-1, ]
-  deaths_endemic <- deaths_endemic[-1, ]
-} else {
-  cat("First row is data, keeping...\n")
-}
-
-# Check if we need to transpose
-needs_transpose <- nrow(cases_endemic) > ncol(cases_endemic)
-if (needs_transpose) {
-  cat(sprintf("Transposing from [%d × %d] to [location × time]...\n",
-              nrow(cases_endemic), ncol(cases_endemic)))
-  cases_endemic <- t(cases_endemic)
-  deaths_endemic <- t(deaths_endemic)
-} else {
-  cat("Data already in [location × time] format\n")
-}
-
-cat(sprintf("Final cases dimensions: %d locations × %d timesteps\n\n",
-            nrow(cases_endemic), ncol(cases_endemic)))
 
 # Calculate total burden
 total_cases_endemic <- sum(cases_endemic, na.rm = TRUE)
@@ -177,11 +124,9 @@ par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 matplot(t(cases_endemic), type = "l", lty = 1, lwd = 2, col = colors,
         xlab = "", ylab = "Expected Cases",
         main = "Endemic Transmission Simulation")
-grid(col = "gray90")
 
 matplot(t(deaths_endemic), type = "l", lty = 1, lwd = 2, col = colors,
         xlab = "Time step", ylab = "Expected Deaths", main = "")
-grid(col = "gray90")
 
 par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
 plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")

@@ -1,5 +1,10 @@
 ---
 title: "Deployment"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Deployment}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
