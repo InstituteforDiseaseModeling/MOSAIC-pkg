@@ -212,16 +212,13 @@ plot_model_convergence <- function(results_dir,
     # Create footnote with metric definitions
     # ============================================================================
 
-    # Footnote for quantile-based method
+    # Footnote defining the three displayed metrics
     top_percentile <- (diagnostics$settings$top_percentile %||% 0.01) * 100
-    b_description <- sprintf("B: Best subset (top %.1f%% of non-outliers)", top_percentile)
 
     footnote_lines <- c(
-        "Retained: Models passing outlier removal (finite, non-outlier)",
-        "ESS: Effective Sample Size (all retained models)",
-        "A: Agreement Index (entropy-based consensus within B, 0-1)",
-        "CVw: Coefficient of Variation of weights (within B)",
-        b_description
+        "Total: All simulations submitted to calibration",
+        "Retained: Simulations passing outlier removal (finite, non-outlier likelihoods)",
+        sprintf("Best subset: Top %.1f%% of retained simulations by likelihood", top_percentile)
     )
 
     footnote_text <- paste(footnote_lines, collapse = "\n")
