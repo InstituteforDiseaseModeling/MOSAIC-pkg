@@ -10,7 +10,6 @@
 #'   (finite likelihood)
 #' @param n_retained Integer number of simulations retained after outlier removal
 #' @param n_best_subset Integer number of simulations in the optimized best subset
-#' @param ess_retained Numeric effective sample size across all retained simulations
 #' @param ess_best Numeric effective sample size within the best subset
 #' @param A_best Numeric agreement index (entropy-based) for the best subset
 #' @param cvw_best Numeric coefficient of variation of weights in the best subset
@@ -96,7 +95,6 @@
 #'     n_successful = 9500,
 #'     n_retained = 8500,
 #'     n_best_subset = 500,
-#'     ess_retained = 450,
 #'     ess_best = 280,
 #'     A_best = 0.92,
 #'     cvw_best = 0.55,
@@ -132,7 +130,6 @@ calc_convergence_diagnostics <- function(
     n_successful,
     n_retained,
     n_best_subset,
-    ess_retained,
     ess_best,
     A_best,
     cvw_best,
@@ -167,7 +164,6 @@ calc_convergence_diagnostics <- function(
               is.numeric(n_retained) && n_retained >= 0 && n_retained <= n_successful)
     stopifnot("n_best_subset must be non-negative integer" =
               is.numeric(n_best_subset) && n_best_subset >= 0 && n_best_subset <= n_retained)
-    stopifnot("ess_retained must be numeric" = is.numeric(ess_retained))
     stopifnot("ess_best must be numeric" = is.numeric(ess_best))
     stopifnot("A_best must be numeric" = is.numeric(A_best))
     stopifnot("cvw_best must be numeric" = is.numeric(cvw_best))
@@ -311,9 +307,6 @@ calc_convergence_diagnostics <- function(
         message("  CVw_B: ", round(cvw_best, 3),
                 " (target <= ", target_cvw_best, ") - ", toupper(status_cvw_best))
         message("")
-        message("Retained Set:")
-        message("  ESS_retained: ", round(ess_retained, 1), " (informational)")
-        message("")
         if (!is.na(pct_pass)) {
             message("Parameter Coverage:")
             message("  Parameters meeting ESS target: ", n_pass, "/", n_params,
@@ -372,13 +365,6 @@ calc_convergence_diagnostics <- function(
         ),
 
         metrics = list(
-            # ESS_retained - informational only
-            ess_retained = list(
-                value = ess_retained,
-                description = "ESS for retained models (non-outliers)",
-                status = "-"
-            ),
-
             # B_size - number in best subset
             B_size = list(
                 value = n_best_subset,
