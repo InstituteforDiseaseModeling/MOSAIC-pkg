@@ -1,3 +1,17 @@
+# MOSAIC 0.10.13
+
+## Bug Fixes
+
+* **Fixed plotting scale for extremely small initial condition posteriors (E_initial, I_initial)**
+  - Implemented automatic detection of tiny values (< 0.001) in posterior distributions
+  - Applied scientific notation formatting for x-axis labels when values < 0.001
+  - Increased padding from 10% to 30% for better visibility of tiny value distributions
+  - Fixed all 8 panels: Prior, Retained, Retained Weighted, Best Unweighted, Best Weighted, Caterpillar, Distributions (Empirical), Distributions (Theoretical)
+  - **Root cause**: E_initial and I_initial have epidemiologically correct tiny values (~10⁻⁷ proportion, representing ~50-60 people in population of 126M), which appeared as flat lines when plotted on wide [0,1] axis
+  - **Solution**: Tight x-axis limits with scientific notation (e.g., "2.0e-07", "4.0e-07", "6.0e-07")
+  - Fixed throughout `plot_model_posteriors_detail.R` (lines 380-769)
+  - See `claude/initial_EI_plotting_issue.md` for complete analysis
+
 # MOSAIC 0.10.12
 
 ## Bug Fixes

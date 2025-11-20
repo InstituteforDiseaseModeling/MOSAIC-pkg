@@ -376,9 +376,23 @@ plot_model_posteriors_detail <- function(quantiles_file,
     all_samples <- c(prior_samples, retained_samples, best_samples)
     finite_samples <- all_samples[is.finite(all_samples)]
     x_range <- range(finite_samples)
-    # Use 10% padding to accommodate histogram bin edges (prevents geom_bar warnings)
-    x_padding <- diff(x_range) * 0.10
-    x_limits <- c(x_range[1] - x_padding, x_range[2] + x_padding)
+
+    # Detect tiny values (e.g., E_initial, I_initial with means ~10^-7)
+    # Use larger padding and scientific notation for better visualization
+    is_tiny <- x_range[2] < 0.001
+
+    if (is_tiny) {
+      # Tighter limits with more padding for visibility of tiny values
+      x_padding <- diff(x_range) * 0.30  # 30% padding for tiny values
+      x_limits <- c(
+        max(0, x_range[1] - x_padding),  # Don't go negative for proportions
+        x_range[2] + x_padding
+      )
+    } else {
+      # Normal padding for regular-scale values
+      x_padding <- diff(x_range) * 0.10
+      x_limits <- c(x_range[1] - x_padding, x_range[2] + x_padding)
+    }
 
     # Create data frames (filter out invalid values to prevent ggplot warnings)
     df_prior <- data.frame(x = prior_samples[is.finite(prior_samples)])
@@ -411,7 +425,6 @@ plot_model_posteriors_detail <- function(quantiles_file,
       ggplot2::labs(title = "Prior Samples",
            subtitle = paste("n =", length(prior_samples)),
            x = NULL, y = "Density") +
-      ggplot2::scale_x_continuous(limits = x_limits) +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -422,6 +435,16 @@ plot_model_posteriors_detail <- function(quantiles_file,
         axis.title.y = ggplot2::element_text(size = 10)
       )
 
+    # Add appropriate x-scale (scientific notation for tiny values)
+    if (is_tiny) {
+      p_prior <- p_prior + ggplot2::scale_x_continuous(
+        limits = x_limits,
+        labels = scales::scientific
+      )
+    } else {
+      p_prior <- p_prior + ggplot2::scale_x_continuous(limits = x_limits)
+    }
+
     # Panel 2: Unweighted Retained Samples
     p_retained <- ggplot2::ggplot() +
       ggplot2::geom_histogram(data = df_retained,
@@ -430,7 +453,6 @@ plot_model_posteriors_detail <- function(quantiles_file,
       ggplot2::labs(title = "Retained Samples (Unweighted)",
            subtitle = paste("n =", length(retained_samples)),
            x = NULL, y = "Density") +
-      ggplot2::scale_x_continuous(limits = x_limits) +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -440,6 +462,15 @@ plot_model_posteriors_detail <- function(quantiles_file,
         axis.text.x = ggplot2::element_blank(),
         axis.title.y = ggplot2::element_text(size = 10)
       )
+
+    if (is_tiny) {
+      p_retained <- p_retained + ggplot2::scale_x_continuous(
+        limits = x_limits,
+        labels = scales::scientific
+      )
+    } else {
+      p_retained <- p_retained + ggplot2::scale_x_continuous(limits = x_limits)
+    }
 
     # Panel 3: Weighted Retained Samples (if weights exist)
     if (!is.null(df_retained_weighted)) {
@@ -452,8 +483,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                     color = posterior_color, linewidth = 1.0, alpha = 0.6) +
         ggplot2::labs(title = "Retained Samples (Weighted)",
              subtitle = paste("ESS =", round(ess_retained, 1)),
-             x = NULL, y = "Density") +
-        ggplot2::scale_x_continuous(limits = x_limits) +
+             x = NULL, y = "Density")
+
+      # Apply scale with scientific notation for tiny values
+      if (is_tiny) {
+        p_retained_weighted <- p_retained_weighted + ggplot2::scale_x_continuous(
+          limits = x_limits,
+          labels = scales::scientific
+        )
+      } else {
+        p_retained_weighted <- p_retained_weighted + ggplot2::scale_x_continuous(limits = x_limits)
+      }
+
+      p_retained_weighted <- p_retained_weighted +
         ggplot2::theme_minimal() +
         ggplot2::theme(
           plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -475,8 +517,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                     bins = 50, fill = posterior_color, alpha = 0.6, color = "white") +
       ggplot2::labs(title = "Best Subset (Unweighted)",
            subtitle = paste("n =", length(best_samples)),
-           x = NULL, y = "Density") +
-      ggplot2::scale_x_continuous(limits = x_limits) +
+           x = NULL, y = "Density")
+
+    # Apply scale with scientific notation for tiny values
+    if (is_tiny) {
+      p_best_unweighted <- p_best_unweighted + ggplot2::scale_x_continuous(
+        limits = x_limits,
+        labels = scales::scientific
+      )
+    } else {
+      p_best_unweighted <- p_best_unweighted + ggplot2::scale_x_continuous(limits = x_limits)
+    }
+
+    p_best_unweighted <- p_best_unweighted +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -497,8 +550,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                   color = posterior_color, linewidth = 1.2, alpha = 0.8) +
       ggplot2::labs(title = "Best Subset (Weighted)",
            subtitle = paste("Effective Sample Size =", round(ess_best, 1)),
-           x = NULL, y = "Density") +
-      ggplot2::scale_x_continuous(limits = x_limits) +
+           x = NULL, y = "Density")
+
+    # Apply scale with scientific notation for tiny values
+    if (is_tiny) {
+      p_best_weighted <- p_best_weighted + ggplot2::scale_x_continuous(
+        limits = x_limits,
+        labels = scales::scientific
+      )
+    } else {
+      p_best_weighted <- p_best_weighted + ggplot2::scale_x_continuous(limits = x_limits)
+    }
+
+    p_best_weighted <- p_best_weighted +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -541,8 +605,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                     color = c(prior_color, posterior_color)) +
       ggplot2::geom_point(size = 3, color = c(prior_color, posterior_color)) +
       ggplot2::labs(title = "Quantiles",
-           x = NULL, y = NULL) +
-      ggplot2::scale_y_continuous(limits = x_limits) +
+           x = NULL, y = NULL)
+
+    # Apply scale with scientific notation for tiny values (y-axis for coord_flip)
+    if (is_tiny) {
+      p_caterpillar <- p_caterpillar + ggplot2::scale_y_continuous(
+        limits = x_limits,
+        labels = scales::scientific
+      )
+    } else {
+      p_caterpillar <- p_caterpillar + ggplot2::scale_y_continuous(limits = x_limits)
+    }
+
+    p_caterpillar <- p_caterpillar +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -565,8 +640,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                   alpha = 0.3, linewidth = 1.0) +
       ggplot2::labs(title = "Prior vs Posterior (Empirical)",
            subtitle = paste("Kullback-Leibler divergence =", round(kl_divergence, 3)),
-           x = "Value", y = "Density") +
-      ggplot2::scale_x_continuous(limits = x_limits) +
+           x = "Value", y = "Density")
+
+    # Apply scale with scientific notation for tiny values
+    if (is_tiny) {
+      p_distributions <- p_distributions + ggplot2::scale_x_continuous(
+        limits = x_limits,
+        labels = scales::scientific
+      )
+    } else {
+      p_distributions <- p_distributions + ggplot2::scale_x_continuous(limits = x_limits)
+    }
+
+    p_distributions <- p_distributions +
       ggplot2::theme_minimal() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, hjust = 0),
@@ -670,8 +756,19 @@ plot_model_posteriors_detail <- function(quantiles_file,
                               } else {
                                 "Unknown"
                               }),
-             x = "Value", y = "Density") +
-        ggplot2::scale_x_continuous(limits = x_limits) +
+             x = "Value", y = "Density")
+
+      # Apply scale with scientific notation for tiny values
+      if (is_tiny) {
+        p_theoretical <- p_theoretical + ggplot2::scale_x_continuous(
+          limits = x_limits,
+          labels = scales::scientific
+        )
+      } else {
+        p_theoretical <- p_theoretical + ggplot2::scale_x_continuous(limits = x_limits)
+      }
+
+      p_theoretical <- p_theoretical +
         ggplot2::theme_minimal() +
         ggplot2::theme(
           plot.title = ggplot2::element_text(size = 11, hjust = 0),
