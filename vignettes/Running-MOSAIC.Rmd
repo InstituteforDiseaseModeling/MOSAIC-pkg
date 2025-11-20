@@ -42,10 +42,9 @@ The epidemic configuration simulates outbreak dynamics with explosive growth pat
 library(MOSAIC)
 
 # Run epidemic scenario
-model_epidemic <- run_LASER(
-  paramfile = config_simulation_epidemic,
-  seed = 123
-)
+config <- MOSAIC::config_simulation_epidemic
+
+model_epidemic <- run_LASER(config = config, seed = 123, quiet = TRUE)
 
 # Extract time series results (convert Python objects to R matrices)
 cases_epidemic <- as.matrix(model_epidemic$results$expected_cases)
@@ -98,10 +97,9 @@ The endemic configuration simulates stable, persistent transmission patterns wit
 
 ```{r endemic-example, eval=TRUE, echo=TRUE}
 # Run endemic scenario
-model_endemic <- run_LASER(
-  paramfile = config_simulation_endemic,
-  seed = 123
-)
+config <- MOSAIC::config_simulation_endemic
+
+model_endemic <- run_LASER(config = config, seed = 123, quiet = TRUE)
 
 # Extract time series results (convert Python objects to R matrices)
 cases_endemic <- as.matrix(model_endemic$results$expected_cases)

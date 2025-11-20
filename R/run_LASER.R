@@ -4,8 +4,9 @@
 #' Automatically suppresses NumPy divide-by-zero warnings that can occur during vaccination
 #' calculations when susceptible and exposed compartments are both zero.
 #'
-#' @param paramfile Character. Path to the LASER parameter file (e.g., YAML or JSON) used to configure the simulation.
+#' @param config Character or list. Either a path to a LASER configuration file (YAML/JSON) or a configuration list object.
 #' @param seed Integer. Random seed for reproducibility. Defaults to 123L.
+#' @param quiet Logical. If TRUE, suppress the progress bar during model execution. Defaults to FALSE.
 #' @param visualize Logical. If TRUE, generate and display visualizations during the run. Defaults to FALSE.
 #' @param pdf Logical. If TRUE, save visualizations as PDF files. Defaults to FALSE.
 #' @param outdir Character. Directory where LASER outputs (e.g., logs, results) will be written. Defaults to a temporary directory.
@@ -15,13 +16,21 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Run with default settings:
+#' # Run with config file path:
 #' result <- run_LASER(
-#'   paramfile = "path/to/laser_params.yml",
+#'   config    = "path/to/laser_params.yml",
 #'   seed      = 20250418L,
+#'   quiet     = FALSE,
 #'   visualize = FALSE,
 #'   pdf       = FALSE,
 #'   outdir    = "./laser_output"
+#' )
+#'
+#' # Run with config object:
+#' result <- run_LASER(
+#'   config = config_default,
+#'   seed   = 123L,
+#'   quiet  = TRUE
 #' )
 #'
 #' # Inspect results:
@@ -32,8 +41,9 @@
 #'
 
 run_LASER <- function(
-          paramfile,
+          config,
           seed      = 123L,
+          quiet     = FALSE,
           visualize = FALSE,
           pdf       = FALSE,
           outdir    = tempdir(),
@@ -50,10 +60,11 @@ run_LASER <- function(
      warnings$filterwarnings("ignore", message = "invalid value encountered in divide")
      warnings$filterwarnings("ignore", category = reticulate::import("numpy", convert = FALSE)$VisibleDeprecationWarning)
 
-     # Execute the model
+     # Execute the model (map R's 'config' parameter to Python's 'paramfile')
      result <- py_module$run_model(
-          paramfile = paramfile,
+          paramfile = config,
           seed      = as.integer(seed),
+          quiet     = quiet,
           visualize = visualize,
           pdf       = pdf,
           outdir    = outdir

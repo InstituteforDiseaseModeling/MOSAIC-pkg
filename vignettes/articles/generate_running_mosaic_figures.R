@@ -22,8 +22,9 @@ message("This will take a few minutes as LASER models run...")
 message("\n[1/2] Running epidemic scenario...")
 
 model_epidemic <- run_LASER(
-  paramfile = config_simulation_epidemic,
-  seed = 123
+  config = config_simulation_epidemic,
+  seed = 123,
+  quiet = TRUE
 )
 
 # Extract results
@@ -68,8 +69,9 @@ message("  Saved: ", file.path(fig_dir, "running_mosaic_epidemic.png"))
 message("\n[2/2] Running endemic scenario...")
 
 model_endemic <- run_LASER(
-  paramfile = config_simulation_endemic,
-  seed = 123
+  config = config_simulation_endemic,
+  seed = 123,
+  quiet = TRUE
 )
 
 # Extract results

@@ -45,8 +45,8 @@ check_python_env()
 check_dependencies()
 
 # Verify installation
-config <- config_default
-results <- run_LASER(config, n_sim = 2, seed = 123)
+config <- MOSAIC::config_default
+results <- run_LASER(config, seed = 123, quiet = TRUE)
 ```
 
 **Successful installation output:**
@@ -114,8 +114,8 @@ check_dependencies()
 
 # Verify
 PATHS <- get_paths()
-config <- config_default
-results <- run_LASER(config, n_sim = 2, seed = 123)
+config <- MOSAIC::config_default
+results <- run_LASER(config, seed = 123, quiet = TRUE)
 ```
 
 ### Development Workflow
