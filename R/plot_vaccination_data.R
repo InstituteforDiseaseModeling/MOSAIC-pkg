@@ -178,12 +178,14 @@ plot_vaccination_data <- function(PATHS, data_source = "WHO") {
           ggplot2::geom_hline(yintercept = 0, color = "black", linewidth = 0.75) +
           ggplot2::geom_hline(yintercept = max(tmp$doses_distributed, na.rm = TRUE), color = "black", linewidth = 0.5, linetype = 'dashed') +
 
-          # Raw doses as green bars
-          ggplot2::geom_bar(ggplot2::aes(x = date, y = doses_shipped, fill = "Raw Doses"),
+          # Raw doses as green bars (only show where doses_shipped > 0)
+          ggplot2::geom_bar(data = tmp[tmp$doses_shipped > 0, ],
+                   ggplot2::aes(x = date, y = doses_shipped, fill = "Raw Doses"),
                    stat = "identity", color = "black", width = 1) +
 
-          # Redistributed doses as purple bars
-          ggplot2::geom_bar(ggplot2::aes(x = date, y = doses_distributed, fill = "Redistributed Doses"),
+          # Redistributed doses as purple bars (only show where doses_distributed > 0)
+          ggplot2::geom_bar(data = tmp[tmp$doses_distributed > 0, ],
+                   ggplot2::aes(x = date, y = doses_distributed, fill = "Redistributed Doses"),
                    stat = "identity", color = "black", width = 1) +
 
           # Add red text label for the red bars (Shipped doses on campaign start date)
