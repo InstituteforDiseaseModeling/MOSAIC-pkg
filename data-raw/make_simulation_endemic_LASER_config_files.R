@@ -273,7 +273,7 @@ p_cases <- ggplot(cases_long, aes(x = date, y = cases, color = location)) +
           legend.position = "right",
           legend.title = element_text(face = "bold", size = 12),
           legend.text = element_text(size = 11),
-          legend.background = element_rect(fill = "white", color = "gray80"),
+          legend.background = element_blank(),
           legend.key.height = unit(1.2, "lines"),
           panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
           panel.grid.minor = element_blank()
@@ -298,7 +298,7 @@ p_deaths <- ggplot(deaths_long, aes(x = date, y = deaths, color = location)) +
           legend.position = "right",
           legend.title = element_text(face = "bold", size = 12),
           legend.text = element_text(size = 11),
-          legend.background = element_rect(fill = "white", color = "gray80"),
+          legend.background = element_blank(),
           legend.key.height = unit(1.2, "lines"),
           panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
           panel.grid.minor = element_blank()
