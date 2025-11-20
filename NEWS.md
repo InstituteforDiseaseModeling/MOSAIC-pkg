@@ -1,3 +1,17 @@
+# MOSAIC 0.10.25
+
+## Bug Fixes
+
+* **CRITICAL: Fixed missing Prior/BFRS curves for seasonality parameters in distribution plots**
+  - Fixed gsub order in parameter name variant generation for seasonality params
+  - **Root cause**: Wrong order in `gsub()` calls generated incorrect variant "a1j" instead of "a1"
+  - Original: `gsub("_j$", "", gsub("_", "", "a_1_j"))` → "a1j" (WRONG)
+  - Fixed: `gsub("_", "", gsub("_j$", "", "a_1_j"))` → "a1" (CORRECT)
+  - **Impact**: Prior/BFRS use `a1`, NPE uses `a_1_j` - variant "a1j" didn't match either
+  - Plotting function now correctly finds seasonality params in all three JSONs
+  - Fixed at lines 515-516 in `plot_model_distributions.R`
+  - **Result**: All three curves (Prior, BFRS, NPE) now appear for seasonality parameters
+
 # MOSAIC 0.10.23
 
 ## Bug Fixes
