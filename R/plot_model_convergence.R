@@ -203,31 +203,7 @@ plot_model_convergence <- function(results_dir,
     # Prepare convergence diagnostics text for annotation
     # ============================================================================
 
-    # Format metrics for display in lower right with safe formatting
-    safe_sprintf <- function(fmt, ...) {
-        args <- list(...)
-        # Check if any arguments are NA - if so, replace format with NA placeholders
-        has_na <- sapply(args, is.na)
-        if (any(has_na)) {
-            # Extract the label from the format string (e.g., "ESS:" from "ESS: %.0f...")
-            label <- sub(":.*$", ":", fmt)
-            return(paste0(label, " NA"))
-        }
-        tryCatch(do.call(sprintf, c(list(fmt), args)),
-                error = function(e) paste("Error formatting:", fmt))
-    }
-
-    diagnostic_lines <- c(
-        sprintf("Retained: %d/%d", n_retained_all, n_total_original),
-        safe_sprintf("ESS: %.0f [target >= %.0f]",
-                     as.numeric(metrics["ESS"]), as.numeric(targets["ESS_min"])),
-        safe_sprintf("A: %.3f [target >= %.3f]",
-                     as.numeric(metrics["A"]), as.numeric(targets["A_min"])),
-        safe_sprintf("CVw: %.3f [target <= %.3f]",
-                     as.numeric(metrics["CVw"]), as.numeric(targets["CVw_max"])),
-        safe_sprintf("B: %.0f [target >= %.0f]",
-                     as.numeric(metrics["B_size"]), as.numeric(targets["B_min"]))
-    )
+    # Note: Diagnostic lines annotation removed - metrics still printed to console in verbose mode
 
     # ============================================================================
     # Create footnote with metric definitions
@@ -282,13 +258,6 @@ plot_model_convergence <- function(results_dir,
                          y = best_ll - (max(plot_data$loglik) - min(plot_data$loglik)) * 0.03,
                          label = sprintf("%.2f", best_ll),
                          hjust = 0.5, vjust = -3, size = 3.25, color = "#2E8B57", fontface = "bold") +
-        # Stacked metrics annotation in lower right
-        ggplot2::annotate("text",
-                         x = n_draws * 0.98,  # Position at 98% of x-axis
-                         y = min(plot_data$loglik) + (max(plot_data$loglik) - min(plot_data$loglik)) * 0.08,
-                         label = paste(diagnostic_lines, collapse = "\n"),
-                         hjust = 1, vjust = 0, size = 3.5, color = "black",
-                         lineheight = 0.8, family = "sans") +
         # Theme and styling
         ggplot2::theme_classic(base_size = 12) +
         ggplot2::theme(
