@@ -1414,14 +1414,13 @@ run_MOSAIC <- function(config,
   if (control$paths$plots) {
     # Robust call handling both old and new plot_model_ppc signatures
     # Old signature: plot_model_ppc(model, output_dir, verbose)
-    # New signature: plot_model_ppc(predictions_dir, predictions_files, by_location, locations, model, output_dir, verbose)
+    # New signature: plot_model_ppc(predictions_dir, predictions_files, locations, model, output_dir, verbose)
     ppc_result <- tryCatch(
       {
-        # Try new signature first
+        # Try new signature first (always creates both aggregate and per-location plots)
         plot_model_ppc(
           predictions_dir = dirs$bfrs_plots_pred,
           output_dir = dirs$bfrs_plots,
-          by_location = "both",
           verbose = FALSE
         )
       },

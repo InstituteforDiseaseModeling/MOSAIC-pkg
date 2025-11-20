@@ -1,3 +1,16 @@
+# MOSAIC 0.11.5
+
+## Changes
+
+* **Simplify plot_model_ppc: Remove by_location argument**
+  - Function now always creates both aggregate and per-location plots by default
+  - **Removed argument**: `by_location` (previously: "aggregate", "both", "per_location")
+  - **New behavior**: Always creates comprehensive diagnostics (aggregate + per-location)
+  - Simplifies API - no configuration needed for plot output mode
+  - Legacy model mode still only creates aggregate plots (as before)
+  - Updated function signature: `plot_model_ppc(predictions_dir, predictions_files, locations, model, output_dir, verbose)`
+  - Updated call in run_MOSAIC.R to remove by_location argument
+
 # MOSAIC 0.11.4
 
 ## Bug Fixes
