@@ -1080,15 +1080,24 @@ run_MOSAIC <- function(config,
       CVw_final <- NA_real_
       gibbs_temperature_final <- 1
     } else {
-      # Use unified adaptive weight method for consistency with weight_best column
-      # Note: top_subset_final is the data frame of selected simulations at this point
-      weight_result_final <- .mosaic_calc_adaptive_gibbs_weights(
-        likelihood = top_subset_final$likelihood,
-        weight_floor = control$weights$floor,
+      # Use truncated Akaike weights with fixed effective range for best subset
+      # Effective AIC = 4 for best subset (5% threshold)
+      aic_final <- -2 * top_subset_final$likelihood
+      best_aic_final <- min(aic_final[is.finite(aic_final)])
+      delta_aic_final <- aic_final - best_aic_final
+
+      # Truncate to effective range
+      effective_range_best <- 4.0
+      delta_aic_truncated <- pmin(delta_aic_final, effective_range_best)
+
+      # Calculate standard Akaike weights: w ∝ exp(-0.5 * delta_aic)
+      gibbs_temperature_final <- 0.5  # Standard for Akaike weights
+      weights_final <- calc_model_weights_gibbs(
+        x = delta_aic_truncated,
+        temperature = gibbs_temperature_final,
         verbose = FALSE
       )
 
-      weights_final <- weight_result_final$weights
       w_tilde_final <- weights_final
       w_final <- weights_final * length(weights_final)
 
@@ -1097,12 +1106,11 @@ run_MOSAIC <- function(config,
       ag_final <- calc_model_agreement_index(w_final)
       A_final <- ag_final$A
       CVw_final <- calc_model_cvw(w_final)
-      gibbs_temperature_final <- weight_result_final$temperature
 
-      log_msg("  Subset selection weights (unified adaptive method):")
-      log_msg("    Adaptive effective range: %.1f (actual range: %.1f)",
-              weight_result_final$effective_range, weight_result_final$metrics$actual_range)
-      log_msg("    Temperature: %.4f", weight_result_final$temperature)
+      actual_range_final <- diff(range(delta_aic_final[is.finite(delta_aic_final)]))
+      log_msg("  Subset selection weights (truncated Akaike, effective range = %.1f):", effective_range_best)
+      log_msg("    Actual delta AIC range: %.1f", actual_range_final)
+      log_msg("    Temperature: %.4f (standard Akaike)", gibbs_temperature_final)
     }
   }
 
@@ -1145,24 +1153,36 @@ run_MOSAIC <- function(config,
   }
 
   if (sum(results$is_retained) > 0) {
-    retained_result <- .mosaic_calc_adaptive_gibbs_weights(
-      likelihood = results$likelihood[results$is_retained],
-      weight_floor = control$weights$floor,
+    # Truncated Akaike weights for retained subset (effective AIC = 25)
+    aic_retained <- -2 * results$likelihood[results$is_retained]
+    best_aic_retained <- min(aic_retained[is.finite(aic_retained)])
+    delta_aic_retained <- aic_retained - best_aic_retained
+    delta_aic_retained_trunc <- pmin(delta_aic_retained, 25.0)
+
+    retained_weights <- calc_model_weights_gibbs(
+      x = delta_aic_retained_trunc,
+      temperature = 0.5,
       verbose = FALSE
     )
-    results$weight_retained[results$is_retained] <- retained_result$weights
-    rm(retained_result)
+    results$weight_retained[results$is_retained] <- retained_weights
   }
 
   if (sum(results$is_best_subset) > 0) {
-    best_result <- .mosaic_calc_adaptive_gibbs_weights(
-      likelihood = results$likelihood[results$is_best_subset],
-      weight_floor = control$weights$floor,
+    # Truncated Akaike weights for best subset (effective AIC = 4)
+    aic_best <- -2 * results$likelihood[results$is_best_subset]
+    best_aic_best <- min(aic_best[is.finite(aic_best)])
+    delta_aic_best <- aic_best - best_aic_best
+    delta_aic_best_trunc <- pmin(delta_aic_best, 4.0)
+
+    best_weights <- calc_model_weights_gibbs(
+      x = delta_aic_best_trunc,
+      temperature = 0.5,
       verbose = FALSE
     )
-    results$weight_best[results$is_best_subset] <- best_result$weights
-    ESS_best <- best_result$metrics$ESS_kish
-    rm(best_result)
+    results$weight_best[results$is_best_subset] <- best_weights
+
+    # Calculate ESS for reference (using control method)
+    ESS_best <- calc_model_ess(best_weights, method = control$targets$ESS_method)
   }
 
   gc(verbose = FALSE)
