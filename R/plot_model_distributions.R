@@ -509,8 +509,11 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
       # Add non-underscore variants (a_1_j → a1)
       if (grepl("^[ab]_\\d_j$", param_name)) {
+        # IMPORTANT: Remove _j suffix FIRST, then remove underscores
+        # Wrong order: gsub("_", "", "a_1_j") → "a1j" → gsub("_j$", ...) → "a1j" (BUG!)
+        # Correct order: gsub("_j$", "a_1_j") → "a_1" → gsub("_", ...) → "a1" (CORRECT!)
         param_variants <- c(param_variants,
-                           gsub("_j$", "", gsub("_", "", param_name)))
+                           gsub("_", "", gsub("_j$", "", param_name)))
       }
 
       # Try to get parameter from global parameters first (try all variants)
