@@ -1514,12 +1514,13 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
         result$variance <- var(samples)
 
     } else if (dist_type == "uniform") {
-        # Fit uniform distribution using sample range
+        # Fit uniform distribution using robust quantiles (not literal min/max)
         # NPE posteriors for bounded parameters often remain approximately uniform
-        min_val <- min(samples, na.rm = TRUE)
-        max_val <- max(samples, na.rm = TRUE)
+        # Use 1% and 99% quantiles to avoid sensitivity to outliers
+        min_val <- quantile(samples, probs = 0.01, na.rm = TRUE)
+        max_val <- quantile(samples, probs = 0.99, na.rm = TRUE)
 
-        # Add small buffer to ensure all samples are within bounds
+        # Add small buffer (1% of range) to ensure coverage
         range_buffer <- (max_val - min_val) * 0.01
         result$min <- min_val - range_buffer
         result$max <- max_val + range_buffer
