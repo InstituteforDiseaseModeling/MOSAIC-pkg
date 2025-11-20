@@ -46,9 +46,33 @@ model_epidemic <- run_LASER(
 cases_epidemic <- as.matrix(model_epidemic$results$expected_cases)
 deaths_epidemic <- as.matrix(model_epidemic$results$disease_deaths)
 
-# Remove first row (time index) and transpose to [location × time]
-cases_epidemic <- t(cases_epidemic[-1, ])
-deaths_epidemic <- t(deaths_epidemic[-1, ])
+# Diagnostic: Check if data manipulation is still needed
+cat(sprintf("Raw cases dimensions: %d rows × %d cols\n",
+            nrow(cases_epidemic), ncol(cases_epidemic)))
+
+# Check if first row is time index (sequential integers starting from 0)
+first_row_is_time <- all(cases_epidemic[1, ] == seq(0, ncol(cases_epidemic) - 1))
+if (first_row_is_time) {
+  cat("First row is time index, removing...\n")
+  cases_epidemic <- cases_epidemic[-1, ]
+  deaths_epidemic <- deaths_epidemic[-1, ]
+} else {
+  cat("First row is data, keeping...\n")
+}
+
+# Check if we need to transpose to [location × time]
+needs_transpose <- nrow(cases_epidemic) > ncol(cases_epidemic)
+if (needs_transpose) {
+  cat(sprintf("Transposing from [%d × %d] to [location × time]...\n",
+              nrow(cases_epidemic), ncol(cases_epidemic)))
+  cases_epidemic <- t(cases_epidemic)
+  deaths_epidemic <- t(deaths_epidemic)
+} else {
+  cat("Data already in [location × time] format\n")
+}
+
+cat(sprintf("Final cases dimensions: %d locations × %d timesteps\n\n",
+            nrow(cases_epidemic), ncol(cases_epidemic)))
 
 # Get metadata
 locations <- c("FOO", "BAR", "BAZ")  # From config_simulation_epidemic
@@ -89,7 +113,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_epidemic.png\n")
 ```
 
-```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "100%"}
+```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "90%"}
 knitr::include_graphics("figures/running_mosaic_epidemic.png")
 ```
 
@@ -108,9 +132,33 @@ model_endemic <- run_LASER(
 cases_endemic <- as.matrix(model_endemic$results$expected_cases)
 deaths_endemic <- as.matrix(model_endemic$results$disease_deaths)
 
-# Remove first row (time index) and transpose to [location × time]
-cases_endemic <- t(cases_endemic[-1, ])
-deaths_endemic <- t(deaths_endemic[-1, ])
+# Diagnostic: Check if data manipulation is still needed
+cat(sprintf("Raw cases dimensions: %d rows × %d cols\n",
+            nrow(cases_endemic), ncol(cases_endemic)))
+
+# Check if first row is time index
+first_row_is_time <- all(cases_endemic[1, ] == seq(0, ncol(cases_endemic) - 1))
+if (first_row_is_time) {
+  cat("First row is time index, removing...\n")
+  cases_endemic <- cases_endemic[-1, ]
+  deaths_endemic <- deaths_endemic[-1, ]
+} else {
+  cat("First row is data, keeping...\n")
+}
+
+# Check if we need to transpose
+needs_transpose <- nrow(cases_endemic) > ncol(cases_endemic)
+if (needs_transpose) {
+  cat(sprintf("Transposing from [%d × %d] to [location × time]...\n",
+              nrow(cases_endemic), ncol(cases_endemic)))
+  cases_endemic <- t(cases_endemic)
+  deaths_endemic <- t(deaths_endemic)
+} else {
+  cat("Data already in [location × time] format\n")
+}
+
+cat(sprintf("Final cases dimensions: %d locations × %d timesteps\n\n",
+            nrow(cases_endemic), ncol(cases_endemic)))
 
 # Calculate total burden
 total_cases_endemic <- sum(cases_endemic, na.rm = TRUE)
@@ -144,7 +192,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_endemic.png\n")
 ```
 
-```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "100%"}
+```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "90%"}
 knitr::include_graphics("figures/running_mosaic_endemic.png")
 ```
 
