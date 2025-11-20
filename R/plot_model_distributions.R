@@ -445,16 +445,38 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     } else if (distribution == "truncnorm" && !is.null(parameters)) {
       mean_param <- if (!is.null(parameters$mean)) as.numeric(parameters$mean) else NA_real_
       sd_param <- if (!is.null(parameters$sd)) as.numeric(parameters$sd) else NA_real_
-      a_bound <- if (!is.null(parameters$a)) as.numeric(parameters$a) else -45
-      b_bound <- if (!is.null(parameters$b)) as.numeric(parameters$b) else 45
+      # Use infinite bounds as defaults (matches fit_truncnorm_from_ci behavior)
+      a_bound <- if (!is.null(parameters$a)) as.numeric(parameters$a) else -Inf
+      b_bound <- if (!is.null(parameters$b)) as.numeric(parameters$b) else Inf
 
       if (!is.na(mean_param) && !is.na(sd_param) &&
-          is.finite(mean_param) && is.finite(sd_param) && sd_param > 0 &&
-          is.finite(a_bound) && is.finite(b_bound) && b_bound > a_bound) {
-        x <- seq(a_bound, b_bound, length.out = 1000)
-        y <- truncnorm::dtruncnorm(x, a = a_bound, b = b_bound, mean = mean_param, sd = sd_param)
-        dist_str <- sprintf("TruncNorm(%.1f, %.1f, [%.0f, %.0f])", mean_param, sd_param, a_bound, b_bound)
-        mean_val <- mean_param
+          is.finite(mean_param) && is.finite(sd_param) && sd_param > 0) {
+
+        # Check bounds are valid (allow infinite bounds)
+        valid_bounds <- (!is.na(a_bound) && !is.na(b_bound) &&
+                        (is.infinite(a_bound) || is.infinite(b_bound) || b_bound > a_bound))
+
+        if (valid_bounds) {
+          # For plotting, use finite range based on distribution
+          if (is.infinite(a_bound) || is.infinite(b_bound)) {
+            # No truncation or one-sided: use mean ± 4sd (covers ~99.99% of normal dist)
+            x_min <- if (is.infinite(a_bound)) mean_param - 4*sd_param else a_bound
+            x_max <- if (is.infinite(b_bound)) mean_param + 4*sd_param else b_bound
+          } else {
+            # Both bounds finite: use them
+            x_min <- a_bound
+            x_max <- b_bound
+          }
+
+          x <- seq(x_min, x_max, length.out = 1000)
+          y <- truncnorm::dtruncnorm(x, a = a_bound, b = b_bound, mean = mean_param, sd = sd_param)
+
+          # Format bounds for display
+          a_str <- if (is.infinite(a_bound)) "-Inf" else sprintf("%.0f", a_bound)
+          b_str <- if (is.infinite(b_bound)) "Inf" else sprintf("%.0f", b_bound)
+          dist_str <- sprintf("TruncNorm(%.1f, %.1f, [%s, %s])", mean_param, sd_param, a_str, b_str)
+          mean_val <- mean_param
+        }
       }
     }
 
