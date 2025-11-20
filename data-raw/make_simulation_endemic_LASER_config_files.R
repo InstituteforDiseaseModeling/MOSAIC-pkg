@@ -145,6 +145,9 @@ sim_args <- list(
      gamma_2          = 0.10,
      epsilon          = 0.0005,
      mu_jt            = mu_jt,
+     chi_endemic      = 0.5,       # PPV during endemic periods
+     chi_epidemic     = 0.75,      # PPV during epidemic periods
+     epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
      rho              = 0.52,
      sigma            = 0.24,
      longitude        = longitude,
@@ -163,6 +166,10 @@ sim_args <- list(
      beta_j0_env      = baseline_beta * 0.5,  # stronger env. contribution
      theta_j          = theta_j,
      psi_jt           = psi_jt,
+     psi_star_a       = rep(1, n_loc),    # Identity gain (no calibration)
+     psi_star_b       = rep(0, n_loc),    # No offset
+     psi_star_z       = rep(1, n_loc),    # No smoothing (use raw psi_jt)
+     psi_star_k       = rep(0, n_loc),    # No time lag
      zeta_1           = 7.5,
      zeta_2           = 2.5,
      kappa            = 1e5,
