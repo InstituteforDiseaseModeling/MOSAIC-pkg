@@ -293,17 +293,17 @@ plot_model_ppc <- function(predictions_dir = NULL,
         # Panel 1: Cases density overlay
         if (length(obs_cases_valid) >= 2) {
             dens_obs <- tryCatch(
-                density(log(obs_cases_valid + 1), bw = "SJ"),
+                density(log(obs_cases_valid + 1), bw = "SJ", adjust = 2),
                 error = function(e) tryCatch(
-                    density(log(obs_cases_valid + 1), bw = "nrd0"),
-                    error = function(e2) density(log(obs_cases_valid + 1), bw = 0.5)
+                    density(log(obs_cases_valid + 1), bw = "nrd0", adjust = 2),
+                    error = function(e2) density(log(obs_cases_valid + 1), bw = 0.5, adjust = 2)
                 )
             )
             dens_pred <- tryCatch(
-                density(log(pred_cases_valid + 1), bw = "SJ"),
+                density(log(pred_cases_valid + 1), bw = "SJ", adjust = 2),
                 error = function(e) tryCatch(
-                    density(log(pred_cases_valid + 1), bw = "nrd0"),
-                    error = function(e2) density(log(pred_cases_valid + 1), bw = 0.5)
+                    density(log(pred_cases_valid + 1), bw = "nrd0", adjust = 2),
+                    error = function(e2) density(log(pred_cases_valid + 1), bw = 0.5, adjust = 2)
                 )
             )
 
@@ -340,17 +340,17 @@ plot_model_ppc <- function(predictions_dir = NULL,
         # Panel 2: Deaths density overlay
         if (length(obs_deaths_valid) >= 2) {
             dens_obs <- tryCatch(
-                density(log(obs_deaths_valid + 1), bw = "SJ"),
+                density(log(obs_deaths_valid + 1), bw = "SJ", adjust = 2),
                 error = function(e) tryCatch(
-                    density(log(obs_deaths_valid + 1), bw = "nrd0"),
-                    error = function(e2) density(log(obs_deaths_valid + 1), bw = 0.5)
+                    density(log(obs_deaths_valid + 1), bw = "nrd0", adjust = 2),
+                    error = function(e2) density(log(obs_deaths_valid + 1), bw = 0.5, adjust = 2)
                 )
             )
             dens_pred <- tryCatch(
-                density(log(pred_deaths_valid + 1), bw = "SJ"),
+                density(log(pred_deaths_valid + 1), bw = "SJ", adjust = 2),
                 error = function(e) tryCatch(
-                    density(log(pred_deaths_valid + 1), bw = "nrd0"),
-                    error = function(e2) density(log(pred_deaths_valid + 1), bw = 0.5)
+                    density(log(pred_deaths_valid + 1), bw = "nrd0", adjust = 2),
+                    error = function(e2) density(log(pred_deaths_valid + 1), bw = 0.5, adjust = 2)
                 )
             )
 
