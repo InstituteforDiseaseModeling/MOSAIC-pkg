@@ -1698,15 +1698,25 @@ run_MOSAIC <- function(config,
 
         for (i in 1:n_param_sets) {
           idx <- sample_indices[i]
-          config_sample <- config
 
-          for (param_name in param_names_estimated) {
-            if (param_name %in% colnames(posterior_samples)) {
-              config_sample[[param_name]] <- posterior_samples[idx, param_name]
-            }
-          }
+          # Create mini posterior_result with single sample
+          # CRITICAL: Use create_config_npe() to ensure location-aware parameter assignment
+          # The old naive loop created new fields (e.g., tau_i_ETH) instead of updating
+          # vector elements, causing ensemble to use prior values instead of posterior samples
+          sample_result <- list(
+            samples = matrix(posterior_samples[idx, ], nrow = 1),
+            quantiles = NULL
+          )
+          colnames(sample_result$samples) <- colnames(posterior_samples)
 
-          param_configs[[i]] <- config_sample
+          # Use create_config_npe with use_median=FALSE (mean of 1 sample = the sample itself)
+          param_configs[[i]] <- create_config_npe(
+            posterior_result = sample_result,
+            config_base = config,
+            output_file = NULL,
+            use_median = FALSE,
+            verbose = FALSE
+          )
         }
 
         # CRITICAL: Use uniform weights for posterior predictive sampling
