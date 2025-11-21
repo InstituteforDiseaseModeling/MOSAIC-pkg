@@ -1454,7 +1454,7 @@ run_MOSAIC <- function(config,
       error = function(e) {
         # If new signature fails, check if it's an argument mismatch
         if (grepl("unused argument", e$message)) {
-          log_msg("Warning: plot_model_ppc using legacy signature (package may need reinstallation)", "warning")
+          log_msg("Warning: plot_model_ppc using legacy signature (package may need reinstallation)")
           # Fall back to reading predictions and calling with model object
           # This is a compatibility shim for clusters with old package versions
           NULL  # Skip PPC plots with old signature
@@ -1779,7 +1779,7 @@ run_MOSAIC <- function(config,
             )
           },
           error = function(e) {
-            log_msg("Warning: NPE PPC plots failed: %s", e$message, "warning")
+            log_msg("Warning: NPE PPC plots failed: %s", e$message)
             NULL
           }
         )
