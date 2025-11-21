@@ -174,8 +174,9 @@
 
         # Check if we need to grow the output matrix
         if (output_row_idx + n_rows_needed - 1 > nrow(output_matrix)) {
-          # Double the size
-          new_rows <- matrix(NA_character_, nrow = nrow(output_matrix), ncol = 6)
+          # Grow to exact size needed (not just double, which may be insufficient)
+          rows_to_add <- (output_row_idx + n_rows_needed - 1) - nrow(output_matrix)
+          new_rows <- matrix(NA_character_, nrow = rows_to_add, ncol = 6)
           colnames(new_rows) <- colnames(output_matrix)
           output_matrix <- rbind(output_matrix, new_rows)
         }
