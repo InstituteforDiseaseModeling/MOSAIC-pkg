@@ -997,6 +997,7 @@ prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
      if (!file.exists(priors_file)) {
           # Try alternative locations
           alt_locations <- c(
+               file.path(dirname(bfrs_dir), "0_setup", "priors.json"),  # Standard location
                file.path(bfrs_dir, "config", "priors.json"),  # Check config subdirectory
                file.path(dirname(bfrs_dir), "priors.json"),
                file.path(dirname(dirname(bfrs_dir)), "priors.json")
