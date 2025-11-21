@@ -48,7 +48,7 @@ calc_bfrs_posterior <- function(results,
         log_msg("Creating BFRS posterior approximation via %s", method)
         log_msg("  Input simulations: %d", nrow(results))
         log_msg("  Parameters: %d", length(param_names))
-        log_msg("  Target samples: %d", n_samples)
+        log_msg("  Target samples: %.0f", n_samples)
     }
 
     # Extract parameters and likelihoods
