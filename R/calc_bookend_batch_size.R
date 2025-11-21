@@ -174,7 +174,7 @@ calc_bookend_batch_size <- function(ess_history,
         target_ess = target_ess,
         predicted_ess = as.numeric(predicted_ess),
         total_predicted = current_n + predictive_batch_size + reserved_sims,
-        message = sprintf("Predictive batch: %d sims (model=%s, R²=%.3f)",
+        message = sprintf("Predictive batch: %.0f sims (model=%s, R²=%.3f)",
                          predictive_batch_size, best_model, best_r2)
     ))
 }

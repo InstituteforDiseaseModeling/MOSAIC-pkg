@@ -150,7 +150,7 @@ calc_predictive_batch_size <- function(ess_history,
         model_used = best_model,
         r_squared = best_r2,
         safety_factor = safety_factor,
-        message = sprintf("Recommending %d simulations to reach ~%.0f%% of target",
+        message = sprintf("Recommending %.0f simulations to reach ~%.0f%% of target",
                          sims_recommended, safety_factor * 100)
     ))
 }
@@ -179,7 +179,7 @@ plan_batch_strategy <- function(current_ess, target_ess, ess_history = NULL,
             return(list(
                 stage = "calibration",
                 batch_size = calibration_batch,
-                message = sprintf("Calibration batch %d of %d",
+                message = sprintf("Calibration batch %.0f of %.0f",
                                 floor(n_done/calibration_batch) + 1,
                                 calibration_size/calibration_batch)
             ))
@@ -205,7 +205,7 @@ plan_batch_strategy <- function(current_ess, target_ess, ess_history = NULL,
                 expected_ess = pred_result$expected_ess,
                 model = pred_result$model_used,
                 confidence = pred_result$r_squared,
-                message = sprintf("Large predictive batch: %d sims (%.0f%% confidence)",
+                message = sprintf("Large predictive batch: %.0f sims (%.0f%% confidence)",
                                 pred_result$recommended_batch,
                                 pred_result$r_squared * 100)
             ))

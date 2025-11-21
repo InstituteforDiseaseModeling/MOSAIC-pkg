@@ -215,15 +215,15 @@ format_ess_rate_analysis <- function(rate_analysis) {
 
     msgs <- c(msgs, "\nPredictions:")
     if (is.finite(rate_analysis$sims_needed)) {
-        msgs <- c(msgs, sprintf("  Simulations needed:   %d", rate_analysis$sims_needed))
-        msgs <- c(msgs, sprintf("  Predicted total:      %d",
+        msgs <- c(msgs, sprintf("  Simulations needed:   %.0f", rate_analysis$sims_needed))
+        msgs <- c(msgs, sprintf("  Predicted total:      %.0f",
                                rate_analysis$predicted_convergence_n))
         msgs <- c(msgs, sprintf("  Confidence (R²):      %.2f", rate_analysis$confidence))
     } else {
         msgs <- c(msgs, "  ⚠ ESS accumulation stagnant - intervention needed")
     }
 
-    msgs <- c(msgs, sprintf("\nRecommended next batch: %d simulations",
+    msgs <- c(msgs, sprintf("\nRecommended next batch: %.0f simulations",
                            rate_analysis$recommended_batch_size))
 
     return(paste(msgs, collapse = "\n"))

@@ -89,7 +89,7 @@ identify_best_subset <- function(
     n_valid <- sum(valid_rows)
 
     if (n_valid < min_B) {
-        stop(sprintf("Insufficient valid simulations: %d (need at least %d)",
+        stop(sprintf("Insufficient valid simulations: %d (need at least %.0f)",
                      n_valid, min_B))
     }
 
@@ -204,8 +204,8 @@ identify_best_subset <- function(
     best_valid_result <- NULL
 
     if (verbose) {
-        log_msg("Starting binary search for optimal subset (n_total=%d, min_B=%d)", n_total, min_B)
-        log_msg("Search range: %.3f%% to %.1f%% (min_percentile=%.3f%%, enforcing min_B=%d)",
+        log_msg("Starting binary search for optimal subset (n_total=%d, min_B=%.0f)", n_total, min_B)
+        log_msg("Search range: %.3f%% to %.1f%% (min_percentile=%.3f%%, enforcing min_B=%.0f)",
                 search_min_percentile, search_max_percentile, min_percentile, min_B)
         log_msg("Using adaptive effective AIC range for Gibbs tempering")
     }
@@ -219,7 +219,7 @@ identify_best_subset <- function(
     if (initial_test$criteria_met) {
         if (verbose) {
             log_msg("Minimum percentile %.3f%% already meets all criteria!", search_min_percentile)
-            log_msg("  Returning minimum subset of %d simulations", initial_test$metrics$B_size)
+            log_msg("  Returning minimum subset of %.0f simulations", initial_test$metrics$B_size)
         }
         return(list(
             subset = initial_test$subset,
@@ -231,7 +231,7 @@ identify_best_subset <- function(
     }
 
     if (verbose) {
-        log_msg("Binary search precision: %.3f%% (max %d iterations)", precision, max_iterations)
+        log_msg("Binary search precision: %.3f%% (max %.0f iterations)", precision, max_iterations)
         log_msg("Minimum percentile %.3f%% did NOT meet criteria, searching larger subsets", search_min_percentile)
     }
 
@@ -245,7 +245,7 @@ identify_best_subset <- function(
 
         if (verbose && iteration <= 15) {
             criteria_status <- ifelse(result$criteria_met, "PASS", "FAIL")
-            log_msg("  Iteration %d: Testing %.3f%% (n=%d) - %s [ESS_B=%.1f, A=%.3f, CVw=%.3f, T=%.4f]",
+            log_msg("  Iteration %d: Testing %.3f%% (n=%.0f) - %s [ESS_B=%.1f, A=%.3f, CVw=%.3f, T=%.4f]",
                     iteration, mid_percentile, result$metrics$B_size, criteria_status,
                     result$metrics$ESS_B, result$metrics$A, result$metrics$CVw,
                     result$metrics$gibbs_temperature)
@@ -256,7 +256,7 @@ identify_best_subset <- function(
             if (is.null(best_valid_result) || result$metrics$B_size < best_valid_result$metrics$B_size) {
                 best_valid_result <- result
                 if (verbose) {
-                    log_msg("    -> New best: %.3f%% (%d simulations)",
+                    log_msg("    -> New best: %.3f%% (%.0f simulations)",
                             mid_percentile, result$metrics$B_size)
                 }
             }
@@ -290,7 +290,7 @@ identify_best_subset <- function(
 
     if (!is.null(best_valid_result)) {
         if (verbose) {
-            log_msg("Optimal subset found: %.1f%% (%d simulations)",
+            log_msg("Optimal subset found: %.1f%% (%.0f simulations)",
                     best_valid_result$percentile,
                     best_valid_result$metrics$B_size)
             log_msg("  Final metrics: ESS_B=%.1f, A=%.3f, CVw=%.3f",

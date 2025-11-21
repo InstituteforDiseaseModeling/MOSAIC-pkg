@@ -99,7 +99,7 @@ calc_model_ess_parameter <- function(
     # Rule of thumb: n_grid should be at most n_samples / 2
     n_grid_adaptive <- min(n_grid, floor(n_valid / 2))
     if (n_grid_adaptive < n_grid && verbose) {
-        log_msg("Adapting n_grid from %d to %d based on sample size (%d samples)",
+        log_msg("Adapting n_grid from %.0f to %.0f based on sample size (%d samples)",
                 n_grid, n_grid_adaptive, n_valid)
     }
     n_grid <- n_grid_adaptive
