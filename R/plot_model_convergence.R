@@ -309,15 +309,15 @@ plot_model_convergence <- function(results_dir,
         message(sprintf("Best subset B: %d/%d retained (%.1f%%)",
                        n_best_subset, n_retained_all, 100 * n_best_subset / n_retained_all))
 
-        # Use safe_sprintf for metrics display
-        message(safe_sprintf("ESS: %.0f (target >= %.0f) - %s",
-                            as.numeric(metrics["ESS"]), as.numeric(targets["ESS_min"]), as.character(status["ESS"])))
-        message(safe_sprintf("Agreement Index: %.3f (target >= %.3f) - %s",
-                            as.numeric(metrics["A"]), as.numeric(targets["A_min"]), as.character(status["A"])))
-        message(safe_sprintf("Weight CV: %.3f (target <= %.3f) - %s",
-                            as.numeric(metrics["CVw"]), as.numeric(targets["CVw_max"]), as.character(status["CVw"])))
-        message(safe_sprintf("Retained Set Size: %.0f (target >= %.0f) - %s",
-                            as.numeric(metrics["B_size"]), as.numeric(targets["B_min"]), as.character(status["B_size"])))
+        # Metrics display
+        message(sprintf("ESS: %.0f (target >= %.0f) - %s",
+                       as.numeric(metrics["ESS"]), as.numeric(targets["ESS_min"]), as.character(status["ESS"])))
+        message(sprintf("Agreement Index: %.3f (target >= %.3f) - %s",
+                       as.numeric(metrics["A"]), as.numeric(targets["A_min"]), as.character(status["A"])))
+        message(sprintf("Weight CV: %.3f (target <= %.3f) - %s",
+                       as.numeric(metrics["CVw"]), as.numeric(targets["CVw_max"]), as.character(status["CVw"])))
+        message(sprintf("Retained Set Size: %.0f (target >= %.0f) - %s",
+                       as.numeric(metrics["B_size"]), as.numeric(targets["B_min"]), as.character(status["B_size"])))
         message(sprintf("Overall Status: %s", safe_character(diagnostics$summary$convergence_status)))
     }
 
