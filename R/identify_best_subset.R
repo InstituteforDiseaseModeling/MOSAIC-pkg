@@ -193,7 +193,7 @@ identify_best_subset <- function(
     # Calculate search range
     # Minimum percentile is either user-specified (default 0.001%) or whatever gives min_B simulations
     # whichever is LARGER (to ensure we have at least min_B simulations)
-    min_percentile_for_size <- ceiling(100 * min_B / n_total)
+    min_percentile_for_size <- (100 * min_B / n_total)
     search_min_percentile <- max(min_percentile, min_percentile_for_size)
 
     # Maximum percentile is user-specified (default 30%)

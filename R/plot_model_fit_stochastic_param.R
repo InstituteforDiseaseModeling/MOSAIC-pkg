@@ -141,14 +141,50 @@ plot_model_fit_stochastic_param <- function(
             stop("PATHS required when using parameter_seeds")
         }
 
-        if (verbose) {
-            message("Sampling ", length(parameter_seeds), " parameter sets using provided seeds")
+        # Filter to non-zero weights if weights provided
+        if (!is.null(parameter_weights)) {
+            if (length(parameter_weights) != length(parameter_seeds)) {
+                stop("parameter_weights must have same length as parameter_seeds")
+            }
+
+            # Identify non-zero weights
+            nonzero_idx <- parameter_weights > 0
+            n_total <- length(parameter_seeds)
+            n_zero <- sum(!nonzero_idx)
+            n_nonzero <- sum(nonzero_idx)
+
+            if (verbose && n_zero > 0) {
+                message("\n=== Filtering to Non-Zero Weighted Parameter Sets ===")
+                message("  Total seeds provided: ", n_total)
+                message("  Zero-weight seeds (skipped): ", n_zero, " (", round(100*n_zero/n_total, 1), "%)")
+                message("  Non-zero weighted seeds: ", n_nonzero, " (", round(100*n_nonzero/n_total, 1), "%)")
+            }
+
+            # Filter both seeds and weights
+            parameter_seeds <- parameter_seeds[nonzero_idx]
+            parameter_weights <- parameter_weights[nonzero_idx]
+
+            if (length(parameter_seeds) == 0) {
+                stop("No parameter sets with non-zero weights")
+            }
         }
 
-        # Sample parameter configurations
+        if (verbose) {
+            message("\n=== Parameter Sampling ===")
+            message("  Parameter sets to sample: ", length(parameter_seeds))
+            message("  Stochastic sims per set: ", n_simulations_per_config)
+            message("  Total simulations: ", length(parameter_seeds) * n_simulations_per_config)
+        }
+
+        # Sample parameter configurations with progress bar
         param_configs <- list()
+        if (verbose) {
+            pb <- txtProgressBar(min = 0, max = length(parameter_seeds), style = 1,
+                                char = "█")
+        }
+
         for (i in seq_along(parameter_seeds)) {
-            if (verbose) message("  Sampling parameter set ", i, " with seed ", parameter_seeds[i])
+            if (verbose) setTxtProgressBar(pb, i)
 
             # Sample parameters using sample_args
             param_configs[[i]] <- tryCatch({
@@ -164,6 +200,12 @@ plot_model_fit_stochastic_param <- function(
                 warning("Failed to sample parameters with seed ", parameter_seeds[i], ": ", e$message)
                 NULL
             })
+        }
+
+        # Close progress bar
+        if (verbose) {
+            close(pb)
+            message("  ✓ Sampled ", length(parameter_seeds), " parameter configurations")
         }
 
         # Remove any failed samplings

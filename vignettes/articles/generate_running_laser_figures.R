@@ -1,10 +1,10 @@
-# Generate Running MOSAIC Vignette Figures
+# Generate Running LASER Vignette Figures
 #
-# This script generates the pre-computed figures for the Running MOSAIC vignette.
+# This script generates the pre-computed figures for the Running LASER vignette.
 # Run this script manually when you need to update the vignette figures.
 #
 # Usage:
-#   source("vignettes/articles/generate_running_mosaic_figures.R")
+#   source("vignettes/articles/generate_running_laser_figures.R")
 
 library(MOSAIC)
 
@@ -12,7 +12,7 @@ library(MOSAIC)
 fig_dir <- "vignettes/articles/figures"
 if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
 
-message("Generating Running MOSAIC vignette figures...")
+message("Generating Running LASER vignette figures...")
 message("This will take a few minutes as LASER models run...")
 
 # =============================================================================
@@ -45,7 +45,7 @@ cat(sprintf("  Locations: %d\n", n_locations))
 cat(sprintf("  Time steps: %d\n", n_timesteps))
 
 # Create plot
-png(file.path(fig_dir, "running_mosaic_epidemic.png"),
+png(file.path(fig_dir, "running_laser_epidemic.png"),
     width = 800, height = 600, res = 100)
 
 total_cases_by_time <- colSums(cases_epidemic, na.rm = TRUE)
@@ -60,7 +60,7 @@ plot(total_cases_by_time,
 grid()
 
 dev.off()
-message("  Saved: ", file.path(fig_dir, "running_mosaic_epidemic.png"))
+message("  Saved: ", file.path(fig_dir, "running_laser_epidemic.png"))
 
 # =============================================================================
 # ENDEMIC SCENARIO
@@ -87,7 +87,7 @@ cat(sprintf("  Total cases: %s\n", format(total_cases_endemic, big.mark = ",")))
 cat(sprintf("  Total deaths: %s\n", format(total_deaths_endemic, big.mark = ",")))
 
 # Create plot
-png(file.path(fig_dir, "running_mosaic_endemic.png"),
+png(file.path(fig_dir, "running_laser_endemic.png"),
     width = 800, height = 600, res = 100)
 
 total_cases_by_time_endemic <- colSums(cases_endemic, na.rm = TRUE)
@@ -102,7 +102,7 @@ plot(total_cases_by_time_endemic,
 grid()
 
 dev.off()
-message("  Saved: ", file.path(fig_dir, "running_mosaic_endemic.png"))
+message("  Saved: ", file.path(fig_dir, "running_laser_endemic.png"))
 
 # =============================================================================
 # COMPLETE
@@ -111,5 +111,5 @@ message("  Saved: ", file.path(fig_dir, "running_mosaic_endemic.png"))
 message("\n✓ All figures generated successfully!")
 message("  Location: ", normalizePath(fig_dir))
 message("\nFigures:")
-message("  - running_mosaic_epidemic.png")
-message("  - running_mosaic_endemic.png")
+message("  - running_laser_epidemic.png")
+message("  - running_laser_endemic.png")

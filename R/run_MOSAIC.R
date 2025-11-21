@@ -1016,9 +1016,9 @@ run_MOSAIC <- function(config,
       target_ESS_B = tier$ESS_B,
       target_A = tier$A,
       target_CVw = tier$CVw,
-      min_percentile = 0.001,
+      min_percentile = control$targets$percentile_min,
       max_percentile = control$targets$percentile_max,
-      precision = 0.001,
+      precision = 0.0001,
       ess_method = 'kish', # Leave as kish, this is intentional because it is more conservative when forming the best subset, but using perplexity elsewhere for reporting
       verbose = FALSE
     )
@@ -1188,6 +1188,7 @@ run_MOSAIC <- function(config,
   gc(verbose = FALSE)
 
   subset_summary <- data.frame(
+    min_search_percentile = control$targets$percentile_min,
     max_search_percentile = control$targets$percentile_max,
     optimal_percentile = percentile_used,
     optimization_tier = convergence_tier,
@@ -1235,6 +1236,7 @@ run_MOSAIC <- function(config,
     target_ess_best = control$targets$ESS_best,
     target_A_best = control$targets$A_best,
     target_cvw_best = control$targets$CVw_best,
+    target_percentile_min = control$targets$percentile_min,
     target_percentile_max = control$targets$percentile_max,
     target_ess_param = control$targets$ESS_param,
     target_ess_param_prop = control$targets$ESS_param_prop,
@@ -1827,6 +1829,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
 #'     \item \code{A_best}: Target agreement index (default: 0.95)
 #'     \item \code{CVw_best}: Target CV of weights (default: 0.5)
+#'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
 #'     \item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 #'   }
@@ -1839,7 +1842,17 @@ run_mosaic <- run_MOSAIC
 #' @param npe List of NPE settings (post-calibration stage). Default is:
 #'   \itemize{
 #'     \item \code{enable}: Enable NPE training (default: FALSE)
-#'     \item \code{weight_strategy}: NPE weight strategy (default: "continuous_all")
+#'     \item \code{weight_strategy}: Weight strategy: "continuous_best", "continuous_retained", "continuous_all", "binary_best", "binary_retained", "binary_all" (default: "continuous_best")
+#'     \item \code{architecture_tier}: Architecture size: "auto", "minimal", "small", "medium", "large", "xlarge" (default: "auto")
+#'     \item \code{n_epochs}: Maximum training epochs (default: 1000)
+#'     \item \code{batch_size}: Training batch size (default: 512)
+#'     \item \code{learning_rate}: Initial learning rate (default: 1e-3)
+#'     \item \code{validation_split}: Proportion for validation (default: 0.15)
+#'     \item \code{early_stopping}: Enable early stopping (default: TRUE)
+#'     \item \code{patience}: Early stopping patience in epochs (default: 20)
+#'     \item \code{use_gpu}: Use GPU if available (default: TRUE)
+#'     \item \code{seed}: Random seed for reproducibility (default: 42)
+#'     \item \code{n_posterior_samples}: Number of posterior samples to draw (default: 10000)
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
@@ -2089,6 +2102,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     ESS_best = 100,
     A_best = 0.95,
     CVw_best = 0.5,
+    percentile_min = 0.001,
     percentile_max = 5.0,
     ESS_method = "perplexity"     # ESS calculation method: "kish" or "perplexity"
   )
@@ -2096,7 +2110,17 @@ mosaic_control_defaults <- function(calibration = NULL,
   # Default NPE settings
   default_npe <- list(
     enable = FALSE,
-    weight_strategy = "continuous_best"  # Use BFRS best weights (consistent with prior definition)
+    weight_strategy = "continuous_best",  # Weight strategy for NPE training
+    architecture_tier = "auto",           # Architecture size: "auto", "minimal", "small", "medium", "large", "xlarge"
+    n_epochs = 1000,                      # Maximum training epochs
+    batch_size = 512,                     # Training batch size
+    learning_rate = 1e-3,                 # Initial learning rate
+    validation_split = 0.15,              # Proportion of data for validation
+    early_stopping = TRUE,                # Enable early stopping
+    patience = 20,                        # Early stopping patience (epochs)
+    use_gpu = TRUE,                       # Use GPU if available
+    seed = 42,                            # Random seed for reproducibility
+    n_posterior_samples = 10000           # Number of posterior samples to draw after training
   )
 
   # Default prediction settings
