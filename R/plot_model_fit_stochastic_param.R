@@ -724,9 +724,12 @@ plot_model_fit_stochastic_param <- function(
         }
 
         # Add observed points and median line
+        # Filter to non-NA observed values for points (surveillance data often has missing weeks)
+        loc_data_points <- loc_data[!is.na(loc_data$observed), ]
+
         p_individual <- p_individual +
-            # Observed points
-            ggplot2::geom_point(ggplot2::aes(y = observed),
+            # Observed points (only where data exists)
+            ggplot2::geom_point(data = loc_data_points, ggplot2::aes(y = observed),
                               color = "black", size = 1.5, alpha = 0.6) +
             # Median prediction line
             ggplot2::geom_line(ggplot2::aes(y = predicted_median, color = metric),
