@@ -682,7 +682,7 @@
     # Print model fit diagnostics
     log_msg("Calibration convergence check (batch %d):", state$batch_number)
     if (!is.na(est_sims)) {
-      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: %d",
+      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: %.0f",
               intercept, slope, r2, control$calibration$target_r2, round(est_sims))
     } else {
       log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: N/A",
@@ -716,7 +716,7 @@
                   control$calibration$max_batches)
         }
         if (remaining_sims > 0) {
-          log_msg("    Estimated gap: %d sims → proceeding to predictive phase", ceiling(remaining_sims))
+          log_msg("    Estimated gap: %.0f sims → proceeding to predictive phase", ceiling(remaining_sims))
         }
 
       } else if (threshold_ess >= target_ess) {
@@ -727,7 +727,7 @@
       } else if (remaining_sims > 0 && remaining_sims < control$calibration$batch_size) {
         # Small gap remaining - continue calibration instead of transitioning
         log_msg("  → Calibration R² achieved, but gap is small")
-        log_msg("    Current: %d sims | Estimated need: %d sims | Gap: %d sims",
+        log_msg("    Current: %d sims | Estimated need: %.0f sims | Gap: %.0f sims",
                 current_n, round(est_sims), ceiling(remaining_sims))
         log_msg("    Continuing calibration (gap < batch_size)")
         # Don't set calibration_done, continue with one more batch
@@ -737,7 +737,7 @@
         state$calibration_done <- TRUE
         log_msg("  → Calibration complete: R² converged")
         if (remaining_sims > 0) {
-          log_msg("    Estimated gap: %d sims → proceeding to predictive batch", ceiling(remaining_sims))
+          log_msg("    Estimated gap: %.0f sims → proceeding to predictive batch", ceiling(remaining_sims))
         }
       }
     }
