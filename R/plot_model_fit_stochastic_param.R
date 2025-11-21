@@ -428,6 +428,10 @@ plot_model_fit_stochastic_param <- function(
             # style = 1: Shows elapsed and remaining time with percentage
             pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
             on.exit(pbapply::pboptions(pbo), add = TRUE)
+        } else {
+            # Explicitly disable progress bar for non-verbose mode (prevents cluster hangs)
+            pbo <- pbapply::pboptions(type = "none")
+            on.exit(pbapply::pboptions(pbo), add = TRUE)
         }
 
         results_list <- pbapply::pblapply(
@@ -462,6 +466,10 @@ plot_model_fit_stochastic_param <- function(
             # Simple progress bar with block character (no color codes)
             # style = 1: Shows elapsed and remaining time with percentage
             pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+            on.exit(pbapply::pboptions(pbo), add = TRUE)
+        } else {
+            # Explicitly disable progress bar for non-verbose mode (prevents cluster hangs)
+            pbo <- pbapply::pboptions(type = "none")
             on.exit(pbapply::pboptions(pbo), add = TRUE)
         }
 
