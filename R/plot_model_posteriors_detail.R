@@ -394,13 +394,29 @@ plot_model_posteriors_detail <- function(quantiles_file,
       x_limits <- c(x_range[1] - x_padding, x_range[2] + x_padding)
     }
 
-    # Create data frames (filter out invalid values to prevent ggplot warnings)
-    df_prior <- data.frame(x = prior_samples[is.finite(prior_samples)])
-    df_retained <- data.frame(x = retained_samples[is.finite(retained_samples)])
-    df_best <- data.frame(x = best_samples[is.finite(best_samples)])
+    # Create data frames (filter out invalid values AND values outside x_limits to prevent ggplot warnings)
+    # Values outside x_limits will be invisible anyway, so filter them out to avoid warnings
+    valid_prior_idx <- is.finite(prior_samples) &
+                       prior_samples >= x_limits[1] &
+                       prior_samples <= x_limits[2]
+    df_prior <- data.frame(x = prior_samples[valid_prior_idx])
 
-    # Filter out invalid samples and weights (NA, zero, negative, or infinite) to prevent ggplot warnings
-    valid_best_idx <- is.finite(best_samples) & is.finite(posterior_weights) & posterior_weights > 0
+    valid_retained_idx_unweighted <- is.finite(retained_samples) &
+                                      retained_samples >= x_limits[1] &
+                                      retained_samples <= x_limits[2]
+    df_retained <- data.frame(x = retained_samples[valid_retained_idx_unweighted])
+
+    valid_best_idx_unweighted <- is.finite(best_samples) &
+                                  best_samples >= x_limits[1] &
+                                  best_samples <= x_limits[2]
+    df_best <- data.frame(x = best_samples[valid_best_idx_unweighted])
+
+    # Filter out invalid samples and weights (NA, zero, negative, infinite, or outside limits) to prevent ggplot warnings
+    valid_best_idx <- is.finite(best_samples) &
+                      is.finite(posterior_weights) &
+                      posterior_weights > 0 &
+                      best_samples >= x_limits[1] &
+                      best_samples <= x_limits[2]
     df_best_weighted <- data.frame(
       x = best_samples[valid_best_idx],
       w = posterior_weights[valid_best_idx]
@@ -408,7 +424,11 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Create retained weighted df if weights exist
     df_retained_weighted <- if (!is.null(retained_weights)) {
-      valid_retained_idx <- is.finite(retained_samples) & is.finite(retained_weights) & retained_weights > 0
+      valid_retained_idx <- is.finite(retained_samples) &
+                            is.finite(retained_weights) &
+                            retained_weights > 0 &
+                            retained_samples >= x_limits[1] &
+                            retained_samples <= x_limits[2]
       data.frame(
         x = retained_samples[valid_retained_idx],
         w = retained_weights[valid_retained_idx]
