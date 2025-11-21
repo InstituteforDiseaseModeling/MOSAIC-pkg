@@ -8,7 +8,6 @@ test_that("calc_convergence_diagnostics validates inputs correctly", {
                n_successful = 100,
                n_retained = 80,
                n_best_subset = 50,
-               ess_retained = 200,
                ess_best = 150,
                A_best = 0.85,
                cvw_best = 0.6,
@@ -25,7 +24,6 @@ test_that("calc_convergence_diagnostics validates inputs correctly", {
                n_successful = 150,  # Invalid: > n_total
                n_retained = 80,
                n_best_subset = 50,
-               ess_retained = 200,
                ess_best = 150,
                A_best = 0.85,
                cvw_best = 0.6,
@@ -42,7 +40,6 @@ test_that("calc_convergence_diagnostics validates inputs correctly", {
                n_successful = 90,
                n_retained = 100,  # Invalid: > n_successful
                n_best_subset = 50,
-               ess_retained = 200,
                ess_best = 150,
                A_best = 0.85,
                cvw_best = 0.6,
@@ -60,8 +57,7 @@ test_that("Status calculations work correctly for individual metrics", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,     # Well above B_min (100)
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425), well above target (300)
           ess_best = 280,          # 93% of target (300) → pass (≥80%)
           A_best = 0.92,           # 97% of target (0.95) → pass (≥90%)
           cvw_best = 0.7,          # 140% of target (0.5) → warn (>120%, ≤200%)
@@ -70,17 +66,15 @@ test_that("Status calculations work correctly for individual metrics", {
           target_ess_best = 300,
           target_A_best = 0.95,
           target_cvw_best = 0.5,
-          target_B_min = 100,
           target_percentile_max = 5.0,
           verbose = FALSE
      )
 
      # Check individual statuses
-     expect_equal(diag$metrics$B_size$status, "pass")      # 500 ≥ 100
+     expect_equal(diag$metrics$B_size$status, "pass")      # 400 ≥ 300
      expect_equal(diag$metrics$ess_best$status, "pass")    # 280 ≥ 300*0.8
      expect_equal(diag$metrics$A_B$status, "pass")         # 0.92 ≥ 0.95*0.9
      expect_equal(diag$metrics$cvw_B$status, "warn")       # 0.7 > 0.5*1.2 but ≤ 0.5*2.0
-     expect_equal(diag$metrics$ess_retained$status, "-")   # Informational only
 
      # Overall status should be WARN (has one warn, no fails)
      expect_equal(diag$summary$convergence_status, "WARN")
@@ -93,8 +87,7 @@ test_that("Overall status reflects worst individual status", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 300,      # Meets target
           A_best = 0.95,       # Meets target
           cvw_best = 0.4,      # Better than target
@@ -109,8 +102,7 @@ test_that("Overall status reflects worst individual status", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 250,      # 83% of 300 → pass
           A_best = 0.95,       # Meets target
           cvw_best = 0.7,      # 140% of 0.5 → warn (>120%, ≤200%)
@@ -125,8 +117,7 @@ test_that("Overall status reflects worst individual status", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 100,      # 33% of 300 → fail
           A_best = 0.95,
           cvw_best = 0.4,
@@ -148,20 +139,18 @@ test_that("B_size target is separate from ESS target", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 1000,    # Well above B_min (100)
-          ess_retained = 450,
+          n_best_subset = 1000,    # Well above target (300)
           ess_best = 80,           # Well below ESS target (300)
           A_best = 0.95,
           cvw_best = 0.4,
           percentile_used = 10.0,   # Also above percentile target
           convergence_tier = "tier_15",
           target_ess_best = 300,
-          target_B_min = 100,
           target_percentile_max = 5.0,
           verbose = FALSE
      )
 
-     expect_equal(diag$metrics$B_size$status, "pass")      # 1000 ≥ 100
+     expect_equal(diag$metrics$B_size$status, "pass")      # 1000 ≥ 300
      expect_equal(diag$metrics$ess_best$status, "fail")    # 80 < 300*0.5
      expect_equal(diag$summary$convergence_status, "FAIL") # Overall reflects worst
 })
@@ -173,8 +162,7 @@ test_that("Percentile status is calculated correctly", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 300,
           A_best = 0.95,
           cvw_best = 0.4,
@@ -191,8 +179,7 @@ test_that("Percentile status is calculated correctly", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 300,
           A_best = 0.95,
           cvw_best = 0.4,
@@ -218,8 +205,7 @@ test_that("Parameter ESS metric is included when data provided", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 300,
           A_best = 0.95,
           cvw_best = 0.4,
@@ -248,8 +234,7 @@ test_that("Parameter ESS metric is omitted when data not provided", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 300,
           A_best = 0.95,
           cvw_best = 0.4,
@@ -272,8 +257,7 @@ test_that("Diagnostics structure is complete and correctly formatted", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 280,
           A_best = 0.92,
           cvw_best = 0.55,
@@ -293,18 +277,17 @@ test_that("Diagnostics structure is complete and correctly formatted", {
      expect_equal(diag$settings$percentile_used, 4.8)
 
      # Check targets structure
-     expect_true(all(c("B_min", "ess_best", "A_best", "cvw_best",
+     expect_true(all(c("ess_best", "A_best", "cvw_best",
                        "percentile_max", "ess_param", "ess_param_prop") %in%
                     names(diag$targets)))
-     expect_equal(diag$targets$B_min$value, 100)
      expect_equal(diag$targets$ess_best$value, 300)
 
      # Check metrics structure
-     expect_true(all(c("ess_retained", "B_size", "ess_best", "A_B", "cvw_B") %in%
+     expect_true(all(c("B_size", "ess_best", "A_B", "cvw_B") %in%
                     names(diag$metrics)))
 
      # Each metric should have value, description, status
-     for (metric_name in c("ess_retained", "B_size", "ess_best", "A_B", "cvw_B")) {
+     for (metric_name in c("B_size", "ess_best", "A_B", "cvw_B")) {
           metric <- diag$metrics[[metric_name]]
           expect_true("value" %in% names(metric))
           expect_true("description" %in% names(metric))
@@ -354,8 +337,7 @@ test_that("Diagnostics can be serialized to JSON", {
           n_total = 10000,
           n_successful = 9500,
           n_retained = 8500,
-          n_best_subset = 500,
-          ess_retained = 450,
+          n_best_subset = 400,     # Below max (8500*5%=425)
           ess_best = 280,
           A_best = 0.92,
           cvw_best = 0.55,
