@@ -501,10 +501,10 @@
     if (!is.null(res) && !is.null(res$model) && res$batch_size > 0) {
       log_msg("Predictive batch calculation:")
       log_msg("  Model: %s (R² = %.4f)", res$model, res$r_squared)
-      log_msg("  Current ESS: %.1f → Target: %d", res$current_ess, res$target_ess)
-      log_msg("  Predicted batch size: %d sims (safety factor: %.2f)",
+      log_msg("  Current ESS: %.1f → Target: %.0f", res$current_ess, res$target_ess)
+      log_msg("  Predicted batch size: %.0f sims (safety factor: %.2f)",
               res$batch_size, res$safety_factor)
-      log_msg("  Expected total after batch: %d sims", res$total_predicted)
+      log_msg("  Expected total after batch: %.0f sims", res$total_predicted)
     }
 
     size <- if (is.null(res) || res$batch_size <= 0) {
@@ -756,7 +756,7 @@
 
   if (prop_converged >= control$targets$ESS_param_prop) {
     state$converged <- TRUE
-    log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %d",
+    log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f",
             prop_converged * 100, control$targets$ESS_param)
   }
 
