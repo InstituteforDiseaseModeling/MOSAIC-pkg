@@ -564,9 +564,15 @@ run_MOSAIC <- function(config,
     )
   )
 
+  log_msg("Writing setup files...")
   .mosaic_write_json(sim_params, file.path(dirs$setup, "simulation_params.json"), control$io)
+  log_msg("  Saved %s", basename(file.path(dirs$setup, "simulation_params.json")))
+
   .mosaic_write_json(priors, file.path(dirs$setup, "priors.json"), control$io)
+  log_msg("  Saved %s", basename(file.path(dirs$setup, "priors.json")))
+
   .mosaic_write_json(config, file.path(dirs$setup, "config_base.json"), control$io)
+  log_msg("  Saved %s", basename(file.path(dirs$setup, "config_base.json")))
 
   # ===========================================================================
   # PARAMETER NAME DETECTION
@@ -989,14 +995,14 @@ run_MOSAIC <- function(config,
     likelihood_col = "likelihood",
     n_grid = 100,
     method = control$targets$ESS_method,
-    verbose = FALSE
+    verbose = control$logging$verbose
   )
 
   ess_file <- file.path(dirs$bfrs_diag, "parameter_ess.csv")
   write.csv(ess_results, ess_file, row.names = FALSE)
   log_msg("Saved %s", ess_file)
 
-  log_msg("Optimizing subset selection")
+  log_msg("Optimizing subset selection (testing up to 15 tiers)...")
 
   subset_tiers <- get_default_subset_tiers(
     target_ESS_best = control$targets$ESS_best,
@@ -1011,6 +1017,9 @@ run_MOSAIC <- function(config,
   for (tier_name in names(subset_tiers)) {
     tier <- subset_tiers[[tier_name]]
 
+    log_msg("  Testing tier '%s' (ESS_B=%.0f, A=%.2f, CVw=%.2f)...",
+            tier$name, tier$ESS_B, tier$A, tier$CVw)
+
     tier_result <- identify_best_subset(
       results = results,
       min_B = tier$ESS_B,  # Use tier-specific ESS target as minimum count
@@ -1021,15 +1030,18 @@ run_MOSAIC <- function(config,
       max_percentile = control$targets$percentile_max,
       precision = 0.0001,
       ess_method = 'kish', # Leave as kish, this is intentional because it is more conservative when forming the best subset, but using perplexity elsewhere for reporting
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     if (tier_result$converged) {
+      log_msg("    ✓ Tier '%s' converged at %.1f%% percentile",
+              tier$name, tier_result$percentile_used)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
       rm(tier)
       break
     } else {
+      log_msg("    ✗ Tier '%s' failed to converge", tier$name)
       rm(tier_result)
       rm(tier)
     }
@@ -1137,23 +1149,27 @@ run_MOSAIC <- function(config,
   # Update best subset column
   results$is_best_subset <- FALSE
   results$is_best_subset[results$sim %in% top_subset_final$sim] <- TRUE
-  log_msg("Calculating weights")
+
+  log_msg("Calculating weights for %d simulations...", nrow(results))
 
   results$weight_all <- 0
   results$weight_retained <- 0
   results$weight_best <- 0
 
   if (sum(results$is_valid) > 0) {
+    log_msg("  Computing adaptive Gibbs weights (all valid: n=%d)...", sum(results$is_valid))
     all_result <- .mosaic_calc_adaptive_gibbs_weights(
       likelihood = results$likelihood[results$is_valid],
       weight_floor = control$weights$floor,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
     results$weight_all[results$is_valid] <- all_result$weights
+    log_msg("    ESS (all): %.1f", all_result$metrics$ESS_perplexity)
     rm(all_result)
   }
 
   if (sum(results$is_retained) > 0) {
+    log_msg("  Computing Akaike weights (retained subset: n=%d)...", sum(results$is_retained))
     # Truncated Akaike weights for retained subset (effective AIC = 25)
     aic_retained <- -2 * results$likelihood[results$is_retained]
     best_aic_retained <- min(aic_retained[is.finite(aic_retained)])
@@ -1163,12 +1179,15 @@ run_MOSAIC <- function(config,
     retained_weights <- calc_model_weights_gibbs(
       x = delta_aic_retained_trunc,
       temperature = 0.5,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
     results$weight_retained[results$is_retained] <- retained_weights
+    ESS_retained <- calc_model_ess(retained_weights, method = control$targets$ESS_method)
+    log_msg("    ESS (retained): %.1f", ESS_retained)
   }
 
   if (sum(results$is_best_subset) > 0) {
+    log_msg("  Computing Akaike weights (best subset: n=%d)...", sum(results$is_best_subset))
     # Truncated Akaike weights for best subset (effective AIC = 4)
     aic_best <- -2 * results$likelihood[results$is_best_subset]
     best_aic_best <- min(aic_best[is.finite(aic_best)])
@@ -1178,13 +1197,16 @@ run_MOSAIC <- function(config,
     best_weights <- calc_model_weights_gibbs(
       x = delta_aic_best_trunc,
       temperature = 0.5,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
     results$weight_best[results$is_best_subset] <- best_weights
 
     # Calculate ESS for reference (using control method)
     ESS_best <- calc_model_ess(best_weights, method = control$targets$ESS_method)
+    log_msg("    ESS (best): %.1f", ESS_best)
   }
+
+  log_msg("Weight calculation complete")
 
   gc(verbose = FALSE)
 
@@ -1278,15 +1300,16 @@ run_MOSAIC <- function(config,
   log_msg("Saved %s", diagnostics_file)
 
   if (control$paths$plots) {
+    log_msg("Generating convergence diagnostic plots...")
     plot_model_convergence(
       results_dir = dirs$bfrs_diag,
       plots_dir = dirs$bfrs_plots_diag,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
     plot_model_convergence_status(
       results_dir = dirs$bfrs_diag,
       plots_dir = dirs$bfrs_plots_diag,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
   }
 
@@ -1299,7 +1322,7 @@ run_MOSAIC <- function(config,
     results = results,
     probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
     output_dir = dirs$bfrs_post,
-    verbose = FALSE
+    verbose = control$logging$verbose
   )
   log_msg("Saved %s", file.path(dirs$bfrs_post, "posterior_quantiles.csv"))
 
@@ -1307,7 +1330,7 @@ run_MOSAIC <- function(config,
     plot_model_posterior_quantiles(
       csv_files = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
       output_dir = dirs$bfrs_plots_post,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
   }
 
@@ -1317,7 +1340,7 @@ run_MOSAIC <- function(config,
     quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
     priors_file = file.path(dirs$setup, "priors.json"),
     output_dir = dirs$bfrs_post,
-    verbose = FALSE
+    verbose = control$logging$verbose
   )
   log_msg("Saved %s", file.path(dirs$bfrs_post, "posteriors.json"))
 
@@ -1334,7 +1357,7 @@ run_MOSAIC <- function(config,
       priors_file = file.path(dirs$setup, "priors.json"),
       posteriors_file = file.path(dirs$bfrs_post, "posteriors.json"),
       output_dir = file.path(dirs$bfrs_plots_post, "detail"),
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
   }
 
@@ -1363,6 +1386,7 @@ run_MOSAIC <- function(config,
   best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
 
   if (control$paths$plots) {
+    log_msg("Generating posterior predictive plots (best model)...")
     plot_model_fit_stochastic(
       config = config_best,
       n_simulations = control$predictions$best_model_n_sims,
@@ -1372,7 +1396,7 @@ run_MOSAIC <- function(config,
       parallel = TRUE,
       n_cores = control$parallel$n_cores,
       root_dir = root_dir,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
   }
 
@@ -1381,6 +1405,7 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   if (control$paths$plots && sum(results$is_best_subset) > 0) {
+    log_msg("Generating ensemble predictions (parameter + stochastic uncertainty)...")
     best_subset_results <- results[results$is_best_subset == TRUE, ]
     param_seeds <- best_subset_results$seed_sim
     param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
@@ -1405,7 +1430,7 @@ run_MOSAIC <- function(config,
       parallel = TRUE,
       n_cores = control$parallel$n_cores,
       root_dir = root_dir,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
   }
 
@@ -1423,7 +1448,7 @@ run_MOSAIC <- function(config,
         plot_model_ppc(
           predictions_dir = dirs$bfrs_plots_pred,
           output_dir = dirs$bfrs_plots,
-          verbose = FALSE
+          verbose = control$logging$verbose
         )
       },
       error = function(e) {
@@ -1490,7 +1515,7 @@ run_MOSAIC <- function(config,
       n_params = npe_data$n_params,
       n_timesteps = npe_data$n_timesteps,
       n_locations = npe_data$n_locations,
-      tier = "large",
+      tier = "auto",
       verbose = FALSE
     )
 
@@ -1534,12 +1559,12 @@ run_MOSAIC <- function(config,
     posterior_result <- estimate_npe_posterior(
       model = npe_model,
       observed_data = observed_data,
-      n_samples = 10000,
+      n_samples = 1000,
       return_log_probs = TRUE,
       output_dir = npe_dirs$posterior,
       verbose = FALSE,
       rejection_sampling = TRUE,
-      max_rejection_rate = 0.20,
+      max_rejection_rate = 0.25,
       max_attempts = 10
     )
 
@@ -1740,6 +1765,23 @@ run_MOSAIC <- function(config,
           root_dir = root_dir,
           verbose = FALSE,
           plot_decomposed = FALSE
+        )
+
+        # NPE Posterior Predictive Checks
+        # Create PPC diagnostics for NPE ensemble predictions (same as BFRS)
+        log_msg("Creating NPE posterior predictive check plots")
+        ppc_npe_result <- tryCatch(
+          {
+            plot_model_ppc(
+              predictions_dir = npe_dirs$plots,
+              output_dir = npe_dirs$plots,
+              verbose = control$logging$verbose
+            )
+          },
+          error = function(e) {
+            log_msg("Warning: NPE PPC plots failed: %s", e$message, "warning")
+            NULL
+          }
         )
       }
 
@@ -1977,7 +2019,8 @@ mosaic_control_defaults <- function(calibration = NULL,
                            weights = NULL,
                            parallel = NULL,
                            io = NULL,
-                           paths = NULL) {
+                           paths = NULL,
+                           logging = NULL) {
 
   # Default calibration settings
   default_calibration <- list(
@@ -2155,8 +2198,13 @@ mosaic_control_defaults <- function(calibration = NULL,
     verbose_weights = FALSE            # Print detailed weight calculation diagnostics
   )
 
+  # Default logging settings
+  default_logging <- list(
+    verbose = FALSE                    # Enable detailed progress messages in sub-functions
+  )
+
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → npe → predictions → weights → parallel → io → paths
+  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → npe → predictions → weights → parallel → io → paths → logging
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
@@ -2168,7 +2216,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     weights = if (is.null(weights)) default_weights else modifyList(default_weights, weights),
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),
     io = if (is.null(io)) default_io else modifyList(default_io, io),
-    paths = if (is.null(paths)) default_paths else modifyList(default_paths, paths)
+    paths = if (is.null(paths)) default_paths else modifyList(default_paths, paths),
+    logging = if (is.null(logging)) default_logging else modifyList(default_logging, logging)
   )
 }
 
