@@ -11,140 +11,488 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = TRUE,
-  cache = TRUE,
-  cache.path = "cache/"
+  eval = FALSE
 )
-
-# Create figures directory if it doesn't exist
-if (!dir.exists("figures")) {
-  dir.create("figures", recursive = TRUE)
-}
 ```
 
 ## Overview
 
-MOSAIC (Metapopulation Outbreak Simulation with Agent-based Implementation for Cholera) simulates cholera transmission dynamics using the LASER (Light-agent Spatial model for ERadication) engine. This guide shows how to run models using the core `run_LASER()` function.
+This guide shows how to run MOSAIC simulations with **parameter stochasticity** using the `run_MOSAIC()` function. This workflow samples parameters from prior distributions and runs multiple simulations to quantify uncertainty.
+
+For running single deterministic simulations, see the **Running LASER** vignette.
 
 **Before you begin**: Complete the Installation vignette to set up MOSAIC and its dependencies.
 
 ---
 
-## Quick Start
+## MOSAIC Workflow Components
 
-MOSAIC includes pre-configured parameter sets for different transmission scenarios. Let's run and visualize two key scenarios: epidemic and endemic transmission.
+The MOSAIC workflow consists of three main steps:
 
-### Epidemic Scenario
+1. **Parameter Sampling**: Generate parameter sets from prior distributions
+2. **Parallel Execution**: Run multiple LASER simulations with sampled parameters
+3. **Analysis**: Aggregate results and quantify uncertainty
 
-The epidemic configuration simulates outbreak dynamics with explosive growth patterns typical of cholera epidemics.
-
-```{r epidemic-example, eval=TRUE, echo=TRUE}
+```{r workflow-diagram, eval=FALSE}
 library(MOSAIC)
 
-# Run epidemic scenario
-config <- MOSAIC::config_simulation_epidemic
+# 1. Sample parameters from priors
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 123
+)
 
-model_epidemic <- run_LASER(config = config, seed = 123, quiet = TRUE)
+# 2. Run multiple simulations
+ctrl <- mosaic_control_defaults(
+  n_sim = 100,
+  parallel = TRUE
+)
 
-# Extract time series results (convert Python objects to R matrices)
-cases_epidemic <- as.matrix(model_epidemic$results$expected_cases)
-deaths_epidemic <- as.matrix(model_epidemic$results$disease_deaths)
+results <- run_MOSAIC(
+  config = config_sampled,
+  control = ctrl,
+  seed = 123
+)
 
-# Get metadata
-locations <- config_simulation_epidemic$location_name
-n_locations <- length(locations)
-n_timesteps <- ncol(cases_epidemic)
-
-# Calculate total burden
-total_cases_epidemic <- sum(cases_epidemic, na.rm = TRUE)
-total_deaths_epidemic <- sum(deaths_epidemic, na.rm = TRUE)
-
-cat(sprintf("Epidemic Scenario Results:\n"))
-cat(sprintf("  Total cases: %s\n", format(total_cases_epidemic, big.mark = ",")))
-cat(sprintf("  Total deaths: %s\n", format(total_deaths_epidemic, big.mark = ",")))
-cat(sprintf("  Locations: %d\n", n_locations))
-cat(sprintf("  Time steps: %d\n", n_timesteps))
-
-# Plot epidemic time series by location
-png("figures/running_mosaic_epidemic.png", width = 800, height = 600, res = 120)
-
-colors <- c("#009ADE", "#FF1F5B", "#00CD6C")  # Blue, Pink, Green
-par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
-
-matplot(t(cases_epidemic), type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "", ylab = "Expected Cases",
-        main = "Epidemic Transmission Simulation")
-
-matplot(t(deaths_epidemic), type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "Time step", ylab = "Expected Deaths", main = "")
-
-par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
-plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
-legend("bottom", legend = locations, col = colors, lty = 1, lwd = 2,
-       horiz = TRUE, bty = "n", xpd = TRUE)
-
-dev.off()
-cat("Saved: figures/running_mosaic_epidemic.png\n")
-```
-
-```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
-knitr::include_graphics("figures/running_mosaic_epidemic.png")
-```
-
-### Endemic Scenario
-
-The endemic configuration simulates stable, persistent transmission patterns with seasonal fluctuations.
-
-```{r endemic-example, eval=TRUE, echo=TRUE}
-# Run endemic scenario
-config <- MOSAIC::config_simulation_endemic
-
-model_endemic <- run_LASER(config = config, seed = 123, quiet = TRUE)
-
-# Extract time series results (convert Python objects to R matrices)
-cases_endemic <- as.matrix(model_endemic$results$expected_cases)
-deaths_endemic <- as.matrix(model_endemic$results$disease_deaths)
-
-# Calculate total burden
-total_cases_endemic <- sum(cases_endemic, na.rm = TRUE)
-total_deaths_endemic <- sum(deaths_endemic, na.rm = TRUE)
-
-cat(sprintf("Endemic Scenario Results:\n"))
-cat(sprintf("  Total cases: %s\n", format(total_cases_endemic, big.mark = ",")))
-cat(sprintf("  Total deaths: %s\n", format(total_deaths_endemic, big.mark = ",")))
-
-# Plot endemic time series by location
-png("figures/running_mosaic_endemic.png", width = 800, height = 600, res = 120)
-
-colors <- c("#00CD6C", "#AF58BA", "#009ADE")  # Green, Purple, Blue
-par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
-
-matplot(t(cases_endemic), type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "", ylab = "Expected Cases",
-        main = "Endemic Transmission Simulation")
-
-matplot(t(deaths_endemic), type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "Time step", ylab = "Expected Deaths", main = "")
-
-par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
-plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
-legend("bottom", legend = locations, col = colors, lty = 1, lwd = 2,
-       horiz = TRUE, bty = "n", xpd = TRUE)
-
-dev.off()
-cat("Saved: figures/running_mosaic_endemic.png\n")
-```
-
-```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
-knitr::include_graphics("figures/running_mosaic_endemic.png")
+# 3. Analyze outputs
+summary(results)
 ```
 
 ---
 
+## Parameter Sampling
 
+The `sample_parameters()` function samples parameter values from prior distributions specified in `priors_default`. You can control which parameter groups to sample.
 
-## Getting Help
+### Sample All Parameters
 
-- **Package documentation**: `help(package = "MOSAIC")`
-- **Function help**: `?run_LASER`, `?make_LASER_config`
-- **Report issues**: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues
+```{r sample-all}
+library(MOSAIC)
+
+# Sample all parameters with stochasticity
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 123,
+
+  # Sample all parameter groups
+  sample_transmission = TRUE,
+  sample_seasonality = TRUE,
+  sample_initial_conditions = TRUE,
+  sample_vaccination_efficacy = TRUE,
+  sample_disease_natural_history = TRUE,
+  sample_reporting_rates = TRUE,
+  sample_cfr = TRUE,
+  sample_waning_immunity = TRUE,
+  sample_environmental = TRUE
+)
+
+# View sampled transmission parameters
+cat("Sampled beta_j0_tot:", config_sampled$beta_j0_tot, "\n")
+cat("Sampled p_beta:", config_sampled$p_beta, "\n")
+```
+
+### Sample Specific Parameter Groups
+
+```{r sample-specific}
+# Sample only transmission and seasonality parameters
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 456,
+
+  # Only sample these groups
+  sample_transmission = TRUE,
+  sample_seasonality = TRUE,
+
+  # Keep all others at default
+  sample_initial_conditions = FALSE,
+  sample_vaccination_efficacy = FALSE,
+  sample_disease_natural_history = FALSE,
+  sample_reporting_rates = FALSE,
+  sample_cfr = FALSE,
+  sample_waning_immunity = FALSE,
+  sample_environmental = FALSE
+)
+```
+
+### Initial Conditions Sampling
+
+Initial condition proportions are sampled from Beta distributions:
+
+```{r initial-conditions}
+# Sample initial conditions
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 789,
+  sample_initial_conditions = TRUE
+)
+
+# View sampled initial condition proportions
+cat("Sampled prop_S_initial:", config_sampled$prop_S_initial, "\n")
+cat("Sampled prop_R_initial:", config_sampled$prop_R_initial, "\n")
+cat("Sampled prop_V1_initial:", config_sampled$prop_V1_initial, "\n")
+cat("Sampled prop_V2_initial:", config_sampled$prop_V2_initial, "\n")
+
+# These proportions are normalized to sum to 1.0 and converted to counts
+```
+
+---
+
+## Control Settings
+
+Use `mosaic_control_defaults()` to configure the simulation workflow:
+
+```{r control-settings}
+# Default control settings
+ctrl <- mosaic_control_defaults()
+
+# View defaults
+str(ctrl)
+
+# Custom control settings
+ctrl_custom <- mosaic_control_defaults(
+  n_sim = 500,              # Number of simulations
+  parallel = TRUE,          # Run in parallel
+  n_cores = 8,              # Number of cores
+  save_output = TRUE,       # Save intermediate results
+  output_dir = "results/"   # Output directory
+)
+```
+
+---
+
+## Running Multiple Simulations
+
+### Basic Usage
+
+```{r run-mosaic-basic}
+library(MOSAIC)
+
+# Sample parameters
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 123,
+  sample_transmission = TRUE,
+  sample_seasonality = TRUE
+)
+
+# Set up control
+ctrl <- mosaic_control_defaults(
+  n_sim = 100,
+  parallel = TRUE
+)
+
+# Run simulations
+results <- run_MOSAIC(
+  config = config_sampled,
+  control = ctrl,
+  seed = 123
+)
+```
+
+### Location-Specific Analysis
+
+```{r location-specific}
+# Extract config for specific country
+config_eth <- get_location_config(
+  config = config_default,
+  iso = "ETH"
+)
+
+# Sample parameters
+config_eth_sampled <- sample_parameters(
+  config = config_eth,
+  seed = 456,
+  sample_transmission = TRUE,
+  sample_seasonality = TRUE,
+  sample_initial_conditions = TRUE
+)
+
+# Run simulations
+ctrl <- mosaic_control_defaults(n_sim = 200)
+
+results_eth <- run_MOSAIC(
+  config = config_eth_sampled,
+  control = ctrl,
+  seed = 456
+)
+```
+
+---
+
+## Analyzing Results
+
+### Summary Statistics
+
+```{r analyze-summary}
+# View summary of results
+summary(results)
+
+# Extract key metrics
+n_simulations <- length(results$simulations)
+cat("Total simulations:", n_simulations, "\n")
+
+# Calculate summary statistics across simulations
+# (specific structure depends on run_MOSAIC output format)
+```
+
+### Time Series with Uncertainty
+
+```{r analyze-timeseries}
+# Extract time series from all simulations
+# Calculate median and quantiles
+
+# Example structure (adjust based on actual output)
+I_all <- lapply(results$simulations, function(sim) {
+  as.vector(sim$I)
+})
+
+# Calculate quantiles across simulations
+I_median <- apply(do.call(rbind, I_all), 2, median)
+I_lower <- apply(do.call(rbind, I_all), 2, quantile, probs = 0.025)
+I_upper <- apply(do.call(rbind, I_all), 2, quantile, probs = 0.975)
+
+# Plot with uncertainty bands
+plot(I_median, type = "l",
+     ylim = range(c(I_lower, I_upper)),
+     main = "Infected Individuals (with 95% CI)",
+     xlab = "Time (days)",
+     ylab = "Number Infected")
+
+polygon(c(1:length(I_median), rev(1:length(I_median))),
+        c(I_lower, rev(I_upper)),
+        col = rgb(0, 0, 1, 0.2), border = NA)
+
+lines(I_median, col = "blue", lwd = 2)
+```
+
+---
+
+## Advanced Workflows
+
+### Calibration Setup
+
+```{r calibration-setup}
+# Sample parameters for calibration
+config_calibration <- sample_parameters(
+  config = config_default,
+  seed = 999,
+
+  # Sample parameters to calibrate
+  sample_transmission = TRUE,
+  sample_seasonality = TRUE,
+  sample_environmental = TRUE,
+
+  # Fix other parameters
+  sample_initial_conditions = FALSE,
+  sample_vaccination_efficacy = FALSE
+)
+
+# Run simulations for calibration
+ctrl_calibration <- mosaic_control_defaults(
+  n_sim = 1000,
+  parallel = TRUE,
+  n_cores = parallel::detectCores() - 1
+)
+
+results_calibration <- run_MOSAIC(
+  config = config_calibration,
+  control = ctrl_calibration,
+  seed = 999
+)
+```
+
+### Scenario Comparison
+
+```{r scenario-comparison}
+# Baseline scenario
+config_baseline <- sample_parameters(
+  config = config_default,
+  seed = 111
+)
+
+results_baseline <- run_MOSAIC(
+  config = config_baseline,
+  control = mosaic_control_defaults(n_sim = 200),
+  seed = 111
+)
+
+# Intervention scenario (e.g., increased vaccination)
+config_intervention <- config_baseline
+config_intervention$nu_1_jt <- config_intervention$nu_1_jt * 2  # Double vaccination rate
+
+results_intervention <- run_MOSAIC(
+  config = config_intervention,
+  control = mosaic_control_defaults(n_sim = 200),
+  seed = 222
+)
+
+# Compare results
+# (comparison code depends on output structure)
+```
+
+---
+
+## Best Practices
+
+### Reproducibility
+
+```{r reproducibility}
+# Always set seeds for reproducibility
+set.seed(12345)
+
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 12345  # Seed for parameter sampling
+)
+
+results <- run_MOSAIC(
+  config = config_sampled,
+  control = mosaic_control_defaults(n_sim = 100),
+  seed = 12345  # Seed for simulation runs
+)
+```
+
+### Parallel Execution
+
+```{r parallel-execution}
+# Check available cores
+n_cores <- parallel::detectCores()
+cat("Available cores:", n_cores, "\n")
+
+# Leave one core free for system
+ctrl <- mosaic_control_defaults(
+  n_sim = 500,
+  parallel = TRUE,
+  n_cores = n_cores - 1
+)
+
+# Monitor progress (if implemented in run_MOSAIC)
+results <- run_MOSAIC(
+  config = config_sampled,
+  control = ctrl,
+  seed = 123
+)
+```
+
+### Memory Management
+
+```{r memory-management}
+# For large simulation batches, save intermediate results
+ctrl <- mosaic_control_defaults(
+  n_sim = 1000,
+  parallel = TRUE,
+  save_output = TRUE,
+  output_dir = "results/batch_001/"
+)
+
+# Process results in batches to avoid memory issues
+results <- run_MOSAIC(
+  config = config_sampled,
+  control = ctrl,
+  seed = 123
+)
+
+# Clear memory after processing
+rm(results)
+gc()
+```
+
+---
+
+## Common Parameter Groups
+
+### Transmission Parameters
+
+- `beta_j0_tot`: Total transmission rate
+- `p_beta`: Proportion of human-to-human transmission
+- `beta_j0_hum`: Human transmission component (derived)
+- `beta_j0_env`: Environmental transmission component (derived)
+
+### Seasonality Parameters
+
+- `a_1_j`, `a_2_j`: Fourier coefficients (amplitude)
+- `b_1_j`, `b_2_j`: Fourier coefficients (phase)
+
+### Disease Natural History
+
+- `gamma_1`: Recovery rate (symptomatic)
+- `gamma_2`: Recovery rate (asymptomatic)
+- `sigma`: Incubation rate
+- `epsilon`: Infectiousness ratio (asymptomatic/symptomatic)
+
+### Vaccination
+
+- `phi_1`: Efficacy of one dose
+- `phi_2`: Efficacy of two doses
+- `omega_1`: Waning rate for one-dose immunity
+- `omega_2`: Waning rate for two-dose immunity
+
+### Environmental Parameters
+
+- `theta_j`: Environmental contamination rate
+- `chi_endemic`: Environmental decay rate (endemic)
+- `chi_epidemic`: Environmental decay rate (epidemic)
+- `psi_jt`: Environmental suitability (time-varying)
+
+---
+
+## Troubleshooting
+
+### High Parameter Variance
+
+If your results show excessive variability:
+
+```{r troubleshoot-variance}
+# Reduce sampling to specific parameter groups
+config_sampled <- sample_parameters(
+  config = config_default,
+  seed = 123,
+
+  # Only sample parameters with greatest uncertainty
+  sample_transmission = TRUE,
+  sample_seasonality = FALSE,  # Fix seasonality
+  sample_initial_conditions = FALSE  # Fix initial conditions
+)
+```
+
+### Computational Time
+
+For faster iteration during development:
+
+```{r troubleshoot-time}
+# Start with fewer simulations
+ctrl_test <- mosaic_control_defaults(
+  n_sim = 10,  # Small test run
+  parallel = FALSE
+)
+
+# Test on single location
+config_test <- get_location_config(
+  config = config_default,
+  iso = "ETH"
+)
+
+# Quick test run
+results_test <- run_MOSAIC(
+  config = config_test,
+  control = ctrl_test,
+  seed = 123
+)
+
+# Once validated, scale up
+ctrl_full <- mosaic_control_defaults(
+  n_sim = 1000,
+  parallel = TRUE
+)
+```
+
+---
+
+## Next Steps
+
+- **Calibration**: Use the NPE workflow for Bayesian calibration
+- **Forecasting**: Generate epidemic forecasts with uncertainty
+- **Scenario Analysis**: Compare intervention strategies
+- **Sensitivity Analysis**: Identify key parameters driving outcomes
+
+See the MOSAIC documentation for advanced workflows and case studies.

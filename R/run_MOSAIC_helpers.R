@@ -6,11 +6,11 @@
 # All functions prefixed with . (not exported - internal use only)
 
 # Constants for validation
-.MOSAIC_MAX_ITERATIONS <- 100L
+.MOSAIC_MAX_ITERATIONS <- 1000L
 .MOSAIC_MIN_BATCH_SIZE <- 10L
-.MOSAIC_MAX_BATCH_SIZE <- 10000L
+.MOSAIC_MAX_BATCH_SIZE <- 1000000L
 .MOSAIC_MIN_SIMULATIONS <- 100L
-.MOSAIC_MAX_SIMULATIONS <- 1000000L
+.MOSAIC_MAX_SIMULATIONS <- 100000000L
 
 # =============================================================================
 # VALIDATION
