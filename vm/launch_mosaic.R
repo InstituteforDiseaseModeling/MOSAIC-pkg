@@ -113,36 +113,6 @@ cat("===========================================================================
 
 
 
-# Generate stochastic parameter plots for the 4_countries output
-# Load parameter seeds and weights from BFRS results
-sims <- arrow::read_parquet("~/MOSAIC/output/10_countries/1_bfrs/outputs/simulations.parquet")
-
-plot_model_fit_stochastic_param(
-     config = config,
-     parameter_seeds = sims$seed_sim,
-     parameter_weights = sims$weight_best,
-     n_simulations_per_config = 5,
-     PATHS = get_paths(),
-     priors = priors,
-     sampling_args = list(
-          sample_tau_i = FALSE,
-          sample_mobility_gamma = FALSE,
-          sample_mobility_omega = FALSE
-     ),
-     output_dir = "~/MOSAIC/output/10_countries/1_bfrs/plots/predictions",
-     parallel = TRUE,
-     n_cores = parallel::detectCores() - 1,
-     root_dir = getOption('root_directory'),
-     save_predictions = TRUE,
-     verbose = TRUE
-)
-
-
-plot_model_ppc(
-predictions_dir = "~/MOSAIC/output/10_countries/1_bfrs/plots/predictions",
-   output_dir = "~/MOSAIC/output/10_countries/1_bfrs/plots"
-)
-
 # ==============================================================================
 # Compress output directory for transfer
 # ==============================================================================
@@ -183,8 +153,26 @@ if (!dir.exists(dir_output)) {
     compression_ratio <- (1 - tar_size / dir_size) * 100
     cat(sprintf("  ✓ Compression complete in %.1f seconds\n", compress_time))
     cat(sprintf("  Archive size: %.2f GB (%.1f%% compression)\n", tar_size, compression_ratio))
+
+    # Get username and IP address for scp command
+    username <- Sys.info()["user"]
+
+    # Try to get IP address (Linux/Mac)
+    ip_address <- tryCatch({
+      ip_result <- system2("hostname", args = "-I", stdout = TRUE, stderr = FALSE)
+      # Take first IP if multiple returned (space-separated)
+      trimws(strsplit(ip_result, " ")[[1]][1])
+    }, error = function(e) {
+      # Fallback: try hostname -i
+      tryCatch({
+        system2("hostname", args = "-i", stdout = TRUE, stderr = FALSE)
+      }, error = function(e2) {
+        "SERVER_IP"  # Fallback placeholder
+      })
+    })
+
     cat("\n  Ready to transfer:\n")
-    cat(sprintf("  scp user@server:%s .\n", tar_file))
+    cat(sprintf("  scp %s@%s:%s .\n", username, ip_address, tar_file))
   } else {
     cat("  ERROR: Compression failed!\n")
     cat("  Message:", paste(result, collapse = "\n"), "\n")
