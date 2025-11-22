@@ -207,8 +207,8 @@ calc_convergence_diagnostics <- function(
         value = ess_best,
         target = target_ess_best,
         direction = "higher",
-        pass_threshold = 0.8,
-        warn_threshold = 0.5
+        pass_threshold = 1.0,
+        warn_threshold = 0.8
     )
 
     # A_best: Agreement index
