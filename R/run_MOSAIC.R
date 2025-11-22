@@ -1476,7 +1476,7 @@ run_MOSAIC <- function(config,
     npe_weights <- get_npe_weights(
       bfrs_results = results,
       strategy = control$npe$weight_strategy,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     # Add weight_npe column to results dataframe
@@ -1491,7 +1491,7 @@ run_MOSAIC <- function(config,
     .mosaic_write_parquet(weight_df, npe_weights_file, control$io)
     log_msg("Saved %s", npe_weights_file)
 
-    observed_data <- get_npe_observed_data(config, verbose = FALSE)
+    observed_data <- get_npe_observed_data(config, verbose = control$logging$verbose)
     observed_file <- file.path(dirs$npe, "observed_data.csv")
     write.csv(observed_data, observed_file, row.names = FALSE)
     log_msg("Saved %s", observed_file)
@@ -1511,7 +1511,7 @@ run_MOSAIC <- function(config,
       results = results,
       param_names = param_names_estimated,
       weights = NULL,  # Don't pass weights - will be extracted from results$weight_npe
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     arch_spec <- calc_npe_architecture(
@@ -1520,7 +1520,7 @@ run_MOSAIC <- function(config,
       n_timesteps = npe_data$n_timesteps,
       n_locations = npe_data$n_locations,
       tier = "auto",
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     log_msg("Training NPE model")
@@ -1533,7 +1533,7 @@ run_MOSAIC <- function(config,
       output_dir = npe_dirs$model,
       use_gpu = FALSE,
       seed = 42,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     param_names_npe <- npe_data$param_names
@@ -1554,7 +1554,7 @@ run_MOSAIC <- function(config,
       n_npe_samples = 100,
       probs = c(0.025, 0.25, 0.75, 0.975),
       output_dir = npe_dirs$diagnostics,
-      verbose = FALSE,
+      verbose = control$logging$verbose,
       parallel = FALSE,
       n_cores = 6
     )
@@ -1566,7 +1566,7 @@ run_MOSAIC <- function(config,
       n_samples = 1000,
       return_log_probs = TRUE,
       output_dir = npe_dirs$posterior,
-      verbose = FALSE,
+      verbose = control$logging$verbose,
       rejection_sampling = TRUE,
       max_rejection_rate = 0.25,
       max_attempts = 10
@@ -1595,14 +1595,14 @@ run_MOSAIC <- function(config,
       config_base = config,
       output_file = file.path(dirs$npe, "config_npe.json"),
       use_median = TRUE,
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     posteriors_npe <- fit_posterior_distributions(
       posterior_samples = posterior_samples,
       priors_file = file.path(dirs$setup, "priors.json"),
       output_file = file.path(npe_dirs$posterior, "posteriors.json"),
-      verbose = FALSE
+      verbose = control$logging$verbose
     )
 
     npe_summary <- list(
