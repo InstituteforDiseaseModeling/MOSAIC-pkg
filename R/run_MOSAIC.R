@@ -1038,7 +1038,7 @@ run_MOSAIC <- function(config,
       min_percentile = control$targets$percentile_min,
       max_percentile = control$targets$percentile_max,
       precision = 0.0001,
-      ess_method = 'kish', # Leave as kish, this is intentional because it is more conservative when forming the best subset, but using perplexity elsewhere for reporting
+      ess_method = control$targets$ESS_method, # Use consistent ESS method for both selection and reporting
       verbose = control$logging$verbose
     )
 
