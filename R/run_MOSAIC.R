@@ -1479,6 +1479,10 @@ run_MOSAIC <- function(config,
       verbose = FALSE
     )
 
+    # Add weight_npe column to results dataframe
+    # This ensures weights stay synchronized when results is filtered in prepare_npe_data
+    results$weight_npe <- npe_weights
+
     npe_weights_file <- file.path(dirs$npe, "npe_weights.parquet")
     weight_df <- data.frame(
       sim = results$sim,
@@ -1506,7 +1510,7 @@ run_MOSAIC <- function(config,
       bfrs_dir = dirs$bfrs,
       results = results,
       param_names = param_names_estimated,
-      weights = npe_weights,
+      weights = NULL,  # Don't pass weights - will be extracted from results$weight_npe
       verbose = FALSE
     )
 
