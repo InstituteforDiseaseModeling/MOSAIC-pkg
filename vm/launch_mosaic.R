@@ -44,7 +44,7 @@ start_time <- Sys.time()
 #iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE",
 #               "TZA", "UGA", "KEN", "ETH")
 
-iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
+#iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
 
 iso_codes <- c("ETH", "KEN")
 
@@ -53,7 +53,7 @@ config <- get_location_config(iso=iso_codes)
 
 control <- mosaic_control_defaults()
 
-control$calibration$n_simulations <- 500
+control$calibration$n_simulations <- 1000
 control$calibration$n_iterations <- 2
 control$calibration$batch_size <- 1000
 control$calibration$min_batches <- 3
@@ -157,17 +157,28 @@ if (!dir.exists(dir_output)) {
     # Get username and IP address for scp command
     username <- Sys.info()["user"]
 
-    # Try to get IP address (Linux/Mac)
+    # Try to get public IP address (for external SSH access)
     ip_address <- tryCatch({
-      ip_result <- system2("hostname", args = "-I", stdout = TRUE, stderr = FALSE)
-      # Take first IP if multiple returned (space-separated)
-      trimws(strsplit(ip_result, " ")[[1]][1])
+      # First: try to get public IP from external service
+      public_ip <- system2("curl", args = c("-s", "--max-time", "3", "ifconfig.me"),
+                          stdout = TRUE, stderr = FALSE)
+      if (length(public_ip) > 0 && nchar(trimws(public_ip)) > 0) {
+        trimws(public_ip)
+      } else {
+        stop("No public IP")
+      }
     }, error = function(e) {
-      # Fallback: try hostname -i
+      # Fallback 1: try local IP with hostname -I
       tryCatch({
-        system2("hostname", args = "-i", stdout = TRUE, stderr = FALSE)
+        ip_result <- system2("hostname", args = "-I", stdout = TRUE, stderr = FALSE)
+        trimws(strsplit(ip_result, " ")[[1]][1])
       }, error = function(e2) {
-        "SERVER_IP"  # Fallback placeholder
+        # Fallback 2: try hostname -i
+        tryCatch({
+          system2("hostname", args = "-i", stdout = TRUE, stderr = FALSE)
+        }, error = function(e3) {
+          "SERVER_IP"  # Final fallback placeholder
+        })
       })
     })
 
