@@ -1,3 +1,26 @@
+# MOSAIC 0.13.5
+
+## Improvements
+
+* **Use linear interpolation for NA values in observed data**
+  - **Problem**: Previously converted all NAs to 0, artificially introducing "no cases" observations that could mislead the model
+  - **Solution**: Linear interpolation within each location preserves temporal trends
+  - **Method**:
+    - Uses `approx(method = "linear", rule = 1)` to interpolate interior NAs
+    - `rule = 1` prevents extrapolation beyond data range (preserves boundaries)
+    - Only sets start/end NAs to 0 when interpolation is impossible (no surrounding data points)
+    - Applies independently to each location for multi-location data
+    - Handles both cases and deaths time series
+  - **Example**: Time series `NA, NA, 10, 20, NA, 30, 40, NA, 50, NA` becomes `0, 0, 10, 20, 25, 30, 40, 45, 50, 0`
+    - Interior NAs interpolated: position 5 → 25 (between 20 and 30), position 8 → 45 (between 40 and 50)
+    - Boundary NAs set to 0: positions 1-2 (before first data), position 10 (after last data)
+  - **Impact**: More accurate representation of missing data, better model training quality
+  - **Output**:
+    - Reports number of NAs interpolated vs. set to 0
+    - "Interpolated: X" shows successful linear interpolation
+    - "Set to 0 (start/end): Y" shows boundary NAs
+  - **Files modified**: `R/npe_posterior.R`
+
 # MOSAIC 0.13.4
 
 ## Bug Fixes
