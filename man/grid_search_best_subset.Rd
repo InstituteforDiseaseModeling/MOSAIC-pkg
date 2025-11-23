@@ -64,8 +64,7 @@ Metrics are calculated using Gibbs weighting with dynamic temperature:
 \item Calculate Delta AIC (relative to best in subset)
 \item Calculate dynamic temperature:
 \itemize{
-\item percentile = (n / n_total) * 100
-\item effective_range = get_effective_aic_range(percentile)
+\item effective_range = 4.0 (standard Akaike range)
 \item actual_range = range(Delta AIC)
 \item temperature = 0.5 * (effective_range / actual_range)
 }
@@ -73,8 +72,8 @@ Metrics are calculated using Gibbs weighting with dynamic temperature:
 \item Calculate ESS, A, CVw from Gibbs-weighted samples
 }
 
-This exactly matches the identify_best_subset logic, ensuring consistent
-weighting and convergence behavior across both search strategies.
+The temperature adapts to the data's actual Delta AIC range, providing
+consistent discrimination across different likelihood spreads.
 
 If no size meets criteria, returns results at max_size with converged=FALSE.
 }

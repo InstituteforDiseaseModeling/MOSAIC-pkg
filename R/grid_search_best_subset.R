@@ -33,15 +33,14 @@
 #' 1. Calculate AIC = -2 * likelihood for subset
 #' 2. Calculate Delta AIC (relative to best in subset)
 #' 3. Calculate dynamic temperature:
-#'    - percentile = (n / n_total) * 100
-#'    - effective_range = get_effective_aic_range(percentile)
+#'    - effective_range = 4.0 (standard Akaike range)
 #'    - actual_range = range(Delta AIC)
 #'    - temperature = 0.5 * (effective_range / actual_range)
 #' 4. Apply Gibbs weighting: weights = exp(-Delta AIC / temperature) / Z
 #' 5. Calculate ESS, A, CVw from Gibbs-weighted samples
 #'
-#' This exactly matches the identify_best_subset logic, ensuring consistent
-#' weighting and convergence behavior across both search strategies.
+#' The temperature adapts to the data's actual Delta AIC range, providing
+#' consistent discrimination across different likelihood spreads.
 #'
 #' If no size meets criteria, returns results at max_size with converged=FALSE.
 #'
@@ -132,10 +131,9 @@ grid_search_best_subset <- function(
     best_aic_in_subset <- min(aic_subset)
     delta_subset <- aic_subset - best_aic_in_subset
 
-    # 3. Calculate dynamic Gibbs temperature (matching identify_best_subset)
-    # Convert n to percentile for effective range calculation
-    percentile <- (n / nrow(results_ranked)) * 100
-    effective_range <- get_effective_aic_range(percentile)
+    # 3. Calculate dynamic Gibbs temperature
+    # Use fixed effective AIC range of 4.0 (standard for Akaike weighting)
+    effective_range <- 4.0
     actual_range <- diff(range(delta_subset))
 
     # Avoid division by zero if all models have same likelihood
@@ -203,8 +201,7 @@ grid_search_best_subset <- function(
   delta_max <- aic_max - best_aic_max
 
   # Dynamic temperature for fallback
-  percentile_max <- (max_size / nrow(results_ranked)) * 100
-  effective_range_max <- get_effective_aic_range(percentile_max)
+  effective_range_max <- 4.0
   actual_range_max <- diff(range(delta_max))
 
   if (actual_range_max < .Machine$double.eps) {
