@@ -1,3 +1,20 @@
+# MOSAIC 0.13.2
+
+## Bug Fixes
+
+* **CRITICAL: Fix run_NPE() JSON loading causing persistent list column errors**
+  - **Root cause**: Used `jsonlite::fromJSON(..., simplifyVector = FALSE)` when loading config/priors from disk, keeping JSON arrays as R lists instead of converting to vectors
+  - **Error**: Even after v0.13.1 fix in get_npe_observed_data(), `config$reported_cases` was still a list, creating list columns in data frames
+  - **Fix**: Replace `jsonlite::fromJSON()` with `read_json_to_list()` (MOSAIC standard loader) at 3 locations in run_NPE.R (lines 244, 264, 284)
+  - **Benefits**:
+    - Uses MOSAIC codebase standard for JSON loading (consistent with other functions)
+    - Properly simplifies JSON arrays to R vectors (`simplifyVector = TRUE` default)
+    - Supports gzipped JSON files
+    - More maintainable and consistent
+  - **Impact**: Resolves persistent CSV write errors in run_NPE() standalone mode
+  - **Files modified**: `R/run_NPE.R`
+  - **Verified**: JSON loading, get_npe_observed_data(), CSV write all succeed
+
 # MOSAIC 0.13.1
 
 ## Bug Fixes

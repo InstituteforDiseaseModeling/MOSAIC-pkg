@@ -241,7 +241,7 @@ run_NPE <- function(
         stop("Priors file not found: ", priors_file)
       }
 
-      priors <- jsonlite::fromJSON(priors_file, simplifyVector = FALSE)
+      priors <- read_json_to_list(priors_file)
       if (verbose) {
         message("  Loaded priors from ", basename(priors_file))
       }
@@ -261,7 +261,7 @@ run_NPE <- function(
         stop("Config file not found: ", config_file)
       }
 
-      config <- jsonlite::fromJSON(config_file, simplifyVector = FALSE)
+      config <- read_json_to_list(config_file)
       if (verbose) {
         message("  Loaded config from ", basename(config_file))
       }
@@ -281,7 +281,7 @@ run_NPE <- function(
         stop("Simulation params file not found: ", sim_params_file)
       }
 
-      sim_params <- jsonlite::fromJSON(sim_params_file, simplifyVector = FALSE)
+      sim_params <- read_json_to_list(sim_params_file)
       control <- sim_params$control
 
       # Convert from JSON list structure to proper control structure
