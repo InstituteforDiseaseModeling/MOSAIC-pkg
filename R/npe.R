@@ -380,6 +380,30 @@ train_npe <- function(
           training_history$train_loss <- c(training_history$train_loss, avg_train_loss)
           training_history$val_loss <- c(training_history$val_loss, val_loss)
 
+          # Check for NA/NaN losses (numerical instability)
+          if (is.na(avg_train_loss) || is.na(val_loss) ||
+              !is.finite(avg_train_loss) || !is.finite(val_loss)) {
+               stop(sprintf(
+                    paste0(
+                         "Training failed at epoch %d: Loss became NA/NaN/Inf\n",
+                         "  Train loss: %s\n",
+                         "  Val loss: %s\n\n",
+                         "This indicates numerical instability. Common causes:\n",
+                         "1. Very low ESS causing degenerate weight distribution\n",
+                         "   (Check the ESS values printed earlier - values < 10 are problematic)\n",
+                         "2. Extreme weight concentration (max/min ratio very large)\n",
+                         "3. Model architecture too complex for the data\n",
+                         "4. Learning rate too high causing gradient explosion\n\n",
+                         "Solutions to try:\n",
+                         "1. Use 'continuous_best' weight strategy instead of 'continuous_retained'\n",
+                         "2. Run more BFRS iterations to improve ESS\n",
+                         "3. Use 'light' architecture tier: control$npe$architecture_tier = 'light'\n",
+                         "4. Reduce learning rate: control$npe$learning_rate = 0.0001"
+                    ),
+                    epoch, avg_train_loss, val_loss
+               ))
+          }
+
           # Learning rate scheduling
           scheduler$step(val_loss)
 
