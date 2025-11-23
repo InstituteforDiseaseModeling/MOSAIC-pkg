@@ -16,6 +16,8 @@ navbar:
       menu:
       - text: Installation
         href: articles/Installation.html
+      - text: Running LASER
+        href: articles/Running-LASER.html
       - text: Running MOSAIC
         href: articles/Running-MOSAIC.html
       - text: Deployment
@@ -26,6 +28,7 @@ articles:
   desc: "Installation and basic usage"
   contents:
   - Installation
+  - Running-LASER
   - Running-MOSAIC
   - Deployment
 
