@@ -167,6 +167,104 @@ train_npe <- function(
      # This ensures all .to(device) calls work correctly
      device_obj <- torch$device(device)
 
+     # DATA VALIDATION: Check for NAs/Infs before tensor conversion
+     # (Critical: PyTorch will silently propagate NaNs through the network)
+     if (verbose) {
+          message("  Validating data integrity...")
+     }
+
+     # Check X (parameters)
+     X_has_na <- anyNA(X)
+     X_has_inf <- any(!is.finite(as.matrix(X)))
+
+     if (X_has_na || X_has_inf) {
+          # Detailed diagnostics
+          X_mat <- as.matrix(X)
+          na_rows <- which(apply(X_mat, 1, anyNA))
+          inf_rows <- which(apply(X_mat, 1, function(row) any(!is.finite(row))))
+          na_cols <- which(apply(X_mat, 2, anyNA))
+          inf_cols <- which(apply(X_mat, 2, function(col) any(!is.finite(col))))
+
+          stop(sprintf(
+               paste0(
+                    "Data validation failed: X (parameters) contains invalid values\n\n",
+                    "  NAs found: %s\n",
+                    "  Infs found: %s\n",
+                    "  Affected rows: %s\n",
+                    "  Affected columns: %s\n\n",
+                    "CAUSE:\n",
+                    "  Parameters matrix has NA or Inf values that will cause NaN losses during training.\n\n",
+                    "LIKELY SOURCES:\n",
+                    "  1. Invalid parameter samples from priors (e.g., division by zero)\n",
+                    "  2. Corrupted simulations.parquet file\n",
+                    "  3. Bug in parameter sampling or transformations\n",
+                    "  4. Simulations with is_valid=FALSE not filtered properly\n\n",
+                    "SOLUTION:\n",
+                    "  Check prepare_npe_data() output - ensure all parameter columns are finite:\n",
+                    "    all(is.finite(npe_data$parameters))\n",
+                    "  Re-run BFRS stage if simulations.parquet is corrupted."
+               ),
+               X_has_na,
+               X_has_inf,
+               if (length(na_rows) + length(inf_rows) > 0) {
+                    paste(head(unique(c(na_rows, inf_rows)), 5), collapse = ", ")
+               } else "none",
+               if (length(na_cols) + length(inf_cols) > 0) {
+                    paste(head(unique(c(na_cols, inf_cols)), 5), collapse = ", ")
+               } else "none"
+          ), call. = FALSE)
+     }
+
+     # Check y (observations)
+     y_has_na <- anyNA(y)
+     y_has_inf <- any(!is.finite(as.matrix(y)))
+
+     if (y_has_na || y_has_inf) {
+          y_mat <- as.matrix(y)
+          na_rows <- which(apply(y_mat, 1, anyNA))
+          inf_rows <- which(apply(y_mat, 1, function(row) any(!is.finite(row))))
+
+          stop(sprintf(
+               paste0(
+                    "Data validation failed: y (observations) contains invalid values\n\n",
+                    "  NAs found: %s\n",
+                    "  Infs found: %s\n",
+                    "  Affected simulations: %s\n\n",
+                    "CAUSE:\n",
+                    "  Observation matrix has NA or Inf values from simulation outputs.\n\n",
+                    "LIKELY SOURCES:\n",
+                    "  1. Corrupted timeseries files in outputs/timeseries/\n",
+                    "  2. Simulations that crashed or failed to complete\n",
+                    "  3. Bug in .prepare_observation_matrix() reshaping\n\n",
+                    "SOLUTION:\n",
+                    "  Check simulation outputs for corruption:\n",
+                    "    - Verify timeseries files exist and are valid\n",
+                    "    - Re-run BFRS stage if outputs are corrupted"
+               ),
+               y_has_na,
+               y_has_inf,
+               if (length(na_rows) + length(inf_rows) > 0) {
+                    paste(head(unique(c(na_rows, inf_rows)), 10), collapse = ", ")
+               } else "none"
+          ), call. = FALSE)
+     }
+
+     # Check weights
+     if (!is.null(weights) && (anyNA(weights) || any(!is.finite(weights)))) {
+          stop(paste0(
+               "Data validation failed: weights contain NA or Inf values\n\n",
+               "CAUSE:\n",
+               "  Weight vector from get_npe_weights() or results$weight_npe is corrupted.\n\n",
+               "SOLUTION:\n",
+               "  Check weight calculation - weights must be finite non-negative values:\n",
+               "    all(is.finite(weights)) && all(weights >= 0)"
+          ), call. = FALSE)
+     }
+
+     if (verbose) {
+          message("    ✓ Data validation passed (no NAs/Infs)")
+     }
+
      # Convert data to tensors (most crash-prone operation)
      if (verbose) {
           message("  Converting data to tensors...")
