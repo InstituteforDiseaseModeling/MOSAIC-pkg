@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,9 +18,10 @@
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -55,16 +56,10 @@
         <dd>Run LASER Model Simulation</dd>
       </dl><dl><dt>
 
-          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
-      </dl><dl><dt>
-
           <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
 
         </dt>
-        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
+        <dd>Run MOSAIC Calibration Workflow</dd>
       </dl><dl><dt>
 
           <code><a href="make_LASER_config.html">make_LASER_config()</a></code>
@@ -146,19 +141,19 @@
           <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
 
         </dt>
-        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
+        <dd>Run MOSAIC Calibration Workflow</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_NPE.html">run_NPE()</a></code>
+
+        </dt>
+        <dd>Run Neural Posterior Estimation (NPE)</dd>
       </dl><dl><dt>
 
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code>
 
         </dt>
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
-      </dl><dl><dt>
-
-          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
       </dl><dl><dt>
 
           <code><a href="run_npe_diagnostics.html">run_npe_diagnostics()</a></code>
@@ -970,7 +965,7 @@
           <code><a href="plot_model_ppc.html">plot_model_ppc()</a></code>
 
         </dt>
-        <dd>Plot Posterior Predictive Checks for LASER Model</dd>
+        <dd>Plot Posterior Predictive Checks from Ensemble Predictions</dd>
       </dl><dl><dt>
 
           <code><a href="plot_mosaic_country_map.html">plot_mosaic_country_map()</a></code>
@@ -2595,6 +2590,12 @@
         <dd>Get WHO Region for ISO Country Codes</dd>
       </dl><dl><dt>
 
+          <code><a href="grid_search_best_subset.html">grid_search_best_subset()</a></code>
+
+        </dt>
+        <dd>Grid Search for Best Subset with Early Stopping</dd>
+      </dl><dl><dt>
+
           <code><a href="identify_best_subset.html">identify_best_subset()</a></code>
 
         </dt>
@@ -2880,7 +2881,7 @@
           <code><a href="plot_model_ppc.html">plot_model_ppc()</a></code>
 
         </dt>
-        <dd>Plot Posterior Predictive Checks for LASER Model</dd>
+        <dd>Plot Posterior Predictive Checks from Ensemble Predictions</dd>
       </dl><dl><dt>
 
           <code><a href="plot_mosaic_country_map.html">plot_mosaic_country_map()</a></code>
@@ -3204,19 +3205,19 @@
           <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
 
         </dt>
-        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
+        <dd>Run MOSAIC Calibration Workflow</dd>
+      </dl><dl><dt>
+
+          <code><a href="run_NPE.html">run_NPE()</a></code>
+
+        </dt>
+        <dd>Run Neural Posterior Estimation (NPE)</dd>
       </dl><dl><dt>
 
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code>
 
         </dt>
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
-      </dl><dl><dt>
-
-          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
       </dl><dl><dt>
 
           <code><a href="run_npe_diagnostics.html">run_npe_diagnostics()</a></code>

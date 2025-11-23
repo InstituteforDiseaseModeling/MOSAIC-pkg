@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,9 +38,10 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+<li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -65,7 +66,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>Installation</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/HEAD/vignettes/articles/Installation.Rmd" class="external-link"><code>vignettes/articles/Installation.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/HEAD/vignettes/Installation.Rmd" class="external-link"><code>vignettes/Installation.Rmd</code></a></small>
       <div class="d-none name"><code>Installation.Rmd</code></div>
     </div>
 
@@ -74,12 +75,12 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>MOSAIC has three installation levels depending on your needs:</p>
+<p>MOSAIC has two installation levels depending on your needs:</p>
 <table class="table">
 <colgroup>
-<col width="24%">
-<col width="40%">
-<col width="35%">
+<col width="18%">
+<col width="50%">
+<col width="32%">
 </colgroup>
 <thead><tr class="header">
 <th align="left">Setup</th>
@@ -88,87 +89,109 @@
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="left"><strong>Quick Start</strong></td>
-<td align="left">Run pre-configured models</td>
+<td align="left"><strong>Basic</strong></td>
+<td align="left">Run models with pre-configured data</td>
 <td align="left">R + internet</td>
 </tr>
 <tr class="even">
-<td align="left"><strong>Standard</strong></td>
-<td align="left">Process data &amp; run prior models</td>
-<td align="left">R + git + system libraries</td>
-</tr>
-<tr class="odd">
 <td align="left"><strong>Developer</strong></td>
-<td align="left">Contribute code &amp; full development</td>
-<td align="left">All above + dev tools</td>
+<td align="left">Full access: data collection, prior estimation,
+development</td>
+<td align="left">R + git + system libraries</td>
 </tr>
 </tbody>
 </table>
-<p>Most users should start with <strong>Quick Start</strong>.</p>
+<p>Most users should start with <strong>Basic</strong>.</p>
 <hr>
 </div>
 <div class="section level2">
-<h2 id="quick-start">Quick Start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+<h2 id="basic-setup">Basic Setup<a class="anchor" aria-label="anchor" href="#basic-setup"></a>
 </h2>
 <p>Install the R package from GitHub and let it automatically set up
 Python dependencies. This is sufficient for running models with
-pre-configured parameters.</p>
+pre-configured parameters and data.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Install MOSAIC R package</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"InstituteforDiseaseModeling/MOSAIC-pkg"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Install remotes if not already installed</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">require</a></span><span class="op">(</span><span class="st"><a href="https://remotes.r-lib.org" class="external-link">"remotes"</a></span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Install MOSAIC R package</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"InstituteforDiseaseModeling/MOSAIC-pkg"</span>, upgrade <span class="op">=</span> <span class="st">"never"</span>, force <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Load and install Python dependencies</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/install_dependencies.html">install_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
+<span><span class="co"># Check Python environment and dependencies</span></span>
+<span><span class="fu"><a href="../reference/check_python_env.html">check_python_env</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/check_dependencies.html">check_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
 <span><span class="co"># Verify installation</span></span>
-<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="va">config_default</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span><span class="va">config</span>, n_sim <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="../reference/config_default.html">config_default</a></span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span><span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p><strong>Successful installation output:</strong></p>
+<p>When MOSAIC loads successfully, you should see:</p>
+<pre><code> __  __   ___   ____     _     ___  ____       __      ___    _____  _____   _____ ___
+|  \/  | / _ \ / ___|   / \   |_ _|/ ___|   __/ /_    / /    /   |  / ___/ / ____// __ \
+| |\/| || | | |\___ \  / _ \   | || |      /_  __/   / /    / /| |  \__ \ / __/  / /_/ /
+| |  | || |_| | ___) |/ ___ \  | || |___    /_/     / /___ / ___ | ___/ // /___ / _, _/
+|_|  |_| \___/ |____//_/   \_\|___|\____|          /_____//_/  |_|/____//_____//_/ |_|
+
+Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation
+for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!
+
+Version: 0.11.25</code></pre>
 <hr>
 </div>
 <div class="section level2">
-<h2 id="standard-setup">Standard Setup<a class="anchor" aria-label="anchor" href="#standard-setup"></a>
+<h2 id="developer-setup">Developer Setup<a class="anchor" aria-label="anchor" href="#developer-setup"></a>
 </h2>
-<p>Clone the full repository structure for data processing and parameter
-estimation. Requires system dependencies (GDAL, PROJ, GEOS,
-UDUNITS).</p>
+<p>Clone the full repository structure for data processing, parameter
+estimation, and code development. Requires system dependencies (GDAL,
+PROJ, GEOS, UDUNITS).</p>
 <p><strong>Note</strong>: We recommend creating a <code>~/MOSAIC</code>
 directory to organize all MOSAIC repositories in one location.</p>
+<div class="section level3">
+<h3 id="install-system-dependencies">Install System Dependencies<a class="anchor" aria-label="anchor" href="#install-system-dependencies"></a>
+</h3>
 <p><strong>macOS:</strong></p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="ex">brew</span> install gdal proj geos udunits</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="ex">brew</span> install gdal proj geos udunits</span></code></pre></div>
 <p><strong>Ubuntu/Debian:</strong></p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> gdal-bin libgdal-dev libproj-dev libgeos-dev libudunits2-dev</span></code></pre></div>
-<p><strong>Clone repositories:</strong></p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> ~/MOSAIC <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> ~/MOSAIC</span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git</span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git</span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git</span></code></pre></div>
-<p><strong>Install and configure:</strong></p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Install R package from source</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"~/MOSAIC/MOSAIC-pkg"</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">sudo</span> apt-get install <span class="at">-y</span> gdal-bin libgdal-dev libproj-dev libgeos-dev libudunits2-dev</span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="clone-repositories">Clone Repositories<a class="anchor" aria-label="anchor" href="#clone-repositories"></a>
+</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> ~/MOSAIC <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> ~/MOSAIC</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git</span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="install-and-configure">Install and Configure<a class="anchor" aria-label="anchor" href="#install-and-configure"></a>
+</h3>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Install R package from source (upgrade = "never" avoids prompts)</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"~/MOSAIC/MOSAIC-pkg"</span>, upgrade <span class="op">=</span> <span class="st">"never"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Set up Python and paths</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/install_dependencies.html">install_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
 <span></span>
+<span><span class="co"># Check Python environment and dependencies</span></span>
+<span><span class="fu"><a href="../reference/check_python_env.html">check_python_env</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/check_dependencies.html">check_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
 <span><span class="co"># Verify</span></span>
 <span><span class="va">PATHS</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_paths.html">get_paths</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="va">config_default</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span><span class="va">config</span>, n_sim <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span></code></pre></div>
-<hr>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="../reference/config_default.html">config_default</a></span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span><span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span></code></pre></div>
 </div>
-<div class="section level2">
-<h2 id="developer-setup">Developer Setup<a class="anchor" aria-label="anchor" href="#developer-setup"></a>
-</h2>
-<p>Same as Standard Setup, plus optional data scraping repository and
-development tools.</p>
-<p><strong>Clone additional repository (optional):</strong></p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="bu">cd</span> ~/MOSAIC</span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git</span></code></pre></div>
-<p><strong>Development workflow:</strong></p>
+<div class="section level3">
+<h3 id="development-workflow">Development Workflow<a class="anchor" aria-label="anchor" href="#development-workflow"></a>
+</h3>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load for development</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/load_all.html" class="external-link">load_all</a></span><span class="op">(</span><span class="st">"~/MOSAIC/MOSAIC-pkg"</span><span class="op">)</span></span>
@@ -179,21 +202,50 @@ development tools.</p>
 <span><span class="co"># Build documentation</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://devtools.r-lib.org/reference/document.html" class="external-link">document</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu">pkgdown</span><span class="fu">::</span><span class="fu"><a href="https://pkgdown.r-lib.org/reference/build_site.html" class="external-link">build_site</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="optional-mobility-package">Optional: Mobility Package<a class="anchor" aria-label="anchor" href="#optional-mobility-package"></a>
+</h3>
+<p>The <code>mobility</code> package is only needed if you want to
+regenerate mobility estimates from scratch. Most users can skip this -
+pre-computed mobility files are included in
+<code>model/input/</code>.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Only install if you need to regenerate mobility data</span></span>
+<span><span class="co"># Requires JAGS system library</span></span>
+<span></span>
+<span><span class="co"># macOS:</span></span>
+<span><span class="co"># brew install jags</span></span>
+<span></span>
+<span><span class="co"># Ubuntu/Debian:</span></span>
+<span><span class="co"># sudo apt-get install -y jags libjags-dev</span></span>
+<span></span>
+<span><span class="co"># Then install R packages:</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"rjags"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"COVID-19-Mobility-Data-Network/mobility"</span><span class="op">)</span></span></code></pre></div>
+<p><strong>When is this needed?</strong> Only if you’re calling
+<code><a href="../reference/est_mobility.html">MOSAIC::est_mobility()</a></code> to regenerate mobility matrices.
+Otherwise, use the pre-computed files included with the package.</p>
 <hr>
+</div>
 </div>
 <div class="section level2">
 <h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
 </h2>
 <p><strong>Python issues:</strong></p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Check Python configuration</span></span>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Check Python environment and dependencies</span></span>
+<span><span class="fu"><a href="../reference/check_python_env.html">check_python_env</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/check_dependencies.html">check_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Check detailed Python configuration</span></span>
 <span><span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/py_config.html" class="external-link">py_config</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Reset if needed</span></span>
 <span><span class="fu">remove_MOSAIC_python_env</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/install_dependencies.html">install_dependencies</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><strong>Path issues (Standard/Developer only):</strong></p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<p><strong>Path issues (Developer only):</strong></p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Check and reset root directory</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"root_directory"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span></code></pre></div>

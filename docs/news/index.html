@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,9 +18,10 @@
       <ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -37,6 +38,673 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/HEAD/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.5" id="mosaic-0135">MOSAIC 0.13.5<a class="anchor" aria-label="anchor" href="#mosaic-0135"></a></h2>
+<div class="section level3">
+<h3 id="improvements-0-13-5">Improvements<a class="anchor" aria-label="anchor" href="#improvements-0-13-5"></a></h3>
+<ul><li>
+<strong>Use linear interpolation for NA values in observed data</strong>
+<ul><li>
+<strong>Problem</strong>: Previously converted all NAs to 0, artificially introducing “no cases” observations that could mislead the model</li>
+<li>
+<strong>Solution</strong>: Linear interpolation within each location preserves temporal trends</li>
+<li>
+<strong>Method</strong>:
+<ul><li>Uses <code>approx(method = "linear", rule = 1)</code> to interpolate interior NAs</li>
+<li>
+<code>rule = 1</code> prevents extrapolation beyond data range (preserves boundaries)</li>
+<li>Only sets start/end NAs to 0 when interpolation is impossible (no surrounding data points)</li>
+<li>Applies independently to each location for multi-location data</li>
+<li>Handles both cases and deaths time series</li>
+</ul></li>
+<li>
+<strong>Example</strong>: Time series <code>NA, NA, 10, 20, NA, 30, 40, NA, 50, NA</code> becomes <code>0, 0, 10, 20, 25, 30, 40, 45, 50, 0</code>
+<ul><li>Interior NAs interpolated: position 5 → 25 (between 20 and 30), position 8 → 45 (between 40 and 50)</li>
+<li>Boundary NAs set to 0: positions 1-2 (before first data), position 10 (after last data)</li>
+</ul></li>
+<li>
+<strong>Impact</strong>: More accurate representation of missing data, better model training quality</li>
+<li>
+<strong>Output</strong>:
+<ul><li>Reports number of NAs interpolated vs. set to 0</li>
+<li>“Interpolated: X” shows successful linear interpolation</li>
+<li>“Set to 0 (start/end): Y” shows boundary NAs</li>
+</ul></li>
+<li>
+<strong>Files modified</strong>: <code>R/npe_posterior.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.4" id="mosaic-0134">MOSAIC 0.13.4<a class="anchor" aria-label="anchor" href="#mosaic-0134"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-13-4">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-4"></a></h3>
+<ul><li>
+<strong>Add comprehensive data validation to train_npe() to catch NAs/Infs early</strong>
+<ul><li>
+<strong>Problem</strong>: PyTorch silently propagates NaN/Inf values through the network, causing cryptic training failures</li>
+<li>
+<strong>Root cause</strong>: No validation of input data (X, y, weights) before tensor conversion</li>
+<li>
+<strong>Impact</strong>: If parameters or observations contain NAs/Infs (from corrupted files, invalid samples, or bugs), they propagate silently and cause losses to become NaN</li>
+<li>
+<strong>Fix</strong>: Add explicit validation checks for X (parameters), y (observations), and weights before tensor conversion (line 170-266 in npe.R)</li>
+<li>
+<strong>Validation checks</strong>:
+<ul><li>
+<code>anyNA(X)</code> and <code>any(!is.finite(X))</code> - parameters matrix</li>
+<li>
+<code>anyNA(y)</code> and <code>any(!is.finite(y))</code> - observations matrix</li>
+<li>
+<code>anyNA(weights)</code> and <code>any(!is.finite(weights))</code> - weight vector</li>
+</ul></li>
+<li>
+<strong>Error messages include</strong>:
+<ul><li>Which data structure failed (X, y, or weights)</li>
+<li>Whether NAs or Infs were found</li>
+<li>Affected rows and columns (first 5-10 shown)</li>
+<li>Likely sources of corruption</li>
+<li>Specific solutions to diagnose and fix</li>
+</ul></li>
+<li>
+<strong>Benefits</strong>:
+<ul><li>Catches data corruption BEFORE training starts (saves time)</li>
+<li>Clear diagnostic messages pinpoint exact problem</li>
+<li>Prevents silent NaN propagation through network</li>
+<li>Helps identify upstream bugs in data preparation</li>
+</ul></li>
+<li>
+<strong>Files modified</strong>: <code>R/npe.R</code>
+</li>
+<li>
+<strong>Note</strong>: This addresses the user’s concern that NA/NaN errors with 25k evenly weighted samples (binary_retained) should not be due to numerical instability, but rather data corruption</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.3" id="mosaic-0133">MOSAIC 0.13.3<a class="anchor" aria-label="anchor" href="#mosaic-0133"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-13-3">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-3"></a></h3>
+<ul><li>
+<strong>Fix cryptic “missing value where TRUE/FALSE needed” error in NPE training</strong>
+<ul><li>
+<strong>Root cause</strong>: Validation loss became NA/NaN during training, causing <code>if (val_loss &lt; best_val_loss)</code> comparison to fail with cryptic error</li>
+<li>
+<strong>Error</strong>: <code>Error during wrapup: missing value where TRUE/FALSE needed</code> followed by recursive error and abort</li>
+<li>
+<strong>Trigger</strong>: Low ESS (Kish: 1.2, Perplexity: 3.0) with <code>continuous_retained</code> weight strategy causing numerical instability</li>
+<li>
+<strong>Fix</strong>: Add explicit NA/NaN checking for train_loss and val_loss before early stopping comparison (line 384-405 in npe.R)</li>
+<li>
+<strong>Impact</strong>: Now provides clear, actionable error message with diagnostic information and solutions</li>
+<li>
+<strong>Error message includes</strong>:
+<ul><li>Which epoch failed and what the loss values were</li>
+<li>Common causes (low ESS, weight concentration, architecture complexity)</li>
+<li>Specific solutions (try ‘continuous_best’, use ‘light’ tier, reduce learning rate)</li>
+</ul></li>
+<li>
+<strong>Files modified</strong>: <code>R/npe.R</code>
+</li>
+<li>
+<strong>Related</strong>: This error was masked by recursive error handling - actual issue is numerical instability from degenerate weight distributions</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.2" id="mosaic-0132">MOSAIC 0.13.2<a class="anchor" aria-label="anchor" href="#mosaic-0132"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-13-2">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-2"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fix run_NPE() JSON loading causing persistent list column errors</strong>
+<ul><li>
+<strong>Root cause</strong>: Used <code>jsonlite::fromJSON(..., simplifyVector = FALSE)</code> when loading config/priors from disk, keeping JSON arrays as R lists instead of converting to vectors</li>
+<li>
+<strong>Error</strong>: Even after v0.13.1 fix in get_npe_observed_data(), <code>config$reported_cases</code> was still a list, creating list columns in data frames</li>
+<li>
+<strong>Fix</strong>: Replace <code><a href="https://jeroen.r-universe.dev/jsonlite/reference/fromJSON.html" class="external-link">jsonlite::fromJSON()</a></code> with <code><a href="../reference/read_json_to_list.html">read_json_to_list()</a></code> (MOSAIC standard loader) at 3 locations in run_NPE.R (lines 244, 264, 284)</li>
+<li>
+<strong>Benefits</strong>:
+<ul><li>Uses MOSAIC codebase standard for JSON loading (consistent with other functions)</li>
+<li>Properly simplifies JSON arrays to R vectors (<code>simplifyVector = TRUE</code> default)</li>
+<li>Supports gzipped JSON files</li>
+<li>More maintainable and consistent</li>
+</ul></li>
+<li>
+<strong>Impact</strong>: Resolves persistent CSV write errors in run_NPE() standalone mode</li>
+<li>
+<strong>Files modified</strong>: <code>R/run_NPE.R</code>
+</li>
+<li>
+<strong>Verified</strong>: JSON loading, get_npe_observed_data(), CSV write all succeed</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.1" id="mosaic-0131">MOSAIC 0.13.1<a class="anchor" aria-label="anchor" href="#mosaic-0131"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-13-1">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-1"></a></h3>
+<ul><li>
+<strong>Fix list column error in get_npe_observed_data() causing CSV write failures</strong>
+<ul><li>
+<strong>Root cause</strong>: When <code>config$location_name</code> or <code>config$iso_code</code> is a list (common in LASER config format), single-bracket extraction <code>location_names[1]</code> returned a list of length 1 instead of scalar, creating list columns in data frames</li>
+<li>
+<strong>Error</strong>: <code>Error in utils::write.table(...): unimplemented type 'list' in 'EncodeElement'</code> when writing observed_data.csv in run_NPE()</li>
+<li>
+<strong>Fix</strong>: Convert location_names to character vector using <code><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist()</a></code> at function start (line 1008)</li>
+<li>
+<strong>Fix</strong>: Changed all <code>location_names[index]</code> to <code>location_names[[index]]</code> for scalar extraction (lines 1032, 1055, 1134)</li>
+<li>
+<strong>Impact</strong>: NPE workflow now handles list-type location identifiers correctly</li>
+<li>
+<strong>Files modified</strong>: <code>R/npe_posterior.R</code> (get_npe_observed_data function)</li>
+<li>
+<strong>Verified</strong>: CSV write succeeds, data frame structure correct, existing tests still pass</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.13.0" id="mosaic-0130">MOSAIC 0.13.0<a class="anchor" aria-label="anchor" href="#mosaic-0130"></a></h2>
+<div class="section level3">
+<h3 id="major-features-0-13-0">Major Features<a class="anchor" aria-label="anchor" href="#major-features-0-13-0"></a></h3>
+<ul><li>
+<strong>New run_NPE() function for flexible Neural Posterior Estimation</strong>
+<ul><li>Complete NPE workflow extracted into standalone function in <code>R/run_NPE.R</code> (1000+ lines)</li>
+<li>
+<strong>Dual-mode architecture</strong>:
+<ul><li>
+<strong>Embedded mode</strong>: Runs inside <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> with in-memory objects (no disk I/O)</li>
+<li>
+<strong>Standalone mode</strong>: Runs independently after calibration completes, loading from disk</li>
+</ul></li>
+<li>
+<strong>Key features</strong>:
+<ul><li>Automatic mode detection based on arguments provided</li>
+<li>Custom <code>output_dir</code> support for experimenting with multiple NPE strategies</li>
+<li>Root directory auto-detection from <code>getOption('root_directory')</code>
+</li>
+<li>Full control object support for all NPE hyperparameters</li>
+<li>Complete error handling and validation</li>
+</ul></li>
+<li>
+<strong>Benefits</strong>:
+<ul><li>Post-hoc NPE without re-running expensive BFRS calibration</li>
+<li>Experiment with different weight strategies (continuous_best, continuous_retained, etc.)</li>
+<li>Cleaner, more maintainable code architecture</li>
+<li>Reusable in custom workflows</li>
+</ul></li>
+<li>
+<strong>run_MOSAIC.R refactored</strong>: Replaced 300+ lines of inline NPE code with clean <code><a href="../reference/run_NPE.html">run_NPE()</a></code> call (lines 1500-1523)</li>
+<li>
+<strong>Standalone examples added</strong>: <code>vm/launch_mosaic.R</code> now includes post-hoc NPE usage examples (lines 201-233)</li>
+<li>See function documentation: <code><a href="../reference/run_NPE.html">?run_NPE</a></code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.11.5" id="mosaic-0115">MOSAIC 0.11.5<a class="anchor" aria-label="anchor" href="#mosaic-0115"></a></h2>
+<div class="section level3">
+<h3 id="changes-0-11-5">Changes<a class="anchor" aria-label="anchor" href="#changes-0-11-5"></a></h3>
+<ul><li>
+<strong>Simplify plot_model_ppc: Remove by_location argument</strong>
+<ul><li>Function now always creates both aggregate and per-location plots by default</li>
+<li>
+<strong>Removed argument</strong>: <code>by_location</code> (previously: “aggregate”, “both”, “per_location”)</li>
+<li>
+<strong>New behavior</strong>: Always creates comprehensive diagnostics (aggregate + per-location)</li>
+<li>Simplifies API - no configuration needed for plot output mode</li>
+<li>Legacy model mode still only creates aggregate plots (as before)</li>
+<li>Updated function signature: <code>plot_model_ppc(predictions_dir, predictions_files, locations, model, output_dir, verbose)</code>
+</li>
+<li>Updated call in run_MOSAIC.R to remove by_location argument</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.11.4" id="mosaic-0114">MOSAIC 0.11.4<a class="anchor" aria-label="anchor" href="#mosaic-0114"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-11-4">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-11-4"></a></h3>
+<ul><li>
+<strong>Add backward compatibility for plot_model_ppc function signature</strong>
+<ul><li>Wrapped plot_model_ppc call in run_MOSAIC with tryCatch to handle old package versions</li>
+<li>
+<strong>Issue</strong>: Clusters with cached old package versions (pre-v0.11.0) have different function signature</li>
+<li>Old signature: <code>plot_model_ppc(model, output_dir, verbose)</code>
+</li>
+<li>New signature: <code>plot_model_ppc(predictions_dir, predictions_files, by_location, locations, model, output_dir, verbose)</code>
+</li>
+<li>
+<strong>Solution</strong>: Try new signature first; if “unused arguments” error, log warning and skip PPC plots</li>
+<li>Prevents workflow from crashing on clusters that need package reinstallation</li>
+<li>Fixed at lines 1415-1441 in <code>run_MOSAIC.R</code>
+</li>
+<li>
+<strong>Note</strong>: Users should reinstall package on cluster to get full PPC functionality</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.25" id="mosaic-01025">MOSAIC 0.10.25<a class="anchor" aria-label="anchor" href="#mosaic-01025"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-25">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-25"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed missing Prior/BFRS curves for seasonality parameters in distribution plots</strong>
+<ul><li>Fixed gsub order in parameter name variant generation for seasonality params</li>
+<li>
+<strong>Root cause</strong>: Wrong order in <code><a href="https://rdrr.io/r/base/grep.html" class="external-link">gsub()</a></code> calls generated incorrect variant “a1j” instead of “a1”</li>
+<li>Original: <code>gsub("_j$", "", gsub("_", "", "a_1_j"))</code> → “a1j” (WRONG)</li>
+<li>Fixed: <code>gsub("_", "", gsub("_j$", "", "a_1_j"))</code> → “a1” (CORRECT)</li>
+<li>
+<strong>Impact</strong>: Prior/BFRS use <code>a1</code>, NPE uses <code>a_1_j</code> - variant “a1j” didn’t match either</li>
+<li>Plotting function now correctly finds seasonality params in all three JSONs</li>
+<li>Fixed at lines 515-516 in <code>plot_model_distributions.R</code>
+</li>
+<li>
+<strong>Result</strong>: All three curves (Prior, BFRS, NPE) now appear for seasonality parameters</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.23" id="mosaic-01023">MOSAIC 0.10.23<a class="anchor" aria-label="anchor" href="#mosaic-01023"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-23">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-23"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed missing NPE posteriors in distribution plots</strong>
+<ul><li>Added uniform distribution handling to <code>.fit_distribution()</code> in NPE posterior processing</li>
+<li>
+<strong>Root cause</strong>: Function only handled beta, gamma, lognormal, normal - NOT uniform</li>
+<li>When dist_type=“uniform”, function fell through to normal case, setting mean/sd instead of min/max</li>
+<li>Result: NPE posteriors.json had <code>{distribution: "uniform", parameters: []}</code>
+</li>
+<li>Plotting function couldn’t plot uniform without min/max parameters → NPE curves missing</li>
+<li>
+<strong>Solution</strong>: Calculate min/max from 1% and 99% quantiles (robust to outliers) + 1% buffer</li>
+<li>Fixed at lines 1516-1528 in <code>npe_posterior.R</code>
+</li>
+<li>
+<strong>Impact</strong>: NPE posteriors now appear in distribution plots (Prior vs BFRS vs NPE)</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.20" id="mosaic-01020">MOSAIC 0.10.20<a class="anchor" aria-label="anchor" href="#mosaic-01020"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-20">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-20"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed derived parameters not added to posteriors.json</strong>
+<ul><li>Modified <code><a href="../reference/calc_model_posterior_distributions.html">calc_model_posterior_distributions()</a></code> to dynamically add parameters missing from priors template</li>
+<li>Derived parameters (beta_j0_hum, beta_j0_env) now correctly added to posteriors.json</li>
+<li>
+<strong>Root cause</strong>: Function used priors.json as template, which only contains sampled parameters</li>
+<li>
+<strong>Solution</strong>: Dynamically create parameter structure for derived parameters not in priors</li>
+<li>Handles multiple locations correctly (adds each location as it’s processed)</li>
+<li>Fixed at lines 391-420 in <code>calc_model_posterior_distributions.R</code>
+</li>
+<li>
+<strong>Result</strong>: beta_j0_hum and beta_j0_env now appear in distributions_ETH_Prior_Posterior.pdf</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.19" id="mosaic-01019">MOSAIC 0.10.19<a class="anchor" aria-label="anchor" href="#mosaic-01019"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-19">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-19"></a></h3>
+<ul><li>
+<strong>Fixed missing derived parameters (beta_j0_hum, beta_j0_env) in distribution plots</strong>
+<ul><li>Changed distribution type from “derived” to “gamma” in estimated_parameters source data</li>
+<li>Derived rate parameters (beta_j0_hum, beta_j0_env) now fitted with gamma distributions</li>
+<li>
+<strong>Background</strong>: beta_j0_hum = p_beta × beta_j0_tot, beta_j0_env = (1 - p_beta) × beta_j0_tot</li>
+<li>Previously marked as “failed” because “derived” distribution type was unhandled</li>
+<li>Now appear in distributions_ETH_Prior_Posterior.pdf alongside beta_j0_tot and p_beta</li>
+<li>Fixed at line 289 in <code>data-raw/make_estimated_parameters_inventory.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.17" id="mosaic-01017">MOSAIC 0.10.17<a class="anchor" aria-label="anchor" href="#mosaic-01017"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-17">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-17"></a></h3>
+<ul><li>
+<strong>Fixed plot_model_convergence diagnostic text formatting</strong>
+<ul><li>Corrected convergence metrics display in diagnostic plots</li>
+<li>Fixed in <code>R/plot_model_convergence.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.15" id="mosaic-01015">MOSAIC 0.10.15<a class="anchor" aria-label="anchor" href="#mosaic-01015"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-15">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-15"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed “subscript out of bounds” error in convergence diagnostic plots</strong>
+<ul><li>Fixed regression from v0.10.14 where <code>targets[["ESS_min"]]</code> would error if element missing</li>
+<li>
+<strong>Root cause</strong>: <code>safe_numeric()</code> returned <code>numeric(0)</code> for NULL inputs, causing elements to be dropped from vectors</li>
+<li>
+<strong>Solution 1</strong>: Enhanced <code>safe_numeric()</code> to check for NULL and empty vectors before conversion</li>
+<li>
+<strong>Solution 2</strong>: Changed extraction from <code>[[</code> to <code>as.numeric(x["name"])</code> for safe handling of missing elements</li>
+<li>
+<code>[[</code> throws error on missing elements; <code>as.numeric(x["name"])</code> returns NA safely</li>
+<li>Fixed in both <code>plot_model_convergence.R</code> and <code>plot_model_convergence_loss.R</code>
+</li>
+<li>Now properly handles cases where JSON diagnostics may have missing target values</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.14" id="mosaic-01014">MOSAIC 0.10.14<a class="anchor" aria-label="anchor" href="#mosaic-01014"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-14">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-14"></a></h3>
+<ul><li>
+<strong>Fixed sprintf formatting errors in convergence diagnostic plots</strong>
+<ul><li>Fixed “Error formatting: ESS: %.0f [target &gt;= %.0f]” messages in convergence_diagnostic.pdf</li>
+<li>
+<strong>Root cause</strong>: Using single brackets <code>metrics["ESS"]</code> returns named vector element, not just value</li>
+<li>
+<strong>Solution</strong>: Changed to double brackets <code>metrics[["ESS"]]</code> to extract raw values</li>
+<li>Fixed in both <code>plot_model_convergence.R</code> (lines 214-223, 330-336) and <code>plot_model_convergence_loss.R</code> (lines 108-114)</li>
+<li>All convergence metrics (ESS, A, CVw, B) now format correctly in diagnostic text</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.13" id="mosaic-01013">MOSAIC 0.10.13<a class="anchor" aria-label="anchor" href="#mosaic-01013"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-13">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-13"></a></h3>
+<ul><li>
+<strong>Fixed plotting scale for extremely small initial condition posteriors (E_initial, I_initial)</strong>
+<ul><li>Implemented automatic detection of tiny values (&lt; 0.001) in posterior distributions</li>
+<li>Applied scientific notation formatting for x-axis labels when values &lt; 0.001</li>
+<li>Increased padding from 10% to 30% for better visibility of tiny value distributions</li>
+<li>Fixed all 8 panels: Prior, Retained, Retained Weighted, Best Unweighted, Best Weighted, Caterpillar, Distributions (Empirical), Distributions (Theoretical)</li>
+<li>
+<strong>Root cause</strong>: E_initial and I_initial have epidemiologically correct tiny values (~10⁻⁷ proportion, representing ~50-60 people in population of 126M), which appeared as flat lines when plotted on wide [0,1] axis</li>
+<li>
+<strong>Solution</strong>: Tight x-axis limits with scientific notation (e.g., “2.0e-07”, “4.0e-07”, “6.0e-07”)</li>
+<li>Fixed throughout <code>plot_model_posteriors_detail.R</code> (lines 380-769)</li>
+<li>See <code>claude/initial_EI_plotting_issue.md</code> for complete analysis</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.12" id="mosaic-01012">MOSAIC 0.10.12<a class="anchor" aria-label="anchor" href="#mosaic-01012"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-12">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-12"></a></h3>
+<ul><li>
+<strong>Fixed missing dplyr namespace prefix in <code><a href="../reference/plot_model_posteriors_detail.html">plot_model_posteriors_detail()</a></code></strong>
+<ul><li>Added explicit <code>dplyr::</code> prefix to <code>slice()</code> function call</li>
+<li>Fixes “could not find function ‘slice’” error</li>
+<li>Fixed at line 908 in <code>plot_model_posteriors_detail.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.11" id="mosaic-01011">MOSAIC 0.10.11<a class="anchor" aria-label="anchor" href="#mosaic-01011"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-11">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-11"></a></h3>
+<ul><li>
+<strong>Fixed S7 class conflict with patchwork operators in <code><a href="../reference/plot_model_posteriors_detail.html">plot_model_posteriors_detail()</a></code></strong>
+<ul><li>Replaced <code>/</code> operator with explicit <code>patchwork::wrap_plots(ncol=1)</code> calls</li>
+<li>Fixes “Can’t find method for generic <code>/(e1, e2)</code>” error from S7 class system</li>
+<li>S7 was intercepting the patchwork <code>/</code> operator between ggplot objects</li>
+<li>Using explicit <code>wrap_plots()</code> avoids operator dispatch conflicts</li>
+<li>Fixed at lines 727-754 in <code>plot_model_posteriors_detail.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.10" id="mosaic-01010">MOSAIC 0.10.10<a class="anchor" aria-label="anchor" href="#mosaic-01010"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-10">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-10"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed incorrect weighting in NPE ensemble predictions</strong>
+<ul><li>Removed density-based weighting that caused double-weighting artifact</li>
+<li>NPE samples are drawn directly from posterior p(θ|x), so uniform weights are correct</li>
+<li>Using density as weights was creating effective distribution [p(θ|x)]²</li>
+<li>This over-emphasized high-density regions and under-represented uncertainty</li>
+<li>Now uses uniform weights (NULL) for proper posterior predictive sampling</li>
+<li>Fixed at lines 1679-1686 in <code>run_MOSAIC.R</code>
+</li>
+<li>
+<strong>Impact:</strong> NPE ensemble predictions should now have appropriate uncertainty bands</li>
+<li>
+<strong>Theory:</strong> For posterior predictive p(y|x) ≈ (1/N) Σ p(y|θᵢ) where θᵢ ~ p(θ|x)</li>
+<li>Density weights only correct for importance sampling from q(θ) ≠ p(θ|x)</li>
+<li>See <code>claude/npe_weighting_analysis.md</code> for complete theoretical analysis</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.9" id="mosaic-0109">MOSAIC 0.10.9<a class="anchor" aria-label="anchor" href="#mosaic-0109"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-9">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-9"></a></h3>
+<ul><li>
+<strong>Fixed missing namespace prefixes in <code><a href="../reference/plot_model_posteriors_detail.html">plot_model_posteriors_detail()</a></code></strong>
+<ul><li>Added explicit <code>ggplot2::</code> prefixes to all ggplot2 functions (68+ occurrences)</li>
+<li>Added <code>grid::</code> prefix for <code>unit()</code> calls</li>
+<li>Added <code>arrow::</code> prefix for <code>read_parquet()</code>
+</li>
+<li>Added <code>patchwork::</code> prefixes for <code>wrap_plots()</code> and <code>plot_layout()</code>
+</li>
+<li>Added <code>cowplot::</code> prefixes for <code>plot_grid()</code> and <code>get_legend()</code>
+</li>
+<li>Fixes “could not find function ‘geom_histogram’” error</li>
+<li>Fixed throughout <code>plot_model_posteriors_detail.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.8" id="mosaic-0108">MOSAIC 0.10.8<a class="anchor" aria-label="anchor" href="#mosaic-0108"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-8">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-8"></a></h3>
+<ul><li>
+<strong>Fixed inappropriate hard-coded bounds for truncated normal distribution</strong>
+<ul><li>Replaced arbitrary -45/45 defaults with -Inf/Inf to match fitting function behavior</li>
+<li>Added intelligent plotting range selection for infinite bounds</li>
+<li>Use mean ± 4sd for plotting range when bounds are infinite (covers 99.99%)</li>
+<li>Properly handle one-sided truncation (e.g., a=-Inf, b=10)</li>
+<li>Format display strings to show “Inf” for infinite bounds</li>
+<li>Fixed at lines 445-481 in <code>plot_model_distributions.R</code>
+</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.7" id="mosaic-0107">MOSAIC 0.10.7<a class="anchor" aria-label="anchor" href="#mosaic-0107"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-7">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-7"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed remaining NA handling error in <code>calc_distribution_density()</code></strong>
+<ul><li>Fixed “missing value where TRUE/FALSE needed” error for truncated normal distribution</li>
+<li>Completed NA handling fix missed in v0.10.6</li>
+<li>Fixed truncnorm distribution at lines 446-453 in <code>plot_model_distributions.R</code>
+</li>
+<li>Now all distribution types properly handle NULL parameters</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.6" id="mosaic-0106">MOSAIC 0.10.6<a class="anchor" aria-label="anchor" href="#mosaic-0106"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-6">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-6"></a></h3>
+<ul><li>
+<strong>CRITICAL: Fixed NA handling error in <code>calc_distribution_density()</code></strong>
+<ul><li>Fixed “missing value where TRUE/FALSE needed” error in <code><a href="../reference/plot_model_distributions.html">plot_model_distributions()</a></code>
+</li>
+<li>Replaced unsafe <code>as.numeric(NULL)</code> pattern with explicit <code>NA_real_</code> conversion</li>
+<li>Fixed for uniform, normal, and gompertz distributions (lines 402-427)</li>
+<li>Prevents crashes when parameter bounds are NULL</li>
+</ul></li>
+<li>
+<strong>Fixed all ggplot2 3.4.0+ deprecation warnings</strong>
+<ul><li>Replaced deprecated <code>size=</code> with <code>linewidth=</code> in <code>geom_line()</code> (14 instances)</li>
+<li>Replaced deprecated <code>size=</code> with <code>linewidth=</code> in <code>geom_smooth()</code> (2 instances)</li>
+<li>Replaced deprecated <code>size=</code> with <code>linewidth=</code> in <code>element_line()</code> (10 instances)</li>
+<li>Replaced deprecated <code>size=</code> with <code>linewidth=</code> in <code>geom_vline()</code> (6 instances)</li>
+<li>Fixed across 10 files: plot_generation_time.R, plot_vibrio_decay_rate.R, est_symptomatic_prop.R, plot_suspected_cases.R, plot_CFR_by_country.R, plot_vaccine_effectiveness.R, est_WASH_coverage.R, npe_plots.R, plot_africa_map.R, plot_model_distributions.R</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.5" id="mosaic-0105">MOSAIC 0.10.5<a class="anchor" aria-label="anchor" href="#mosaic-0105"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-5">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-5"></a></h3>
+<ul><li>Fixed broken documentation links to deprecated <code>run_mosaic_iso()</code>
+<ul><li>Removed references to <code>run_mosaic_iso()</code> in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> documentation</li>
+<li>Fixes roxygen2 warnings about unresolvable links</li>
+<li>Updated <a href="https://github.com/description" class="external-link">@description</a> and removed <a href="https://github.com/seealso" class="external-link">@seealso</a> reference</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.4" id="mosaic-0104">MOSAIC 0.10.4<a class="anchor" aria-label="anchor" href="#mosaic-0104"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-4">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-4"></a></h3>
+<ul><li>Fixed missing namespace prefixes in <code><a href="../reference/plot_npe_training_loss.html">plot_npe_training_loss()</a></code>
+<ul><li>Added explicit <code>ggplot2::</code> prefixes to all ggplot2 functions throughout the function</li>
+<li>Fixes “could not find function ‘facet_wrap’” error during NPE training visualization</li>
+<li>Fixed throughout lines 1585-1768 including: <code>facet_wrap</code>, <code>ggplot</code>, <code>aes</code>, <code>geom_smooth</code>, <code>geom_line</code>, <code>geom_vline</code>, <code>geom_point</code>, <code>geom_text</code>, <code>labs</code>, <code>theme_minimal</code>, <code>theme</code>, and all theme element functions</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.3" id="mosaic-0103">MOSAIC 0.10.3<a class="anchor" aria-label="anchor" href="#mosaic-0103"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-3">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-3"></a></h3>
+<ul><li>Fixed missing <code>ggsave()</code> namespace prefix in <code><a href="../reference/plot_model_distributions.html">plot_model_distributions()</a></code>
+<ul><li>Added explicit <code><a href="https://ggplot2.tidyverse.org/reference/ggsave.html" class="external-link">ggplot2::ggsave()</a></code> prefix at two save locations</li>
+<li>Fixes “could not find function ‘ggsave’” error when saving plots</li>
+<li>Fixed for both global parameters plot (line 834) and location-specific plots (line 980)</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.2" id="mosaic-0102">MOSAIC 0.10.2<a class="anchor" aria-label="anchor" href="#mosaic-0102"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-2">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-2"></a></h3>
+<ul><li>Fixed missing namespace prefixes in <code><a href="../reference/plot_model_distributions.html">plot_model_distributions()</a></code>
+<ul><li>Added explicit <code>ggplot2::</code> prefixes to <code>scale_x_continuous()</code> and all other ggplot2 functions</li>
+<li>Fixes “could not find function ‘scale_x_continuous’” error in <code>create_multi_method_plot()</code>
+</li>
+<li>Fixed in three locations: main plot creation and two legend plot sections</li>
+<li>Also added <code><a href="https://rdrr.io/r/grid/unit.html" class="external-link">grid::unit()</a></code> prefix for grid package function</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.1" id="mosaic-0101">MOSAIC 0.10.1<a class="anchor" aria-label="anchor" href="#mosaic-0101"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-10-1">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-1"></a></h3>
+<ul><li>Fixed missing namespace prefixes in <code><a href="../reference/plot_model_posterior_quantiles.html">plot_model_posterior_quantiles()</a></code>
+<ul><li>Added explicit <code>ggplot2::</code> prefixes to all ggplot2 functions</li>
+<li>Fixes “could not find function ‘geom_errorbar’” error</li>
+<li>Functions not imported in NAMESPACE now called with explicit prefix</li>
+<li>Affects both global and location-specific plotting sections</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.0" id="mosaic-0100">MOSAIC 0.10.0<a class="anchor" aria-label="anchor" href="#mosaic-0100"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-10-0">Breaking Changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-10-0"></a></h3>
+<ul><li>
+<strong>Major refactor: Lean run_MOSAIC() - aggressive simplification</strong>
+<ul><li>Moved <code>run_mosaic_iso()</code> to <code>deprecated/</code> directory (use <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> directly)</li>
+<li>Stripped ESS calculation: removed conditional skipping, verbose summaries</li>
+<li>Stripped convergence diagnostics: removed section banners, verbose logging</li>
+<li>Stripped posterior sections: removed verbose progress, set verbose=FALSE everywhere</li>
+<li>Stripped PPC sections: removed conditional checks, verbose status messages</li>
+<li>Stripped parameter uncertainty: removed ensemble logging</li>
+<li>Stripped NPE section: removed 66 log_msg calls, verbose diagnostics, section banners</li>
+<li>Stripped POST-HOC optimization: removed tier-by-tier logging, convergence messages</li>
+<li>Stripped WEIGHTS section: removed detailed ESS/temperature logging</li>
+<li>Removed all major section banners (80× ‘=’ decorative headers)</li>
+<li>Pattern applied: calculate → write → log filepath (no defensive checks)</li>
+<li>Total: removed 180+ verbose log_msg calls and 90+ section banners</li>
+<li><strong>Result: 284 lines removed (2441 → 2157 lines, 12% reduction)</strong></li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="deprecations-0-10-0">Deprecations<a class="anchor" aria-label="anchor" href="#deprecations-0-10-0"></a></h3>
+<ul><li>
+<code>run_mosaic_iso()</code> - Use <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> with <code><a href="../reference/get_location_config.html">get_location_config()</a></code> and <code><a href="../reference/get_location_priors.html">get_location_priors()</a></code> instead</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.1" id="mosaic-091">MOSAIC 0.9.1<a class="anchor" aria-label="anchor" href="#mosaic-091"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-9-1">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-9-1"></a></h3>
+<ul><li>Fixed premature cleanup of <code>ess_results</code> variable in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>
+<ul><li>Removed cleanup at line 1204 that occurred before <code><a href="../reference/calc_convergence_diagnostics.html">calc_convergence_diagnostics()</a></code> call</li>
+<li>Variable is now retained until after convergence diagnostics are calculated</li>
+<li>Fixes “object ‘ess_results’ not found” error at runtime</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.0" id="mosaic-090">MOSAIC 0.9.0<a class="anchor" aria-label="anchor" href="#mosaic-090"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-9-0">Breaking Changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-9-0"></a></h3>
+<ul><li>
+<strong>Major refactor: Removed ALL excessive flow control from <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code></strong>
+<ul><li>Removed validation wrapper around <code><a href="../reference/calc_convergence_diagnostics.html">calc_convergence_diagnostics()</a></code> (90 lines → 30 lines)</li>
+<li>Removed ALL tryCatch blocks around plotting functions (10+ instances)</li>
+<li>Removed tryCatch around <code><a href="../reference/calc_model_posterior_quantiles.html">calc_model_posterior_quantiles()</a></code>
+</li>
+<li>Removed tryCatch around <code><a href="../reference/calc_model_posterior_distributions.html">calc_model_posterior_distributions()</a></code>
+</li>
+<li>Removed tryCatch around <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code> for best model</li>
+<li>Removed tryCatch around <code>lc$run_model()</code> for best model</li>
+<li>Removed tryCatch around <code><a href="../reference/plot_model_fit_stochastic.html">plot_model_fit_stochastic()</a></code> and related plotting</li>
+<li>Removed defensive if-else wrapper around NPE posterior samples processing</li>
+<li>Functions now fail fast with clear error messages at the source</li>
+<li>
+<strong>Impact:</strong> Errors will stop execution immediately rather than continuing with NA/NULL values</li>
+<li>
+<strong>Benefit:</strong> Much easier to debug - errors show exactly where the problem is</li>
+<li>
+<strong>Note:</strong> Parallel worker tryCatch blocks retained (essential for batch processing)</li>
+</ul></li>
+</ul></div>
+<div class="section level3">
+<h3 id="why-this-change-0-9-0">Why This Change?<a class="anchor" aria-label="anchor" href="#why-this-change-0-9-0"></a></h3>
+<p>Excessive defensive programming was masking real errors and making debugging extremely difficult. The new fail-fast approach: - ✅ Errors happen at the source with clear tracebacks - ✅ Simpler code flow that’s easier to understand and maintain - ✅ Forces fixing root causes instead of papering over problems - ✅ Better for research/development workflows - ✅ Reduces code complexity (~150+ lines of error handling removed)</p>
+<p><strong>If you encounter errors after upgrading:</strong> The errors were always there, just hidden. Fix the underlying issue rather than relying on fallback behavior.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.9" id="mosaic-089">MOSAIC 0.8.9<a class="anchor" aria-label="anchor" href="#mosaic-089"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-8-9">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-8-9"></a></h3>
+<ul><li>Fixed uninitialized variable in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>
+<ul><li>Added defensive initialization of <code>ess_results</code> to NULL before parameter-specific ESS calculation</li>
+<li>Prevents “object not found” error when debugging or if code execution is interrupted</li>
+<li>Variable is properly set later based on sample availability (lines 1161 or 1164)</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.8" id="mosaic-088">MOSAIC 0.8.8<a class="anchor" aria-label="anchor" href="#mosaic-088"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-8-8">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-8-8"></a></h3>
+<ul><li>Fixed test failures in <code>test-calc_convergence_diagnostics.R</code>
+<ul><li>Corrected threshold expectations for “lower is better” metrics (CVw)</li>
+<li>Changed test values to properly demonstrate warn status (within 120-200% of target)</li>
+<li>Updated helper function tests to use <code>MOSAIC:::</code> for internal function access</li>
+<li>All 70 tests now pass</li>
+</ul></li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="mosaic-development-version">MOSAIC (development version)<a class="anchor" aria-label="anchor" href="#mosaic-development-version"></a></h2>
 <div class="section level3">

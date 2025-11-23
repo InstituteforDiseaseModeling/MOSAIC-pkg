@@ -13,7 +13,7 @@ and filter a large combined outputs file."><meta property="og:image" content="ht
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -24,9 +24,10 @@ and filter a large combined outputs file."><meta property="og:image" content="ht
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -57,6 +58,7 @@ and filter a large combined outputs file.</p>
 <span>  <span class="va">bfrs_dir</span>,</span>
 <span>  results <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  param_names <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  weights <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  chunk_size <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -81,6 +83,12 @@ avoid redundant file I/O. Must contain columns: sim, likelihood, and parameter c
 
 <dt id="arg-param-names">param_names<a class="anchor" aria-label="anchor" href="#arg-param-names"></a></dt>
 <dd><p>Character vector of parameter names to extract (NULL = auto-detect)</p></dd>
+
+
+<dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
+<dd><p>Optional numeric vector of NPE weights for each simulation
+(NULL = extract from results$weight_npe, then results$weight_best, then uniform).
+Passing weights explicitly avoids needing to add weight_npe column to results.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -139,13 +147,14 @@ removed after NPE training completes to free disk space.</p>
 <span class="r-in"><span>    param_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta_env"</span>, <span class="st">"beta_hum"</span>, <span class="st">"tau_i"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Optimized usage (pass pre-loaded results)</span></span></span>
+<span class="r-in"><span><span class="co"># Optimized usage (pass pre-loaded results and weights)</span></span></span>
 <span class="r-in"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">arrow</span><span class="fu">::</span><span class="fu"><a href="https://arrow.apache.org/docs/r/reference/read_parquet.html" class="external-link">read_parquet</a></span><span class="op">(</span><span class="st">"path/to/1_bfrs/outputs/simulations.parquet"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">results</span><span class="op">$</span><span class="va">weight_npe</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_npe_weights.html">get_npe_weights</a></span><span class="op">(</span><span class="va">results</span>, strategy <span class="op">=</span> <span class="st">"continuous_best"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">npe_weights</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_npe_weights.html">get_npe_weights</a></span><span class="op">(</span><span class="va">results</span>, strategy <span class="op">=</span> <span class="st">"continuous_best"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">npe_data</span> <span class="op">&lt;-</span> <span class="fu">prepare_npe_data</span><span class="op">(</span></span></span>
 <span class="r-in"><span>    bfrs_dir <span class="op">=</span> <span class="st">"path/to/1_bfrs"</span>,</span></span>
 <span class="r-in"><span>    results <span class="op">=</span> <span class="va">results</span>,</span></span>
-<span class="r-in"><span>    param_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta_env"</span>, <span class="st">"beta_hum"</span>, <span class="st">"tau_i"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>    param_names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"beta_env"</span>, <span class="st">"beta_hum"</span>, <span class="st">"tau_i"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>    weights <span class="op">=</span> <span class="va">npe_weights</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>

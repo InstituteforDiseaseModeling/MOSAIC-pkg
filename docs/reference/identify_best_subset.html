@@ -11,7 +11,7 @@ This subset will be used to define priors for Neural Posterior Estimation (NPE).
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -22,9 +22,10 @@ This subset will be used to define priors for Neural Posterior Estimation (NPE).
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -59,6 +60,7 @@ This subset will be used to define priors for Neural Posterior Estimation (NPE).
 <span>  min_percentile <span class="op">=</span> <span class="fl">0.001</span>,</span>
 <span>  max_percentile <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  precision <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>  ess_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"kish"</span>, <span class="st">"perplexity"</span><span class="op">)</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -81,7 +83,7 @@ Can be lowered for small datasets, but values &lt; 20 may give unstable results.
 
 
 <dt id="arg-target-ess-b">target_ESS_B<a class="anchor" aria-label="anchor" href="#arg-target-ess-b"></a></dt>
-<dd><p>Numeric target minimum ESS for the subset using Kish formula (default: 50)</p></dd>
+<dd><p>Numeric target minimum ESS for the subset (default: 50)</p></dd>
 
 
 <dt id="arg-target-a">target_A<a class="anchor" aria-label="anchor" href="#arg-target-a"></a></dt>
@@ -108,6 +110,10 @@ E.g., 30 means at most the top 30% will be considered.</p></dd>
 <dt id="arg-precision">precision<a class="anchor" aria-label="anchor" href="#arg-precision"></a></dt>
 <dd><p>Numeric precision for binary search convergence as a percentage (default: 0.1)
 The search stops when the range is smaller than this value.</p></dd>
+
+
+<dt id="arg-ess-method">ess_method<a class="anchor" aria-label="anchor" href="#arg-ess-method"></a></dt>
+<dd><p>Character string specifying ESS calculation method: "kish" (default) or "perplexity"</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
