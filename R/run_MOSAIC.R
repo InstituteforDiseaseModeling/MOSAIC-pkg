@@ -1286,7 +1286,7 @@ run_MOSAIC <- function(config,
     target_ess_best = control$targets$ESS_best,
     target_A_best = control$targets$A_best,
     target_cvw_best = control$targets$CVw_best,
-    target_percentile_max = control$targets$percentile_max,
+    target_max_best_subset = control$targets$max_best_subset,
     target_ess_param = control$targets$ESS_param,
     target_ess_param_prop = control$targets$ESS_param_prop,
 
