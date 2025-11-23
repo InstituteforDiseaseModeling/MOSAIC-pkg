@@ -1,9 +1,9 @@
 #' Grid Search for Best Subset with Early Stopping
 #'
 #' Performs exhaustive grid search to find the smallest subset size that meets
-#' convergence criteria (ESS, A, CVw). Stops at first convergence.
+#' convergence criteria (ESS, A, CVw) using uniform weights. Stops at first convergence.
 #'
-#' @param results Data frame of calibration results with columns: sim_id, likelihood, weights, parameters
+#' @param results Data frame of calibration results with columns: sim_id, likelihood
 #' @param target_ESS Numeric target for Effective Sample Size (ESS)
 #' @param target_A Numeric target for Agreement Index (A)
 #' @param target_CVw Numeric target for Coefficient of Variation of weights (CVw)
@@ -28,6 +28,9 @@
 #' - ESS >= target_ESS
 #' - A >= target_A
 #' - CVw <= target_CVw
+#'
+#' Metrics are calculated using uniform weights (1/n for each sample) since Gibbs
+#' weighting is applied after subset selection in the workflow.
 #'
 #' If no size meets criteria, returns results at max_size with converged=FALSE.
 #'
@@ -61,8 +64,8 @@ grid_search_best_subset <- function(
     stop("results must be a data frame")
   }
 
-  if (!all(c("sim_id", "likelihood", "weights") %in% names(results))) {
-    stop("results must contain columns: sim_id, likelihood, weights")
+  if (!all(c("sim_id", "likelihood") %in% names(results))) {
+    stop("results must contain columns: sim_id, likelihood")
   }
 
   if (nrow(results) == 0) {
@@ -110,9 +113,9 @@ grid_search_best_subset <- function(
     # Select top n
     subset_n <- results_ranked[1:n, ]
 
-    # Calculate convergence metrics
-    weights_n <- subset_n$weights
-    weights_n <- weights_n / sum(weights_n)  # Normalize
+    # Calculate convergence metrics using uniform weights
+    # At subset optimization stage, Gibbs weights haven't been calculated yet
+    weights_n <- rep(1/n, n)  # Uniform weights
 
     # ESS
     if (ess_method == "kish") {
@@ -155,8 +158,7 @@ grid_search_best_subset <- function(
 
   # No convergence - return results at max_size
   subset_max <- results_ranked[1:max_size, ]
-  weights_max <- subset_max$weights
-  weights_max <- weights_max / sum(weights_max)
+  weights_max <- rep(1/max_size, max_size)  # Uniform weights
 
   if (ess_method == "kish") {
     ESS_max <- 1 / sum(weights_max^2)
