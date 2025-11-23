@@ -3,7 +3,7 @@
 #' Performs exhaustive grid search to find the smallest subset size that meets
 #' convergence criteria (ESS, A, CVw) using uniform weights. Stops at first convergence.
 #'
-#' @param results Data frame of calibration results with columns: sim_id, likelihood
+#' @param results Data frame of calibration results with columns: sim, likelihood
 #' @param target_ESS Numeric target for Effective Sample Size (ESS)
 #' @param target_A Numeric target for Agreement Index (A)
 #' @param target_CVw Numeric target for Coefficient of Variation of weights (CVw)
@@ -64,8 +64,8 @@ grid_search_best_subset <- function(
     stop("results must be a data frame")
   }
 
-  if (!all(c("sim_id", "likelihood") %in% names(results))) {
-    stop("results must contain columns: sim_id, likelihood")
+  if (!all(c("sim", "likelihood") %in% names(results))) {
+    stop("results must contain columns: sim, likelihood")
   }
 
   if (nrow(results) == 0) {
