@@ -1,3 +1,27 @@
+# MOSAIC 0.13.0
+
+## Major Features
+
+* **New run_NPE() function for flexible Neural Posterior Estimation**
+  - Complete NPE workflow extracted into standalone function in `R/run_NPE.R` (1000+ lines)
+  - **Dual-mode architecture**:
+    - **Embedded mode**: Runs inside `run_MOSAIC()` with in-memory objects (no disk I/O)
+    - **Standalone mode**: Runs independently after calibration completes, loading from disk
+  - **Key features**:
+    - Automatic mode detection based on arguments provided
+    - Custom `output_dir` support for experimenting with multiple NPE strategies
+    - Root directory auto-detection from `getOption('root_directory')`
+    - Full control object support for all NPE hyperparameters
+    - Complete error handling and validation
+  - **Benefits**:
+    - Post-hoc NPE without re-running expensive BFRS calibration
+    - Experiment with different weight strategies (continuous_best, continuous_retained, etc.)
+    - Cleaner, more maintainable code architecture
+    - Reusable in custom workflows
+  - **run_MOSAIC.R refactored**: Replaced 300+ lines of inline NPE code with clean `run_NPE()` call (lines 1500-1523)
+  - **Standalone examples added**: `vm/launch_mosaic.R` now includes post-hoc NPE usage examples (lines 201-233)
+  - See function documentation: `?run_NPE`
+
 # MOSAIC 0.11.5
 
 ## Changes
