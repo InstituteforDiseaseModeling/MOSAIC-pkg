@@ -25,8 +25,8 @@
 #'   Both B_size and ESS_B must be >= target_ess_best.
 #' @param target_A_best Numeric target agreement index (default 0.95)
 #' @param target_cvw_best Numeric target coefficient of variation (default 0.5)
-#' @param target_percentile_max Numeric maximum percentile for subset selection
-#'   (default 5.0, meaning top 5%)
+#' @param target_max_best_subset Numeric maximum best subset size in absolute count
+#'   (default 1000). Replaced target_percentile_max for absolute count-based control.
 #' @param target_ess_param Numeric target ESS for individual parameters (default 300)
 #' @param target_ess_param_prop Numeric target proportion of parameters that must
 #'   meet ESS threshold (default 0.95, meaning 95%)
@@ -104,7 +104,7 @@
 #'     target_ess_best = 300,
 #'     target_A_best = 0.95,
 #'     target_cvw_best = 0.5,
-#'     target_percentile_max = 5.0,
+#'     target_max_best_subset = 1000,
 #'     ess_method = "kish"
 #' )
 #'
@@ -140,7 +140,7 @@ calc_convergence_diagnostics <- function(
     target_ess_best = 300,
     target_A_best = 0.95,
     target_cvw_best = 0.5,
-    target_percentile_max = 5.0,
+    target_max_best_subset = 1000,  # Changed from target_percentile_max
     target_ess_param = 300,
     target_ess_param_prop = 0.95,
 
@@ -192,14 +192,13 @@ calc_convergence_diagnostics <- function(
         warn_threshold = 0.5
     )
 
-    # B_size upper bound: Must not exceed percentile_max of retained set
-    max_B_size <- n_retained * (target_percentile_max / 100)
+    # B_size upper bound: Must not exceed max_best_subset
     status_B_size_upper <- .calc_status(
         value = n_best_subset,
-        target = max_B_size,
-        direction = "lower",     # Must be BELOW target
-        pass_threshold = 1.0,    # Must not exceed limit
-        warn_threshold = 1.2     # Warn if within 20% of exceeding
+        target = target_max_best_subset,  # Direct comparison (absolute count)
+        direction = "lower",              # Must be BELOW target
+        pass_threshold = 1.0,             # Must not exceed limit
+        warn_threshold = 1.2              # Warn if within 20% of exceeding
     )
 
     # ESS_best: Effective sample size in best subset
@@ -230,9 +229,11 @@ calc_convergence_diagnostics <- function(
     )
 
     # Percentile: Should be small (concentrated selection)
+    # Convert max_best_subset to percentile for validation
+    target_percentile_max_derived <- (target_max_best_subset / n_retained) * 100
     status_percentile <- .calc_percentile_status(
         percentile_val = percentile_used,
-        target_max = target_percentile_max
+        target_max = target_percentile_max_derived
     )
 
     # Parameter ESS: Proportion meeting target
@@ -304,14 +305,14 @@ calc_convergence_diagnostics <- function(
         message("Subset Selection:")
         message("  Convergence tier: ", convergence_tier)
         message("  Percentile used: ", round(percentile_used, 2), "%",
-                " (target <= ", target_percentile_max, "%) - ", toupper(status_percentile))
+                " (target <= ", round(target_percentile_max_derived, 2), "%) - ", toupper(status_percentile))
         message("")
         message("Best Subset Metrics:")
         message("  Size (B) - Lower: ", n_best_subset,
                 " (target >= ", target_ess_best, ") - ", toupper(status_B_size))
         message("  Size (B) - Upper: ", n_best_subset,
-                " (target <= ", round(max_B_size, 0),
-                " = ", n_retained, "*", target_percentile_max, "%) - ",
+                " (target <= ", target_max_best_subset,
+                " = ", round(target_percentile_max_derived, 2), "%) - ",
                 toupper(status_B_size_upper))
         message("  ESS_B: ", round(ess_best, 1),
                 " (target >= ", target_ess_best, ") - ", toupper(status_ess_best))
@@ -359,9 +360,13 @@ calc_convergence_diagnostics <- function(
                 value = target_cvw_best,
                 description = "Target coefficient of variation"
             ),
+            max_best_subset = list(
+                value = target_max_best_subset,
+                description = "Maximum best subset size (absolute count)"
+            ),
             percentile_max = list(
-                value = target_percentile_max,
-                description = "Maximum percentile for subset selection"
+                value = target_percentile_max_derived,
+                description = "Maximum percentile for subset selection (derived from max_best_subset)"
             ),
             ess_param = list(
                 value = target_ess_param,
@@ -384,8 +389,8 @@ calc_convergence_diagnostics <- function(
             # B_size_upper - upper bound on best subset size
             B_size_upper = list(
                 value = n_best_subset,
-                target = max_B_size,
-                description = "Best subset size must not exceed percentile_max of retained set",
+                target = target_max_best_subset,
+                description = "Best subset size must not exceed max_best_subset",
                 status = status_B_size_upper
             ),
 

@@ -17,7 +17,7 @@ train_npe(
   validation_split = 0.15,
   early_stopping = TRUE,
   patience = 20,
-  use_gpu = TRUE,
+  use_gpu = FALSE,
   seed = 42,
   verbose = TRUE
 )

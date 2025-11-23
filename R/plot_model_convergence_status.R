@@ -281,9 +281,13 @@ plot_model_convergence_status <- function(results_dir,
             # Get target for max percentile from diagnostics
             # Check for both old and new target names for backward compatibility
             target_percentile <- if (!is.null(diagnostics$targets$percentile_max$value)) {
-                diagnostics$targets$percentile_max$value
+                diagnostics$targets$percentile_max$value  # Backward compat (old percentile-based)
             } else if (!is.null(diagnostics$targets$max_percentile$value)) {
-                diagnostics$targets$max_percentile$value
+                diagnostics$targets$max_percentile$value  # Backward compat (old percentile-based)
+            } else if (!is.null(diagnostics$targets$max_best_subset$value)) {
+                # NEW: Convert max_best_subset (absolute count) to percentile
+                n_retained <- diagnostics$summary$retained_simulations
+                (diagnostics$targets$max_best_subset$value / n_retained) * 100
             } else {
                 5.0  # Default 5%
             }
