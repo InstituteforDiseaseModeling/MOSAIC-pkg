@@ -66,17 +66,17 @@ test_that("Status calculations work correctly for individual metrics", {
           target_ess_best = 300,
           target_A_best = 0.95,
           target_cvw_best = 0.5,
-          target_percentile_max = 5.0,
+          target_max_best_subset = 425,  # 5% of 8500 retained
           verbose = FALSE
      )
 
      # Check individual statuses
      expect_equal(diag$metrics$B_size$status, "pass")      # 400 ≥ 300
-     expect_equal(diag$metrics$ess_best$status, "pass")    # 280 ≥ 300*0.8
+     expect_equal(diag$metrics$ess_best$status, "warn")    # 280 = 93% of 300 (≥80% but <100%)
      expect_equal(diag$metrics$A_B$status, "pass")         # 0.92 ≥ 0.95*0.9
      expect_equal(diag$metrics$cvw_B$status, "warn")       # 0.7 > 0.5*1.2 but ≤ 0.5*2.0
 
-     # Overall status should be WARN (has one warn, no fails)
+     # Overall status should be WARN (has two warnings, no fails)
      expect_equal(diag$summary$convergence_status, "WARN")
 })
 
@@ -146,7 +146,7 @@ test_that("B_size target is separate from ESS target", {
           percentile_used = 10.0,   # Also above percentile target
           convergence_tier = "tier_15",
           target_ess_best = 300,
-          target_percentile_max = 5.0,
+          target_max_best_subset = 425,  # 5% of 8500 retained
           verbose = FALSE
      )
 
@@ -168,7 +168,7 @@ test_that("Percentile status is calculated correctly", {
           cvw_best = 0.4,
           percentile_used = 4.5,   # < 5.0 → pass
           convergence_tier = "tier_2",
-          target_percentile_max = 5.0,
+          target_max_best_subset = 425,  # 5% of 8500 retained
           verbose = FALSE
      )
      # Percentile status isn't in metrics, but affects overall via fallback
@@ -185,7 +185,7 @@ test_that("Percentile status is calculated correctly", {
           cvw_best = 0.4,
           percentile_used = 15.0,  # >> 5.0 → fail
           convergence_tier = "tier_10",
-          target_percentile_max = 5.0,
+          target_max_best_subset = 425,  # 5% of 8500 retained
           verbose = FALSE
      )
      # Should fail due to percentile (internal calculation)

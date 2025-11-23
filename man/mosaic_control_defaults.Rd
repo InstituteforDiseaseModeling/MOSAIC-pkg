@@ -15,7 +15,8 @@ mosaic_control_defaults(
   weights = NULL,
   parallel = NULL,
   io = NULL,
-  paths = NULL
+  paths = NULL,
+  logging = NULL
 )
 }
 \arguments{
@@ -59,10 +60,10 @@ mosaic_control_defaults(
 \itemize{
 \item \code{ESS_param}: Target ESS per parameter (default: 500)
 \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-\item \code{ESS_best}: Target ESS for best subset (default: 100)
+\item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
 \item \code{A_best}: Target agreement index (default: 0.95)
 \item \code{CVw_best}: Target CV of weights (default: 0.5)
-\item \code{B_min}: Minimum best subset size (default: 30)
+\item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
 \item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
 \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 }}
@@ -75,7 +76,17 @@ mosaic_control_defaults(
 \item{npe}{List of NPE settings (post-calibration stage). Default is:
 \itemize{
 \item \code{enable}: Enable NPE training (default: FALSE)
-\item \code{weight_strategy}: NPE weight strategy (default: "continuous_all")
+\item \code{weight_strategy}: Weight strategy: "continuous_best", "continuous_retained", "continuous_all", "binary_best", "binary_retained", "binary_all" (default: "continuous_best")
+\item \code{architecture_tier}: Architecture size: "auto", "minimal", "small", "medium", "large", "xlarge" (default: "auto")
+\item \code{n_epochs}: Maximum training epochs (default: 1000)
+\item \code{batch_size}: Training batch size (default: 512)
+\item \code{learning_rate}: Initial learning rate (default: 1e-3)
+\item \code{validation_split}: Proportion for validation (default: 0.15)
+\item \code{early_stopping}: Enable early stopping (default: TRUE)
+\item \code{patience}: Early stopping patience in epochs (default: 20)
+\item \code{use_gpu}: Use GPU if available (default: TRUE)
+\item \code{seed}: Random seed for reproducibility (default: 42)
+\item \code{n_posterior_samples}: Number of posterior samples to draw (default: 10000)
 }}
 
 \item{predictions}{List of prediction generation settings. Default is:

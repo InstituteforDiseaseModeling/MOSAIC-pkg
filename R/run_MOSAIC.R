@@ -1011,13 +1011,12 @@ run_MOSAIC <- function(config,
   write.csv(ess_results, ess_file, row.names = FALSE)
   log_msg("Saved %s", ess_file)
 
-  log_msg("Optimizing subset selection (testing up to 15 tiers)...")
+  log_msg("Optimizing subset selection (testing up to 30 tiers with grid search)...")
 
   subset_tiers <- get_default_subset_tiers(
     target_ESS_best = control$targets$ESS_best,
     target_A = control$targets$A_best,
-    target_CVw = control$targets$CVw_best,
-    n_tiers = 15
+    target_CVw = control$targets$CVw_best
   )
 
   optimal_subset_result <- NULL
@@ -1029,22 +1028,22 @@ run_MOSAIC <- function(config,
     log_msg("  Testing tier '%s' (ESS_B=%.0f, A=%.2f, CVw=%.2f)...",
             tier$name, tier$ESS_B, tier$A, tier$CVw)
 
-    tier_result <- identify_best_subset(
+    tier_result <- grid_search_best_subset(
       results = results,
-      min_B = tier$ESS_B,  # Use tier-specific ESS target as minimum count
-      target_ESS_B = tier$ESS_B,
+      target_ESS = tier$ESS_B,
       target_A = tier$A,
       target_CVw = tier$CVw,
-      min_percentile = control$targets$percentile_min,
-      max_percentile = control$targets$percentile_max,
-      precision = 0.0001,
-      ess_method = control$targets$ESS_method, # Use consistent ESS method for both selection and reporting
+      min_size = control$targets$min_best_subset,
+      max_size = control$targets$max_best_subset,
+      ess_method = control$targets$ESS_method,
       verbose = control$logging$verbose
     )
 
     if (tier_result$converged) {
-      log_msg("    ✓ Tier '%s' converged at %.1f%% percentile",
-              tier$name, tier_result$percentile_used)
+      # CRITICAL: Calculate percentile from absolute count
+      tier_percentile <- (tier_result$n / nrow(results)) * 100
+      log_msg("    ✓ Tier '%s' converged at n=%d (%.1f%% of retained)",
+              tier$name, tier_result$n, tier_percentile)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
       rm(tier)
@@ -1060,20 +1059,32 @@ run_MOSAIC <- function(config,
   gc(verbose = FALSE)
 
   if (!is.null(optimal_subset_result)) {
+    # CRITICAL: Use $n (not $n_selected) and calculate percentile from count
     top_subset_final <- optimal_subset_result$subset
-    percentile_used <- optimal_subset_result$percentile_used
-    n_top_final <- optimal_subset_result$n_selected
+    n_top_final <- optimal_subset_result$n
+    percentile_used <- (n_top_final / nrow(results)) * 100
     convergence_tier <- tier_used
 
   } else {
-    fallback_percentile <- control$targets$percentile_max
-    n_top_final <- ceiling(nrow(results) * fallback_percentile / 100)
+    # Fallback: use max_best_subset directly
+    n_top_final <- min(control$targets$max_best_subset, nrow(results))
     results_ranked_final <- results[order(results$likelihood, decreasing = TRUE), ]
     top_subset_final <- results_ranked_final[1:n_top_final, ]
     rm(results_ranked_final)
 
-    percentile_used <- fallback_percentile
+    percentile_used <- (n_top_final / nrow(results)) * 100
     convergence_tier <- "fallback"
+
+    log_msg("  All tiers failed - using fallback (top %d simulations, %.1f%%)",
+            n_top_final, percentile_used)
+
+    # Create minimal optimal_subset_result for consistency
+    optimal_subset_result <- list(
+      subset = top_subset_final,
+      n = n_top_final,
+      converged = FALSE,
+      metrics = list(ESS = NA_real_, A = NA_real_, CVw = NA_real_)
+    )
   }
 
   # Check if we have sufficient valid data for metric calculation
@@ -1220,10 +1231,17 @@ run_MOSAIC <- function(config,
   gc(verbose = FALSE)
 
   subset_summary <- data.frame(
-    min_search_percentile = control$targets$percentile_min,
-    max_search_percentile = control$targets$percentile_max,
+    # Absolute count-based fields (new)
+    min_search_size = control$targets$min_best_subset,
+    max_search_size = control$targets$max_best_subset,
+    optimal_size = n_top_final,
+
+    # Percentile-based fields (backward compatibility)
     optimal_percentile = percentile_used,
+
+    # Standard fields
     optimization_tier = convergence_tier,
+    optimization_method = "grid_search",
     n_selected = n_top_final,
     ESS_B = ESS_B_final,
     A = A_final,
@@ -2163,14 +2181,21 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default target settings
   default_targets <- list(
+    # Parameter-level targets
     ESS_param = 500,
     ESS_param_prop = 0.95,
-    ESS_best = 100,
+
+    # Best subset targets
+    ESS_best = 500,              # Updated from 100 for better statistical power
     A_best = 0.95,
-    CVw_best = 0.5,
-    percentile_min = 0.001,
-    percentile_max = 5.0,
-    ESS_method = "perplexity"     # ESS calculation method: "kish" or "perplexity"
+    CVw_best = 0.7,              # Updated from 0.5 for realistic subset quality
+
+    # Subset search bounds (absolute counts, replacing percentile-based)
+    min_best_subset = 30,        # Minimum subset size for stable metrics
+    max_best_subset = 1000,      # Maximum subset size (~1.5% of typical retained)
+
+    # ESS calculation method
+    ESS_method = "perplexity"    # "kish" or "perplexity"
   )
 
   # Default NPE settings

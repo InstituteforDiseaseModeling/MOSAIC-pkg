@@ -63,9 +63,12 @@
       def$targets$A_best >= 0 && def$targets$A_best <= 1,
     "targets$CVw_best must be positive" =
       is.numeric(def$targets$CVw_best) && def$targets$CVw_best > 0,
-    "targets$percentile_max must be in (0, 100]" =
-      is.numeric(def$targets$percentile_max) &&
-      def$targets$percentile_max > 0 && def$targets$percentile_max <= 100
+    "targets$min_best_subset must be positive integer >= 10" =
+      is.numeric(def$targets$min_best_subset) &&
+      def$targets$min_best_subset >= 10,
+    "targets$max_best_subset must be >= min_best_subset" =
+      is.numeric(def$targets$max_best_subset) &&
+      def$targets$max_best_subset >= def$targets$min_best_subset
   )
 
   # SEMANTIC VALIDATION (reasonable bounds and logical consistency)
