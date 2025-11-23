@@ -1,3 +1,16 @@
+# MOSAIC 0.13.1
+
+## Bug Fixes
+
+* **Fix list column error in get_npe_observed_data() causing CSV write failures**
+  - **Root cause**: When `config$location_name` or `config$iso_code` is a list (common in LASER config format), single-bracket extraction `location_names[1]` returned a list of length 1 instead of scalar, creating list columns in data frames
+  - **Error**: `Error in utils::write.table(...): unimplemented type 'list' in 'EncodeElement'` when writing observed_data.csv in run_NPE()
+  - **Fix**: Convert location_names to character vector using `unlist()` at function start (line 1008)
+  - **Fix**: Changed all `location_names[index]` to `location_names[[index]]` for scalar extraction (lines 1032, 1055, 1134)
+  - **Impact**: NPE workflow now handles list-type location identifiers correctly
+  - **Files modified**: `R/npe_posterior.R` (get_npe_observed_data function)
+  - **Verified**: CSV write succeeds, data frame structure correct, existing tests still pass
+
 # MOSAIC 0.13.0
 
 ## Major Features

@@ -1004,6 +1004,11 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
         location_names <- config$iso_code
     }
 
+    # Convert to character vector if it's a list (common in LASER configs)
+    if (!is.null(location_names) && is.list(location_names)) {
+        location_names <- as.character(unlist(location_names))
+    }
+
     # Extract cases data
     if (!("reported_cases" %in% names(config))) {
         if ("observed_cases" %in% names(config)) {
@@ -1029,7 +1034,7 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
         # Create long format data frame
         outbreak_data <- data.frame(
             j = if (!is.null(location_names) && length(location_names) >= 1) {
-                rep(location_names[1], n_timesteps)
+                rep(location_names[[1]], n_timesteps)  # Use [[]] to extract scalar
             } else {
                 rep(1, n_timesteps)
             },
@@ -1052,7 +1057,7 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
         df_list <- list()
         for (loc_idx in 1:n_locations) {
             location_id <- if (!is.null(location_names) && length(location_names) >= loc_idx) {
-                location_names[loc_idx]
+                location_names[[loc_idx]]  # Use [[]] to extract scalar
             } else {
                 loc_idx
             }
@@ -1131,7 +1136,7 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
             deaths_long <- data.frame()
             for (loc_idx in 1:nrow(deaths_data)) {
                 location_id <- if (!is.null(location_names) && length(location_names) >= loc_idx) {
-                    location_names[loc_idx]
+                    location_names[[loc_idx]]  # Use [[]] to extract scalar
                 } else {
                     loc_idx
                 }
