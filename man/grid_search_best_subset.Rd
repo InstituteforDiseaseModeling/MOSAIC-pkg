@@ -47,7 +47,7 @@ List with elements:
 }
 \description{
 Performs exhaustive grid search to find the smallest subset size that meets
-convergence criteria (ESS, A, CVw) using uniform weights. Stops at first convergence.
+convergence criteria (ESS, A, CVw) using Gibbs weighting. Stops at first convergence.
 }
 \details{
 The function searches from min_size to max_size by step_size, stopping at the
@@ -58,8 +58,16 @@ first size where all three criteria are met simultaneously:
 \item CVw <= target_CVw
 }
 
-Metrics are calculated using uniform weights (1/n for each sample) since Gibbs
-weighting is applied after subset selection in the workflow.
+Metrics are calculated using Gibbs weighting with temperature = 1.0:
+\enumerate{
+\item Calculate AIC = -2 * likelihood for subset
+\item Calculate Delta AIC (relative to best in subset)
+\item Apply Gibbs weighting: weights = exp(-Delta AIC / temperature) / Z
+\item Calculate ESS, A, CVw from Gibbs-weighted samples
+}
+
+This matches the identify_best_subset logic but uses fixed temperature
+instead of dynamic temperature for computational efficiency.
 
 If no size meets criteria, returns results at max_size with converged=FALSE.
 }

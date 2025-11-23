@@ -1,7 +1,7 @@
 #' Grid Search for Best Subset with Early Stopping
 #'
 #' Performs exhaustive grid search to find the smallest subset size that meets
-#' convergence criteria (ESS, A, CVw) using uniform weights. Stops at first convergence.
+#' convergence criteria (ESS, A, CVw) using Gibbs weighting. Stops at first convergence.
 #'
 #' @param results Data frame of calibration results with columns: sim, likelihood
 #' @param target_ESS Numeric target for Effective Sample Size (ESS)
@@ -29,8 +29,14 @@
 #' - A >= target_A
 #' - CVw <= target_CVw
 #'
-#' Metrics are calculated using uniform weights (1/n for each sample) since Gibbs
-#' weighting is applied after subset selection in the workflow.
+#' Metrics are calculated using Gibbs weighting with temperature = 1.0:
+#' 1. Calculate AIC = -2 * likelihood for subset
+#' 2. Calculate Delta AIC (relative to best in subset)
+#' 3. Apply Gibbs weighting: weights = exp(-Delta AIC / temperature) / Z
+#' 4. Calculate ESS, A, CVw from Gibbs-weighted samples
+#'
+#' This matches the identify_best_subset logic but uses fixed temperature
+#' instead of dynamic temperature for computational efficiency.
 #'
 #' If no size meets criteria, returns results at max_size with converged=FALSE.
 #'
@@ -113,23 +119,41 @@ grid_search_best_subset <- function(
     # Select top n
     subset_n <- results_ranked[1:n, ]
 
-    # Calculate convergence metrics using uniform weights
-    # At subset optimization stage, Gibbs weights haven't been calculated yet
-    weights_n <- rep(1/n, n)  # Uniform weights
+    # Calculate Gibbs weights based on likelihood (matching identify_best_subset logic)
+    # 1. Calculate AIC for subset
+    aic_subset <- -2 * subset_n$likelihood
 
-    # ESS
+    # 2. Calculate delta AIC within subset (relative to best in subset)
+    best_aic_in_subset <- min(aic_subset)
+    delta_subset <- aic_subset - best_aic_in_subset
+
+    # 3. Calculate Gibbs temperature (simplified - use fixed temperature = 1.0)
+    # Note: identify_best_subset uses dynamic temperature based on percentile
+    # For grid search, we use a standard temperature for simplicity
+    gibbs_temperature <- 1.0
+
+    # 4. Calculate Gibbs weights
+    weights_n <- calc_model_weights_gibbs(
+      x = delta_subset,
+      temperature = gibbs_temperature,
+      verbose = FALSE
+    )
+
+    # 5. Calculate metrics using Gibbs weights
+    # ESS (using normalized weights)
     if (ess_method == "kish") {
       ESS <- 1 / sum(weights_n^2)
     } else {  # perplexity
       ESS <- exp(-sum(weights_n * log(weights_n + 1e-300)))
     }
 
-    # Agreement Index (A) - proportion of effective weight in top subset
-    # A = ESS / n (ratio of effective to actual sample size)
-    A <- ESS / n
+    # Agreement Index (A) - using unnormalized weights
+    w_unnorm <- weights_n * n
+    ag <- calc_model_agreement_index(w_unnorm)
+    A <- ag$A
 
-    # Coefficient of Variation of weights (CVw)
-    CVw <- sqrt(sum(weights_n^2) - (1/n)) / (1/n)
+    # Coefficient of Variation of weights (CVw) - using unnormalized weights
+    CVw <- calc_model_cvw(w_unnorm)
 
     if (verbose) {
       cat(sprintf("  n=%5d: ESS=%7.1f (target=%.1f), A=%5.3f (target=%.3f), CVw=%5.3f (target=%.3f)\n",
@@ -156,18 +180,31 @@ grid_search_best_subset <- function(
     }
   }
 
-  # No convergence - return results at max_size
+  # No convergence - return results at max_size with Gibbs weights
   subset_max <- results_ranked[1:max_size, ]
-  weights_max <- rep(1/max_size, max_size)  # Uniform weights
 
+  # Calculate Gibbs weights for fallback
+  aic_max <- -2 * subset_max$likelihood
+  best_aic_max <- min(aic_max)
+  delta_max <- aic_max - best_aic_max
+
+  weights_max <- calc_model_weights_gibbs(
+    x = delta_max,
+    temperature = 1.0,
+    verbose = FALSE
+  )
+
+  # Calculate metrics
   if (ess_method == "kish") {
     ESS_max <- 1 / sum(weights_max^2)
   } else {
     ESS_max <- exp(-sum(weights_max * log(weights_max + 1e-300)))
   }
 
-  A_max <- ESS_max / max_size
-  CVw_max <- sqrt(sum(weights_max^2) - (1/max_size)) / (1/max_size)
+  w_max_unnorm <- weights_max * max_size
+  ag_max <- calc_model_agreement_index(w_max_unnorm)
+  A_max <- ag_max$A
+  CVw_max <- calc_model_cvw(w_max_unnorm)
 
   if (verbose) {
     cat(sprintf("  ✗ No convergence after %d evaluations (max_size=%d reached)\n",
