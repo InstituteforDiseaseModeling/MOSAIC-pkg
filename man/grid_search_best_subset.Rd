@@ -17,7 +17,7 @@ grid_search_best_subset(
 )
 }
 \arguments{
-\item{results}{Data frame of calibration results with columns: sim_id, likelihood, weights, parameters}
+\item{results}{Data frame of calibration results with columns: sim_id, likelihood}
 
 \item{target_ESS}{Numeric target for Effective Sample Size (ESS)}
 
@@ -47,7 +47,7 @@ List with elements:
 }
 \description{
 Performs exhaustive grid search to find the smallest subset size that meets
-convergence criteria (ESS, A, CVw). Stops at first convergence.
+convergence criteria (ESS, A, CVw) using uniform weights. Stops at first convergence.
 }
 \details{
 The function searches from min_size to max_size by step_size, stopping at the
@@ -57,6 +57,9 @@ first size where all three criteria are met simultaneously:
 \item A >= target_A
 \item CVw <= target_CVw
 }
+
+Metrics are calculated using uniform weights (1/n for each sample) since Gibbs
+weighting is applied after subset selection in the workflow.
 
 If no size meets criteria, returns results at max_size with converged=FALSE.
 }
