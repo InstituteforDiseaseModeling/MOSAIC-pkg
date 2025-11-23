@@ -1,3 +1,30 @@
+# MOSAIC 0.13.4
+
+## Bug Fixes
+
+* **Add comprehensive data validation to train_npe() to catch NAs/Infs early**
+  - **Problem**: PyTorch silently propagates NaN/Inf values through the network, causing cryptic training failures
+  - **Root cause**: No validation of input data (X, y, weights) before tensor conversion
+  - **Impact**: If parameters or observations contain NAs/Infs (from corrupted files, invalid samples, or bugs), they propagate silently and cause losses to become NaN
+  - **Fix**: Add explicit validation checks for X (parameters), y (observations), and weights before tensor conversion (line 170-266 in npe.R)
+  - **Validation checks**:
+    - `anyNA(X)` and `any(!is.finite(X))` - parameters matrix
+    - `anyNA(y)` and `any(!is.finite(y))` - observations matrix
+    - `anyNA(weights)` and `any(!is.finite(weights))` - weight vector
+  - **Error messages include**:
+    - Which data structure failed (X, y, or weights)
+    - Whether NAs or Infs were found
+    - Affected rows and columns (first 5-10 shown)
+    - Likely sources of corruption
+    - Specific solutions to diagnose and fix
+  - **Benefits**:
+    - Catches data corruption BEFORE training starts (saves time)
+    - Clear diagnostic messages pinpoint exact problem
+    - Prevents silent NaN propagation through network
+    - Helps identify upstream bugs in data preparation
+  - **Files modified**: `R/npe.R`
+  - **Note**: This addresses the user's concern that NA/NaN errors with 25k evenly weighted samples (binary_retained) should not be due to numerical instability, but rather data corruption
+
 # MOSAIC 0.13.3
 
 ## Bug Fixes
