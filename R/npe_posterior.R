@@ -1102,10 +1102,55 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
         stop("Unrecognized format for reported_cases: ", class(cases_data))
     }
 
-    # Handle NA values
+    # Handle NA values with linear interpolation
     if (any(is.na(outbreak_data$cases))) {
-        if (verbose) message("  Converting ", sum(is.na(outbreak_data$cases)), " NA values to 0")
-        outbreak_data$cases[is.na(outbreak_data$cases)] <- 0
+        n_na_initial <- sum(is.na(outbreak_data$cases))
+
+        if (verbose) {
+            message("  Interpolating ", n_na_initial, " NA values in time series...")
+        }
+
+        # Interpolate within each location separately
+        locations <- unique(outbreak_data$j)
+
+        for (loc in locations) {
+            loc_idx <- outbreak_data$j == loc
+            loc_data <- outbreak_data[loc_idx, ]
+
+            # Only interpolate if we have at least 2 non-NA values
+            non_na_idx <- !is.na(loc_data$cases)
+
+            if (sum(non_na_idx) >= 2) {
+                # Linear interpolation for interior NAs
+                # rule = 1: NAs returned for extrapolation (outside data range)
+                interpolated <- approx(
+                    x = loc_data$t[non_na_idx],
+                    y = loc_data$cases[non_na_idx],
+                    xout = loc_data$t,
+                    method = "linear",
+                    rule = 1,  # Don't extrapolate beyond data range
+                    ties = mean  # Average if duplicate time points
+                )
+
+                # Replace with interpolated values
+                outbreak_data$cases[loc_idx] <- interpolated$y
+            }
+        }
+
+        # Set any remaining NAs (at start/end that couldn't be interpolated) to 0
+        n_na_remaining <- sum(is.na(outbreak_data$cases))
+
+        if (n_na_remaining > 0) {
+            if (verbose) {
+                message("    Interpolated: ", n_na_initial - n_na_remaining)
+                message("    Set to 0 (start/end): ", n_na_remaining)
+            }
+            outbreak_data$cases[is.na(outbreak_data$cases)] <- 0
+        } else {
+            if (verbose) {
+                message("    All NAs successfully interpolated")
+            }
+        }
     }
 
     # Aggregate across locations if requested
@@ -1152,9 +1197,54 @@ get_npe_observed_data <- function(config, aggregate_locations = FALSE, verbose =
             outbreak_data <- merge(outbreak_data, deaths_long, by = c("j", "t"), all.x = TRUE)
         }
 
-        # Handle NA deaths
-        if ("deaths" %in% colnames(outbreak_data)) {
-            outbreak_data$deaths[is.na(outbreak_data$deaths)] <- 0
+        # Handle NA deaths with linear interpolation (same as cases)
+        if ("deaths" %in% colnames(outbreak_data) && any(is.na(outbreak_data$deaths))) {
+            n_na_initial <- sum(is.na(outbreak_data$deaths))
+
+            if (verbose) {
+                message("  Interpolating ", n_na_initial, " NA values in deaths time series...")
+            }
+
+            # Interpolate within each location separately
+            locations <- unique(outbreak_data$j)
+
+            for (loc in locations) {
+                loc_idx <- outbreak_data$j == loc
+                loc_data <- outbreak_data[loc_idx, ]
+
+                # Only interpolate if we have at least 2 non-NA values
+                non_na_idx <- !is.na(loc_data$deaths)
+
+                if (sum(non_na_idx) >= 2) {
+                    # Linear interpolation for interior NAs
+                    interpolated <- approx(
+                        x = loc_data$t[non_na_idx],
+                        y = loc_data$deaths[non_na_idx],
+                        xout = loc_data$t,
+                        method = "linear",
+                        rule = 1,  # Don't extrapolate beyond data range
+                        ties = mean
+                    )
+
+                    # Replace with interpolated values
+                    outbreak_data$deaths[loc_idx] <- interpolated$y
+                }
+            }
+
+            # Set any remaining NAs to 0
+            n_na_remaining <- sum(is.na(outbreak_data$deaths))
+
+            if (n_na_remaining > 0) {
+                if (verbose) {
+                    message("    Interpolated: ", n_na_initial - n_na_remaining)
+                    message("    Set to 0 (start/end): ", n_na_remaining)
+                }
+                outbreak_data$deaths[is.na(outbreak_data$deaths)] <- 0
+            } else {
+                if (verbose) {
+                    message("    All NAs successfully interpolated")
+                }
+            }
         }
     }
 
