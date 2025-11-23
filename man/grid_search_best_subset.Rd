@@ -17,7 +17,7 @@ grid_search_best_subset(
 )
 }
 \arguments{
-\item{results}{Data frame of calibration results with columns: sim_id, likelihood}
+\item{results}{Data frame of calibration results with columns: sim, likelihood}
 
 \item{target_ESS}{Numeric target for Effective Sample Size (ESS)}
 
