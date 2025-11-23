@@ -42,7 +42,7 @@ train_npe <- function(
           validation_split = 0.15,
           early_stopping = TRUE,
           patience = 20,
-          use_gpu = TRUE,
+          use_gpu = FALSE,
           seed = 42,
           verbose = TRUE
 ) {
@@ -741,41 +741,39 @@ prepare_npe_data <- function(bfrs_dir, results = NULL, param_names = NULL,
      }
 
      # Step 3: Filter to weighted simulations BEFORE loading outputs (OVERWRITE to free memory)
-     # This dramatically reduces memory usage for binary strategies (e.g., 395 vs 39,465)
-     # For continuous strategies, all simulations should have weight > 0
-     if (verbose) message("Step 3/6: Identifying weighted simulations...")
+     # Remove all zero-weight simulations to save memory and computation time
+     if (verbose) message("Step 3/6: Filtering weighted simulations...")
 
      n_before <- nrow(results)
 
      if ("weight_npe" %in% colnames(results)) {
-          # Detect strategy type by checking weight distribution
+          # Count simulations with zero vs non-zero weights
           n_zero <- sum(results$weight_npe == 0)
           n_nonzero <- sum(results$weight_npe > 0)
 
-          # Binary strategy: many exact zeros (e.g., 24,800 zeros, 200 non-zero)
-          # Continuous strategy: few/no exact zeros (all should be > 0)
-          is_binary <- (n_zero > 0.5 * nrow(results))
-
-          if (is_binary) {
-               # Binary strategy: filter out exact zeros to save memory
+          if (n_zero > 0) {
+               # Filter out all zero-weight simulations
                has_weight_idx <- which(results$weight_npe > 0)
                results <- results[has_weight_idx, ]
 
                if (verbose) {
-                    message(sprintf("  Binary strategy: filtered to %d weighted simulations (%.1f%% of total)",
-                                  nrow(results),
-                                  100 * nrow(results) / n_before))
-                    message(sprintf("  Memory freed: ~%.1f MB (%.0f%% reduction)",
-                                  (object.size(results) * (n_before / nrow(results) - 1)) / 1024^2,
-                                  100 * (1 - nrow(results) / n_before)))
+                    message(sprintf("  Filtered to %d weighted simulations (removed %d with weight = 0)",
+                                  nrow(results), n_zero))
+                    message(sprintf("  Reduction: %.1f%% of simulations removed, ~%.1f MB freed",
+                                  100 * n_zero / n_before,
+                                  (object.size(results) * (n_before / nrow(results) - 1)) / 1024^2))
                }
           } else {
-               # Continuous strategy: keep all simulations with their weights
+               # All simulations have non-zero weights (no filtering needed)
                if (verbose) {
-                    message(sprintf("  Continuous strategy: keeping all %d simulations (%.1f%% with weight > 0)",
-                                  nrow(results),
-                                  100 * n_nonzero / nrow(results)))
+                    message(sprintf("  All %d simulations have weight > 0 (no filtering needed)",
+                                  nrow(results)))
                }
+          }
+     } else {
+          # No weight column found - cannot filter
+          if (verbose) {
+               message("  No weight_npe column found - keeping all simulations")
           }
      }
 
