@@ -47,7 +47,7 @@ train_npe(
 
 \item{patience}{Early stopping patience (default 10, reduced to prevent overfitting)}
 
-\item{use_gpu}{Use GPU if available (default TRUE)}
+\item{use_gpu}{Use GPU if available (default FALSE for stability)}
 
 \item{seed}{Random seed}
 
