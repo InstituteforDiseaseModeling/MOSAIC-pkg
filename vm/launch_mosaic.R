@@ -25,7 +25,7 @@ MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
-dir_output <- path.expand("~/MOSAIC/output/ETH_KEN")
+dir_output <- path.expand("~/MOSAIC/output/4_countries")
 if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
 
 set_root_directory("~/MOSAIC")
@@ -39,40 +39,43 @@ cat("===========================================================================
 
 start_time <- Sys.time()
 
-#iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD']
+iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD']
 
 #iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE",
 #               "TZA", "UGA", "KEN", "ETH")
 
-#iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
+iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
 
-iso_codes <- c("ETH", "KEN")
+#iso_codes <- c("ETH", "KEN")
+
+#iso_codes <- "ETH"
 
 priors <- get_location_priors(iso=iso_codes)
 config <- get_location_config(iso=iso_codes)
 
 control <- mosaic_control_defaults()
 
-control$calibration$n_simulations <- 1000
-control$calibration$n_iterations <- 2
+control$calibration$n_simulations <- 'auto'
+control$calibration$n_iterations <- 3
 control$calibration$batch_size <- 1000
 control$calibration$min_batches <- 3
 control$calibration$max_batches <- 10
+control$calibration$target_r2 <- 0.95
 control$calibration$max_simulations <- 1e+06
 
 control$parallel$enable <- TRUE
 control$parallel$n_cores <- parallel::detectCores()-1
 
-control$targets$ESS_param <- 500
+control$targets$ESS_param <- 1000
 control$targets$ESS_param_prop <- 0.95
 control$targets$ESS_best <- 100
-control$targets$percentile_min <- 0.0001
-control$targets$percentile_max <- 5.0
+control$targets$min_best_subset <- 30
+control$targets$max_best_subset <- 1500
 control$targets$ess_method <- 'perplexity'
 
 control$fine_tuning$batch_sizes <- lapply(control$fine_tuning$batch_sizes, function(x) x*5)
 
-control$sampling$sample_tau_i <- length(iso_codes) > 1
+control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability
 control$sampling$sample_mobility_gamma <- length(iso_codes) > 1  # Gravity model exponent
 control$sampling$sample_mobility_omega <- length(iso_codes) > 1  # Mobility rate
 
@@ -84,6 +87,9 @@ control$predictions$ensemble_n_sims_per_param <- 10
 
 control$npe$enable <- TRUE
 control$npe$weight_strategy <- "continuous_retained"
+control$npe$learning_rate <- 0.0005
+control$npe$validation_split <- 0.2
+control$npe$patience <- 10
 
 control$paths$clean_output <- TRUE
 control$io <- mosaic_io_presets("fast")
@@ -191,4 +197,38 @@ if (!dir.exists(dir_output)) {
 }
 
 cat("==============================================================================\n")
+
+# ==============================================================================
+# OPTIONAL: Run NPE Post-Hoc (Standalone Mode)
+# ==============================================================================
+# If you ran MOSAIC without NPE enabled, you can run NPE later without
+# re-running the expensive BFRS calibration:
+#
+# # Example 1: Run NPE with default settings
+# npe_result <- run_NPE(
+#   input_dir = dir_output,
+#   verbose = TRUE
+# )
+#
+# # Example 2: Experiment with different NPE weight strategies
+# npe_best <- run_NPE(
+#   input_dir = dir_output,
+#   output_dir = file.path(dir_output, "2_npe_strategy_best"),
+#   control = mosaic_control_defaults(
+#     npe = list(weight_strategy = "continuous_best")
+#   )
+# )
+#
+# npe_retained <- run_NPE(
+#   input_dir = dir_output,
+#   output_dir = file.path(dir_output, "2_npe_strategy_retained"),
+#   control = mosaic_control_defaults(
+#     npe = list(weight_strategy = "continuous_retained")
+#   )
+# )
+#
+# # Compare different strategies
+# cat("NPE Best Strategy ESS:", npe_best$npe_summary$n_posterior_samples, "\n")
+# cat("NPE Retained Strategy ESS:", npe_retained$npe_summary$n_posterior_samples, "\n")
+# ==============================================================================
 
