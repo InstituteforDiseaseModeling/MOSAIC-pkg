@@ -1,3 +1,20 @@
+# MOSAIC 0.13.3
+
+## Bug Fixes
+
+* **Fix cryptic "missing value where TRUE/FALSE needed" error in NPE training**
+  - **Root cause**: Validation loss became NA/NaN during training, causing `if (val_loss < best_val_loss)` comparison to fail with cryptic error
+  - **Error**: `Error during wrapup: missing value where TRUE/FALSE needed` followed by recursive error and abort
+  - **Trigger**: Low ESS (Kish: 1.2, Perplexity: 3.0) with `continuous_retained` weight strategy causing numerical instability
+  - **Fix**: Add explicit NA/NaN checking for train_loss and val_loss before early stopping comparison (line 384-405 in npe.R)
+  - **Impact**: Now provides clear, actionable error message with diagnostic information and solutions
+  - **Error message includes**:
+    - Which epoch failed and what the loss values were
+    - Common causes (low ESS, weight concentration, architecture complexity)
+    - Specific solutions (try 'continuous_best', use 'light' tier, reduce learning rate)
+  - **Files modified**: `R/npe.R`
+  - **Related**: This error was masked by recursive error handling - actual issue is numerical instability from degenerate weight distributions
+
 # MOSAIC 0.13.2
 
 ## Bug Fixes
