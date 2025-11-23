@@ -58,16 +58,23 @@ first size where all three criteria are met simultaneously:
 \item CVw <= target_CVw
 }
 
-Metrics are calculated using Gibbs weighting with temperature = 1.0:
+Metrics are calculated using Gibbs weighting with dynamic temperature:
 \enumerate{
 \item Calculate AIC = -2 * likelihood for subset
 \item Calculate Delta AIC (relative to best in subset)
+\item Calculate dynamic temperature:
+\itemize{
+\item percentile = (n / n_total) * 100
+\item effective_range = get_effective_aic_range(percentile)
+\item actual_range = range(Delta AIC)
+\item temperature = 0.5 * (effective_range / actual_range)
+}
 \item Apply Gibbs weighting: weights = exp(-Delta AIC / temperature) / Z
 \item Calculate ESS, A, CVw from Gibbs-weighted samples
 }
 
-This matches the identify_best_subset logic but uses fixed temperature
-instead of dynamic temperature for computational efficiency.
+This exactly matches the identify_best_subset logic, ensuring consistent
+weighting and convergence behavior across both search strategies.
 
 If no size meets criteria, returns results at max_size with converged=FALSE.
 }
