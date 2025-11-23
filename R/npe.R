@@ -23,7 +23,7 @@
 #' @param validation_split Proportion for validation (default 0.2)
 #' @param early_stopping Use early stopping (default TRUE)
 #' @param patience Early stopping patience (default 10, reduced to prevent overfitting)
-#' @param use_gpu Use GPU if available (default TRUE)
+#' @param use_gpu Use GPU if available (default FALSE for stability)
 #' @param seed Random seed
 #' @param verbose Print progress
 #'
