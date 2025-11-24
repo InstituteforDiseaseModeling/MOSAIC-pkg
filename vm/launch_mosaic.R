@@ -25,7 +25,7 @@ MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
-dir_output <- path.expand("~/MOSAIC/output/4_countries")
+dir_output <- path.expand("~/MOSAIC/output/8_countries")
 if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
 
 set_root_directory("~/MOSAIC")
@@ -39,12 +39,12 @@ cat("===========================================================================
 
 start_time <- Sys.time()
 
-iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD']
+#iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD']
 
-#iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE",
-#               "TZA", "UGA", "KEN", "ETH")
+iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE",
+               "TZA", "UGA", "KEN", "ETH")
 
-iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
+#iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
 
 #iso_codes <- c("ETH", "KEN")
 
@@ -58,7 +58,7 @@ control <- mosaic_control_defaults()
 control$calibration$n_simulations <- 'auto'
 control$calibration$n_iterations <- 3
 control$calibration$batch_size <- 1000
-control$calibration$min_batches <- 3
+control$calibration$min_batches <- 5
 control$calibration$max_batches <- 10
 control$calibration$target_r2 <- 0.95
 control$calibration$max_simulations <- 1e+06
@@ -85,16 +85,21 @@ control$likelihood$weight_deaths <- 0.05
 control$predictions$best_model_n_sims <- 100
 control$predictions$ensemble_n_sims_per_param <- 10
 
-control$npe$enable <- TRUE
-control$npe$weight_strategy <- "continuous_retained"
-control$npe$learning_rate <- 0.0005
+control$npe$enable <- FALSE
+control$npe$architecture_tier <- 'minimal'
+control$npe$weight_strategy <- "binary_retained"
+control$npe$learning_rate <- 0.0001
 control$npe$validation_split <- 0.2
 control$npe$patience <- 10
+control$npe$n_posterior_samples <- 1000
+control$npe$use_gpu <- FALSE
 
 control$paths$clean_output <- TRUE
 control$io <- mosaic_io_presets("fast")
 
 control$logging$verbose <- TRUE
+
+
 
 result <- run_MOSAIC(
      dir_output = dir_output,
@@ -103,6 +108,8 @@ result <- run_MOSAIC(
      control = control,
      resume = FALSE
 )
+
+
 
 
 # Report completion and runtime
@@ -116,6 +123,8 @@ cat("End time:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n")
 cat("Total runtime:", round(runtime, 2), "hours\n")
 cat("Output directory:", dir_output, "\n")
 cat("==============================================================================\n")
+
+
 
 
 

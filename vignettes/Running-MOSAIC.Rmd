@@ -25,474 +25,184 @@ For running single deterministic simulations, see the **Running LASER** vignette
 
 ---
 
-## MOSAIC Workflow Components
+## Run a fixed number of simulations for one location
 
-The MOSAIC workflow consists of three main steps:
-
-1. **Parameter Sampling**: Generate parameter sets from prior distributions
-2. **Parallel Execution**: Run multiple LASER simulations with sampled parameters
-3. **Analysis**: Aggregate results and quantify uncertainty
-
-```{r workflow-diagram, eval=FALSE}
+```{r fixed-one-location, eval=FALSE}
+# Load required packages
 library(MOSAIC)
 
-# 1. Sample parameters from priors
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 123
-)
+MOSAIC::attach_mosaic_env(silent = FALSE)
 
-# 2. Run multiple simulations
-ctrl <- mosaic_control_defaults(
-  n_sim = 100,
-  parallel = TRUE
-)
 
-results <- run_MOSAIC(
-  config = config_sampled,
-  control = ctrl,
-  seed = 123
-)
+# Create output directory and set up logging
+dir_output <- path.expand("~/MOSAIC/output/ETH_fixed")
+if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
 
-# 3. Analyze outputs
-summary(results)
+set_root_directory("~/MOSAIC")
+
+
+priors_ETH <- get_location_priors(iso="ETH")
+config_ETH <- get_location_config(iso="ETH")
+
+control_ETH <- mosaic_control_defaults()
+
+control_ETH$calibration$n_simulations <- 500
+control_ETH$calibration$n_iterations <- 2
+
+control_ETH$parallel$enable <- TRUE
+control_ETH$parallel$n_cores <- parallel::detectCores()-1
+
+control_ETH$targets$ESS_param <- 100
+control_ETH$targets$ESS_param_prop <- 0.9
+control_ETH$targets$ESS_best <- 50
+control_ETH$targets$ess_method <- 'perplexity'
+
+control_ETH$sampling$sample_tau_i <- FALSE # Travel probability
+control_ETH$sampling$sample_mobility_gamma <- FALSE   # Gravity model exponent
+control_ETH$sampling$sample_mobility_omega <- FALSE   # Mobility rate
+
+control_ETH$likelihood$weight_cases <- 1
+control_ETH$likelihood$weight_deaths <- 0.05
+
+control_ETH$predictions$best_model_n_sims <- 30
+control_ETH$predictions$ensemble_n_sims_per_param <- 5
+
+control_ETH$npe$enable <- FALSE
+
+control_ETH$paths$clean_output <- TRUE
+control_ETH$io <- mosaic_io_presets("fast")
+
+result_ETH <- run_MOSAIC(
+     dir_output = dir_output,
+     config = config_ETH,
+     priors = priors_ETH,
+     control = control_ETH,
+     resume = FALSE
+)
 ```
 
----
+## Run the adaptive simulation algorithm for one location
 
-## Parameter Sampling
-
-The `sample_parameters()` function samples parameter values from prior distributions specified in `priors_default`. You can control which parameter groups to sample.
-
-### Sample All Parameters
-
-```{r sample-all}
+```{r auto-one-location, eval=FALSE}
+# Load required packages
 library(MOSAIC)
 
-# Sample all parameters with stochasticity
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 123,
+MOSAIC::attach_mosaic_env(silent = FALSE)
 
-  # Sample all parameter groups
-  sample_transmission = TRUE,
-  sample_seasonality = TRUE,
-  sample_initial_conditions = TRUE,
-  sample_vaccination_efficacy = TRUE,
-  sample_disease_natural_history = TRUE,
-  sample_reporting_rates = TRUE,
-  sample_cfr = TRUE,
-  sample_waning_immunity = TRUE,
-  sample_environmental = TRUE
-)
 
-# View sampled transmission parameters
-cat("Sampled beta_j0_tot:", config_sampled$beta_j0_tot, "\n")
-cat("Sampled p_beta:", config_sampled$p_beta, "\n")
-```
+# Create output directory and set up logging
+dir_output <- path.expand("~/MOSAIC/output/ETH_auto")
+if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
 
-### Sample Specific Parameter Groups
+set_root_directory("~/MOSAIC")
 
-```{r sample-specific}
-# Sample only transmission and seasonality parameters
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 456,
 
-  # Only sample these groups
-  sample_transmission = TRUE,
-  sample_seasonality = TRUE,
+priors_ETH <- get_location_priors(iso="ETH")
+config_ETH <- get_location_config(iso="ETH")
 
-  # Keep all others at default
-  sample_initial_conditions = FALSE,
-  sample_vaccination_efficacy = FALSE,
-  sample_disease_natural_history = FALSE,
-  sample_reporting_rates = FALSE,
-  sample_cfr = FALSE,
-  sample_waning_immunity = FALSE,
-  sample_environmental = FALSE
-)
-```
+control_ETH <- mosaic_control_defaults()
 
-### Initial Conditions Sampling
+control_ETH$calibration$n_simulations <- 'auto'
+control_ETH$calibration$n_iterations <- 2
+control_ETH$calibration$batch_size <- 500
+control_ETH$calibration$min_batches <- 5
+control_ETH$calibration$max_batches <- 10
+control_ETH$calibration$target_r2 <- 0.95
+control_ETH$calibration$max_simulations <- 1e+06
 
-Initial condition proportions are sampled from Beta distributions:
+control_ETH$parallel$enable <- TRUE
+control_ETH$parallel$n_cores <- parallel::detectCores()-1
 
-```{r initial-conditions}
-# Sample initial conditions
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 789,
-  sample_initial_conditions = TRUE
-)
+control_ETH$targets$ESS_param <- 100
+control_ETH$targets$ESS_param_prop <- 0.9
+control_ETH$targets$ESS_best <- 50
+control_ETH$targets$ess_method <- 'perplexity'
 
-# View sampled initial condition proportions
-cat("Sampled prop_S_initial:", config_sampled$prop_S_initial, "\n")
-cat("Sampled prop_R_initial:", config_sampled$prop_R_initial, "\n")
-cat("Sampled prop_V1_initial:", config_sampled$prop_V1_initial, "\n")
-cat("Sampled prop_V2_initial:", config_sampled$prop_V2_initial, "\n")
+control_ETH$sampling$sample_tau_i <- FALSE
+control_ETH$sampling$sample_mobility_gamma <- FALSE   # Gravity model exponent
+control_ETH$sampling$sample_mobility_omega <- FALSE   # Mobility rate
 
-# These proportions are normalized to sum to 1.0 and converted to counts
-```
+control_ETH$likelihood$weight_cases <- 1
+control_ETH$likelihood$weight_deaths <- 0.05
 
----
+control_ETH$predictions$best_model_n_sims <- 30
+control_ETH$predictions$ensemble_n_sims_per_param <- 5
 
-## Control Settings
+control_ETH$npe$enable <- FALSE
 
-Use `mosaic_control_defaults()` to configure the simulation workflow:
+control_ETH$paths$clean_output <- TRUE
+control_ETH$io <- mosaic_io_presets("fast")
 
-```{r control-settings}
-# Default control settings
-ctrl <- mosaic_control_defaults()
-
-# View defaults
-str(ctrl)
-
-# Custom control settings
-ctrl_custom <- mosaic_control_defaults(
-  n_sim = 500,              # Number of simulations
-  parallel = TRUE,          # Run in parallel
-  n_cores = 8,              # Number of cores
-  save_output = TRUE,       # Save intermediate results
-  output_dir = "results/"   # Output directory
+result_ETH <- run_MOSAIC(
+     dir_output = dir_output,
+     config = config_ETH,
+     priors = priors_ETH,
+     control = control_ETH,
+     resume = FALSE
 )
 ```
 
----
+## Run the adaptive simulation algorithm for multiple locations
 
-## Running Multiple Simulations
-
-### Basic Usage
-
-```{r run-mosaic-basic}
+```{r auto-two-locations, eval=FALSE}
+# Load required packages
 library(MOSAIC)
 
-# Sample parameters
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 123,
-  sample_transmission = TRUE,
-  sample_seasonality = TRUE
+MOSAIC::attach_mosaic_env(silent = FALSE)
+
+# Create output directory and set up logging
+dir_output <- path.expand("~/MOSAIC/output/ETH_KEN")
+if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
+
+set_root_directory("~/MOSAIC")
+
+iso_codes <- c("ETH", "KEN")
+
+priors <- get_location_priors(iso=iso_codes)
+config <- get_location_config(iso=iso_codes)
+
+control <- mosaic_control_defaults()
+
+control$calibration$n_simulations <- 'auto'
+control$calibration$n_iterations <- 3
+control$calibration$batch_size <- 500
+control$calibration$min_batches <- 5
+control$calibration$max_batches <- 10
+control$calibration$target_r2 <- 0.95
+control$calibration$max_simulations <- 1e+06
+
+control$parallel$enable <- TRUE
+control$parallel$n_cores <- parallel::detectCores()-1
+
+control$targets$ESS_param <- 100
+control$targets$ESS_param_prop <- 0.95
+control$targets$ESS_best <- 30
+control$targets$ess_method <- 'perplexity'
+
+control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability
+control$sampling$sample_mobility_gamma <- length(iso_codes) > 1  # Gravity model exponent
+control$sampling$sample_mobility_omega <- length(iso_codes) > 1  # Mobility rate
+
+control$likelihood$weight_cases <- 1
+control$likelihood$weight_deaths <- 0.05
+
+control$predictions$best_model_n_sims <- 50
+control$predictions$ensemble_n_sims_per_param <- 10
+
+control$npe$enable <- FALSE
+
+control$paths$clean_output <- TRUE
+control$io <- mosaic_io_presets("fast")
+
+control$logging$verbose <- TRUE
+
+result <- run_MOSAIC(
+     dir_output = dir_output,
+     config = config,
+     priors = priors,
+     control = control,
+     resume = FALSE
 )
 
-# Set up control
-ctrl <- mosaic_control_defaults(
-  n_sim = 100,
-  parallel = TRUE
-)
-
-# Run simulations
-results <- run_MOSAIC(
-  config = config_sampled,
-  control = ctrl,
-  seed = 123
-)
 ```
 
-### Location-Specific Analysis
-
-```{r location-specific}
-# Extract config for specific country
-config_eth <- get_location_config(
-  config = config_default,
-  iso = "ETH"
-)
-
-# Sample parameters
-config_eth_sampled <- sample_parameters(
-  config = config_eth,
-  seed = 456,
-  sample_transmission = TRUE,
-  sample_seasonality = TRUE,
-  sample_initial_conditions = TRUE
-)
-
-# Run simulations
-ctrl <- mosaic_control_defaults(n_sim = 200)
-
-results_eth <- run_MOSAIC(
-  config = config_eth_sampled,
-  control = ctrl,
-  seed = 456
-)
-```
-
----
-
-## Analyzing Results
-
-### Summary Statistics
-
-```{r analyze-summary}
-# View summary of results
-summary(results)
-
-# Extract key metrics
-n_simulations <- length(results$simulations)
-cat("Total simulations:", n_simulations, "\n")
-
-# Calculate summary statistics across simulations
-# (specific structure depends on run_MOSAIC output format)
-```
-
-### Time Series with Uncertainty
-
-```{r analyze-timeseries}
-# Extract time series from all simulations
-# Calculate median and quantiles
-
-# Example structure (adjust based on actual output)
-I_all <- lapply(results$simulations, function(sim) {
-  as.vector(sim$I)
-})
-
-# Calculate quantiles across simulations
-I_median <- apply(do.call(rbind, I_all), 2, median)
-I_lower <- apply(do.call(rbind, I_all), 2, quantile, probs = 0.025)
-I_upper <- apply(do.call(rbind, I_all), 2, quantile, probs = 0.975)
-
-# Plot with uncertainty bands
-plot(I_median, type = "l",
-     ylim = range(c(I_lower, I_upper)),
-     main = "Infected Individuals (with 95% CI)",
-     xlab = "Time (days)",
-     ylab = "Number Infected")
-
-polygon(c(1:length(I_median), rev(1:length(I_median))),
-        c(I_lower, rev(I_upper)),
-        col = rgb(0, 0, 1, 0.2), border = NA)
-
-lines(I_median, col = "blue", lwd = 2)
-```
-
----
-
-## Advanced Workflows
-
-### Calibration Setup
-
-```{r calibration-setup}
-# Sample parameters for calibration
-config_calibration <- sample_parameters(
-  config = config_default,
-  seed = 999,
-
-  # Sample parameters to calibrate
-  sample_transmission = TRUE,
-  sample_seasonality = TRUE,
-  sample_environmental = TRUE,
-
-  # Fix other parameters
-  sample_initial_conditions = FALSE,
-  sample_vaccination_efficacy = FALSE
-)
-
-# Run simulations for calibration
-ctrl_calibration <- mosaic_control_defaults(
-  n_sim = 1000,
-  parallel = TRUE,
-  n_cores = parallel::detectCores() - 1
-)
-
-results_calibration <- run_MOSAIC(
-  config = config_calibration,
-  control = ctrl_calibration,
-  seed = 999
-)
-```
-
-### Scenario Comparison
-
-```{r scenario-comparison}
-# Baseline scenario
-config_baseline <- sample_parameters(
-  config = config_default,
-  seed = 111
-)
-
-results_baseline <- run_MOSAIC(
-  config = config_baseline,
-  control = mosaic_control_defaults(n_sim = 200),
-  seed = 111
-)
-
-# Intervention scenario (e.g., increased vaccination)
-config_intervention <- config_baseline
-config_intervention$nu_1_jt <- config_intervention$nu_1_jt * 2  # Double vaccination rate
-
-results_intervention <- run_MOSAIC(
-  config = config_intervention,
-  control = mosaic_control_defaults(n_sim = 200),
-  seed = 222
-)
-
-# Compare results
-# (comparison code depends on output structure)
-```
-
----
-
-## Best Practices
-
-### Reproducibility
-
-```{r reproducibility}
-# Always set seeds for reproducibility
-set.seed(12345)
-
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 12345  # Seed for parameter sampling
-)
-
-results <- run_MOSAIC(
-  config = config_sampled,
-  control = mosaic_control_defaults(n_sim = 100),
-  seed = 12345  # Seed for simulation runs
-)
-```
-
-### Parallel Execution
-
-```{r parallel-execution}
-# Check available cores
-n_cores <- parallel::detectCores()
-cat("Available cores:", n_cores, "\n")
-
-# Leave one core free for system
-ctrl <- mosaic_control_defaults(
-  n_sim = 500,
-  parallel = TRUE,
-  n_cores = n_cores - 1
-)
-
-# Monitor progress (if implemented in run_MOSAIC)
-results <- run_MOSAIC(
-  config = config_sampled,
-  control = ctrl,
-  seed = 123
-)
-```
-
-### Memory Management
-
-```{r memory-management}
-# For large simulation batches, save intermediate results
-ctrl <- mosaic_control_defaults(
-  n_sim = 1000,
-  parallel = TRUE,
-  save_output = TRUE,
-  output_dir = "results/batch_001/"
-)
-
-# Process results in batches to avoid memory issues
-results <- run_MOSAIC(
-  config = config_sampled,
-  control = ctrl,
-  seed = 123
-)
-
-# Clear memory after processing
-rm(results)
-gc()
-```
-
----
-
-## Common Parameter Groups
-
-### Transmission Parameters
-
-- `beta_j0_tot`: Total transmission rate
-- `p_beta`: Proportion of human-to-human transmission
-- `beta_j0_hum`: Human transmission component (derived)
-- `beta_j0_env`: Environmental transmission component (derived)
-
-### Seasonality Parameters
-
-- `a_1_j`, `a_2_j`: Fourier coefficients (amplitude)
-- `b_1_j`, `b_2_j`: Fourier coefficients (phase)
-
-### Disease Natural History
-
-- `gamma_1`: Recovery rate (symptomatic)
-- `gamma_2`: Recovery rate (asymptomatic)
-- `sigma`: Incubation rate
-- `epsilon`: Infectiousness ratio (asymptomatic/symptomatic)
-
-### Vaccination
-
-- `phi_1`: Efficacy of one dose
-- `phi_2`: Efficacy of two doses
-- `omega_1`: Waning rate for one-dose immunity
-- `omega_2`: Waning rate for two-dose immunity
-
-### Environmental Parameters
-
-- `theta_j`: Environmental contamination rate
-- `chi_endemic`: Environmental decay rate (endemic)
-- `chi_epidemic`: Environmental decay rate (epidemic)
-- `psi_jt`: Environmental suitability (time-varying)
-
----
-
-## Troubleshooting
-
-### High Parameter Variance
-
-If your results show excessive variability:
-
-```{r troubleshoot-variance}
-# Reduce sampling to specific parameter groups
-config_sampled <- sample_parameters(
-  config = config_default,
-  seed = 123,
-
-  # Only sample parameters with greatest uncertainty
-  sample_transmission = TRUE,
-  sample_seasonality = FALSE,  # Fix seasonality
-  sample_initial_conditions = FALSE  # Fix initial conditions
-)
-```
-
-### Computational Time
-
-For faster iteration during development:
-
-```{r troubleshoot-time}
-# Start with fewer simulations
-ctrl_test <- mosaic_control_defaults(
-  n_sim = 10,  # Small test run
-  parallel = FALSE
-)
-
-# Test on single location
-config_test <- get_location_config(
-  config = config_default,
-  iso = "ETH"
-)
-
-# Quick test run
-results_test <- run_MOSAIC(
-  config = config_test,
-  control = ctrl_test,
-  seed = 123
-)
-
-# Once validated, scale up
-ctrl_full <- mosaic_control_defaults(
-  n_sim = 1000,
-  parallel = TRUE
-)
-```
-
----
-
-## Next Steps
-
-- **Calibration**: Use the NPE workflow for Bayesian calibration
-- **Forecasting**: Generate epidemic forecasts with uncertainty
-- **Scenario Analysis**: Compare intervention strategies
-- **Sensitivity Analysis**: Identify key parameters driving outcomes
-
-See the MOSAIC documentation for advanced workflows and case studies.
