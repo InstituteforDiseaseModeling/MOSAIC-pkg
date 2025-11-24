@@ -144,7 +144,7 @@ knitr::include_graphics("figures/running_mosaic_endemic.png")
 
 ### Running LASER for multiple locations
 
-```{r multi-location-example, echo=TRUE, eval=FALSE}
+```{r multi-location-example, echo=TRUE, eval=TRUE}
 library(MOSAIC)
 
 iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
@@ -175,6 +175,11 @@ mtext("Time step", side = 1, outer = TRUE, line = 0.5)
 mtext("Expected Cases", side = 2, outer = TRUE, line = 0.5)
 mtext("Expected Cases by Location", side = 3, outer = TRUE, line = 0.5, font = 2)
 dev.off()
+cat("Saved: figures/multi_location_grid.png\n")
+```
+
+```{r multi-location-grid-plot, echo = FALSE, eval = TRUE, out.width = "100%", fig.align = "center"}
+knitr::include_graphics("figures/multi_location_grid.png")
 ```
 
 ---
