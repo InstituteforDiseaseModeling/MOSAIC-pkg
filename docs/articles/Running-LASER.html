@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.13</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,7 +103,8 @@ growth patterns typical of cholera epidemics.</p>
 <span><span class="co"># Run epidemic scenario</span></span>
 <span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="../reference/config_simulation_epidemic.html">config_simulation_epidemic</a></span></span>
 <span></span>
-<span><span class="va">model_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">model_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Loading LASER module...</span></span>
 <span></span>
 <span><span class="co"># Extract time series results (convert Python objects to R matrices)</span></span>
 <span><span class="va">cases_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span></span>
@@ -163,7 +164,8 @@ patterns with seasonal fluctuations.</p>
 <code class="sourceCode R"><span><span class="co"># Run endemic scenario</span></span>
 <span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="../reference/config_simulation_endemic.html">config_simulation_endemic</a></span></span>
 <span></span>
-<span><span class="va">model_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">model_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Loading LASER module...</span></span>
 <span></span>
 <span><span class="co"># Extract time series results (convert Python objects to R matrices)</span></span>
 <span><span class="va">cases_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span></span>
@@ -204,6 +206,47 @@ patterns with seasonal fluctuations.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Saved: figures/running_mosaic_endemic.png\n"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Saved: figures/running_mosaic_endemic.png</span></span></code></pre></div>
 <p><img src="figures/running_mosaic_endemic.png" width="90%" style="display: block; margin: auto;"></p>
+</div>
+<div class="section level3">
+<h3 id="running-laser-for-multiple-locations">Running LASER for multiple locations<a class="anchor" aria-label="anchor" href="#running-laser-for-multiple-locations"></a>
+</h3>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">iso_codes</span> <span class="op">&lt;-</span> <span class="va">iso_codes_mosaic</span><span class="op">[</span><span class="va">iso_codes_mosaic</span> <span class="op">!=</span> <span class="st">'SSD'</span><span class="op">]</span> <span class="co"># Current bug with SSD vaccination data</span></span>
+<span></span>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso <span class="op">=</span> <span class="va">iso_codes</span><span class="op">)</span></span>
+<span><span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span> <span class="op">&lt;-</span> <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span><span class="op">*</span><span class="fl">2</span></span>
+<span><span class="va">config</span><span class="op">$</span><span class="va">beta_j0_env</span> <span class="op">&lt;-</span> <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_env</span><span class="op">*</span><span class="fl">4</span></span>
+<span></span>
+<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span><span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Loading LASER module...</span></span>
+<span></span>
+<span><span class="co"># Extract expected cases</span></span>
+<span><span class="va">cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Create grid plot showing each location separately</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/grDevices/png.html" class="external-link">png</a></span><span class="op">(</span><span class="st">"figures/multi_location_grid.png"</span>, width <span class="op">=</span> <span class="fl">1400</span>, height <span class="op">=</span> <span class="fl">1600</span>, res <span class="op">=</span> <span class="fl">130</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>mfrow <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">8</span>, <span class="fl">5</span><span class="op">)</span>, mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">1</span><span class="op">)</span>, oma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cases</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>     <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cases</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, type <span class="op">=</span> <span class="st">"l"</span>, lwd <span class="op">=</span> <span class="fl">1.5</span>, col <span class="op">=</span> <span class="st">"#009ADE"</span>,</span>
+<span>          main <span class="op">=</span> <span class="va">config</span><span class="op">$</span><span class="va">location_name</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
+<span>          xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">""</span>,</span>
+<span>          cex.main <span class="op">=</span> <span class="fl">0.9</span><span class="op">)</span></span>
+<span>     <span class="fu"><a href="https://rdrr.io/r/graphics/grid.html" class="external-link">grid</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"gray90"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Add common axis labels</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/mtext.html" class="external-link">mtext</a></span><span class="op">(</span><span class="st">"Time step"</span>, side <span class="op">=</span> <span class="fl">1</span>, outer <span class="op">=</span> <span class="cn">TRUE</span>, line <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/mtext.html" class="external-link">mtext</a></span><span class="op">(</span><span class="st">"Expected Cases"</span>, side <span class="op">=</span> <span class="fl">2</span>, outer <span class="op">=</span> <span class="cn">TRUE</span>, line <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/mtext.html" class="external-link">mtext</a></span><span class="op">(</span><span class="st">"Expected Cases by Location"</span>, side <span class="op">=</span> <span class="fl">3</span>, outer <span class="op">=</span> <span class="cn">TRUE</span>, line <span class="op">=</span> <span class="fl">0.5</span>, font <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/grDevices/dev.html" class="external-link">dev.off</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; agg_png </span></span>
+<span><span class="co">#&gt;       2</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Saved: figures/multi_location_grid.png\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Saved: figures/multi_location_grid.png</span></span></code></pre></div>
+<p><img src="figures/multi_location_grid.png" width="100%" style="display: block; margin: auto;"></p>
 <hr>
 </div>
 </div>
