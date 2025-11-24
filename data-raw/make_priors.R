@@ -1043,7 +1043,9 @@ initial_conditions_E_I <- est_initial_E_I(
 adjustment_factors_E_I <- list(
      MOZ = 0.3,  # Reduce Mozambique initial E/I to 30% of estimated
      MWI = 0.2,  # Reduce Malawi initial E/I to 20% of estimated
-     ZWE = 0.15  # Reduce Zimbabwe initial E/I to 15% of estimated
+     ZWE = 0.1,  # Reduce Zimbabwe initial E/I to 15% of estimated
+     UGA = 0.1,
+     TZA = 0.1
 )
 
 cat("\nApplying post-estimation mean adjustments for initial E and I:\n")

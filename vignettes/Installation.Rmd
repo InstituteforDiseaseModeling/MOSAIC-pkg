@@ -46,10 +46,6 @@ install_dependencies()
 # Check Python environment and dependencies
 check_python_env()
 check_dependencies()
-
-# Verify installation
-config <- MOSAIC::config_default
-results <- run_LASER(config, seed = 123, quiet = TRUE)
 ```
 
 **Successful installation output:**
@@ -115,10 +111,6 @@ set_root_directory("~/MOSAIC")
 check_python_env()
 check_dependencies()
 
-# Verify
-PATHS <- get_paths()
-config <- MOSAIC::config_default
-results <- run_LASER(config, seed = 123)
 ```
 
 ### Development Workflow
