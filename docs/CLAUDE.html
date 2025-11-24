@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,7 @@
 
 <p>This file provides comprehensive guidance for Claude Code when working with the MOSAIC R package.</p>
 <div class="section level2">
-<h2 id="id_-table-of-contents">📚 Table of Contents<a class="anchor" aria-label="anchor" href="#id_-table-of-contents"></a></h2>
+<h2 id="books-table-of-contents">📚 Table of Contents<a class="anchor" aria-label="anchor" href="#books-table-of-contents"></a></h2>
 <p><strong>Quick Start:</strong> - <a href="#id_-quick-reference-card">⚡ Quick Reference Card</a> - <a href="#id_-first-time-on-mosaic">🚀 First Time on MOSAIC</a> - <a href="#id_-common-tasks-step-by-step">📋 Common Tasks</a></p>
 <p><strong>Understanding MOSAIC:</strong> - <a href="#package-overview">Package Overview</a> - <a href="#architecture">Architecture</a> - <a href="#the-run_mosaic-workflow-centerpiece-of-the-package">The run_MOSAIC Workflow</a> ⭐ CENTERPIECE - <a href="#function-organization-219-files">Function Organization</a> - <a href="#parameter-system-architecture">Parameter System</a></p>
 <p><strong>Development:</strong> - <a href="#working-with-claude-code-development-standards">Development Standards</a> 📋 CRITICAL - <a href="#id_2-package-version-management">Version Management</a> - <a href="#id_3-testing-requirements">Testing</a> - <a href="#id_6-git-workflow">Git Workflow</a> - <a href="#id_7-documentation-standards">Documentation</a></p>
@@ -50,7 +50,7 @@
 <p><strong>Troubleshooting &amp; Reference:</strong> - <a href="#id_-when-things-go-wrong">When Things Go Wrong</a> - <a href="#key-files-reference">Key Files Reference</a> - <a href="#id_-why-we-do-this-design-decisions">Design Decisions</a> - <a href="#system-requirements">System Requirements</a></p>
 <hr></div>
 <div class="section level2">
-<h2 id="id_-quick-reference-card">⚡ Quick Reference Card<a class="anchor" aria-label="anchor" href="#id_-quick-reference-card"></a></h2>
+<h2 id="zap-quick-reference-card">⚡ Quick Reference Card<a class="anchor" aria-label="anchor" href="#zap-quick-reference-card"></a></h2>
 <p><strong>Check current state (do this FIRST):</strong></p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">git</span> status                      <span class="co"># Any uncommitted changes?</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">git</span> log <span class="at">--oneline</span> <span class="at">-5</span>           <span class="co"># Recent commits</span></span>
@@ -95,7 +95,7 @@
 <p><strong>When stuck:</strong> - Check <a href="#id_-common-tasks-step-by-step">Common Tasks</a> for step-by-step guides - Check <a href="#id_-when-things-go-wrong">Troubleshooting</a> for common issues - Check <a href="#id_-why-we-do-this-design-decisions">Design Decisions</a> for context - ASK the user if unclear!</p>
 <hr></div>
 <div class="section level2">
-<h2 id="id_-first-time-on-mosaic">🚀 First Time on MOSAIC<a class="anchor" aria-label="anchor" href="#id_-first-time-on-mosaic"></a></h2>
+<h2 id="rocket-first-time-on-mosaic">🚀 First Time on MOSAIC<a class="anchor" aria-label="anchor" href="#rocket-first-time-on-mosaic"></a></h2>
 <p><strong>You’re a new Claude instance starting work on MOSAIC. Here’s what to do FIRST.</strong></p>
 <div class="section level3">
 <h3 id="step-1-understand-current-state-5-minutes">Step 1: Understand Current State (5 minutes)<a class="anchor" aria-label="anchor" href="#step-1-understand-current-state-5-minutes"></a></h3>
@@ -135,27 +135,27 @@
 <div class="section level3">
 <h3 id="step-3-read-relevant-context">Step 3: Read Relevant Context<a class="anchor" aria-label="anchor" href="#step-3-read-relevant-context"></a></h3>
 <p><strong>For different task types, read these sections:</strong></p>
-<table class="table"><colgroup><col width="36%"><col width="63%"></colgroup><thead><tr class="header"><th>Task Type</th>
+<table class="table"><colgroup><col width="36%"><col width="63%"></colgroup><thead><tr><th>Task Type</th>
 <th>Read These Sections</th>
-</tr></thead><tbody><tr class="odd"><td>Bug in run_MOSAIC</td>
+</tr></thead><tbody><tr><td>Bug in run_MOSAIC</td>
 <td>
 <a href="#the-run_mosaic-workflow-centerpiece-of-the-package">run_MOSAIC Workflow</a>, <a href="#key-files-reference">Key Files</a>
 </td>
-</tr><tr class="even"><td>Bug in likelihood</td>
+</tr><tr><td>Bug in likelihood</td>
 <td>
 <a href="#likelihood-calculation">Likelihood Calculation</a>, <a href="#id_5-performance-standards">Performance</a>
 </td>
-</tr><tr class="odd"><td>Add parameter</td>
+</tr><tr><td>Add parameter</td>
 <td>
 <a href="#parameter-system-architecture">Parameter System</a>, <a href="#common-tasks-step-by-step">Common Tasks</a>
 </td>
-</tr><tr class="even"><td>Performance issue</td>
+</tr><tr><td>Performance issue</td>
 <td>
 <a href="#critical-npe-performance-optimization">NPE Optimization</a>, <a href="#id_5-performance-standards">Performance Standards</a>
 </td>
-</tr><tr class="odd"><td>Documentation</td>
+</tr><tr><td>Documentation</td>
 <td><a href="#id_7-documentation-standards">Documentation Standards</a></td>
-</tr><tr class="even"><td>Any change</td>
+</tr><tr><td>Any change</td>
 <td>
 <a href="#working-with-claude-code-development-standards">Development Standards</a> (always!)</td>
 </tr></tbody></table></div>
@@ -172,7 +172,7 @@
 <hr></div>
 </div>
 <div class="section level2">
-<h2 id="id_-common-tasks-step-by-step">📋 Common Tasks: Step-by-Step<a class="anchor" aria-label="anchor" href="#id_-common-tasks-step-by-step"></a></h2>
+<h2 id="clipboard-common-tasks-step-by-step">📋 Common Tasks: Step-by-Step<a class="anchor" aria-label="anchor" href="#clipboard-common-tasks-step-by-step"></a></h2>
 <p>Detailed walkthroughs for common development tasks on MOSAIC.</p>
 <div class="section level3">
 <h3 id="task-1-fix-a-bug">Task 1: Fix a Bug<a class="anchor" aria-label="anchor" href="#task-1-fix-a-bug"></a></h3>
@@ -519,47 +519,47 @@
 <div class="section level3">
 <h3 id="naming-conventions">Naming Conventions<a class="anchor" aria-label="anchor" href="#naming-conventions"></a></h3>
 <p>Functions follow strict prefixes indicating their purpose:</p>
-<table class="table"><colgroup><col width="23%"><col width="26%"><col width="20%"><col width="29%"></colgroup><thead><tr class="header"><th>Prefix</th>
+<table class="table"><colgroup><col width="23%"><col width="26%"><col width="20%"><col width="29%"></colgroup><thead><tr><th>Prefix</th>
 <th>Purpose</th>
 <th>Count</th>
 <th>Examples</th>
-</tr></thead><tbody><tr class="odd"><td><code>process_*()</code></td>
+</tr></thead><tbody><tr><td><code>process_*()</code></td>
 <td>Data cleaning &amp; preprocessing</td>
 <td>25</td>
 <td>
 <code><a href="reference/process_WHO_weekly_data.html">process_WHO_weekly_data()</a></code>, <code><a href="reference/process_climate_data.html">process_climate_data()</a></code>
 </td>
-</tr><tr class="even"><td><code>est_*()</code></td>
+</tr><tr><td><code>est_*()</code></td>
 <td>Parameter estimation</td>
 <td>18</td>
 <td>
 <code><a href="reference/est_initial_E_I.html">est_initial_E_I()</a></code>, <code><a href="reference/est_vaccination_rate.html">est_vaccination_rate()</a></code>, <code><a href="reference/est_WASH_coverage.html">est_WASH_coverage()</a></code>
 </td>
-</tr><tr class="odd"><td><code>plot_*()</code></td>
+</tr><tr><td><code>plot_*()</code></td>
 <td>Visualization &amp; figures</td>
 <td>30+</td>
 <td>
 <code><a href="reference/plot_model_ppc.html">plot_model_ppc()</a></code>, <code><a href="reference/plot_vaccination_maps.html">plot_vaccination_maps()</a></code>, <code><a href="reference/plot_model_convergence.html">plot_model_convergence()</a></code>
 </td>
-</tr><tr class="even"><td><code>get_*()</code></td>
+</tr><tr><td><code>get_*()</code></td>
 <td>Data retrieval &amp; utilities</td>
 <td>25+</td>
 <td>
 <code><a href="reference/get_paths.html">get_paths()</a></code>, <code><a href="reference/get_climate_historical.html">get_climate_historical()</a></code>, <code><a href="reference/get_WASH_data.html">get_WASH_data()</a></code>
 </td>
-</tr><tr class="odd"><td><code>calc_*()</code></td>
+</tr><tr><td><code>calc_*()</code></td>
 <td>Mathematical calculations</td>
 <td>25+</td>
 <td>
 <code><a href="reference/calc_model_likelihood.html">calc_model_likelihood()</a></code>, <code><a href="reference/calc_spatial_correlation.html">calc_spatial_correlation()</a></code>
 </td>
-</tr><tr class="even"><td><code>check_*()</code></td>
+</tr><tr><td><code>check_*()</code></td>
 <td>Validation &amp; verification</td>
 <td>5</td>
 <td>
 <code><a href="reference/check_dependencies.html">check_dependencies()</a></code>, <code><a href="reference/check_affine_normalization.html">check_affine_normalization()</a></code>
 </td>
-</tr><tr class="odd"><td><code>sample_*()</code></td>
+</tr><tr><td><code>sample_*()</code></td>
 <td>Parameter sampling</td>
 <td>2</td>
 <td>
@@ -934,7 +934,7 @@ Speedup: 100-1200× faster (2-3 orders of magnitude)</code></pre>
 </div>
 </div>
 <div class="section level2">
-<h2 id="id_-why-we-do-this-design-decisions">🎯 Why We Do This: Design Decisions<a class="anchor" aria-label="anchor" href="#id_-why-we-do-this-design-decisions"></a></h2>
+<h2 id="dart-why-we-do-this-design-decisions">🎯 Why We Do This: Design Decisions<a class="anchor" aria-label="anchor" href="#dart-why-we-do-this-design-decisions"></a></h2>
 <p>Understanding the <strong>why</strong> behind key architectural choices helps you work with (not against) the system.</p>
 <div class="section level3">
 <h3 id="why-bump-version-on-every-commit">Why bump version on EVERY commit?<a class="anchor" aria-label="anchor" href="#why-bump-version-on-every-commit"></a></h3>
@@ -1012,7 +1012,7 @@ Speedup: 100-1200× faster (2-3 orders of magnitude)</code></pre>
 <hr></div>
 </div>
 <div class="section level2">
-<h2 id="id_-when-things-go-wrong">🔧 When Things Go Wrong<a class="anchor" aria-label="anchor" href="#id_-when-things-go-wrong"></a></h2>
+<h2 id="wrench-when-things-go-wrong">🔧 When Things Go Wrong<a class="anchor" aria-label="anchor" href="#wrench-when-things-go-wrong"></a></h2>
 <p>Systematic troubleshooting guide for common issues.</p>
 <div class="section level3">
 <h3 id="tests-failing-after-your-changes">Tests Failing After Your Changes<a class="anchor" aria-label="anchor" href="#tests-failing-after-your-changes"></a></h3>
@@ -1023,22 +1023,22 @@ Speedup: 100-1200× faster (2-3 orders of magnitude)</code></pre>
 <span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a><span class="co"># Run just the failing test for details</span></span>
 <span id="cb40-5"><a href="#cb40-5" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"testthat::test_file('tests/testthat/test-my_function.R')"</span></span></code></pre></div>
 <p><strong>Step 2: Common causes and fixes</strong></p>
-<table class="table"><colgroup><col width="33%"><col width="48%"><col width="18%"></colgroup><thead><tr class="header"><th>Symptom</th>
+<table class="table"><colgroup><col width="33%"><col width="48%"><col width="18%"></colgroup><thead><tr><th>Symptom</th>
 <th>Likely Cause</th>
 <th>Fix</th>
-</tr></thead><tbody><tr class="odd"><td>“Object not found”</td>
+</tr></thead><tbody><tr><td>“Object not found”</td>
 <td>Function not exported or typo</td>
 <td>Check @export tag, check spelling</td>
-</tr><tr class="even"><td>“Unexpected type”</td>
+</tr><tr><td>“Unexpected type”</td>
 <td>Function signature changed</td>
 <td>Update all calls to new signature</td>
-</tr><tr class="odd"><td>“NA/NaN produced”</td>
+</tr><tr><td>“NA/NaN produced”</td>
 <td>Edge case not handled</td>
 <td>Add NA handling, check for empty inputs</td>
-</tr><tr class="even"><td>“Dimensions don’t match”</td>
+</tr><tr><td>“Dimensions don’t match”</td>
 <td>Matrix/vector size changed</td>
 <td>Check assumptions about data dimensions</td>
-</tr><tr class="odd"><td>“Test times out”</td>
+</tr><tr><td>“Test times out”</td>
 <td>Infinite loop or very slow</td>
 <td>Add browser() before problem line, debug</td>
 </tr></tbody></table><p><strong>Step 3: Debug interactively</strong></p>
@@ -1056,20 +1056,20 @@ Speedup: 100-1200× faster (2-3 orders of magnitude)</code></pre>
 <div class="section level3">
 <h3 id="r-cmd-check-errors-or-warnings">R CMD Check Errors or Warnings<a class="anchor" aria-label="anchor" href="#r-cmd-check-errors-or-warnings"></a></h3>
 <p><strong>Common errors and quick fixes:</strong></p>
-<table class="table"><colgroup><col width="58%"><col width="41%"></colgroup><thead><tr class="header"><th>Error</th>
+<table class="table"><colgroup><col width="58%"><col width="41%"></colgroup><thead><tr><th>Error</th>
 <th>Fix</th>
-</tr></thead><tbody><tr class="odd"><td>“Undocumented parameters”</td>
+</tr></thead><tbody><tr><td>“Undocumented parameters”</td>
 <td>Add missing <code>@param</code> tags matching function signature</td>
-</tr><tr class="even"><td>“Functions not exported”</td>
+</tr><tr><td>“Functions not exported”</td>
 <td>Add <code>@export</code> tag, run <code><a href="https://devtools.r-lib.org/reference/document.html" class="external-link">devtools::document()</a></code>
 </td>
-</tr><tr class="odd"><td>“Broken \link{}”</td>
+</tr><tr><td>“Broken \link{}”</td>
 <td>Use <code>\code{\link{function}}</code> not <code>\link{function}</code>
 </td>
-</tr><tr class="even"><td>“Undefined global variable”</td>
+</tr><tr><td>“Undefined global variable”</td>
 <td>Add to <code>R/globals.R</code>: <code>utils::globalVariables(c("var"))</code>
 </td>
-</tr><tr class="odd"><td>“Complex \eqn{} error”</td>
+</tr><tr><td>“Complex \eqn{} error”</td>
 <td>Simplify equation or move to vignette</td>
 </tr></tbody></table><hr></div>
 <div class="section level3">
