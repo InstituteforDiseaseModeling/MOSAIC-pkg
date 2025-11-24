@@ -161,14 +161,18 @@ cases <- as.matrix(results$results$expected_cases)
 # Sum across all locations for total cases per timestep
 total_cases <- colSums(cases, na.rm = TRUE)
 
-# Create a simple time series plot
+# Plot 1: Total cases across all locations
+png("figures/multi_location_total.png", width = 800, height = 600, res = 120)
 plot(total_cases, type = "l", lwd = 2, col = "#009ADE",
      xlab = "Time step",
      ylab = "Total Expected Cases",
      main = "Total Expected Cases Across All Locations")
 grid()
+dev.off()
+cat("Saved: figures/multi_location_total.png\n")
 
-# Create a grid plot showing each location separately
+# Plot 2: Grid plot showing each location separately
+png("figures/multi_location_grid.png", width = 1200, height = 1200, res = 120)
 par(mfrow = c(8, 5), mar = c(2, 2, 2, 1), oma = c(2, 2, 2, 0))
 
 for (i in 1:nrow(cases)) {
@@ -183,6 +187,16 @@ for (i in 1:nrow(cases)) {
 mtext("Time step", side = 1, outer = TRUE, line = 0.5)
 mtext("Expected Cases", side = 2, outer = TRUE, line = 0.5)
 mtext("Expected Cases by Location", side = 3, outer = TRUE, line = 0.5, font = 2)
+dev.off()
+cat("Saved: figures/multi_location_grid.png\n")
+```
+
+```{r multi-location-total-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
+knitr::include_graphics("figures/multi_location_total.png")
+```
+
+```{r multi-location-grid-plot, echo = FALSE, eval = TRUE, out.width = "100%", fig.align = "center"}
+knitr::include_graphics("figures/multi_location_grid.png")
 ```
 
 ---
