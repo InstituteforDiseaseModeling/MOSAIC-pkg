@@ -46,7 +46,7 @@ library(MOSAIC)
 # Run epidemic scenario
 config <- MOSAIC::config_simulation_epidemic
 
-model_epidemic <- run_LASER(config = config, seed = 123, quiet = TRUE)
+model_epidemic <- run_LASER(config = config, seed = 123, quiet = FALSE)
 
 # Extract time series results (convert Python objects to R matrices)
 cases_epidemic <- as.matrix(model_epidemic$results$expected_cases)
@@ -101,7 +101,7 @@ The endemic configuration simulates stable, persistent transmission patterns wit
 # Run endemic scenario
 config <- MOSAIC::config_simulation_endemic
 
-model_endemic <- run_LASER(config = config, seed = 123, quiet = TRUE)
+model_endemic <- run_LASER(config = config, seed = 123, quiet = FALSE)
 
 # Extract time series results (convert Python objects to R matrices)
 cases_endemic <- as.matrix(model_endemic$results$expected_cases)
@@ -139,6 +139,32 @@ cat("Saved: figures/running_mosaic_endemic.png\n")
 
 ```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
 knitr::include_graphics("figures/running_mosaic_endemic.png")
+```
+
+
+### Running LASER for multiple locations
+
+```{r multi-location-example, echo=TRUE, eval=FALSE}
+library(MOSAIC)
+
+iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
+
+config <- get_location_config(iso = iso_codes)
+
+results <- run_LASER(config, seed = 123, quiet = FALSE)
+
+# Extract expected cases
+cases <- as.matrix(results$results$expected_cases)
+
+# Sum across all locations for total cases per timestep
+total_cases <- colSums(cases, na.rm = TRUE)
+
+# Create a simple time series plot
+plot(total_cases, type = "l", lwd = 2, col = "#009ADE",
+     xlab = "Time step",
+     ylab = "Total Expected Cases",
+     main = "Total Expected Cases Across All Locations")
+grid()
 ```
 
 ---
