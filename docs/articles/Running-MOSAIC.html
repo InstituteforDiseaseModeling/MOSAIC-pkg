@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,536 +86,184 @@ to set up MOSAIC and its dependencies.</p>
 <hr>
 </div>
 <div class="section level2">
-<h2 id="mosaic-workflow-components">MOSAIC Workflow Components<a class="anchor" aria-label="anchor" href="#mosaic-workflow-components"></a>
+<h2 id="run-a-fixed-number-of-simulations-for-one-location">Run a fixed number of simulations for one location<a class="anchor" aria-label="anchor" href="#run-a-fixed-number-of-simulations-for-one-location"></a>
 </h2>
-<p>The MOSAIC workflow consists of three main steps:</p>
-<ol style="list-style-type: decimal">
-<li>
-<strong>Parameter Sampling</strong>: Generate parameter sets from
-prior distributions</li>
-<li>
-<strong>Parallel Execution</strong>: Run multiple LASER simulations
-with sampled parameters</li>
-<li>
-<strong>Analysis</strong>: Aggregate results and quantify
-uncertainty</li>
-</ol>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Load required packages</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 1. Sample parameters from priors</span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/attach_mosaic_env.html">attach_mosaic_env</a></span><span class="op">(</span>silent <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 2. Run multiple simulations</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_sampled</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span>
+<span><span class="co"># Create output directory and set up logging</span></span>
+<span><span class="va">dir_output</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/path.expand.html" class="external-link">path.expand</a></span><span class="op">(</span><span class="st">"~/MOSAIC/output/ETH_fixed"</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">dir_output</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">dir_output</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 3. Analyze outputs</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span></span></code></pre></div>
-<hr>
+<span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
+<span></span>
+<span></span>
+<span><span class="va">priors_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span><span class="va">config_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.9</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span> <span class="co"># Travel probability</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Gravity model exponent</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_omega</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Mobility rate</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_cases</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_deaths</span> <span class="op">&lt;-</span> <span class="fl">0.05</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">best_model_n_sims</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">ensemble_n_sims_per_param</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">npe</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">paths</span><span class="op">$</span><span class="va">clean_output</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">io</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"fast"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">result_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
+<span>     dir_output <span class="op">=</span> <span class="va">dir_output</span>,</span>
+<span>     config <span class="op">=</span> <span class="va">config_ETH</span>,</span>
+<span>     priors <span class="op">=</span> <span class="va">priors_ETH</span>,</span>
+<span>     control <span class="op">=</span> <span class="va">control_ETH</span>,</span>
+<span>     resume <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="parameter-sampling">Parameter Sampling<a class="anchor" aria-label="anchor" href="#parameter-sampling"></a>
+<h2 id="run-the-adaptive-simulation-algorithm-for-one-location">Run the adaptive simulation algorithm for one location<a class="anchor" aria-label="anchor" href="#run-the-adaptive-simulation-algorithm-for-one-location"></a>
 </h2>
-<p>The <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code> function samples parameter
-values from prior distributions specified in
-<code>priors_default</code>. You can control which parameter groups to
-sample.</p>
-<div class="section level3">
-<h3 id="sample-all-parameters">Sample All Parameters<a class="anchor" aria-label="anchor" href="#sample-all-parameters"></a>
-</h3>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Load required packages</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Sample all parameters with stochasticity</span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/attach_mosaic_env.html">attach_mosaic_env</a></span><span class="op">(</span>silent <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="co"># Sample all parameter groups</span></span>
-<span>  sample_transmission <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_seasonality <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_initial_conditions <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_vaccination_efficacy <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_disease_natural_history <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_reporting_rates <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_cfr <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_waning_immunity <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_environmental <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># View sampled transmission parameters</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sampled beta_j0_tot:"</span>, <span class="va">config_sampled</span><span class="op">$</span><span class="va">beta_j0_tot</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sampled p_beta:"</span>, <span class="va">config_sampled</span><span class="op">$</span><span class="va">p_beta</span>, <span class="st">"\n"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co"># Create output directory and set up logging</span></span>
+<span><span class="va">dir_output</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/path.expand.html" class="external-link">path.expand</a></span><span class="op">(</span><span class="st">"~/MOSAIC/output/ETH_auto"</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">dir_output</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">dir_output</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
+<span></span>
+<span></span>
+<span><span class="va">priors_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span><span class="va">config_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="st">'auto'</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.9</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Gravity model exponent</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_omega</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Mobility rate</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_cases</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_deaths</span> <span class="op">&lt;-</span> <span class="fl">0.05</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">best_model_n_sims</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">ensemble_n_sims_per_param</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">npe</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">paths</span><span class="op">$</span><span class="va">clean_output</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">io</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"fast"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">result_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
+<span>     dir_output <span class="op">=</span> <span class="va">dir_output</span>,</span>
+<span>     config <span class="op">=</span> <span class="va">config_ETH</span>,</span>
+<span>     priors <span class="op">=</span> <span class="va">priors_ETH</span>,</span>
+<span>     control <span class="op">=</span> <span class="va">control_ETH</span>,</span>
+<span>     resume <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
-<div class="section level3">
-<h3 id="sample-specific-parameter-groups">Sample Specific Parameter Groups<a class="anchor" aria-label="anchor" href="#sample-specific-parameter-groups"></a>
-</h3>
+<div class="section level2">
+<h2 id="run-the-adaptive-simulation-algorithm-for-multiple-locations">Run the adaptive simulation algorithm for multiple locations<a class="anchor" aria-label="anchor" href="#run-the-adaptive-simulation-algorithm-for-multiple-locations"></a>
+</h2>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Sample only transmission and seasonality parameters</span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">456</span>,</span>
+<code class="sourceCode R"><span><span class="co"># Load required packages</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="co"># Only sample these groups</span></span>
-<span>  sample_transmission <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_seasonality <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/attach_mosaic_env.html">attach_mosaic_env</a></span><span class="op">(</span>silent <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="co"># Keep all others at default</span></span>
-<span>  sample_initial_conditions <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_vaccination_efficacy <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_disease_natural_history <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_reporting_rates <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_cfr <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_waning_immunity <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_environmental <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="co"># Create output directory and set up logging</span></span>
+<span><span class="va">dir_output</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/path.expand.html" class="external-link">path.expand</a></span><span class="op">(</span><span class="st">"~/MOSAIC/output/ETH_KEN"</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">dir_output</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">dir_output</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">iso_codes</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ETH"</span>, <span class="st">"KEN"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">priors</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso<span class="op">=</span><span class="va">iso_codes</span><span class="op">)</span></span>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso<span class="op">=</span><span class="va">iso_codes</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="st">'auto'</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">3</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span> <span class="co"># Travel probability</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>  <span class="co"># Gravity model exponent</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_omega</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>  <span class="co"># Mobility rate</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_cases</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_deaths</span> <span class="op">&lt;-</span> <span class="fl">0.05</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">best_model_n_sims</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">ensemble_n_sims_per_param</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">npe</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">paths</span><span class="op">$</span><span class="va">clean_output</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">io</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"fast"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">logging</span><span class="op">$</span><span class="va">verbose</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
+<span>     dir_output <span class="op">=</span> <span class="va">dir_output</span>,</span>
+<span>     config <span class="op">=</span> <span class="va">config</span>,</span>
+<span>     priors <span class="op">=</span> <span class="va">priors</span>,</span>
+<span>     control <span class="op">=</span> <span class="va">control</span>,</span>
+<span>     resume <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="initial-conditions-sampling">Initial Conditions Sampling<a class="anchor" aria-label="anchor" href="#initial-conditions-sampling"></a>
-</h3>
-<p>Initial condition proportions are sampled from Beta
-distributions:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Sample initial conditions</span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">789</span>,</span>
-<span>  sample_initial_conditions <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># View sampled initial condition proportions</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sampled prop_S_initial:"</span>, <span class="va">config_sampled</span><span class="op">$</span><span class="va">prop_S_initial</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sampled prop_R_initial:"</span>, <span class="va">config_sampled</span><span class="op">$</span><span class="va">prop_R_initial</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sampled prop_V1_initial:"</span>, <span class="va">config_sampled</span><span class="op">$</span><span class="va">prop_V1_initial</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sampled prop_V2_initial:"</span>, <span class="va">config_sampled</span><span class="op">$</span><span class="va">prop_V2_initial</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># These proportions are normalized to sum to 1.0 and converted to counts</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="control-settings">Control Settings<a class="anchor" aria-label="anchor" href="#control-settings"></a>
-</h2>
-<p>Use <code><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults()</a></code> to configure the
-simulation workflow:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Default control settings</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># View defaults</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">ctrl</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Custom control settings</span></span>
-<span><span class="va">ctrl_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">500</span>,              <span class="co"># Number of simulations</span></span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,          <span class="co"># Run in parallel</span></span>
-<span>  n_cores <span class="op">=</span> <span class="fl">8</span>,              <span class="co"># Number of cores</span></span>
-<span>  save_output <span class="op">=</span> <span class="cn">TRUE</span>,       <span class="co"># Save intermediate results</span></span>
-<span>  output_dir <span class="op">=</span> <span class="st">"results/"</span>   <span class="co"># Output directory</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="running-multiple-simulations">Running Multiple Simulations<a class="anchor" aria-label="anchor" href="#running-multiple-simulations"></a>
-</h2>
-<div class="section level3">
-<h3 id="basic-usage">Basic Usage<a class="anchor" aria-label="anchor" href="#basic-usage"></a>
-</h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Sample parameters</span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
-<span>  sample_transmission <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_seasonality <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Set up control</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Run simulations</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_sampled</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="location-specific-analysis">Location-Specific Analysis<a class="anchor" aria-label="anchor" href="#location-specific-analysis"></a>
-</h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Extract config for specific country</span></span>
-<span><span class="va">config_eth</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  iso <span class="op">=</span> <span class="st">"ETH"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Sample parameters</span></span>
-<span><span class="va">config_eth_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_eth</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">456</span>,</span>
-<span>  sample_transmission <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_seasonality <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_initial_conditions <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Run simulations</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span>n_sim <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">results_eth</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_eth_sampled</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="analyzing-results">Analyzing Results<a class="anchor" aria-label="anchor" href="#analyzing-results"></a>
-</h2>
-<div class="section level3">
-<h3 id="summary-statistics">Summary Statistics<a class="anchor" aria-label="anchor" href="#summary-statistics"></a>
-</h3>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># View summary of results</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Extract key metrics</span></span>
-<span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">simulations</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Total simulations:"</span>, <span class="va">n_simulations</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Calculate summary statistics across simulations</span></span>
-<span><span class="co"># (specific structure depends on run_MOSAIC output format)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="time-series-with-uncertainty">Time Series with Uncertainty<a class="anchor" aria-label="anchor" href="#time-series-with-uncertainty"></a>
-</h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Extract time series from all simulations</span></span>
-<span><span class="co"># Calculate median and quantiles</span></span>
-<span></span>
-<span><span class="co"># Example structure (adjust based on actual output)</span></span>
-<span><span class="va">I_all</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">simulations</span>, <span class="kw">function</span><span class="op">(</span><span class="va">sim</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">I</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Calculate quantiles across simulations</span></span>
-<span><span class="va">I_median</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">I_all</span><span class="op">)</span>, <span class="fl">2</span>, <span class="va">median</span><span class="op">)</span></span>
-<span><span class="va">I_lower</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">I_all</span><span class="op">)</span>, <span class="fl">2</span>, <span class="va">quantile</span>, probs <span class="op">=</span> <span class="fl">0.025</span><span class="op">)</span></span>
-<span><span class="va">I_upper</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">I_all</span><span class="op">)</span>, <span class="fl">2</span>, <span class="va">quantile</span>, probs <span class="op">=</span> <span class="fl">0.975</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Plot with uncertainty bands</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">I_median</span>, type <span class="op">=</span> <span class="st">"l"</span>,</span>
-<span>     ylim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">I_lower</span>, <span class="va">I_upper</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>     main <span class="op">=</span> <span class="st">"Infected Individuals (with 95% CI)"</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"Time (days)"</span>,</span>
-<span>     ylab <span class="op">=</span> <span class="st">"Number Infected"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/polygon.html" class="external-link">polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">I_median</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">I_median</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>        <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">I_lower</span>, <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="va">I_upper</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/rgb.html" class="external-link">rgb</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">0.2</span><span class="op">)</span>, border <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">I_median</span>, col <span class="op">=</span> <span class="st">"blue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="advanced-workflows">Advanced Workflows<a class="anchor" aria-label="anchor" href="#advanced-workflows"></a>
-</h2>
-<div class="section level3">
-<h3 id="calibration-setup">Calibration Setup<a class="anchor" aria-label="anchor" href="#calibration-setup"></a>
-</h3>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Sample parameters for calibration</span></span>
-<span><span class="va">config_calibration</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">999</span>,</span>
-<span></span>
-<span>  <span class="co"># Sample parameters to calibrate</span></span>
-<span>  sample_transmission <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_seasonality <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_environmental <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span></span>
-<span>  <span class="co"># Fix other parameters</span></span>
-<span>  sample_initial_conditions <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  sample_vaccination_efficacy <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Run simulations for calibration</span></span>
-<span><span class="va">ctrl_calibration</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">1000</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  n_cores <span class="op">=</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">results_calibration</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_calibration</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl_calibration</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">999</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="scenario-comparison">Scenario Comparison<a class="anchor" aria-label="anchor" href="#scenario-comparison"></a>
-</h3>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Baseline scenario</span></span>
-<span><span class="va">config_baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">111</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">results_baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_baseline</span>,</span>
-<span>  control <span class="op">=</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span>n_sim <span class="op">=</span> <span class="fl">200</span><span class="op">)</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">111</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Intervention scenario (e.g., increased vaccination)</span></span>
-<span><span class="va">config_intervention</span> <span class="op">&lt;-</span> <span class="va">config_baseline</span></span>
-<span><span class="va">config_intervention</span><span class="op">$</span><span class="va">nu_1_jt</span> <span class="op">&lt;-</span> <span class="va">config_intervention</span><span class="op">$</span><span class="va">nu_1_jt</span> <span class="op">*</span> <span class="fl">2</span>  <span class="co"># Double vaccination rate</span></span>
-<span></span>
-<span><span class="va">results_intervention</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_intervention</span>,</span>
-<span>  control <span class="op">=</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span>n_sim <span class="op">=</span> <span class="fl">200</span><span class="op">)</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">222</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Compare results</span></span>
-<span><span class="co"># (comparison code depends on output structure)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="best-practices">Best Practices<a class="anchor" aria-label="anchor" href="#best-practices"></a>
-</h2>
-<div class="section level3">
-<h3 id="reproducibility">Reproducibility<a class="anchor" aria-label="anchor" href="#reproducibility"></a>
-</h3>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Always set seeds for reproducibility</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">12345</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">12345</span>  <span class="co"># Seed for parameter sampling</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_sampled</span>,</span>
-<span>  control <span class="op">=</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span>n_sim <span class="op">=</span> <span class="fl">100</span><span class="op">)</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">12345</span>  <span class="co"># Seed for simulation runs</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="parallel-execution">Parallel Execution<a class="anchor" aria-label="anchor" href="#parallel-execution"></a>
-</h3>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Check available cores</span></span>
-<span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Available cores:"</span>, <span class="va">n_cores</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Leave one core free for system</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">500</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  n_cores <span class="op">=</span> <span class="va">n_cores</span> <span class="op">-</span> <span class="fl">1</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Monitor progress (if implemented in run_MOSAIC)</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_sampled</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="memory-management">Memory Management<a class="anchor" aria-label="anchor" href="#memory-management"></a>
-</h3>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># For large simulation batches, save intermediate results</span></span>
-<span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">1000</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  save_output <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  output_dir <span class="op">=</span> <span class="st">"results/batch_001/"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Process results in batches to avoid memory issues</span></span>
-<span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_sampled</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Clear memory after processing</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/rm.html" class="external-link">rm</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/gc.html" class="external-link">gc</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="common-parameter-groups">Common Parameter Groups<a class="anchor" aria-label="anchor" href="#common-parameter-groups"></a>
-</h2>
-<div class="section level3">
-<h3 id="transmission-parameters">Transmission Parameters<a class="anchor" aria-label="anchor" href="#transmission-parameters"></a>
-</h3>
-<ul>
-<li>
-<code>beta_j0_tot</code>: Total transmission rate</li>
-<li>
-<code>p_beta</code>: Proportion of human-to-human transmission</li>
-<li>
-<code>beta_j0_hum</code>: Human transmission component
-(derived)</li>
-<li>
-<code>beta_j0_env</code>: Environmental transmission component
-(derived)</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="seasonality-parameters">Seasonality Parameters<a class="anchor" aria-label="anchor" href="#seasonality-parameters"></a>
-</h3>
-<ul>
-<li>
-<code>a_1_j</code>, <code>a_2_j</code>: Fourier coefficients
-(amplitude)</li>
-<li>
-<code>b_1_j</code>, <code>b_2_j</code>: Fourier coefficients
-(phase)</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="disease-natural-history">Disease Natural History<a class="anchor" aria-label="anchor" href="#disease-natural-history"></a>
-</h3>
-<ul>
-<li>
-<code>gamma_1</code>: Recovery rate (symptomatic)</li>
-<li>
-<code>gamma_2</code>: Recovery rate (asymptomatic)</li>
-<li>
-<code>sigma</code>: Incubation rate</li>
-<li>
-<code>epsilon</code>: Infectiousness ratio
-(asymptomatic/symptomatic)</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="vaccination">Vaccination<a class="anchor" aria-label="anchor" href="#vaccination"></a>
-</h3>
-<ul>
-<li>
-<code>phi_1</code>: Efficacy of one dose</li>
-<li>
-<code>phi_2</code>: Efficacy of two doses</li>
-<li>
-<code>omega_1</code>: Waning rate for one-dose immunity</li>
-<li>
-<code>omega_2</code>: Waning rate for two-dose immunity</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="environmental-parameters">Environmental Parameters<a class="anchor" aria-label="anchor" href="#environmental-parameters"></a>
-</h3>
-<ul>
-<li>
-<code>theta_j</code>: Environmental contamination rate</li>
-<li>
-<code>chi_endemic</code>: Environmental decay rate (endemic)</li>
-<li>
-<code>chi_epidemic</code>: Environmental decay rate (epidemic)</li>
-<li>
-<code>psi_jt</code>: Environmental suitability (time-varying)</li>
-</ul>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
-</h2>
-<div class="section level3">
-<h3 id="high-parameter-variance">High Parameter Variance<a class="anchor" aria-label="anchor" href="#high-parameter-variance"></a>
-</h3>
-<p>If your results show excessive variability:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Reduce sampling to specific parameter groups</span></span>
-<span><span class="va">config_sampled</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_parameters.html">sample_parameters</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
-<span></span>
-<span>  <span class="co"># Only sample parameters with greatest uncertainty</span></span>
-<span>  sample_transmission <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  sample_seasonality <span class="op">=</span> <span class="cn">FALSE</span>,  <span class="co"># Fix seasonality</span></span>
-<span>  sample_initial_conditions <span class="op">=</span> <span class="cn">FALSE</span>  <span class="co"># Fix initial conditions</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="computational-time">Computational Time<a class="anchor" aria-label="anchor" href="#computational-time"></a>
-</h3>
-<p>For faster iteration during development:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Start with fewer simulations</span></span>
-<span><span class="va">ctrl_test</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">10</span>,  <span class="co"># Small test run</span></span>
-<span>  parallel <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Test on single location</span></span>
-<span><span class="va">config_test</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  iso <span class="op">=</span> <span class="st">"ETH"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Quick test run</span></span>
-<span><span class="va">results_test</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
-<span>  config <span class="op">=</span> <span class="va">config_test</span>,</span>
-<span>  control <span class="op">=</span> <span class="va">ctrl_test</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Once validated, scale up</span></span>
-<span><span class="va">ctrl_full</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span></span>
-<span>  n_sim <span class="op">=</span> <span class="fl">1000</span>,</span>
-<span>  parallel <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
-</h2>
-<ul>
-<li>
-<strong>Calibration</strong>: Use the NPE workflow for Bayesian
-calibration</li>
-<li>
-<strong>Forecasting</strong>: Generate epidemic forecasts with
-uncertainty</li>
-<li>
-<strong>Scenario Analysis</strong>: Compare intervention
-strategies</li>
-<li>
-<strong>Sensitivity Analysis</strong>: Identify key parameters
-driving outcomes</li>
-</ul>
-<p>See the MOSAIC documentation for advanced workflows and case
-studies.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
