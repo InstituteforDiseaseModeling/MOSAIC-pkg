@@ -4,13 +4,13 @@
 \alias{get_location_config}
 \title{Get Location-Specific Configuration}
 \usage{
-get_location_config(config = NULL, iso)
+get_location_config(iso, config = NULL)
 }
 \arguments{
+\item{iso}{Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).}
+
 \item{config}{A configuration list object in the format of MOSAIC::config_default.
 If NULL, will use MOSAIC::config_default.}
-
-\item{iso}{Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).}
 }
 \value{
 A config list object with the same structure as the input, but with

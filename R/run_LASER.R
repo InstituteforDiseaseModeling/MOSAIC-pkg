@@ -52,6 +52,9 @@ run_LASER <- function(
 
      # Import LASER Python module if not provided
      if (is.null(py_module)) {
+          if (!quiet) {
+               message("Loading LASER module...")
+          }
           py_module <- reticulate::import("laser_cholera.metapop.model", convert = FALSE)
      }
 
