@@ -11,7 +11,7 @@ the requested location(s)."><meta property="og:image" content="https://institute
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.13</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,20 +51,20 @@ the requested location(s).</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">get_location_config</span><span class="op">(</span>config <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">iso</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">get_location_config</span><span class="op">(</span><span class="va">iso</span>, config <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-config">config<a class="anchor" aria-label="anchor" href="#arg-config"></a></dt>
+<dl><dt id="arg-iso">iso<a class="anchor" aria-label="anchor" href="#arg-iso"></a></dt>
+<dd><p>Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).</p></dd>
+
+
+<dt id="arg-config">config<a class="anchor" aria-label="anchor" href="#arg-config"></a></dt>
 <dd><p>A configuration list object in the format of MOSAIC::config_default.
 If NULL, will use MOSAIC::config_default.</p></dd>
-
-
-<dt id="arg-iso">iso<a class="anchor" aria-label="anchor" href="#arg-iso"></a></dt>
-<dd><p>Character vector of ISO3 country codes to extract (e.g., "ETH" or c("ETH", "KEN")).</p></dd>
 
 </dl></div>
     <div class="section level2">
