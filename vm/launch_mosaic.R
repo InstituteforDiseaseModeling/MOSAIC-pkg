@@ -25,7 +25,7 @@ MOSAIC::attach_mosaic_env(silent = FALSE)
 
 
 # Create output directory and set up logging
-dir_output <- path.expand("~/MOSAIC/output/8_countries")
+dir_output <- path.expand("~/MOSAIC/output/9_countries")
 if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
 
 set_root_directory("~/MOSAIC")
@@ -42,13 +42,17 @@ start_time <- Sys.time()
 #iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD']
 
 iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE",
-               "TZA", "UGA", "KEN", "ETH")
+               "TZA", "UGA", "KEN", "ETH",
+               "SOM")
+
+#iso_codes <- c("TZA", "UGA", "KEN", "ETH")
 
 #iso_codes <- c("MOZ", "MWI", "ZMB", "ZWE")
 
 #iso_codes <- c("ETH", "KEN")
 
 #iso_codes <- "ETH"
+#iso_codes <- "SOM"
 
 priors <- get_location_priors(iso=iso_codes)
 config <- get_location_config(iso=iso_codes)
@@ -66,9 +70,9 @@ control$calibration$max_simulations <- 1e+06
 control$parallel$enable <- TRUE
 control$parallel$n_cores <- parallel::detectCores()-1
 
-control$targets$ESS_param <- 1000
+control$targets$ESS_param <- 5000
 control$targets$ESS_param_prop <- 0.95
-control$targets$ESS_best <- 100
+control$targets$ESS_best <- 500
 control$targets$min_best_subset <- 30
 control$targets$max_best_subset <- 1500
 control$targets$ess_method <- 'perplexity'
@@ -106,7 +110,7 @@ result <- run_MOSAIC(
      config = config,
      priors = priors,
      control = control,
-     resume = FALSE
+     resume = TRUE
 )
 
 
