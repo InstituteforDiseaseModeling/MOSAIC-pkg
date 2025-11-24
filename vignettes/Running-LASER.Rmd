@@ -150,6 +150,8 @@ library(MOSAIC)
 iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
 
 config <- get_location_config(iso = iso_codes)
+config$beta_j0_hum <- config$beta_j0_hum*2
+config$beta_j0_env <- config$beta_j0_env*4
 
 results <- run_LASER(config, seed = 123, quiet = FALSE)
 
@@ -165,6 +167,22 @@ plot(total_cases, type = "l", lwd = 2, col = "#009ADE",
      ylab = "Total Expected Cases",
      main = "Total Expected Cases Across All Locations")
 grid()
+
+# Create a grid plot showing each location separately
+par(mfrow = c(8, 5), mar = c(2, 2, 2, 1), oma = c(2, 2, 2, 0))
+
+for (i in 1:nrow(cases)) {
+     plot(cases[i, ], type = "l", lwd = 1.5, col = "#009ADE",
+          main = config$location_name[i],
+          xlab = "", ylab = "",
+          cex.main = 0.9)
+     grid(col = "gray90")
+}
+
+# Add common axis labels
+mtext("Time step", side = 1, outer = TRUE, line = 0.5)
+mtext("Expected Cases", side = 2, outer = TRUE, line = 0.5)
+mtext("Expected Cases by Location", side = 3, outer = TRUE, line = 0.5, font = 2)
 ```
 
 ---
