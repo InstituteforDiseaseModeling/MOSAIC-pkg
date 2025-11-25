@@ -191,7 +191,7 @@ compress_directory <- function(dir_output, output_base, log_file) {
   if (file.exists(tar_file)) {
     tar_size <- file.size(tar_file) / 1024^3
     compression_ratio <- (1 - tar_size / dir_size) * 100
-    log_message(sprintf("     Compressed in %.1f sec: %.2f GB (%.1f%% reduction)\n",
+    log_message(sprintf("     Compressed in %.1f sec: %.2f GB (%.1f%% reduction)\n",
                        compress_time, tar_size, compression_ratio), log_file)
     return(TRUE)
   } else {
@@ -262,7 +262,7 @@ for (i in seq_along(COUNTRIES)) {
 
   # Check if already complete
   if (!FORCE_RERUN && SKIP_COMPLETED && is_country_complete(dir_output)) {
-    skip_msg <- sprintf("   Country %s already complete (skipping)\n", iso)
+    skip_msg <- sprintf("   Country %s already complete (skipping)\n", iso)
     log_message(skip_msg, master_log_file)
 
     results_tracker <- rbind(results_tracker, data.frame(
@@ -360,11 +360,11 @@ for (i in seq_along(COUNTRIES)) {
       resume = TRUE
     )
 
-    log_message("   Calibration completed successfully\n", master_log_file)
-    "SUCCESS"
+    log_message("   Calibration completed successfully\n", master_log_file)
+    list(status = "SUCCESS", message = NA_character_)
 
   }, error = function(e) {
-    error_msg <- sprintf("   ERROR: %s\n", conditionMessage(e))
+    error_msg <- sprintf("   ERROR: %s\n", conditionMessage(e))
     log_message(error_msg, master_log_file)
     return(list(status = "FAILED", message = conditionMessage(e)))
   })
@@ -381,7 +381,7 @@ for (i in seq_along(COUNTRIES)) {
 
   # Handle compression if requested
   compressed <- FALSE
-  if (calibration_status == "SUCCESS" && COMPRESS_AFTER_EACH) {
+  if (calibration_status$status == "SUCCESS" && COMPRESS_AFTER_EACH) {
     compressed <- compress_directory(dir_output, OUTPUT_BASE, master_log_file)
 
     # Delete uncompressed directory if requested
@@ -392,7 +392,7 @@ for (i in seq_along(COUNTRIES)) {
   }
 
   # Record result
-  if (calibration_status == "SUCCESS") {
+  if (calibration_status$status == "SUCCESS") {
     results_tracker <- rbind(results_tracker, data.frame(
       iso_code = iso,
       status = "SUCCESS",
@@ -556,4 +556,4 @@ if (length(tar_files) > 0) {
   log_message("==============================================================================\n", master_log_file)
 }
 
-cat("\n Pipeline complete!\n")
+cat("\n Pipeline complete!\n")
