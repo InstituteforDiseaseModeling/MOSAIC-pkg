@@ -40,6 +40,14 @@
           Sys.setenv(OMP_NUM_THREADS = "1")
      }
 
+     # Suppress OpenMP informational messages
+     # LASER (laser-cholera) uses deprecated omp_set_nested() which triggers
+     # "OMP: Info #276" warnings in newer OpenMP versions (5.0+)
+     # This is harmless but clutters output - suppress info-level messages
+     if (Sys.getenv("KMP_WARNINGS") == "") {
+          Sys.setenv(KMP_WARNINGS = "0")
+     }
+
      # Set RETICULATE_PYTHON before reticulate is imported (if not already set)
      # This prevents reticulate from initializing with the wrong Python environment
      # when library(MOSAIC) is called
