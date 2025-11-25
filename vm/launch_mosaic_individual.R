@@ -64,7 +64,7 @@ set_root_directory("~/MOSAIC")
 # ==============================================================================
 
 # Base output directory (individual country folders created within)
-OUTPUT_BASE <- path.expand("~/MOSAIC/output")
+OUTPUT_BASE <- path.expand("~/MOSAIC/output/individual")
 
 # Countries to calibrate (default: all 40 countries in iso_codes_mosaic)
 # To run subset, specify manually: COUNTRIES <- c("ETH", "KEN", "TZA")
@@ -83,17 +83,17 @@ DELETE_AFTER_COMPRESS <- FALSE  # Delete uncompressed directory after compressio
 # Control settings
 CONTROL_SETTINGS <- list(
   # Calibration
-  n_simulations = 1000,         # Per batch (use 1000 for production)
+  n_simulations = 'auto',         # Per batch (use 1000 for production)
   n_iterations = 3,             # LASER iterations per simulation
   batch_size = 1000,            # Simulations per batch
   min_batches = 5,              # Minimum batches before convergence check
   max_batches = 10,             # Maximum batches
-  target_r2 = 0.95,             # R� convergence threshold
+  target_r2 = 0.95,             # R? convergence threshold
   max_simulations = 1e6,        # Safety limit
 
   # Targets
   ESS_param = 1000,             # Target ESS per parameter
-  ESS_param_prop = 0.95,        # Proportion threshold (95%)
+  ESS_param_prop = 1 - 1/41,        # Proportion threshold (95%)
   ESS_best = 100,               # Target for top-weighted samples
   min_best_subset = 30,         # Minimum best subset size
   max_best_subset = 1500,       # Maximum best subset size
@@ -112,13 +112,6 @@ CONTROL_SETTINGS <- list(
 
   # NPE settings
   npe_enable = FALSE,           # Enable Neural Posterior Estimation
-  npe_architecture = 'minimal', # Architecture tier
-  npe_weight_strategy = "binary_retained",
-  npe_learning_rate = 0.0001,
-  npe_validation_split = 0.2,
-  npe_patience = 10,
-  npe_n_posterior_samples = 1000,
-  npe_use_gpu = FALSE,
 
   # Parallel
   use_parallel = TRUE,          # Enable parallel execution
@@ -368,7 +361,7 @@ for (i in seq_along(COUNTRIES)) {
     )
 
     log_message("   Calibration completed successfully\n", master_log_file)
-    list(status = "SUCCESS", message = NA_character_)
+    "SUCCESS"
 
   }, error = function(e) {
     error_msg <- sprintf("   ERROR: %s\n", conditionMessage(e))
@@ -388,7 +381,7 @@ for (i in seq_along(COUNTRIES)) {
 
   # Handle compression if requested
   compressed <- FALSE
-  if (calibration_status$status == "SUCCESS" && COMPRESS_AFTER_EACH) {
+  if (calibration_status == "SUCCESS" && COMPRESS_AFTER_EACH) {
     compressed <- compress_directory(dir_output, OUTPUT_BASE, master_log_file)
 
     # Delete uncompressed directory if requested
@@ -399,7 +392,7 @@ for (i in seq_along(COUNTRIES)) {
   }
 
   # Record result
-  if (calibration_status$status == "SUCCESS") {
+  if (calibration_status == "SUCCESS") {
     results_tracker <- rbind(results_tracker, data.frame(
       iso_code = iso,
       status = "SUCCESS",
