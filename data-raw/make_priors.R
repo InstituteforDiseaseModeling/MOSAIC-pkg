@@ -1041,11 +1041,46 @@ initial_conditions_E_I <- est_initial_E_I(
 # Apply scaling factors to reduce mean E and I while preserving relative uncertainty
 
 adjustment_factors_E_I <- list(
-     MOZ = 0.3,  # Reduce Mozambique initial E/I to 30% of estimated
-     MWI = 0.2,  # Reduce Malawi initial E/I to 20% of estimated
-     ZWE = 0.1,  # Reduce Zimbabwe initial E/I to 15% of estimated
+     MOZ = 0.4,  # Reduce Mozambique initial E/I to 30% of estimated
+     MWI = 0.3,  # Reduce Malawi initial E/I to 20% of estimated
+     ZWE = 0.075,  # Reduce Zimbabwe initial E/I to 15% of estimated
      UGA = 0.05,
-     TZA = 0.05
+     TZA = 0.05,
+     SOM = 0.3,
+     AGO = 0.01,
+     BEN = 0.01,
+     BFA = 0.01,
+     BWA = 0.00,
+     CAF = 0.01,
+     CIV = 0.01,
+     CMR = 0.01,
+     COD = 0.75,
+     COG = 0.05,
+     ERI = 0.00,
+     GAB = 0.00,
+     GHA = 0.001,
+     GIN = 0.001,
+     GMB = 0.000,
+     GNB = 0.001,
+     GNQ = 0.00,
+     KEN = 1.2,
+     LBR = 0.001,
+     MLI = 0.00,
+     MRT = 0.00,
+     NAM = 0.2,
+     NER = 0.1,
+     NGA = 1.1,
+     RWA = 0.01,
+     SEN = 0.001,
+     SLE = 0.001,
+     SOM = 0.5,
+     SSD = 0.1,
+     SWZ = 0.00,
+     TCD = 0.001,
+     TGO = 0.1,
+     TZA = 0.05,
+     UGA = 0.3,
+     ZAF = 0.01
 )
 
 cat("\nApplying post-estimation mean adjustments for initial E and I:\n")
@@ -1391,7 +1426,7 @@ if (file.exists(mu_file)) {
                     #       ρ = reporting rate ≈ 0.63
 
                     sigma_mean <- 0.24  # Proportion symptomatic
-                    rho_mean <- 0.75 * mean(c(0.5, 0.75))    # Average reporting rate
+                    rho_mean <- 0.6 * mean(c(0.5, 0.75))    # Average reporting rate
 
                     # Calculate adjustment factor
                     cfr_to_ifr_adjustment <- sigma_mean * rho_mean  # ≈ 0.15
