@@ -1,3 +1,13 @@
+# MOSAIC 0.13.21
+
+## Bug Fixes
+
+* **Respect control$parallel$enable flag in prediction plotting functions**
+  - **Problem**: `plot_model_fit_stochastic()` and `plot_model_fit_stochastic_param()` were hardcoded to use `parallel = TRUE`, ignoring the user's `control$parallel$enable` setting
+  - **Solution**: Changed both function calls in `run_MOSAIC()` to use `parallel = control$parallel$enable` instead of hardcoded `TRUE`
+  - **Impact**: Users can now disable parallel execution for ensemble predictions by setting `control$parallel$enable = FALSE`, useful for debugging or when parallel execution causes issues
+  - **Files modified**: `R/run_MOSAIC.R` (lines 1444, 1478)
+
 # MOSAIC 0.13.20
 
 ## Bug Fixes
