@@ -1,3 +1,23 @@
+# MOSAIC 0.13.19
+
+## Bug Fixes
+
+* **Fix Numba/TBB threading conflict in parallel execution**
+  - **Problem**: Numba (used by laser-cholera) and Intel TBB library cause threading conflicts when R forks parallel workers, resulting in "Attempted to fork from a non-main thread" warnings and potential deadlocks
+  - **Solution**: Set threading environment variables to 1 before cluster creation and in each worker
+  - **Environment variables set**:
+    - `TBB_NUM_THREADS = "1"` - Intel Threading Building Blocks
+    - `NUMBA_NUM_THREADS = "1"` - Numba JIT compiler
+    - `OMP_NUM_THREADS = "1"` - OpenMP
+    - `MKL_NUM_THREADS = "1"` - Intel MKL
+    - `OPENBLAS_NUM_THREADS = "1"` - OpenBLAS
+  - **Implementation**:
+    - Set in main process before `parallel::makeCluster()` (line 630-639)
+    - Set in each worker via `clusterEvalQ()` (line 672-679)
+    - Consistent with existing BLAS thread limiting strategy
+  - **Impact**: Prevents fork-related threading conflicts, ensures stable parallel execution with laser-cholera simulations
+  - **Files modified**: `R/run_MOSAIC.R`
+
 # MOSAIC 0.13.5
 
 ## Improvements

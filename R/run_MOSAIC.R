@@ -627,6 +627,17 @@ run_MOSAIC <- function(config,
   if (control$parallel$n_cores > 1L) {
     log_msg("Setting up %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
 
+    # CRITICAL: Set threading environment variables to prevent fork issues
+    # Numba (used by laser-cholera) and TBB can cause threading conflicts when forking
+    # These must be set in the main process BEFORE creating the cluster
+    Sys.setenv(
+      TBB_NUM_THREADS = "1",
+      NUMBA_NUM_THREADS = "1",
+      OMP_NUM_THREADS = "1",
+      MKL_NUM_THREADS = "1",
+      OPENBLAS_NUM_THREADS = "1"
+    )
+
     cl <- parallel::makeCluster(control$parallel$n_cores, type = control$parallel$type)
 
     # Register cleanup handler (will be called on normal exit or error)
@@ -650,12 +661,22 @@ run_MOSAIC <- function(config,
       library(reticulate)
       library(arrow)
 
-      # CRITICAL: Limit each worker to single-threaded BLAS operations
-      # Without this, each worker spawns multiple BLAS threads → severe oversubscription
+      # CRITICAL: Limit each worker to single-threaded operations
+      # Without this, each worker spawns multiple threads → severe oversubscription
       # Example: 16 workers × 8 BLAS threads = 128 total threads (worse than single-threaded!)
-      # This ensures: 16 workers × 1 BLAS thread = 16 threads (optimal)
-      # Use ::: to access internal function from MOSAIC namespace in PSOCK workers
+      # This ensures: 16 workers × 1 thread each = 16 threads (optimal)
+
+      # BLAS threading (linear algebra operations)
       MOSAIC:::.mosaic_set_blas_threads(1L)
+
+      # TBB/Numba threading (Python JIT compiler used by laser-cholera)
+      Sys.setenv(
+        TBB_NUM_THREADS = "1",
+        NUMBA_NUM_THREADS = "1",
+        OMP_NUM_THREADS = "1",
+        MKL_NUM_THREADS = "1",
+        OPENBLAS_NUM_THREADS = "1"
+      )
 
       set_root_directory(.root_dir_val)
       PATHS <- get_paths()
