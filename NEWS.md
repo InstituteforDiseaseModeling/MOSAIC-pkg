@@ -1,22 +1,27 @@
-# MOSAIC 0.13.19
+# MOSAIC 0.13.20
 
 ## Bug Fixes
 
-* **Fix Numba/TBB threading conflict in parallel execution**
-  - **Problem**: Numba (used by laser-cholera) and Intel TBB library cause threading conflicts when R forks parallel workers, resulting in "Attempted to fork from a non-main thread" warnings and potential deadlocks
-  - **Solution**: Set threading environment variables to 1 before cluster creation and in each worker
+* **Fix Numba/TBB threading conflict in ALL parallel execution contexts**
+  - **Problem**: Numba (used by laser-cholera) and Intel TBB library cause threading conflicts when R forks parallel workers, resulting in "Attempted to fork from a non-main thread" warnings and potential deadlocks or hangs
+  - **Solution**: Set threading environment variables to 1 before cluster creation and in each worker across ALL functions that use parallel execution
   - **Environment variables set**:
     - `TBB_NUM_THREADS = "1"` - Intel Threading Building Blocks
     - `NUMBA_NUM_THREADS = "1"` - Numba JIT compiler
     - `OMP_NUM_THREADS = "1"` - OpenMP
     - `MKL_NUM_THREADS = "1"` - Intel MKL
     - `OPENBLAS_NUM_THREADS = "1"` - OpenBLAS
-  - **Implementation**:
-    - Set in main process before `parallel::makeCluster()` (line 630-639)
-    - Set in each worker via `clusterEvalQ()` (line 672-679)
-    - Consistent with existing BLAS thread limiting strategy
-  - **Impact**: Prevents fork-related threading conflicts, ensures stable parallel execution with laser-cholera simulations
-  - **Files modified**: `R/run_MOSAIC.R`
+  - **Implementation**: Applied to all 4 locations where `parallel::makeCluster()` is called:
+    - `R/run_MOSAIC.R` - Main calibration workflow
+    - `R/plot_model_fit_stochastic_param.R` - Ensemble predictions (was causing hangs at "Generating ensemble predictions")
+    - `R/plot_model_fit_stochastic.R` - Stochastic predictions
+    - `R/calc_npe_diagnostics.R` - NPE SBC diagnostics
+  - **Each location now has**:
+    - Environment variables set in main process before cluster creation
+    - BLAS thread limiting in workers
+    - Environment variables set again in each worker
+  - **Impact**: Prevents fork-related threading conflicts across entire package, ensures stable parallel execution with laser-cholera simulations, fixes hangs during ensemble predictions
+  - **Files modified**: `R/run_MOSAIC.R`, `R/plot_model_fit_stochastic_param.R`, `R/plot_model_fit_stochastic.R`, `R/calc_npe_diagnostics.R`
 
 # MOSAIC 0.13.5
 

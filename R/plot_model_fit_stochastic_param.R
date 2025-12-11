@@ -388,6 +388,15 @@ plot_model_fit_stochastic_param <- function(
             message("Setting up parallel cluster with ", n_cores_use, " cores...")
         }
 
+        # CRITICAL: Set threading environment variables to prevent fork issues
+        Sys.setenv(
+            TBB_NUM_THREADS = "1",
+            NUMBA_NUM_THREADS = "1",
+            OMP_NUM_THREADS = "1",
+            MKL_NUM_THREADS = "1",
+            OPENBLAS_NUM_THREADS = "1"
+        )
+
         # Create cluster
         cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
 
@@ -401,6 +410,18 @@ plot_model_fit_stochastic_param <- function(
 
             library(MOSAIC)
             library(reticulate)
+
+            # CRITICAL: Limit each worker to single-threaded operations
+            MOSAIC:::.mosaic_set_blas_threads(1L)
+
+            # TBB/Numba threading
+            Sys.setenv(
+                TBB_NUM_THREADS = "1",
+                NUMBA_NUM_THREADS = "1",
+                OMP_NUM_THREADS = "1",
+                MKL_NUM_THREADS = "1",
+                OPENBLAS_NUM_THREADS = "1"
+            )
 
             # Import laser-cholera ONCE per worker (not per task)
             # This avoids repeated import overhead (~200-500ms per import on cluster)

@@ -353,6 +353,15 @@ calc_npe_diagnostics <- function(
 
         if (verbose) cat("Starting parallel SBC tests on", n_cores, "cores...\n\n")
 
+        # CRITICAL: Set threading environment variables to prevent fork issues
+        Sys.setenv(
+            TBB_NUM_THREADS = "1",
+            NUMBA_NUM_THREADS = "1",
+            OMP_NUM_THREADS = "1",
+            MKL_NUM_THREADS = "1",
+            OPENBLAS_NUM_THREADS = "1"
+        )
+
         cl <- parallel::makeCluster(n_cores)
         parallel::clusterEvalQ(cl, {
             # Set library path for VM user installation
@@ -362,6 +371,18 @@ calc_npe_diagnostics <- function(
             library(reticulate)
             library(dplyr)
             library(tidyr)
+
+            # CRITICAL: Limit each worker to single-threaded operations
+            MOSAIC:::.mosaic_set_blas_threads(1L)
+
+            # TBB/Numba threading
+            Sys.setenv(
+                TBB_NUM_THREADS = "1",
+                NUMBA_NUM_THREADS = "1",
+                OMP_NUM_THREADS = "1",
+                MKL_NUM_THREADS = "1",
+                OPENBLAS_NUM_THREADS = "1"
+            )
         })
 
         # Export required objects to parallel workers
