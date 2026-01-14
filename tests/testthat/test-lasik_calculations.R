@@ -641,3 +641,38 @@ testthat::test_that("UN population trends", {
 # testthat::test_that("r_effective calculations match", {})
 
 
+# Check observation process
+# LASIC values in model.patches.reported_cases
+testthat::test_that("observation model", {
+     I <- model$results$Isym
+     N <- model$results$N
+     delta_t <- baseline$delta_reporting_cases
+
+     # calc_cases_from_infections() works on one location at a time
+     # so we will iterate over the locations (nrow(rc))
+     rc <- model$results$reported_cases
+     for (i in seq_len(nrow(rc))) {
+          expected <- MOSAIC::calc_cases_from_infections(
+               infections=I[i,],
+               N=N[i,],
+               rho=baseline$rho,
+               chi_endemic=baseline$chi_endemic,
+               chi_epidemic=baseline$chi_epidemic,
+               epidemic_threshold=baseline$epidemic_threshold,
+               delta_t=delta_t)
+
+          # number of cases should be integral values
+          expect <- round(expected$cases_suspected)
+          # extract the row for the current location
+          actual <- rc[i,]
+          # ignore the first delta_t entries
+          expect <- expect[1+delta_t:length(expect)]
+          actual <- actual[1+delta_t:length(actual)]
+
+          testthat::expect_equal(expect, actual, tolerance = 0)
+     }
+
+     if (plot_diagnostics) {
+
+     }
+})
