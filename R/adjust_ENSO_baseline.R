@@ -1,5 +1,5 @@
 ###############################################################################
-## adjust_baseline.R - Bias correction for multi-source ENSO data
+## adjust_ENSO_baseline.R - Bias correction for multi-source ENSO data
 ###############################################################################
 
 #' Simple Bias Correction for ENSO Data with Different Climatological Baselines
@@ -57,7 +57,7 @@
 #'               0.9, 1.0, 1.1, 1.2, 1.3, 1.4)  # Future
 #'
 #' # Apply bias correction using all overlap points
-#' result <- adjust_baseline(historical, forecast, n_overlap = NULL)
+#' result <- adjust_ENSO_baseline(historical, forecast, n_overlap = NULL)
 #'
 #' print(result$bias)           # Expected: ~0.2°C
 #' print(result$n_overlap)      # 3 overlap points used
@@ -80,7 +80,7 @@
 #' forecast <- forecast_raw / 100
 #'
 #' # Apply bias correction using last 6 months only
-#' result <- adjust_baseline(historical, forecast, n_overlap = 6)
+#' result <- adjust_ENSO_baseline(historical, forecast, n_overlap = 6)
 #'
 #' print(result$bias)            # Expected: ~0.23°C
 #' print(result$se)              # Standard error
@@ -95,7 +95,7 @@
 #' }
 #'
 #' @export
-adjust_baseline <- function(historical, forecast, n_overlap = NULL) {
+adjust_ENSO_baseline <- function(historical, forecast, n_overlap = NULL) {
 
   # Input validation
   if (!is.numeric(historical) || !is.numeric(forecast)) {
