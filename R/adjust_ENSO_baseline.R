@@ -92,6 +92,96 @@
 #'      xlab = "Difference (°C)",
 #'      col = "lightblue")
 #' abline(v = result$bias, col = "red", lwd = 2, lty = 2)
+#'
+#'
+#' # Example 3: Time Series Visualization with Residuals
+#' # Create realistic example with dates
+#' dates <- seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "month")
+#' n <- length(dates)
+#'
+#' # Historical observations (18 months) then NA
+#' historical <- c(rnorm(18, mean = -0.3, sd = 0.3), rep(NA, n - 18))
+#'
+#' # Forecast available for last 12 months (overlaps last 6 months of historical)
+#' forecast <- c(rep(NA, 12),
+#'               rnorm(12, mean = -0.1, sd = 0.3))  # Warmer by ~0.2°C (baseline bias)
+#'
+#' # Apply bias correction
+#' result <- adjust_ENSO_baseline(historical, forecast, n_overlap = 6)
+#'
+#' # Create two-panel plot
+#' par(mfrow = c(2, 1), mar = c(3, 4, 2, 1), oma = c(2, 0, 1, 0))
+#'
+#' # Panel 1: Time series with historical, raw forecast, and corrected forecast
+#' plot(dates, historical, type = "l", col = "black", lwd = 2,
+#'      ylim = range(c(historical, forecast, result$forecast_corrected), na.rm = TRUE),
+#'      xlab = "", ylab = "ENSO Anomaly (°C)",
+#'      main = "ENSO Baseline Adjustment",
+#'      las = 1)
+#' grid()
+#'
+#' # Add raw forecast (dashed, red)
+#' lines(dates, forecast, col = "red", lwd = 2, lty = 2)
+#'
+#' # Add corrected forecast (solid, blue)
+#' lines(dates, result$forecast_corrected, col = "blue", lwd = 2, lty = 1)
+#'
+#' # Add vertical line at transition point
+#' transition_idx <- max(which(!is.na(historical)))
+#' abline(v = dates[transition_idx], col = "gray50", lty = 3, lwd = 1)
+#'
+#' # Add horizontal line at zero
+#' abline(h = 0, col = "gray70", lty = 1, lwd = 0.5)
+#'
+#' # Add ENSO thresholds
+#' abline(h = c(-0.5, 0.5), col = "gray50", lty = 2, lwd = 0.5)
+#' text(dates[2], 0.5, "El Niño", pos = 3, cex = 0.7, col = "gray50")
+#' text(dates[2], -0.5, "La Niña", pos = 1, cex = 0.7, col = "gray50")
+#'
+#' # Legend
+#' legend("topleft",
+#'        legend = c("Historical (NOAA)",
+#'                   "Raw Forecast (BOM)",
+#'                   sprintf("Corrected (bias = %.2f°C)", result$bias)),
+#'        col = c("black", "red", "blue"),
+#'        lty = c(1, 2, 1),
+#'        lwd = 2,
+#'        bty = "n",
+#'        cex = 0.8)
+#'
+#' # Panel 2: Residuals (forecast - historical during overlap)
+#' # Create residual vector for all dates
+#' residuals <- forecast - historical
+#'
+#' plot(dates, residuals, type = "h", col = "red", lwd = 2,
+#'      ylim = range(residuals, na.rm = TRUE) * 1.2,
+#'      xlab = "Date", ylab = "Bias (°C)",
+#'      main = sprintf("Forecast Bias (n=%d overlap months)", result$n_overlap),
+#'      las = 1)
+#' grid()
+#'
+#' # Add points at overlap period
+#' overlap_idx <- which(!is.na(historical) & !is.na(forecast))
+#' points(dates[overlap_idx], residuals[overlap_idx],
+#'        col = "red", pch = 19, cex = 1.2)
+#'
+#' # Add horizontal lines
+#' abline(h = 0, col = "gray70", lwd = 1)
+#' abline(h = result$bias, col = "blue", lwd = 2, lty = 2)
+#'
+#' # Add confidence interval (±2 SE)
+#' if (!is.na(result$se) && result$se > 0) {
+#'   abline(h = result$bias + c(-2, 2) * result$se,
+#'          col = "blue", lwd = 1, lty = 3)
+#' }
+#'
+#' # Add text annotation
+#' text(dates[n * 0.8], result$bias,
+#'      sprintf("Mean bias = %.3f ± %.3f°C", result$bias, result$se),
+#'      pos = 3, col = "blue", cex = 0.8)
+#'
+#' # Reset graphics parameters
+#' par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1, oma = c(0, 0, 0, 0))
 #' }
 #'
 #' @export
