@@ -88,7 +88,7 @@ This is **instant** - just references the Docker image.
 conda activate mosaic-local-orchestrate
 
 # Run test
-python azure/run_mosaic_docker.py \
+python azure/run_mosaic_dask_bfrs.py \
   --iso ETH \
   --n-simulations 10 \
   --n-iterations 1 \
@@ -96,7 +96,7 @@ python azure/run_mosaic_docker.py \
   --output-dir ./test-output
 ```
 
-**Note**: `run_mosaic_docker.py` runs **locally** (doesn't need MOSAIC installed). It just orchestrates Coiled workers which use the Docker image with MOSAIC pre-installed.
+**Note**: `run_mosaic_dask_bfrs.py` runs **locally** (doesn't need MOSAIC installed). It just orchestrates Coiled workers which use the Docker image with MOSAIC pre-installed.
 
 **Expected**:
 - Cluster starts in ~2 minutes
@@ -129,7 +129,7 @@ Results saved to GitHub Artifacts
 | File | Purpose |
 |------|---------|
 | [Dockerfile](Dockerfile) | MOSAIC worker image definition |
-| [run_mosaic_docker.py](run_mosaic_docker.py) | Python runner for Docker-based workers |
+| [run_mosaic_dask_bfrs.py](run_mosaic_dask_bfrs.py) | Python runner for Docker-based workers |
 | [.github/workflows/mosaic-docker.yml](../.github/workflows/mosaic-docker.yml) | GitHub Actions workflow |
 
 ---
