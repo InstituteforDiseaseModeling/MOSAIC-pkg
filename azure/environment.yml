@@ -1,0 +1,23 @@
+name: mosaic-local-orchestrate
+channels:
+  - conda-forge
+dependencies:
+  # Python (for running orchestration script locally)
+  - python=3.11
+
+  # Coiled and Dask (for cluster orchestration)
+  - coiled
+  - dask
+  - distributed
+
+  # Basic data handling (for local parameter sampling/processing)
+  - numpy
+  - pandas
+  - pyarrow
+
+  # Utilities
+  - pip
+
+  # Pip packages
+  - pip:
+      # No additional pip packages needed for orchestration
