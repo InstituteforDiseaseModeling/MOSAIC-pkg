@@ -92,7 +92,8 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
         'cowplot', \
         'furrr', \
         'slider', \
-        'RhpcBLASctl' \
+        'RhpcBLASctl', \
+        'truncnorm' \
     )); \
     # Install older ggrepel compatible with R 4.4 \
     remotes::install_version('ggrepel', version = '0.9.5', repos = 'https://cloud.r-project.org'); \
@@ -144,6 +145,21 @@ RUN R -e "library(MOSAIC); \
     if (!result) quit(status = 1)"
 
 # ============================================================
+# Clone MOSAIC-data repository
+# ============================================================
+# Include data in image for direct access (no mounting needed)
+RUN git clone --depth 1 \
+    https://github.com/InstituteforDiseaseModeling/MOSAIC-data \
+    /workspace/MOSAIC/MOSAIC-data && \
+    echo "✓ MOSAIC-data cloned ($(du -sh /workspace/MOSAIC/MOSAIC-data | cut -f1))"
+
+# Create MOSAIC-pkg directory structure
+# (Workers only need model input/output directories)
+RUN mkdir -p /workspace/MOSAIC/MOSAIC-pkg/model/input && \
+    mkdir -p /workspace/MOSAIC/MOSAIC-pkg/model/output && \
+    echo "✓ MOSAIC-pkg directory structure created"
+
+# ============================================================
 # Setup for Coiled workers
 # ============================================================
 # Add r-mosaic conda environment to PATH so Coiled can find Python/dask
@@ -151,10 +167,10 @@ ENV PATH=/root/.virtualenvs/r-mosaic/bin:$PATH
 
 WORKDIR /workspace
 
-# Create directories for MOSAIC workflows
-RUN mkdir -p /workspace/model/input && \
-    mkdir -p /workspace/model/output && \
-    mkdir -p /workspace/data
+# Create additional directories for MOSAIC workflows
+RUN mkdir -p /workspace/model/input \
+             /workspace/model/output \
+             /workspace/data
 
 # Default command for Coiled workers
 CMD ["/bin/bash"]

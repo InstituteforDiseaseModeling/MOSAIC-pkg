@@ -37,54 +37,140 @@ def run_mosaic_for_country(iso_code, output_dir, n_simulations=1000, n_iteration
     This function runs on a Coiled worker.
     """
     import subprocess
+    import tempfile
+    import os
 
+    # Create R script as temp file (avoids quoting hell with -e)
     r_script = f"""
-    library(MOSAIC)
-    set_root_directory('/workspace')
+library(MOSAIC)
 
-    # Configure MOSAIC for this country
-    iso_codes <- c("{iso_code}")
-    config <- get_location_config(iso=iso_codes)
-    priors <- get_location_priors(iso=iso_codes)
-    control <- mosaic_control_defaults()
+# Attach Python environment (CRITICAL for LASER simulations!)
+cat("Attaching MOSAIC Python environment...\\n")
+MOSAIC::use_mosaic_env()
+cat("✅ Python environment attached\\n")
 
-    control$calibration$n_simulations <- {n_simulations}
-    control$calibration$n_iterations <- {n_iterations}
-    control$parallel$enable <- TRUE
-    control$parallel$n_cores <- parallel::detectCores() - 1
+# Data is included in Docker image - verify it exists
+cat("Verifying MOSAIC data directories...\\n")
+if (!dir.exists('/workspace/MOSAIC/MOSAIC-data')) {{
+    cat("❌ ERROR: MOSAIC-data not found in Docker image\\n")
+    system('ls -la /workspace/MOSAIC/')
+    quit(status = 1)
+}}
+if (!dir.exists('/workspace/MOSAIC/MOSAIC-pkg')) {{
+    cat("❌ ERROR: MOSAIC-pkg not found in Docker image\\n")
+    system('ls -la /workspace/MOSAIC/')
+    quit(status = 1)
+}}
+cat("✅ MOSAIC data directories verified\\n")
 
-    cat("Starting MOSAIC calibration for {iso_code}...\\n")
-    cat("Simulations:", {n_simulations}, "\\n")
-    cat("Iterations:", {n_iterations}, "\\n")
-    cat("Cores:", parallel::detectCores() - 1, "\\n")
+# Set MOSAIC root directory (data is already there!)
+set_root_directory('/workspace/MOSAIC')
 
-    # Run MOSAIC (existing proven workflow!)
+# Configure MOSAIC for this country
+iso_codes <- c("{iso_code}")
+
+cat(strrep("=", 70), "\\n")
+cat("MOSAIC Calibration: {iso_code}\\n")
+cat(strrep("=", 70), "\\n")
+cat("Step 1: Getting location config...\\n")
+config <- get_location_config(iso=iso_codes)
+cat("  ✓ Config loaded for:", config$location_name, "\\n")
+
+cat("Step 2: Getting location priors...\\n")
+priors <- get_location_priors(iso=iso_codes)
+cat("  ✓ Priors loaded\\n")
+
+cat("Step 3: Setting up control parameters...\\n")
+control <- mosaic_control_defaults()
+control$calibration$n_simulations <- {n_simulations}
+control$calibration$n_iterations <- {n_iterations}
+control$parallel$enable <- TRUE
+control$parallel$n_cores <- max(1, parallel::detectCores() - 1)
+cat("  ✓ Simulations:", {n_simulations}, "\\n")
+cat("  ✓ Iterations:", {n_iterations}, "\\n")
+cat("  ✓ Cores:", control$parallel$n_cores, "\\n")
+
+cat("Step 4: Creating output directory...\\n")
+dir_output <- file.path('/workspace', 'output', '{iso_code}')
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+cat("  ✓ Output dir:", dir_output, "\\n")
+
+cat(strrep("=", 70), "\\n")
+cat("Starting MOSAIC calibration...\\n")
+cat(strrep("=", 70), "\\n")
+
+# Run MOSAIC (existing proven workflow!)
+tryCatch({{
     result <- run_MOSAIC(
-        dir_output = "{output_dir}/{iso_code}",
+        dir_output = dir_output,
         config = config,
         priors = priors,
         control = control
     )
-
+    cat("\\n")
+    cat(strrep("=", 70), "\\n")
     cat("✅ MOSAIC calibration complete for {iso_code}!\\n")
-    """
+    cat(strrep("=", 70), "\\n")
+}}, error = function(e) {{
+    cat("\\n")
+    cat(strrep("=", 70), "\\n")
+    cat("❌ ERROR in MOSAIC calibration:\\n")
+    cat(strrep("=", 70), "\\n")
+    cat("Error message:\\n")
+    cat(as.character(e$message), "\\n")
+    cat("\\n")
+    cat("Traceback:\\n")
+    print(sys.calls())
+    quit(status = 1)
+}})
+"""
 
     print(f"[{iso_code}] Running MOSAIC calibration...")
 
-    result = subprocess.run(
-        ['Rscript', '-e', r_script],
-        capture_output=True,
-        text=True,
-        timeout=7200  # 2 hour timeout per country
-    )
+    # Write R script to temp file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.R', delete=False) as f:
+        f.write(r_script)
+        script_path = f.name
 
-    if result.returncode == 0:
-        print(f"[{iso_code}] ✅ Complete!")
-        return {'country': iso_code, 'status': 'success'}
-    else:
-        print(f"[{iso_code}] ❌ Failed")
-        print(f"Stderr: {result.stderr}")
-        return {'country': iso_code, 'status': 'failed', 'error': result.stderr}
+    try:
+        # Run R script from file (much cleaner than -e!)
+        result = subprocess.run(
+            ['Rscript', script_path],
+            capture_output=True,
+            text=True,
+            timeout=7200  # 2 hour timeout per country
+        )
+
+        # Print stdout for visibility
+        if result.stdout:
+            print(f"[{iso_code}] Output:")
+            for line in result.stdout.split('\n'):
+                if line.strip():
+                    print(f"  {line}")
+
+        if result.returncode == 0:
+            print(f"[{iso_code}] ✅ Complete!")
+            return {'country': iso_code, 'status': 'success', 'output': result.stdout}
+        else:
+            print(f"[{iso_code}] ❌ Failed (exit code {result.returncode})")
+            if result.stderr:
+                print(f"[{iso_code}] Error output:")
+                for line in result.stderr.split('\n')[:50]:  # Limit error output
+                    if line.strip():
+                        print(f"  {line}")
+            return {
+                'country': iso_code,
+                'status': 'failed',
+                'error': result.stderr,
+                'output': result.stdout,
+                'exit_code': result.returncode
+            }
+    finally:
+        # Cleanup temp file
+        try:
+            os.unlink(script_path)
+        except:
+            pass
 
 def main():
     parser = argparse.ArgumentParser(
@@ -109,6 +195,7 @@ def main():
     print(f"Iterations per country: {args.n_iterations}")
     print(f"VM type: {args.vm_type}")
     print(f"Output: {args.output_dir}")
+    print(f"Data source: Included in Docker image")
     print("="*70)
     print()
 
@@ -165,8 +252,11 @@ def main():
     for result in results:
         status_icon = "✅" if result['status'] == 'success' else "❌"
         print(f"{status_icon} {result['country']}: {result['status']}")
-        if result['status'] == 'failed' and 'error' in result:
-            print(f"   Error: {result['error'][:1000]}")
+        if result['status'] == 'failed':
+            if 'output' in result and result['output']:
+                print(f"   Stdout (last 3000 chars): {result['output'][-3000:]}")
+            if 'error' in result and result['error']:
+                print(f"   Stderr (last 3000 chars): {result['error'][-3000:]}")
 
     print("="*70)
 
