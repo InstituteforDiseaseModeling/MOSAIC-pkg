@@ -25,9 +25,9 @@
 #' }
 #' @param climate_variables A character vector of climate variables to retrieve. See details for available variables.
 #'
-#' @return The function does not return a value. It downloads the climate data for each country, climate model, and climate variable, saving the results as Parquet files in the specified directory.
+#' @return The function does not return a value. It downloads the climate data for each country and climate model, saving the results as Parquet files in the specified directory. One file is saved per climate variable per model per country, named `climate_data_{climate_model}_{climate_variable}_{date_start}_{date_stop}_{ISO3}.parquet`.
 #'
-#' @details This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (`date_start` to `date_stop`) and the specified climate models and variables. The data is saved for each country, climate model, and climate variable in a Parquet file named `climate_data_{climate_model}_{climate_variable}_{date_start}_{date_stop}_{ISO3}.parquet`.
+#' @details This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. All climate variables are fetched in a single API call per country/model combination (batching all grid points up to 1,000 per request), then split and saved as individual Parquet files per variable. The file naming convention is: `climate_data_{climate_model}_{climate_variable}_{date_start}_{date_stop}_{ISO3}.parquet`.
 #'
 #' The available climate variables include:
 #' \itemize{
@@ -87,57 +87,76 @@ download_climate_data <- function(PATHS,
           "et0_fao_evapotranspiration_sum"
      )
 
-     # Ensure output directory exists, if not, create it
      if (!dir.exists(PATHS$DATA_CLIMATE)) {
           dir.create(PATHS$DATA_CLIMATE, recursive = TRUE)
      }
 
-     # Loop through each climate model
+     is_free <- identical(api_key, "free")
+
+     if (is_free) {
+          n_days <- as.integer(as.Date(date_stop) - as.Date(date_start)) + 1L
+          estimated_calls <- length(climate_models) * length(iso_codes) * n_points *
+                             length(climate_variables) * 263.5 * (n_days / 36500)
+          if (estimated_calls > 0.8 * 300000L) {
+               warning(glue::glue(
+                    "Estimated API call-equivalent cost ({round(estimated_calls)}) exceeds ",
+                    "80% of the free tier monthly limit (300000). ",
+                    "The request may hit the free API limit."
+               ))
+          }
+     }
+
+     n_cores <- max(1L, parallel::detectCores() - 1L)
+     # n_cores <- if (is_free) 1L else max(1L, parallel::detectCores() - 1L)
+
      for (climate_model in climate_models) {
 
-          # Loop through each ISO3 country code
-          for (country_iso_code in iso_codes) {
+          process_country <- function(country_iso_code) {
+               message(glue::glue("Downloading climate data for {country_iso_code} using {climate_model} at {n_points} points"))
 
-               # Loop through each climate variable
-               for (climate_variable in climate_variables) {
+               country_name <- MOSAIC::convert_iso_to_country(country_iso_code)
+               country_shp  <- sf::st_read(
+                    dsn = file.path(PATHS$DATA_SHAPEFILES, paste0(country_iso_code, "_ADM0.shp")),
+                    quiet = TRUE)
+               grid_points <- MOSAIC::generate_country_grid_n(country_shp, n_points = n_points)
+               coords      <- as.data.frame(sf::st_coordinates(grid_points))
+               rm(grid_points, country_shp)
 
-                    message(glue::glue("Downloading daily {climate_variable} data for {country_iso_code} using {climate_model} at {n_points} points"))
-
-                    # Convert ISO3 code to country name and read country shapefile
-                    country_name <- MOSAIC::convert_iso_to_country(country_iso_code)
-                    country_shp <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, paste0(country_iso_code, "_ADM0.shp")), quiet = TRUE)
-
-                    # Generate grid points within the country
-                    grid_points <- MOSAIC::generate_country_grid_n(country_shp, n_points = n_points)
-                    coords <- sf::st_coordinates(grid_points)
-                    coords <- as.data.frame(coords)
-                    rm(grid_points)
-                    rm(country_shp)
-
-                    # Download climate data for the generated grid points for the current climate variable
-                    climate_data <- MOSAIC::get_climate_future(lat = coords$Y,
-                                                               lon = coords$X,
-                                                               date_start = date_start,
-                                                               date_stop = date_stop,
-                                                               climate_variables = climate_variable,  # Single variable per loop
-                                                               climate_model = climate_model,
-                                                               api_key = api_key)
-
-                    # Add additional metadata columns
-                    climate_data <- data.frame(
-                         country_name = country_name,
-                         iso_code = country_iso_code,
-                         year = lubridate::year(climate_data$date),
-                         month = lubridate::month(climate_data$date),
-                         week = lubridate::week(climate_data$date),
-                         doy = lubridate::yday(climate_data$date),
-                         climate_data
-                    )
-
-                    # Save climate data as Parquet, including the climate model and variable in the file name
-                    arrow::write_parquet(climate_data,
-                                         sink = file.path(PATHS$DATA_RAW, paste0("climate/climate_data_", climate_model, "_", climate_variable, "_", date_start, "_", date_stop, "_", country_iso_code, ".parquet")))
+               climate_data <- MOSAIC::get_climate_future(
+                    lat = coords$Y, lon = coords$X,
+                    date_start = date_start, date_stop = date_stop,
+                    climate_variables = climate_variables,
+                    climate_model = climate_model, api_key = api_key
+               )
+               if (is.null(climate_data) || nrow(climate_data) == 0) {
+                    warning(glue::glue("No data returned for {country_iso_code} / {climate_model} — skipping"))
+                    return(NULL)
                }
+               climate_data <- data.frame(
+                    country_name = country_name,
+                    iso_code     = country_iso_code,
+                    year  = lubridate::year(climate_data$date),
+                    month = lubridate::month(climate_data$date),
+                    week  = lubridate::week(climate_data$date),
+                    doy   = lubridate::yday(climate_data$date),
+                    climate_data
+               )
+               for (climate_variable in climate_variables) {
+                    variable_data <- climate_data[climate_data$variable_name == climate_variable, ]
+                    if (nrow(variable_data) == 0) next
+                    arrow::write_parquet(
+                         variable_data,
+                         sink = file.path(PATHS$DATA_RAW, paste0(
+                              "climate/climate_data_", climate_model, "_", climate_variable, "_",
+                              date_start, "_", date_stop, "_", country_iso_code, ".parquet")))
+               }
+               if (is_free) Sys.sleep(0.11)
+          }
+
+          if (!is_free && .Platform$OS.type != "windows") {
+               parallel::mclapply(iso_codes, process_country, mc.cores = n_cores)
+          } else {
+               lapply(iso_codes, process_country)
           }
      }
 
