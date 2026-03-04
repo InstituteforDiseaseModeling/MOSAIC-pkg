@@ -122,12 +122,34 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 RUN R -e "MOSAIC::install_dependencies(force = TRUE)"
 
 # ============================================================
-# Install Dask/Distributed for Coiled workers
+# Install Dask/Distributed/Coiled for orchestration
 # ============================================================
-# Install to r-mosaic conda environment (created by install_dependencies)
+# Install to r-mosaic virtualenv (created by install_dependencies)
+# coiled is needed when this container is used as the R orchestrator
+# (run_MOSAIC_dask connects to Coiled.io via reticulate::import("coiled"))
 RUN /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir \
     dask \
-    distributed
+    distributed \
+    coiled
+
+# ============================================================
+# Fix OpenSSL version mismatch
+# ============================================================
+# The r-mosaic virtualenv's Python was compiled against OpenSSL 3.3.0,
+# but the Ubuntu base ships libcrypto 3.0.x which lacks the OPENSSL_3.3.0
+# versioned symbol. Copy the newer libs from the virtualenv to the system
+# path so all processes (R via libcurl and Python via _ssl) use the same
+# OpenSSL. OpenSSL 3.3 is ABI-backward-compatible with 3.0.
+RUN if [ -f /root/.virtualenvs/r-mosaic/lib/libcrypto.so.3 ]; then \
+      cp /root/.virtualenvs/r-mosaic/lib/libcrypto.so.3 \
+         /usr/lib/x86_64-linux-gnu/libcrypto.so.3 && \
+      cp /root/.virtualenvs/r-mosaic/lib/libssl.so.3 \
+         /usr/lib/x86_64-linux-gnu/libssl.so.3 && \
+      ldconfig && \
+      echo "✓ OpenSSL updated to $(openssl version)"; \
+    else \
+      echo "⚠ virtualenv libcrypto not found, skipping OpenSSL fix"; \
+    fi
 
 # ============================================================
 # Verify MOSAIC installation

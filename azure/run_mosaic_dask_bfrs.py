@@ -194,6 +194,7 @@ def run_mosaic_on_coiled(
         name=f"mosaic-{'-'.join(iso_codes)}-{int(time.time())}",
         n_workers=n_workers,
         worker_vm_types=[vm_type],
+        scheduler_vm_types=[vm_type],
         region=region,
         software=coiled_env,
         shutdown_on_close=True,
