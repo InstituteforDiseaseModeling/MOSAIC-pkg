@@ -172,17 +172,17 @@ install_dependencies <- function(force = FALSE) {
 
 
      # -----------------------------------------------------------------------
-     # Activate the conda environment for reticulate.
+     # Activate the r-mosaic virtualenv for reticulate.
      # -----------------------------------------------------------------------
 
      paths <- MOSAIC::get_python_paths()
      Sys.setenv(RETICULATE_PYTHON = paths$norm)
-     reticulate::use_condaenv(paths$norm, required = TRUE)
+     reticulate::use_virtualenv(paths$env, required = TRUE)
      config <- reticulate::py_config()
 
      if (grepl(paths$env, config$python)) {
 
-          cli::cli_alert_success("Reticulate has activated the conda environment at '{paths$env}' for MOSAIC!")
+          cli::cli_alert_success("Reticulate has activated the r-mosaic virtualenv at '{paths$env}' for MOSAIC!")
           cli::cli_alert_info("Python configuration:")
           print(config)
           cli::cli_text(paste0("RETICULATE_PYTHON: ", Sys.getenv('RETICULATE_PYTHON')))

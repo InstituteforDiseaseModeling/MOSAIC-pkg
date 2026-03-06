@@ -98,7 +98,7 @@ lock_python_env <- function() {
         cli::cli_text("Initializing Python with r-mosaic environment...")
 
         tryCatch({
-            reticulate::use_condaenv(paths$norm, required = TRUE)
+            reticulate::use_virtualenv(paths$env, required = TRUE)
 
             # Verify it worked
             config <- reticulate::py_config()
