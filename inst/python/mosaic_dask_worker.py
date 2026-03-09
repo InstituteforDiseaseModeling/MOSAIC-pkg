@@ -18,6 +18,7 @@ import copy
 import gc
 import json
 import os
+import time
 import traceback as tb
 
 import numpy as np
@@ -145,6 +146,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
             {
                 "sim_id": int,
                 "success": True,
+                "worker_elapsed_sec": float,
                 "iterations": [
                     {
                         "j": int,                       # 1-based iteration index
@@ -183,6 +185,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
 
         config = _apply_sampled_params(base_config, sampled_params_json)
 
+        t_start = time.monotonic()
         iterations = []
 
         for j in range(1, n_iterations + 1):
@@ -207,6 +210,8 @@ def run_laser_sim(sim_id: int, n_iterations: int,
 
             del model  # release Python LASER object immediately
 
+        worker_elapsed_sec = time.monotonic() - t_start
+
         # Explicit GC after all iterations — prevents Python object build-up
         # across thousands of simulations (mirrors run_MOSAIC.R lines 278-279)
         gc.collect()
@@ -214,6 +219,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
         return {
             "sim_id": sim_id,
             "success": True,
+            "worker_elapsed_sec": worker_elapsed_sec,
             "iterations": iterations,
         }
 

@@ -140,6 +140,25 @@
   }
 
   # ---------------------------------------------------------------------------
+  # 4b. Log per-worker timing summary
+  # ---------------------------------------------------------------------------
+  worker_times <- vapply(gathered, function(res) {
+    if (isTRUE(res$success) && !is.null(res$worker_elapsed_sec))
+      as.numeric(res$worker_elapsed_sec)
+    else
+      NA_real_
+  }, numeric(1))
+  worker_times <- worker_times[is.finite(worker_times)]
+
+  if (length(worker_times) > 0L) {
+    log_msg("  Worker timing (n=%d): mean=%.1fs, median=%.1fs, min=%.1fs, max=%.1fs, total=%.1fs",
+            length(worker_times),
+            mean(worker_times), median(worker_times),
+            min(worker_times), max(worker_times),
+            sum(worker_times))
+  }
+
+  # ---------------------------------------------------------------------------
   # 5. For each sim: compute likelihood in R, write parquet
   # ---------------------------------------------------------------------------
   success_indicators <- logical(n_sims)
@@ -514,7 +533,8 @@ run_MOSAIC_dask <- function(config,
     cluster_name <- paste0("mosaic-dask-",
                            format(Sys.time(), "%Y%m%d-%H%M%S"))
 
-    cluster <- coiled_mod$Cluster(
+    # Build optional args (e.g. host_setup_script for Docker Hub auth)
+    cluster_args <- list(
       name                = cluster_name,
       n_workers           = as.integer(n_workers_req),
       worker_vm_types     = as.list(dask_spec$vm_types),
@@ -524,6 +544,13 @@ run_MOSAIC_dask <- function(config,
       shutdown_on_close   = TRUE,
       idle_timeout        = dask_spec$idle_timeout
     )
+
+    if (!is.null(dask_spec$host_setup_script)) {
+      cluster_args$host_setup_script <- dask_spec$host_setup_script
+      log_msg("Using host_setup_script for worker VM init")
+    }
+
+    cluster <- do.call(coiled_mod$Cluster, cluster_args)
     client <- dask_dist$Client(cluster)
   } else {
     log_msg("Connecting to Dask scheduler: %s", dask_spec$address)
