@@ -130,7 +130,10 @@
   # 4. Gather results (blocking)
   # ---------------------------------------------------------------------------
   log_msg("  Waiting for %d Dask futures...", length(valid_futures))
+  gather_start <- Sys.time()
   gathered <- client$gather(valid_futures)
+  gather_elapsed <- as.numeric(difftime(Sys.time(), gather_start, units = "secs"))
+  log_msg("  Gather complete: %d results in %.1fs", length(gathered), gather_elapsed)
 
   # Build lookup: sim_id → worker result
   result_lookup <- list()
@@ -140,7 +143,7 @@
   }
 
   # ---------------------------------------------------------------------------
-  # 4b. Log per-worker timing summary
+  # 4b. Log per-worker timing summary then free gathered list
   # ---------------------------------------------------------------------------
   worker_times <- vapply(gathered, function(res) {
     if (isTRUE(res$success) && !is.null(res$worker_elapsed_sec))
@@ -158,12 +161,28 @@
             sum(worker_times))
   }
 
+  # Free the raw gathered list — result_lookup holds the same data
+  rm(gathered); gc(verbose = FALSE)
+
   # ---------------------------------------------------------------------------
   # 5. For each sim: compute likelihood in R, write parquet
   # ---------------------------------------------------------------------------
+  log_msg("  Computing likelihoods + writing parquet for %d sims...", n_sims)
+  likelihood_start <- Sys.time()
   success_indicators <- logical(n_sims)
 
   for (idx in seq_len(n_sims)) {
+    # Periodic progress + Dask client health check
+    if (idx %% 500L == 0L) {
+      elapsed <- as.numeric(difftime(Sys.time(), likelihood_start, units = "secs"))
+      log_msg("    Likelihood progress: %d/%d (%.0fs elapsed)", idx, n_sims, elapsed)
+      # Ping scheduler to keep connection alive and detect disconnection early
+      tryCatch({
+        client$scheduler_info()
+      }, error = function(e) {
+        log_msg("    WARNING: Dask scheduler ping failed at sim %d: %s", idx, e$message)
+      })
+    }
     sim_id <- sim_ids[[idx]]
     key    <- as.character(sim_id)
 
@@ -270,7 +289,19 @@
                           sprintf("sim_%07d.parquet", sim_id))
     .mosaic_write_parquet(row_df, out_file, control$io)
     success_indicators[idx] <- file.exists(out_file)
+
+    # Free this sim's data immediately — each result holds large case/death
+    # arrays from Python. Without this, 20K results peak at several GB.
+    result_lookup[key] <- list(NULL)
+    params_list[idx]   <- list(NULL)
   }
+
+  likelihood_elapsed <- as.numeric(difftime(Sys.time(), likelihood_start, units = "secs"))
+  log_msg("  Likelihood + parquet writing done: %d sims in %.1fs (%.1f sims/s)",
+          n_sims, likelihood_elapsed, n_sims / max(likelihood_elapsed, 0.1))
+
+  rm(result_lookup, params_list, sampled_jsons, futures)
+  gc(verbose = FALSE)
 
   success_indicators
 }
@@ -309,9 +340,12 @@
 #'     \item{n_workers}{Integer. Number of Dask workers. Defaults to
 #'       \code{control$parallel$n_cores}.}
 #'     \item{software}{Character. Coiled software environment name.
-#'       Default \code{"mosaic-docker-workers"}.}
-#'     \item{vm_types}{Character vector. Azure VM type(s).
+#'       Default \code{"mosaic-acr-workers"} (pulls from Azure Container Registry).}
+#'     \item{vm_types}{Character vector. Azure VM type(s) for workers.
 #'       Default \code{"Standard_D8s_v6"}.}
+#'     \item{scheduler_vm_types}{Character vector. Azure VM type(s) for the
+#'       scheduler. Should have enough RAM to coordinate all workers and hold
+#'       gathered results. Default \code{"Standard_D4s_v6"} (4 vCPU, 16 GB).}
 #'     \item{region}{Character. Azure region. Default \code{"westus2"}.}
 #'     \item{idle_timeout}{Character. Coiled idle shutdown timeout.
 #'       Default \code{"2 hours"}.}
@@ -372,10 +406,11 @@ run_MOSAIC_dask <- function(config,
   # Normalise dask_spec defaults
   if (is.null(dask_spec)) dask_spec <- list()
   dask_spec$type         <- dask_spec$type         %||% "coiled"
-  dask_spec$software     <- dask_spec$software     %||% "mosaic-docker-workers"
-  dask_spec$vm_types     <- dask_spec$vm_types     %||% c("Standard_D8s_v6")
-  dask_spec$region       <- dask_spec$region       %||% "westus2"
-  dask_spec$idle_timeout <- dask_spec$idle_timeout %||% "2 hours"
+  dask_spec$software     <- dask_spec$software     %||% "mosaic-acr-workers"
+  dask_spec$vm_types              <- dask_spec$vm_types              %||% c("Standard_D8s_v6")
+  dask_spec$scheduler_vm_types    <- dask_spec$scheduler_vm_types    %||% c("Standard_D4s_v6")
+  dask_spec$region                <- dask_spec$region                %||% "westus2"
+  dask_spec$idle_timeout          <- dask_spec$idle_timeout          %||% "2 hours"
 
   if (!dask_spec$type %in% c("coiled", "scheduler")) {
     stop("dask_spec$type must be 'coiled' or 'scheduler'", call. = FALSE)
@@ -538,7 +573,7 @@ run_MOSAIC_dask <- function(config,
       name                = cluster_name,
       n_workers           = as.integer(n_workers_req),
       worker_vm_types     = as.list(dask_spec$vm_types),
-      scheduler_vm_types  = as.list(dask_spec$vm_types),
+      scheduler_vm_types  = as.list(dask_spec$scheduler_vm_types),
       region              = dask_spec$region,
       software            = dask_spec$software,
       shutdown_on_close   = TRUE,
@@ -559,17 +594,15 @@ run_MOSAIC_dask <- function(config,
 
   log_msg("Dask dashboard: %s", client$dashboard_link)
 
-  # Register cleanup (runs on normal exit OR error)
+  # Register cleanup (runs on normal exit OR error).
+  # client/cluster are set to NULL after graceful close in post-processing,
+  # so this only fires if an error occurs during the batch loop.
   on.exit({
-    try({
-      client$close()
-      log_msg("Dask client closed")
-    }, silent = TRUE)
+    if (!is.null(client)) {
+      try({ client$close(); log_msg("Dask client closed (on.exit)") }, silent = TRUE)
+    }
     if (!is.null(cluster)) {
-      try({
-        cluster$close()
-        log_msg("Dask cluster closed")
-      }, silent = TRUE)
+      try({ cluster$close(); log_msg("Dask cluster closed (on.exit)") }, silent = TRUE)
     }
   }, add = TRUE)
 
@@ -800,6 +833,35 @@ run_MOSAIC_dask <- function(config,
   # POST-PROCESSING — identical to run_MOSAIC() from here onward
   # ===========================================================================
 
+  # Close Dask client/cluster — no longer needed, all results are gathered.
+  # Closing now prevents TLS heartbeat timeout errors during heavy R-side
+  # post-processing (parquet combining, ESS, weights) which blocks the
+  # Python event loop and starves the Dask heartbeat.
+  log_msg("Closing Dask cluster (all results gathered, no longer needed)")
+  tryCatch({
+    client$close()
+    log_msg("  Dask client closed")
+  }, silent = TRUE, error = function(e) {
+    log_msg("  Dask client close failed (may already be disconnected): %s", e$message)
+  })
+  if (!is.null(cluster)) {
+    tryCatch({
+      cluster$close()
+      log_msg("  Dask cluster closed")
+    }, silent = TRUE, error = function(e) {
+      log_msg("  Dask cluster close failed: %s", e$message)
+    })
+  }
+  # Null out so the on.exit handler doesn't double-close
+  client  <- NULL
+  cluster <- NULL
+
+  # Force GC before loading parquets — batch intermediates can hold several GB
+  gc(verbose = FALSE)
+  mem_mb <- sum(gc(verbose = FALSE)[, 2])
+  log_msg("Memory after GC: %.0f MB (R heap)", mem_mb)
+
+  post_start <- Sys.time()
   log_msg("Combining simulation files")
 
   parquet_files <- list.files(dirs$bfrs_params,
@@ -851,6 +913,8 @@ run_MOSAIC_dask <- function(config,
     log_msg("  Cleaned up %d individual simulation files", length(parquet_files))
   }
   log_msg("  Combined simulations saved: %s", basename(simulations_file))
+  log_msg("  Combine + write elapsed: %.1fs",
+          as.numeric(difftime(Sys.time(), post_start, units = "secs")))
 
   # --- Parameter ESS ---
   log_msg("Calculating parameter ESS")

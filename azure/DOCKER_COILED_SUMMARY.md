@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Successfully implemented Docker-based automation for MOSAIC workflows using Coiled.io. The Docker image (`ttingidmod/mosaic-worker:latest`) contains MOSAIC v0.13.24 fully installed and verified. Coiled workers start successfully with MOSAIC ready to use.
+Successfully implemented Docker-based automation for MOSAIC workflows using Coiled.io. The Docker image (`idmmosaicacr.azurecr.io/mosaic-worker:latest`) is hosted on Azure Container Registry (ACR) and contains MOSAIC v0.13.24 fully installed and verified. Coiled workers start successfully with MOSAIC ready to use.
 
 **Key Achievement**: Proven infrastructure for running MOSAIC on auto-scaling cloud workers without manual server login.
 
@@ -33,12 +33,12 @@ Successfully implemented Docker-based automation for MOSAIC workflows using Coil
 ✓ Version: 0.13.24
 ```
 
-**Published**: `ttingidmod/mosaic-worker:latest` on Docker Hub
+**Published**: `idmmosaicacr.azurecr.io/mosaic-worker:latest` on Azure Container Registry (see [ACR_SETUP.md](ACR_SETUP.md))
 
 ### ✅ Phase 2: Coiled Integration (Complete)
 
-**Coiled Environment Created**: `mosaic-docker-workers`
-- Points to Docker image on Docker Hub
+**Coiled Environment Created**: `mosaic-acr-workers`
+- Points to Docker image on ACR (anonymous pull enabled, no rate limits)
 - Region: westus2
 - Workers start with MOSAIC pre-installed
 
@@ -175,9 +175,9 @@ After completing the conda exploration (Day 1), we pivoted to Docker on Day 2. H
 **Environment Creation**: Instant (just references Docker image)
 ```python
 coiled.create_software_environment(
-    name='mosaic-docker-workers',
-    container='ttingidmod/mosaic-worker:latest',
-    region_name='westus2'
+    name='mosaic-acr-workers',
+    container='idmmosaicacr.azurecr.io/mosaic-worker:latest',
+    force_rebuild=True
 )
 ```
 
@@ -324,8 +324,8 @@ auto-scaling Coiled.io cloud infrastructure, eliminating manual
 server login requirements.
 
 Key deliverables:
-- Docker image (ttingidmod/mosaic-worker:latest) with MOSAIC v0.13.24
-- Coiled environment setup (mosaic-docker-workers)
+- Docker image (idmmosaicacr.azurecr.io/mosaic-worker:latest) with MOSAIC v0.13.24
+- Coiled environment setup (mosaic-acr-workers)
 - Parallel country execution framework
 - Comprehensive documentation
 
@@ -351,7 +351,7 @@ Co-Authored-By: Claude Sonnet 4.5 (1M context) <noreply@anthropic.com>
 
 ```bash
 # 1. Pull Docker image
-docker pull ttingidmod/mosaic-worker:latest
+docker pull idmmosaicacr.azurecr.io/mosaic-worker:latest
 
 # 2. Create local environment (if needed)
 conda env create -f azure/environment.yml

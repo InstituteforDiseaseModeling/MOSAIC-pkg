@@ -74,9 +74,8 @@ docker run --rm \
   -v ~/MOSAIC/MOSAIC-data:/workspace/MOSAIC/MOSAIC-data \
   -v ~/output:/workspace/output \
   -v ~/.config/dask:/root/.config/dask:ro \
-  -v /tmp/mosaic_dask_test.R:/tmp/mosaic_dask_test.R \
   idmmosaicacr.azurecr.io/mosaic-worker:latest \
-  bash -c "R CMD INSTALL /src/MOSAIC-pkg && Rscript /tmp/mosaic_dask_test.R"
+  bash -c "R CMD INSTALL /src/MOSAIC-pkg && Rscript /src/MOSAIC-pkg/azure/mosaic_dask_test.R"
 ```
 
 ### Calling from R

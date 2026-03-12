@@ -54,30 +54,33 @@ R orchestrator (continued)
 
 ### 1. Docker image with MOSAIC
 
-The worker image `ttingidmod/mosaic-worker:latest` must be available. It is already pushed to Docker Hub and includes:
+The worker image `idmmosaicacr.azurecr.io/mosaic-worker:latest` is hosted on Azure Container Registry (ACR) to avoid Docker Hub pull rate limits. It includes:
 - MOSAIC R package (v0.13.24)
 - `laser_cholera==0.9.1`
 - PyTorch, SBI, Zuko (for NPE)
 - Dask / distributed
 - MOSAIC-data repo (`/workspace/MOSAIC/MOSAIC-data`)
 
+See [ACR_SETUP.md](ACR_SETUP.md) for full ACR configuration details.
+
 **Verify the image exists:**
 ```bash
-docker pull ttingidmod/mosaic-worker:latest
-docker run --rm ttingidmod/mosaic-worker:latest R -e "library(MOSAIC); packageVersion('MOSAIC')"
+docker pull idmmosaicacr.azurecr.io/mosaic-worker:latest
+docker run --rm idmmosaicacr.azurecr.io/mosaic-worker:latest R -e "library(MOSAIC); packageVersion('MOSAIC')"
 ```
 
 **Rebuild if MOSAIC-pkg has changed:**
 ```bash
 cd ~/MOSAIC/MOSAIC-pkg
 docker build -f azure/Dockerfile -t mosaic-worker:latest .
-docker tag mosaic-worker:latest ttingidmod/mosaic-worker:latest
-docker push ttingidmod/mosaic-worker:latest
+docker tag mosaic-worker:latest idmmosaicacr.azurecr.io/mosaic-worker:latest
+az acr login --name idmmosaicacr
+docker push idmmosaicacr.azurecr.io/mosaic-worker:latest
 ```
 
 ### 2. Coiled software environment
 
-`mosaic-docker-workers` is a **Coiled software environment** — a cloud-side definition stored in your Coiled account that tells Coiled workers which Docker image to use. It is not a conda environment.
+`mosaic-acr-workers` is a **Coiled software environment** — a cloud-side definition stored in your Coiled account that tells Coiled workers which Docker image to use (from ACR). It is not a conda environment.
 
 **Check it exists** (`mosaic-coiled` conda env is just where the `coiled` CLI lives):
 ```bash
@@ -85,15 +88,15 @@ conda activate mosaic-coiled   # activates the local env that has the coiled CLI
 coiled env list                # lists your Coiled-side software environments
 ```
 
-You should see `mosaic-docker-workers` in the output.
+You should see `mosaic-acr-workers` in the output.
 
 **Recreate if needed** (e.g. after pushing a new Docker image):
 ```python
 import coiled
 coiled.create_software_environment(
-    name='mosaic-docker-workers',
-    container='ttingidmod/mosaic-worker:latest',
-    region_name='westus2'
+    name='mosaic-acr-workers',
+    container='idmmosaicacr.azurecr.io/mosaic-worker:latest',
+    force_rebuild=True
 )
 ```
 
@@ -197,14 +200,13 @@ docker run --rm \
   -v ~/MOSAIC/MOSAIC-data:/workspace/MOSAIC/MOSAIC-data \
   -v ~/output:/workspace/output \
   -v ~/.config/dask:/root/.config/dask:ro \
-  -v /tmp/mosaic_dask_test.R:/tmp/mosaic_dask_test.R \
-  ttingidmod/mosaic-worker:latest \
-  bash -c "R CMD INSTALL /src/MOSAIC-pkg && Rscript /tmp/mosaic_dask_test.R"
+  idmmosaicacr.azurecr.io/mosaic-worker:latest \
+  bash -c "R CMD INSTALL /src/MOSAIC-pkg && Rscript /src/MOSAIC-pkg/azure/mosaic_dask_test.R"
 ```
 
 What happens:
 - `R CMD INSTALL /src/MOSAIC-pkg` — installs `run_MOSAIC_dask()` from your local source into the container's R library (~60 s; all deps already present)
-- `Rscript /tmp/mosaic_dask_test.R` — runs the calibration; connects to Coiled using the mounted credentials
+- `Rscript /src/MOSAIC-pkg/azure/mosaic_dask_test.R` — runs the calibration; connects to Coiled using the mounted credentials
 
 #### Step 3: Verify outputs
 
@@ -453,7 +455,7 @@ R CMD INSTALL .
 ### Worker returns `success=False`
 
 Check the error message in the R log — it prints `res$error` and `res$traceback` for failed futures. Common causes:
-- `laser_cholera` not importable on worker → verify Docker image has it: `docker run --rm ttingidmod/mosaic-worker:latest python -c "import laser_cholera"`
+- `laser_cholera` not importable on worker → verify Docker image has it: `docker run --rm idmmosaicacr.azurecr.io/mosaic-worker:latest python -c "import laser_cholera"`
 - `TypeError: 'int' object is not iterable` → a scalar field in `sampled_params` is being treated as a vector by LASER; check `_VECTOR_FIELDS` list in `mosaic_dask_worker.py`
 - Memory error on worker → reduce `n_iterations` or increase VM size
 
