@@ -81,8 +81,8 @@
 #' @param sigma Proportion of symptomatic infections (numeric in \[0, 1\]).
 #' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
 #' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
-#' @param epidemic_threshold Incidence threshold (infections per capita) for epidemic definition. Used for both
-#'        case reporting and IFR threshold models. Numeric in \[0, 1\].
+#' @param epidemic_threshold Isym/N point prevalence threshold for epidemic regime activation. Used for both
+#'        case reporting and IFR threshold models. Numeric scalar or length-n vector in \[0, 1\].
 #' @param delta_reporting_cases Infection-to-case reporting delay in days (non-negative integer).
 #' @param delta_reporting_deaths Infection-to-death reporting delay in days (non-negative integer).
 #'
@@ -682,8 +682,8 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(chi_epidemic) || chi_epidemic <= 0 || chi_epidemic > 1) {
           stop("chi_epidemic must be a numeric scalar in (0, 1].")
      }
-     if (!is.null(epidemic_threshold) && (!is.numeric(epidemic_threshold) || epidemic_threshold < 0 || epidemic_threshold > 1)) {
-          stop("epidemic_threshold must be NULL or a numeric scalar in [0, 1].")
+     if (!is.null(epidemic_threshold) && (!is.numeric(epidemic_threshold) || any(epidemic_threshold < 0) || any(epidemic_threshold > 1))) {
+          stop("epidemic_threshold must be NULL or a numeric scalar or vector with all values in [0, 1].")
      }
      # Validate delta_reporting_cases
      if (!is.null(delta_reporting_cases)) {

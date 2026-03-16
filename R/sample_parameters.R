@@ -42,7 +42,12 @@
 #'     \item sample_a2: Seasonality (default TRUE)
 #'     \item sample_b1: Seasonality (default TRUE)
 #'     \item sample_b2: Seasonality (default TRUE)
-#'     \item sample_mu_j: Location-specific case fatality ratio (default TRUE)
+#'     \item sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
+#'     \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
+#'     \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
+#'     \item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)
+#'     \item sample_delta_reporting_cases: Infection-to-case reporting delay in days (default TRUE)
+#'     \item sample_delta_reporting_deaths: Infection-to-death reporting delay in days (default TRUE)
 #'     \item sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 #'     \item sample_psi_star_b: Suitability calibration scale/offset (default TRUE)
 #'     \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
@@ -131,7 +136,7 @@ sample_parameters <- function(
     sample_zeta_1 = TRUE,
     sample_zeta_2 = TRUE,
 
-    # Location-specific parameter sampling controls (13 parameters)
+    # Location-specific parameter sampling controls
     sample_beta_j0_tot = TRUE,
     sample_p_beta = TRUE,
     sample_tau_i = TRUE,
@@ -140,7 +145,12 @@ sample_parameters <- function(
     sample_a2 = TRUE,
     sample_b1 = TRUE,
     sample_b2 = TRUE,
-    sample_mu_j = TRUE,
+    sample_mu_j_baseline = TRUE,
+    sample_mu_j_slope = TRUE,
+    sample_mu_j_epidemic_factor = TRUE,
+    sample_epidemic_threshold = TRUE,
+    sample_delta_reporting_cases = TRUE,
+    sample_delta_reporting_deaths = TRUE,
 
     # psi_star calibration parameters
     sample_psi_star_a = TRUE,

@@ -350,7 +350,7 @@ default_args <- list(
      rho = 0.7,                   # Proportion of symptomatic infections seeking care
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
-     epidemic_threshold = 1/10000,  # Infection rate threshold for PPV switching (1 per 10k per day)
+     epidemic_threshold = rep(1/10000, length(j)),  # Per-location Isym/N threshold for PPV switching (1 per 10k)
      delta_reporting_cases = 2,   # NEW: Infection-to-case report delay in days
      delta_reporting_deaths = 7,  # NEW: Infection-to-death report delay in days
      longitude         = longitude,
