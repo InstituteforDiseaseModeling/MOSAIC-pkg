@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_suspected_cases.R
 \name{plot_suspected_cases}
 \alias{plot_suspected_cases}
-\title{Plot Proportion of Suspected Cholera Cases}
+\title{Plot Chi PPV Prior Distributions}
 \usage{
 plot_suspected_cases(PATHS)
 }
@@ -14,5 +14,8 @@ plot_suspected_cases(PATHS)
 }}
 }
 \description{
-This function loads the parameter data frame for the proportion of suspected cholera cases (rho) from the \code{param_rho_suspected_cases.csv} file and generates a plot showing the probability distributions for both low and high estimates, with custom annotations and formatting.
+This function loads the parameter data frame for the positive predictive value (PPV)
+of the cholera clinical case definition from the \code{param_chi_suspected_cases.csv} file
+and generates a plot showing the Beta prior distributions for chi_endemic (low/all-settings
+estimate) and chi_epidemic (high/outbreak estimate).
 }
