@@ -2,30 +2,32 @@
 % Please edit documentation in R/download_climate_data.R
 \name{download_climate_data}
 \alias{download_climate_data}
-\title{Download and Save Climate Data for Multiple Countries (Parquet Format, Multiple Models and Variables)}
+\title{Download and Save Climate Data (Parquet Format, Multiple Models and Variables)}
 \usage{
 download_climate_data(
   PATHS,
-  iso_codes,
-  n_points,
+  iso_codes = NULL,
+  n_points = NULL,
   date_start,
   date_stop,
   climate_models,
   climate_variables,
-  api_key
+  api_key,
+  shapes = NULL,
+  points = NULL
 )
 }
 \arguments{
 \item{PATHS}{A list containing paths where raw and processed data are stored.
 PATHS is typically the output of the \code{get_paths()} function and should include:
 \itemize{
-\item \strong{DATA_SHAPEFILES}: Path to the directory containing country shapefiles.
+\item \strong{DATA_SHAPEFILES}: Path to the directory containing country shapefiles (required for \code{iso_codes} mode).
 \item \strong{DATA_CLIMATE}: Path to the directory where processed climate data will be saved.
 }}
 
-\item{iso_codes}{A character vector of ISO3 country codes for which climate data should be downloaded.}
+\item{iso_codes}{A character vector of ISO3 country codes. Exactly one of \code{iso_codes}, \code{shapes}, or \code{points} must be supplied.}
 
-\item{n_points}{An integer specifying the number of grid points to generate within each country for which climate data will be downloaded.}
+\item{n_points}{An integer specifying the number of grid points to generate within each country/shape. Not used in \code{points} mode.}
 
 \item{date_start}{A character string representing the start date for the climate data (in "YYYY-MM-DD" format).}
 
@@ -45,15 +47,32 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 \item{climate_variables}{A character vector of climate variables to retrieve. See details for available variables.}
 
 \item{api_key}{A character string representing the API key required to access the climate data API.}
+
+\item{shapes}{A named list of sf polygon objects. Names become unit IDs in output filenames and a \code{region_id} column.}
+
+\item{points}{A data.frame with columns \code{lat} and \code{lon}, and an optional \code{id} column. If \code{id} is absent, all points form a single unit with id \code{"custom"}.}
 }
 \value{
-The function does not return a value. It downloads the climate data for each country, climate model, and climate variable, saving the results as Parquet files in the specified directory.
+The function does not return a value. It downloads the climate data for each unit and climate model,
+saving the results as Parquet files in the specified directory. One file is saved per climate variable per
+model per unit, named \code{climate_data_{climate_model}_{climate_variable}_{date_start}_{date_stop}_{unit_id}.parquet}.
 }
 \description{
-This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country for a specified set of climate models and variables.
+Downloads daily climate data for a set of locations defined by country ISO3 codes,
+custom sf polygon shapes, or explicit lat/lon points. Data is saved as Parquet files,
+one per variable per model per unit (country/shape/points group).
 }
 \details{
-This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (\code{date_start} to \code{date_stop}) and the specified climate models and variables. The data is saved for each country, climate model, and climate variable in a Parquet file named \verb{climate_data_\{climate_model\}_\{climate_variable\}_\{date_start\}_\{date_stop\}_\{ISO3\}.parquet}.
+Exactly one of \code{iso_codes}, \code{shapes}, or \code{points} must be supplied.
+
+\strong{Country mode} (\code{iso_codes}): Reads country shapefiles from \code{PATHS$DATA_SHAPEFILES}, generates a
+grid of \code{n_points} points, and adds \code{country_name} and \code{iso_code} columns to output.
+
+\strong{Shapes mode} (\code{shapes}): Accepts a named list of sf polygons, generates a grid of \code{n_points}
+points per polygon, and adds a \code{region_id} column to output.
+
+\strong{Points mode} (\code{points}): Accepts a data.frame with \code{lat}, \code{lon}, and optional \code{id}
+columns. Points sharing the same \code{id} are downloaded together. Adds a \code{region_id} column to output.
 
 The available climate variables include:
 \itemize{
@@ -71,20 +90,29 @@ The available climate variables include:
 }
 \examples{
 \dontrun{
-# Define paths for raw and processed data using get_paths()
 PATHS <- get_paths()
 
-# ISO3 country codes for African countries
-iso_codes <- c("ZAF", "KEN", "NGA")
-
-# API key for climate data API
-api_key <- "your-api-key-here"
-
-# Download climate data for multiple models and variables and save it for the specified countries
-download_climate_data(PATHS, iso_codes, n_points = 5,
+# Country mode
+download_climate_data(PATHS, iso_codes = c("ZAF", "KEN"), n_points = 5,
                       date_start = "1970-01-01", date_stop = "2030-12-31",
-                      climate_models = c("MRI_AGCM3_2_S", "EC_Earth3P_HR"),
-                      climate_variables = c("temperature_2m_mean", "precipitation_sum"), api_key)
+                      climate_models = "MRI_AGCM3_2_S",
+                      climate_variables = c("temperature_2m_mean", "precipitation_sum"),
+                      api_key = "your-api-key")
+
+# Shapes mode
+download_climate_data(PATHS, shapes = list(myregion = my_sf_polygon), n_points = 5,
+                      date_start = "2020-01-01", date_stop = "2020-12-31",
+                      climate_models = "MRI_AGCM3_2_S",
+                      climate_variables = "temperature_2m_mean",
+                      api_key = "your-api-key")
+
+# Points mode
+pts <- data.frame(lat = c(1.0, 1.5), lon = c(36.0, 36.5), id = c("A", "A"))
+download_climate_data(PATHS, points = pts,
+                      date_start = "2020-01-01", date_stop = "2020-12-31",
+                      climate_models = "MRI_AGCM3_2_S",
+                      climate_variables = "temperature_2m_mean",
+                      api_key = "your-api-key")
 }
 
 }
