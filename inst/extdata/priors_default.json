@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "version": "9.0.0",
-    "date": "2025-11-24",
+    "version": "9.1.0",
+    "date": "2026-03-16",
     "description": "Default informative prior distributions for MOSAIC model parameters"
   },
   "parameters_global": {
@@ -2526,15 +2526,15 @@
         "CMR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 239.9496,
-            "shape2": 1207.2444
+            "shape1": 174.5005,
+            "shape2": 856.6448
           }
         },
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 63.6189,
-            "shape2": 1081.617
+            "shape1": 54.5719,
+            "shape2": 928.945
           }
         },
         "COG": {
@@ -2554,8 +2554,8 @@
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 138.1987,
-            "shape2": 3263.4481
+            "shape1": 121.6903,
+            "shape2": 2856.9557
           }
         },
         "GAB": {
@@ -2575,8 +2575,8 @@
         "GIN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 38.2774,
-            "shape2": 21061.6566
+            "shape1": 31.3267,
+            "shape2": 17807.9625
           }
         },
         "GMB": {
@@ -2603,8 +2603,8 @@
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 554.7002,
-            "shape2": 18051.6406
+            "shape1": 553.7753,
+            "shape2": 18109.6007
           }
         },
         "LBR": {
@@ -2624,8 +2624,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 31.3176,
-            "shape2": 873.9766
+            "shape1": 20.7699,
+            "shape2": 574.5395
           }
         },
         "MRT": {
@@ -2638,8 +2638,8 @@
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 114.8624,
-            "shape2": 429.3036
+            "shape1": 111.7447,
+            "shape2": 423.0625
           }
         },
         "NAM": {
@@ -2652,15 +2652,15 @@
         "NER": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 126.08,
-            "shape2": 1240.1556
+            "shape1": 136.0297,
+            "shape2": 1328.741
           }
         },
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 51.7072,
-            "shape2": 1928.0844
+            "shape1": 70.6601,
+            "shape2": 2613.8967
           }
         },
         "RWA": {
@@ -2680,22 +2680,22 @@
         "SLE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 13.0225,
-            "shape2": 533.9946
+            "shape1": 17.1619,
+            "shape2": 702.3533
           }
         },
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 94.5355,
-            "shape2": 502.1484
+            "shape1": 117.4708,
+            "shape2": 628.4828
           }
         },
         "SSD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 21.6584,
-            "shape2": 147.0541
+            "shape1": 18.4837,
+            "shape2": 124.5755
           }
         },
         "SWZ": {
@@ -2722,15 +2722,15 @@
         "TZA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 200.6008,
-            "shape2": 37807.2836
+            "shape1": 133.1318,
+            "shape2": 24969.56
           }
         },
         "UGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 51.9137,
-            "shape2": 1742.2723
+            "shape1": 37.7372,
+            "shape2": 1251.3005
           }
         },
         "ZAF": {
@@ -2743,15 +2743,15 @@
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 40.6798,
-            "shape2": 215.3891
+            "shape1": 35.6962,
+            "shape2": 183.0916
           }
         },
         "ZWE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 16.4079,
-            "shape2": 237.5985
+            "shape1": 15.9384,
+            "shape2": 231.7758
           }
         }
       }
@@ -3054,8 +3054,8 @@
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 10.4194,
-            "shape2": 6776410.7337
+            "shape1": 13.7191,
+            "shape2": 12355724.9445
           }
         },
         "BEN": {
@@ -3103,8 +3103,8 @@
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.1535,
-            "shape2": 286706.4258
+            "shape1": 2.012,
+            "shape2": 220660.5109
           }
         },
         "COG": {
@@ -3124,8 +3124,8 @@
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 32.17,
-            "shape2": 61324066.6673
+            "shape1": 31.5155,
+            "shape2": 58775736.23
           }
         },
         "GAB": {
@@ -3173,8 +3173,8 @@
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 40.4845,
-            "shape2": 13106608.0746
+            "shape1": 38.254,
+            "shape2": 11667597.2945
           }
         },
         "LBR": {
@@ -3194,8 +3194,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 11.1473,
-            "shape2": 1459253.5514
+            "shape1": 7.0801,
+            "shape2": 523888.3965
           }
         },
         "MRT": {
@@ -3208,8 +3208,8 @@
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.7354,
-            "shape2": 10203.0123
+            "shape1": 1.6677,
+            "shape2": 8408.0709
           }
         },
         "NAM": {
@@ -3229,8 +3229,8 @@
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 30.5144,
-            "shape2": 31986359.0106
+            "shape1": 27.2433,
+            "shape2": 25288989.3403
           }
         },
         "RWA": {
@@ -3257,8 +3257,8 @@
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2818,
-            "shape2": 222634.4419
+            "shape1": 1.327,
+            "shape2": 299849.0621
           }
         },
         "SSD": {
@@ -3313,8 +3313,8 @@
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 100.2221,
-            "shape2": 55812956.8446
+            "shape1": 112.5129,
+            "shape2": 70496738.6046
           }
         },
         "ZWE": {
@@ -3339,8 +3339,8 @@
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 9.1062,
-            "shape2": 5018683.6185
+            "shape1": 11.6446,
+            "shape2": 8653926.4772
           }
         },
         "BEN": {
@@ -3388,8 +3388,8 @@
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.5194,
-            "shape2": 497449.7746
+            "shape1": 1.8327,
+            "shape2": 149407.3104
           }
         },
         "COG": {
@@ -3409,8 +3409,8 @@
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 40.6856,
-            "shape2": 99408444.1322
+            "shape1": 30.1086,
+            "shape2": 53480995.7011
           }
         },
         "GAB": {
@@ -3458,8 +3458,8 @@
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 45.2096,
-            "shape2": 16431242.0791
+            "shape1": 34.738,
+            "shape2": 9569183.3752
           }
         },
         "LBR": {
@@ -3479,8 +3479,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 10.1032,
-            "shape2": 1174387.5871
+            "shape1": 6.6957,
+            "shape2": 459733.368
           }
         },
         "MRT": {
@@ -3493,8 +3493,8 @@
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.6569,
-            "shape2": 8136.3316
+            "shape1": 1.8102,
+            "shape2": 12388.962
           }
         },
         "NAM": {
@@ -3514,8 +3514,8 @@
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 26.4501,
-            "shape2": 23783478.0814
+            "shape1": 22.5696,
+            "shape2": 17083667.6409
           }
         },
         "RWA": {
@@ -3542,8 +3542,8 @@
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.3099,
-            "shape2": 269342.6092
+            "shape1": 1.2406,
+            "shape2": 162223.295
           }
         },
         "SSD": {
@@ -3598,8 +3598,8 @@
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 96.4445,
-            "shape2": 51644023.2127
+            "shape1": 113.241,
+            "shape2": 71420388.1314
           }
         },
         "ZWE": {
@@ -3617,281 +3617,281 @@
         "AGO": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1768,
-            "shape2": 7.6557
+            "shape1": 1.1595,
+            "shape2": 5.9947
           }
         },
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2314,
-            "shape2": 20.276
+            "shape1": 1.202,
+            "shape2": 16.0238
           }
         },
         "BEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2162,
-            "shape2": 15.839
+            "shape1": 1.2389,
+            "shape2": 19.4592
           }
         },
         "BFA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0412,
-            "shape2": 20.7536
+            "shape1": 1.0302,
+            "shape2": 17.8529
           }
         },
         "BWA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.163,
-            "shape2": 2625.5401
+            "shape1": 1.097,
+            "shape2": 1444.2241
           }
         },
         "CAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0416,
-            "shape2": 47.4842
+            "shape1": 1.041,
+            "shape2": 56.1027
           }
         },
         "CIV": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0431,
-            "shape2": 12.111
+            "shape1": 1.0365,
+            "shape2": 11.2581
           }
         },
         "CMR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.445,
-            "shape2": 13.925
+            "shape1": 1.5274,
+            "shape2": 19.8259
           }
         },
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.3541,
-            "shape2": 5.3409
+            "shape1": 1.4608,
+            "shape2": 7.4508
           }
         },
         "COG": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0995,
-            "shape2": 5.1864
+            "shape1": 1.1215,
+            "shape2": 5.6904
           }
         },
         "ERI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0173,
-            "shape2": 78.2662
+            "shape1": 1.01,
+            "shape2": 32.5069
           }
         },
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0509,
-            "shape2": 6.9681
+            "shape1": 1.0463,
+            "shape2": 5.2078
           }
         },
         "GAB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0258,
-            "shape2": 17.4899
+            "shape1": 1.0571,
+            "shape2": 42.4911
           }
         },
         "GHA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2643,
-            "shape2": 11.4689
+            "shape1": 1.2825,
+            "shape2": 10.3916
           }
         },
         "GIN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1616,
-            "shape2": 7.8289
+            "shape1": 1.2641,
+            "shape2": 11.9727
           }
         },
         "GMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0115,
-            "shape2": 23.3331
+            "shape1": 1.01,
+            "shape2": 16.3842
           }
         },
         "GNB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 4.4635,
-            "shape2": 15.0936
+            "shape1": 4.0191,
+            "shape2": 12.338
           }
         },
         "GNQ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1725,
-            "shape2": 7.3107
+            "shape1": 1.1699,
+            "shape2": 8.6062
           }
         },
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1603,
-            "shape2": 8.79
+            "shape1": 1.2849,
+            "shape2": 17.8216
           }
         },
         "LBR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.6696,
-            "shape2": 10.8389
+            "shape1": 1.8168,
+            "shape2": 11.8566
           }
         },
         "MLI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0309,
-            "shape2": 5.7658
+            "shape1": 1.0337,
+            "shape2": 7.4855
           }
         },
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.4999,
-            "shape2": 8.4802
+            "shape1": 1.4293,
+            "shape2": 8.0691
           }
         },
         "MRT": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0981,
-            "shape2": 7.9915
+            "shape1": 1.0849,
+            "shape2": 5.5321
           }
         },
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.4502,
-            "shape2": 9.613
+            "shape1": 1.3556,
+            "shape2": 6.7278
           }
         },
         "NAM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0852,
-            "shape2": 8.2608
+            "shape1": 1.0696,
+            "shape2": 6.9132
           }
         },
         "NER": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2897,
-            "shape2": 20.0757
+            "shape1": 1.1222,
+            "shape2": 7.3969
           }
         },
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.6896,
-            "shape2": 28.6546
+            "shape1": 1.5547,
+            "shape2": 22.0309
           }
         },
         "RWA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.074,
-            "shape2": 17.0811
+            "shape1": 1.0949,
+            "shape2": 27.7935
           }
         },
         "SEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2258,
-            "shape2": 10.9071
+            "shape1": 1.5056,
+            "shape2": 25.8039
           }
         },
         "SLE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.5982,
-            "shape2": 13.1385
+            "shape1": 1.3672,
+            "shape2": 7.63
           }
         },
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.236,
-            "shape2": 1.7101
+            "shape1": 1.1483,
+            "shape2": 1.2187
           }
         },
         "SSD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.331,
-            "shape2": 11.036
+            "shape1": 1.3453,
+            "shape2": 10.6699
           }
         },
         "SWZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2148,
-            "shape2": 6.6174
+            "shape1": 1.3343,
+            "shape2": 10.2627
           }
         },
         "TCD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1961,
-            "shape2": 11.2542
+            "shape1": 1.1564,
+            "shape2": 8.785
           }
         },
         "TGO": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1298,
-            "shape2": 14.0777
+            "shape1": 1.1161,
+            "shape2": 15.1053
           }
         },
         "TZA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1266,
-            "shape2": 6.0493
+            "shape1": 1.278,
+            "shape2": 15.0136
           }
         },
         "UGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0653,
-            "shape2": 5.0766
+            "shape1": 1.0675,
+            "shape2": 6.3139
           }
         },
         "ZAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0879,
-            "shape2": 7.3054
+            "shape1": 1.0307,
+            "shape2": 2.2566
           }
         },
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.3957,
-            "shape2": 14.8799
+            "shape1": 1.3283,
+            "shape2": 16.1348
           }
         },
         "ZWE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.6578,
-            "shape2": 7.8411
+            "shape1": 1.652,
+            "shape2": 8.8531
           }
         }
       }
@@ -5037,286 +5037,286 @@
       }
     },
     "epidemic_threshold": {
-      "description": "Incidence threshold (infections per capita) for epidemic definition",
+      "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) converted via Zheng formula using config rho, chi_endemic, and gamma_1. Lognormal(meanlog = log(prior_mean), sdlog = 0.5).",
       "location": {
         "AGO": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -14.2684,
+            "sdlog": 0.5
           }
         },
         "BDI": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -14.5247,
+            "sdlog": 0.5
           }
         },
         "BEN": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -15.7905,
+            "sdlog": 0.5
           }
         },
         "BFA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "BWA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9896,
-            "shape2": 62449.0104
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "CAF": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9974,
-            "shape2": 249949.0026
+            "meanlog": -13.6875,
+            "sdlog": 0.5
           }
         },
         "CIV": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9935,
-            "shape2": 99949.0065
+            "meanlog": -17.7461,
+            "sdlog": 0.5
           }
         },
         "CMR": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9935,
-            "shape2": 99949.0065
+            "meanlog": -13.8791,
+            "sdlog": 0.5
           }
         },
         "COD": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -12.6816,
+            "sdlog": 0.5
           }
         },
         "COG": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -15.0915,
+            "sdlog": 0.5
           }
         },
         "ERI": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "ETH": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -13.3838,
+            "sdlog": 0.5
           }
         },
         "GAB": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9922,
-            "shape2": 83282.3411
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "GHA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9922,
-            "shape2": 83282.3411
+            "meanlog": -13.2794,
+            "sdlog": 0.5
           }
         },
         "GIN": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -13.547,
+            "sdlog": 0.5
           }
         },
         "GMB": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "GNB": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "GNQ": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9935,
-            "shape2": 99949.0065
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "KEN": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9909,
-            "shape2": 71377.5805
+            "meanlog": -14.3025,
+            "sdlog": 0.5
           }
         },
         "LBR": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -15.0287,
+            "sdlog": 0.5
           }
         },
         "MLI": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "MOZ": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -13.0831,
+            "sdlog": 0.5
           }
         },
         "MRT": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "MWI": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9935,
-            "shape2": 99949.0065
+            "meanlog": -15.2,
+            "sdlog": 0.5
           }
         },
         "NAM": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9909,
-            "shape2": 71377.5805
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "NER": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -14.7682,
+            "sdlog": 0.5
           }
         },
         "NGA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9935,
-            "shape2": 99949.0065
+            "meanlog": -15.3965,
+            "sdlog": 0.5
           }
         },
         "RWA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9896,
-            "shape2": 62449.0104
+            "meanlog": -15.1998,
+            "sdlog": 0.5
           }
         },
         "SEN": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9922,
-            "shape2": 83282.3411
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "SLE": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -11.5478,
+            "sdlog": 0.5
           }
         },
         "SOM": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9974,
-            "shape2": 249949.0026
+            "meanlog": -12.0095,
+            "sdlog": 0.5
           }
         },
         "SSD": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9974,
-            "shape2": 249949.0026
+            "meanlog": -11.9203,
+            "sdlog": 0.5
           }
         },
         "SWZ": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9922,
-            "shape2": 83282.3411
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "TCD": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9961,
-            "shape2": 166615.6706
+            "meanlog": -15.0517,
+            "sdlog": 0.5
           }
         },
         "TGO": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -14.3949,
+            "sdlog": 0.5
           }
         },
         "TZA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9935,
-            "shape2": 99949.0065
+            "meanlog": -14.0527,
+            "sdlog": 0.5
           }
         },
         "UGA": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9922,
-            "shape2": 83282.3411
+            "meanlog": -15.22,
+            "sdlog": 0.5
           }
         },
         "ZAF": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.987,
-            "shape2": 49949.013
+            "meanlog": -12.5425,
+            "sdlog": 0.5
           }
         },
         "ZMB": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9922,
-            "shape2": 83282.3411
+            "meanlog": -13.7568,
+            "sdlog": 0.5
           }
         },
         "ZWE": {
-          "distribution": "beta",
+          "distribution": "lognormal",
           "parameters": {
-            "shape1": 24.9948,
-            "shape2": 124949.0052
+            "meanlog": -12.7523,
+            "sdlog": 0.5
           }
         }
       }

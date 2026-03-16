@@ -13,9 +13,23 @@ date_start <- as.Date(config_default$date_start)
 
 j <- MOSAIC::iso_codes_mosaic
 
+#----------------------------------------
+# Load surveillance and demographics data for epidemic_threshold priors
+#----------------------------------------
+
+surv_weekly <- read.csv(
+     file.path(PATHS$DATA_PROCESSED, "cholera/weekly/cholera_surveillance_weekly_combined.csv"),
+     stringsAsFactors = FALSE
+)
+
+dem_annual <- read.csv(
+     file.path(PATHS$DATA_PROCESSED, "demographics/demographics_mosaic_countries_2000_2024_annual.csv"),
+     stringsAsFactors = FALSE
+)
+
 priors_default <- list(
      metadata = list(
-          version = "9.0.0",
+          version = "9.1.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -1554,90 +1568,138 @@ for (iso in j) {
      )
 }
 
-# epidemic_threshold - Location-specific epidemic threshold
+# epidemic_threshold - Location-specific epidemic regime activation threshold
+#
+# Units: dimensionless daily Isym/N point prevalence fraction.
+# The LASER engine compares epidemic_threshold against
+#   Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases]
+# at every daily tick to decide whether to apply epidemic-mode IFR and chi_epidemic.
+#
+# Derivation of prior means:
+#   Reported weekly incidence (cases/100k/wk) is converted to Isym/N via:
+#     Isym/N = (reported_per_100k / 1e5) * (chi_endemic / rho) / (7 * gamma_1)
+#   (Little's Law under approximate steady state; sdlog = 0.5 captures factor-of-2
+#    uncertainty from this approximation.)
+#
+# Data source: PATHS$DATA_PROCESSED cholera/weekly/cholera_surveillance_weekly_combined.csv
+#   Median weekly reported incidence per 100k across outbreak-positive weeks (cases > 0).
+#   Countries with < 10 outbreak weeks use the Zheng global reference (0.7/100k/wk),
+#   the published SSA median from Zheng et al. (2022) IJID.
+#
+# Distribution: Lognormal(meanlog = log(prior_mean), sdlog = 0.5)
+
+# Helper: convert Zheng weekly reported incidence to Isym/N point prevalence
+convert_zheng_threshold <- function(zheng_weekly_per_100k, rho, chi, gamma_1) {
+     (zheng_weekly_per_100k / 1e5) * (chi / rho) / (7 * gamma_1)
+}
+
+# Extract model parameters from config — do NOT hardcode these values
+rho_val    <- config_default$rho
+chi_val    <- config_default$chi_endemic
+gamma1_val <- config_default$gamma_1
+
+# Compute per-country median weekly incidence per 100k during outbreak-positive weeks.
+# Cap the population join year at the maximum available year in demographics (2024)
+# to handle surveillance records in 2025 that have no matching population row.
+dem_max_year  <- max(dem_annual$year)
+
+outbreak_rows <- surv_weekly[
+     surv_weekly$iso_code %in% j &
+     !is.na(surv_weekly$cases) &
+     surv_weekly$cases > 0,
+]
+outbreak_rows$dem_year <- pmin(outbreak_rows$year, dem_max_year)
+
+merged_surv <- merge(
+     outbreak_rows,
+     dem_annual[, c("iso_code", "year", "population")],
+     by.x = c("iso_code", "dem_year"),
+     by.y = c("iso_code", "year"),
+     all.x = TRUE
+)
+merged_surv$weekly_incidence_per_100k <- merged_surv$cases / merged_surv$population * 1e5
+
+# Per-country summary: outbreak week count and median weekly incidence per 100k
+country_threshold_data <- do.call(rbind, lapply(j, function(iso) {
+     rows <- merged_surv[
+          merged_surv$iso_code == iso &
+          !is.na(merged_surv$weekly_incidence_per_100k),
+     ]
+     data.frame(
+          iso_code                  = iso,
+          n_outbreak_weeks          = nrow(rows),
+          median_incidence_per_100k = if (nrow(rows) > 0) median(rows$weekly_incidence_per_100k, na.rm = TRUE) else NA_real_,
+          stringsAsFactors          = FALSE
+     )
+}))
+
+# Countries with < 10 outbreak weeks fall back to the Zheng global SSA reference value.
+# 0.7 per 100k per week is the published median from Zheng et al. (2022) IJID across
+# SSA districts — a conservative (upper-side) choice for low-burden / data-sparse countries.
+ZHENG_GLOBAL_FALLBACK_PER_100K   <- 0.7
+MIN_OUTBREAK_WEEKS_FOR_DATA_PRIOR <- 10
+
+country_threshold_data$use_fallback <- (
+     country_threshold_data$n_outbreak_weeks < MIN_OUTBREAK_WEEKS_FOR_DATA_PRIOR |
+     is.na(country_threshold_data$median_incidence_per_100k)
+)
+
+country_threshold_data$prior_mean <- ifelse(
+     !country_threshold_data$use_fallback,
+     convert_zheng_threshold(
+          country_threshold_data$median_incidence_per_100k,
+          rho_val, chi_val, gamma1_val
+     ),
+     convert_zheng_threshold(
+          ZHENG_GLOBAL_FALLBACK_PER_100K,
+          rho_val, chi_val, gamma1_val
+     )
+)
+
+EPIDEMIC_THRESHOLD_SDLOG <- 0.5   # captures ~factor-of-2 uncertainty around Zheng conversion
+
 priors_default$parameters_location$epidemic_threshold <- list(
-     description = "Incidence threshold (infections per capita) for epidemic definition",
+     description = paste0(
+          "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. ",
+          "Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. ",
+          "Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) ",
+          "converted via Zheng formula using config rho, chi_endemic, and gamma_1. ",
+          "Lognormal(meanlog = log(prior_mean), sdlog = 0.5)."
+     ),
      location = list()
 )
 
-# Define location-specific thresholds based on healthcare capacity (per 100,000)
-epidemic_threshold_by_country <- c(
-     "AGO" = 20,  # Angola
-     "BDI" = 15,  # Burundi
-     "BEN" = 20,  # Benin
-     "BFA" = 15,  # Burkina Faso
-     "BWA" = 40,  # Botswana - good healthcare
-     "CAF" = 10,  # Central African Republic - limited capacity
-     "CIV" = 25,  # Côte d'Ivoire
-     "CMR" = 25,  # Cameroon
-     "COD" = 15,  # Democratic Republic of Congo
-     "COG" = 20,  # Congo
-     "ERI" = 15,  # Eritrea
-     "ETH" = 20,  # Ethiopia
-     "GAB" = 30,  # Gabon
-     "GHA" = 30,  # Ghana - good healthcare
-     "GIN" = 20,  # Guinea
-     "GMB" = 20,  # Gambia
-     "GNB" = 15,  # Guinea-Bissau
-     "GNQ" = 25,  # Equatorial Guinea
-     "KEN" = 35,  # Kenya - good surveillance
-     "LBR" = 20,  # Liberia
-     "MLI" = 20,  # Mali
-     "MOZ" = 20,  # Mozambique
-     "MRT" = 15,  # Mauritania
-     "MWI" = 25,  # Malawi
-     "NAM" = 35,  # Namibia - good healthcare
-     "NER" = 15,  # Niger
-     "NGA" = 25,  # Nigeria
-     "RWA" = 40,  # Rwanda - excellent healthcare
-     "SEN" = 30,  # Senegal
-     "SLE" = 20,  # Sierra Leone
-     "SOM" = 10,  # Somalia - very limited capacity
-     "SSD" = 10,  # South Sudan - conflict affected
-     "SWZ" = 30,  # Eswatini
-     "TCD" = 15,  # Chad
-     "TGO" = 20,  # Togo
-     "TZA" = 25,  # Tanzania
-     "UGA" = 30,  # Uganda
-     "ZAF" = 50,  # South Africa - excellent healthcare
-     "ZMB" = 30,  # Zambia
-     "ZWE" = 20   # Zimbabwe
-)
-
 for (iso in j) {
-     # Get location-specific threshold or use default
-     threshold_per_100k <- ifelse(
-          iso %in% names(epidemic_threshold_by_country),
-          epidemic_threshold_by_country[iso],
-          25  # Default: 25 per 100,000
-     )
-
-     # Convert to per capita
-     threshold_mean <- threshold_per_100k / 100000
-
-     # Create beta distribution centered on this value with some uncertainty
-     # Use method of moments for Beta distribution
-     # Mean = threshold_mean, CV = 0.2 (20% coefficient of variation)
-     cv <- 0.2
-     variance <- (threshold_mean * cv)^2
-
-     # Beta parameters from mean and variance
-     # Mean = a/(a+b), Var = ab/((a+b)^2(a+b+1))
-     common_term <- threshold_mean * (1 - threshold_mean) / variance - 1
-     shape1 <- threshold_mean * common_term
-     shape2 <- (1 - threshold_mean) * common_term
-
-     # Ensure reasonable bounds
-     shape1 <- max(shape1, 2)
-     shape2 <- max(shape2, 2)
-
+     idx <- which(country_threshold_data$iso_code == iso)
      priors_default$parameters_location$epidemic_threshold$location[[iso]] <- list(
-          distribution = "beta",
-          parameters = list(
-               shape1 = shape1,
-               shape2 = shape2
+          distribution = "lognormal",
+          parameters   = list(
+               meanlog = log(country_threshold_data$prior_mean[idx]),
+               sdlog   = EPIDEMIC_THRESHOLD_SDLOG
           )
      )
+}
+
+# Verification summary
+n_data_prior <- sum(!country_threshold_data$use_fallback)
+n_fallback   <- sum(country_threshold_data$use_fallback)
+all_ml <- sapply(j, function(iso)
+     priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$meanlog)
+
+cat(sprintf(
+     "\n[epidemic_threshold priors] Data-derived: %d | Fallback: %d | Total: %d\n",
+     n_data_prior, n_fallback, length(j)
+))
+cat(sprintf(
+     "[epidemic_threshold priors] prior_mean range: [%.2e, %.2e]\n",
+     exp(min(all_ml)), exp(max(all_ml))
+))
+for (iso in c("ETH", "COD", "SLE", "BWA")) {
+     pm <- priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$meanlog
+     ps <- priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$sdlog
+     fb <- if (country_threshold_data$use_fallback[country_threshold_data$iso_code == iso]) " [fallback]" else ""
+     cat(sprintf("  %s%s: median=%.2e  95%% CI=[%.2e, %.2e]\n",
+                 iso, fb, exp(pm), exp(pm - 1.96 * ps), exp(pm + 1.96 * ps)))
 }
 
 #----------------------------------------
