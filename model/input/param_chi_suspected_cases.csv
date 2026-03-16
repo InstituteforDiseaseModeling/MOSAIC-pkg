@@ -1,0 +1,7 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"chi","PPV among suspected cases (chi_endemic): Point estimate low (all settings)","beta",NA,NA,NA,"mean",0.52
+"chi","PPV among suspected cases (chi_epidemic): Point estimate high (during outbreaks)","beta",NA,NA,NA,"mean",0.78
+"chi","PPV among suspected cases (chi_endemic): Low estimate (all settings)","beta",NA,NA,NA,"shape1",5.42988327430809
+"chi","PPV among suspected cases (chi_endemic): Low estimate (all settings)","beta",NA,NA,NA,"shape2",5.00904617715547
+"chi","PPV among suspected cases (chi_epidemic): High estimate (during outbreaks)","beta",NA,NA,NA,"shape1",4.78806160754615
+"chi","PPV among suspected cases (chi_epidemic): High estimate (during outbreaks)","beta",NA,NA,NA,"shape2",1.53280128097088

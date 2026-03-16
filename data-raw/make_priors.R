@@ -349,76 +349,70 @@ priors_default$parameters_global$phi_2 <- list(
 
 
 
-# Configuration parameter for rho (reporting rate)
-# Set outbreak = TRUE to use high estimate (during outbreaks, ~78% mean)
-# Set outbreak = FALSE to use low estimate (all settings, ~52% mean)
-outbreak <- FALSE  # Default to outbreak scenario for active transmission modeling
+# ---- chi_endemic and chi_epidemic (PPV of clinical case definition) ----
+# Beta distribution parameters from Weins et al. 2023 (PLOS Medicine,
+# doi:10.1371/journal.pmed.1004286), fit in get_suspected_cases().
+# Low estimate (all settings) -> chi_endemic; High estimate (outbreaks) -> chi_epidemic.
+chi_param_file <- file.path(PATHS$MODEL_INPUT, "param_chi_suspected_cases.csv")
+if (file.exists(chi_param_file)) {
+     param_chi <- read.csv(chi_param_file)
 
-# Load rho (reporting rate) parameters
-# Check if file exists first
-rho_param_file <- file.path(PATHS$MODEL_INPUT, "param_rho_suspected_cases.csv")
-if (file.exists(rho_param_file)) {
-     param_rho <- read.csv(rho_param_file)
+     chi_endemic_shape1 <- param_chi$parameter_value[
+          grepl("chi_endemic.*Low estimate", param_chi$variable_description) &
+               param_chi$parameter_name == "shape1"
+     ]
+     chi_endemic_shape2 <- param_chi$parameter_value[
+          grepl("chi_endemic.*Low estimate", param_chi$variable_description) &
+               param_chi$parameter_name == "shape2"
+     ]
+     chi_epidemic_shape1 <- param_chi$parameter_value[
+          grepl("chi_epidemic.*High estimate", param_chi$variable_description) &
+               param_chi$parameter_name == "shape1"
+     ]
+     chi_epidemic_shape2 <- param_chi$parameter_value[
+          grepl("chi_epidemic.*High estimate", param_chi$variable_description) &
+               param_chi$parameter_name == "shape2"
+     ]
 
-     # Select parameters based on outbreak setting
-     if (outbreak) {
-          # Extract high estimate parameters (during outbreaks)
-          # Mean ~78%, appropriate for active outbreak modeling
-          rho_shape1 <- param_rho$parameter_value[
-               grepl("High estimate", param_rho$variable_description) &
-                    param_rho$parameter_name == "shape1"
-          ]
-          rho_shape2 <- param_rho$parameter_value[
-               grepl("High estimate", param_rho$variable_description) &
-                    param_rho$parameter_name == "shape2"
-          ]
-          rho_description <- "High estimate (during outbreaks)"
-
-          # Default values for high estimate if not found
-          default_shape1 <- 4.79
-          default_shape2 <- 1.53
-     } else {
-          # Extract low estimate parameters (all settings)
-          # Mean ~52%, appropriate for endemic/inter-outbreak periods
-          rho_shape1 <- param_rho$parameter_value[
-               grepl("Low estimate", param_rho$variable_description) &
-                    param_rho$parameter_name == "shape1"
-          ]
-          rho_shape2 <- param_rho$parameter_value[
-               grepl("Low estimate", param_rho$variable_description) &
-                    param_rho$parameter_name == "shape2"
-          ]
-          rho_description <- "Low estimate (all settings)"
-
-          # Default values for low estimate if not found
-          default_shape1 <- 5.43
-          default_shape2 <- 5.01
+     if (length(chi_endemic_shape1) == 0 || length(chi_endemic_shape2) == 0) {
+          warning("Could not extract chi_endemic shape params from file. Using defaults.")
+          chi_endemic_shape1 <- 5.43
+          chi_endemic_shape2 <- 5.01
      }
-
-     if (length(rho_shape1) == 0 || length(rho_shape2) == 0) {
-          warning(paste("Could not find rho parameters for", rho_description, "in file. Using defaults."))
-          rho_shape1 <- default_shape1
-          rho_shape2 <- default_shape2
+     if (length(chi_epidemic_shape1) == 0 || length(chi_epidemic_shape2) == 0) {
+          warning("Could not extract chi_epidemic shape params from file. Using defaults.")
+          chi_epidemic_shape1 <- 4.79
+          chi_epidemic_shape2 <- 1.53
      }
 } else {
-     warning("Rho parameter file not found. Using default values.")
-     if (outbreak) {
-          rho_shape1 <- 4.79  # High estimate defaults
-          rho_shape2 <- 1.53
-          rho_description <- "High estimate (during outbreaks) - DEFAULT"
-     } else {
-          rho_shape1 <- 5.43  # Low estimate defaults
-          rho_shape2 <- 5.01
-          rho_description <- "Low estimate (all settings) - DEFAULT"
-     }
+     warning("Chi PPV parameter file not found. Using default values.")
+     chi_endemic_shape1  <- 5.43;  chi_endemic_shape2  <- 5.01
+     chi_epidemic_shape1 <- 4.79;  chi_epidemic_shape2 <- 1.53
 }
 
-# rho - Reporting rate (proportion of suspected cases that are true cholera)
-# Using selected estimate based on outbreak parameter
-priors_default$parameters_global$rho <- list(
-     description = "Reporting rate (proportion of suspected cases that are true cholera)",
+# chi_endemic - PPV among suspected cases during endemic periods (Weins et al. 2023 low estimate)
+# Beta(5.43, 5.01) -> median ~0.52, 95% CI [0.24, 0.80]
+priors_default$parameters_global$chi_endemic <- list(
+     description = "PPV among suspected cases during endemic periods (Weins et al. 2023, all settings)",
      distribution = "beta",
-     parameters = list(shape1 = rho_shape1, shape2 = rho_shape2)
+     parameters = list(shape1 = chi_endemic_shape1, shape2 = chi_endemic_shape2)
+)
+
+# chi_epidemic - PPV among suspected cases during epidemic periods (Weins et al. 2023 high estimate)
+# Beta(4.79, 1.53) -> median ~0.78, 95% CI [0.40, 0.99]
+priors_default$parameters_global$chi_epidemic <- list(
+     description = "PPV among suspected cases during epidemic periods (Weins et al. 2023, during outbreaks)",
+     distribution = "beta",
+     parameters = list(shape1 = chi_epidemic_shape1, shape2 = chi_epidemic_shape2)
+)
+
+# rho - Care-seeking rate (probability a symptomatic infection presents as a suspected case)
+# NOTE: A dedicated data-driven prior for rho is pending (to be updated in a future step).
+# Placeholder uses Beta(3, 7) -> mean ~0.30, reflecting typical care-seeking rates in SSA.
+priors_default$parameters_global$rho <- list(
+     description = "Care-seeking rate: probability a symptomatic infection is reported as suspected (placeholder - to be updated)",
+     distribution = "beta",
+     parameters = list(shape1 = 3.0, shape2 = 7.0)
 )
 
 # sigma - Proportion symptomatic

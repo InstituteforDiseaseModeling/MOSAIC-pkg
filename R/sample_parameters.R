@@ -30,8 +30,10 @@
 #'     \item sample_omega_2: Infection (default TRUE)
 #'     \item sample_phi_1: Incubation (default TRUE)
 #'     \item sample_phi_2: Incubation (default TRUE)
-#'     \item sample_rho: Immunity waning (default TRUE)
-#'     \item sample_sigma: Immunity (default TRUE)
+#'     \item sample_chi_endemic: PPV among suspected cases during endemic periods (default TRUE)
+#'     \item sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)
+#'     \item sample_rho: Care-seeking rate (default TRUE)
+#'     \item sample_sigma: Symptomatic fraction (default TRUE)
 #'     \item sample_zeta_1: Spatial (default TRUE)
 #'     \item sample_zeta_2: Spatial (default TRUE)
 #'     \item sample_beta_j0_tot: Total transmission rate (default TRUE)
@@ -131,6 +133,8 @@ sample_parameters <- function(
     sample_omega_2 = TRUE,
     sample_phi_1 = TRUE,
     sample_phi_2 = TRUE,
+    sample_chi_endemic = TRUE,
+    sample_chi_epidemic = TRUE,
     sample_rho = TRUE,
     sample_sigma = TRUE,
     sample_zeta_1 = TRUE,
@@ -842,10 +846,10 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   schema <- list(
     global = list(
       params = c("phi_1", "phi_2", "omega_1", "omega_2", "iota",
-                "gamma_1", "gamma_2", "epsilon", "rho", "sigma",
-                "mobility_omega", "mobility_gamma", "zeta_1", "zeta_2",
-                "kappa", "alpha_1", "alpha_2", "decay_days_long",
-                "decay_days_short", "decay_shape_1", "decay_shape_2"),
+                "gamma_1", "gamma_2", "epsilon", "chi_endemic", "chi_epidemic",
+                "rho", "sigma", "mobility_omega", "mobility_gamma",
+                "zeta_1", "zeta_2", "kappa", "alpha_1", "alpha_2",
+                "decay_days_long", "decay_days_short", "decay_shape_1", "decay_shape_2"),
       type = "scalar"
     ),
     location = list(
@@ -1267,7 +1271,8 @@ create_sampling_args <- function(pattern = "all",
     disease_params <- c("sample_phi_1", "sample_phi_2",
                        "sample_omega_1", "sample_omega_2",
                        "sample_gamma_1", "sample_gamma_2",
-                       "sample_epsilon", "sample_rho",
+                       "sample_epsilon", "sample_chi_endemic",
+                       "sample_chi_epidemic", "sample_rho",
                        "sample_sigma", "sample_iota")
     param_names <- names(all_params)
     all_params <- lapply(param_names, function(n) {
