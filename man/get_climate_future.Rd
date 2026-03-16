@@ -74,7 +74,10 @@ A data frame with columns:
 This function retrieves daily future climate data for multiple specified locations and climate variables over a specified date range using a specified climate model.
 }
 \details{
-The function retrieves daily future climate data for multiple specified locations using the Open-Meteo Climate API. It downloads the specified climate variables for each latitude and longitude provided, using a single climate model. The data is retrieved for the date range specified by \code{date_start} and \code{date_stop}. A progress bar is displayed to indicate the download progress.
+The function retrieves daily future climate data for multiple specified locations using the Open-Meteo
+Climate API. Locations are batched into groups of up to 1,000 per request, and all climate variables
+are fetched in a single API call per batch. Failed requests are retried with exponential backoff
+(up to 5 attempts). The API requires a paid key (customer-climate-api.open-meteo.com).
 }
 \examples{
 \dontrun{
