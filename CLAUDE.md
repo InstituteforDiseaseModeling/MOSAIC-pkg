@@ -13,7 +13,7 @@ This file provides comprehensive guidance for Claude Code when working with the 
 - [Package Overview](#package-overview)
 - [Architecture](#architecture)
 - [The run_MOSAIC Workflow](#the-run_mosaic-workflow-centerpiece-of-the-package) ⭐ CENTERPIECE
-- [Function Organization](#function-organization-219-files)
+- [Function Organization](#function-organization-223-files)
 - [Parameter System](#parameter-system-architecture)
 
 **Development:**
@@ -31,7 +31,7 @@ This file provides comprehensive guidance for Claude Code when working with the 
 **Troubleshooting & Reference:**
 - [When Things Go Wrong](#-when-things-go-wrong)
 - [Key Files Reference](#key-files-reference)
-- [Design Decisions](#-why-we-do-this-design-decisions)
+- [Key Design Principles](#key-design-principles)
 - [System Requirements](#system-requirements)
 
 ---
@@ -62,7 +62,7 @@ Rscript -e "pkgdown::build_site()"        # If docs changed
 
 **Commit workflow (ALWAYS):**
 ```bash
-# 1. Bump version in DESCRIPTION (patch: 0.8.7→0.8.8, minor: 0.8.7→0.9.0, major: 0.8.7→1.0.0)
+# 1. Bump version in DESCRIPTION (patch: 0.13.25→0.13.26, minor: 0.13.25→0.14.0, major: 0.13.25→1.0.0)
 # 2. Stage relevant files: git add DESCRIPTION R/my_file.R tests/...
 # 3. Commit with version: git commit -m "Fix bug (v0.8.8)"
 # 4. Push: git push origin main
@@ -119,7 +119,7 @@ git log --grep="NPE"                             # Search commits
 ```bash
 # What version are we at?
 grep "^Version:" DESCRIPTION
-# Output example: Version: 0.8.7
+# Output example: Version: 0.13.25
 
 # What happened recently?
 git log --oneline -10
@@ -141,8 +141,8 @@ Rscript -e "devtools::test()"
 ### Step 2: Understand the Task
 
 **Ask yourself:**
-- [ ] Does this functionality already exist? (219 functions - check first!)
-- [ ] Is this a bug fix (patch 0.8.7→0.8.8) or new feature (minor 0.8.7→0.9.0)?
+- [ ] Does this functionality already exist? (223 functions - check first!)
+- [ ] Is this a bug fix (patch 0.13.25→0.13.26) or new feature (minor 0.13.25→0.14.0)?
 - [ ] Which files will I modify?
 - [ ] How does this fit into the run_MOSAIC workflow?
 - [ ] Are there tests I can look at for similar functionality?
@@ -239,9 +239,9 @@ Rscript -e "devtools::test()"
 # 6. Update docs if needed
 Rscript -e "devtools::document()"
 
-# 7. Bump version (0.8.7 → 0.8.8), commit, push
+# 7. Bump version (e.g. 0.13.25 → 0.13.26), commit, push
 git add DESCRIPTION R/my_function.R tests/testthat/test-my_bugfix.R
-git commit -m "Fix NA handling in my_function (v0.8.8)
+git commit -m "Fix NA handling in my_function (v0.13.26)
 
 - Handle NA values explicitly instead of crashing
 - Add validation and clear error messages
@@ -281,7 +281,7 @@ Rscript /tmp/test_likelihood_performance.R
 
 ## Package Overview
 
-**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) v0.8.7 is a production-quality R package for simulating cholera transmission dynamics across Sub-Saharan Africa. It integrates with the Python laser-cholera simulation engine (https://laser-cholera.readthedocs.io) and provides 219 functions for data processing, parameter estimation, Bayesian calibration, and visualization.
+**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) v0.13.25 is a production-quality R package for simulating cholera transmission dynamics across Sub-Saharan Africa. It integrates with the Python laser-cholera simulation engine (https://laser-cholera.readthedocs.io) and provides 223 functions for data processing, parameter estimation, Bayesian calibration, and visualization.
 
 **Key Capabilities:**
 - Cholera transmission simulation using metapopulation SEIR models
@@ -324,8 +324,8 @@ When creating files in `./claude/`:
 ```
 MOSAIC/                          # Root (set via set_root_directory())
 ├── MOSAIC-pkg/                  # THIS PACKAGE (EDITABLE)
-│   ├── R/                       # 219 function files
-│   ├── tests/testthat/          # 38 test files
+│   ├── R/                       # 223 function files
+│   ├── tests/testthat/          # 40 test files
 │   ├── inst/
 │   │   ├── extdata/             # Default parameters (JSON, 3.9 MB)
 │   │   └── py/                  # Python environment.yml
@@ -333,7 +333,12 @@ MOSAIC/                          # Root (set via set_root_directory())
 │   ├── model/
 │   │   ├── input/               # LASER model inputs
 │   │   ├── output/              # LASER model outputs
+│   │   ├── scenarios/           # Scenario-specific configs and outputs
 │   │   └── LAUNCH.R             # Main workflow pipeline
+│   ├── vm/                      # VM/cluster launch scripts
+│   │   ├── launch_mosaic.R      # Multi-country workflow launcher
+│   │   ├── launch_mosaic_individual.R  # Per-country launcher
+│   │   └── setup_mosaic*.sh     # Environment setup scripts
 │   ├── claude/                  # USE THIS for temporary files
 │   ├── man/                     # Auto-generated documentation
 │   └── DESCRIPTION              # Package metadata
@@ -359,12 +364,13 @@ These directories are excluded from package builds:
 
 ### Overview
 
-The `run_MOSAIC()` / `run_mosaic_iso()` workflow is **the centerpiece of the MOSAIC package**. It orchestrates the complete Bayesian calibration pipeline from prior sampling through posterior estimation. This is a production-quality implementation spanning 4,243 lines across 3 files.
+The `run_MOSAIC()` / `run_mosaic_iso()` workflow is **the centerpiece of the MOSAIC package**. It orchestrates the complete Bayesian calibration pipeline from prior sampling through posterior estimation.
 
 **Files:**
-- `R/run_MOSAIC.R` (2,856 lines) - Main workflow and public API
+- `R/run_MOSAIC.R` (2,028 lines) - Main workflow and public API (NPE stage refactored out to run_NPE.R in v0.13.0)
 - `R/run_MOSAIC_helpers.R` (1,037 lines) - Internal helpers and validation
 - `R/run_MOSAIC_infrastructure.R` (350 lines) - Directory setup and I/O
+- `R/run_NPE.R` (1000+ lines) - Standalone NPE workflow (see NPE section)
 
 ### Two User Interfaces
 
@@ -460,6 +466,9 @@ Results are written to `dir_output/1_bfrs/` with parameter files, simulation out
 - Trains normalizing flow model on BFRS results
 - Provides fast posterior sampling without additional simulations
 - Uses PyTorch/Zuko for neural density estimation
+- **Standalone mode:** `run_NPE()` can be called post-hoc on any BFRS output directory without re-running calibration — useful for experimenting with different weight strategies (`continuous_best`, `continuous_retained`, etc.)
+- **NA handling (v0.13.5):** Interior NAs in observed data are linearly interpolated; boundary NAs set to 0 (prevents artificial "no cases" observations from misleading the model)
+- **Input validation (v0.13.4):** `train_npe()` validates X, y, weights before tensor conversion — catches NaN/Inf data corruption early
 
 **Outputs:**
 Results are written to `dir_output/2_npe/` with trained model, posterior samples, and diagnostics.
@@ -631,7 +640,7 @@ MOSAIC:::.mosaic_set_blas_threads(1L)
 - Scale accordingly: 16 cores ≈ 32 GB RAM
 - NPE training: Additional 4-8 GB for PyTorch
 
-## Function Organization (219 Files)
+## Function Organization (223 Files)
 
 ### Naming Conventions
 
@@ -655,9 +664,10 @@ Functions follow strict prefixes indicating their purpose:
 - `get_default_LASER_config.R` - Retrieve default configurations
 
 **Run MOSAIC Workflow (CENTERPIECE):**
-- `run_MOSAIC.R` - Main calibration workflow (2,856 lines)
+- `run_MOSAIC.R` - Main calibration workflow (2,028 lines)
 - `run_MOSAIC_helpers.R` - Internal helpers (1,037 lines)
 - `run_MOSAIC_infrastructure.R` - Directory setup (350 lines)
+- `run_NPE.R` - Standalone NPE workflow (1000+ lines); dual-mode: embedded (called by run_MOSAIC) OR standalone post-hoc on any BFRS output
 
 **Neural Posterior Estimation (NPE):**
 - `npe.R` - Main NPE workflow (train_npe, sample_posterior, etc.)
@@ -696,8 +706,11 @@ Functions follow strict prefixes indicating their purpose:
 - `set_root_directory.R` - Set MOSAIC root directory
 - ISO code conversions: 8 files for geographic coding
 
+**Climate & ENSO Utilities:**
+- `adjust_ENSO_baseline.R` - Harmonizes climate baselines for ENSO data (v0.13.22+); includes time series visualization
+
 **Python Environment:**
-- `install_dependencies.R` - Set up conda environment from `inst/py/environment.yml`
+- `install_dependencies.R` - Set up virtualenv from `inst/py/environment.yml`
 - `check_dependencies.R` - Comprehensive diagnostics with capability checks
 - `remove_MOSAIC_python_env.R` - Cleanup for troubleshooting
 - `check_python_env.R`, `lock_python_env.R`, `get_python_paths.R`
@@ -768,14 +781,16 @@ Sys.setenv(
   OMP_NUM_THREADS = "1",
   MKL_NUM_THREADS = "1",
   OPENBLAS_NUM_THREADS = "1",
-  NUMEXPR_NUM_THREADS = "1"
+  NUMEXPR_NUM_THREADS = "1",
+  TBB_NUM_THREADS = "1",       # Intel TBB (used by some PyTorch backends)
+  NUMBA_NUM_THREADS = "1"      # Numba JIT (used by laser-cholera)
 )
 
 # Then import
 torch <- reticulate::import("torch")
 ```
 
-**Why:** PyTorch initializes BLAS/MKL on import. If R has already set BLAS threads differently, this causes deadlocks on clusters.
+**Why:** PyTorch initializes BLAS/MKL on import. Numba (used by laser-cholera) and Intel TBB also spawn threads. Without all six env vars, parallel workers can trigger "Attempted to fork from a non-main thread" deadlocks on clusters.
 
 ### LASER Model Integration
 
@@ -971,7 +986,7 @@ Rscript -e "covr::package_coverage()"
 Rscript -e "testthat::test_file('tests/testthat/test-calc_spatial_correlation.R')"
 ```
 
-### Test Structure (38 files)
+### Test Structure (40 files)
 
 **Organized by component:**
 - Likelihood: `test-calc_log_likelihood_negbin.R`, `test-calc_log_likelihood_poisson.R`
@@ -1109,194 +1124,16 @@ Rscript -e "devtools::document()"
 Rscript -e "pkgdown::build_site()"
 ```
 
-## Common Development Tasks
-
-### 1. Package Development
-
-```bash
-# Document functions
-Rscript -e "devtools::document()"
-
-# Run all tests
-Rscript -e "devtools::test()"
-
-# Check package
-R CMD check .
-
-# Build package
-R CMD build .
-
-# Install from source
-Rscript -e "devtools::install()"
-
-# Load for interactive development
-Rscript -e "devtools::load_all()"
-```
-
-### 2. Python Environment Management
-
-```bash
-# Check dependencies
-Rscript -e "MOSAIC::check_dependencies()"
-
-# Install/update Python environment
-Rscript -e "MOSAIC::install_dependencies()"
-
-# Force reinstall
-Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
-
-# Remove environment (troubleshooting)
-Rscript -e "MOSAIC::remove_MOSAIC_python_env()"
-```
-
-### 3. Running Main Workflow
-
-```bash
-cd model/
-Rscript LAUNCH.R
-```
-
-### 4. Parallel Execution (Azure-style)
-
-```bash
-# Run parallel simulations
-Rscript azure/azure_run_laser.R [n_sim] [n_iter] [n_cores]
-```
-
-## 🎯 Why We Do This: Design Decisions
-
-Understanding the **why** behind key architectural choices helps you work with (not against) the system.
-
-### Why bump version on EVERY commit?
-
-**Problem:** Without version tracking, debugging reported bugs is impossible - can't identify when bugs were introduced or which commit fixed them.
-
-**Solution:** Semantic versioning in DESCRIPTION + commit messages
-
-**Example:** User reports "calc_model_likelihood crashes" → Check their version (0.8.7) → Search git log for that version → Find exact commit with fix → Determine if they need to upgrade.
-
-**Benefits:** Traceable history, easy rollback, clear deployment state, professional version management
-
-**Scheme:** Patch (0.8.7→0.8.8): bug fixes; Minor (0.8.7→0.9.0): new features; Major (0.8.7→1.0.0): breaking changes
-
----
-
-### Why NPE uses outputs/ subdirectory?
-
-**Problem:** 40K BFRS simulations create individual files, but only 1-5% have non-zero NPE weights. Loading all files then filtering wastes time.
-
-**Old approach:** Combine all 40K files → 194 MB parquet → filter to 2-5 MB used (30-120 seconds)
-
-**New approach:** Store in `outputs/` subdirectory → load only weighted file IDs directly (0.1-0.5 seconds)
-
-**Speedup:** 100-1200× faster (2-3 orders of magnitude)
-
-**Why it matters:** NPE training is iterative - saving 120s × 10 attempts = 20 minutes. At 100K simulations, old approach unusable.
-
-**Implementation:** Files written in `.mosaic_run_simulation_worker()`, loaded in `.prepare_npe_data()`, cleaned after NPE completes.
-
-**Key rules:**
-- ❌ Don't combine files into single `outputs.parquet`
-- ✅ Load only weighted files directly
-- ✅ Clean up `outputs/` after NPE completes
-
----
-
-### Why BLAS threads must = 1 in parallel execution?
-
-**Problem:** BLAS libraries multithread by default. With parallel workers, this causes severe oversubscription (16 workers × 8 BLAS threads = 128 threads on 16 cores), leading to context switching, cache thrashing, and potential deadlocks.
-
-**Solution:** Set BLAS threads = 1 in each worker
-```r
-MOSAIC:::.mosaic_set_blas_threads(1L)
-Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1")
-```
-
-**Result:** 16 workers × 1 BLAS thread = 16 threads = optimal CPU usage, linear speedup, no deadlocks
-
-**Implementation:** Set in cluster initialization (`R/run_MOSAIC.R`) and NPE training (`R/npe.R`)
-
-**Critical:** REQUIRED for stable parallel execution. Without it, jobs may hang indefinitely.
-
----
-
-### Why get_paths() for ALL file operations?
-
-**Problem:** Hardcoded paths break across different systems, directory structures, and testing environments.
-
-**Solution:** Centralized path management via `get_paths()`
-```r
-# BAD: file.path("~/MOSAIC/MOSAIC-data/processed/climate/ETH.parquet")
-# GOOD:
-PATHS <- get_paths()
-file.path(PATHS$DATA_CLIMATE, "ETH.parquet")
-```
-
-**How:** User calls `set_root_directory()` once → `get_paths()` builds all paths relative to root → Returns 30+ standard paths
-
-**Benefits:** Portable across systems, single source of truth, self-documenting, consistent, testable
-
-**Usage:** 50+ files use it. See `R/get_paths.R` for definitions.
-
-**Rule:** ALWAYS use `get_paths()`. NEVER hardcode paths.
-
----
-
-### Why no placeholder code ever?
-
-**Problem:** Placeholder code ships to production. Developer commits `return(NULL) # TODO` → gets distracted → weeks pass → someone calls function → production breaks.
-
-**Solution:** Production-ready code from commit #1. Complete implementation before committing.
-
-**Benefits:** Every commit shippable, no technical debt, clear git history, forces proper planning, no surprises
-
-**Rule:** Can't implement fully now? DON'T commit. Ask for help or break into smaller pieces.
-
----
-
-### Why concise documentation?
-
-**Problem:** Verbose roxygen2 docs cause R CMD check warnings, are hard to scan, and take forever to maintain.
-
-**Bad:** Multi-line `@param` with nested `\itemize{}` lists and complex LaTeX → warnings, users give up
-
-**Good:** One-line `@param` descriptions → clear, scannable, builds cleanly
-
-**Guidelines:** Title (1 line), Description (1-2 sentences), `@param` (1 line each), `@return` (1 line), Examples (simple, in `\dontrun{}`). Avoid nested lists, complex equations, verbose text.
-
-**Detailed explanations go in:** Vignettes, CLAUDE.md, code comments - NOT roxygen2
-
----
-
-### Why "design for scale, test small"?
-
-**Problem:** MOSAIC runs at production scale (40K simulations, 16-32 workers, 100-200 GB memory). Testing at full scale takes hours - development would be impossibly slow.
-
-**Solution:** Test with 10-100 simulations (seconds) but write code thinking about 40K:
-- Will loops handle 40K efficiently?
-- Pre-allocate or grow objects? (growing is O(n²))
-- Vectorized or slow element-wise?
-- Memory usage scale linearly?
-
-**Bad:** `results <- list(); for(i in 1:n) results[[i]] <- ...` # Growing list O(n²)
-
-**Good:** `results <- vector("list", n); for(i in 1:n) results[[i]] <- ...` # Pre-allocated
-
-**Benefits:** Fast development, scalable code, catch issues early, efficient iteration
-
-**Rule:** Test with 100 examples. Think about 40K examples.
-
----
-
-### Why always push to remote after completing work?
-
-**Problem:** Local-only commits are fragile: Computer crashes/disk fails → work lost; Need different computer → work stuck; Collaborator needs fix → can't access; CI/CD doesn't run → bugs not caught
-
-**Solution:** Push every completed unit of work: `git push origin main`
-
-**Benefits:** Backup (safe on remote), collaboration (others access), CI/CD (auto tests), transparency (user sees progress), portability (continue elsewhere)
-
-**Rule:** Version bump means "this is complete" - push immediately.
+## Key Design Principles
+
+- **Version every commit:** Enables exact bug reproduction. `git log --grep="v0.13.25"` finds the change instantly.
+- **NPE uses `outputs/` subdirectory:** Load only weighted files (1-5%) directly — 100-1200× faster than combining all 40K files first.
+- **Thread safety (6 env vars):** BLAS, OpenMP, Intel TBB, and Numba all need `= "1"` per worker or parallel execution deadlocks.
+- **`get_paths()` everywhere:** Hardcoded paths break across machines. User calls `set_root_directory()` once; `get_paths()` handles the rest.
+- **No placeholder code:** Every commit is production-ready. Can't implement fully? Don't commit — ask for help.
+- **Concise roxygen2:** One-line `@param`. Detailed explanations go in vignettes/CLAUDE.md. Verbose docs cause R CMD check warnings.
+- **Design for scale, test small:** Test with 10-100 sims (seconds), write code that handles 40K. Pre-allocate, vectorize, avoid growing objects.
+- **Push after every completed unit:** Version bump = "this is done" = push immediately.
 
 ---
 
@@ -1397,12 +1234,11 @@ Rscript -e "library(MOSAIC); MOSAIC::check_dependencies()"
 
 **If problem persists:**
 ```bash
-# Check conda availability
-which conda
-conda --version
+# Check virtualenv
+ls -la ~/.virtualenvs/r-mosaic/bin/python
 
 # Check Python version
-python --version  # Should be 3.9+
+~/.virtualenvs/r-mosaic/bin/python --version  # Should be 3.9+
 
 # Manually check laser-cholera
 ~/.virtualenvs/r-mosaic/bin/python -c "import laser_cholera; print('OK')"
@@ -1422,9 +1258,8 @@ python --version  # Should be 3.9+
 MOSAIC:::.mosaic_set_blas_threads(1L)
 
 Sys.setenv(
-  OMP_NUM_THREADS = "1",
-  MKL_NUM_THREADS = "1",
-  OPENBLAS_NUM_THREADS = "1"
+  OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1",
+  NUMEXPR_NUM_THREADS = "1", TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1"
 )
 
 # NOW safe to import:
@@ -1477,7 +1312,7 @@ When something breaks, run through this checklist:
 
 ### Critical Core Files
 
-1. **`R/run_MOSAIC.R`** (2,856 lines) **[CENTERPIECE]**
+1. **`R/run_MOSAIC.R`** (2,028 lines) **[CENTERPIECE]**
    - Complete Bayesian calibration workflow
    - Three-phase adaptive calibration
    - Parallel execution infrastructure
@@ -1517,8 +1352,14 @@ When something breaks, run through this checklist:
    - **Critical for understanding calibration**
 
 8. **`R/npe.R`** (1500+ lines)
-   - Main NPE workflow
+   - Core NPE functions (train_npe, sample_posterior, etc.)
    - PyTorch integration
+   - **Reference for NPE internals**
+
+8b. **`R/run_NPE.R`** (1000+ lines)
+   - Standalone NPE workflow callable post-hoc
+   - Dual-mode: embedded (called by run_MOSAIC) OR standalone on existing BFRS output
+   - Experiment with weight strategies without re-running calibration
    - **Reference for advanced calibration**
 
 9. **`R/get_paths.R`** (81 lines)
@@ -1542,33 +1383,6 @@ When something breaks, run through this checklist:
 - `NEWS.md` - Version history and changes
 - `man/` - Auto-generated function documentation
 
-## Key Design Decisions
-
-### 1. Universal Export Pattern
-```r
-# NAMESPACE
-exportPattern("^[[:alpha:]]+")
-```
-All functions starting with letters are exported. This simplifies development but means internal functions need special naming (e.g., `.mosaic_set_blas_threads`).
-
-### 2. Centralized Path Management
-All file operations go through `get_paths()` to maintain consistency across the multi-repo structure.
-
-### 3. Python Environment Isolation
-Fixed path `~/.virtualenvs/r-mosaic` ensures consistency across sessions and prevents conflicts.
-
-### 4. Guardrails in Likelihood
-Inline guardrails in `calc_model_likelihood()` prevent numerical instabilities without requiring external validation.
-
-### 5. Performance-Critical NPE Design
-Individual parquet files in `outputs/` subdirectory allow selective loading based on weights, achieving 100-1200× speedup.
-
-### 6. Backward Compatibility
-Functions like `sample_parameters()` support both old (individual args) and new (sample_args list) interfaces.
-
-### 7. Adaptive Calibration
-Auto mode (`n_simulations = NULL`) dynamically adjusts batch sizes based on convergence metrics, stopping when targets met.
-
 ## System Requirements
 
 **R:** >= 4.1.1
@@ -1579,7 +1393,7 @@ Auto mode (`n_simulations = NULL`) dynamically adjusts batch sizes based on conv
 - GEOS >= 3.4.0
 - UDUNITS-2
 
-**Python:** >= 3.9 (managed via conda)
+**Python:** >= 3.9 (managed via virtualenv at `~/.virtualenvs/r-mosaic`)
 
 **Critical R Packages:**
 - reticulate (Python interface)
@@ -1597,54 +1411,6 @@ Auto mode (`n_simulations = NULL`) dynamically adjusts batch sizes based on conv
 - **Core:** laser-cholera, laser-core, numpy, h5py, pyarrow
 - **Suitability:** tensorflow, keras
 - **NPE:** torch, sbi, lampe, zuko, scikit-learn
-
-## Version History
-
-### Checking Package History
-
-**View recent changes:**
-```bash
-# Last 10 commits with one-line summaries
-git log --oneline -10
-
-# Detailed log with diffs
-git log -5 --stat
-
-# Changes since a specific version
-git log v0.8.6..HEAD --oneline
-
-# View specific file history
-git log --follow -- R/run_MOSAIC.R
-
-# Search commits by message
-git log --grep="NPE" --oneline
-```
-
-**View version in DESCRIPTION:**
-```bash
-# Current version
-grep "^Version:" DESCRIPTION
-
-# Version history
-git log --oneline --all --decorate --graph DESCRIPTION
-```
-
-**View NEWS.md:**
-```bash
-cat NEWS.md | head -50
-```
-
-**Check what changed between versions:**
-```bash
-# Compare two versions
-git diff v0.8.6 v0.8.7
-
-# List files changed
-git diff --name-only v0.8.6 v0.8.7
-
-# Show changes to specific file
-git diff v0.8.6 v0.8.7 -- R/npe.R
-```
 
 ## Additional Resources
 
@@ -1684,7 +1450,7 @@ Claude Code working on MOSAIC must act as a **production systems software engine
 
 **CRITICAL: Always bump version when committing.** Edit DESCRIPTION file, commit with version in message. See [Why bump version](#why-bump-version-on-every-commit) for detailed rationale.
 
-**Scheme:** Patch (0.8.7→0.8.8): bugs/docs; Minor (0.8.7→0.9.0): features; Major (0.8.7→1.0.0): breaking changes
+**Scheme:** Patch (0.13.25→0.13.26): bugs/docs; Minor (0.13.25→0.14.0): features; Major (0.13.25→1.0.0): breaking changes
 
 #### 3. Testing Requirements
 
@@ -1845,58 +1611,3 @@ sapply(seq_along(x), function(i) x[i] + y[i])  # Bad
 **Commit:** Stage relevant files, clear message with version, push
 **After:** Verify push, check CI/CD, update issues
 
-### Communication Protocol
-
-**When starting a task:**
-1. Explain what you're going to do
-2. List files you'll modify
-3. Describe testing approach
-4. Ask for clarification if requirements unclear
-
-**During work:**
-1. Show test results as you go
-2. Report any unexpected issues
-3. Ask before implementing "improvements"
-4. Explain non-obvious decisions
-
-**When complete:**
-1. Summarize what changed
-2. Report test results
-3. Show git commit and push output
-4. Note any limitations or follow-up needed
-
-### Quick Reference
-
-**Essential commands:**
-```bash
-# Test
-Rscript -e "devtools::test()"
-
-# Document
-Rscript -e "devtools::document()"
-
-# Check
-R CMD check .
-
-# Version
-grep "^Version:" DESCRIPTION
-
-# Git workflow
-git status
-git diff
-git add <files>
-git commit -m "message (vX.Y.Z)"
-git push origin main
-```
-
-**Files to check:**
-- [ ] Use `./claude/` for temporary files
-- [ ] Never create files in package root without necessity
-- [ ] Respect read-only repos (laser-cholera, ees-cholera-mapping, jhu_cholera_data)
-- [ ] Never modify MOSAIC-data/raw/
-
-**Key functions to understand:**
-- `run_MOSAIC()` - Centerpiece calibration workflow
-- `calc_model_likelihood()` - Core likelihood calculation
-- `sample_parameters()` - Parameter sampling with 301 parameters
-- `get_paths()` - MUST use for all file operations
