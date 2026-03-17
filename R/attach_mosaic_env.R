@@ -102,7 +102,7 @@ attach_mosaic_env <- function(silent = FALSE) {
      } else {
           # Python not initialized - initialize it now
           tryCatch({
-               reticulate::use_virtualenv(paths$env, required = TRUE)
+               reticulate::use_condaenv(paths$env, required = TRUE)
 
                # Verify it worked
                config <- reticulate::py_config()
