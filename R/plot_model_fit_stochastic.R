@@ -183,7 +183,7 @@ plot_model_fit_stochastic <- function(config,
 
             # Extract results before cleanup
             result <- list(
-                expected_cases = model$results$reported_cases,
+                reported_cases = model$results$reported_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE,
                 seed = seed_i
@@ -345,11 +345,11 @@ plot_model_fit_stochastic <- function(config,
         result <- successful_results[[i]]
 
         # Handle both matrix and vector formats
-        if (is.matrix(result$expected_cases)) {
-            cases_array[,,i] <- result$expected_cases
+        if (is.matrix(result$reported_cases)) {
+            cases_array[,,i] <- result$reported_cases
             deaths_array[,,i] <- result$disease_deaths
         } else {
-            cases_array[1,,i] <- result$expected_cases
+            cases_array[1,,i] <- result$reported_cases
             deaths_array[1,,i] <- result$disease_deaths
         }
     }
@@ -455,7 +455,7 @@ plot_model_fit_stochastic <- function(config,
         loc_data <- data.frame(
             location = location_names[i],
             date = rep(dates, 2),
-            metric = c(rep("Cases", n_time_points), rep("Deaths", n_time_points)),
+            metric = c(rep("Suspected Cases", n_time_points), rep("Deaths", n_time_points)),
             observed = c(obs_cases_i, obs_deaths_i),
             predicted_mean = c(cases_mean_i, deaths_mean_i),
             predicted_lower = c(cases_lower_i, deaths_lower_i),
@@ -466,7 +466,7 @@ plot_model_fit_stochastic <- function(config,
     }
 
     # Convert metric to factor
-    plot_data$metric <- factor(plot_data$metric, levels = c("Cases", "Deaths"))
+    plot_data$metric <- factor(plot_data$metric, levels = c("Suspected Cases", "Deaths"))
 
     # ============================================================================
     # Save predictions to CSV (if requested)
@@ -548,10 +548,10 @@ plot_model_fit_stochastic <- function(config,
             ggplot2::facet_grid(metric ~ .,
                               scales = "free_y",
                               switch = "y") +
-            ggplot2::scale_color_manual(values = c("Cases" = "steelblue",
+            ggplot2::scale_color_manual(values = c("Suspected Cases" = "steelblue",
                                                   "Deaths" = "darkred"),
                                        guide = "none") +
-            ggplot2::scale_fill_manual(values = c("Cases" = "steelblue",
+            ggplot2::scale_fill_manual(values = c("Suspected Cases" = "steelblue",
                                                  "Deaths" = "darkred"),
                                       guide = "none") +
             ggplot2::scale_y_continuous(labels = scales::comma) +
@@ -623,7 +623,7 @@ plot_model_fit_stochastic <- function(config,
 
     if (n_locations > 1) {
         # Filter for cases only
-        cases_data <- plot_data[plot_data$metric == "Cases",]
+        cases_data <- plot_data[plot_data$metric == "Suspected Cases",]
 
         # Calculate overall statistics
         all_obs_cases <- if(is.matrix(obs_cases)) as.vector(obs_cases) else obs_cases
@@ -671,8 +671,8 @@ plot_model_fit_stochastic <- function(config,
             ) +
             ggplot2::labs(
                 x = if(use_date_axis) "Date" else "Time",
-                y = "Cases",
-                title = "Stochastic Model Fit: Cases by Location",
+                y = "Suspected Cases",
+                title = "Stochastic Model Fit: Suspected Cases by Location",
                 subtitle = paste0(
                     "Median prediction with ",
                     round((envelope_quantiles[2] - envelope_quantiles[1]) * 100), "% range | ",
