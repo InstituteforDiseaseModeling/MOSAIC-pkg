@@ -274,6 +274,9 @@ sample_parameters <- function(
     )
   }
 
+  # Rebuild mu_jt from sampled mu_j_baseline/slope/epidemic_factor
+  config_sampled <- update_mu_jt_from_baseline(config_sampled, sampling_flags, verbose)
+
   # Apply psi_star calibration to psi_jt matrix if psi_star parameters were sampled
   config_sampled <- apply_psi_star_calibration(config_sampled, sampling_flags, verbose)
 
@@ -941,6 +944,82 @@ validate_parameter <- function(config, param, type, n_locations) {
   }
 
   return(NULL)  # No issues
+}
+
+#' Rebuild mu_jt from sampled IFR baseline parameters
+#'
+#' After sampling mu_j_baseline, mu_j_slope, and mu_j_epidemic_factor, the
+#' pre-computed mu_jt matrix in the config must be regenerated so that the
+#' sampled values actually affect LASER simulations. Without this step, the
+#' stale default mu_jt is passed to Python and the sampled IFR parameters
+#' have no effect.
+#'
+#' @param config_sampled The sampled config object
+#' @param sampling_flags List of sampling flag settings
+#' @param verbose Logical; print diagnostics
+#'
+#' @return Updated config_sampled with mu_jt rebuilt from sampled baseline
+#' @noRd
+update_mu_jt_from_baseline <- function(config_sampled, sampling_flags, verbose = FALSE) {
+
+  ifr_params <- c("mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor")
+
+  # Skip if none of the IFR params were sampled
+  ifr_flags_exist <- ifr_params %in% names(sampling_flags)
+  if (!any(ifr_flags_exist)) return(config_sampled)
+
+  ifr_enabled <- any(unlist(sampling_flags[ifr_params[ifr_flags_exist]]))
+  if (!ifr_enabled) return(config_sampled)
+
+  # Require mu_j_baseline to rebuild
+  if (!"mu_j_baseline" %in% names(config_sampled) || is.null(config_sampled$mu_j_baseline)) {
+    warning("mu_j_baseline not found in config; cannot rebuild mu_jt")
+    return(config_sampled)
+  }
+
+  mu_j_baseline      <- config_sampled$mu_j_baseline
+  mu_j_slope         <- config_sampled$mu_j_slope
+  mu_j_epidemic_factor <- config_sampled$mu_j_epidemic_factor
+  locations          <- config_sampled$location_name
+  n_locations        <- length(locations)
+
+  if (!is.numeric(mu_j_baseline) || length(mu_j_baseline) != n_locations) {
+    warning("mu_j_baseline has wrong length; cannot rebuild mu_jt")
+    return(config_sampled)
+  }
+
+  # Default slope and epidemic_factor to zero if absent
+  if (is.null(mu_j_slope))         mu_j_slope         <- rep(0, n_locations)
+  if (is.null(mu_j_epidemic_factor)) mu_j_epidemic_factor <- rep(0, n_locations)
+
+  # Compute time axis from config dates
+  n_days <- ncol(config_sampled$mu_jt)
+  if (is.null(n_days)) {
+    tryCatch({
+      n_days <- length(seq.Date(as.Date(config_sampled$date_start),
+                                as.Date(config_sampled$date_stop), by = "day"))
+    }, error = function(e) {
+      warning("Cannot determine simulation length; mu_jt not rebuilt: ", e$message)
+      return(config_sampled)
+    })
+  }
+
+  # Rebuild mu_jt (same formula as make_LASER_config.R lines 647-651)
+  mu_jt_new <- matrix(NA_real_, nrow = n_locations, ncol = n_days)
+  time_factor <- (seq_len(n_days) - 1) / max(1, n_days - 1)
+
+  for (j in seq_len(n_locations)) {
+    mu_jt_new[j, ] <- pmax(0, pmin(1,
+      mu_j_baseline[j] * (1 + mu_j_slope[j] * time_factor)
+    ))
+  }
+
+  config_sampled$mu_jt <- mu_jt_new
+
+  if (verbose) cat("  Rebuilt mu_jt from sampled mu_j_baseline/slope (",
+                   n_locations, "locations x", n_days, "days)\n")
+
+  return(config_sampled)
 }
 
 #' Apply psi_star calibration to psi_jt matrix
