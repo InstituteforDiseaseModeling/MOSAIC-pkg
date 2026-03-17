@@ -1463,7 +1463,7 @@ run_MOSAIC <- function(config,
   log_msg("Saved %s", config_best_file)
 
   lc <- reticulate::import("laser.cholera.metapop.model")
-  best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
+  best_model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
   if (control$paths$plots) {
     log_msg("Generating posterior predictive plots (best model)...")
