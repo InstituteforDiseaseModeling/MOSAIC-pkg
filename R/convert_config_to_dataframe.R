@@ -110,7 +110,15 @@ convert_config_to_dataframe <- function(config) {
           "decay_days_long",
           "decay_shape_1",
           "decay_shape_2",
-          "mu_j",               # Added: Case fatality ratio
+          "mu_j",               # Added: Case fatality ratio (derived)
+          "mu_j_baseline",      # Added: Baseline location-specific IFR
+          "mu_j_slope",         # Added: Temporal IFR trend
+          "mu_j_epidemic_factor", # Added: Epidemic IFR multiplier
+          "epidemic_threshold", # Added: Epidemic activation threshold
+          "chi_endemic",        # Added: PPV during endemic periods
+          "chi_epidemic",       # Added: PPV during epidemic periods
+          "delta_reporting_cases",  # Added: Case reporting delay
+          "delta_reporting_deaths", # Added: Death reporting delay
           "psi_star_a",         # Added: psi_star calibration parameters
           "psi_star_b",
           "psi_star_z",
@@ -147,9 +155,15 @@ convert_config_to_dataframe <- function(config) {
           location_params_base <- c(
                "S_j_initial", "E_j_initial", "I_j_initial",
                "R_j_initial", "V1_j_initial", "V2_j_initial",
-               "beta_j0_env", "beta_j0_hum",
+               "prop_S_initial", "prop_E_initial", "prop_I_initial",
+               "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
+               "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
                "tau_i", "theta_j",
-               "a_1_j", "a_2_j", "b_1_j", "b_2_j"
+               "a_1_j", "a_2_j", "b_1_j", "b_2_j",
+               "a1", "a2", "b1", "b2",
+               "mu_j", "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
+               "epidemic_threshold",
+               "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
           )
           
           # Check if this parameter is location-specific

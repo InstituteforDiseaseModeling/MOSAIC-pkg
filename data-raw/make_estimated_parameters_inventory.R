@@ -71,8 +71,11 @@ global_params <- data.frame(
     "omega_1",
     "omega_2",
     "epsilon",
-    # Surveillance (2 params) - reordered
-    "delta_reporting",
+    # Surveillance (4 params)
+    "chi_endemic",
+    "chi_epidemic",
+    "delta_reporting_cases",
+    "delta_reporting_deaths",
     "rho",
     # Mobility (2 params)
     "mobility_gamma",
@@ -101,8 +104,11 @@ global_params <- data.frame(
     "One-Dose Vaccine Waning Rate",
     "Two-Dose Vaccine Waning Rate",
     "Natural Immunity Waning Rate",
-    # Surveillance - reordered
-    "Reporting Delay",
+    # Surveillance
+    "PPV in Endemic Periods",
+    "PPV in Epidemic Periods",
+    "Case Reporting Delay",
+    "Death Reporting Delay",
     "Reporting Rate",
     # Mobility
     "Mobility Distance Decay",
@@ -132,7 +138,10 @@ global_params <- data.frame(
     "Vaccine waning rate for two-dose vaccination",
     "Natural immunity waning rate",
     # Surveillance
-    "Days of reporting delay in surveillance data",
+    "Positive predictive value of suspected cholera cases in endemic periods",
+    "Positive predictive value of suspected cholera cases in epidemic periods",
+    "Days from infection to case report in surveillance data",
+    "Days from infection to death report in surveillance data",
     "Proportion of suspected cases that are true cholera",
     # Mobility
     "Distance decay parameter for human mobility",
@@ -147,8 +156,8 @@ global_params <- data.frame(
     "per day (rate)", "proportion", "per day (rate)", "per day (rate)",
     # Immunity - reordered
     "proportion", "proportion", "per day (rate)", "per day (rate)", "per day (rate)",
-    # Surveillance - reordered
-    "days", "proportion",
+    # Surveillance
+    "proportion", "proportion", "days", "days", "proportion",
     # Mobility
     "dimensionless", "dimensionless"
   ),
@@ -161,8 +170,8 @@ global_params <- data.frame(
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
     "beta", "beta", "gamma", "gamma", "lognormal",
-    # Surveillance - reordered
-    "lognormal", "beta",
+    # Surveillance
+    "beta", "beta", "lognormal", "lognormal", "beta",
     # Mobility
     "gamma", "gamma"
   ),
@@ -177,11 +186,11 @@ global_params <- data.frame(
     # Immunity - reordered
     "immunity", "immunity", "immunity", "immunity", "immunity",
     # Surveillance
-    "surveillance", "surveillance",
+    "surveillance", "surveillance", "surveillance", "surveillance", "surveillance",
     # Mobility
     "mobility", "mobility"
   ),
-  order = 1:22,
+  order = 1:25,
   order_scale = "01",
   order_category = c(
     # Transmission (01)
@@ -192,22 +201,22 @@ global_params <- data.frame(
     "03", "03", "03", "03",
     # Immunity (04)
     "04", "04", "04", "04", "04",
-    # Surveillance (05)
-    "05", "05",
+    # Surveillance (05): chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho
+    "05", "05", "05", "05", "05",
     # Mobility (06)
     "06", "06"
   ),
   order_parameter = c(
     # Transmission
     "01", "02",
-    # Environmental - reordered (decay_days_short, decay_days_long, decay_shape_1, decay_shape_2, zeta_1, zeta_2, kappa)
+    # Environmental (decay_days_short, decay_days_long, decay_shape_1, decay_shape_2, zeta_1, zeta_2, kappa)
     "01", "02", "03", "04", "05", "06", "07",
-    # Disease - reordered (iota, sigma, gamma_1, gamma_2)
+    # Disease (iota, sigma, gamma_1, gamma_2)
     "01", "02", "03", "04",
-    # Immunity - reordered (phi_1, phi_2, omega_1, omega_2, epsilon)
+    # Immunity (phi_1, phi_2, omega_1, omega_2, epsilon)
     "01", "02", "03", "04", "05",
-    # Surveillance
-    "01", "02",
+    # Surveillance (chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho)
+    "01", "02", "03", "04", "05",
     # Mobility
     "01", "02"
   ),
@@ -344,17 +353,27 @@ spatial_params <- data.frame(
 
 # Disease-specific parameters
 disease_params <- data.frame(
-  parameter_name = c("mu_j"),
-  display_name = c("Infection Fatality Ratio"),
-  description = c("Infection fatality ratio (IFR) - proportion of infections resulting in death"),
-  units = c("proportion"),
-  distribution = c("gamma"),
+  parameter_name = c("mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor", "epidemic_threshold"),
+  display_name = c(
+    "Baseline IFR",
+    "Temporal IFR Trend",
+    "Epidemic IFR Multiplier",
+    "Epidemic Threshold"
+  ),
+  description = c(
+    "Baseline location-specific infection fatality ratio",
+    "Temporal trend in IFR (change per year)",
+    "Multiplier applied to IFR during epidemic periods",
+    "Case incidence threshold for epidemic period classification"
+  ),
+  units = c("proportion", "per year", "dimensionless", "cases/100k/week"),
+  distribution = c("gamma", "normal", "lognormal", "lognormal"),
   scale = "location",
   category = "disease",
-  order = 39L,
+  order = 39:42,
   order_scale = "02",
   order_category = "06",
-  order_parameter = "01",
+  order_parameter = sprintf("%02d", 1:4),
   stringsAsFactors = FALSE
 )
 
@@ -391,30 +410,35 @@ calibration_params <- data.frame(
 # Combine location parameters in the requested order:
 # initial_conditions, transmission, seasonality, environmental, other (mobility, spatial, disease)
 
-# Initial conditions (already ordered correctly)
+# Initial conditions — global_params now has 25 rows, so location params start at 26
+initial_params$order <- 26:31
 # order_category = "01"
 
 # Transmission parameters
-transmission_params$order <- 29:32
+transmission_params$order <- 32:35
 transmission_params$order_category <- "02"
 
 # Seasonality parameters
-seasonality_params$order <- 33:36
+seasonality_params$order <- 36:39
 seasonality_params$order_category <- "03"
 
 # Environmental parameters (psi_star calibration params)
-calibration_params$order <- 37:40
+calibration_params$order <- 40:43
 calibration_params$order_category <- "04"
 
-# Other parameters: mobility, spatial, disease (in alphabetical order by param name)
-# mu_j (disease), tau_i (mobility), theta_j (spatial)
+# Other parameters: disease (mu_j_*), mobility (tau_i), spatial (theta_j)
 other_params <- rbind(
-  disease_params,    # mu_j
+  disease_params,    # mu_j_baseline, mu_j_slope, mu_j_epidemic_factor, epidemic_threshold
   spatial_params     # tau_i, theta_j
 )
-other_params$order <- 41:43
-other_params$order_category <- c("05", "05", "05")  # All in "other" category
-other_params$order_parameter <- c("01", "02", "03") # mu_j, tau_i, theta_j
+n_disease <- nrow(disease_params)
+n_spatial <- nrow(spatial_params)
+other_params$order <- 44:(43 + n_disease + n_spatial)
+other_params$order_category <- c(
+  rep("05", n_disease),  # disease params
+  "05", "05"             # tau_i, theta_j
+)
+other_params$order_parameter <- sprintf("%02d", seq_len(n_disease + n_spatial))
 
 # =============================================================================
 # 5. COMBINE ALL PARAMETER GROUPS
