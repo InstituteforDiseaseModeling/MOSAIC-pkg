@@ -324,116 +324,121 @@ plot_model_fit <- function(model,
     # 1. Individual location plots (one plot per location with cases and deaths as rows)
     # ============================================================================
     
-    for (i in 1:n_locations) {
-        loc_name <- location_names[i]
-        
-        # Filter data for this location
-        loc_data <- plot_data_long %>%
-            dplyr::filter(location == loc_name)
-        
-        # Extract data for this location for statistics
-        obs_cases_i <- extract_location_data(obs_cases, i)
-        obs_deaths_i <- extract_location_data(obs_deaths, i)
-        pred_cases_i <- extract_location_data(pred_cases, i)
-        pred_deaths_i <- extract_location_data(pred_deaths, i)
-        
-        # Calculate correlations (handling NAs)
-        cor_cases <- tryCatch({
-            round(cor(obs_cases_i, pred_cases_i, use = "complete.obs"), 3)
-        }, error = function(e) NA)
-        
-        cor_deaths <- tryCatch({
-            round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs"), 3)
-        }, error = function(e) NA)
-        
-        # Calculate sums
-        sum_obs_cases <- sum(obs_cases_i, na.rm = TRUE)
-        sum_pred_cases <- round(sum(pred_cases_i, na.rm = TRUE))
-        sum_obs_deaths <- sum(obs_deaths_i, na.rm = TRUE)
-        sum_pred_deaths <- round(sum(pred_deaths_i, na.rm = TRUE))
-        
-        # Create individual location plot
-        p_individual <- ggplot2::ggplot(loc_data, 
-                                       ggplot2::aes(x = date, y = count)) +
-            # Observed data as points (black)
-            ggplot2::geom_point(data = dplyr::filter(loc_data, type == "observed"),
-                              color = "black",
-                              size = 1.5,
-                              alpha = 0.6) +
-            # Predicted data as lines
-            ggplot2::geom_line(data = dplyr::filter(loc_data, type == "predicted"),
-                             ggplot2::aes(color = metric),
-                             linewidth = 0.8,
-                             alpha = 0.8) +
-            # Facet by metric (cases and deaths as rows)
-            ggplot2::facet_grid(metric ~ .,
-                              scales = "free_y",
-                              switch = "y") +
-            ggplot2::scale_color_manual(values = c("Cases" = "steelblue", 
-                                                  "Deaths" = "darkred"),
-                                       guide = "none") +
-            ggplot2::scale_y_continuous(labels = scales::comma) +
-            ggplot2::theme_minimal(base_size = 10) +
-            ggplot2::theme(
-                strip.text = ggplot2::element_text(size = 9, face = "bold"),
-                strip.background = ggplot2::element_blank(),
-                panel.grid.minor = ggplot2::element_blank(),
-                panel.grid.major = ggplot2::element_line(linewidth = 0.25, color = "gray85"),
-                axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
-                axis.text.y = ggplot2::element_text(size = 8),
-                axis.title = ggplot2::element_text(size = 10),
-                plot.title = ggplot2::element_text(size = 12, face = "bold", hjust = 0.5),
-                plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5),
-                plot.caption = ggplot2::element_text(size = 8, hjust = 1, face = "italic"),
-                strip.placement = "outside"
-            ) +
-            ggplot2::labs(
-                x = if(use_date_axis) "Date" else "Time",
-                y = NULL,
-                title = paste0("Model Fit: ", loc_name),
-                subtitle = paste0(
-                    "Observed (points) vs Predicted (lines)",
-                    if (!is.null(seed)) paste0(" | Seed: ", seed) else "",
-                    if (!is.na(likelihood)) paste0(" | Log-likelihood: ", round(likelihood, 1)) else ""
-                ),
-                caption = paste0(
-                    "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
-                    ", Pred = ", format(sum_pred_cases, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_cases), "NA", cor_cases),
-                    " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
-                    ", Pred = ", format(sum_pred_deaths, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_deaths), "NA", cor_deaths),
-                    "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+    on.exit(pbapply::pboptions(pbo), add = TRUE)
+
+    plot_list$individual <- stats::setNames(
+        pbapply::pblapply(1:n_locations, function(i) {
+            loc_name <- location_names[i]
+
+            # Filter data for this location
+            loc_data <- plot_data_long %>%
+                dplyr::filter(location == loc_name)
+
+            # Extract data for this location for statistics
+            obs_cases_i <- extract_location_data(obs_cases, i)
+            obs_deaths_i <- extract_location_data(obs_deaths, i)
+            pred_cases_i <- extract_location_data(pred_cases, i)
+            pred_deaths_i <- extract_location_data(pred_deaths, i)
+
+            # Calculate correlations (handling NAs)
+            cor_cases <- tryCatch({
+                round(cor(obs_cases_i, pred_cases_i, use = "complete.obs"), 3)
+            }, error = function(e) NA)
+
+            cor_deaths <- tryCatch({
+                round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs"), 3)
+            }, error = function(e) NA)
+
+            # Calculate sums
+            sum_obs_cases <- sum(obs_cases_i, na.rm = TRUE)
+            sum_pred_cases <- round(sum(pred_cases_i, na.rm = TRUE))
+            sum_obs_deaths <- sum(obs_deaths_i, na.rm = TRUE)
+            sum_pred_deaths <- round(sum(pred_deaths_i, na.rm = TRUE))
+
+            # Create individual location plot
+            p_individual <- ggplot2::ggplot(loc_data,
+                                           ggplot2::aes(x = date, y = count)) +
+                # Observed data as points (black)
+                ggplot2::geom_point(data = dplyr::filter(loc_data, type == "observed"),
+                                  color = "black",
+                                  size = 1.5,
+                                  alpha = 0.6) +
+                # Predicted data as lines
+                ggplot2::geom_line(data = dplyr::filter(loc_data, type == "predicted"),
+                                 ggplot2::aes(color = metric),
+                                 linewidth = 0.8,
+                                 alpha = 0.8) +
+                # Facet by metric (cases and deaths as rows)
+                ggplot2::facet_grid(metric ~ .,
+                                  scales = "free_y",
+                                  switch = "y") +
+                ggplot2::scale_color_manual(values = c("Cases" = "steelblue",
+                                                      "Deaths" = "darkred"),
+                                           guide = "none") +
+                ggplot2::scale_y_continuous(labels = scales::comma) +
+                ggplot2::theme_minimal(base_size = 10) +
+                ggplot2::theme(
+                    strip.text = ggplot2::element_text(size = 9, face = "bold"),
+                    strip.background = ggplot2::element_blank(),
+                    panel.grid.minor = ggplot2::element_blank(),
+                    panel.grid.major = ggplot2::element_line(linewidth = 0.25, color = "gray85"),
+                    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
+                    axis.text.y = ggplot2::element_text(size = 8),
+                    axis.title = ggplot2::element_text(size = 10),
+                    plot.title = ggplot2::element_text(size = 12, face = "bold", hjust = 0.5),
+                    plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5),
+                    plot.caption = ggplot2::element_text(size = 8, hjust = 1, face = "italic"),
+                    strip.placement = "outside"
+                ) +
+                ggplot2::labs(
+                    x = if(use_date_axis) "Date" else "Time",
+                    y = NULL,
+                    title = paste0("Model Fit: ", loc_name),
+                    subtitle = paste0(
+                        "Observed (points) vs Predicted (lines)",
+                        if (!is.null(seed)) paste0(" | Seed: ", seed) else "",
+                        if (!is.na(likelihood)) paste0(" | Log-likelihood: ", round(likelihood, 1)) else ""
+                    ),
+                    caption = paste0(
+                        "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
+                        ", Pred = ", format(sum_pred_cases, big.mark = ","),
+                        ", Cor = ", ifelse(is.na(cor_cases), "NA", cor_cases),
+                        " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
+                        ", Pred = ", format(sum_pred_deaths, big.mark = ","),
+                        ", Cor = ", ifelse(is.na(cor_deaths), "NA", cor_deaths),
+                        "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+                    )
                 )
-            )
-        
-        # Add appropriate x-axis scale
-        if (use_date_axis) {
-            p_individual <- p_individual +
-                ggplot2::scale_x_date(date_breaks = "3 months",
-                                    date_labels = "%b %Y")
-        }
-        
-        # Store plot
-        plot_list$individual[[loc_name]] <- p_individual
-        
-        # Display plot
-        if (verbose) {
-            print(p_individual)
-        }
-        
-        # Save individual location plot
-        output_file <- file.path(output_dir, paste0("model_timeseries_", loc_name, ".pdf"))
-        ggplot2::ggsave(output_file,
-                       plot = p_individual,
-                       width = 10,
-                       height = 6,
-                       dpi = 300)
-        
-        if (verbose) {
-            message("Individual location plot saved as '", output_file, "'")
-        }
-    }
+
+            # Add appropriate x-axis scale
+            if (use_date_axis) {
+                p_individual <- p_individual +
+                    ggplot2::scale_x_date(date_breaks = "3 months",
+                                        date_labels = "%b %Y")
+            }
+
+            # Display plot
+            if (verbose) {
+                print(p_individual)
+            }
+
+            # Save individual location plot
+            output_file <- file.path(output_dir, paste0("model_timeseries_", loc_name, ".pdf"))
+            ggplot2::ggsave(output_file,
+                           plot = p_individual,
+                           width = 10,
+                           height = 6,
+                           dpi = 300)
+
+            if (verbose) {
+                message("Individual location plot saved as '", output_file, "'")
+            }
+
+            return(p_individual)
+        }),
+        location_names
+    )
     
     # ============================================================================
     # 2. Cases faceted plot (all locations, cases only) - skip if only 1 location
