@@ -74,7 +74,7 @@
   # Run iterations
   for (j in 1:n_iterations) {
     # Use iteration-specific seed (see seed scheme documentation above)
-    seed_ij <- (sim_id - 1L) * n_iterations + j
+    seed_ij <- as.integer((sim_id - 1L) * n_iterations + j)
     params <- params_sim
     params$seed <- seed_ij
 

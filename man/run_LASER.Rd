@@ -7,7 +7,7 @@
 \usage{
 run_LASER(
   config,
-  seed = 123L,
+  seed = NULL,
   quiet = FALSE,
   visualize = FALSE,
   pdf = FALSE,
@@ -17,7 +17,7 @@ run_LASER(
 
 run_laser(
   config,
-  seed = 123L,
+  seed = NULL,
   quiet = FALSE,
   visualize = FALSE,
   pdf = FALSE,
@@ -28,7 +28,7 @@ run_laser(
 \arguments{
 \item{config}{Character or list. Either a path to a LASER configuration file (YAML/JSON) or a configuration list object.}
 
-\item{seed}{Integer. Random seed for reproducibility. Defaults to 123L.}
+\item{seed}{Integer or NULL. Random seed for reproducibility. If NULL (default), uses \code{config$seed} when present, otherwise defaults to 123L.}
 
 \item{quiet}{Logical. If TRUE, suppress the progress bar during model execution. Defaults to FALSE.}
 
@@ -60,10 +60,9 @@ result <- run_LASER(
   outdir    = "./laser_output"
 )
 
-# Run with config object:
+# Run with config object (uses config$seed if present, else 123L):
 result <- run_LASER(
   config = config_default,
-  seed   = 123L,
   quiet  = TRUE
 )
 
