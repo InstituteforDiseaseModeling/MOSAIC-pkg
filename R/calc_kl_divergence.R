@@ -180,3 +180,11 @@ calc_kl_divergence <- function(samples1,
 
      return(kl_div)
 }
+
+#' @rdname calc_kl_divergence
+#' @export
+calculate_kl_divergence <- function(samples1, weights1 = NULL, samples2, weights2 = NULL,
+                                    n_points = 1000, eps = 1e-10) {
+     .Deprecated("calc_kl_divergence")
+     calc_kl_divergence(samples1, weights1, samples2, weights2, n_points, eps)
+}
