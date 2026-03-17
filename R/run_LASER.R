@@ -5,7 +5,7 @@
 #' calculations when susceptible and exposed compartments are both zero.
 #'
 #' @param config Character or list. Either a path to a LASER configuration file (YAML/JSON) or a configuration list object.
-#' @param seed Integer. Random seed for reproducibility. Defaults to 123L.
+#' @param seed Integer or NULL. Random seed for reproducibility. If NULL (default), uses \code{config$seed} when present, otherwise defaults to 123L.
 #' @param quiet Logical. If TRUE, suppress the progress bar during model execution. Defaults to FALSE.
 #' @param visualize Logical. If TRUE, generate and display visualizations during the run. Defaults to FALSE.
 #' @param pdf Logical. If TRUE, save visualizations as PDF files. Defaults to FALSE.
@@ -26,10 +26,9 @@
 #'   outdir    = "./laser_output"
 #' )
 #'
-#' # Run with config object:
+#' # Run with config object (uses config$seed if present, else 123L):
 #' result <- run_LASER(
 #'   config = config_default,
-#'   seed   = 123L,
 #'   quiet  = TRUE
 #' )
 #'
@@ -42,13 +41,20 @@
 
 run_LASER <- function(
           config,
-          seed      = 123L,
+          seed      = NULL,
           quiet     = FALSE,
           visualize = FALSE,
           pdf       = FALSE,
           outdir    = tempdir(),
           py_module = NULL
 ) {
+
+     # Resolve seed: explicit arg > config$seed > default 123L
+     if (is.null(seed)) {
+          seed <- if (is.list(config) && !is.null(config$seed)) as.integer(config$seed) else 123L
+     } else {
+          seed <- as.integer(seed)
+     }
 
      # Import LASER Python module if not provided
      if (is.null(py_module)) {
