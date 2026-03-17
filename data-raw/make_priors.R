@@ -1561,6 +1561,9 @@ for (iso in j) {
 }
 
 # mu_j_epidemic_factor - Proportional IFR increase during epidemics
+# Gamma(shape=1, rate=2): mode=0 (no epidemic effect most probable), mean=0.5,
+# 95th pct ~1.5. Encodes weakly informative belief that epidemic-mode CFR increase
+# is modest but uncertain, with exponential decay away from zero.
 priors_default$parameters_location$mu_j_epidemic_factor <- list(
      description = "Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50% increase)",
      location = list()
@@ -1568,10 +1571,10 @@ priors_default$parameters_location$mu_j_epidemic_factor <- list(
 
 for (iso in j) {
      priors_default$parameters_location$mu_j_epidemic_factor$location[[iso]] <- list(
-          distribution = "lognormal",
+          distribution = "gamma",
           parameters = list(
-               meanlog = log(0.5),  # Median: 50% increase
-               sdlog = 0.7          # 95% CI: ~10% to 200% increase
+               shape = 1,  # Exponential: mode=0, most mass near zero
+               rate  = 2   # Mean=0.5, 95th pct ~1.5
           )
      )
 }
