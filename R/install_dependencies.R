@@ -177,7 +177,7 @@ install_dependencies <- function(force = FALSE) {
 
      paths <- MOSAIC::get_python_paths()
      Sys.setenv(RETICULATE_PYTHON = paths$norm)
-     reticulate::use_virtualenv(paths$env, required = TRUE)
+     reticulate::use_condaenv(paths$env, required = TRUE)
      config <- reticulate::py_config()
 
      if (grepl(paths$env, config$python)) {
