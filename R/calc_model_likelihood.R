@@ -141,9 +141,10 @@ calc_model_likelihood <- function(obs_cases,
      if (enable_guardrails) {
 
           # Vectorized per-timestep ratio checks
+          # Skip timesteps where est=0 (model startup delay); the cumulative check handles dead models.
           # Check cases
           ratio_cases <- est_cases / obs_cases
-          valid_cases <- is.finite(ratio_cases) & obs_cases >= min_obs_for_ratio
+          valid_cases <- is.finite(ratio_cases) & obs_cases >= min_obs_for_ratio & est_cases > 0
           bad_cases <- which(valid_cases & (ratio_cases > max_timestep_ratio | ratio_cases < min_timestep_ratio),
                             arr.ind = TRUE)
           if (nrow(bad_cases) > 0) {
@@ -157,7 +158,7 @@ calc_model_likelihood <- function(obs_cases,
 
           # Check deaths
           ratio_deaths <- est_deaths / obs_deaths
-          valid_deaths <- is.finite(ratio_deaths) & obs_deaths >= min_obs_for_ratio
+          valid_deaths <- is.finite(ratio_deaths) & obs_deaths >= min_obs_for_ratio & est_deaths > 0
           bad_deaths <- which(valid_deaths & (ratio_deaths > max_timestep_ratio | ratio_deaths < min_timestep_ratio),
                              arr.ind = TRUE)
           if (nrow(bad_deaths) > 0) {

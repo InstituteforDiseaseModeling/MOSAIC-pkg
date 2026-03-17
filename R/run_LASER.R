@@ -69,6 +69,12 @@ run_LASER <- function(
      warnings$filterwarnings("ignore", message = "invalid value encountered in divide")
      warnings$filterwarnings("ignore", category = reticulate::import("numpy", convert = FALSE)$VisibleDeprecationWarning)
 
+     # Wrap length-1 location-specific array params as R lists so reticulate
+     # passes them as Python lists (not scalars) for single-location runs
+     if (is.list(config)) {
+          config <- MOSAIC:::.mosaic_prepare_config_for_python(config)
+     }
+
      # Execute the model (map R's 'config' parameter to Python's 'paramfile')
      result <- py_module$run_model(
           paramfile = config,

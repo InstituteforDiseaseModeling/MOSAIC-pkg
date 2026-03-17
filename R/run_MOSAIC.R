@@ -4,6 +4,35 @@
 # =============================================================================
 
 # =============================================================================
+# PYTHON COMPATIBILITY HELPER
+# =============================================================================
+
+# Wrap location-specific scalar params as R lists so reticulate passes them as
+# Python lists instead of Python scalars.  Python's dict_to_propertysetex uses
+# np.array() (not as_ndarray()) for these params, so a Python scalar produces a
+# 0-d array (shape ()) rather than the expected 1-d array (shape (npatches,)).
+# This only affects single-location runs where length == 1.
+#
+# @param config A MOSAIC config list
+# @return config with affected length-1 params wrapped as R lists
+# @noRd
+.mosaic_prepare_config_for_python <- function(config) {
+  array_params <- c(
+    "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k",
+    "beta_j0_tot", "p_beta",
+    "prop_S_initial", "prop_E_initial", "prop_I_initial",
+    "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
+    "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor"
+  )
+  for (p in array_params) {
+    if (!is.null(config[[p]]) && length(config[[p]]) == 1 && !is.list(config[[p]])) {
+      config[[p]] <- as.list(config[[p]])
+    }
+  }
+  config
+}
+
+# =============================================================================
 # SIMULATION WORKER FUNCTION
 # =============================================================================
 
@@ -100,9 +129,12 @@
       }
     }
 
+    # Prepare config for Python (wrap length-1 array params as lists)
+    params_py <- .mosaic_prepare_config_for_python(params)
+
     # Run model
     model <- tryCatch({
-      lc$run_model(paramfile = params, quiet = TRUE)
+      lc$run_model(paramfile = params_py, quiet = TRUE)
     }, error = function(e) {
       # Log model run failure (but don't fail entire simulation)
       warning("Simulation ", sim_id, " iteration ", j, " model run failed: ",
@@ -114,7 +146,7 @@
     if (!is.null(model)) {
       likelihood <- tryCatch({
         obs_cases <- params$reported_cases
-        est_cases <- model$results$expected_cases
+        est_cases <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi (comparable to surveillance data)
         obs_deaths <- params$reported_deaths
         est_deaths <- model$results$disease_deaths
 
@@ -158,7 +190,7 @@
       result_matrix[j, 5] <- likelihood
 
       # Store time series outputs
-      est_cases_array <- model$results$expected_cases
+      est_cases_array <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi
       est_deaths_array <- model$results$disease_deaths
 
       if (!is.null(est_cases_array) && !is.null(est_deaths_array)) {

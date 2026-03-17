@@ -109,11 +109,14 @@ get_location_config <- function(iso, config = NULL) {
           "longitude", "latitude",
           "tau_i", "theta_j",
           "beta_j0_hum", "beta_j0_env",
-          "beta_j0_tot", "p_beta",  # Added: handle new transmission parameters
+          "beta_j0_tot", "p_beta",
           "a_1_j", "a_2_j", "b_1_j", "b_2_j",
-          "mu_j", "mu_j_slope",  # Added: handle location-specific CFR parameters
+          "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
+          "epidemic_threshold",
           "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
      )
+
+     location_params <- intersect(location_params, names(out))
 
      for (l in location_params) {
 
