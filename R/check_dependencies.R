@@ -95,7 +95,7 @@ check_dependencies <- function() {
      npe_working <- TRUE
 
      # Define package categories
-     core_packages <- c("laser_cholera", "laser_core", "numpy", "h5py", "pyarrow")
+     core_packages <- c("laser.cholera", "laser.core", "numpy", "h5py", "pyarrow")
      suitability_packages <- c("tensorflow", "keras")
      npe_packages <- c("torch", "sbi", "lampe", "zuko", "sklearn")
 
@@ -117,10 +117,10 @@ check_dependencies <- function() {
           pkg_names <- pkg_names[!grepl("^python=", pkg_names)]
 
           sel <- grep("laser-cholera", pkg_names)
-          if (length(sel) > 0) pkg_names[sel] <- "laser_cholera"
+          if (length(sel) > 0) pkg_names[sel] <- "laser.cholera"
 
           sel <- grep("laser-core", pkg_names)
-          if (length(sel) > 0) pkg_names[sel] <- "laser_core"
+          if (length(sel) > 0) pkg_names[sel] <- "laser.core"
 
           for (pkg_spec in pkg_names) {
 
@@ -133,8 +133,8 @@ check_dependencies <- function() {
                import_map <- c(
                     "pytorch" = "torch",
                     "scikit-learn" = "sklearn",
-                    "laser-cholera" = "laser_cholera",
-                    "laser-core" = "laser_core"
+                    "laser-cholera" = "laser.cholera",
+                    "laser-core" = "laser.core"
                )
 
                if (pkg_import_name %in% names(import_map)) {
@@ -169,7 +169,7 @@ check_dependencies <- function() {
                          cli::cli_alert_success("{pkg_import_name}: {version}")
                     }
 
-                    if (pkg_import_name == "laser_cholera") {
+                    if (pkg_import_name == "laser.cholera") {
                          cli::cli_alert_info("LASER built with:")
                          freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
                          laser_lines <- grep("laser", freeze, value = TRUE)

@@ -97,10 +97,10 @@ calc_npe_diagnostics <- function(
     coverage_level <- coverage_upper - coverage_lower
 
     # Check Python environment
-    if (!reticulate::py_module_available("laser_cholera")) {
-        stop("laser_cholera Python module not found. Use MOSAIC::use_mosaic_env() to activate.")
+    if (!reticulate::py_module_available("laser.cholera")) {
+        stop("laser.cholera Python module not found. Use MOSAIC::use_mosaic_env() to activate.")
     }
-    lc <- reticulate::import("laser_cholera.metapop.model")
+    lc <- reticulate::import("laser.cholera.metapop.model")
 
     # Get location information
     location_names <- config_base$location_name
@@ -176,9 +176,9 @@ calc_npe_diagnostics <- function(
                 cat(sprintf("[Test %d/%d] Starting...\n", sim_idx, n_sbc_sims))
             }
 
-            # Import laser_cholera for parallel workers (sequential uses parent scope)
+            # Import laser.cholera for parallel workers (sequential uses parent scope)
             lc_local <- if (parallel) {
-                reticulate::import("laser_cholera.metapop.model")
+                reticulate::import("laser.cholera.metapop.model")
             } else {
                 lc  # From parent scope
             }
@@ -651,9 +651,9 @@ calc_npe_diagnostics <- function(
 #' Extract NPE-formatted simulated data from LASER model output
 #'
 #' Converts LASER model output to the data frame format expected by NPE posterior estimation.
-#' Handles both R list structure and Python object structure from laser_cholera.
+#' Handles both R list structure and Python object structure from laser.cholera.
 #'
-#' @param laser_result Output from laser_cholera run_model
+#' @param laser_result Output from laser.cholera run_model
 #' @param verbose Logical whether to print messages
 #'
 #' @return Data frame with columns j (location), t (time), cases
@@ -679,7 +679,7 @@ get_npe_simulated_data <- function(laser_result, verbose = FALSE) {
 
     # Check if this is a Python Model object first
     if (inherits(laser_result, "python.builtin.object")) {
-        # Handle Python laser_cholera Model object
+        # Handle Python laser.cholera Model object
         tryCatch({
             # The Model object has a results attribute which is a dict-like object
             if (reticulate::py_has_attr(laser_result, "results")) {

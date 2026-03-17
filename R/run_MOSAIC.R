@@ -66,7 +66,7 @@
   # Parallel mode: lc exists in worker global environment
   # Sequential mode: import here
   if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-    lc <- reticulate::import("laser_cholera.metapop.model")
+    lc <- reticulate::import("laser.cholera.metapop.model")
   } else {
     lc <- get("lc", envir = .GlobalEnv)
   }
@@ -683,7 +683,7 @@ run_MOSAIC <- function(config,
 
       # Import laser-cholera ONCE per worker (not per simulation)
       # This avoids repeated import overhead (~5ms per simulation)
-      lc <- reticulate::import("laser_cholera.metapop.model")
+      lc <- reticulate::import("laser.cholera.metapop.model")
       assign("lc", lc, envir = .GlobalEnv)  # Store in global for worker function
 
       # Suppress NumPy warnings
@@ -1430,7 +1430,7 @@ run_MOSAIC <- function(config,
   jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE)
   log_msg("Saved %s", config_best_file)
 
-  lc <- reticulate::import("laser_cholera.metapop.model")
+  lc <- reticulate::import("laser.cholera.metapop.model")
   best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
 
   if (control$paths$plots) {

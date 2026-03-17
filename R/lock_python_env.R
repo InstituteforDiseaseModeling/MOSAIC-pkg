@@ -10,7 +10,7 @@
 #'   \item Verifies the r-mosaic environment exists
 #'   \item Sets and locks the RETICULATE_PYTHON environment variable
 #'   \item Initializes Python with the r-mosaic environment
-#'   \item Imports laser_cholera to ensure it's available
+#'   \item Imports laser.cholera to ensure it's available
 #'   \item Fails loudly if any step fails
 #' }
 #'
@@ -124,21 +124,21 @@ lock_python_env <- function() {
     }
 
     # Import laser-cholera to ensure it's available and lock in the environment
-    cli::cli_text("Importing laser_cholera to verify installation...")
+    cli::cli_text("Importing laser.cholera to verify installation...")
 
     lc <- tryCatch({
-        reticulate::import("laser_cholera.metapop.model")
+        reticulate::import("laser.cholera.metapop.model")
     }, error = function(e) {
-        cli::cli_alert_danger("Failed to import laser_cholera: {e$message}")
+        cli::cli_alert_danger("Failed to import laser.cholera: {e$message}")
         cli::cli_text("")
         cli::cli_text("The r-mosaic environment may be corrupted or incomplete.")
         cli::cli_text("To fix:")
         cli::cli_text("  1. Check dependencies: {.run MOSAIC::check_dependencies()}")
         cli::cli_text("  2. Reinstall: {.run MOSAIC::install_dependencies()}")
-        stop("Cannot import laser_cholera from r-mosaic environment", call. = FALSE)
+        stop("Cannot import laser.cholera from r-mosaic environment", call. = FALSE)
     })
 
-    cli::cli_alert_success("laser_cholera imported successfully")
+    cli::cli_alert_success("laser.cholera imported successfully")
     cli::cli_text("")
 
     # Final summary
