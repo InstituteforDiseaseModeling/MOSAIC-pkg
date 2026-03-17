@@ -849,12 +849,15 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
                 "gamma_1", "gamma_2", "epsilon", "chi_endemic", "chi_epidemic",
                 "rho", "sigma", "mobility_omega", "mobility_gamma",
                 "zeta_1", "zeta_2", "kappa", "alpha_1", "alpha_2",
-                "decay_days_long", "decay_days_short", "decay_shape_1", "decay_shape_2"),
+                "decay_days_long", "decay_days_short", "decay_shape_1", "decay_shape_2",
+                "delta_reporting_cases", "delta_reporting_deaths"),
       type = "scalar"
     ),
     location = list(
       params = c("beta_j0_env", "beta_j0_hum", "tau_i", "theta_j",
-                "a_1_j", "a_2_j", "b_1_j", "b_2_j"),
+                "a_1_j", "a_2_j", "b_1_j", "b_2_j",
+                "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
+                "epidemic_threshold"),
       type = "vector"
     ),
     bounds = list(

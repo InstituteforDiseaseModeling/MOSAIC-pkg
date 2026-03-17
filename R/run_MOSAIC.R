@@ -1809,8 +1809,12 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_phi_2 = TRUE,             # Vaccine coverage (2 doses)
 
     # Reporting/observation
-    sample_sigma = TRUE,             # Reporting rate
+    sample_sigma = TRUE,             # Proportion symptomatic
     sample_kappa = TRUE,             # Overdispersion parameter
+    sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
+    sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
+    sample_delta_reporting_cases = TRUE,  # Infection-to-case reporting delay
+    sample_delta_reporting_deaths = TRUE, # Infection-to-death reporting delay
 
     # Environmental decay
     sample_decay_days_long = TRUE,   # Long-term environmental decay
@@ -1822,13 +1826,16 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_zeta_1 = TRUE,            # Advanced parameter 1
     sample_zeta_2 = TRUE,            # Advanced parameter 2
 
-    # === LOCATION-SPECIFIC PARAMETERS (13) ===
+    # === LOCATION-SPECIFIC PARAMETERS ===
     # Transmission and seasonality
     sample_beta_j0_tot = TRUE,       # Baseline transmission rate by location
-    sample_p_beta = TRUE,            # Proportion of seasonality
-    sample_tau_i = TRUE,             # Rainfall effect timing
-    sample_theta_j = TRUE,           # Temperature seasonal effect
-    sample_mu_j = TRUE,              # Baseline rate by location
+    sample_p_beta = TRUE,            # Proportion human-to-human transmission
+    sample_tau_i = TRUE,             # Travel/diffusion probability
+    sample_theta_j = TRUE,           # WASH coverage
+    sample_mu_j_baseline = TRUE,     # Baseline location-specific IFR
+    sample_mu_j_slope = TRUE,        # Temporal IFR trend
+    sample_mu_j_epidemic_factor = TRUE, # Epidemic IFR multiplier
+    sample_epidemic_threshold = TRUE, # Epidemic activation threshold
 
     # Climate relationship
     sample_a1 = TRUE,                # Temperature coefficient 1
