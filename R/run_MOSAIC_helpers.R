@@ -416,9 +416,12 @@
 
   # Only create NPE-specific directories when NPE is enabled
   if (run_npe) {
-    d$bfrs_times = file.path(dir_output, "1_bfrs/outputs/timeseries")
-    d$npe <- file.path(dir_output, "2_npe")
-    d$npe_plots <- file.path(dir_output, "2_npe/plots")
+    d$bfrs_times    <- file.path(dir_output, "1_bfrs/outputs/timeseries")
+    d$npe           <- file.path(dir_output, "2_npe")
+    d$npe_model     <- file.path(dir_output, "2_npe/model")
+    d$npe_posterior <- file.path(dir_output, "2_npe/posterior")
+    d$npe_diagnostics <- file.path(dir_output, "2_npe/diagnostics")
+    d$npe_plots     <- file.path(dir_output, "2_npe/plots")
   }
 
   if (clean_output && dir.exists(d$root)) {
