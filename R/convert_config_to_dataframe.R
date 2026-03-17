@@ -110,7 +110,6 @@ convert_config_to_dataframe <- function(config) {
           "decay_days_long",
           "decay_shape_1",
           "decay_shape_2",
-          "mu_j",               # Added: Case fatality ratio (derived)
           "mu_j_baseline",      # Added: Baseline location-specific IFR
           "mu_j_slope",         # Added: Temporal IFR trend
           "mu_j_epidemic_factor", # Added: Epidemic IFR multiplier
@@ -161,7 +160,7 @@ convert_config_to_dataframe <- function(config) {
                "tau_i", "theta_j",
                "a_1_j", "a_2_j", "b_1_j", "b_2_j",
                "a1", "a2", "b1", "b2",
-               "mu_j", "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
+               "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
                "epidemic_threshold",
                "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"
           )
