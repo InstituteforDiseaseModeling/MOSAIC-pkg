@@ -103,7 +103,7 @@ plot_model_parameters <- function(results,
           "omega_1", "omega_2",                      # Vaccine waning
           "gamma_1", "gamma_2",                      # Recovery rates
           "epsilon",                                 # Incubation rate
-          "rho",                                     # Reporting fraction
+          "rho",                                     # Care-seeking probability
           "sigma",                                   # Progression rate
           "iota",                                    # Importation rate
           "alpha_1", "alpha_2",                      # Environmental transmission

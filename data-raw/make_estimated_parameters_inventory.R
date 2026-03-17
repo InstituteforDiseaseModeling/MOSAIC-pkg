@@ -109,7 +109,7 @@ global_params <- data.frame(
     "PPV in Epidemic Periods",
     "Case Reporting Delay",
     "Death Reporting Delay",
-    "Reporting Rate",
+    "Care-Seeking Probability",
     # Mobility
     "Mobility Distance Decay",
     "Mobility Population Scaling"
@@ -142,7 +142,7 @@ global_params <- data.frame(
     "Positive predictive value of suspected cholera cases in epidemic periods",
     "Days from infection to case report in surveillance data",
     "Days from infection to death report in surveillance data",
-    "Proportion of suspected cases that are true cholera",
+    "Probability a symptomatic infection is reported as a suspected case",
     # Mobility
     "Distance decay parameter for human mobility",
     "Population scaling parameter for human mobility"
