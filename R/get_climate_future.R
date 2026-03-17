@@ -171,7 +171,7 @@ get_climate_future <- function(lat,
                                    longitude = lon_j,
                                    climate_model = climate_model,
                                    variable_name = variable,
-                                   value = unlist(vals)
+                                   value = vapply(vals, function(x) if (is.null(x)) NA_real_ else as.numeric(x), numeric(1))
                               )
                          }
                     }
