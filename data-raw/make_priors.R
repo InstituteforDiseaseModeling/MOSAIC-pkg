@@ -407,12 +407,26 @@ priors_default$parameters_global$chi_epidemic <- list(
 )
 
 # rho - Care-seeking rate (probability a symptomatic infection presents as a suspected case)
-# NOTE: A dedicated data-driven prior for rho is pending (to be updated in a future step).
-# Placeholder uses Beta(3, 7) -> mean ~0.30, reflecting typical care-seeking rates in SSA.
+# Fitted from GEMS (Nasrin et al. 2013, PMC3748499) and Wiens et al. 2025 (PMC12013865)
+# via get_rho_care_seeking_params().  Values read from param_rho_care_seeking.csv.
+rho_param_file <- file.path(PATHS$MODEL_INPUT, "param_rho_care_seeking.csv")
+if (file.exists(rho_param_file)) {
+     param_rho    <- read.csv(rho_param_file, stringsAsFactors = FALSE)
+     rho_shape1   <- param_rho$parameter_value[param_rho$parameter_name == "shape1"]
+     rho_shape2   <- param_rho$parameter_value[param_rho$parameter_name == "shape2"]
+     if (length(rho_shape1) == 0 || length(rho_shape2) == 0) {
+          warning("Could not extract rho shape params from file. Using Beta(3, 7) fallback.")
+          rho_shape1 <- 3.0; rho_shape2 <- 7.0
+     }
+} else {
+     warning("param_rho_care_seeking.csv not found. Using Beta(3, 7) fallback.")
+     rho_shape1 <- 3.0; rho_shape2 <- 7.0
+}
+
 priors_default$parameters_global$rho <- list(
-     description = "Care-seeking rate: probability a symptomatic infection is reported as suspected (placeholder - to be updated)",
+     description = "Care-seeking rate: probability a symptomatic infection is reported as suspected (GEMS + Wiens 2025)",
      distribution = "beta",
-     parameters = list(shape1 = 3.0, shape2 = 7.0)
+     parameters = list(shape1 = rho_shape1, shape2 = rho_shape2)
 )
 
 # sigma - Proportion symptomatic

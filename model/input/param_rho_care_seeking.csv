@@ -1,0 +1,4 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"rho","Care-seeking rate (rho): pooled point estimate (GEMS + Wiens 2025)","beta",NA,NA,NA,"shape1",6.81427258303886
+"rho","Care-seeking rate (rho): pooled point estimate (GEMS + Wiens 2025)","beta",NA,NA,NA,"shape2",17.8943797428517
+"rho","Care-seeking rate (rho): pooled point estimate (GEMS + Wiens 2025)","beta",NA,NA,NA,"mean",0.264709301428352
