@@ -156,42 +156,74 @@ check_dependencies <- function() {
                     pkg_category <- "npe"
                }
 
-               tryCatch({
+               # tensorflow and keras cannot be imported in the same process as torch
+               # (segfault due to OpenMP/MKL conflict on macOS arm64). Check via pip show.
+               if (pkg_import_name %in% c("tensorflow", "keras")) {
 
-                    module <- reticulate::import(pkg_import_name, delay_load = FALSE)
-                    version <- module[["__version__"]]
+                    pip_info <- tryCatch(
+                         system2(paths$exe, c("-m", "pip", "show", pkg_import_name),
+                                 stdout = TRUE, stderr = FALSE),
+                         error = function(e) character(0)
+                    )
+                    version_line <- grep("^Version:", pip_info, value = TRUE)
 
-                    # Show version with expected
-                    if (grepl("[=><!]", pkg_spec)) {
-                         expected <- sub("^[^=><!]+", "", pkg_spec)
-                         cli::cli_alert_success("{pkg_import_name}: {version} (expected {expected})")
+                    if (length(version_line) > 0) {
+                         version <- trimws(sub("^Version:", "", version_line))
+                         if (grepl("[=><!]", pkg_spec)) {
+                              expected <- sub("^[^=><!]+", "", pkg_spec)
+                              cli::cli_alert_success("{pkg_import_name}: {version} (expected {expected}) [checked via pip]")
+                         } else {
+                              cli::cli_alert_success("{pkg_import_name}: {version} [checked via pip]")
+                         }
                     } else {
-                         cli::cli_alert_success("{pkg_import_name}: {version}")
+                         if (pkg_category == "suitability") {
+                              suitability_working <<- FALSE
+                              cli::cli_alert_warning("{pkg_import_name} [suitability] not found in pip")
+                         } else {
+                              cli::cli_alert_warning("{pkg_import_name} not found in pip")
+                         }
                     }
 
-                    if (pkg_import_name == "laser.cholera") {
-                         cli::cli_alert_info("LASER built with:")
-                         freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
-                         laser_lines <- grep("laser", freeze, value = TRUE)
-                         laser_lines <- paste0("   ", laser_lines)
-                         cli::cli_text("{laser_lines}")
-                    }
+               } else {
 
-               }, error = function(e) {
-                    # Mark capability as broken
-                    if (pkg_category == "core") {
-                         core_working <<- FALSE
-                         cli::cli_alert_danger("{pkg_import_name} [CORE] cannot be imported: {e$message}")
-                    } else if (pkg_category == "suitability") {
-                         suitability_working <<- FALSE
-                         cli::cli_alert_warning("{pkg_import_name} [suitability] cannot be imported: {e$message}")
-                    } else if (pkg_category == "npe") {
-                         npe_working <<- FALSE
-                         cli::cli_alert_warning("{pkg_import_name} [NPE] cannot be imported: {e$message}")
-                    } else {
-                         cli::cli_alert_warning("{pkg_import_name} cannot be imported: {e$message}")
-                    }
-               })
+                    tryCatch({
+
+                         module <- reticulate::import(pkg_import_name, delay_load = FALSE)
+                         version <- module[["__version__"]]
+
+                         # Show version with expected
+                         if (grepl("[=><!]", pkg_spec)) {
+                              expected <- sub("^[^=><!]+", "", pkg_spec)
+                              cli::cli_alert_success("{pkg_import_name}: {version} (expected {expected})")
+                         } else {
+                              cli::cli_alert_success("{pkg_import_name}: {version}")
+                         }
+
+                         if (pkg_import_name == "laser.cholera") {
+                              cli::cli_alert_info("LASER built with:")
+                              freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
+                              laser_lines <- grep("laser", freeze, value = TRUE)
+                              laser_lines <- paste0("   ", laser_lines)
+                              cli::cli_text("{laser_lines}")
+                         }
+
+                    }, error = function(e) {
+                         # Mark capability as broken
+                         if (pkg_category == "core") {
+                              core_working <<- FALSE
+                              cli::cli_alert_danger("{pkg_import_name} [CORE] cannot be imported: {e$message}")
+                         } else if (pkg_category == "suitability") {
+                              suitability_working <<- FALSE
+                              cli::cli_alert_warning("{pkg_import_name} [suitability] cannot be imported: {e$message}")
+                         } else if (pkg_category == "npe") {
+                              npe_working <<- FALSE
+                              cli::cli_alert_warning("{pkg_import_name} [NPE] cannot be imported: {e$message}")
+                         } else {
+                              cli::cli_alert_warning("{pkg_import_name} cannot be imported: {e$message}")
+                         }
+                    })
+
+               }
           }
 
      } else {
@@ -205,14 +237,20 @@ check_dependencies <- function() {
      cli::cli_h2("Checking R package dependencies")
      cli::cli_alert_success("{R.version.string}")
 
-     # Note: R keras3/tensorflow packages are optional
-     # MOSAIC uses reticulate::import() directly, so R wrapper packages don't matter
-     if (requireNamespace("tensorflow", quietly = TRUE)) {
-          cli::cli_alert_info("tensorflow R package: {as.character(packageVersion('tensorflow'))} (optional)")
+     # Note: R keras3/tensorflow packages are optional.
+     # Use find.package() + packageVersion() rather than requireNamespace() to avoid
+     # triggering their .onLoad hooks, which import tensorflow into the Python session
+     # and cause a bus error/segfault when torch is already loaded (OpenMP conflict).
+     tf_path <- tryCatch(find.package("tensorflow"), error = function(e) NULL)
+     if (!is.null(tf_path)) {
+          tf_ver <- tryCatch(as.character(packageVersion("tensorflow")), error = function(e) "unknown")
+          cli::cli_alert_info("tensorflow R package: {tf_ver} (optional)")
      }
 
-     if (requireNamespace("keras3", quietly = TRUE)) {
-          cli::cli_alert_info("keras3 R package: {as.character(packageVersion('keras3'))} (optional)")
+     keras3_path <- tryCatch(find.package("keras3"), error = function(e) NULL)
+     if (!is.null(keras3_path)) {
+          keras3_ver <- tryCatch(as.character(packageVersion("keras3")), error = function(e) "unknown")
+          cli::cli_alert_info("keras3 R package: {keras3_ver} (optional)")
      }
 
      # -----------------------------------------------------------------------
