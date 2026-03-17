@@ -199,7 +199,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
         location_names <- model$params$location_name
         obs_cases <- model$params$reported_cases
         obs_deaths <- model$params$reported_deaths
-        pred_cases <- model$results$expected_cases
+        pred_cases <- model$results$reported_cases
         pred_deaths <- model$results$disease_deaths
 
         # Convert to flat vectors (aggregate all locations)
@@ -311,8 +311,8 @@ plot_model_ppc <- function(predictions_dir = NULL,
             ylim_range <- c(0, max(c(dens_obs$y, dens_pred$y)) * 1.1)
 
             plot(dens_obs, col = palette$observed, lwd = 2.5,
-                 main = "Distribution of Log-Transformed Cases",
-                 xlab = "log(Cases + 1)", ylab = "Density",
+                 main = "Distribution of Log-Transformed Suspected Cases",
+                 xlab = "log(Suspected Cases + 1)", ylab = "Density",
                  xlim = xlim_range, ylim = ylim_range, type = "n")
             add_grid()
 
@@ -408,9 +408,9 @@ plot_model_ppc <- function(predictions_dir = NULL,
         if (length(obs_cases_valid) > 0) {
             plot(log(pred_cases_valid + 1), log(obs_cases_valid + 1),
                  pch = 19, col = col_points_cases, cex = 0.6,
-                 xlab = "log(Predicted Cases + 1)",
-                 ylab = "log(Observed Cases + 1)",
-                 main = "Observed vs Predicted Cases",
+                 xlab = "log(Predicted Suspected Cases + 1)",
+                 ylab = "log(Observed Suspected Cases + 1)",
+                 main = "Observed vs Predicted Suspected Cases",
                  panel.first = add_grid())
 
             abline(0, 1, col = palette$reference, lwd = 2, lty = 2)
@@ -791,13 +791,13 @@ plot_model_ppc <- function(predictions_dir = NULL,
         if (verbose) message("\n=== Creating Aggregate PPC Plots ===")
 
         # Flatten all locations together
-        obs_cases_flat <- all_data$observed[all_data$metric == "Cases"]
-        pred_cases_flat <- all_data[[pred_col]][all_data$metric == "Cases"]
+        obs_cases_flat <- all_data$observed[all_data$metric == "Suspected Cases"]
+        pred_cases_flat <- all_data[[pred_col]][all_data$metric == "Suspected Cases"]
         obs_deaths_flat <- all_data$observed[all_data$metric == "Deaths"]
         pred_deaths_flat <- all_data[[pred_col]][all_data$metric == "Deaths"]
 
         # Create time vector
-        n_per_location <- sum(all_data$location == available_locations[1] & all_data$metric == "Cases")
+        n_per_location <- sum(all_data$location == available_locations[1] & all_data$metric == "Suspected Cases")
         time_vec <- rep(1:n_per_location, n_locations)
 
         create_ppc_plots(obs_cases_flat, pred_cases_flat,
@@ -814,8 +814,8 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 # Filter to this location
                 loc_data <- all_data[all_data$location == loc, ]
 
-                obs_cases_loc <- loc_data$observed[loc_data$metric == "Cases"]
-                pred_cases_loc <- loc_data[[pred_col]][loc_data$metric == "Cases"]
+                obs_cases_loc <- loc_data$observed[loc_data$metric == "Suspected Cases"]
+                pred_cases_loc <- loc_data[[pred_col]][loc_data$metric == "Suspected Cases"]
                 obs_deaths_loc <- loc_data$observed[loc_data$metric == "Deaths"]
                 pred_deaths_loc <- loc_data[[pred_col]][loc_data$metric == "Deaths"]
 

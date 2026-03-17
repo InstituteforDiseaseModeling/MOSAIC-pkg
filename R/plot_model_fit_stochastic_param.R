@@ -343,7 +343,7 @@ plot_model_fit_stochastic_param <- function(
             result <- list(
                 param_idx = param_idx,
                 stoch_idx = stoch_idx,
-                expected_cases = model$results$reported_cases,
+                reported_cases = model$results$reported_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE
             )
@@ -467,11 +467,11 @@ plot_model_fit_stochastic_param <- function(
                 p <- result$param_idx
                 s <- result$stoch_idx
 
-                if (is.matrix(result$expected_cases)) {
-                    cases_array[,,p,s] <- result$expected_cases
+                if (is.matrix(result$reported_cases)) {
+                    cases_array[,,p,s] <- result$reported_cases
                     deaths_array[,,p,s] <- result$disease_deaths
                 } else {
-                    cases_array[1,,p,s] <- result$expected_cases
+                    cases_array[1,,p,s] <- result$reported_cases
                     deaths_array[1,,p,s] <- result$disease_deaths
                 }
             }
@@ -511,11 +511,11 @@ plot_model_fit_stochastic_param <- function(
                 p <- result$param_idx
                 s <- result$stoch_idx
 
-                if (is.matrix(result$expected_cases)) {
-                    cases_array[,,p,s] <- result$expected_cases
+                if (is.matrix(result$reported_cases)) {
+                    cases_array[,,p,s] <- result$reported_cases
                     deaths_array[,,p,s] <- result$disease_deaths
                 } else {
-                    cases_array[1,,p,s] <- result$expected_cases
+                    cases_array[1,,p,s] <- result$reported_cases
                     deaths_array[1,,p,s] <- result$disease_deaths
                 }
             }
@@ -654,7 +654,7 @@ plot_model_fit_stochastic_param <- function(
         loc_data <- data.frame(
             location = location_names[i],
             date = rep(dates, 2),
-            metric = c(rep("Cases", n_time_points), rep("Deaths", n_time_points)),
+            metric = c(rep("Suspected Cases", n_time_points), rep("Deaths", n_time_points)),
             observed = c(obs_cases_i, obs_deaths_i),
             predicted_median = c(cases_overall$median[i,], deaths_overall$median[i,])
         )
@@ -675,7 +675,7 @@ plot_model_fit_stochastic_param <- function(
         plot_data <- rbind(plot_data, loc_data)
     }
 
-    plot_data$metric <- factor(plot_data$metric, levels = c("Cases", "Deaths"))
+    plot_data$metric <- factor(plot_data$metric, levels = c("Suspected Cases", "Deaths"))
 
     # ============================================================================
     # Save predictions to CSV (if requested)
@@ -757,9 +757,9 @@ plot_model_fit_stochastic_param <- function(
                              linewidth = 0.75) +
             # Facet by metric
             ggplot2::facet_grid(metric ~ ., scales = "free_y", switch = "y") +
-            ggplot2::scale_color_manual(values = c("Cases" = "steelblue", "Deaths" = "darkred"),
+            ggplot2::scale_color_manual(values = c("Suspected Cases" = "steelblue", "Deaths" = "darkred"),
                                        guide = "none") +
-            ggplot2::scale_fill_manual(values = c("Cases" = "steelblue", "Deaths" = "darkred"),
+            ggplot2::scale_fill_manual(values = c("Suspected Cases" = "steelblue", "Deaths" = "darkred"),
                                       guide = "none") +
             ggplot2::scale_y_continuous(labels = scales::comma) +
             ggplot2::theme_minimal(base_size = 10) +
