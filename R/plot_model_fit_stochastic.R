@@ -266,13 +266,9 @@ plot_model_fit_stochastic <- function(config,
         parallel::clusterExport(cl, c("config", "run_single_simulation"), envir = environment())
 
         # Run parallel simulations
-        if (verbose) {
-            message("Running ", n_simulations, " simulations on ", n_cores_use, " cores...")
-            # Simple progress bar with block character (no color codes)
-            # style = 1: Shows elapsed and remaining time with percentage
-            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
-            on.exit(pbapply::pboptions(pbo), add = TRUE)
-        }
+        if (verbose) message("Running ", n_simulations, " simulations on ", n_cores_use, " cores...")
+        pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+        on.exit(pbapply::pboptions(pbo), add = TRUE)
 
         simulation_results <- pbapply::pblapply(
             seeds,

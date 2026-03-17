@@ -443,17 +443,9 @@ plot_model_fit_stochastic_param <- function(
         parallel::clusterExport(cl, c("param_configs"), envir = environment())
 
         # Run parallel simulations
-        if (verbose) {
-            message("Running ", total_simulations, " simulations on ", n_cores_use, " cores...")
-            # Simple progress bar with block character (no color codes)
-            # style = 1: Shows elapsed and remaining time with percentage
-            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
-            on.exit(pbapply::pboptions(pbo), add = TRUE)
-        } else {
-            # Explicitly disable progress bar for non-verbose mode (prevents cluster hangs)
-            pbo <- pbapply::pboptions(type = "none")
-            on.exit(pbapply::pboptions(pbo), add = TRUE)
-        }
+        if (verbose) message("Running ", total_simulations, " simulations on ", n_cores_use, " cores...")
+        pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+        on.exit(pbapply::pboptions(pbo), add = TRUE)
 
         results_list <- pbapply::pblapply(
             split(task_list, seq(nrow(task_list))),
@@ -482,17 +474,9 @@ plot_model_fit_stochastic_param <- function(
         # SEQUENTIAL EXECUTION
         # ========================================================================
 
-        if (verbose) {
-            message("Running ", total_simulations, " simulations sequentially...")
-            # Simple progress bar with block character (no color codes)
-            # style = 1: Shows elapsed and remaining time with percentage
-            pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
-            on.exit(pbapply::pboptions(pbo), add = TRUE)
-        } else {
-            # Explicitly disable progress bar for non-verbose mode (prevents cluster hangs)
-            pbo <- pbapply::pboptions(type = "none")
-            on.exit(pbapply::pboptions(pbo), add = TRUE)
-        }
+        if (verbose) message("Running ", total_simulations, " simulations sequentially...")
+        pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+        on.exit(pbapply::pboptions(pbo), add = TRUE)
 
         # Create flattened task list for sequential execution with progress bar
         task_list <- expand.grid(
