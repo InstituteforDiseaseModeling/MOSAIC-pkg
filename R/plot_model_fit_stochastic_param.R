@@ -337,13 +337,13 @@ plot_model_fit_stochastic_param <- function(
             param_config$seed <- stochastic_seed
 
             # Run model
-            model <- lc$run_model(paramfile = param_config, quiet = TRUE)
+            model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(param_config), quiet = TRUE)
 
             # Extract results before cleanup
             result <- list(
                 param_idx = param_idx,
                 stoch_idx = stoch_idx,
-                expected_cases = model$results$expected_cases,
+                expected_cases = model$results$reported_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE
             )
