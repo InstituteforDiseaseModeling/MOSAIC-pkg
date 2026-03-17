@@ -3,7 +3,7 @@
 #' Creates timeseries plots comparing model predictions with observed data
 #' from a laser-cholera model run.
 #'
-#' @param model A laser-cholera Model object (class 'laser_cholera.metapop.model.Model') 
+#' @param model A laser-cholera Model object (class 'laser.cholera.metapop.model.Model')
 #'   output from lc$run_model(paramfile = config). Must contain:
 #'   \itemize{
 #'     \item results$expected_cases - predicted cases
@@ -91,8 +91,8 @@ plot_model_fit <- function(model,
     }
     
     # Check model structure
-    if (!inherits(model, "laser_cholera.metapop.model.Model") && !is.list(model)) {
-        stop("model must be a laser-cholera Model object (class 'laser_cholera.metapop.model.Model') or a list")
+    if (!inherits(model, "laser.cholera.metapop.model.Model") && !is.list(model)) {
+        stop("model must be a laser-cholera Model object (class 'laser.cholera.metapop.model.Model') or a list")
     }
     
     # ============================================================================

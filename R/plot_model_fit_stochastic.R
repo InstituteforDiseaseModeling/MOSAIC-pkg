@@ -4,7 +4,7 @@
 #' timeseries plots showing mean predictions with confidence envelopes.
 #'
 #' @param config A configuration list/object as produced by sample_parameters().
-#'   Must contain all necessary parameters for running laser_cholera model including:
+#'   Must contain all necessary parameters for running laser.cholera model including:
 #'   \itemize{
 #'     \item reported_cases - observed cases data
 #'     \item reported_deaths - observed deaths data
@@ -171,8 +171,8 @@ plot_model_fit_stochastic <- function(config,
     # Worker function (must be self-contained for parallel execution)
     run_single_simulation <- function(seed_i, config_template) {
         tryCatch({
-            # Import laser_cholera on worker (each worker needs its own instance)
-            lc <- reticulate::import("laser_cholera.metapop.model")
+            # Import laser.cholera on worker (each worker needs its own instance)
+            lc <- reticulate::import("laser.cholera.metapop.model")
 
             # Modify config with specific seed
             config_i <- config_template

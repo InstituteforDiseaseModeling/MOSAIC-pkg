@@ -118,7 +118,7 @@
      # Python will initialize lazily when first used
      if (interactive()) {
           # Automatically attach r-mosaic Python environment
-          # This initializes Python and makes laser_cholera available immediately
+          # This initializes Python and makes laser.cholera available immediately
           attachment_success <- tryCatch({
                MOSAIC::attach_mosaic_env(silent = TRUE)
                TRUE

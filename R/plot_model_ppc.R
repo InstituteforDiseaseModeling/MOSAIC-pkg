@@ -192,7 +192,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
         # Legacy model object input
         if (verbose) message("=== Extracting data from model object (legacy mode) ===")
 
-        if (!inherits(model, "laser_cholera.metapop.model.Model") && !is.list(model)) {
+        if (!inherits(model, "laser.cholera.metapop.model.Model") && !is.list(model)) {
             stop("model must be a laser-cholera Model object or a list")
         }
 

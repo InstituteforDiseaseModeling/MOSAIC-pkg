@@ -320,11 +320,11 @@ plot_model_fit_stochastic_param <- function(
         stoch_idx <- task_info$stoch_idx
 
         tryCatch({
-            # Get laser_cholera from worker global environment
+            # Get laser.cholera from worker global environment
             # Parallel mode: lc exists in worker global environment (imported during init)
             # Sequential mode: import here
             if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-                lc <- reticulate::import("laser_cholera.metapop.model")
+                lc <- reticulate::import("laser.cholera.metapop.model")
             } else {
                 lc <- get("lc", envir = .GlobalEnv)
             }
@@ -423,9 +423,9 @@ plot_model_fit_stochastic_param <- function(
                 OPENBLAS_NUM_THREADS = "1"
             )
 
-            # Import laser-cholera ONCE per worker (not per task)
+            # Import laser.cholera ONCE per worker (not per task)
             # This avoids repeated import overhead (~200-500ms per import on cluster)
-            lc <- reticulate::import("laser_cholera.metapop.model")
+            lc <- reticulate::import("laser.cholera.metapop.model")
             assign("lc", lc, envir = .GlobalEnv)
 
             NULL
