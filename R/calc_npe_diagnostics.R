@@ -196,7 +196,7 @@ calc_npe_diagnostics <- function(
             if (verbose && !parallel) {
                 cat(sprintf("[Test %d/%d] Running LASER forward simulation...\n", sim_idx, n_sbc_sims))
             }
-            model_output <- lc_local$run_model(paramfile = theta_true, quiet = TRUE)
+            model_output <- lc_local$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(theta_true), quiet = TRUE)
 
             # Extract simulated data in NPE format
             y_sim <- get_npe_simulated_data(model_output, verbose = FALSE)

@@ -179,11 +179,11 @@ plot_model_fit_stochastic <- function(config,
             config_i$seed <- seed_i
 
             # Run model
-            model <- lc$run_model(paramfile = config_i, quiet = TRUE)
+            model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_i), quiet = TRUE)
 
             # Extract results before cleanup
             result <- list(
-                expected_cases = model$results$expected_cases,
+                expected_cases = model$results$reported_cases,
                 disease_deaths = model$results$disease_deaths,
                 success = TRUE,
                 seed = seed_i
