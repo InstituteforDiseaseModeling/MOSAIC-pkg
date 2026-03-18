@@ -65,12 +65,25 @@
   result_matrix <- matrix(NA_real_, nrow = n_iterations, ncol = 5 + n_params)
   colnames(result_matrix) <- c('sim', 'iter', 'seed_sim', 'seed_iter', 'likelihood', param_names_all)
 
-  # Pre-allocate output matrix (estimated size, will grow if needed)
-  # Estimate: assume ~10 locations × 100 time points = 1000 rows per iteration
-  estimated_rows <- n_iterations * 1000
-  output_matrix <- matrix(NA_character_, nrow = estimated_rows, ncol = 6)
-  colnames(output_matrix) <- c('sim', 'iter', 'j', 't', 'cases', 'deaths')
-  output_row_idx <- 1L
+  # Timeseries accumulators — only allocated when NPE requires them.
+  # Old approach: character matrix + O(n_j * n_t * n_iter)^2 string-search
+  #   collapse ran unconditionally even when save_timeseries = FALSE.
+  # New approach: numeric accumulator matrices summed in-place each iteration;
+  #   final mean computed in O(n_j * n_t) with vectorised arithmetic.
+  ts_cases_sum  <- NULL
+  ts_deaths_sum <- NULL
+  ts_iter_count <- 0L
+  ts_n_j        <- 0L
+  ts_n_t        <- 0L
+
+  if (save_timeseries) {
+    ts_n_j <- length(config$location_name)
+    ts_n_t <- if (!is.null(config$reported_cases)) ncol(config$reported_cases) else 0L
+    if (ts_n_j > 0L && ts_n_t > 0L) {
+      ts_cases_sum  <- matrix(0.0, nrow = ts_n_j, ncol = ts_n_t)
+      ts_deaths_sum <- matrix(0.0, nrow = ts_n_j, ncol = ts_n_t)
+    }
+  }
 
   # Sample parameters ONCE per simulation
   params_sim <- tryCatch({
@@ -189,42 +202,21 @@
 
       result_matrix[j, 5] <- likelihood
 
-      # Store time series outputs
-      est_cases_array <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi
-      est_deaths_array <- model$results$disease_deaths
+      # Accumulate time series outputs (only when NPE timeseries are needed)
+      if (save_timeseries && !is.null(ts_cases_sum)) {
+        est_cases_array  <- model$results$reported_cases
+        est_deaths_array <- model$results$disease_deaths
 
-      if (!is.null(est_cases_array) && !is.null(est_deaths_array)) {
-        # Ensure matrix format
-        if (!is.matrix(est_cases_array)) {
-          est_cases_array <- matrix(est_cases_array, nrow = 1)
-          est_deaths_array <- matrix(est_deaths_array, nrow = 1)
-        }
-
-        n_j <- nrow(est_cases_array)
-        n_t <- ncol(est_cases_array)
-        n_rows_needed <- n_j * n_t
-
-        # Check if we need to grow the output matrix
-        if (output_row_idx + n_rows_needed - 1 > nrow(output_matrix)) {
-          # Grow to exact size needed (not just double, which may be insufficient)
-          rows_to_add <- (output_row_idx + n_rows_needed - 1) - nrow(output_matrix)
-          new_rows <- matrix(NA_character_, nrow = rows_to_add, ncol = 6)
-          colnames(new_rows) <- colnames(output_matrix)
-          output_matrix <- rbind(output_matrix, new_rows)
-        }
-
-        # Write directly to pre-allocated matrix (FIXED: no rbind in loop!)
-        for (loc_idx in 1:n_j) {
-          for (t_idx in 1:n_t) {
-            output_matrix[output_row_idx, ] <- c(
-              as.character(sim_id),
-              as.character(j),
-              as.character(loc_idx),
-              as.character(t_idx),
-              as.character(est_cases_array[loc_idx, t_idx]),
-              as.character(est_deaths_array[loc_idx, t_idx])
-            )
-            output_row_idx <- output_row_idx + 1L
+        if (!is.null(est_cases_array) && !is.null(est_deaths_array)) {
+          if (!is.matrix(est_cases_array)) {
+            est_cases_array  <- matrix(est_cases_array,  nrow = 1)
+            est_deaths_array <- matrix(est_deaths_array, nrow = 1)
+          }
+          # Only accumulate if dimensions match the pre-allocated accumulators
+          if (nrow(est_cases_array) == ts_n_j && ncol(est_cases_array) == ts_n_t) {
+            ts_cases_sum  <- ts_cases_sum  + est_cases_array
+            ts_deaths_sum <- ts_deaths_sum + est_deaths_array
+            ts_iter_count <- ts_iter_count + 1L
           }
         }
       }
@@ -236,13 +228,6 @@
       gc(verbose = FALSE)
       reticulate::import("gc")$collect()
     }
-  }
-
-  # Trim output matrix to actual size used
-  if (output_row_idx > 1) {
-    output_matrix <- output_matrix[1:(output_row_idx - 1), , drop = FALSE]
-  } else {
-    output_matrix <- output_matrix[0, , drop = FALSE]  # Empty matrix
   }
 
   # Collapse iterations if n_iterations > 1
@@ -265,43 +250,29 @@
   output_file <- file.path(dir_bfrs_parameters, sprintf("sim_%07d.parquet", sim_id))
   .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
 
-  # Collapse and write time series
-  if (nrow(output_matrix) > 0) {
-    unique_combos <- unique(output_matrix[, c(3, 4)])
-    n_combos <- nrow(unique_combos)
+  # Write timeseries file (NPE only) — O(n_j * n_t) vectorised mean from accumulators.
+  # No string conversion, no nested loops, no linear scan per (j,t) cell.
+  if (save_timeseries && ts_iter_count > 0L &&
+      !is.null(ts_cases_sum) && !is.null(dir_bfrs_timeseries)) {
 
-    collapsed_matrix <- matrix(NA_real_, nrow = n_combos, ncol = 6)
-    colnames(collapsed_matrix) <- c('sim', 'iter', 'j', 't', 'cases', 'deaths')
+    cases_mean  <- ts_cases_sum  / ts_iter_count
+    deaths_mean <- ts_deaths_sum / ts_iter_count
 
-    for (i in 1:n_combos) {
-      j_val <- as.integer(unique_combos[i, 1])
-      t_val <- as.integer(unique_combos[i, 2])
-
-      match_rows <- output_matrix[, 3] == as.character(j_val) &
-                    output_matrix[, 4] == as.character(t_val)
-      matching_data <- output_matrix[match_rows, , drop = FALSE]
-
-      collapsed_matrix[i, ] <- c(
-        sim_id, 1, j_val, t_val,
-        mean(as.numeric(matching_data[, 5]), na.rm = TRUE),
-        mean(as.numeric(matching_data[, 6]), na.rm = TRUE)
-      )
-    }
+    # Build long-format index (row-major: j varies slowest, t fastest)
+    j_idx <- rep(seq_len(ts_n_j), times = ts_n_t)
+    t_idx <- rep(seq_len(ts_n_t), each  = ts_n_j)
 
     collapsed_df <- data.frame(
-      sim = as.integer(collapsed_matrix[, 1]),
-      iter = as.integer(collapsed_matrix[, 2]),
-      j = as.integer(collapsed_matrix[, 3]),
-      t = as.integer(collapsed_matrix[, 4]),
-      cases = as.numeric(collapsed_matrix[, 5]),
-      deaths = as.numeric(collapsed_matrix[, 6])
+      sim    = sim_id,
+      iter   = 1L,
+      j      = j_idx,
+      t      = t_idx,
+      cases  = as.numeric(cases_mean),
+      deaths = as.numeric(deaths_mean)
     )
 
-    # Only write timeseries files if NPE is enabled
-    if (save_timeseries && !is.null(dir_bfrs_timeseries)) {
-      out_file <- file.path(dir_bfrs_timeseries, sprintf("timeseries_%07d.parquet", sim_id))
-      .mosaic_write_parquet(collapsed_df, out_file, io)
-    }
+    out_file <- file.path(dir_bfrs_timeseries, sprintf("timeseries_%07d.parquet", sim_id))
+    .mosaic_write_parquet(collapsed_df, out_file, io)
   }
 
   # CRITICAL: Cleanup Python objects after EACH simulation completes
@@ -639,8 +610,32 @@ run_MOSAIC <- function(config,
     stop("No estimated parameters found for ESS tracking")
   }
 
-  log_msg("Parameters: %d estimated (of %d total) | Locations: %s",
-          length(param_names_estimated), length(param_names_all),
+  # Derive disabled parameter names from sampling_args flags so the log
+  # message reflects the actual number being sampled in this run.
+  # Flags use "sample_<name>" convention; strip the prefix to get the config
+  # key. Handle the special-case name mappings used in sample_parameters.R.
+  disabled_base_params <- character(0)
+  if (!is.null(sampling_args)) {
+    disabled_flags <- names(sampling_args)[vapply(sampling_args, isFALSE, logical(1))]
+    disabled_base <- gsub("^sample_", "", disabled_flags)
+    special_map <- list(
+      beta_j0_tot = c("beta_j0_hum", "beta_j0_env"),
+      a1 = "a_1_j", a2 = "a_2_j",
+      b1 = "b_1_j", b2 = "b_2_j"
+    )
+    resolved <- unlist(lapply(disabled_base, function(nm) {
+      if (nm %in% names(special_map)) special_map[[nm]] else nm
+    }))
+    disabled_base_params <- unique(resolved)
+  }
+
+  param_names_sampled <- param_names_estimated[
+    !(gsub("_[A-Z]{3}$", "", param_names_estimated) %in% disabled_base_params)
+  ]
+
+  log_msg("Parameters: %d sampled (of %d estimable, %d total) | Locations: %s",
+          length(param_names_sampled), length(param_names_estimated),
+          length(param_names_all),
           paste(config$location_name, collapse = ', '))
 
   # ===========================================================================
