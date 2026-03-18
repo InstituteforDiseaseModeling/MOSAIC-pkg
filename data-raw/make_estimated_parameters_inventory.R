@@ -165,7 +165,9 @@ global_params <- data.frame(
     # Transmission
     "beta", "beta",
     # Environmental - reordered
-    "uniform", "uniform", "uniform", "uniform", "uniform", "uniform", "uniform",
+    # decay_days_short, decay_days_long, decay_shape_1, decay_shape_2: Uniform (unchanged)
+    # zeta_1, zeta_2, kappa: updated to Lognormal in make_priors.R (v0.14.30)
+    "uniform", "uniform", "uniform", "uniform", "lognormal", "lognormal", "lognormal",
     # Disease - reordered
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
