@@ -394,7 +394,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
                 legend("topright",
                        legend = c("Nominal coverage", "Color: |obs - nominal|",
-                                  "  \u22645pp (good)", "  5-15pp (warn)", "  >15pp (poor)"),
+                                  "  <=5pp (good)", "  5-15pp (warn)", "  >15pp (poor)"),
                        col    = c("black", NA, "#4CAF50", "#FF9800", "#F44336"),
                        lty    = c(2, NA, 1, 1, 1),
                        lwd    = c(2.5, NA, 6, 6, 6),
@@ -700,8 +700,6 @@ plot_model_ppc <- function(predictions_dir = NULL,
         }
 
         # --- Aggregate plot (all locations combined) --------------------------
-        if (verbose) message("\n=== Creating Aggregate PPC Plots ===")
-
         obs_cases_flat   <- .get_metric(all_data, "Suspected Cases", "observed")
         pred_cases_flat  <- .get_metric(all_data, "Suspected Cases", pred_col)
         obs_deaths_flat  <- .get_metric(all_data, "Deaths",          "observed")
@@ -721,13 +719,19 @@ plot_model_ppc <- function(predictions_dir = NULL,
             hi95 = .get_metric(all_data, "Deaths", "ci_1_upper")
         ) else NULL
 
-        # Aggregate uses sequential index (locations have different date ranges)
-        create_ppc_plots(obs_cases_flat, pred_cases_flat,
-                         obs_deaths_flat, pred_deaths_flat,
-                         dates_vec    = NULL,
-                         ci_cases     = ci_cases,
-                         ci_deaths    = ci_deaths,
-                         location_label = "")
+        # Aggregate plot: only when multiple locations (different date ranges per
+        # location make a combined date axis meaningless — use sequential index).
+        # For single-location runs the per-location loop below creates the file
+        # with actual dates on the temporal page.
+        if (n_locations > 1) {
+            if (verbose) message("\n=== Creating Aggregate PPC Plots ===")
+            create_ppc_plots(obs_cases_flat, pred_cases_flat,
+                             obs_deaths_flat, pred_deaths_flat,
+                             dates_vec      = NULL,
+                             ci_cases       = ci_cases,
+                             ci_deaths      = ci_deaths,
+                             location_label = "")
+        }
 
         # --- Per-location plots -----------------------------------------------
         if (n_locations > 1) {
