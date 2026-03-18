@@ -60,10 +60,12 @@ priors_default$parameters_global$alpha_2 <- list(
 )
 
 # decay_days_long - Maximum V. cholerae survival time
+# Old posterior 97.5th=147.4 was within 2.6 of upper bound=150 -- clear upper truncation.
+# Extended to 200; lower bound stays at 30 to prevent decay_days_short >= decay_days_long violations.
 priors_default$parameters_global$decay_days_long <- list(
      description = "Maximum V. cholerae survival time (days)",
      distribution = "uniform",
-     parameters = list(min = 30, max = 150)
+     parameters = list(min = 30, max = 200)
 )
 
 # decay_days_short - Minimum V. cholerae survival time
@@ -74,17 +76,22 @@ priors_default$parameters_global$decay_days_short <- list(
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation
+# Lower bound extended from 0.5 to 0.1: allows U-shaped (arcsine-type) suitability-survival mapping
+# where survival changes mainly at environmental extremes -- biologically defensible for tropical Africa.
+# Upper bound kept at 5.0: values >5 produce near-step-function behavior not supported by V. cholerae
+# survival literature (thresholds are moderate sigmoids, not binary switches).
 priors_default$parameters_global$decay_shape_1 <- list(
      description = "First shape parameter of Beta distribution for V. cholerae decay",
      distribution = "uniform",
-     parameters = list(min = 0.5, max = 5.0)
+     parameters = list(min = 0.1, max = 5.0)
 )
 
 # decay_shape_2 - Second shape parameter of Beta distribution for V. cholerae decay rate transformation
+# Same rationale as decay_shape_1.
 priors_default$parameters_global$decay_shape_2 <- list(
      description = "Second shape parameter of Beta distribution for V. cholerae decay",
      distribution = "uniform",
-     parameters = list(min = 0.5, max = 5.0)
+     parameters = list(min = 0.1, max = 5.0)
 )
 
 # epsilon - Natural immunity waning rate
