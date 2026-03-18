@@ -961,14 +961,13 @@ run_MOSAIC <- function(config,
               state$batch_number, n_success_batch, length(sim_ids),
               batch_success_rate, as.numeric(batch_runtime))
 
-      # ESS convergence check (skips automatically if insufficient samples)
-      # Skip if final batch - we're about to load data anyway for final processing
-      if (state$total_sims_run < control$calibration$max_simulations) {
-        state <- .mosaic_ess_check_update_state(state, dirs, param_names_estimated, control)
-        .mosaic_save_state(state, state_file)
-      } else {
-        log_msg("Skipping ESS check (final batch)")
-      }
+      # ESS convergence check — always run so state$converged is accurate.
+      # The old guard skipped this when total_sims_run >= max_simulations,
+      # which meant the final batch never updated the converged flag and
+      # always emitted a spurious "no convergence" warning even when the
+      # target was met on that last batch.
+      state <- .mosaic_ess_check_update_state(state, dirs, param_names_estimated, control)
+      .mosaic_save_state(state, state_file)
 
       if (state$total_sims_run >= control$calibration$max_simulations && !state$converged) {
         log_msg("WARNING: Reached maximum simulations (%d) without convergence",
