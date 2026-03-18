@@ -964,12 +964,18 @@
   # (not used in weight calculation, just for reporting)
   temperature <- 0.5 * (effective_range / actual_range)
 
-  # Calculate Gibbs weights using inverse temperature
-  weights <- calc_model_weights_gibbs(
-    x = delta_aic,
-    temperature = eta,  # Note: this parameter is actually inverse temperature
+  # Calculate Gibbs weights using inverse temperature — valid models only.
+  # delta_aic[!valid_idx] = Inf; passing the full vector to calc_model_weights_gibbs
+  # would crash because that function stop()s on any non-finite input. Compute
+  # weights on the valid subset, then place them back into a full-length vector
+  # (invalid models receive weight 0 and are silently dropped by calc_model_ess).
+  weights_valid <- calc_model_weights_gibbs(
+    x = delta_aic[valid_idx],
+    temperature = eta,
     verbose = FALSE
   )
+  weights <- numeric(n_total)
+  weights[valid_idx] <- weights_valid
 
   # ===========================================================================
   # Calculate ESS metrics
