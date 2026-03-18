@@ -539,24 +539,32 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           getOption("MOSAIC.cumulative_k", 10)
      }
      
+     vals <- vector("numeric", length(timepoints))
+     n_vals <- 0L
+
      for (tp in timepoints) {
-          # Fix: Ensure index is at least 1 and at most n
+          # Ensure index is at least 1 and at most n
           end_idx <- min(n, max(1L, round(n * tp)))
-          
-          # Apply weights to cumulative sums
-          idx_range <- 1:end_idx
-          o_cum <- sum(obs_vec[idx_range] * weights_time[idx_range], na.rm = TRUE) / sum(weights_time[idx_range], na.rm = TRUE) * end_idx
-          e_cum <- sum(est_vec[idx_range] * weights_time[idx_range], na.rm = TRUE) / sum(weights_time[idx_range], na.rm = TRUE) * end_idx
-          
+
+          # Use plain cumulative sums (NA-safe).
+          # weights_time is for masking non-observed timesteps in the core NB
+          # likelihood, but the cumulative term needs actual totals — using a
+          # weighted mean times end_idx would inflate the sum proportionally to
+          # the fraction of NA timesteps (e.g. 50% NAs → 2× inflation).
+          idx_range <- seq_len(end_idx)
+          o_cum <- sum(obs_vec[idx_range], na.rm = TRUE)
+          e_cum <- sum(est_vec[idx_range], na.rm = TRUE)
+
           if (!is.finite(o_cum) || !is.finite(e_cum)) next
-          if (e_cum <= 0 && o_cum > 0) { vals <- c(vals, per_tp_ll_floor); next }
+          if (e_cum <= 0 && o_cum > 0) { n_vals <- n_vals + 1L; vals[n_vals] <- per_tp_ll_floor; next }
           e_cum <- if (e_cum <= 0) .Machine$double.eps else e_cum
           ll_tp <- stats::dnbinom(round(o_cum), mu = e_cum, size = cum_k, log = TRUE)
           if (!is.finite(ll_tp)) ll_tp <- per_tp_ll_floor
-          vals <- c(vals, ll_tp)
+          n_vals <- n_vals + 1L
+          vals[n_vals] <- ll_tp
      }
-     if (!length(vals)) return(per_tp_ll_floor)
-     mean(vals)
+     if (n_vals == 0L) return(per_tp_ll_floor)
+     mean(vals[seq_len(n_vals)])
 }
 
 
