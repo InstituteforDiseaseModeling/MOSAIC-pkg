@@ -240,6 +240,9 @@ calc_model_posterior_quantiles <- function(results,
         scale = character(0),
         location = character(0),
         distribution = character(0),
+        posterior_distribution = character(0),
+        posterior_lower = numeric(0),
+        posterior_upper = numeric(0),
         stringsAsFactors = FALSE
     )
 
@@ -258,6 +261,12 @@ calc_model_posterior_quantiles <- function(results,
                     scale = scale,
                     location = "",
                     distribution = estimated_parameters$distribution[i],
+                    posterior_distribution = if ("posterior_distribution" %in% names(estimated_parameters))
+                        estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
+                    posterior_lower = if ("posterior_lower" %in% names(estimated_parameters))
+                        estimated_parameters$posterior_lower[i] else NA_real_,
+                    posterior_upper = if ("posterior_upper" %in% names(estimated_parameters))
+                        estimated_parameters$posterior_upper[i] else NA_real_,
                     stringsAsFactors = FALSE
                 ))
             }
@@ -273,6 +282,12 @@ calc_model_posterior_quantiles <- function(results,
                         scale = scale,
                         location = iso,
                         distribution = estimated_parameters$distribution[i],
+                        posterior_distribution = if ("posterior_distribution" %in% names(estimated_parameters))
+                            estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
+                        posterior_lower = if ("posterior_lower" %in% names(estimated_parameters))
+                            estimated_parameters$posterior_lower[i] else NA_real_,
+                        posterior_upper = if ("posterior_upper" %in% names(estimated_parameters))
+                            estimated_parameters$posterior_upper[i] else NA_real_,
                         stringsAsFactors = FALSE
                     ))
                 }
@@ -309,11 +324,14 @@ calc_model_posterior_quantiles <- function(results,
         scale = character(total_rows),
         iso_code = character(total_rows),
         distribution = character(total_rows),
-        type = character(total_rows),  # NEW: "prior" or "posterior"
+        posterior_distribution = character(total_rows),
+        posterior_lower = rep(NA_real_, total_rows),
+        posterior_upper = rep(NA_real_, total_rows),
+        type = character(total_rows),  # "prior" or "posterior"
         mean = numeric(total_rows),
         sd = numeric(total_rows),
-        mode = numeric(total_rows),     # NEW: mode from KDE
-        kl = numeric(total_rows),      # NEW: KL divergence (NA for prior rows)
+        mode = numeric(total_rows),
+        kl = numeric(total_rows),      # KL divergence (NA for prior rows)
         stringsAsFactors = FALSE
     )
 
@@ -361,6 +379,9 @@ calc_model_posterior_quantiles <- function(results,
             quantile_results$scale[row_idx] <- param_inventory$scale[i]
             quantile_results$iso_code[row_idx] <- ifelse(param_inventory$location[i] == "", NA_character_, param_inventory$location[i])
             quantile_results$distribution[row_idx] <- param_inventory$distribution[i]
+            quantile_results$posterior_distribution[row_idx] <- param_inventory$posterior_distribution[i]
+            quantile_results$posterior_lower[row_idx] <- param_inventory$posterior_lower[i]
+            quantile_results$posterior_upper[row_idx] <- param_inventory$posterior_upper[i]
             quantile_results$type[row_idx] <- "prior"
             quantile_results$kl[row_idx] <- NA_real_  # No KL for prior row
 
@@ -402,6 +423,9 @@ calc_model_posterior_quantiles <- function(results,
             quantile_results$scale[row_idx] <- param_inventory$scale[i]
             quantile_results$iso_code[row_idx] <- ifelse(param_inventory$location[i] == "", NA_character_, param_inventory$location[i])
             quantile_results$distribution[row_idx] <- param_inventory$distribution[i]
+            quantile_results$posterior_distribution[row_idx] <- param_inventory$posterior_distribution[i]
+            quantile_results$posterior_lower[row_idx] <- param_inventory$posterior_lower[i]
+            quantile_results$posterior_upper[row_idx] <- param_inventory$posterior_upper[i]
             quantile_results$type[row_idx] <- "posterior"
 
             # Calculate KL divergence if we have both prior and posterior
@@ -454,6 +478,7 @@ calc_model_posterior_quantiles <- function(results,
     names(output_df)[names(output_df) == "iso_code"] <- "location"
     names(output_df)[names(output_df) == "distribution"] <- "prior_distribution"
     names(output_df)[names(output_df) == "display_name"] <- "description"
+    # posterior_distribution, posterior_lower, posterior_upper pass through unchanged
 
     # Save quantiles as CSV
     output_file <- file.path(output_dir, "posterior_quantiles.csv")

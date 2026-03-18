@@ -1,50 +1,50 @@
-"parameter_name","display_name","description","units","distribution","scale","category","order","order_scale","order_category","order_parameter"
-"alpha_1","Population Mixing","Population mixing within metapops (0-1, 1 = well-mixed)","proportion","beta","global","transmission",1,"01","01","01"
-"alpha_2","Frequency-Driven Transmission","Degree of frequency driven transmission (0-1)","proportion","beta","global","transmission",2,"01","01","02"
-"decay_days_short","Minimum V. cholerae Survival","Minimum V. cholerae survival time in environment","days","uniform","global","environmental",3,"01","02","01"
-"decay_days_long","Maximum V. cholerae Survival","Maximum V. cholerae survival time in environment","days","uniform","global","environmental",4,"01","02","02"
-"decay_shape_1","Decay Shape Parameter 1","First shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",5,"01","02","03"
-"decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",6,"01","02","04"
-"zeta_1","Symptomatic Shedding Rate","Shedding rate for symptomatic infections","bacteria/day (rate)","lognormal","global","environmental",7,"01","02","05"
-"zeta_2","Asymptomatic Shedding Rate","Shedding rate for asymptomatic infections","bacteria/day (rate)","lognormal","global","environmental",8,"01","02","06"
-"kappa","50% Infectious Dose","Concentration of V. cholerae for 50% infectious dose","bacteria/mL","lognormal","global","environmental",9,"01","02","07"
-"iota","Incubation Rate","Rate parameter for incubation period (per day, 1/iota = mean incubation time)","per day (rate)","lognormal","global","disease",10,"01","03","01"
-"sigma","Proportion Symptomatic","Proportion of infections that are symptomatic","proportion","beta","global","disease",11,"01","03","02"
-"gamma_1","Symptomatic Recovery Rate","Recovery rate for symptomatic/severe infections","per day (rate)","lognormal","global","disease",12,"01","03","03"
-"gamma_2","Asymptomatic Recovery Rate","Recovery rate for asymptomatic/mild infections","per day (rate)","lognormal","global","disease",13,"01","03","04"
-"phi_1","One-Dose Vaccine Effectiveness","Initial vaccine effectiveness for one dose","proportion","beta","global","immunity",14,"01","04","01"
-"phi_2","Two-Dose Vaccine Effectiveness","Initial vaccine effectiveness for two dose","proportion","beta","global","immunity",15,"01","04","02"
-"omega_1","One-Dose Vaccine Waning Rate","Vaccine waning rate for one-dose vaccination","per day (rate)","gamma","global","immunity",16,"01","04","03"
-"omega_2","Two-Dose Vaccine Waning Rate","Vaccine waning rate for two-dose vaccination","per day (rate)","gamma","global","immunity",17,"01","04","04"
-"epsilon","Natural Immunity Waning Rate","Natural immunity waning rate","per day (rate)","lognormal","global","immunity",18,"01","04","05"
-"chi_endemic","PPV in Endemic Periods","Positive predictive value of suspected cholera cases in endemic periods","proportion","beta","global","surveillance",19,"01","05","01"
-"chi_epidemic","PPV in Epidemic Periods","Positive predictive value of suspected cholera cases in epidemic periods","proportion","beta","global","surveillance",20,"01","05","02"
-"delta_reporting_cases","Case Reporting Delay","Days from infection to case report in surveillance data","days","uniform","global","surveillance",21,"01","05","03"
-"delta_reporting_deaths","Death Reporting Delay","Days from infection to death report in surveillance data","days","uniform","global","surveillance",22,"01","05","04"
-"rho","Care-Seeking Probability","Probability a symptomatic infection is reported as a suspected case","proportion","beta","global","surveillance",23,"01","05","05"
-"mobility_gamma","Mobility Distance Decay","Distance decay parameter for human mobility","dimensionless","gamma","global","mobility",24,"01","06","01"
-"mobility_omega","Mobility Population Scaling","Population scaling parameter for human mobility","dimensionless","gamma","global","mobility",25,"01","06","02"
-"prop_S_initial","Initial Susceptible Proportion","Proportion of population susceptible at start","proportion","beta","location","initial_conditions",26,"02","01","01"
-"prop_E_initial","Initial Exposed Proportion","Proportion of population exposed at start","proportion","beta","location","initial_conditions",27,"02","01","02"
-"prop_I_initial","Initial Infected Proportion","Proportion of population infected at start","proportion","beta","location","initial_conditions",28,"02","01","03"
-"prop_R_initial","Initial Recovered Proportion","Proportion of population recovered/immune at start","proportion","beta","location","initial_conditions",29,"02","01","04"
-"prop_V1_initial","Initial One-Dose Vaccinated Proportion","Proportion with one vaccine dose at start","proportion","beta","location","initial_conditions",30,"02","01","05"
-"prop_V2_initial","Initial Two-Dose Vaccinated Proportion","Proportion with two vaccine doses at start","proportion","beta","location","initial_conditions",31,"02","01","06"
-"beta_j0_tot","Total Base Transmission Rate","Total base transmission rate (human + environmental)","per day","gompertz","location","transmission",32,"02","02","01"
-"p_beta","Human-to-Human Proportion","Proportion of total transmission that is human-to-human","proportion","beta","location","transmission",33,"02","02","02"
-"beta_j0_hum","Human-to-Human Transmission","Human-to-human component of transmission (derived from beta_j0_tot * p_beta)","per day","gamma","location","transmission",34,"02","02","03"
-"beta_j0_env","Environmental Transmission","Environmental component of transmission (derived from beta_j0_tot * (1-p_beta))","per day","gamma","location","transmission",35,"02","02","04"
-"a_1_j","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",36,"02","03","01"
-"a_2_j","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",37,"02","03","02"
-"b_1_j","Seasonality Coefficient b1","First Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",38,"02","03","03"
-"b_2_j","Seasonality Coefficient b2","Second Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",39,"02","03","04"
-"psi_star_a","Suitability Shape/Gain","Shape/gain parameter for logit calibration of NN suitability (a>1 sharpens, a<1 flattens)","dimensionless","truncnorm","location","environmental",40,"02","04","01"
-"psi_star_b","Suitability Scale/Offset","Scale/offset parameter for logit calibration (shifts baseline up/down)","dimensionless","normal","location","environmental",41,"02","04","02"
-"psi_star_z","Suitability Smoothing","Smoothing weight for causal EWMA (z=1: no smoothing, z<1: smoothing)","proportion","beta","location","environmental",42,"02","04","03"
-"psi_star_k","Suitability Time Offset","Time offset in days for suitability calibration (k>0: delay, k<0: advance)","days","truncnorm","location","environmental",43,"02","04","04"
-"mu_j_baseline","Baseline IFR","Baseline location-specific infection fatality ratio","proportion","gamma","location","disease",44,"02","05","01"
-"mu_j_slope","Temporal IFR Trend","Temporal trend in IFR (change per year)","per year","normal","location","disease",45,"02","05","02"
-"mu_j_epidemic_factor","Epidemic IFR Multiplier","Multiplier applied to IFR during epidemic periods","dimensionless","gamma","location","disease",46,"02","05","03"
-"epidemic_threshold","Epidemic Threshold","Case incidence threshold for epidemic period classification","cases/100k/week","lognormal","location","disease",47,"02","05","04"
-"tau_i","Travel Probability","Country-level travel/mobility probability","probability","beta","location","mobility",48,"02","05","05"
-"theta_j","WASH Coverage","WASH coverage index (proportion with adequate water, sanitation, hygiene)","proportion","beta","location","spatial",49,"02","05","06"
+"parameter_name","display_name","description","units","distribution","scale","category","order","order_scale","order_category","order_parameter","posterior_distribution","posterior_lower","posterior_upper"
+"alpha_1","Population Mixing","Population mixing within metapops (0-1, 1 = well-mixed)","proportion","beta","global","transmission",1,"01","01","01","beta",NA,NA
+"alpha_2","Frequency-Driven Transmission","Degree of frequency driven transmission (0-1)","proportion","beta","global","transmission",2,"01","01","02","beta",NA,NA
+"decay_days_short","Minimum V. cholerae Survival","Minimum V. cholerae survival time in environment","days","uniform","global","environmental",3,"01","02","01","lognormal",NA,NA
+"decay_days_long","Maximum V. cholerae Survival","Maximum V. cholerae survival time in environment","days","uniform","global","environmental",4,"01","02","02","lognormal",NA,NA
+"decay_shape_1","Decay Shape Parameter 1","First shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",5,"01","02","03","gamma",NA,NA
+"decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",6,"01","02","04","gamma",NA,NA
+"zeta_1","Symptomatic Shedding Rate","Shedding rate for symptomatic infections","bacteria/day (rate)","lognormal","global","environmental",7,"01","02","05","lognormal",NA,NA
+"zeta_2","Asymptomatic Shedding Rate","Shedding rate for asymptomatic infections","bacteria/day (rate)","lognormal","global","environmental",8,"01","02","06","lognormal",NA,NA
+"kappa","50% Infectious Dose","Concentration of V. cholerae for 50% infectious dose","bacteria/mL","lognormal","global","environmental",9,"01","02","07","lognormal",NA,NA
+"iota","Incubation Rate","Rate parameter for incubation period (per day, 1/iota = mean incubation time)","per day (rate)","lognormal","global","disease",10,"01","03","01","lognormal",NA,NA
+"sigma","Proportion Symptomatic","Proportion of infections that are symptomatic","proportion","beta","global","disease",11,"01","03","02","beta",NA,NA
+"gamma_1","Symptomatic Recovery Rate","Recovery rate for symptomatic/severe infections","per day (rate)","lognormal","global","disease",12,"01","03","03","lognormal",NA,NA
+"gamma_2","Asymptomatic Recovery Rate","Recovery rate for asymptomatic/mild infections","per day (rate)","lognormal","global","disease",13,"01","03","04","lognormal",NA,NA
+"phi_1","One-Dose Vaccine Effectiveness","Initial vaccine effectiveness for one dose","proportion","beta","global","immunity",14,"01","04","01","beta",NA,NA
+"phi_2","Two-Dose Vaccine Effectiveness","Initial vaccine effectiveness for two dose","proportion","beta","global","immunity",15,"01","04","02","beta",NA,NA
+"omega_1","One-Dose Vaccine Waning Rate","Vaccine waning rate for one-dose vaccination","per day (rate)","gamma","global","immunity",16,"01","04","03","gamma",NA,NA
+"omega_2","Two-Dose Vaccine Waning Rate","Vaccine waning rate for two-dose vaccination","per day (rate)","gamma","global","immunity",17,"01","04","04","gamma",NA,NA
+"epsilon","Natural Immunity Waning Rate","Natural immunity waning rate","per day (rate)","lognormal","global","immunity",18,"01","04","05","lognormal",NA,NA
+"chi_endemic","PPV in Endemic Periods","Positive predictive value of suspected cholera cases in endemic periods","proportion","beta","global","surveillance",19,"01","05","01","beta",NA,NA
+"chi_epidemic","PPV in Epidemic Periods","Positive predictive value of suspected cholera cases in epidemic periods","proportion","beta","global","surveillance",20,"01","05","02","beta",NA,NA
+"delta_reporting_cases","Case Reporting Delay","Days from infection to case report in surveillance data","days","uniform","global","surveillance",21,"01","05","03","truncnorm",0,7
+"delta_reporting_deaths","Death Reporting Delay","Days from infection to death report in surveillance data","days","uniform","global","surveillance",22,"01","05","04","truncnorm",0,14
+"rho","Care-Seeking Probability","Probability a symptomatic infection is reported as a suspected case","proportion","beta","global","surveillance",23,"01","05","05","beta",NA,NA
+"mobility_gamma","Mobility Distance Decay","Distance decay parameter for human mobility","dimensionless","gamma","global","mobility",24,"01","06","01","gamma",NA,NA
+"mobility_omega","Mobility Population Scaling","Population scaling parameter for human mobility","dimensionless","gamma","global","mobility",25,"01","06","02","gamma",NA,NA
+"prop_S_initial","Initial Susceptible Proportion","Proportion of population susceptible at start","proportion","beta","location","initial_conditions",26,"02","01","01","beta",NA,NA
+"prop_E_initial","Initial Exposed Proportion","Proportion of population exposed at start","proportion","beta","location","initial_conditions",27,"02","01","02","beta",NA,NA
+"prop_I_initial","Initial Infected Proportion","Proportion of population infected at start","proportion","beta","location","initial_conditions",28,"02","01","03","beta",NA,NA
+"prop_R_initial","Initial Recovered Proportion","Proportion of population recovered/immune at start","proportion","beta","location","initial_conditions",29,"02","01","04","beta",NA,NA
+"prop_V1_initial","Initial One-Dose Vaccinated Proportion","Proportion with one vaccine dose at start","proportion","beta","location","initial_conditions",30,"02","01","05","beta",NA,NA
+"prop_V2_initial","Initial Two-Dose Vaccinated Proportion","Proportion with two vaccine doses at start","proportion","beta","location","initial_conditions",31,"02","01","06","beta",NA,NA
+"beta_j0_tot","Total Base Transmission Rate","Total base transmission rate (human + environmental)","per day","gompertz","location","transmission",32,"02","02","01","gompertz",NA,NA
+"p_beta","Human-to-Human Proportion","Proportion of total transmission that is human-to-human","proportion","beta","location","transmission",33,"02","02","02","beta",NA,NA
+"beta_j0_hum","Human-to-Human Transmission","Human-to-human component of transmission (derived from beta_j0_tot * p_beta)","per day","gamma","location","transmission",34,"02","02","03","gamma",NA,NA
+"beta_j0_env","Environmental Transmission","Environmental component of transmission (derived from beta_j0_tot * (1-p_beta))","per day","gamma","location","transmission",35,"02","02","04","gamma",NA,NA
+"a_1_j","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",36,"02","03","01","normal",NA,NA
+"a_2_j","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",37,"02","03","02","normal",NA,NA
+"b_1_j","Seasonality Coefficient b1","First Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",38,"02","03","03","normal",NA,NA
+"b_2_j","Seasonality Coefficient b2","Second Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",39,"02","03","04","normal",NA,NA
+"psi_star_a","Suitability Shape/Gain","Shape/gain parameter for logit calibration of NN suitability (a>1 sharpens, a<1 flattens)","dimensionless","truncnorm","location","environmental",40,"02","04","01","truncnorm",NA,NA
+"psi_star_b","Suitability Scale/Offset","Scale/offset parameter for logit calibration (shifts baseline up/down)","dimensionless","normal","location","environmental",41,"02","04","02","normal",NA,NA
+"psi_star_z","Suitability Smoothing","Smoothing weight for causal EWMA (z=1: no smoothing, z<1: smoothing)","proportion","beta","location","environmental",42,"02","04","03","beta",NA,NA
+"psi_star_k","Suitability Time Offset","Time offset in days for suitability calibration (k>0: delay, k<0: advance)","days","truncnorm","location","environmental",43,"02","04","04","truncnorm",NA,NA
+"mu_j_baseline","Baseline IFR","Baseline location-specific infection fatality ratio","proportion","gamma","location","disease",44,"02","05","01","gamma",NA,NA
+"mu_j_slope","Temporal IFR Trend","Temporal trend in IFR (change per year)","per year","normal","location","disease",45,"02","05","02","normal",NA,NA
+"mu_j_epidemic_factor","Epidemic IFR Multiplier","Multiplier applied to IFR during epidemic periods","dimensionless","gamma","location","disease",46,"02","05","03","gamma",NA,NA
+"epidemic_threshold","Epidemic Threshold","Case incidence threshold for epidemic period classification","cases/100k/week","lognormal","location","disease",47,"02","05","04","lognormal",NA,NA
+"tau_i","Travel Probability","Country-level travel/mobility probability","probability","beta","location","mobility",48,"02","05","05","beta",NA,NA
+"theta_j","WASH Coverage","WASH coverage index (proportion with adequate water, sanitation, hygiene)","proportion","beta","location","spatial",49,"02","05","06","beta",NA,NA
