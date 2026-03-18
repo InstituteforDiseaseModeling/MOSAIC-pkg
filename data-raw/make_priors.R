@@ -1769,7 +1769,7 @@ for (iso in j) {
           distribution = "normal",
           parameters = list(
                mean = 0,        # Centered at no offset
-               sd = 2.0       # 95% CI: [-2.45, 2.45], allows larger baseline shifts
+               sd = 2.5         # 95% CI: [-4.90, 4.90]; old posterior lower tail (-4.65) was below sd=2.0 95th
           )
      )
 }
@@ -1800,10 +1800,10 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_k$location[[iso]] <- list(
           distribution = "truncnorm",
           parameters = list(
-               mean = 0,        # Centered at no offset
-               sd = 25,         # Standard deviation of 15 days (increased from 10)
-               a = -90,         # Lower bound: -60 days (increased from -45)
-               b = 90           # Upper bound: +60 days (increased from 45)
+               mean = 0,        # Centered at no offset (no assumed lag direction)
+               sd = 25,         # Wide enough to explore 0 to -90 days
+               a = -90,         # Lower bound: -90 days
+               b = 0            # Upper bound: k<=0 enforces advance-only (corrects NN forward-timing offset)
           )
      )
 }
