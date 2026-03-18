@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "10.0",
+          version = "11.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -134,12 +134,14 @@ priors_default$parameters_global$iota <- list(
 # Kappa is structurally unidentifiable alongside zeta and beta_env from case
 # data alone (Lee et al. 2017); standard practice in the cholera modeling
 # literature (Codeço 2001, Hartley 2006) is to fix it. We use a tight
-# Lognormal(log(1e6), 0.25) which keeps 95% of mass within a factor of
-# ~1.6 of the default (95% CI: [613k, 1.63M]).
+# Lognormal prior with mode exactly at 1e6 and sdlog=0.25.
+# For lognormal: mode = exp(meanlog - sdlog^2), so
+#   meanlog = log(1e6) + sdlog^2 = log(1e6) + 0.0625
+# This gives 95% CI approximately [626k, 1.60M].
 priors_default$parameters_global$kappa <- list(
      description = "Concentration of V. cholerae for 50% infectious dose",
      distribution = "lognormal",
-     parameters = list(meanlog = log(10^6), sdlog = 0.25)
+     parameters = list(meanlog = log(10^6) + 0.25^2, sdlog = 0.25)
 )
 
 
