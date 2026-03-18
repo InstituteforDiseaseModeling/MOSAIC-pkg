@@ -764,14 +764,14 @@ run_MOSAIC <- function(config,
     if (is.null(loaded_state)) {
       log_msg("WARNING: Failed to load or validate state file")
       log_msg("Starting fresh calibration")
-      .mosaic_init_state(control, param_names_estimated, nspec)
+      .mosaic_init_state(control, param_names_sampled, nspec)
     } else {
       log_msg("Successfully loaded state (batch %d, %d simulations completed)",
               loaded_state$batch_number, loaded_state$total_sims_run)
       loaded_state
     }
   } else {
-    .mosaic_init_state(control, param_names_estimated, nspec)
+    .mosaic_init_state(control, param_names_sampled, nspec)
   }
 
   log_msg("Starting simulation (mode: %s)", state$mode)
@@ -961,7 +961,7 @@ run_MOSAIC <- function(config,
       # which meant the final batch never updated the converged flag and
       # always emitted a spurious "no convergence" warning even when the
       # target was met on that last batch.
-      state <- .mosaic_ess_check_update_state(state, dirs, param_names_estimated, control)
+      state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
       .mosaic_save_state(state, state_file)
 
       if (state$total_sims_run >= control$calibration$max_simulations && !state$converged) {
@@ -1054,7 +1054,7 @@ run_MOSAIC <- function(config,
   log_msg("Calculating parameter ESS")
   ess_results <- calc_model_ess_parameter(
     results = results,
-    param_names = param_names_estimated,
+    param_names = param_names_sampled,
     likelihood_col = "likelihood",
     n_grid = 100,
     method = control$targets$ESS_method,
@@ -1561,7 +1561,7 @@ run_MOSAIC <- function(config,
       priors = priors,
       config = config,
       control = control,
-      param_names = param_names_estimated,
+      param_names = param_names_sampled,
       dirs = dirs,
       PATHS = PATHS,
       verbose = control$logging$verbose
