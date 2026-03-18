@@ -697,9 +697,22 @@
     log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
             nrow(ess_df), state$batch_number, min(ess_df$sims), max(ess_df$sims))
 
-    # Check if calibration should end
-    if (r2 >= control$calibration$target_r2 ||
-        state$batch_number >= control$calibration$max_batches) {
+    # Check if calibration should end.
+    # R² is only used as an exit signal when there are at least 5 data points
+    # (3 residual df). A 2-parameter model fit to exactly min_batches=3 points
+    # has only 1 residual df, making R² trivially near 1 for any monotone ESS
+    # trajectory. The max_batches hard limit is always honoured regardless.
+    min_r2_points <- 5L
+    r2_converged <- r2 >= control$calibration$target_r2 && nrow(ess_df) >= min_r2_points
+    if (r2_converged) {
+      log_msg("  R² criterion met with %d data points (min required: %d)",
+              nrow(ess_df), min_r2_points)
+    } else if (r2 >= control$calibration$target_r2 && nrow(ess_df) < min_r2_points) {
+      log_msg("  R² = %.4f >= target, but only %d data point(s) — need >= %d for reliable R²",
+              r2, nrow(ess_df), min_r2_points)
+    }
+
+    if (r2_converged || state$batch_number >= control$calibration$max_batches) {
 
       # Calculate remaining gap
       current_n <- nrow(ess_check_results)
