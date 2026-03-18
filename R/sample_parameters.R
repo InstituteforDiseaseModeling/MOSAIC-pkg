@@ -392,6 +392,11 @@ sample_global_parameters_impl <- function(config_sampled, global_params,
         verbose = FALSE
       )
 
+      # delta_reporting_* are integer days; make_LASER_config() rejects non-integers
+      if (param_name %in% c("delta_reporting_cases", "delta_reporting_deaths")) {
+        sampled_value <- as.integer(round(sampled_value))
+      }
+
       config_sampled[[param_name]] <- sampled_value
 
       if (verbose) {

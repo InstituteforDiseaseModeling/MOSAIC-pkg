@@ -19,8 +19,8 @@
 "epsilon","Natural Immunity Waning Rate","Natural immunity waning rate","per day (rate)","lognormal","global","immunity",18,"01","04","05","lognormal",NA,NA
 "chi_endemic","PPV in Endemic Periods","Positive predictive value of suspected cholera cases in endemic periods","proportion","beta","global","surveillance",19,"01","05","01","beta",NA,NA
 "chi_epidemic","PPV in Epidemic Periods","Positive predictive value of suspected cholera cases in epidemic periods","proportion","beta","global","surveillance",20,"01","05","02","beta",NA,NA
-"delta_reporting_cases","Case Reporting Delay","Days from infection to case report in surveillance data","days","uniform","global","surveillance",21,"01","05","03","truncnorm",0,7
-"delta_reporting_deaths","Death Reporting Delay","Days from infection to death report in surveillance data","days","uniform","global","surveillance",22,"01","05","04","truncnorm",0,14
+"delta_reporting_cases","Case Reporting Delay","Days from infection to case report in surveillance data","days","truncnorm","global","surveillance",21,"01","05","03","truncnorm",0,7
+"delta_reporting_deaths","Death Reporting Delay","Days from infection to death report in surveillance data","days","truncnorm","global","surveillance",22,"01","05","04","truncnorm",0,14
 "rho","Care-Seeking Probability","Probability a symptomatic infection is reported as a suspected case","proportion","beta","global","surveillance",23,"01","05","05","beta",NA,NA
 "mobility_gamma","Mobility Distance Decay","Distance decay parameter for human mobility","dimensionless","gamma","global","mobility",24,"01","06","01","gamma",NA,NA
 "mobility_omega","Mobility Population Scaling","Population scaling parameter for human mobility","dimensionless","gamma","global","mobility",25,"01","06","02","gamma",NA,NA
