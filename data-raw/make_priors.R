@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "9.1.0",
+          version = "9.2.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -1759,8 +1759,8 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_z$location[[iso]] <- list(
           distribution = "beta",
           parameters = list(
-               shape1 = 1,      # Mean: 0.75, Mode: 1.0
-               shape2 = 1       # 95% CI: [0.21, 1.00], allows more smoothing flexibility
+               shape1 = 3,      # Beta(3,1): mean=0.75, mode=1.0 (no smoothing most probable)
+               shape2 = 1       # Right-skewed toward z=1; 95% CI ~[0.37, 1.00]
           )
      )
 }
