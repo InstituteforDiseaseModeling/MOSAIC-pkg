@@ -76,22 +76,28 @@ priors_default$parameters_global$decay_days_short <- list(
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation
-# Lower bound extended from 0.5 to 0.1: allows U-shaped (arcsine-type) suitability-survival mapping
-# where survival changes mainly at environmental extremes -- biologically defensible for tropical Africa.
-# Upper bound kept at 5.0: values >5 produce near-step-function behavior not supported by V. cholerae
-# survival literature (thresholds are moderate sigmoids, not binary switches).
+# Bounds [0.1, 10]: lower bound 0.1 allows U-shaped (arcsine-type) mapping where survival responds
+# mainly at environmental extremes. Upper bound 10 supported by empirical evidence: 85% of 84
+# country-level calibrations had posterior q97.5 > 4.8 against old bound=5.
+# Functionally, s1=s2=10 spans 99.7% of [days_short, days_long] across psi in [0.2,0.8] --
+# steep sigmoid but not a step function; increment from s=5 to s=10 is only ~3 days of extra variation.
 priors_default$parameters_global$decay_shape_1 <- list(
      description = "First shape parameter of Beta distribution for V. cholerae decay",
      distribution = "uniform",
-     parameters = list(min = 0.1, max = 5.0)
+     parameters = list(min = 0.1, max = 10.0)
 )
 
 # decay_shape_2 - Second shape parameter of Beta distribution for V. cholerae decay rate transformation
-# Same rationale as decay_shape_1.
+# Same rationale as decay_shape_1. Upper bound extended to 10: 85% of calibration runs (n=84)
+# across all MOSAIC countries had posterior q97.5 > 4.8 against the old bound=5, confirming
+# truncation. Functionally, s1=s2=10 spans 99.7% of the [days_short, days_long] survival range
+# across psi in [0.2,0.8] -- a steep but continuous sigmoid, not a step function.
+# Asymmetric extreme combinations (e.g. s1=10, s2=0.1) have ~5-6% prior mass and are
+# biologically implausible, but acceptable given the strong empirical evidence for extension.
 priors_default$parameters_global$decay_shape_2 <- list(
      description = "Second shape parameter of Beta distribution for V. cholerae decay",
      distribution = "uniform",
-     parameters = list(min = 0.1, max = 5.0)
+     parameters = list(min = 0.1, max = 10.0)
 )
 
 # epsilon - Natural immunity waning rate
