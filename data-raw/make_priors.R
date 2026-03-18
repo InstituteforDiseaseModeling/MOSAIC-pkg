@@ -1750,8 +1750,8 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_a$location[[iso]] <- list(
           distribution = "truncnorm",
           parameters = list(
-               mean = 1,    # Neutral value: a=1 is the identity (no transformation)
-               sd   = 0.5,  # 95% CI: ~[0.02, 1.98]; P(a<0) < 2.3% so truncation is negligible
+               mean = 1,    # Neutral value: a=1 is identity (no transformation); mode=1
+               sd   = 1.0,  # 95% CI: ~[0.08, 3.03]; P(a>2)=18.9% matches old Lognormal(0,0.9) at 22.1%
                a    = 0,    # Lower bound enforces a > 0 (required by calc_psi_star)
                b    = Inf   # No upper bound
           )
@@ -1784,8 +1784,8 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_z$location[[iso]] <- list(
           distribution = "beta",
           parameters = list(
-               shape1 = 3,      # Beta(3,1): mean=0.75, mode=1.0 (no smoothing most probable)
-               shape2 = 1       # Right-skewed toward z=1; 95% CI ~[0.37, 1.00]
+               shape1 = 1,      # Beta(1,1): uniform on [0,1]; no prior preference for smoothing level
+               shape2 = 1       # Old posterior (MOZ) median=0.56, 95% CI=[0.07, 0.95] -- full range used
           )
      )
 }
