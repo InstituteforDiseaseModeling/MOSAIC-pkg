@@ -756,14 +756,20 @@
     log_msg("  → Predictive batch complete, proceeding to fine-tuning")
   }
 
-  # Check convergence
-  n_converged <- sum(ess_current$ess_marginal >= control$targets$ESS_param, na.rm = TRUE)
-  prop_converged <- n_converged / length(param_names_est)
+  # Check convergence.
+  # Use only parameters that produced a valid ESS estimate as the denominator.
+  # Parameters whose KDE failed return NA in ess_marginal; dividing by
+  # length(param_names_est) would count them as "not converged" and make
+  # the target proportion artificially harder to reach.
+  n_converged    <- sum(ess_current$ess_marginal >= control$targets$ESS_param, na.rm = TRUE)
+  n_ess_computed <- sum(!is.na(ess_current$ess_marginal))
+  prop_converged <- if (n_ess_computed > 0L) n_converged / n_ess_computed else 0
 
   if (prop_converged >= control$targets$ESS_param_prop) {
     state$converged <- TRUE
-    log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f",
-            prop_converged * 100, control$targets$ESS_param)
+    log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (computed on %d/%d params)",
+            prop_converged * 100, control$targets$ESS_param,
+            n_ess_computed, length(param_names_est))
   }
 
   # Clean up and return
