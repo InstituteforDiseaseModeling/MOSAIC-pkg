@@ -562,6 +562,20 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     # Skip if no method has this parameter
     if (length(param_distributions) == 0) return(NULL)
 
+    # Separate fixed-value markers from distributional entries
+    fixed_values <- list()
+    dist_only <- list()
+    for (mn in names(param_distributions)) {
+      if (!is.null(param_distributions[[mn]]$distribution) &&
+          param_distributions[[mn]]$distribution == "fixed") {
+        val <- as.numeric(param_distributions[[mn]]$parameters$value)
+        if (is.finite(val)) fixed_values[[mn]] <- val
+      } else {
+        dist_only[[mn]] <- param_distributions[[mn]]
+      }
+    }
+    param_distributions <- dist_only
+
     # Calculate density for each method
     method_results <- list()
     for (method_name in names(param_distributions)) {
@@ -582,9 +596,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       }
     }
 
-    if (length(method_results) == 0) {
+    if (length(method_results) == 0 && length(fixed_values) == 0) {
       if (verbose) {
-        cat(sprintf("  [NO PLOT] %s: No valid densities calculated for any method\n", param_name))
+        cat(sprintf("  [NO PLOT] %s: No valid densities or fixed values for any method\n", param_name))
       }
       return(NULL)
     }
@@ -617,7 +631,11 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       }
     }
 
-    if (nrow(plot_data) == 0) {
+    # If only fixed values exist (no density data), build a minimal plot showing
+    # the prior-free axis and add the fixed-value vlines below
+    fixed_only <- nrow(plot_data) == 0
+
+    if (fixed_only && length(fixed_values) == 0) {
       if (verbose) {
         cat(sprintf("  [NO PLOT] %s: No data survived finite value filtering\n", param_name))
       }
@@ -625,8 +643,14 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     }
 
     # Ensure method factor levels are in the order they appear in method_names
-    available_methods <- intersect(names(methods_data), unique(plot_data$method))
-    plot_data$method <- factor(plot_data$method, levels = available_methods)
+    available_methods <- if (fixed_only) {
+      character(0)
+    } else {
+      intersect(names(methods_data), unique(plot_data$method))
+    }
+    if (!fixed_only) {
+      plot_data$method <- factor(plot_data$method, levels = available_methods)
+    }
 
     # Create subtitle with distribution information
     subtitle_lines <- c()
@@ -635,6 +659,12 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         result <- method_results[[method_name]]
         subtitle_lines <- c(subtitle_lines, paste0(method_name, ": ", result$dist_str))
       }
+    }
+    # Add fixed-value entries to subtitle
+    for (method_name in names(fixed_values)) {
+      subtitle_lines <- c(subtitle_lines,
+                          sprintf("%s: Fixed = %s", method_name,
+                                  format(fixed_values[[method_name]], digits = 4, scientific = FALSE)))
     }
     subtitle_str <- paste(subtitle_lines, collapse = "\n")
 
@@ -647,12 +677,23 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       ggplot2::scale_x_continuous()
     }
 
-    # Create plot
-    p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = x, y = y, color = method, fill = method)) +
-      ggplot2::geom_area(alpha = 0.25, position = "identity") +  # Slightly lower alpha for better overlap visibility
-      ggplot2::geom_line(linewidth = 1.2) +  # Thicker lines for better distinguishability
-      ggplot2::scale_color_manual(values = method_colors[available_methods], name = "Method") +
-      ggplot2::scale_fill_manual(values = method_colors[available_methods], name = "Method") +
+    # Build base plot — use an empty data frame when only fixed values exist
+    if (fixed_only) {
+      # x range from fixed values; y range 0-1 (arbitrary, no density axis needed)
+      fv <- unlist(fixed_values)
+      x_pad <- max(abs(fv)) * 0.5
+      dummy_df <- data.frame(x = c(min(fv) - x_pad, max(fv) + x_pad), y = c(0, 1))
+      p <- ggplot2::ggplot(dummy_df, ggplot2::aes(x = x, y = y)) +
+        ggplot2::geom_blank()
+    } else {
+      p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = x, y = y, color = method, fill = method)) +
+        ggplot2::geom_area(alpha = 0.25, position = "identity") +
+        ggplot2::geom_line(linewidth = 1.2) +
+        ggplot2::scale_color_manual(values = method_colors[available_methods], name = "Method") +
+        ggplot2::scale_fill_manual(values = method_colors[available_methods], name = "Method")
+    }
+
+    p <- p +
       x_scale +
       ggplot2::theme_minimal() +
       ggplot2::theme(
@@ -662,7 +703,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         axis.title.x = ggplot2::element_text(size = 9),
         panel.grid.minor = ggplot2::element_blank(),
         panel.grid.major = ggplot2::element_line(color = "gray90"),
-        legend.position = "none"  # Remove legend from individual plots
+        legend.position = "none"
       ) +
       ggplot2::labs(
         title = paste0(param_info$display_name, " (", param_name, ")"),
@@ -670,7 +711,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         x = param_info$units
       )
 
-    # Add mean lines for each method
+    # Add mean lines for distributional posteriors
     for (method_name in names(method_results)) {
       result <- method_results[[method_name]]
       if (!is.null(result$mean_val) && is.finite(result$mean_val) &&
@@ -681,6 +722,17 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
                              color = method_colors[method_name], alpha = 0.5)
         }
       }
+    }
+
+    # Add solid vertical lines for fixed (not-sampled) parameters
+    for (method_name in names(fixed_values)) {
+      p <- p + ggplot2::geom_vline(
+        xintercept = fixed_values[[method_name]],
+        linetype   = "solid",
+        linewidth  = 1.2,
+        color      = method_colors[method_name],
+        alpha      = 0.85
+      )
     }
 
     return(p)

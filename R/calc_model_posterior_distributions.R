@@ -245,16 +245,21 @@ calc_model_posterior_distributions <- function(
         }
         if (relative_range < 1e-4) {
             if (verbose) {
-                message(sprintf("  [FIXED] %s - near-zero variance (q_low=%.6g, q_high=%.6g); removing from posteriors",
+                message(sprintf("  [FIXED] %s - near-zero variance (q_low=%.6g, q_high=%.6g); storing as point value",
                                 param_name, q_low, q_high))
             }
-            # Remove from posteriors so it is absent from the output JSON
-            # and the plotter shows only the prior curve.
+            # Store as a "fixed" marker so the distribution plotter can draw
+            # a vertical line at the point value instead of a density curve.
+            fixed_marker <- list(
+                distribution = "fixed",
+                parameters   = list(value = q_med)
+            )
             if (param_scale == "global") {
-                posteriors$parameters_global[[param_base]] <- NULL
+                posteriors$parameters_global[[param_base]] <- fixed_marker
             } else if (param_scale == "location" && !is.null(location)) {
-                posteriors$parameters_location[[param_base]]$location[[location]] <- NULL
+                posteriors$parameters_location[[param_base]]$location[[location]] <- fixed_marker
             }
+            n_updated <- n_updated + 1
             next
         }
 
