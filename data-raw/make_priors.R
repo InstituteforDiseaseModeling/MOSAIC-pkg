@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "9.2.0",
+          version = "10.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -466,20 +466,26 @@ priors_default$parameters_global$zeta_2 <- list(
      parameters = list(meanlog = log(1), sdlog = 1.5)
 )
 
-# delta_reporting_cases - Infection-to-case reporting delay
-# This corresponds to the delta_t parameter in calc_cases_from_infections()
+# delta_reporting_cases - Symptom-onset-to-case reporting delay
+# Incubation is already handled by the E compartment (iota parameter); this
+# captures only the lag from symptom onset to surveillance report.
+# Prior: TruncNorm(mean=2, sd=2, a=0, b=7) — mode near 1-2 days, hard ceiling at 7.
+# Sampled value is rounded to the nearest integer before passing to make_LASER_config().
 priors_default$parameters_global$delta_reporting_cases <- list(
-     description = "Infection-to-case reporting delay in days",
-     distribution = "discrete_uniform",
-     parameters = list(min = 0, max = 7)
+     description = "Symptom-onset-to-case reporting delay in days (integer, 0-7)",
+     distribution = "truncnorm",
+     parameters = list(mean = 2, sd = 2, a = 0, b = 7)
 )
 
-# delta_reporting_deaths - Infection-to-death reporting delay
-# This corresponds to the delta_t parameter in calc_deaths_from_infections()
+# delta_reporting_deaths - Symptom-onset-to-death reporting delay
+# Incubation is already handled by the E compartment (iota parameter); this
+# captures the lag from symptom onset through clinical progression to death report.
+# Prior: TruncNorm(mean=4, sd=3, a=0, b=14) — mode near 3-5 days, hard ceiling at 14.
+# Sampled value is rounded to the nearest integer before passing to make_LASER_config().
 priors_default$parameters_global$delta_reporting_deaths <- list(
-     description = "Infection-to-death reporting delay in days",
-     distribution = "discrete_uniform",
-     parameters = list(min = 0, max = 14)
+     description = "Symptom-onset-to-death reporting delay in days (integer, 0-14)",
+     distribution = "truncnorm",
+     parameters = list(mean = 4, sd = 3, a = 0, b = 14)
 )
 
 

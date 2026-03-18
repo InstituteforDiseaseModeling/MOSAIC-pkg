@@ -173,10 +173,8 @@ global_params <- data.frame(
     # Immunity - reordered
     "beta", "beta", "gamma", "gamma", "lognormal",
     # Surveillance
-    # chi_endemic, chi_epidemic: Beta; delta_reporting_*: prior is discrete_uniform([0,7],[0,14]);
-    # no discrete posterior fitter exists, so "uniform" is the continuous approximation that
-    # covers the same range and supports 0 (unlike lognormal); rho: Beta
-    "beta", "beta", "uniform", "uniform", "beta",
+    # chi_endemic, chi_epidemic: Beta; delta_reporting_*: TruncNorm prior ([0,7],[0,14]); rho: Beta
+    "beta", "beta", "truncnorm", "truncnorm", "beta",
     # Mobility
     "gamma", "gamma"
   ),

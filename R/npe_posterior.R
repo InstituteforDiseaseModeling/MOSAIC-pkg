@@ -1672,6 +1672,14 @@ evaluate_prior_densities <- function(samples, priors, verbose = FALSE) {
             log_p <- dnorm(values, mean = prior$mean, sd = prior$sd, log = TRUE)
         } else if (prior$distribution == "uniform") {
             log_p <- dunif(values, min = prior$min, max = prior$max, log = TRUE)
+        } else if (prior$distribution %in% c("truncnorm", "discrete_uniform")) {
+            # truncnorm parameters: mean, sd, a (lower bound), b (upper bound)
+            # discrete_uniform treated as continuous truncnorm for density evaluation
+            a_val  <- if (!is.null(prior$parameters$a))    prior$parameters$a    else prior$parameters$min
+            b_val  <- if (!is.null(prior$parameters$b))    prior$parameters$b    else prior$parameters$max
+            mn     <- if (!is.null(prior$parameters$mean)) prior$parameters$mean else (a_val + b_val) / 2
+            sd_val <- if (!is.null(prior$parameters$sd))   prior$parameters$sd   else (b_val - a_val) / 4
+            log_p  <- truncnorm::dtruncnorm(values, a = a_val, b = b_val, mean = mn, sd = sd_val, log = TRUE)
         } else {
             warning("Unknown distribution type for ", param, ": ", prior$distribution)
             log_p <- rep(0, length(values))
