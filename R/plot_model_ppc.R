@@ -341,6 +341,9 @@ plot_model_ppc <- function(predictions_dir = NULL,
             valid <- !is.na(obs_v) & !is.na(pred_v)
             obs_v_valid <- obs_v[valid]
 
+            # Expand right margin to accommodate out-of-area legend
+            par(mar = c(4.5, 4.5, 3, 10))
+
             if (!is.null(lo50) && !is.null(hi50) && !is.null(lo95) && !is.null(hi95) &&
                 length(obs_v_valid) > 0) {
 
@@ -353,52 +356,52 @@ plot_model_ppc <- function(predictions_dir = NULL,
                 # Bayesian p-value: P(pred > obs)
                 bp <- mean(pred_v[valid] > obs_v_valid, na.rm = TRUE)
 
-                bar_vals <- c(cov50, cov95)
-                nom_vals <- c(50, 95)
-                bar_cols <- sapply(seq_along(bar_vals), function(k) {
-                    diff <- abs(bar_vals[k] - nom_vals[k])
-                    if (diff <= 5)  "#4CAF50"   # green: within 5pp
-                    else if (diff <= 15) "#FF9800" # orange: 5-15pp
-                    else "#F44336"                  # red: >15pp
-                })
+                # Use the metric's own color: lighter shade for 50% CI, solid for 95% CI
+                col_50 <- adjustcolor(col_pred, alpha.f = 0.45)
+                col_95 <- col_pred
 
                 plot(0, 0, type = "n",
-                     xlim = c(0, 3), ylim = c(0, 110),
+                     xlim = c(0, 3), ylim = c(0, 115),
                      xaxt = "n", yaxt = "n",
                      xlab = "", ylab = "Coverage (%)",
-                     main = paste0("CI Coverage: ", metric))
+                     main = paste0("CI Coverage: ", metric),
+                     sub  = paste0("Bayesian p = ", round(bp, 3),
+                                   "  (n = ", length(obs_v_valid), ")"))
                 add_grid()
                 axis(2, at = seq(0, 100, 10))
-                axis(1, at = c(1, 2), labels = c("50% CI", "95% CI"), tick = FALSE, cex.axis = 1.1)
+                axis(1, at = c(1, 2), labels = c("50% CI", "95% CI"),
+                     tick = FALSE, cex.axis = 1.1, padj = -0.5)
 
-                # Draw bars
-                rect(0.55, 0, 1.45, bar_vals[1], col = bar_cols[1], border = "white", lwd = 1.5)
-                rect(1.55, 0, 2.45, bar_vals[2], col = bar_cols[2], border = "white", lwd = 1.5)
+                # Bars
+                rect(0.55, 0, 1.45, cov50, col = col_50, border = NA)
+                rect(1.55, 0, 2.45, cov95, col = col_95, border = NA)
 
-                # Nominal reference lines
-                segments(0.55, nom_vals[1], 1.45, nom_vals[1],
-                         col = "black", lwd = 2.5, lty = 2)
-                segments(1.55, nom_vals[2], 2.45, nom_vals[2],
-                         col = "black", lwd = 2.5, lty = 2)
+                # Nominal reference lines spanning each bar
+                segments(0.55, 50, 1.45, 50, col = "black", lwd = 2.5, lty = 2)
+                segments(1.55, 95, 2.45, 95, col = "black", lwd = 2.5, lty = 2)
 
-                # Coverage labels on bars
-                text(1.0, max(bar_vals[1] + 4, 8),
-                     paste0(round(cov50, 1), "%"), cex = 1.0, font = 2)
-                text(2.0, max(bar_vals[2] + 4, 8),
-                     paste0(round(cov95, 1), "%"), cex = 1.0, font = 2)
+                # Empirical coverage labels above each bar
+                text(1.0, max(cov50 + 4, 8), paste0(round(cov50, 1), "%"), cex = 1.0, font = 2)
+                text(2.0, max(cov95 + 4, 8), paste0(round(cov95, 1), "%"), cex = 1.0, font = 2)
 
-                # Bayesian p-value annotation
-                mtext(paste0("Bayesian p = ", round(bp, 3),
-                             "  (n = ", length(obs_v_valid), ")"),
-                      side = 1, line = 2.5, cex = 0.85, font = 3)
-
-                legend("topright",
-                       legend = c("Nominal coverage", "Color: |obs - nominal|",
-                                  "  <=5pp (good)", "  5-15pp (warn)", "  >15pp (poor)"),
-                       col    = c("black", NA, "#4CAF50", "#FF9800", "#F44336"),
-                       lty    = c(2, NA, 1, 1, 1),
-                       lwd    = c(2.5, NA, 6, 6, 6),
-                       bty    = "n", cex = 0.8)
+                # Legend placed in the right margin, outside the plot area
+                par(xpd = NA)
+                legend(x = 3.15, y = 110,
+                       title     = "Legend",
+                       title.col = "black",
+                       legend    = c(
+                           "50% CI bar (lighter)",
+                           "95% CI bar (solid)",
+                           "Nominal target (--)"
+                       ),
+                       fill   = c(col_50, col_95, NA),
+                       border = c(NA,     NA,     NA),
+                       lty    = c(NA,     NA,     2),
+                       lwd    = c(NA,     NA,     2.5),
+                       col    = c(NA,     NA,     "black"),
+                       bty    = "n", cex = 0.82, y.intersp = 1.3,
+                       text.col = "black")
+                par(xpd = FALSE)
 
             } else {
                 plot.new()
