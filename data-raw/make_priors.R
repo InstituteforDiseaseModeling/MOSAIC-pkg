@@ -446,26 +446,25 @@ priors_default$parameters_global$sigma <- list(
 
 # zeta_1 - Symptomatic shedding rate (bacteria per infected person per day, LASER total-count units)
 # Equilibrium analysis: W_eq = zeta_1 * Isym * (1-theta) / delta. With kappa fixed at 1e6,
-# delta=1/30, Isym=1000, theta=0.5: zeta_1~67 puts W~kappa (50% max FOI). The LASER default
-# (7.5) keeps the system in the linear regime at typical outbreak sizes, which is biologically
-# plausible. Literature values (cells/mL/person/day) are not directly comparable due to unit
-# mismatch (total count vs. concentration). Lognormal chosen over Uniform because zeta spans
-# orders of magnitude and linear Uniform would concentrate >99% of mass at the upper bound.
-# Lognormal(log(10), 1.5): median=10, 95% CI=[0.5, 189]; LASER default (7.5) well within CI.
+# delta=1/30, Isym=1000, theta=0.5, the linear-saturation transition occurs at zeta_1* ~ 33.
+# Prior centered at median=100 (3x above transition) with sdlog=3.0 gives approximately
+# equal mass across regimes: ~36% linear (zeta<33), ~30% transition (33-330),
+# ~32% mild saturation (330-33k), ~3% strong saturation (>33k).
+# 95% CI=[0.28, 35777]; LASER default (7.5) at ~19th percentile.
 priors_default$parameters_global$zeta_1 <- list(
      description = "Symptomatic shedding rate (total bacteria per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(10), sdlog = 1.5)
+     parameters = list(meanlog = log(100), sdlog = 3.0)
 )
 
 # zeta_2 - Asymptomatic shedding rate (bacteria per infected person per day, LASER total-count units)
-# Should be substantially less than zeta_1 (symptomatic individuals shed ~10-1000x more).
-# Prior centered at 10:1 ratio relative to zeta_1: Lognormal(log(1), 1.5).
-# Median=1, 95% CI=[0.05, 19]; LASER default (2.5) well within CI.
+# Maintains ~10:1 ratio to zeta_1 (symptomatic individuals shed substantially more).
+# Median=10, sdlog=3.0 matches zeta_1 breadth; 95% CI=[0.03, 3578].
+# LASER default (2.5) at ~32nd percentile.
 priors_default$parameters_global$zeta_2 <- list(
      description = "Asymptomatic shedding rate (total bacteria per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(1), sdlog = 1.5)
+     parameters = list(meanlog = log(10), sdlog = 3.0)
 )
 
 # delta_reporting_cases - Symptom-onset-to-case reporting delay
