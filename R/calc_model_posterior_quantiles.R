@@ -295,18 +295,25 @@ calc_model_posterior_quantiles <- function(results,
         }
     }
 
-    # Add any remaining parameters not in estimated_parameters template
+    # Add any remaining parameters not in estimated_parameters template.
+    # Must include all 9 columns that param_inventory was initialised with,
+    # including posterior_distribution / posterior_lower / posterior_upper
+    # added by the prior-update work — omitting them causes an rbind column
+    # mismatch crash.
     remaining_params <- setdiff(param_cols, param_inventory$parameter)
     if (length(remaining_params) > 0) {
         for (param in remaining_params) {
             param_inventory <- rbind(param_inventory, data.frame(
-                parameter = param,
-                display_name = param,
-                category = "other",
-                scale = "unknown",
-                location = "",
-                distribution = "unknown",
-                stringsAsFactors = FALSE
+                parameter            = param,
+                display_name         = param,
+                category             = "other",
+                scale                = "unknown",
+                location             = "",
+                distribution         = "unknown",
+                posterior_distribution = NA_character_,
+                posterior_lower      = NA_real_,
+                posterior_upper      = NA_real_,
+                stringsAsFactors     = FALSE
             ))
         }
     }
