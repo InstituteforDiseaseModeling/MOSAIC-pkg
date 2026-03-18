@@ -140,6 +140,12 @@ calc_model_posterior_distributions <- function(
     n_failed <- 0
     failed_params <- character()
 
+    # Track which parameters actually appear in the quantiles file so that
+    # parameters absent from the file (and thus unchanged copies of the prior)
+    # can be removed from posteriors after the loop.
+    quantiles_global_params   <- character()
+    quantiles_location_params <- character()  # "param_base:location"
+
     if (verbose) {
         message("\nProcessing ", nrow(quantiles), " posterior parameters...")
         message("------------------------------------------------")
@@ -208,6 +214,14 @@ calc_model_posterior_distributions <- function(
             }
         }
 
+        # Track which parameters appear in the quantiles file
+        if (param_scale == "global") {
+            quantiles_global_params <- unique(c(quantiles_global_params, param_base))
+        } else if (param_scale == "location" && !is.null(location)) {
+            quantiles_location_params <- unique(c(quantiles_location_params,
+                                                  paste0(param_base, ":", location)))
+        }
+
         # Skip if quantiles are missing
         if (is.na(q_low) || is.na(q_med) || is.na(q_high)) {
             if (verbose) {
@@ -215,6 +229,32 @@ calc_model_posterior_distributions <- function(
             }
             n_failed <- n_failed + 1
             failed_params <- c(failed_params, param_name)
+            next
+        }
+
+        # Detect near-zero-variance parameters (fixed / not sampled).
+        # When a parameter is held constant across all simulations, all three
+        # quantiles are identical. The downstream bounds correction would
+        # artificially expand the CI and produce a misleading "posterior".
+        # Instead, remove the parameter from the posteriors object so the
+        # distribution plot only shows the prior curve.
+        relative_range <- if (abs(q_med) > 1e-10) {
+            abs(q_high - q_low) / abs(q_med)
+        } else {
+            abs(q_high - q_low)
+        }
+        if (relative_range < 1e-4) {
+            if (verbose) {
+                message(sprintf("  [FIXED] %s - near-zero variance (q_low=%.6g, q_high=%.6g); removing from posteriors",
+                                param_name, q_low, q_high))
+            }
+            # Remove from posteriors so it is absent from the output JSON
+            # and the plotter shows only the prior curve.
+            if (param_scale == "global") {
+                posteriors$parameters_global[[param_base]] <- NULL
+            } else if (param_scale == "location" && !is.null(location)) {
+                posteriors$parameters_location[[param_base]]$location[[location]] <- NULL
+            }
             next
         }
 
@@ -431,6 +471,38 @@ calc_model_posterior_distributions <- function(
                 message("  Warning: Could not find ", param_name, " in posteriors structure")
             }
         }
+    }
+
+    # -------------------------------------------------------------------------
+    # Remove parameters that were never in the quantiles file.
+    # posteriors was initialised as a full copy of priors, so any parameter
+    # absent from the quantiles CSV would otherwise appear in the output JSON
+    # with its prior distribution unchanged, causing the distribution plot to
+    # draw both a "prior" curve and an identical "posterior" curve.
+    # -------------------------------------------------------------------------
+
+    # Global parameters not in quantiles file
+    for (param in setdiff(names(posteriors$parameters_global), quantiles_global_params)) {
+        posteriors$parameters_global[[param]] <- NULL
+    }
+
+    # Location-specific parameters not in quantiles file
+    for (pb in names(posteriors$parameters_location)) {
+        locs_in_quantiles <- sub(paste0("^", pb, ":"), "",
+                                 grep(paste0("^", pb, ":"), quantiles_location_params, value = TRUE))
+        locs_to_remove <- setdiff(names(posteriors$parameters_location[[pb]]$location),
+                                  locs_in_quantiles)
+        for (loc in locs_to_remove) {
+            posteriors$parameters_location[[pb]]$location[[loc]] <- NULL
+        }
+        if (length(posteriors$parameters_location[[pb]]$location) == 0) {
+            posteriors$parameters_location[[pb]] <- NULL
+        }
+    }
+
+    n_pruned <- length(setdiff(names(priors$parameters_global), names(posteriors$parameters_global)))
+    if (verbose && n_pruned > 0) {
+        message("  Removed ", n_pruned, " global parameters absent from quantiles file (not sampled)")
     }
 
     # Write posteriors to JSON
