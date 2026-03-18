@@ -65,7 +65,7 @@ priors_default$parameters_global$alpha_2 <- list(
 priors_default$parameters_global$decay_days_long <- list(
      description = "Maximum V. cholerae survival time (days)",
      distribution = "uniform",
-     parameters = list(min = 30, max = 200)
+     parameters = list(min = 30, max = 365)
 )
 
 # decay_days_short - Minimum V. cholerae survival time
