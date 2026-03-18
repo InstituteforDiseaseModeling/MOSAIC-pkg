@@ -228,6 +228,47 @@ global_params <- data.frame(
   stringsAsFactors = FALSE
 )
 
+# Add posterior distribution columns to global_params.
+# For parameters with uniform priors the posterior family is decoupled so that
+# the fitted posterior curve can reflect the actual shape of the weighted samples
+# rather than being forced into a flat uniform. Parameters without a uniform
+# prior retain the same family for both prior display and posterior fitting.
+# posterior_lower / posterior_upper supply hard truncation bounds passed to
+# fit_truncnorm_from_ci() for bounded integer parameters (delta_reporting_*).
+global_params$posterior_distribution <- c(
+  # Transmission: beta prior → beta posterior
+  "beta", "beta",
+  # Environmental: decay_days_short/long uniform → lognormal posterior (positive durations);
+  #   decay_shape_1/2 uniform → gamma posterior (positive shape parameters);
+  #   zeta_1, zeta_2, kappa: lognormal prior → lognormal posterior (unchanged)
+  "lognormal", "lognormal", "gamma", "gamma", "lognormal", "lognormal", "lognormal",
+  # Disease: unchanged
+  "lognormal", "beta", "lognormal", "lognormal",
+  # Immunity: unchanged
+  "beta", "beta", "gamma", "gamma", "lognormal",
+  # Surveillance: chi_endemic/epidemic unchanged; delta_reporting_* uniform → truncnorm
+  #   posterior with hard bounds enforcing the integer support; rho unchanged
+  "beta", "beta", "truncnorm", "truncnorm", "beta",
+  # Mobility: unchanged
+  "gamma", "gamma"
+)
+global_params$posterior_lower <- c(
+  NA, NA,
+  NA, NA, NA, NA, NA, NA, NA,
+  NA, NA, NA, NA,
+  NA, NA, NA, NA, NA,
+  NA, NA, 0, 0, NA,  # delta_reporting_cases lower bound = 0
+  NA, NA
+)
+global_params$posterior_upper <- c(
+  NA, NA,
+  NA, NA, NA, NA, NA, NA, NA,
+  NA, NA, NA, NA,
+  NA, NA, NA, NA, NA,
+  NA, NA, 7, 14, NA,  # delta_reporting_cases upper = 7, delta_reporting_deaths upper = 14
+  NA, NA
+)
+
 # =============================================================================
 # 3. LOCATION-SPECIFIC PARAMETERS (BY CATEGORY)
 # =============================================================================
@@ -268,6 +309,13 @@ initial_params <- data.frame(
     "beta", "beta",
     "beta", "beta"
   ),
+  posterior_distribution = c(
+    "beta", "beta",
+    "beta", "beta",
+    "beta", "beta"
+  ),
+  posterior_lower = rep(NA_real_, 6),
+  posterior_upper = rep(NA_real_, 6),
   scale = "location",
   category = "initial_conditions",
   order = 23:28,
@@ -301,6 +349,9 @@ transmission_params <- data.frame(
     "per day", "proportion", "per day", "per day"
   ),
   distribution = c("gompertz", "beta", "gamma", "gamma"),
+  posterior_distribution = c("gompertz", "beta", "gamma", "gamma"),
+  posterior_lower = rep(NA_real_, 4),
+  posterior_upper = rep(NA_real_, 4),
   scale = "location",
   category = "transmission",
   order = 29:32,
@@ -325,6 +376,9 @@ seasonality_params <- data.frame(
   ),
   units = "dimensionless",
   distribution = c("normal", "normal", "normal", "normal"),
+  posterior_distribution = c("normal", "normal", "normal", "normal"),
+  posterior_lower = rep(NA_real_, 4),
+  posterior_upper = rep(NA_real_, 4),
   scale = "location",
   category = "seasonality",
   order = 33:36,
@@ -347,6 +401,9 @@ spatial_params <- data.frame(
   ),
   units = c("probability", "proportion"),
   distribution = c("beta", "beta"),
+  posterior_distribution = c("beta", "beta"),
+  posterior_lower = rep(NA_real_, 2),
+  posterior_upper = rep(NA_real_, 2),
   scale = "location",
   category = c("mobility", "spatial"),
   order = 37:38,
@@ -374,6 +431,9 @@ disease_params <- data.frame(
   units = c("proportion", "per year", "dimensionless", "cases/100k/week"),
   # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors.R — corrected from lognormal (v0.14.35)
   distribution = c("gamma", "normal", "gamma", "lognormal"),
+  posterior_distribution = c("gamma", "normal", "gamma", "lognormal"),
+  posterior_lower = rep(NA_real_, 4),
+  posterior_upper = rep(NA_real_, 4),
   scale = "location",
   category = "disease",
   order = 39:42,
@@ -401,6 +461,9 @@ calibration_params <- data.frame(
   units = c("dimensionless", "dimensionless", "proportion", "days"),
   # psi_star_a prior is Truncnorm(1, 0.5, [0,Inf]) in make_priors.R — corrected from lognormal (v0.14.35)
   distribution = c("truncnorm", "normal", "beta", "truncnorm"),
+  posterior_distribution = c("truncnorm", "normal", "beta", "truncnorm"),
+  posterior_lower = rep(NA_real_, 4),
+  posterior_upper = rep(NA_real_, 4),
   scale = "location",
   category = "environmental",
   order = 40:43,

@@ -156,8 +156,18 @@ calc_model_posterior_distributions <- function(
         param_row <- quantiles[i, ]
         param_name <- param_row$parameter
 
-        # Get distribution type
-        dist_type <- param_row$prior_distribution
+        # Get distribution type for posterior fitting.
+        # Use posterior_distribution when present (allows decoupling the posterior
+        # family from the prior family for parameters with uniform priors).
+        # Falls back to prior_distribution for backward compatibility with CSV
+        # files written before posterior_distribution was added.
+        dist_type <- if ("posterior_distribution" %in% names(param_row) &&
+                         !is.na(param_row$posterior_distribution) &&
+                         nchar(trimws(param_row$posterior_distribution)) > 0) {
+            param_row$posterior_distribution
+        } else {
+            param_row$prior_distribution
+        }
 
         # Handle both column names (for backward compatibility)
         if ("scale" %in% names(param_row)) {
@@ -332,10 +342,19 @@ calc_model_posterior_distributions <- function(
                     verbose = FALSE
                 )
             } else if (dist_type == "truncnorm") {
+                # Pass hard bounds when available (e.g. delta_reporting_* integer support)
+                a_bound <- if ("posterior_lower" %in% names(param_row) &&
+                               !is.na(param_row$posterior_lower))
+                               as.numeric(param_row$posterior_lower) else NULL
+                b_bound <- if ("posterior_upper" %in% names(param_row) &&
+                               !is.na(param_row$posterior_upper))
+                               as.numeric(param_row$posterior_upper) else NULL
                 fitted_dist <- fit_truncnorm_from_ci(
                     mode_val = mode_val,
                     ci_lower = q_low,
                     ci_upper = q_high,
+                    a = a_bound,
+                    b = b_bound,
                     verbose = FALSE
                 )
             } else if (dist_type == "gompertz") {
