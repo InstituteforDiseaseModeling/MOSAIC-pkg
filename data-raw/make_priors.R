@@ -1741,10 +1741,12 @@ priors_default$parameters_location$psi_star_a <- list(
 
 for (iso in j) {
      priors_default$parameters_location$psi_star_a$location[[iso]] <- list(
-          distribution = "lognormal",
+          distribution = "truncnorm",
           parameters = list(
-               meanlog = 0,     # Mean ~1.16, median = 1.0 (no transformation)
-               sdlog = 0.9      # 95% CI: [0.30, 3.30], allows more flexible shape changes
+               mean = 1,    # Neutral value: a=1 is the identity (no transformation)
+               sd   = 0.5,  # 95% CI: ~[0.02, 1.98]; P(a<0) < 2.3% so truncation is negligible
+               a    = 0,    # Lower bound enforces a > 0 (required by calc_psi_star)
+               b    = Inf   # No upper bound
           )
      )
 }
