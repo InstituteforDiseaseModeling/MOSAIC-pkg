@@ -1018,11 +1018,18 @@ run_MOSAIC <- function(config,
     iqr <- q3 - q1
     iqr_mult <- control$weights$iqr_multiplier
     lower_threshold <- q1 - iqr_mult * iqr
-    upper_threshold <- q3 + iqr_mult * iqr
-    results$is_outlier[results$is_valid] <- valid_ll < lower_threshold | valid_ll > upper_threshold
 
-    log_msg("  Outlier detection (Tukey IQR, multiplier = %.1f):", iqr_mult)
-    log_msg("    - Outliers: %d (%.1f%%)", sum(results$is_outlier),
+    # Only apply the lower fence. Log-likelihoods have a long left tail (many
+    # poor fits) but are bounded above near 0. Applying an upper fence via
+    # Q3 + k*IQR would incorrectly discard the highest-likelihood simulations
+    # — exactly the models we want to keep for the posterior. The lower fence
+    # removes pathologically bad simulations that survived the guardrails.
+    results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
+
+    log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f):", iqr_mult)
+    log_msg("    - Lower threshold: %.1f | Outliers: %d (%.1f%%)",
+            lower_threshold,
+            sum(results$is_outlier),
             100 * sum(results$is_outlier) / sum(results$is_valid))
   }
 
