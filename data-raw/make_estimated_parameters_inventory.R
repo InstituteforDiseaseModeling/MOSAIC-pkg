@@ -173,7 +173,10 @@ global_params <- data.frame(
     # Immunity - reordered
     "beta", "beta", "gamma", "gamma", "lognormal",
     # Surveillance
-    "beta", "beta", "lognormal", "lognormal", "beta",
+    # chi_endemic, chi_epidemic: Beta; delta_reporting_*: prior is discrete_uniform([0,7],[0,14]);
+    # no discrete posterior fitter exists, so "uniform" is the continuous approximation that
+    # covers the same range and supports 0 (unlike lognormal); rho: Beta
+    "beta", "beta", "uniform", "uniform", "beta",
     # Mobility
     "gamma", "gamma"
   ),
@@ -369,7 +372,8 @@ disease_params <- data.frame(
     "Case incidence threshold for epidemic period classification"
   ),
   units = c("proportion", "per year", "dimensionless", "cases/100k/week"),
-  distribution = c("gamma", "normal", "lognormal", "lognormal"),
+  # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors.R — corrected from lognormal (v0.14.35)
+  distribution = c("gamma", "normal", "gamma", "lognormal"),
   scale = "location",
   category = "disease",
   order = 39:42,
@@ -395,7 +399,8 @@ calibration_params <- data.frame(
     "Time offset in days for suitability calibration (k>0: delay, k<0: advance)"
   ),
   units = c("dimensionless", "dimensionless", "proportion", "days"),
-  distribution = c("lognormal", "normal", "beta", "truncnorm"),
+  # psi_star_a prior is Truncnorm(1, 0.5, [0,Inf]) in make_priors.R — corrected from lognormal (v0.14.35)
+  distribution = c("truncnorm", "normal", "beta", "truncnorm"),
   scale = "location",
   category = "environmental",
   order = 40:43,
