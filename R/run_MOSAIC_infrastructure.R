@@ -361,11 +361,6 @@
     data_env$priors_version <- priors$metadata$version
     data_env$priors_date <- as.character(priors$metadata$date)
   }
-  default_params_path <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
-  if (file.exists(default_params_path)) {
-    md5 <- tryCatch(tools::md5sum(default_params_path), error = function(e) NA_character_)
-    data_env$default_parameters_md5 <- unname(md5)
-  }
 
   list(
     timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
