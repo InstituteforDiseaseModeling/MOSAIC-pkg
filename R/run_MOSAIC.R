@@ -58,6 +58,7 @@
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
                                           dir_bfrs_parameters, dir_bfrs_timeseries,
                                           param_names_all, sampling_args, io,
+                                          likelihood_settings,
                                           save_timeseries = TRUE) {
 
   # Pre-allocate result matrix (FIXED: proper pre-allocation)
@@ -172,24 +173,24 @@
             est_cases = est_cases,
             obs_deaths = obs_deaths,
             est_deaths = est_deaths,
-            add_max_terms = control$likelihood$add_max_terms,
-            add_peak_timing = control$likelihood$add_peak_timing,
-            add_peak_magnitude = control$likelihood$add_peak_magnitude,
-            add_cumulative_total = control$likelihood$add_cumulative_total,
-            add_wis = control$likelihood$add_wis,
-            weight_cases = control$likelihood$weight_cases,
-            weight_deaths = control$likelihood$weight_deaths,
-            weight_max_terms = control$likelihood$weight_max_terms,
-            weight_peak_timing = control$likelihood$weight_peak_timing,
-            weight_peak_magnitude = control$likelihood$weight_peak_magnitude,
-            weight_cumulative_total = control$likelihood$weight_cumulative_total,
-            weight_wis = control$likelihood$weight_wis,
-            sigma_peak_time = control$likelihood$sigma_peak_time,
-            sigma_peak_log = control$likelihood$sigma_peak_log,
-            penalty_unmatched_peak = control$likelihood$penalty_unmatched_peak,
-            enable_guardrails = control$likelihood$enable_guardrails,
-            floor_likelihood = control$likelihood$floor_likelihood,
-            guardrail_verbose = control$likelihood$guardrail_verbose
+            add_max_terms = likelihood_settings$add_max_terms,
+            add_peak_timing = likelihood_settings$add_peak_timing,
+            add_peak_magnitude = likelihood_settings$add_peak_magnitude,
+            add_cumulative_total = likelihood_settings$add_cumulative_total,
+            add_wis = likelihood_settings$add_wis,
+            weight_cases = likelihood_settings$weight_cases,
+            weight_deaths = likelihood_settings$weight_deaths,
+            weight_max_terms = likelihood_settings$weight_max_terms,
+            weight_peak_timing = likelihood_settings$weight_peak_timing,
+            weight_peak_magnitude = likelihood_settings$weight_peak_magnitude,
+            weight_cumulative_total = likelihood_settings$weight_cumulative_total,
+            weight_wis = likelihood_settings$weight_wis,
+            sigma_peak_time = likelihood_settings$sigma_peak_time,
+            sigma_peak_log = likelihood_settings$sigma_peak_log,
+            penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak,
+            enable_guardrails = likelihood_settings$enable_guardrails,
+            floor_likelihood = likelihood_settings$floor_likelihood,
+            guardrail_verbose = likelihood_settings$guardrail_verbose
           )
         } else {
           NA_real_
@@ -714,8 +715,15 @@ run_MOSAIC <- function(config,
       NULL
     })
 
+    # Extract likelihood settings once (avoids shipping full control to workers)
+    likelihood_settings <- control$likelihood
+    io_settings <- control$io
+    save_timeseries <- control$npe$enable
+    dir_bfrs_timeseries <- if (save_timeseries) dirs$bfrs_times else NULL
+
     parallel::clusterExport(cl,
-      c("n_iterations", "priors", "config", "PATHS", "param_names_all", "sampling_args", "dirs", "control"),
+      c("n_iterations", "priors", "config", "PATHS", "param_names_all", "sampling_args", "dirs",
+        "likelihood_settings", "io_settings", "save_timeseries", "dir_bfrs_timeseries"),
       envir = environment())
 
     # Create worker function on each worker using exported variables
@@ -730,11 +738,12 @@ run_MOSAIC <- function(config,
           config = config,
           PATHS = PATHS,
           dir_bfrs_parameters = dirs$bfrs_params,
-          dir_bfrs_timeseries = if (control$npe$enable) dirs$bfrs_times else NULL,
+          dir_bfrs_timeseries = dir_bfrs_timeseries,
           param_names_all = param_names_all,
           sampling_args = sampling_args,
-          io = control$io,
-          save_timeseries = control$npe$enable
+          io = io_settings,
+          likelihood_settings = likelihood_settings,
+          save_timeseries = save_timeseries
         )
       }, envir = .GlobalEnv)
       NULL
@@ -801,6 +810,7 @@ run_MOSAIC <- function(config,
             if (control$npe$enable) dirs$bfrs_times else NULL,
             param_names_all, sampling_args,
             io = control$io,
+            likelihood_settings = control$likelihood,
             save_timeseries = control$npe$enable
           ),
           cl = cl,
@@ -910,6 +920,7 @@ run_MOSAIC <- function(config,
             if (control$npe$enable) dirs$bfrs_times else NULL,
             param_names_all, sampling_args,
             io = control$io,
+            likelihood_settings = control$likelihood,
             save_timeseries = control$npe$enable
           ),
           cl = cl,
