@@ -389,6 +389,13 @@ default_args <- list(
 
 config_default <- do.call(make_LASER_config, default_args)
 
+# Add metadata for provenance tracking
+config_default$metadata <- list(
+     version = "1.0",
+     date = as.character(Sys.Date()),
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model"
+)
+
 # Validate transmission parameter relationships
 # Note: Using the original vectors since beta_j0_tot and p_beta are not in config
 validation_tol <- 1e-10
