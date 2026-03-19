@@ -57,7 +57,12 @@
 #' @param min_cumulative_for_check Minimum observed total to apply ratio checks; default \code{100}.
 #' @param max_timestep_ratio Maximum ratio of estimated to observed per timestep (default \code{100}).
 #' @param min_timestep_ratio Minimum ratio of estimated to observed per timestep (default \code{0.01}).
-#' @param min_obs_for_ratio Minimum observed value to apply ratio checks (default \code{1}).
+#' @param min_obs_for_ratio Minimum observed value to apply per-timestep ratio checks
+#'   for cases (default \code{1}).
+#' @param min_obs_for_ratio_deaths Minimum observed value to apply per-timestep ratio
+#'   checks for deaths (default \code{10}). Higher than cases because death data is
+#'   typically sparse, and a single timestep with 1-2 observed deaths should not floor
+#'   the entire likelihood on a slight overprediction.
 #' @param negative_correlation_threshold Correlation floor; default \code{0} (requires positive correlation).
 #'
 #' @return Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.
@@ -105,7 +110,8 @@ calc_model_likelihood <- function(obs_cases,
                                   negative_correlation_threshold = 0,
                                   max_timestep_ratio = 100,
                                   min_timestep_ratio = 0.01,
-                                  min_obs_for_ratio = 1)
+                                  min_obs_for_ratio = 1,
+                                  min_obs_for_ratio_deaths = 10)
 {
      # --- basic checks ---
      if (!is.matrix(obs_cases) || !is.matrix(est_cases) ||
@@ -156,9 +162,9 @@ calc_model_likelihood <- function(obs_cases,
                return(floor_likelihood)
           }
 
-          # Check deaths
+          # Check deaths (higher threshold — sparse death data should not floor on 1-2 obs)
           ratio_deaths <- est_deaths / obs_deaths
-          valid_deaths <- is.finite(ratio_deaths) & obs_deaths >= min_obs_for_ratio & est_deaths > 0
+          valid_deaths <- is.finite(ratio_deaths) & obs_deaths >= min_obs_for_ratio_deaths & est_deaths > 0
           bad_deaths <- which(valid_deaths & (ratio_deaths > max_timestep_ratio | ratio_deaths < min_timestep_ratio),
                              arr.ind = TRUE)
           if (nrow(bad_deaths) > 0) {
@@ -252,7 +258,12 @@ calc_model_likelihood <- function(obs_cases,
           have_cases  <- sum(is.finite(obs_c)) >= min_obs_for_likelihood
           have_deaths <- sum(is.finite(obs_d)) >= min_obs_for_likelihood
 
-          # Weighted NB dispersion (k) with floor; Poisson limit if Inf
+          # Weighted NB dispersion (k) estimated from observed data via method-of-moments.
+          # Note: k is a property of the observation process, not the model-observation
+          # mismatch, so all simulations are evaluated against the same k. This is
+          # intentional — it ensures the likelihood reflects data noise characteristics
+          # rather than calibration quality. The k_min floor prevents the NB from
+          # collapsing to a near-Poisson kernel for low-variance series.
           k_c <- if (have_cases)  nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min) else Inf
           k_d <- if (have_deaths) nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min) else Inf
 
@@ -326,16 +337,16 @@ calc_model_likelihood <- function(obs_cases,
                if (have_deaths) ll_max_deaths <- max_ll_poisson(obs_d, est_d)
           }
 
-          # WIS (optional)
+          # WIS (optional) — raw negated WIS; weight_wis applied at assembly (like other components)
           ll_wis_cases <- ll_wis_deaths <- 0
           if (add_wis) {
                if (have_cases) {
                     wis_c <- compute_wis_parametric_row(obs_c, est_c, weights_time, wis_quantiles, k_use = k_c)
-                    if (is.finite(wis_c)) ll_wis_cases <- - weight_wis * wis_c
+                    if (is.finite(wis_c)) ll_wis_cases <- -wis_c
                }
                if (have_deaths) {
                     wis_d <- compute_wis_parametric_row(obs_d, est_d, weights_time, wis_quantiles, k_use = k_d)
-                    if (is.finite(wis_d)) ll_wis_deaths <- - weight_wis * wis_d
+                    if (is.finite(wis_d)) ll_wis_deaths <- -wis_d
                }
           }
 
@@ -355,7 +366,8 @@ calc_model_likelihood <- function(obs_cases,
           ll_loc_cum <-
                weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
-          ll_loc_wis <- (weight_cases * ll_wis_cases) + (weight_deaths * ll_wis_deaths)
+          ll_loc_wis <-
+               weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
 
           ll_loc_total <- ll_loc_core
           if (add_max_terms)                         ll_loc_total <- ll_loc_total + ll_loc_max
@@ -365,7 +377,7 @@ calc_model_likelihood <- function(obs_cases,
 
           if (!is.finite(ll_loc_total)) {
                if (guardrail_verbose) message(sprintf("Non-finite LL at location %d; applying per-location penalty.", j))
-               ll_locations[j] <- weights_location[j] * (-1e9)  # large negative penalty
+               ll_locations[j] <- weights_location[j] * floor_likelihood
                next
           }
 
@@ -585,25 +597,30 @@ ll_cumulative_progressive_nb <- function(obs_vec,
                                          weights_time = NULL,
                                          per_tp_ll_floor = -1e9) {
      n <- length(obs_vec)
-     vals <- numeric(0L)
-     
+
      # Use weights if provided
      if (is.null(weights_time)) weights_time <- rep(1, n)
-     
-     # Use data-driven k if provided, otherwise fall back to option/default
-     # Scale k up for cumulative (sums have higher variance than individual points)
-     cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
-          k_data * 2  # Scale up for cumulative sums
-     } else {
-          getOption("MOSAIC.cumulative_k", 10)
-     }
-     
+
+     # Fallback k when data-driven estimate is unavailable
+     k_fallback <- getOption("MOSAIC.cumulative_k", 10)
+
      vals <- vector("numeric", length(timepoints))
      n_vals <- 0L
 
      for (tp in timepoints) {
           # Ensure index is at least 1 and at most n
           end_idx <- min(n, max(1L, round(n * tp)))
+
+          # Scale k proportionally to the number of summed timesteps.
+          # For independent NB(mu_i, k) variables, the sum's dispersion ≈ k * n_summed
+          # (exact for identical means; reasonable upper bound for varying means).
+          # This replaces the previous fixed k_data * 2 which was always wrong
+          # except when end_idx == 2.
+          cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
+               k_data * end_idx
+          } else {
+               k_fallback
+          }
 
           # Use plain cumulative sums (NA-safe).
           # weights_time is for masking non-observed timesteps in the core NB
@@ -696,15 +713,21 @@ compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
      (mae_term + sum_IS) / denom
 }
 
-# Weighted method-of-moments NB dispersion (k) with floor
+# Weighted method-of-moments NB dispersion (k) with floor.
+# Uses Bessel-corrected weighted variance: V1^2 / (V1^2 - V2) normalisation,
+# where V1 = sum(w) and V2 = sum(w^2). This avoids underestimating variance
+# (and hence overestimating k) with small or unequal-weight samples.
 #' @keywords internal
 nb_size_from_obs_weighted <- function(x, w, k_min = 3, k_max = 1e5) {
      ok <- is.finite(x) & is.finite(w) & (w > 0)
      if (!any(ok)) return(Inf)
      x <- x[ok]; w <- w[ok]
-     sw <- sum(w)
-     m  <- sum(w * x) / sw
-     v  <- sum(w * (x - m)^2) / sw
+     sw  <- sum(w)
+     sw2 <- sum(w^2)
+     m   <- sum(w * x) / sw
+     # Bessel-corrected weighted variance: unbiased for frequency weights
+     denom <- sw - sw2 / sw
+     v <- if (denom > 0) sum(w * (x - m)^2) / denom else sum(w * (x - m)^2) / sw
      if (!is.finite(m) || !is.finite(v) || m <= 0 || v <= m) return(Inf)
      k  <- (m * m) / (v - m)
      k  <- max(min(k, k_max), k_min)
