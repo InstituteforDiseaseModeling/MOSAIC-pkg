@@ -353,6 +353,10 @@
 
   # --- Data versions ---
   data_env <- list()
+  if (!is.null(config) && !is.null(config$metadata)) {
+    data_env$config_version <- config$metadata$version
+    data_env$config_date <- config$metadata$date
+  }
   if (!is.null(priors) && !is.null(priors$metadata)) {
     data_env$priors_version <- priors$metadata$version
     data_env$priors_date <- as.character(priors$metadata$date)

@@ -7,6 +7,8 @@
 #'
 #' @format A named **list** created by `make_default_LASER_config()`, whose
 #'   elements include:
+#'   * **Metadata** – `metadata$version`, `metadata$date`, `metadata$description`
+#'     for provenance tracking;
 #'   * **Scalars** – biological constants (`phi_1`, `gamma_1`, `epsilon`, …);
 #'   * **Vectors** – initial populations (`S_j_initial`, `I_j_initial`, …),
 #'     initial proportions (optional: `prop_S_initial`, `prop_I_initial`, …),

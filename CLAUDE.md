@@ -1452,6 +1452,15 @@ Claude Code working on MOSAIC must act as a **production systems software engine
 
 **Scheme:** Patch (0.13.25→0.13.26): bugs/docs; Minor (0.13.25→0.14.0): features; Major (0.13.25→1.0.0): breaking changes
 
+**Data object versioning:** Two versioned data objects ship with the package. Bump their versions when their contents change:
+
+| Object | Version location | When to bump |
+|--------|-----------------|--------------|
+| `config_default` | `data-raw/make_default_LASER_config_files.R` → `metadata$version` | Any change to default parameter values, date range, locations, or config structure |
+| `priors_default` | `data-raw/make_priors.R` → `metadata$version` | Any change to prior distributions, bounds, or parameter additions/removals |
+
+After bumping a data object version, rebuild the `.rda` and `.json` artifacts by re-running the corresponding `data-raw/make_*.R` script. Both versions are recorded in `0_environment/environment.json` during calibration for full provenance tracking.
+
 #### 3. Testing Requirements
 
 **Before making ANY changes:**

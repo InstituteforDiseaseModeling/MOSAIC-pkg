@@ -1058,7 +1058,7 @@ run_MOSAIC <- function(config,
             tier$name, tier$ESS_B, tier$A, tier$CVw)
 
     tier_result <- grid_search_best_subset(
-      results = results,
+      results = results[results$is_retained, ],
       target_ESS = tier$ESS_B,
       target_A = tier$A,
       target_CVw = tier$CVw,
@@ -1095,11 +1095,12 @@ run_MOSAIC <- function(config,
     convergence_tier <- tier_used
 
   } else {
-    # Fallback: use max_best_subset directly
-    n_top_final <- min(control$targets$max_best_subset, nrow(results))
-    results_ranked_final <- results[order(results$likelihood, decreasing = TRUE), ]
+    # Fallback: use max_best_subset directly (from retained only)
+    retained_for_fallback <- results[results$is_retained, ]
+    n_top_final <- min(control$targets$max_best_subset, nrow(retained_for_fallback))
+    results_ranked_final <- retained_for_fallback[order(retained_for_fallback$likelihood, decreasing = TRUE), ]
     top_subset_final <- results_ranked_final[1:n_top_final, ]
-    rm(results_ranked_final)
+    rm(results_ranked_final, retained_for_fallback)
 
     percentile_used <- (n_top_final / nrow(results)) * 100
     convergence_tier <- "fallback"
