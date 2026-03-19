@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "11.0",
+          version = "12.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -61,7 +61,8 @@ priors_default$parameters_global$alpha_2 <- list(
 
 # decay_days_long - Maximum V. cholerae survival time
 # Old posterior 97.5th=147.4 was within 2.6 of upper bound=150 -- clear upper truncation.
-# Extended to 200; lower bound stays at 30 to prevent decay_days_short >= decay_days_long violations.
+# Extended to 365 days. Lower bound is 30; decay_days_short upper bound is 29,
+# ensuring at least 1-day gap to prevent boundary equality violations.
 priors_default$parameters_global$decay_days_long <- list(
      description = "Maximum V. cholerae survival time (days)",
      distribution = "uniform",
@@ -69,10 +70,14 @@ priors_default$parameters_global$decay_days_long <- list(
 )
 
 # decay_days_short - Minimum V. cholerae survival time
+# Upper bound set to 29 (not 30) to guarantee a minimum 1-day gap from
+# decay_days_long's lower bound of 30, preventing boundary equality violations
+# in make_LASER_config(). The swap constraint in sample_parameters.R also
+# protects against accidental crossings.
 priors_default$parameters_global$decay_days_short <- list(
      description = "Minimum V. cholerae survival time (days)",
      distribution = "uniform",
-     parameters = list(min = 0.01, max = 30)
+     parameters = list(min = 0.01, max = 29)
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation

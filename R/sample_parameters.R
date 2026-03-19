@@ -255,6 +255,29 @@ sample_parameters <- function(
     verbose
   )
 
+  # Enforce zeta_1 > zeta_2: symptomatic shedding must exceed asymptomatic.
+  # make_LASER_config() stops if this is violated. With both at sdlog=3.0,
+  # ~29% of independent draws violate the constraint — swap rather than reject.
+  if (!is.null(config_sampled$zeta_1) && !is.null(config_sampled$zeta_2)) {
+    if (config_sampled$zeta_1 <= config_sampled$zeta_2) {
+      tmp <- config_sampled$zeta_1
+      config_sampled$zeta_1 <- config_sampled$zeta_2
+      config_sampled$zeta_2 <- tmp
+    }
+  }
+
+  # Enforce decay_days_short < decay_days_long: minimum survival must be less
+  # than maximum. make_LASER_config() stops if this is violated. Swap rather
+  # than reject to preserve the marginal distributions.
+  if (!is.null(config_sampled$decay_days_short) &&
+      !is.null(config_sampled$decay_days_long)) {
+    if (config_sampled$decay_days_short >= config_sampled$decay_days_long) {
+      tmp <- config_sampled$decay_days_short
+      config_sampled$decay_days_short <- config_sampled$decay_days_long
+      config_sampled$decay_days_long <- tmp
+    }
+  }
+
   # Sample location-specific parameters
   config_sampled <- sample_location_parameters_impl(
     config_sampled,
