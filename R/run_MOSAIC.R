@@ -177,15 +177,14 @@
   for (j in 1:n_iterations) {
     # Use iteration-specific seed (see seed scheme documentation above)
     seed_ij <- as.integer((sim_id - 1L) * n_iterations + j)
-    params <- params_sim
-    params$seed <- seed_ij
+    params_sim$seed <- seed_ij
 
     # Initialize row directly in pre-allocated matrix (FIXED: no rbind!)
     result_matrix[j, 1:4] <- c(sim_id, j, sim_id, seed_ij)
 
     # Extract parameters directly using precomputed lookup (fast path)
     param_row <- tryCatch({
-      .mosaic_extract_param_row(params, param_lookup, n_params)
+      .mosaic_extract_param_row(params_sim, param_lookup, n_params)
     }, error = function(e) NULL)
 
     if (!is.null(param_row)) {
@@ -193,7 +192,7 @@
     }
 
     # Prepare config for Python (wrap length-1 array params as lists)
-    params_py <- .mosaic_prepare_config_for_python(params)
+    params_py <- .mosaic_prepare_config_for_python(params_sim)
 
     # Run model
     model <- tryCatch({
@@ -208,9 +207,9 @@
     # Calculate likelihood
     if (!is.null(model)) {
       likelihood <- tryCatch({
-        obs_cases <- params$reported_cases
+        obs_cases <- params_sim$reported_cases
         est_cases <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi (comparable to surveillance data)
-        obs_deaths <- params$reported_deaths
+        obs_deaths <- params_sim$reported_deaths
         est_deaths <- model$results$disease_deaths
 
         if (!is.null(obs_cases) && !is.null(est_cases) &&
