@@ -357,7 +357,7 @@ transmission_params <- data.frame(
 
 # Seasonality parameters
 seasonality_params <- data.frame(
-  parameter_name = c("a1", "a2", "b1", "b2"),
+  parameter_name = c("a_1_j", "a_2_j", "b_1_j", "b_2_j"),
   display_name = c(
     "Seasonality Coefficient a1", "Seasonality Coefficient a2",
     "Seasonality Coefficient b1", "Seasonality Coefficient b2"
