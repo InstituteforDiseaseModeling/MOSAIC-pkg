@@ -243,11 +243,12 @@
 #' Uses atomic write with sync for network filesystem safety.
 #'
 #' @noRd
-.mosaic_write_parquet <- function(df, path, io) {
-  # Check disk space (estimate ~1KB per row)
-  estimated_mb <- (nrow(df) * 1024) / (1024^2)
-  if (!.mosaic_check_disk_space(dirname(path), required_mb = estimated_mb * 2)) {
-    stop("Insufficient disk space for parquet write: ", path, call. = FALSE)
+.mosaic_write_parquet <- function(df, path, io, check_disk = TRUE) {
+  if (check_disk) {
+    estimated_mb <- (nrow(df) * 1024) / (1024^2)
+    if (!.mosaic_check_disk_space(dirname(path), required_mb = estimated_mb * 2)) {
+      stop("Insufficient disk space for parquet write: ", path, call. = FALSE)
+    }
   }
 
   # Define write function
@@ -269,10 +270,11 @@
 
 #' Write JSON with Atomic Rename (NFS-Safe)
 #' @noRd
-.mosaic_write_json <- function(obj, path, io) {
-  # Check disk space (JSON is usually small, 10MB buffer)
-  if (!.mosaic_check_disk_space(dirname(path), required_mb = 10)) {
-    stop("Insufficient disk space for JSON write: ", path, call. = FALSE)
+.mosaic_write_json <- function(obj, path, io, check_disk = TRUE) {
+  if (check_disk) {
+    if (!.mosaic_check_disk_space(dirname(path), required_mb = 10)) {
+      stop("Insufficient disk space for JSON write: ", path, call. = FALSE)
+    }
   }
 
   # Define write function
