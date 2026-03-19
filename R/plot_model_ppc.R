@@ -279,14 +279,18 @@ plot_model_ppc <- function(predictions_dir = NULL,
         .plot_density_panel <- function(obs_v, pred_v, metric, col_pred, col_shade_pred, n_total) {
             if (length(obs_v) >= 2) {
                 .safe_density <- function(x) {
-                    tryCatch(density(x, bw = "SJ",   adjust = 2), error = function(e)
-                    tryCatch(density(x, bw = "nrd0", adjust = 2), error = function(e2)
-                             density(x, bw = 0.5,   adjust = 2)))
+                    d <- tryCatch(density(x, bw = "SJ",   adjust = 2), error = function(e)
+                         tryCatch(density(x, bw = "nrd0", adjust = 2), error = function(e2)
+                                  density(x, bw = 0.5,   adjust = 2)))
+                    # Zero out density below 0: log(count+1) >= 0 for all valid
+                    # counts, so mass below 0 is Gaussian kernel boundary bleed.
+                    d$y[d$x < 0] <- 0
+                    d
                 }
                 d_obs  <- .safe_density(log(obs_v  + 1))
                 d_pred <- .safe_density(log(pred_v + 1))
 
-                xl <- range(c(d_obs$x, d_pred$x))
+                xl <- c(0, max(c(d_obs$x, d_pred$x)))
                 yl <- c(0, max(c(d_obs$y, d_pred$y)) * 1.1)
 
                 plot(d_obs, col = palette$observed, lwd = 2.5,
