@@ -248,7 +248,7 @@
 
   # Write parameter file
   output_file <- file.path(dir_bfrs_parameters, sprintf("sim_%07d.parquet", sim_id))
-  .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io, check_disk = FALSE)
+  .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
 
   # Write timeseries file (NPE only) — O(n_j * n_t) vectorised mean from accumulators.
   # No string conversion, no nested loops, no linear scan per (j,t) cell.
@@ -272,7 +272,7 @@
     )
 
     out_file <- file.path(dir_bfrs_timeseries, sprintf("timeseries_%07d.parquet", sim_id))
-    .mosaic_write_parquet(collapsed_df, out_file, io, check_disk = FALSE)
+    .mosaic_write_parquet(collapsed_df, out_file, io)
   }
 
   # CRITICAL: Cleanup Python objects after EACH simulation completes

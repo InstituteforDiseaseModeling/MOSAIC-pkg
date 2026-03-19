@@ -240,17 +240,11 @@
 
 #' Write Parquet with Compression (NFS-Safe)
 #'
-#' Uses atomic write with sync for network filesystem safety.
+#' Uses atomic write with rename for filesystem safety.
+#' Disk space is checked once at calibration start, not per file.
 #'
 #' @noRd
-.mosaic_write_parquet <- function(df, path, io, check_disk = TRUE) {
-  if (check_disk) {
-    estimated_mb <- (nrow(df) * 1024) / (1024^2)
-    if (!.mosaic_check_disk_space(dirname(path), required_mb = estimated_mb * 2)) {
-      stop("Insufficient disk space for parquet write: ", path, call. = FALSE)
-    }
-  }
-
+.mosaic_write_parquet <- function(df, path, io) {
   # Define write function
   write_func <- function(data, file) {
     if (io$compression %in% c("none", "uncompressed")) {
@@ -270,13 +264,7 @@
 
 #' Write JSON with Atomic Rename (NFS-Safe)
 #' @noRd
-.mosaic_write_json <- function(obj, path, io, check_disk = TRUE) {
-  if (check_disk) {
-    if (!.mosaic_check_disk_space(dirname(path), required_mb = 10)) {
-      stop("Insufficient disk space for JSON write: ", path, call. = FALSE)
-    }
-  }
-
+.mosaic_write_json <- function(obj, path, io) {
   # Define write function
   write_func <- function(data, file) {
     jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE)
