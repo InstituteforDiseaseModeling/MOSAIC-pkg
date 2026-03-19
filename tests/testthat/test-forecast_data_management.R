@@ -32,19 +32,10 @@ test_that("enhanced forecast functions work with JSON fallback", {
   expect_true(is.data.frame(dmi_data))
   expect_true(nrow(dmi_data) > 0)
   
-  # Test forcing hardcoded values
-  expect_message(
-    enso_hardcoded <- get_ENSO_forecast(use_json = FALSE),
-    "manually extracted"
-  )
-  expect_message(
-    dmi_hardcoded <- get_DMI_forecast(use_json = FALSE),
-    "manually extracted"
-  )
-  
-  # Both should return valid data frames
-  expect_true(is.data.frame(enso_hardcoded))
-  expect_true(is.data.frame(dmi_hardcoded))
+  # The use_json parameter was removed; functions now always use JSON fallback.
+  # Verify the returned data has expected structure.
+  expect_true(all(c("year", "month", "value") %in% names(enso_data)))
+  expect_true(all(c("year", "month", "value") %in% names(dmi_data)))
 })
 
 test_that("JSON configuration files exist and are valid", {
@@ -92,23 +83,19 @@ test_that("freshness status calculation works correctly", {
   expect_false(status_fresh$needs_update)
 })
 
-test_that("data consistency between JSON and hardcoded methods", {
-  
-  # Get data both ways
+test_that("data consistency between forecast functions", {
+
+  # Get data from both forecast functions
   suppressMessages({
-    enso_json <- get_ENSO_forecast(use_json = TRUE)
-    enso_hardcoded <- get_ENSO_forecast(use_json = FALSE)
-    dmi_json <- get_DMI_forecast(use_json = TRUE) 
-    dmi_hardcoded <- get_DMI_forecast(use_json = FALSE)
+    enso_data <- get_ENSO_forecast()
+    dmi_data <- get_DMI_forecast()
   })
-  
-  # Should have same structure
-  expect_equal(names(enso_json), names(enso_hardcoded))
-  expect_equal(names(dmi_json), names(dmi_hardcoded))
-  
-  # Should have same variable types
-  expect_equal(class(enso_json$year), class(enso_hardcoded$year))
-  expect_equal(class(enso_json$value), class(enso_hardcoded$value))
-  expect_equal(class(dmi_json$year), class(dmi_hardcoded$year))
-  expect_equal(class(dmi_json$value), class(dmi_hardcoded$value))
+
+  # Both should have consistent column structure
+  expect_true(all(c("year", "month", "value") %in% names(enso_data)))
+  expect_true(all(c("year", "month", "value") %in% names(dmi_data)))
+  expect_true(is.numeric(enso_data$year))
+  expect_true(is.numeric(enso_data$value))
+  expect_true(is.numeric(dmi_data$year))
+  expect_true(is.numeric(dmi_data$value))
 })

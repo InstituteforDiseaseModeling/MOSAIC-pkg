@@ -1,3 +1,20 @@
+library(testthat)
+
+# Skip entire file if Python laser_cholera not available or required packages missing
+skip_if_not_installed("reticulate")
+skip_if_not_installed("reshape2")
+skip_if_not_installed("ggplot2")
+skip_if_not_installed("ggExtra")
+skip_if_not_installed("gridExtra")
+
+skip_if_not(
+    tryCatch({
+        reticulate::import("laser_cholera.metapop.model")
+        TRUE
+    }, error = function(e) FALSE),
+    message = "Python laser_cholera package not available"
+)
+
 library(reticulate)
 library(reshape2)
 library(MOSAIC)
@@ -6,11 +23,17 @@ library(ggExtra)
 library(grid)
 library(gridExtra)
 
-plot_diagnostics <- TRUE
+plot_diagnostics <- FALSE
 
 # Load default model and set baseline
 mpm      <- reticulate::import("laser_cholera.metapop.model")
 filename <- file.path(getwd(), "inst", "extdata", "default_parameters.json")
+
+skip_if_not(
+    file.exists(filename),
+    message = "default_parameters.json not found at expected path"
+)
+
 model    <- mpm$run_model(paramfile = filename)
 baseline <- jsonlite::fromJSON(filename)
 

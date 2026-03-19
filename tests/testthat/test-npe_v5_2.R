@@ -3,6 +3,11 @@
 # =============================================================================
 
 library(testthat)
+
+# Skip entire file: NPE v5.2 modules (npe_architecture_v5_2.R, npe_diagnostics_v5_2.R)
+# were removed from the package. These tests are stale.
+skip("NPE v5.2 modules no longer exist in the package")
+
 library(MOSAIC)
 
 # Source v5.2 modules

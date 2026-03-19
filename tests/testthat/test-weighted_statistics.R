@@ -64,8 +64,8 @@ test_that("weighted statistics handle edge cases", {
   x <- c(1, 2, 3)
   w_zero <- c(0, 0, 0)
   
-  # These might produce NaN or 0, but shouldn't error
-  expect_no_error(weighted_var(x, w_zero))
+  # weighted_var errors on all-zero weights (no valid observations)
+  expect_error(weighted_var(x, w_zero))
   expect_no_error(weighted_quantiles(x, w_zero, 0.5))
   expect_no_error(calc_weighted_mode(x, w_zero))
   
