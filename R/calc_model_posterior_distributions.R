@@ -342,13 +342,33 @@ calc_model_posterior_distributions <- function(
                     verbose = FALSE
                 )
             } else if (dist_type == "truncnorm") {
-                # Pass hard bounds when available (e.g. delta_reporting_* integer support)
+                # Read hard bounds from the prior template first.
+                # This preserves biological constraints in the posterior fit —
+                # e.g., psi_star_a >= 0 and psi_star_k <= 0.
+                # posterior_lower/upper columns override when present
+                # (e.g., delta_reporting_* integer support).
+                parse_bound <- function(x) {
+                    if (is.null(x)) return(NULL)
+                    if (is.character(x) && trimws(x) == "Inf")  return(Inf)
+                    if (is.character(x) && trimws(x) == "-Inf") return(-Inf)
+                    v <- suppressWarnings(as.numeric(x))
+                    if (is.na(v)) NULL else v
+                }
+                prior_entry <- if (!is.null(location)) {
+                    priors$parameters_location[[param_base]]$location[[location]]
+                } else {
+                    priors$parameters_global[[param_base]]
+                }
+                prior_a <- parse_bound(prior_entry$parameters$a)
+                prior_b <- parse_bound(prior_entry$parameters$b)
+
                 a_bound <- if ("posterior_lower" %in% names(param_row) &&
                                !is.na(param_row$posterior_lower))
-                               as.numeric(param_row$posterior_lower) else NULL
+                               as.numeric(param_row$posterior_lower) else prior_a
                 b_bound <- if ("posterior_upper" %in% names(param_row) &&
                                !is.na(param_row$posterior_upper))
-                               as.numeric(param_row$posterior_upper) else NULL
+                               as.numeric(param_row$posterior_upper) else prior_b
+
                 fitted_dist <- fit_truncnorm_from_ci(
                     mode_val = mode_val,
                     ci_lower = q_low,
