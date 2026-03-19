@@ -328,7 +328,6 @@
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
-#' @param resume Logical. If \code{TRUE}, continues from existing checkpoint. Default: FALSE.
 #'
 #' @return Invisibly returns a list with:
 #' \describe{
@@ -425,8 +424,7 @@
 run_MOSAIC <- function(config,
                        priors,
                        dir_output,
-                       control = NULL,
-                       resume = FALSE) {
+                       control = NULL) {
 
   # ===========================================================================
   # ARGUMENT VALIDATION
@@ -439,8 +437,6 @@ run_MOSAIC <- function(config,
       !missing(priors) && is.list(priors) && length(priors) > 0,
     "dir_output is required and must be character string" =
       !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L,
-    "resume must be logical" =
-      is.logical(resume) && length(resume) == 1L
   )
 
   # Validate config structure
@@ -756,52 +752,7 @@ run_MOSAIC <- function(config,
   nspec <- .mosaic_normalize_n_sims(n_simulations)
   state_file <- file.path(dirs$bfrs_diag, "run_state.rds")
 
-  # Load state with validation (FIXED: Issue 1.4)
-  state <- if (resume && file.exists(state_file)) {
-    log_msg("Attempting to resume from: %s", state_file)
-    loaded_state <- .mosaic_load_state_safe(state_file)
-
-    if (is.null(loaded_state)) {
-      log_msg("WARNING: Failed to load or validate state file")
-      log_msg("Starting fresh calibration")
-      .mosaic_init_state(control, param_names_sampled, nspec)
-    } else {
-      log_msg("Successfully loaded state (batch %d, %d simulations completed)",
-              loaded_state$batch_number, loaded_state$total_sims_run)
-      loaded_state
-    }
-  } else {
-    .mosaic_init_state(control, param_names_sampled, nspec)
-  }
-
-  # ---------------------------------------------------------------------------
-  # AUTO-MODE RESUME BOOTSTRAP
-  # When resume=TRUE but no run_state.rds exists (stopped mid-batch), the state
-  # is freshly initialised above with total_sims_run=0.  Without this block the
-  # repeat loop would start at sim 1 and overwrite all existing work.
-  # Fixed mode handles its own skip via done_ids below, so this is auto only.
-  # ---------------------------------------------------------------------------
-  if (resume && identical(state$mode, "auto") && state$total_sims_run == 0L) {
-    existing_auto <- list.files(
-      dirs$bfrs_params,
-      pattern = "^sim_[0-9]{7}\\.parquet$",
-      full.names = FALSE
-    )
-    if (length(existing_auto) > 0L) {
-      n_existing <- length(existing_auto)
-      log_msg("Auto-mode resume (no state file): found %d existing simulations", n_existing)
-      state$total_sims_run <- as.integer(n_existing)
-      # Re-run ESS check to restore convergence/phase from existing data so the
-      # loop continues from the correct phase rather than restarting calibration.
-      state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
-      if (state$converged) {
-        log_msg("Resume: calibration already converged with %d sims, skipping to post-processing",
-                n_existing)
-      } else {
-        log_msg("Resume: continuing auto calibration from sim %d onward", n_existing + 1L)
-      }
-    }
-  }
+  state <- .mosaic_init_state(control, param_names_sampled, nspec)
 
   log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
@@ -816,17 +767,8 @@ run_MOSAIC <- function(config,
 
     log_msg("[FIXED MODE] Running exactly %d simulations", target)
 
-    # Find existing files if resuming (FIXED: Issue 1.5 - safe sim ID parsing)
-    done_ids <- integer()
-    if (resume) {
-      existing <- list.files(dirs$bfrs_params, pattern = "^sim_[0-9]{7}\\.parquet$", full.names = FALSE)
-      if (length(existing)) {
-        done_ids <- .mosaic_parse_sim_ids(existing, pattern = "^sim_0*([0-9]+)\\.parquet$")
-        log_msg("Found %d existing simulations to skip", length(done_ids))
-      }
-    }
-
     all_ids <- seq_len(target)
+    done_ids <- integer()
     sim_ids <- setdiff(all_ids, done_ids)
 
     if (length(sim_ids) == 0L) {
