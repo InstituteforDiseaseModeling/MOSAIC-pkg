@@ -496,20 +496,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       method_data <- methods_data[[method_name]]
       param_data <- NULL
 
-      # Generate parameter name variants to handle naming inconsistencies
-      # between priors, BFRS, and NPE (especially seasonality parameters)
       param_variants <- c(param_name)
-
-      # Add _j variants for canonical seasonality params (a_1 → a_1_j)
-      if (param_name %in% c("a_1", "a_2", "b_1", "b_2")) {
-        param_variants <- c(param_variants, paste0(param_name, "_j"))
-      }
-
-      # Add canonical variants from _j form (a_1_j → a_1)
-      if (grepl("^[ab]_\\d_j$", param_name)) {
-        # Strip _j suffix to get canonical name (a_1_j → a_1)
-        param_variants <- c(param_variants, gsub("_j$", "", param_name))
-      }
 
       # Try to get parameter from global parameters first (try all variants)
       for (variant in param_variants) {

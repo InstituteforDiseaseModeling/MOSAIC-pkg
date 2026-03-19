@@ -100,10 +100,10 @@
 #'        length(location_name). If provided with beta_j0_tot, used to derive beta_j0_hum and beta_j0_env.
 #' @param beta_j0_hum Baseline human-to-human transmission rate (numeric vector of length(location_name)).
 #'        If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * p_beta.
-#' @param a_1 Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
-#' @param a_2 Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
-#' @param b_1 Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
-#' @param b_2 Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
+#' @param a_1_j Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
+#' @param a_2_j Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
+#' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
+#' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.
 #' @param alpha_1 Transmission parameter for mixing (numeric in \[0, 1\]).
 #' @param alpha_2 Transmission parameter for density dependence (numeric in \[0, 1\]).
@@ -177,10 +177,10 @@
 #'      rho = 0.9,
 #'      sigma = 0.5,
 #'      beta_j0_hum = c(0.05, 0.03),
-#'      a_1 = c(0.02, 0.02),
-#'      a_2 = c(0.01, 0.01),
-#'      b_1 = c(0.03, 0.03),
-#'      b_2 = c(0.01, 0.01),
+#'      a_1_j = c(0.02, 0.02),
+#'      a_2_j = c(0.01, 0.01),
+#'      b_1_j = c(0.03, 0.03),
+#'      b_2_j = c(0.01, 0.01),
 #'      p     = 365,
 #'      longitude = c(36.8, 37.0),
 #'      latitude = c(-1.3, -1.2),
@@ -271,10 +271,10 @@ make_LASER_config <- function(output_file_path = NULL,
                               beta_j0_tot = NULL,
                               p_beta = NULL,
                               beta_j0_hum = NULL,
-                              a_1 = NULL,
-                              a_2 = NULL,
-                              b_1 = NULL,
-                              b_2 = NULL,
+                              a_1_j = NULL,
+                              a_2_j = NULL,
+                              b_1_j = NULL,
+                              b_2_j = NULL,
                               p = 365L,
                               alpha_1 = NULL,
                               alpha_2 = NULL,
@@ -364,10 +364,10 @@ make_LASER_config <- function(output_file_path = NULL,
           mobility_gamma    = mobility_gamma,
           tau_i             = tau_i,
           beta_j0_hum       = beta_j0_hum,
-          a_1               = a_1,
-          a_2               = a_2,
-          b_1               = b_1,
-          b_2               = b_2,
+          a_1_j             = a_1_j,
+          a_2_j             = a_2_j,
+          b_1_j             = b_1_j,
+          b_2_j             = b_2_j,
           p                 = p,
           alpha_1           = alpha_1,
           alpha_2           = alpha_2,
@@ -741,17 +741,17 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("beta_j0_hum must be a numeric vector of length equal to location_name and values greater than or equal to zero.")
      }
 
-     if (!is.numeric(a_1) || length(a_1) != length(location_name)) {
-          stop("a_1 must be a numeric vector of length equal to location_name.")
+     if (!is.numeric(a_1_j) || length(a_1_j) != length(location_name)) {
+          stop("a_1_j must be a numeric vector of length equal to location_name.")
      }
-     if (!is.numeric(a_2) || length(a_2) != length(location_name)) {
-          stop("a_2 must be a numeric vector of length equal to location_name.")
+     if (!is.numeric(a_2_j) || length(a_2_j) != length(location_name)) {
+          stop("a_2_j must be a numeric vector of length equal to location_name.")
      }
-     if (!is.numeric(b_1) || length(b_1) != length(location_name)) {
-          stop("b_1 must be a numeric vector of length equal to location_name.")
+     if (!is.numeric(b_1_j) || length(b_1_j) != length(location_name)) {
+          stop("b_1_j must be a numeric vector of length equal to location_name.")
      }
-     if (!is.numeric(b_2) || length(b_2) != length(location_name)) {
-          stop("b_2 must be a numeric vector of length equal to location_name.")
+     if (!is.numeric(b_2_j) || length(b_2_j) != length(location_name)) {
+          stop("b_2_j must be a numeric vector of length equal to location_name.")
      }
      if (!is.numeric(p) || length(p) != 1 || p <= 0) {
           stop("p must be a numeric scalar greater than zero.")

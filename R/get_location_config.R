@@ -104,23 +104,13 @@ get_location_config <- function(iso, config = NULL) {
      out <- config
      out$location_name <- out$location_name[sel]
 
-     # Normalize seasonality keys: LASER JSON uses a_1_j; R-side uses a_1.
-     # Rename on load so all downstream code sees the canonical R form.
-     for (.nm in c("a_1_j", "a_2_j", "b_1_j", "b_2_j")) {
-          if (!is.null(out[[.nm]])) {
-               out[[gsub("_j$", "", .nm)]] <- out[[.nm]]
-               out[[.nm]] <- NULL
-          }
-     }
-     rm(.nm)
-
      location_params <- c(
           names(out)[grep( '_initial', names(out))],
           "longitude", "latitude",
           "tau_i", "theta_j",
           "beta_j0_hum", "beta_j0_env",
           "beta_j0_tot", "p_beta",
-          "a_1", "a_2", "b_1", "b_2",
+          "a_1_j", "a_2_j", "b_1_j", "b_2_j",
           "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
           "epidemic_threshold",
           "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"

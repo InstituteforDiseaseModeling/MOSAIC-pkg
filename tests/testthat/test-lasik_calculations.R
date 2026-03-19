@@ -26,10 +26,10 @@ testthat::test_that("beta_j_seasonality matches", {
      beta_jt_hum_expected <- matrix(NA_real_, nrow = length(location_names), ncol = length(time_names))
 
      # Baseline Fourier seasonality terms
-     a_1 <- baseline$a_1
-     a_2 <- baseline$a_2
-     b_1 <- baseline$b_1
-     b_2 <- baseline$b_2
+     a_1 <- baseline$a_1_j
+     a_2 <- baseline$a_2_j
+     b_1 <- baseline$b_1_j
+     b_2 <- baseline$b_2_j
      p <- baseline$p
 
      for (t in 1:length(time_names)) {
@@ -393,10 +393,10 @@ testthat::test_that("log likelihood calculations match", {
 # LASIK values in model.patches.spatial_hazard
 testthat::test_that("spatial hazard calculations", {
 
-     a_1 <- baseline$a_1
-     a_2 <- baseline$a_2
-     b_1 <- baseline$b_1
-     b_2 <- baseline$b_2
+     a_1 <- baseline$a_1_j
+     a_2 <- baseline$a_2_j
+     b_1 <- baseline$b_1_j
+     b_2 <- baseline$b_2_j
      p <- baseline$p
 
      time_names <- seq(as.Date(baseline$date_start), as.Date(baseline$date_stop), 1)

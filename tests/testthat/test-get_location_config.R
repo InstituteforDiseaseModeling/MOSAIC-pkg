@@ -141,7 +141,7 @@ test_that("get_location_config correctly subsets location parameters", {
      location_params <- c("N_j_initial", "S_j_initial", "E_j_initial", 
                          "I_j_initial", "R_j_initial", "V1_j_initial", "V2_j_initial",
                          "longitude", "latitude", "tau_i", "beta_j0_hum", "beta_j0_env",
-                         "a_1", "a_2", "b_1", "b_2")
+                         "a_1_j", "a_2_j", "b_1_j", "b_2_j")
      
      for (param in location_params) {
           if (!is.null(config_default[[param]])) {

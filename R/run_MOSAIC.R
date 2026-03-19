@@ -17,14 +17,6 @@
 # @return config with affected length-1 params wrapped as R lists
 # @noRd
 .mosaic_prepare_config_for_python <- function(config) {
-  # Translate R-canonical seasonality names to LASER Python form at the R/Python boundary.
-  # All R-side code uses a_1/a_2/b_1/b_2; LASER reads a_1_j/a_2_j/b_1_j/b_2_j.
-  for (nm in c("a_1", "a_2", "b_1", "b_2")) {
-    if (!is.null(config[[nm]])) {
-      config[[paste0(nm, "_j")]] <- config[[nm]]
-      config[[nm]] <- NULL
-    }
-  }
   array_params <- c(
     "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k",
     "beta_j0_tot", "p_beta",
@@ -1848,10 +1840,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_epidemic_threshold = TRUE, # Epidemic activation threshold
 
     # Climate relationship
-    sample_a_1 = TRUE,               # Temperature coefficient 1
-    sample_a_2 = TRUE,               # Temperature coefficient 2
-    sample_b_1 = TRUE,               # Rainfall coefficient 1
-    sample_b_2 = TRUE,               # Rainfall coefficient 2
+    sample_a_1_j = TRUE,             # Temperature coefficient 1
+    sample_a_2_j = TRUE,             # Temperature coefficient 2
+    sample_b_1_j = TRUE,             # Rainfall coefficient 1
+    sample_b_2_j = TRUE,             # Rainfall coefficient 2
 
     # Psi-star calibration
     sample_psi_star_a = TRUE,        # Psi-star parameter a
