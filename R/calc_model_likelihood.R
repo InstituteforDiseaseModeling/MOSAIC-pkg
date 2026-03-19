@@ -207,6 +207,38 @@ calc_model_likelihood <- function(obs_cases,
           }
      }
 
+     # --- precompute peak indices per location (once, not per call) ---
+     peak_indices_by_loc <- NULL
+     if ((add_peak_timing || add_peak_magnitude) && !is.null(config)) {
+          location_names <- config$location_name
+          date_start_cfg <- config$date_start
+          date_stop_cfg <- config$date_stop
+
+          if (!is.null(location_names) && !is.null(date_start_cfg) && !is.null(date_stop_cfg)) {
+               # Build date sequence once
+               date_seq <- seq(as.Date(date_start_cfg), as.Date(date_stop_cfg), by = "day")
+               if (length(date_seq) != n_time_steps) {
+                    date_seq <- seq(as.Date(date_start_cfg), as.Date(date_stop_cfg), by = "week")
+                    if (length(date_seq) != n_time_steps) date_seq <- NULL
+               }
+
+               if (!is.null(date_seq)) {
+                    epidemic_peaks <- MOSAIC::epidemic_peaks
+                    peak_indices_by_loc <- vector("list", n_locations)
+                    for (j_pk in seq_len(n_locations)) {
+                         iso_code <- if (j_pk <= length(location_names)) location_names[j_pk] else NA_character_
+                         if (is.na(iso_code)) { peak_indices_by_loc[[j_pk]] <- integer(0); next }
+                         loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
+                         if (nrow(loc_peaks) == 0) { peak_indices_by_loc[[j_pk]] <- integer(0); next }
+                         idx <- vapply(loc_peaks$peak_date, function(pd) {
+                              which.min(abs(date_seq - as.Date(pd)))
+                         }, integer(1))
+                         peak_indices_by_loc[[j_pk]] <- idx[idx > 0L & idx <= n_time_steps]
+                    }
+               }
+          }
+     }
+
      # --- main loop ---
      ll_locations <- rep(NA_real_, n_locations)
 
@@ -245,49 +277,35 @@ calc_model_likelihood <- function(obs_cases,
                verbose   = FALSE
           ) else 0
 
-          # Peak-based likelihoods using epidemic_peaks data
+          # Peak-based likelihoods using precomputed peak indices
           ll_peak_time_c <- ll_peak_time_d <- 0
           ll_peak_mag_c <- ll_peak_mag_d <- 0
-          
-          if ((add_peak_timing || add_peak_magnitude) && !is.null(config)) {
-               # Extract needed info from config
-               location_names <- config$location_name
-               date_start <- config$date_start
-               date_stop <- config$date_stop
-               
-               if (!is.null(location_names) && !is.null(date_start) && !is.null(date_stop)) {
-                    # Get location name for this index (assuming it's an ISO code)
-                    iso_code <- if (j <= length(location_names)) location_names[j] else NULL
-                    
-                    if (!is.null(iso_code)) {
-                         if (add_peak_timing) {
-                              if (have_cases) {
-                                   ll_peak_time_c <- calc_multi_peak_timing_ll(
-                                        obs_c, est_c, iso_code, date_start, date_stop,
-                                        sigma_peak_time, penalty_unmatched_peak
-                                   )
-                              }
-                              if (have_deaths) {
-                                   ll_peak_time_d <- calc_multi_peak_timing_ll(
-                                        obs_d, est_d, iso_code, date_start, date_stop,
-                                        sigma_peak_time, penalty_unmatched_peak
-                                   )
-                              }
+
+          if ((add_peak_timing || add_peak_magnitude) && !is.null(peak_indices_by_loc)) {
+               loc_peak_idx <- peak_indices_by_loc[[j]]
+               if (length(loc_peak_idx) > 0) {
+                    if (add_peak_timing) {
+                         if (have_cases) {
+                              ll_peak_time_c <- .calc_peak_timing_from_indices(
+                                   est_c, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak
+                              )
                          }
-                         
-                         if (add_peak_magnitude) {
-                              if (have_cases) {
-                                   ll_peak_mag_c <- calc_multi_peak_magnitude_ll(
-                                        obs_c, est_c, iso_code, date_start, date_stop,
-                                        sigma_peak_log, penalty_unmatched_peak
-                                   )
-                              }
-                              if (have_deaths) {
-                                   ll_peak_mag_d <- calc_multi_peak_magnitude_ll(
-                                        obs_d, est_d, iso_code, date_start, date_stop,
-                                        sigma_peak_log, penalty_unmatched_peak
-                                   )
-                              }
+                         if (have_deaths) {
+                              ll_peak_time_d <- .calc_peak_timing_from_indices(
+                                   est_d, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak
+                              )
+                         }
+                    }
+                    if (add_peak_magnitude) {
+                         if (have_cases) {
+                              ll_peak_mag_c <- .calc_peak_magnitude_from_indices(
+                                   obs_c, est_c, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
+                              )
+                         }
+                         if (have_deaths) {
+                              ll_peak_mag_d <- .calc_peak_magnitude_from_indices(
+                                   obs_d, est_d, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
+                              )
                          }
                     }
                }
@@ -390,6 +408,53 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 }
 
 
+
+# --- Fast peak helpers using precomputed indices (no date parsing) ---
+
+# Peak timing likelihood from precomputed indices
+.calc_peak_timing_from_indices <- function(est_vec, peak_indices, sigma_peak_time = 1,
+                                           penalty_unmatched = -3) {
+     ll_total <- 0
+     n_matched <- 0
+     n_ts <- length(est_vec)
+     for (peak_idx in peak_indices) {
+          window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
+          if (length(window) > 2L) {
+               est_peak_idx <- window[which.max(est_vec[window])]
+               time_diff <- (est_peak_idx - peak_idx) / 7
+               ll_total <- ll_total + stats::dnorm(time_diff, 0, sigma_peak_time, log = TRUE)
+               n_matched <- n_matched + 1L
+          }
+     }
+     ll_total + (length(peak_indices) - n_matched) * penalty_unmatched
+}
+
+# Peak magnitude likelihood from precomputed indices
+.calc_peak_magnitude_from_indices <- function(obs_vec, est_vec, peak_indices,
+                                              sigma_peak_log = 0.5,
+                                              penalty_unmatched = -3) {
+     ll_total <- 0
+     n_matched <- 0
+     n_ts <- length(obs_vec)
+     for (peak_idx in peak_indices) {
+          window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
+          if (length(window) > 2L) {
+               obs_peak_val <- max(obs_vec[window], na.rm = TRUE)
+               est_peak_val <- max(est_vec[window], na.rm = TRUE)
+               if (is.finite(obs_peak_val) && is.finite(est_peak_val) &&
+                   obs_peak_val > 0 && est_peak_val > 0) {
+                    adaptive_sigma <- sigma_peak_log * sqrt(100 / max(obs_peak_val, 100))
+                    ll_total <- ll_total + stats::dnorm(
+                         log(est_peak_val) - log(obs_peak_val), 0, adaptive_sigma, log = TRUE
+                    )
+                    n_matched <- n_matched + 1L
+               }
+          }
+     }
+     ll_total + (length(peak_indices) - n_matched) * penalty_unmatched
+}
+
+# --- Legacy peak helpers (retained for external/standalone use) ---
 
 # Peak timing likelihood using epidemic_peaks data
 calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
