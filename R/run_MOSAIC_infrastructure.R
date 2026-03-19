@@ -50,10 +50,10 @@
   })
 }
 
-#' NFS-Safe Atomic Write
+#' Atomic Write
 #'
-#' Implements truly atomic write for network filesystems.
-#' Uses write-to-temp-and-rename with sync.
+#' Implements atomic write via write-to-temp-and-rename.
+#' POSIX rename is atomic on local filesystems.
 #'
 #' @param data Data to write
 #' @param path Target path
@@ -71,12 +71,7 @@
     # Write to temp file
     write_func(data, tmp_file, ...)
 
-    # Sync to disk (flush buffers)
-    if (.Platform$OS.type == "unix") {
-      system2("sync", wait = TRUE, stdout = FALSE, stderr = FALSE)
-    }
-
-    # Atomic rename (should be atomic even on NFS after sync)
+    # Atomic rename (POSIX guarantees atomicity on local filesystems)
     success <- file.rename(tmp_file, path)
 
     if (!success) {
