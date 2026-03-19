@@ -436,7 +436,7 @@ run_MOSAIC <- function(config,
     "priors is required and must be a list" =
       !missing(priors) && is.list(priors) && length(priors) > 0,
     "dir_output is required and must be character string" =
-      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L,
+      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L
   )
 
   # Validate config structure
