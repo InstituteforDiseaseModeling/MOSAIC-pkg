@@ -774,6 +774,35 @@ run_MOSAIC <- function(config,
     .mosaic_init_state(control, param_names_sampled, nspec)
   }
 
+  # ---------------------------------------------------------------------------
+  # AUTO-MODE RESUME BOOTSTRAP
+  # When resume=TRUE but no run_state.rds exists (stopped mid-batch), the state
+  # is freshly initialised above with total_sims_run=0.  Without this block the
+  # repeat loop would start at sim 1 and overwrite all existing work.
+  # Fixed mode handles its own skip via done_ids below, so this is auto only.
+  # ---------------------------------------------------------------------------
+  if (resume && identical(state$mode, "auto") && state$total_sims_run == 0L) {
+    existing_auto <- list.files(
+      dirs$bfrs_params,
+      pattern = "^sim_[0-9]{7}\\.parquet$",
+      full.names = FALSE
+    )
+    if (length(existing_auto) > 0L) {
+      n_existing <- length(existing_auto)
+      log_msg("Auto-mode resume (no state file): found %d existing simulations", n_existing)
+      state$total_sims_run <- as.integer(n_existing)
+      # Re-run ESS check to restore convergence/phase from existing data so the
+      # loop continues from the correct phase rather than restarting calibration.
+      state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
+      if (state$converged) {
+        log_msg("Resume: calibration already converged with %d sims, skipping to post-processing",
+                n_existing)
+      } else {
+        log_msg("Resume: continuing auto calibration from sim %d onward", n_existing + 1L)
+      }
+    }
+  }
+
   log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
 
