@@ -1104,32 +1104,28 @@ initial_conditions_E_I <- est_initial_E_I(
 # Apply scaling factors to reduce mean E and I while preserving relative uncertainty
 
 adjustment_factors_E_I <- list(
-     MOZ = 0.4,  # Reduce Mozambique initial E/I to 30% of estimated
-     MWI = 0.3,  # Reduce Malawi initial E/I to 20% of estimated
-     ZWE = 0.075,  # Reduce Zimbabwe initial E/I to 15% of estimated
-     UGA = 0.05,
-     TZA = 0.05,
-     SOM = 0.3,
      AGO = 0.01,
      BEN = 0.01,
      BFA = 0.01,
-     BWA = 0.00,
+     BWA = 0.00,  # Near-zero: no active cholera at model start (uses Beta(0.01, 99999.99))
      CAF = 0.01,
      CIV = 0.01,
      CMR = 0.01,
      COD = 0.75,
      COG = 0.05,
-     ERI = 0.00,
-     GAB = 0.00,
+     ERI = 0.00,  # Near-zero: very limited international data; no active cholera
+     GAB = 0.00,  # Near-zero: no active cholera at model start
      GHA = 0.001,
      GIN = 0.001,
-     GMB = 0.000,
+     GMB = 0.001,
      GNB = 0.001,
-     GNQ = 0.00,
+     GNQ = 0.00,  # Near-zero: no active cholera at model start
      KEN = 1.2,
      LBR = 0.001,
-     MLI = 0.00,
-     MRT = 0.00,
+     MLI = 0.00,  # Near-zero: no active cholera at model start
+     MOZ = 0.4,
+     MRT = 0.00,  # Near-zero: no active cholera at model start
+     MWI = 0.3,
      NAM = 0.2,
      NER = 0.1,
      NGA = 1.1,
@@ -1138,12 +1134,14 @@ adjustment_factors_E_I <- list(
      SLE = 0.001,
      SOM = 0.5,
      SSD = 0.1,
-     SWZ = 0.00,
+     SWZ = 0.00,  # Near-zero: no active cholera at model start
      TCD = 0.001,
      TGO = 0.1,
      TZA = 0.05,
      UGA = 0.3,
-     ZAF = 0.01
+     ZAF = 0.01,
+     ZMB = 0.3,
+     ZWE = 0.075
 )
 
 cat("\nApplying post-estimation mean adjustments for initial E and I:\n")
@@ -1156,31 +1154,44 @@ for (iso in names(adjustment_factors_E_I)) {
           old_params_E <- priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters
           old_mean_E <- old_params_E$shape1 / (old_params_E$shape1 + old_params_E$shape2)
 
-          # Calculate new mean (scaled down)
-          new_mean_E <- old_mean_E * scaling_factor
+          if (scaling_factor == 0) {
+               # Zero scaling: no active E at model start.
+               # Cannot compute new Beta via mean/CV rescale (0/0 = NaN).
+               # Use the minimum-mass default prior instead: Beta(0.01, 99999.99)
+               # gives mean ~1e-7, placing virtually all mass at 0.
+               priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters <- list(
+                    shape1 = 0.01,
+                    shape2 = 99999.99
+               )
+               cat(sprintf("  %s E: %.6f -> ~0 (near-zero prior, 100%% reduction)\n",
+                           iso, old_mean_E))
+          } else {
+               # Calculate new mean (scaled down)
+               new_mean_E <- old_mean_E * scaling_factor
 
-          # Preserve relative uncertainty (CV)
-          # CV = sqrt(variance) / mean for Beta distribution
-          old_var_E <- (old_params_E$shape1 * old_params_E$shape2) /
-                       ((old_params_E$shape1 + old_params_E$shape2)^2 *
-                        (old_params_E$shape1 + old_params_E$shape2 + 1))
-          old_cv_E <- sqrt(old_var_E) / old_mean_E
+               # Preserve relative uncertainty (CV)
+               # CV = sqrt(variance) / mean for Beta distribution
+               old_var_E <- (old_params_E$shape1 * old_params_E$shape2) /
+                            ((old_params_E$shape1 + old_params_E$shape2)^2 *
+                             (old_params_E$shape1 + old_params_E$shape2 + 1))
+               old_cv_E <- sqrt(old_var_E) / old_mean_E
 
-          # Fit new Beta with scaled mean and same CV
-          new_var_E <- (new_mean_E * old_cv_E)^2
+               # Fit new Beta with scaled mean and same CV
+               new_var_E <- (new_mean_E * old_cv_E)^2
 
-          # Beta parameters from mean and variance
-          common_term_E <- new_mean_E * (1 - new_mean_E) / new_var_E - 1
-          new_shape1_E <- max(0.01, new_mean_E * common_term_E)
-          new_shape2_E <- max(0.01, (1 - new_mean_E) * common_term_E)
+               # Beta parameters from mean and variance
+               common_term_E <- new_mean_E * (1 - new_mean_E) / new_var_E - 1
+               new_shape1_E <- max(0.01, new_mean_E * common_term_E)
+               new_shape2_E <- max(0.01, (1 - new_mean_E) * common_term_E)
 
-          priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters <- list(
-               shape1 = new_shape1_E,
-               shape2 = new_shape2_E
-          )
+               priors_default$parameters_location$prop_E_initial$location[[iso]]$parameters <- list(
+                    shape1 = new_shape1_E,
+                    shape2 = new_shape2_E
+               )
 
-          cat(sprintf("  %s E: %.6f -> %.6f (%.0f%% reduction)\n",
-                      iso, old_mean_E, new_mean_E, (1 - scaling_factor) * 100))
+               cat(sprintf("  %s E: %.6f -> %.6f (%.0f%% reduction)\n",
+                           iso, old_mean_E, new_mean_E, (1 - scaling_factor) * 100))
+          }
      }
 
      # Adjust prop_I_initial
@@ -1188,30 +1199,41 @@ for (iso in names(adjustment_factors_E_I)) {
           old_params_I <- priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters
           old_mean_I <- old_params_I$shape1 / (old_params_I$shape1 + old_params_I$shape2)
 
-          # Calculate new mean (scaled down)
-          new_mean_I <- old_mean_I * scaling_factor
+          if (scaling_factor == 0) {
+               # Zero scaling: no active I at model start.
+               # Use the minimum-mass default prior: Beta(0.01, 99999.99) ~ mean 1e-7.
+               priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters <- list(
+                    shape1 = 0.01,
+                    shape2 = 99999.99
+               )
+               cat(sprintf("  %s I: %.6f -> ~0 (near-zero prior, 100%% reduction)\n",
+                           iso, old_mean_I))
+          } else {
+               # Calculate new mean (scaled down)
+               new_mean_I <- old_mean_I * scaling_factor
 
-          # Preserve relative uncertainty (CV)
-          old_var_I <- (old_params_I$shape1 * old_params_I$shape2) /
-                       ((old_params_I$shape1 + old_params_I$shape2)^2 *
-                        (old_params_I$shape1 + old_params_I$shape2 + 1))
-          old_cv_I <- sqrt(old_var_I) / old_mean_I
+               # Preserve relative uncertainty (CV)
+               old_var_I <- (old_params_I$shape1 * old_params_I$shape2) /
+                            ((old_params_I$shape1 + old_params_I$shape2)^2 *
+                             (old_params_I$shape1 + old_params_I$shape2 + 1))
+               old_cv_I <- sqrt(old_var_I) / old_mean_I
 
-          # Fit new Beta with scaled mean and same CV
-          new_var_I <- (new_mean_I * old_cv_I)^2
+               # Fit new Beta with scaled mean and same CV
+               new_var_I <- (new_mean_I * old_cv_I)^2
 
-          # Beta parameters from mean and variance
-          common_term_I <- new_mean_I * (1 - new_mean_I) / new_var_I - 1
-          new_shape1_I <- max(0.01, new_mean_I * common_term_I)
-          new_shape2_I <- max(0.01, (1 - new_mean_I) * common_term_I)
+               # Beta parameters from mean and variance
+               common_term_I <- new_mean_I * (1 - new_mean_I) / new_var_I - 1
+               new_shape1_I <- max(0.01, new_mean_I * common_term_I)
+               new_shape2_I <- max(0.01, (1 - new_mean_I) * common_term_I)
 
-          priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters <- list(
-               shape1 = new_shape1_I,
-               shape2 = new_shape2_I
-          )
+               priors_default$parameters_location$prop_I_initial$location[[iso]]$parameters <- list(
+                    shape1 = new_shape1_I,
+                    shape2 = new_shape2_I
+               )
 
-          cat(sprintf("  %s I: %.6f -> %.6f (%.0f%% reduction)\n",
-                      iso, old_mean_I, new_mean_I, (1 - scaling_factor) * 100))
+               cat(sprintf("  %s I: %.6f -> %.6f (%.0f%% reduction)\n",
+                           iso, old_mean_I, new_mean_I, (1 - scaling_factor) * 100))
+          }
      }
 }
 
