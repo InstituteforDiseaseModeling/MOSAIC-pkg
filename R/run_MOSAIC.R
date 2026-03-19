@@ -17,6 +17,9 @@
 # @return config with affected length-1 params wrapped as R lists
 # @noRd
 .mosaic_prepare_config_for_python <- function(config) {
+  # Multi-location configs never need wrapping (all location params have length > 1)
+  if (length(config$location_name) > 1L) return(config)
+
   array_params <- c(
     "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k",
     "beta_j0_tot", "p_beta",
