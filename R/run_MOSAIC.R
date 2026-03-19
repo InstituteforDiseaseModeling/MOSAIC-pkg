@@ -248,7 +248,7 @@
 
   # Write parameter file
   output_file <- file.path(dir_bfrs_parameters, sprintf("sim_%07d.parquet", sim_id))
-  .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+  .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io, check_disk = FALSE)
 
   # Write timeseries file (NPE only) — O(n_j * n_t) vectorised mean from accumulators.
   # No string conversion, no nested loops, no linear scan per (j,t) cell.
@@ -272,7 +272,7 @@
     )
 
     out_file <- file.path(dir_bfrs_timeseries, sprintf("timeseries_%07d.parquet", sim_id))
-    .mosaic_write_parquet(collapsed_df, out_file, io)
+    .mosaic_write_parquet(collapsed_df, out_file, io, check_disk = FALSE)
   }
 
   # CRITICAL: Cleanup Python objects after EACH simulation completes
@@ -754,6 +754,11 @@ run_MOSAIC <- function(config,
 
   log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
+
+  # Upfront disk space check (once, not per file write)
+  if (!.mosaic_check_disk_space(dirs$bfrs_out, required_mb = 500)) {
+    stop("Insufficient disk space to begin calibration. At least 500 MB required.", call. = FALSE)
+  }
 
   # ===========================================================================
   # SIMULATION: FIXED MODE
