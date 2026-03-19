@@ -132,9 +132,9 @@ est_seasonal_dynamics <- function(PATHS,
 
           # Fit the Fourier series for precipitation.
           fit_p <- minpack.lm::nlsLM(
-               precip_scaled ~ MOSAIC::fourier_series_double(day_of_year, a1, b1, a2, b2, p = 365, beta0 = 0),
+               precip_scaled ~ MOSAIC::fourier_series_double(day_of_year, a_1, b_1, a_2, b_2, p = 365, beta0 = 0),
                data = daily,
-               start = list(a1 = 1, b1 = 1, a2 = 0.5, b2 = 0.5)
+               start = list(a_1 = 1, b_1 = 1, a_2 = 0.5, b_2 = 0.5)
           )
 
           coef_p <- coef(fit_p)
@@ -151,15 +151,15 @@ est_seasonal_dynamics <- function(PATHS,
           )
 
           fitted_days <- 1:365
-          fitted_precip <- MOSAIC::fourier_series_double(fitted_days, coef_p["a1"], coef_p["b1"],
-                                                         coef_p["a2"], coef_p["b2"],
+          fitted_precip <- MOSAIC::fourier_series_double(fitted_days, coef_p["a_1"], coef_p["b_1"],
+                                                         coef_p["a_2"], coef_p["b_2"],
                                                          p = 365, beta0 = 0)
           fitted_precip <- normalize_if_needed(fitted_precip)
 
           if (iso %in% iso_codes_with_usable_data && n_obs >= min_obs) {
 
                fit_c <- minpack.lm::nlsLM(
-                    cases_scaled ~ MOSAIC::fourier_series_double(day_of_year, a1, b1, a2, b2, p = 365, beta0 = 0),
+                    cases_scaled ~ MOSAIC::fourier_series_double(day_of_year, a_1, b_1, a_2, b_2, p = 365, beta0 = 0),
                     data = daily,
                     start = as.list(coef_p)
                )
@@ -177,8 +177,8 @@ est_seasonal_dynamics <- function(PATHS,
                     ci_hi = coef_c + 1.96 * se_c
                )
 
-               fitted_cases <- MOSAIC::fourier_series_double(fitted_days, coef_c["a1"], coef_c["b1"],
-                                                             coef_c["a2"], coef_c["b2"],
+               fitted_cases <- MOSAIC::fourier_series_double(fitted_days, coef_c["a_1"], coef_c["b_1"],
+                                                             coef_c["a_2"], coef_c["b_2"],
                                                              p = 365, beta0 = 0)
 
                fitted_cases <- normalize_if_needed(fitted_cases)

@@ -186,11 +186,10 @@ calc_model_posterior_distributions <- function(
 
         # Seasonality Fourier coefficients are stored as a_1_j / a_2_j / b_1_j / b_2_j
         # in simulation results (matching the LASER config key names) but priors.json
-        # uses the compact forms a1 / a2 / b1 / b2.  Convert here so the priors lookup
-        # below finds the correct key.
+        # uses the canonical forms a_1 / a_2 / b_1 / b_2.  Strip the _j suffix here
+        # so the priors lookup below finds the correct key.
         if (param_base %in% c("a_1_j", "a_2_j", "b_1_j", "b_2_j")) {
             param_base <- gsub("_j$", "", param_base)   # a_1_j -> a_1
-            param_base <- gsub("_", "", param_base)      # a_1   -> a1
         }
 
         # Get quantiles

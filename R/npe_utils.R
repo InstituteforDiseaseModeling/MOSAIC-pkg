@@ -855,15 +855,15 @@ get_npe_parameter_bounds <- function(
 
         # Handle seasonality parameter naming mismatch
         # Calibration uses: a_1_j, a_2_j, b_1_j, b_2_j
-        # Priors use: a1, a2, b1, b2
+        # Priors use: a_1, a_2, b_1, b_2
         if (base_name == "a_1_j") {
-            base_name <- "a1"
+            base_name <- "a_1"
         } else if (base_name == "a_2_j") {
-            base_name <- "a2"
+            base_name <- "a_2"
         } else if (base_name == "b_1_j") {
-            base_name <- "b1"
+            base_name <- "b_1"
         } else if (base_name == "b_2_j") {
-            base_name <- "b2"
+            base_name <- "b_2"
         }
 
         # Try location-specific

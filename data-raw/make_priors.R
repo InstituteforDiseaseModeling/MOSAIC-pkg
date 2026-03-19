@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "12.0",
+          version = "12.1",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -736,7 +736,7 @@ if (seasonal_params_exist) {
 }
 
 # Create priors for each seasonality parameter
-for (param in c("a1", "a2", "b1", "b2")) {
+for (param in c("a_1", "a_2", "b_1", "b_2")) {
      param_name <- param  # Use parameter name directly without suffix
 
      priors_default$parameters_location[[param_name]] <- list(

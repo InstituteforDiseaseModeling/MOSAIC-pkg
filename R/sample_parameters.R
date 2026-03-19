@@ -40,10 +40,10 @@
 #'     \item sample_p_beta: Proportion of human-to-human transmission (default TRUE)
 #'     \item sample_tau_i: Diffusion (default TRUE)
 #'     \item sample_theta_j: WASH coverage (default TRUE)
-#'     \item sample_a1: Seasonality (default TRUE)
-#'     \item sample_a2: Seasonality (default TRUE)
-#'     \item sample_b1: Seasonality (default TRUE)
-#'     \item sample_b2: Seasonality (default TRUE)
+#'     \item sample_a_1: Seasonality (default TRUE)
+#'     \item sample_a_2: Seasonality (default TRUE)
+#'     \item sample_b_1: Seasonality (default TRUE)
+#'     \item sample_b_2: Seasonality (default TRUE)
 #'     \item sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
 #'     \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
 #'     \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
@@ -145,10 +145,10 @@ sample_parameters <- function(
     sample_p_beta = TRUE,
     sample_tau_i = TRUE,
     sample_theta_j = TRUE,
-    sample_a1 = TRUE,
-    sample_a2 = TRUE,
-    sample_b1 = TRUE,
-    sample_b2 = TRUE,
+    sample_a_1 = TRUE,
+    sample_a_2 = TRUE,
+    sample_b_1 = TRUE,
+    sample_b_2 = TRUE,
     sample_mu_j_baseline = TRUE,
     sample_mu_j_slope = TRUE,
     sample_mu_j_epidemic_factor = TRUE,
@@ -455,10 +455,10 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
   # Parameter name mappings
   PARAM_MAPPINGS <- list(
-    a1 = "a_1_j",
-    a2 = "a_2_j",
-    b1 = "b_1_j",
-    b2 = "b_2_j"
+    a_1 = "a_1_j",
+    a_2 = "a_2_j",
+    b_1 = "b_1_j",
+    b_2 = "b_2_j"
   )
 
   for (param_name in names(location_params)) {
@@ -883,7 +883,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
     ),
     location = list(
       params = c("beta_j0_env", "beta_j0_hum", "tau_i", "theta_j",
-                "a_1_j", "a_2_j", "b_1_j", "b_2_j",
+                "a_1", "a_2", "b_1", "b_2",
                 "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
                 "epidemic_threshold"),
       type = "vector"
@@ -1433,10 +1433,10 @@ check_sampled_parameter <- function(config_sampled, priors,
     # Location-specific parameter
     # Handle parameter name mappings
     PARAM_MAPPINGS <- list(
-      a1 = "a_1_j",
-      a2 = "a_2_j",
-      b1 = "b_1_j",
-      b2 = "b_2_j"
+      a_1 = "a_1_j",
+      a_2 = "a_2_j",
+      b_1 = "b_1_j",
+      b_2 = "b_2_j"
     )
 
     config_param_name <- PARAM_MAPPINGS[[param_name]]
