@@ -453,14 +453,6 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
   n_locations <- length(locations)
 
-  # Parameter name mappings
-  PARAM_MAPPINGS <- list(
-    a_1 = "a_1_j",
-    a_2 = "a_2_j",
-    b_1 = "b_1_j",
-    b_2 = "b_2_j"
-  )
-
   for (param_name in names(location_params)) {
 
     # Check if we should sample this parameter
@@ -499,13 +491,8 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
             # Check if sampling returned NA (e.g., due to NA prior parameters)
             if (is.na(sampled_value)) {
               # Fall back to default config value
-              config_param_name <- PARAM_MAPPINGS[[param_name]]
-              if (is.null(config_param_name)) {
-                config_param_name <- param_name
-              }
-
-              if (config_param_name %in% names(config_sampled)) {
-                default_value <- config_sampled[[config_param_name]][i]
+              if (param_name %in% names(config_sampled)) {
+                default_value <- config_sampled[[param_name]][i]
                 if (verbose) {
                   message("Prior contains NA for ", param_name, " in ", iso,
                          ", using default value: ", default_value)
@@ -539,13 +526,7 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
              "\nPlease check priors configuration.")
       }
 
-      # Map to config structure with correct names
-      config_param_name <- PARAM_MAPPINGS[[param_name]]
-      if (is.null(config_param_name)) {
-        config_param_name <- param_name
-      }
-
-      config_sampled[[config_param_name]] <- sampled_values
+      config_sampled[[param_name]] <- sampled_values
 
       if (verbose) {
         cat("  - Sampling:", param_name, "=",
@@ -554,23 +535,13 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
     } else {
       if (verbose) {
-        config_param_name <- PARAM_MAPPINGS[[param_name]]
-        if (is.null(config_param_name)) {
-          config_param_name <- param_name
-        }
-        default_values <- config_sampled[[config_param_name]]
+        default_values <- config_sampled[[param_name]]
         cat("  - Keeping defaults:", param_name, "=",
             format_verbose_value(default_values), "\n")
       }
 
-      # Verify the parameter exists in config
-      config_param_name <- PARAM_MAPPINGS[[param_name]]
-      if (is.null(config_param_name)) {
-        config_param_name <- param_name
-      }
-
-      if (!(config_param_name %in% names(config_sampled))) {
-        warning("Parameter '", config_param_name,
+      if (!(param_name %in% names(config_sampled))) {
+        warning("Parameter '", param_name,
                 "' not found in config template and not sampled")
       }
     }
@@ -1431,23 +1402,10 @@ check_sampled_parameter <- function(config_sampled, priors,
 
   } else {
     # Location-specific parameter
-    # Handle parameter name mappings
-    PARAM_MAPPINGS <- list(
-      a_1 = "a_1_j",
-      a_2 = "a_2_j",
-      b_1 = "b_1_j",
-      b_2 = "b_2_j"
-    )
-
-    config_param_name <- PARAM_MAPPINGS[[param_name]]
-    if (is.null(config_param_name)) {
-      config_param_name <- param_name
-    }
-
-    if (config_param_name %in% names(config_sampled)) {
+    if (param_name %in% names(config_sampled)) {
       loc_idx <- which(config_sampled$location_name == location)
       if (length(loc_idx) > 0) {
-        result$sampled_value <- config_sampled[[config_param_name]][loc_idx]
+        result$sampled_value <- config_sampled[[param_name]][loc_idx]
       }
     }
 

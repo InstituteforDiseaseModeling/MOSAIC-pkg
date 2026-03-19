@@ -17,6 +17,14 @@
 # @return config with affected length-1 params wrapped as R lists
 # @noRd
 .mosaic_prepare_config_for_python <- function(config) {
+  # Translate R-canonical seasonality names to LASER Python form at the R/Python boundary.
+  # All R-side code uses a_1/a_2/b_1/b_2; LASER reads a_1_j/a_2_j/b_1_j/b_2_j.
+  for (nm in c("a_1", "a_2", "b_1", "b_2")) {
+    if (!is.null(config[[nm]])) {
+      config[[paste0(nm, "_j")]] <- config[[nm]]
+      config[[nm]] <- NULL
+    }
+  }
   array_params <- c(
     "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k",
     "beta_j0_tot", "p_beta",
@@ -615,9 +623,7 @@ run_MOSAIC <- function(config,
     disabled_flags <- names(sampling_args)[vapply(sampling_args, isFALSE, logical(1))]
     disabled_base <- gsub("^sample_", "", disabled_flags)
     special_map <- list(
-      beta_j0_tot = c("beta_j0_hum", "beta_j0_env"),
-      a_1 = "a_1_j", a_2 = "a_2_j",
-      b_1 = "b_1_j", b_2 = "b_2_j"
+      beta_j0_tot = c("beta_j0_hum", "beta_j0_env")
     )
     resolved <- unlist(lapply(disabled_base, function(nm) {
       if (nm %in% names(special_map)) special_map[[nm]] else nm
