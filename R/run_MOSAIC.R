@@ -33,6 +33,65 @@
 }
 
 # =============================================================================
+# FAST PARAMETER EXTRACTION (replaces convert_config_to_matrix in hot loop)
+# =============================================================================
+
+#' Build Parameter Lookup Table
+#'
+#' Precomputes a mapping from param_names_all to config keys and location
+#' indices. Built once at setup, passed to each worker to avoid per-sim
+#' overhead of convert_config_to_matrix().
+#'
+#' @param param_names_all Character vector of parameter names (from setup)
+#' @param location_names Character vector of location ISO codes
+#' @return A list of lists, each with \code{key} (config key) and \code{idx}
+#'   (integer location index, or NULL for global params)
+#' @noRd
+.mosaic_build_param_lookup <- function(param_names_all, location_names) {
+  n <- length(param_names_all)
+  lookup <- vector("list", n)
+  for (i in seq_len(n)) {
+    nm <- param_names_all[i]
+    # Check if name ends with _ISO (3-letter uppercase suffix matching a location)
+    suffix <- sub("^.*_([A-Z]{3})$", "\\1", nm)
+    if (nchar(suffix) == 3L && suffix %in% location_names) {
+      base_key <- sub("_[A-Z]{3}$", "", nm)
+      loc_idx <- match(suffix, location_names)
+      lookup[[i]] <- list(key = base_key, idx = loc_idx)
+    } else {
+      lookup[[i]] <- list(key = nm, idx = NULL)
+    }
+  }
+  lookup
+}
+
+#' Extract Parameter Row from Config Using Precomputed Lookup
+#'
+#' Lightweight replacement for convert_config_to_matrix() in the worker hot
+#' loop. Uses direct indexed access instead of iterating all config keys.
+#'
+#' @param config A sampled config list
+#' @param param_lookup Precomputed lookup from .mosaic_build_param_lookup()
+#' @param n_params Length of param_names_all
+#' @return Numeric vector of length n_params
+#' @noRd
+.mosaic_extract_param_row <- function(config, param_lookup, n_params) {
+  row <- numeric(n_params)
+  for (i in seq_len(n_params)) {
+    entry <- param_lookup[[i]]
+    val <- config[[entry$key]]
+    if (is.null(val)) {
+      row[i] <- NA_real_
+    } else if (!is.null(entry$idx)) {
+      row[i] <- as.numeric(val[entry$idx])
+    } else {
+      row[i] <- as.numeric(val[1L])
+    }
+  }
+  row
+}
+
+# =============================================================================
 # SIMULATION WORKER FUNCTION
 # =============================================================================
 
@@ -57,7 +116,7 @@
 #' @noRd
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
                                           dir_bfrs_parameters, dir_bfrs_timeseries,
-                                          param_names_all, sampling_args, io,
+                                          param_names_all, param_lookup, sampling_args, io,
                                           likelihood_settings,
                                           save_timeseries = TRUE) {
 
@@ -124,23 +183,13 @@
     # Initialize row directly in pre-allocated matrix (FIXED: no rbind!)
     result_matrix[j, 1:4] <- c(sim_id, j, sim_id, seed_ij)
 
-    # Convert parameters to vector
-    param_vec <- tryCatch({
-      convert_config_to_matrix(params)
+    # Extract parameters directly using precomputed lookup (fast path)
+    param_row <- tryCatch({
+      .mosaic_extract_param_row(params, param_lookup, n_params)
     }, error = function(e) NULL)
 
-    if (!is.null(param_vec) && length(param_vec) > 0) {
-      if ("seed" %in% names(param_vec)) {
-        param_vec <- param_vec[names(param_vec) != "seed"]
-      }
-      param_vec <- param_vec[param_names_all]
-
-      for (i in seq_along(param_names_all)) {
-        val <- suppressWarnings(as.numeric(param_vec[i]))
-        if (!is.na(val)) {
-          result_matrix[j, 5 + i] <- val
-        }
-      }
+    if (!is.null(param_row)) {
+      result_matrix[j, 6:(5 + n_params)] <- param_row
     }
 
     # Prepare config for Python (wrap length-1 array params as lists)
@@ -593,6 +642,9 @@ run_MOSAIC <- function(config,
   param_names_all <- names(tmp)
   rm(tmp)
 
+  # Precompute lookup for fast parameter extraction in worker hot loop
+  param_lookup <- .mosaic_build_param_lookup(param_names_all, config$location_name)
+
   # Filter to estimated parameters for ESS tracking
   est_params_df <- get("estimated_parameters", envir = asNamespace("MOSAIC"))
   if (!is.data.frame(est_params_df) || nrow(est_params_df) == 0) {
@@ -722,7 +774,8 @@ run_MOSAIC <- function(config,
     dir_bfrs_timeseries <- if (save_timeseries) dirs$bfrs_times else NULL
 
     parallel::clusterExport(cl,
-      c("n_iterations", "priors", "config", "PATHS", "param_names_all", "sampling_args", "dirs",
+      c("n_iterations", "priors", "config", "PATHS", "param_names_all", "param_lookup",
+        "sampling_args", "dirs",
         "likelihood_settings", "io_settings", "save_timeseries", "dir_bfrs_timeseries"),
       envir = environment())
 
@@ -740,6 +793,7 @@ run_MOSAIC <- function(config,
           dir_bfrs_parameters = dirs$bfrs_params,
           dir_bfrs_timeseries = dir_bfrs_timeseries,
           param_names_all = param_names_all,
+          param_lookup = param_lookup,
           sampling_args = sampling_args,
           io = io_settings,
           likelihood_settings = likelihood_settings,
@@ -808,7 +862,7 @@ run_MOSAIC <- function(config,
             sim_id, n_iterations, priors, config, PATHS,
             dirs$bfrs_params,
             if (control$npe$enable) dirs$bfrs_times else NULL,
-            param_names_all, sampling_args,
+            param_names_all, param_lookup, sampling_args,
             io = control$io,
             likelihood_settings = control$likelihood,
             save_timeseries = control$npe$enable
@@ -918,7 +972,7 @@ run_MOSAIC <- function(config,
             sim_id, n_iterations, priors, config, PATHS,
             dirs$bfrs_params,
             if (control$npe$enable) dirs$bfrs_times else NULL,
-            param_names_all, sampling_args,
+            param_names_all, param_lookup, sampling_args,
             io = control$io,
             likelihood_settings = control$likelihood,
             save_timeseries = control$npe$enable
