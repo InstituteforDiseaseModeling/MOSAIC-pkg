@@ -396,19 +396,16 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                      date_start = NULL, date_stop = NULL,
                                      sigma_peak_time = 1,
                                      penalty_unmatched = -3) {
-     # Load epidemic_peaks data
-     if (!exists("epidemic_peaks")) {
-          data("epidemic_peaks", package = "MOSAIC", envir = environment())
-          epidemic_peaks <- get("epidemic_peaks", envir = environment())
-     }
-     
+     # Use lazy-loaded package data (cached in namespace after first access)
+     epidemic_peaks <- MOSAIC::epidemic_peaks
+
      # If required info missing, return 0
      if (is.null(iso_code) || is.null(date_start) || is.null(date_stop)) return(0)
-     
+
      # Get peaks for this location
      loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
      if (nrow(loc_peaks) == 0) return(0)
-     
+
      # Create date sequence for the time series
      date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "day")
      if (length(date_seq) != length(obs_vec)) {
@@ -416,7 +413,7 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
           date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "week")
           if (length(date_seq) != length(obs_vec)) return(0)  # Can't match dates
      }
-     
+
      # Convert peak dates to indices
      peak_indices <- numeric(nrow(loc_peaks))
      for (i in 1:nrow(loc_peaks)) {
@@ -424,13 +421,13 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
           if (length(idx) > 0) peak_indices[i] <- idx[1]
      }
      peak_indices <- peak_indices[peak_indices > 0 & peak_indices <= length(obs_vec)]
-     
+
      if (length(peak_indices) == 0) return(0)
-     
+
      # Find peaks in estimated data near the expected peak times
      ll_total <- 0
      n_matched <- 0
-     
+
      for (peak_idx in peak_indices) {
           # Look for peak in estimated data within window
           window <- max(1, peak_idx - 14):min(length(est_vec), peak_idx + 14)  # +/- 2 weeks
@@ -443,11 +440,11 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
                n_matched <- n_matched + 1
           }
      }
-     
+
      # Penalize if not all peaks were matched
      n_unmatched <- length(peak_indices) - n_matched
      ll_total <- ll_total + n_unmatched * penalty_unmatched
-     
+
      return(ll_total)
 }
 
@@ -456,15 +453,12 @@ calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                         date_start = NULL, date_stop = NULL,
                                         sigma_peak_log = 0.5,
                                         penalty_unmatched = -3) {
-     # Load epidemic_peaks data
-     if (!exists("epidemic_peaks")) {
-          data("epidemic_peaks", package = "MOSAIC", envir = environment())
-          epidemic_peaks <- get("epidemic_peaks", envir = environment())
-     }
-     
+     # Use lazy-loaded package data (cached in namespace after first access)
+     epidemic_peaks <- MOSAIC::epidemic_peaks
+
      # If required info missing, return 0
      if (is.null(iso_code) || is.null(date_start) || is.null(date_stop)) return(0)
-     
+
      # Get peaks for this location
      loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
      if (nrow(loc_peaks) == 0) return(0)
