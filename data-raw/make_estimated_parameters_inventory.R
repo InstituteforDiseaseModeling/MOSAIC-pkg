@@ -324,44 +324,40 @@ initial_params <- data.frame(
 )
 
 # Transmission parameters
+# Note: beta_j0_hum and beta_j0_env are derived quantities (beta_j0_tot * p_beta and
+# beta_j0_tot * (1-p_beta)) — they are not sampled parameters and must not appear here.
 transmission_params <- data.frame(
   parameter_name = c(
     "beta_j0_tot",
-    "p_beta",
-    "beta_j0_hum",
-    "beta_j0_env"
+    "p_beta"
   ),
   display_name = c(
     "Total Base Transmission Rate",
-    "Human-to-Human Proportion",
-    "Human-to-Human Transmission",
-    "Environmental Transmission"
+    "Human-to-Human Proportion"
   ),
   description = c(
     "Total base transmission rate (human + environmental)",
-    "Proportion of total transmission that is human-to-human",
-    "Human-to-human component of transmission (derived from beta_j0_tot * p_beta)",
-    "Environmental component of transmission (derived from beta_j0_tot * (1-p_beta))"
+    "Proportion of total transmission that is human-to-human"
   ),
   units = c(
-    "per day", "proportion", "per day", "per day"
+    "per day", "proportion"
   ),
-  distribution = c("gompertz", "beta", "gamma", "gamma"),
-  posterior_distribution = c("gompertz", "beta", "gamma", "gamma"),
-  posterior_lower = rep(NA_real_, 4),
-  posterior_upper = rep(NA_real_, 4),
+  distribution = c("gompertz", "beta"),
+  posterior_distribution = c("gompertz", "beta"),
+  posterior_lower = rep(NA_real_, 2),
+  posterior_upper = rep(NA_real_, 2),
   scale = "location",
   category = "transmission",
-  order = 29:32,
+  order = 29:30,
   order_scale = "02",
   order_category = "02",
-  order_parameter = sprintf("%02d", 1:4),
+  order_parameter = sprintf("%02d", 1:2),
   stringsAsFactors = FALSE
 )
 
 # Seasonality parameters
 seasonality_params <- data.frame(
-  parameter_name = c("a_1_j", "a_2_j", "b_1_j", "b_2_j"),
+  parameter_name = c("a1", "a2", "b1", "b2"),
   display_name = c(
     "Seasonality Coefficient a1", "Seasonality Coefficient a2",
     "Seasonality Coefficient b1", "Seasonality Coefficient b2"
@@ -482,16 +478,16 @@ calibration_params <- data.frame(
 initial_params$order <- 26:31
 # order_category = "01"
 
-# Transmission parameters
-transmission_params$order <- 32:35
+# Transmission parameters (2 params: beta_j0_tot, p_beta)
+transmission_params$order <- 32:33
 transmission_params$order_category <- "02"
 
 # Seasonality parameters
-seasonality_params$order <- 36:39
+seasonality_params$order <- 34:37
 seasonality_params$order_category <- "03"
 
 # Environmental parameters (psi_star calibration params)
-calibration_params$order <- 40:43
+calibration_params$order <- 38:41
 calibration_params$order_category <- "04"
 
 # Other parameters: disease (mu_j_*), mobility (tau_i), spatial (theta_j)
@@ -501,7 +497,7 @@ other_params <- rbind(
 )
 n_disease <- nrow(disease_params)
 n_spatial <- nrow(spatial_params)
-other_params$order <- 44:(43 + n_disease + n_spatial)
+other_params$order <- 42:(41 + n_disease + n_spatial)
 other_params$order_category <- c(
   rep("05", n_disease),  # disease params
   "05", "05"             # tau_i, theta_j

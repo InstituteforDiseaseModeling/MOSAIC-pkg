@@ -32,19 +32,17 @@
 "prop_V2_initial","Initial Two-Dose Vaccinated Proportion","Proportion with two vaccine doses at start","proportion","beta","location","initial_conditions",31,"02","01","06","beta",NA,NA
 "beta_j0_tot","Total Base Transmission Rate","Total base transmission rate (human + environmental)","per day","gompertz","location","transmission",32,"02","02","01","gompertz",NA,NA
 "p_beta","Human-to-Human Proportion","Proportion of total transmission that is human-to-human","proportion","beta","location","transmission",33,"02","02","02","beta",NA,NA
-"beta_j0_hum","Human-to-Human Transmission","Human-to-human component of transmission (derived from beta_j0_tot * p_beta)","per day","gamma","location","transmission",34,"02","02","03","gamma",NA,NA
-"beta_j0_env","Environmental Transmission","Environmental component of transmission (derived from beta_j0_tot * (1-p_beta))","per day","gamma","location","transmission",35,"02","02","04","gamma",NA,NA
-"a_1_j","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",36,"02","03","01","normal",NA,NA
-"a_2_j","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",37,"02","03","02","normal",NA,NA
-"b_1_j","Seasonality Coefficient b1","First Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",38,"02","03","03","normal",NA,NA
-"b_2_j","Seasonality Coefficient b2","Second Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",39,"02","03","04","normal",NA,NA
-"psi_star_a","Suitability Shape/Gain","Shape/gain parameter for logit calibration of NN suitability (a>1 sharpens, a<1 flattens)","dimensionless","truncnorm","location","environmental",40,"02","04","01","truncnorm",NA,NA
-"psi_star_b","Suitability Scale/Offset","Scale/offset parameter for logit calibration (shifts baseline up/down)","dimensionless","normal","location","environmental",41,"02","04","02","normal",NA,NA
-"psi_star_z","Suitability Smoothing","Smoothing weight for causal EWMA (z=1: no smoothing, z<1: smoothing)","proportion","beta","location","environmental",42,"02","04","03","beta",NA,NA
-"psi_star_k","Suitability Time Offset","Time offset in days for suitability calibration (k>0: delay, k<0: advance)","days","truncnorm","location","environmental",43,"02","04","04","truncnorm",NA,NA
-"mu_j_baseline","Baseline IFR","Baseline location-specific infection fatality ratio","proportion","gamma","location","disease",44,"02","05","01","gamma",NA,NA
-"mu_j_slope","Temporal IFR Trend","Temporal trend in IFR (change per year)","per year","normal","location","disease",45,"02","05","02","normal",NA,NA
-"mu_j_epidemic_factor","Epidemic IFR Multiplier","Multiplier applied to IFR during epidemic periods","dimensionless","gamma","location","disease",46,"02","05","03","gamma",NA,NA
-"epidemic_threshold","Epidemic Threshold","Case incidence threshold for epidemic period classification","cases/100k/week","lognormal","location","disease",47,"02","05","04","lognormal",NA,NA
-"tau_i","Travel Probability","Country-level travel/mobility probability","probability","beta","location","mobility",48,"02","05","05","beta",NA,NA
-"theta_j","WASH Coverage","WASH coverage index (proportion with adequate water, sanitation, hygiene)","proportion","beta","location","spatial",49,"02","05","06","beta",NA,NA
+"a1","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",34,"02","03","01","normal",NA,NA
+"a2","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",35,"02","03","02","normal",NA,NA
+"b1","Seasonality Coefficient b1","First Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",36,"02","03","03","normal",NA,NA
+"b2","Seasonality Coefficient b2","Second Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",37,"02","03","04","normal",NA,NA
+"psi_star_a","Suitability Shape/Gain","Shape/gain parameter for logit calibration of NN suitability (a>1 sharpens, a<1 flattens)","dimensionless","truncnorm","location","environmental",38,"02","04","01","truncnorm",NA,NA
+"psi_star_b","Suitability Scale/Offset","Scale/offset parameter for logit calibration (shifts baseline up/down)","dimensionless","normal","location","environmental",39,"02","04","02","normal",NA,NA
+"psi_star_z","Suitability Smoothing","Smoothing weight for causal EWMA (z=1: no smoothing, z<1: smoothing)","proportion","beta","location","environmental",40,"02","04","03","beta",NA,NA
+"psi_star_k","Suitability Time Offset","Time offset in days for suitability calibration (k>0: delay, k<0: advance)","days","truncnorm","location","environmental",41,"02","04","04","truncnorm",NA,NA
+"mu_j_baseline","Baseline IFR","Baseline location-specific infection fatality ratio","proportion","gamma","location","disease",42,"02","05","01","gamma",NA,NA
+"mu_j_slope","Temporal IFR Trend","Temporal trend in IFR (change per year)","per year","normal","location","disease",43,"02","05","02","normal",NA,NA
+"mu_j_epidemic_factor","Epidemic IFR Multiplier","Multiplier applied to IFR during epidemic periods","dimensionless","gamma","location","disease",44,"02","05","03","gamma",NA,NA
+"epidemic_threshold","Epidemic Threshold","Case incidence threshold for epidemic period classification","cases/100k/week","lognormal","location","disease",45,"02","05","04","lognormal",NA,NA
+"tau_i","Travel Probability","Country-level travel/mobility probability","probability","beta","location","mobility",46,"02","05","05","beta",NA,NA
+"theta_j","WASH Coverage","WASH coverage index (proportion with adequate water, sanitation, hygiene)","proportion","beta","location","spatial",47,"02","05","06","beta",NA,NA
