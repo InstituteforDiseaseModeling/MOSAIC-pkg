@@ -428,6 +428,7 @@ file_paths <- list(
 for (fp in file_paths) {
 
      args <- config_default
+     args$metadata <- NULL
      args$output_file_path <- fp
      do.call(MOSAIC::make_LASER_config, args)
      rm(args)
