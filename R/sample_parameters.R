@@ -40,10 +40,10 @@
 #'     \item sample_p_beta: Proportion of human-to-human transmission (default TRUE)
 #'     \item sample_tau_i: Diffusion (default TRUE)
 #'     \item sample_theta_j: WASH coverage (default TRUE)
-#'     \item sample_a_1: Seasonality (default TRUE)
-#'     \item sample_a_2: Seasonality (default TRUE)
-#'     \item sample_b_1: Seasonality (default TRUE)
-#'     \item sample_b_2: Seasonality (default TRUE)
+#'     \item sample_a_1_j: Seasonality (default TRUE)
+#'     \item sample_a_2_j: Seasonality (default TRUE)
+#'     \item sample_b_1_j: Seasonality (default TRUE)
+#'     \item sample_b_2_j: Seasonality (default TRUE)
 #'     \item sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
 #'     \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
 #'     \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
@@ -145,10 +145,10 @@ sample_parameters <- function(
     sample_p_beta = TRUE,
     sample_tau_i = TRUE,
     sample_theta_j = TRUE,
-    sample_a_1 = TRUE,
-    sample_a_2 = TRUE,
-    sample_b_1 = TRUE,
-    sample_b_2 = TRUE,
+    sample_a_1_j = TRUE,
+    sample_a_2_j = TRUE,
+    sample_b_1_j = TRUE,
+    sample_b_2_j = TRUE,
     sample_mu_j_baseline = TRUE,
     sample_mu_j_slope = TRUE,
     sample_mu_j_epidemic_factor = TRUE,

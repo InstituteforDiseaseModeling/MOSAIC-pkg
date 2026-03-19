@@ -736,8 +736,12 @@ if (seasonal_params_exist) {
 }
 
 # Create priors for each seasonality parameter
-for (param in c("a_1", "a_2", "b_1", "b_2")) {
-     param_name <- param  # Use parameter name directly without suffix
+# Map R config keys (a_1_j etc.) to CSV parameter column values (a1 etc.)
+seasonality_csv_lookup <- c("a_1_j" = "a1", "a_2_j" = "a2", "b_1_j" = "b1", "b_2_j" = "b2")
+
+for (param in names(seasonality_csv_lookup)) {
+     param_name <- param  # Storage key in priors list
+     csv_param  <- seasonality_csv_lookup[[param]]  # CSV column value
 
      priors_default$parameters_location[[param_name]] <- list(
           description = paste0("Seasonality Fourier coefficient ", param, " (cases)"),
@@ -750,7 +754,7 @@ for (param in c("a_1", "a_2", "b_1", "b_2")) {
                # Extract mean and standard error for this parameter and location
                param_row <- param_seasonal[
                     param_seasonal$country_iso_code == iso &
-                         param_seasonal$parameter == param,
+                         param_seasonal$parameter == csv_param,
                ]
 
                if (nrow(param_row) > 0) {

@@ -853,19 +853,6 @@ get_npe_parameter_bounds <- function(
         base_name <- gsub("_[A-Z]{3}$", "", param_name)
         location <- regmatches(param_name, regexpr("[A-Z]{3}$", param_name))
 
-        # Handle seasonality parameter naming mismatch
-        # Calibration uses: a_1_j, a_2_j, b_1_j, b_2_j
-        # Priors use: a_1, a_2, b_1, b_2
-        if (base_name == "a_1_j") {
-            base_name <- "a_1"
-        } else if (base_name == "a_2_j") {
-            base_name <- "a_2"
-        } else if (base_name == "b_1_j") {
-            base_name <- "b_1"
-        } else if (base_name == "b_2_j") {
-            base_name <- "b_2"
-        }
-
         # Try location-specific
         if (!is.null(priors$parameters_location[[base_name]]$location[[location]])) {
             return(priors$parameters_location[[base_name]]$location[[location]])

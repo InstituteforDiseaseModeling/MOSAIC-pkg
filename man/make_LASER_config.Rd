@@ -54,10 +54,10 @@ make_LASER_config(
   beta_j0_tot = NULL,
   p_beta = NULL,
   beta_j0_hum = NULL,
-  a_1 = NULL,
-  a_2 = NULL,
-  b_1 = NULL,
-  b_2 = NULL,
+  a_1_j = NULL,
+  a_2_j = NULL,
+  b_1_j = NULL,
+  b_2_j = NULL,
   p = 365L,
   alpha_1 = NULL,
   alpha_2 = NULL,
@@ -223,13 +223,13 @@ length(location_name). If provided with beta_j0_tot, used to derive beta_j0_hum 
 \item{beta_j0_hum}{Baseline human-to-human transmission rate (numeric vector of length(location_name)).
 If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * p_beta.}
 
-\item{a_1}{Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).}
+\item{a_1_j}{Vector of sine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{a_2}{Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
+\item{a_2_j}{Vector of sine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{b_1}{Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).}
+\item{b_1_j}{Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).}
 
-\item{b_2}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
+\item{b_2_j}{Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).}
 
 \item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.}
 
@@ -332,10 +332,10 @@ make_LASER_config(
      rho = 0.9,
      sigma = 0.5,
      beta_j0_hum = c(0.05, 0.03),
-     a_1 = c(0.02, 0.02),
-     a_2 = c(0.01, 0.01),
-     b_1 = c(0.03, 0.03),
-     b_2 = c(0.01, 0.01),
+     a_1_j = c(0.02, 0.02),
+     a_2_j = c(0.01, 0.01),
+     b_1_j = c(0.03, 0.03),
+     b_2_j = c(0.01, 0.01),
      p     = 365,
      longitude = c(36.8, 37.0),
      latitude = c(-1.3, -1.2),
