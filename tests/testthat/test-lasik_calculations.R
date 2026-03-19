@@ -26,20 +26,20 @@ testthat::test_that("beta_j_seasonality matches", {
      beta_jt_hum_expected <- matrix(NA_real_, nrow = length(location_names), ncol = length(time_names))
 
      # Baseline Fourier seasonality terms
-     a1 <- baseline$a_1_j
-     a2 <- baseline$a_2_j
-     b1 <- baseline$b_1_j
-     b2 <- baseline$b_2_j
+     a_1 <- baseline$a_1
+     a_2 <- baseline$a_2
+     b_1 <- baseline$b_1
+     b_2 <- baseline$b_2
      p <- baseline$p
 
      for (t in 1:length(time_names)) {
           for (j in 1:length(location_names)) {
 
                seasonal_term <-
-                    a1[j] * cos(2 * pi * t / p) +
-                    b1[j] * sin(2 * pi * t / p) +
-                    a2[j] * cos(4 * pi * t / p) +
-                    b2[j] * sin(4 * pi * t / p)
+                    a_1[j] * cos(2 * pi * t / p) +
+                    b_1[j] * sin(2 * pi * t / p) +
+                    a_2[j] * cos(4 * pi * t / p) +
+                    b_2[j] * sin(4 * pi * t / p)
 
                beta_jt_hum_expected[j, t] <- beta_j0_hum[j] * (1 + seasonal_term)
 
@@ -393,10 +393,10 @@ testthat::test_that("log likelihood calculations match", {
 # LASIK values in model.patches.spatial_hazard
 testthat::test_that("spatial hazard calculations", {
 
-     a1 <- baseline$a_1_j
-     a2 <- baseline$a_2_j
-     b1 <- baseline$b_1_j
-     b2 <- baseline$b_2_j
+     a_1 <- baseline$a_1
+     a_2 <- baseline$a_2
+     b_1 <- baseline$b_1
+     b_2 <- baseline$b_2
      p <- baseline$p
 
      time_names <- seq(as.Date(baseline$date_start), as.Date(baseline$date_stop), 1)
@@ -409,10 +409,10 @@ testthat::test_that("spatial hazard calculations", {
           for (j in 1:length(location_names)) {
 
                seasonal_term <-
-                    a1[j] * cos(2 * pi * t / p) +
-                    b1[j] * sin(2 * pi * t / p) +
-                    a2[j] * cos(4 * pi * t / p) +
-                    b2[j] * sin(4 * pi * t / p)
+                    a_1[j] * cos(2 * pi * t / p) +
+                    b_1[j] * sin(2 * pi * t / p) +
+                    a_2[j] * cos(4 * pi * t / p) +
+                    b_2[j] * sin(4 * pi * t / p)
 
                beta_jt_hum[j, t] <- beta_j0_hum[j] * (1 + seasonal_term)
 

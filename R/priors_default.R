@@ -33,8 +33,8 @@
 #'       \item \code{beta_j0_env}: Environmental base transmission rate (gamma distribution by country)
 #'       \item \code{beta_j0_hum}: Human-to-human base transmission rate (gamma distribution by country)
 #'       \item \code{tau_i}: Country-level travel probabilities (beta distribution with uncertainty adjustment)
-#'       \item \code{a1}, \code{a2}: Seasonality Fourier coefficients for cases (normal distribution)
-#'       \item \code{b1}, \code{b2}: Seasonality Fourier coefficients for deaths (normal distribution)
+#'       \item \code{a_1}, \code{a_2}: Seasonality Fourier coefficients for cases (normal distribution)
+#'       \item \code{b_1}, \code{b_2}: Seasonality Fourier coefficients for deaths (normal distribution)
 #'     }
 #'   }
 #' }

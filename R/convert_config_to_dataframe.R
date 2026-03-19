@@ -93,14 +93,10 @@ convert_config_to_dataframe <- function(config) {
           "beta_j0_tot",        # Added: Total transmission rate (primary parameter)
           "p_beta",             # Added: Proportion of human-to-human transmission
           "theta_j",            # Added: WASH coverage parameter
-          "a_1_j",
-          "a_2_j",
-          "b_1_j",
-          "b_2_j",
-          "a1",                 # Added: Alternative seasonality parameter names
-          "a2",
-          "b1",
-          "b2",
+          "a_1",
+          "a_2",
+          "b_1",
+          "b_2",
           "alpha_1",
           "alpha_2",
           "zeta_1",
@@ -158,8 +154,7 @@ convert_config_to_dataframe <- function(config) {
                "prop_R_initial", "prop_V1_initial", "prop_V2_initial",
                "beta_j0_env", "beta_j0_hum", "beta_j0_tot", "p_beta",
                "tau_i", "theta_j",
-               "a_1_j", "a_2_j", "b_1_j", "b_2_j",
-               "a1", "a2", "b1", "b2",
+               "a_1", "a_2", "b_1", "b_2",
                "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
                "epidemic_threshold",
                "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"

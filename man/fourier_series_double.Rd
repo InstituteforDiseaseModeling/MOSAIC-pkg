@@ -4,20 +4,20 @@
 \alias{fourier_series_double}
 \title{Fourier Series Model with Two Harmonics (Sine-Cosine Form)}
 \usage{
-fourier_series_double(t, beta0, a1, b1, a2, b2, p)
+fourier_series_double(t, beta0, a_1, b_1, a_2, b_2, p)
 }
 \arguments{
 \item{t}{A numeric vector representing time points (e.g., day of the year or week of the year).}
 
 \item{beta0}{A numeric value representing the intercept term (fixed at 0 by default).}
 
-\item{a1}{A numeric value representing the amplitude of the first cosine term (first harmonic).}
+\item{a_1}{A numeric value representing the amplitude of the first cosine term (first harmonic).}
 
-\item{b1}{A numeric value representing the amplitude of the first sine term (first harmonic).}
+\item{b_1}{A numeric value representing the amplitude of the first sine term (first harmonic).}
 
-\item{a2}{A numeric value representing the amplitude of the second cosine term (second harmonic).}
+\item{a_2}{A numeric value representing the amplitude of the second cosine term (second harmonic).}
 
-\item{b2}{A numeric value representing the amplitude of the second sine term (second harmonic).}
+\item{b_2}{A numeric value representing the amplitude of the second sine term (second harmonic).}
 
 \item{p}{A numeric value representing the period of the seasonal cycle (e.g., 52 for weekly data over a year).}
 }
@@ -30,7 +30,7 @@ This function implements a generalized Fourier series model with two harmonics i
 \details{
 The model is defined as follows:
 \deqn{\beta_t = \beta_0 + a_1 \cos\left(\frac{2 \pi t}{p}\right) + b_1 \sin\left(\frac{2 \pi t}{p}\right) + a_2 \cos\left(\frac{4 \pi t}{p}\right) + b_2 \sin\left(\frac{4 \pi t}{p}\right)}
-The model includes an intercept term \code{beta0} (set to 0 by default) and two harmonics with coefficients \code{a1}, \code{b1}, \code{a2}, and \code{b2}. The period \code{p} controls the periodicity of the series.
+The model includes an intercept term \code{beta0} (set to 0 by default) and two harmonics with coefficients \code{a_1}, \code{b_1}, \code{a_2}, and \code{b_2}. The period \code{p} controls the periodicity of the series.
 
 This function is based on the sine-cosine form of the Fourier series. For more details, see the Wikipedia page on \href{https://en.wikipedia.org/wiki/Fourier_series}{Fourier series}.
 
@@ -41,13 +41,13 @@ This function is commonly used for modeling seasonal dynamics in environmental o
 # Example usage with weekly data (p = 52 weeks in a year)
 time_points <- 1:52
 beta0 <- 0
-a1 <- 1.5
-b1 <- -0.5
-a2 <- 0.8
-b2 <- 0.3
+a_1 <- 1.5
+b_1 <- -0.5
+a_2 <- 0.8
+b_2 <- 0.3
 p <- 52
 
-predictions <- fourier_series_double(time_points, beta0, a1, b1, a2, b2, p)
+predictions <- fourier_series_double(time_points, beta0, a_1, b_1, a_2, b_2, p)
 print(predictions)
 }
 

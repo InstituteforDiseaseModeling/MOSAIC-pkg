@@ -616,8 +616,8 @@ run_MOSAIC <- function(config,
     disabled_base <- gsub("^sample_", "", disabled_flags)
     special_map <- list(
       beta_j0_tot = c("beta_j0_hum", "beta_j0_env"),
-      a1 = "a_1_j", a2 = "a_2_j",
-      b1 = "b_1_j", b2 = "b_2_j"
+      a_1 = "a_1_j", a_2 = "a_2_j",
+      b_1 = "b_1_j", b_2 = "b_2_j"
     )
     resolved <- unlist(lapply(disabled_base, function(nm) {
       if (nm %in% names(special_map)) special_map[[nm]] else nm
@@ -1842,10 +1842,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_epidemic_threshold = TRUE, # Epidemic activation threshold
 
     # Climate relationship
-    sample_a1 = TRUE,                # Temperature coefficient 1
-    sample_a2 = TRUE,                # Temperature coefficient 2
-    sample_b1 = TRUE,                # Rainfall coefficient 1
-    sample_b2 = TRUE,                # Rainfall coefficient 2
+    sample_a_1 = TRUE,               # Temperature coefficient 1
+    sample_a_2 = TRUE,               # Temperature coefficient 2
+    sample_b_1 = TRUE,               # Rainfall coefficient 1
+    sample_b_2 = TRUE,               # Rainfall coefficient 2
 
     # Psi-star calibration
     sample_psi_star_a = TRUE,        # Psi-star parameter a

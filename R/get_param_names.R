@@ -104,10 +104,10 @@ get_param_names <- function(object) {
         "beta_j0_tot",
         "p_beta",
         "beta_j0_hum",
-        "a_1_j",
-        "a_2_j",
-        "b_1_j",
-        "b_2_j",
+        "a_1",
+        "a_2",
+        "b_1",
+        "b_2",
         "alpha_1",
         "alpha_2",
         "beta_j0_env",
@@ -120,7 +120,6 @@ get_param_names <- function(object) {
         "decay_shape_2",
         "mu_j",               # Added: Case fatality ratio
         "theta_j",            # Added: WASH coverage parameter
-        "a1", "a2", "b1", "b2",  # Added: Alternative seasonality parameter names
         "psi_star_a",         # Added: psi_star calibration parameters
         "psi_star_b",
         "psi_star_z",
@@ -135,8 +134,7 @@ get_param_names <- function(object) {
         "beta_j0_tot", "p_beta",
         "beta_j0_env", "beta_j0_hum",
         "tau_i", "theta_j",
-        "a_1_j", "a_2_j", "b_1_j", "b_2_j",
-        "a1", "a2", "b1", "b2",           # Alternative seasonality parameter names
+        "a_1", "a_2", "b_1", "b_2",
         "mu_j",                          # Case fatality ratio
         "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration parameters
     )
