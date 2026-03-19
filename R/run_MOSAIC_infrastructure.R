@@ -270,6 +270,20 @@
 #' @noRd
 .mosaic_capture_environment <- function(config = NULL, priors = NULL, control = NULL) {
 
+  # Top-level safety net: environment capture must never crash a calibration run
+  tryCatch(
+    .mosaic_capture_environment_impl(config, priors, control),
+    error = function(e) {
+      warning("Environment capture failed: ", e$message, call. = FALSE)
+      list(timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+           error = paste("Capture failed:", e$message))
+    }
+  )
+}
+
+#' @noRd
+.mosaic_capture_environment_impl <- function(config = NULL, priors = NULL, control = NULL) {
+
   # --- R environment ---
   r_env <- list(
     version = R.version.string,
@@ -382,8 +396,8 @@
   # Hash of default_parameters.json for change detection
   default_params_path <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
   if (file.exists(default_params_path)) {
-    data_env$default_parameters_md5 <- tools::md5sum(default_params_path)
-    names(data_env$default_parameters_md5) <- NULL
+    md5 <- tryCatch(tools::md5sum(default_params_path), error = function(e) NA_character_)
+    data_env$default_parameters_md5 <- unname(md5)
   }
 
   list(
