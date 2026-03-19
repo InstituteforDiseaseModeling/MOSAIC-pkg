@@ -288,34 +288,42 @@
   }
 
   # --- Python environment ---
+  # Only query Python if reticulate has already bound to an interpreter.
+  # Calling reticulate::import() before binding can trigger side effects
+  # (wrong interpreter, unexpected init) — especially on clusters.
   py_env <- list()
-  tryCatch({
-    sys <- reticulate::import("sys", delay_load = FALSE)
-    py_env$version <- strsplit(as.character(sys$version), " ")[[1]][1]
-    py_env$executable <- as.character(sys$executable)
+  if (requireNamespace("reticulate", quietly = TRUE) &&
+      reticulate::py_available(initialize = FALSE)) {
+    tryCatch({
+      sys <- reticulate::import("sys", delay_load = FALSE)
+      py_env$version <- strsplit(as.character(sys$version), " ")[[1]][1]
+      py_env$executable <- as.character(sys$executable)
 
-    importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-    py_pkgs <- c("laser-cholera", "laser-core", "numpy", "torch",
-                 "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
-    for (pkg in py_pkgs) {
-      key <- gsub("-", "_", pkg)
-      py_env[[paste0("pkg_", key)]] <- tryCatch(
-        as.character(importlib$version(pkg)),
-        error = function(e) NA_character_
-      )
-    }
-  }, error = function(e) {
-    py_env$error <<- paste("Python not available:", e$message)
-  })
+      importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
+      py_pkgs <- c("laser-cholera", "laser-core", "numpy", "torch",
+                   "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
+      for (pkg in py_pkgs) {
+        key <- gsub("-", "_", pkg)
+        py_env[[paste0("pkg_", key)]] <- tryCatch(
+          as.character(importlib$version(pkg)),
+          error = function(e) NA_character_
+        )
+      }
+    }, error = function(e) {
+      py_env$error <<- paste("Python query failed:", e$message)
+    })
+  }
 
   # --- System / cluster ---
   sys_info <- Sys.info()
+  n_cores <- tryCatch(parallel::detectCores(), error = function(e) NA_integer_)
+  if (is.null(n_cores) || is.na(n_cores)) n_cores <- NA_integer_
   system_env <- list(
     hostname = unname(sys_info["nodename"]),
     user = unname(sys_info["user"]),
     os = unname(sys_info["sysname"]),
     os_version = unname(sys_info["release"]),
-    n_cores_available = parallel::detectCores(),
+    n_cores_available = n_cores,
     n_cores_requested = if (!is.null(control)) control$parallel$n_cores else NA_integer_
   )
 
@@ -332,25 +340,37 @@
 
   # --- Git ---
   git_env <- list()
-  tryCatch({
+  if (nzchar(Sys.which("git"))) {
+    # Find repo root: prefer package source dir, fall back to working dir
+    .git_cmd <- function(...) {
+      out <- tryCatch(
+        system2("git", c(...), stdout = TRUE, stderr = FALSE),
+        error = function(e) NULL, warning = function(w) NULL
+      )
+      if (is.null(out) || !is.character(out) || length(out) == 0) return(NA_character_)
+      trimws(out[1])
+    }
+
     pkg_dir <- system.file(package = "MOSAIC")
-    # Use the package source directory if we're in a dev context
-    git_dir <- if (file.exists(file.path(".", ".git"))) "." else pkg_dir
-    git_env$sha <- trimws(system2("git", c("-C", git_dir, "rev-parse", "--short", "HEAD"),
-                                  stdout = TRUE, stderr = FALSE))
-    git_env$branch <- trimws(system2("git", c("-C", git_dir, "rev-parse", "--abbrev-ref", "HEAD"),
-                                     stdout = TRUE, stderr = FALSE))
-    git_env$dirty <- system2("git", c("-C", git_dir, "diff", "--quiet"),
-                             stdout = FALSE, stderr = FALSE) != 0
-    git_env$remote <- tryCatch(
-      trimws(system2("git", c("-C", git_dir, "remote", "get-url", "origin"),
-                      stdout = TRUE, stderr = FALSE)),
-      error = function(e) NA_character_,
-      warning = function(w) NA_character_
-    )
-  }, error = function(e) {
-    git_env$error <<- paste("Git not available:", e$message)
-  })
+    git_dir <- if (file.exists(file.path(".", ".git"))) {
+      "."
+    } else if (file.exists(file.path(pkg_dir, ".git"))) {
+      pkg_dir
+    } else {
+      NA_character_
+    }
+
+    if (!is.na(git_dir)) {
+      git_env$sha    <- .git_cmd("-C", git_dir, "rev-parse", "--short", "HEAD")
+      git_env$branch <- .git_cmd("-C", git_dir, "rev-parse", "--abbrev-ref", "HEAD")
+      git_env$remote <- .git_cmd("-C", git_dir, "remote", "get-url", "origin")
+      git_env$dirty  <- tryCatch(
+        system2("git", c("-C", git_dir, "diff", "--quiet"),
+                stdout = FALSE, stderr = FALSE) != 0L,
+        error = function(e) NA, warning = function(w) NA
+      )
+    }
+  }
 
   # --- Data versions ---
   data_env <- list()
