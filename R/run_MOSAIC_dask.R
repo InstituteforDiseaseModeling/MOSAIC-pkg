@@ -131,7 +131,27 @@
   # ---------------------------------------------------------------------------
   log_msg("  Waiting for %d Dask futures...", length(valid_futures))
   gather_start <- Sys.time()
-  gathered <- client$gather(valid_futures)
+  gathered <- tryCatch(
+    client$gather(valid_futures),
+    error = function(e) {
+      log_msg("  ERROR in client$gather(): %s", conditionMessage(e))
+      # Try to retrieve first few future errors for diagnostics
+      tryCatch({
+        first_future <- valid_futures[[1L]]
+        st <- first_future$status
+        log_msg("  First future status: %s", as.character(st))
+        if (identical(st, "error")) {
+          exc <- first_future$exception()
+          log_msg("  First future exception: %s", as.character(exc))
+          tb_str <- first_future$traceback()
+          if (!is.null(tb_str)) log_msg("  First future traceback: %s", as.character(tb_str))
+        }
+      }, error = function(e2) {
+        log_msg("  (Could not inspect futures: %s)", conditionMessage(e2))
+      })
+      stop(e)
+    }
+  )
   gather_elapsed <- as.numeric(difftime(Sys.time(), gather_start, units = "secs"))
   log_msg("  Gather complete: %d results in %.1fs", length(gathered), gather_elapsed)
 
@@ -390,7 +410,7 @@ run_MOSAIC_dask <- function(config,
     "priors is required and must be a list" =
       !missing(priors) && is.list(priors) && length(priors) > 0,
     "dir_output is required and must be character string" =
-      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L,
+      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L
   )
 
   if (!"location_name" %in% names(config)) {
@@ -673,45 +693,66 @@ run_MOSAIC_dask <- function(config,
     log_msg("[FIXED MODE] Running exactly %d simulations", target)
 
     all_ids <- seq_len(target)
-    sim_ids <- all_ids
 
-    if (length(sim_ids) == 0L) {
+    if (length(all_ids) == 0L) {
       log_msg("Nothing to do")
     } else {
-      log_msg("Running %d simulations (%d-%d)",
-              length(sim_ids), min(sim_ids), max(sim_ids))
-      batch_start_time <- Sys.time()
+      # Sub-batch to avoid OOM: R holds params + futures + results per batch
+      bsize <- control$calibration$batch_size %||% 10000L
+      batch_chunks <- split(all_ids, ceiling(seq_along(all_ids) / bsize))
+      n_chunks <- length(batch_chunks)
+      log_msg("Running %d simulations in %d sub-batches of up to %d",
+              length(all_ids), n_chunks, bsize)
 
-      success_indicators <- .mosaic_run_batch_dask(
-        sim_ids            = sim_ids,
-        n_iterations       = n_iterations,
-        priors             = priors,
-        config             = config,
-        PATHS              = PATHS,
-        sampling_args      = sampling_args,
-        dirs               = dirs,
-        param_names_all    = param_names_all,
-        control            = control,
-        client             = client,
-        base_config_future = base_config_future,
-        mosaic_worker      = mosaic_worker
-      )
+      total_success <- 0L
+      fixed_start_time <- Sys.time()
 
-      n_success <- sum(unlist(success_indicators))
-      state$total_sims_successful <- state$total_sims_successful + n_success
-      state$batch_success_rates   <- c(state$batch_success_rates,
-                                        (n_success / length(sim_ids)) * 100)
-      state$batch_sizes_used  <- c(state$batch_sizes_used, length(sim_ids))
-      state$batch_number      <- state$batch_number + 1L
-      state$total_sims_run    <- length(all_ids)
+      for (chunk_i in seq_len(n_chunks)) {
+        sim_ids <- batch_chunks[[chunk_i]]
+        log_msg("Sub-batch %d/%d: sims %d-%d (%d sims)",
+                chunk_i, n_chunks, min(sim_ids), max(sim_ids), length(sim_ids))
+        batch_start_time <- Sys.time()
 
-      batch_runtime <- difftime(Sys.time(), batch_start_time, units = "mins")
-      log_msg("Fixed batch complete: %d/%d successful (%.1f%%) in %.1f minutes",
-              n_success, length(sim_ids),
-              tail(state$batch_success_rates, 1),
-              as.numeric(batch_runtime))
+        success_indicators <- .mosaic_run_batch_dask(
+          sim_ids            = sim_ids,
+          n_iterations       = n_iterations,
+          priors             = priors,
+          config             = config,
+          PATHS              = PATHS,
+          sampling_args      = sampling_args,
+          dirs               = dirs,
+          param_names_all    = param_names_all,
+          control            = control,
+          client             = client,
+          base_config_future = base_config_future,
+          mosaic_worker      = mosaic_worker
+        )
 
-      .mosaic_save_state(state, state_file)
+        n_success <- sum(unlist(success_indicators))
+        total_success <- total_success + n_success
+        state$total_sims_successful <- state$total_sims_successful + n_success
+        state$batch_success_rates   <- c(state$batch_success_rates,
+                                          (n_success / length(sim_ids)) * 100)
+        state$batch_sizes_used  <- c(state$batch_sizes_used, length(sim_ids))
+        state$batch_number      <- state$batch_number + 1L
+
+        batch_runtime <- difftime(Sys.time(), batch_start_time, units = "mins")
+        log_msg("Sub-batch %d/%d complete: %d/%d successful (%.1f%%) in %.1f minutes",
+                chunk_i, n_chunks, n_success, length(sim_ids),
+                tail(state$batch_success_rates, 1),
+                as.numeric(batch_runtime))
+
+        .mosaic_save_state(state, state_file)
+        gc(verbose = FALSE)
+      }
+
+      state$total_sims_run <- length(all_ids)
+
+      fixed_runtime <- difftime(Sys.time(), fixed_start_time, units = "mins")
+      log_msg("Fixed mode complete: %d/%d successful (%.1f%%) in %.1f minutes",
+              total_success, length(all_ids),
+              (total_success / length(all_ids)) * 100,
+              as.numeric(fixed_runtime))
     }
 
   # ===========================================================================
