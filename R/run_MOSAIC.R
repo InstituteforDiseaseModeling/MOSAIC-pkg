@@ -647,15 +647,30 @@ run_MOSAIC <- function(config,
   # Precompute lookup for fast parameter extraction in worker hot loop
   param_lookup <- .mosaic_build_param_lookup(param_names_all, config$location_name)
 
-  # Filter to estimated parameters for ESS tracking
+  # Filter to estimated parameters for ESS tracking using metadata table.
+  # Uses the `scale` column ("global" vs "location") from estimated_parameters
+  # to determine which params have ISO suffixes, instead of fragile regex.
   est_params_df <- get("estimated_parameters", envir = asNamespace("MOSAIC"))
   if (!is.data.frame(est_params_df) || nrow(est_params_df) == 0) {
     stop("Failed to load MOSAIC::estimated_parameters")
   }
 
-  base_params <- unique(gsub("_[A-Z]{3}$", "", param_names_all))
-  valid_base_params <- base_params[base_params %in% est_params_df$parameter_name]
-  param_names_estimated <- param_names_all[gsub("_[A-Z]{3}$", "", param_names_all) %in% valid_base_params]
+  estimable_global   <- est_params_df$parameter_name[est_params_df$scale == "global"]
+  estimable_location <- est_params_df$parameter_name[est_params_df$scale == "location"]
+
+  # Derive base name for each param: direct match for globals,
+  # strip known location suffixes (_ISO) for location-specific params
+  location_names <- config$location_name
+  location_suffixes <- paste0("_", location_names)
+  param_base <- param_names_all
+  for (sfx in location_suffixes) {
+    hits <- endsWith(param_names_all, sfx)
+    param_base[hits] <- sub(paste0(sfx, "$"), "", param_names_all[hits])
+  }
+
+  is_estimable <- param_base %in% c(estimable_global, estimable_location)
+  param_names_estimated <- param_names_all[is_estimable]
+  # Exclude initial condition counts (proportions are estimable, counts are derived)
   param_names_estimated <- param_names_estimated[!grepl("^[NSEIRV][12]?_j_initial", param_names_estimated)]
 
   if (!length(param_names_estimated)) {
