@@ -246,76 +246,83 @@ calc_model_posterior_quantiles <- function(results,
         stringsAsFactors = FALSE
     )
 
-    # Build parameter inventory following estimated_parameters order
+    # Build parameter inventory following estimated_parameters order.
+    # Pre-allocate a list and combine once to avoid O(n^2) rbind copies.
+    has_post_dist  <- "posterior_distribution" %in% names(estimated_parameters)
+    has_post_lower <- "posterior_lower"        %in% names(estimated_parameters)
+    has_post_upper <- "posterior_upper"        %in% names(estimated_parameters)
+
+    max_rows      <- nrow(estimated_parameters) * max(length(location_suffixes), 1L)
+    inventory_rows <- vector("list", max_rows)
+    inv_idx <- 0L
+
     for (i in seq_len(nrow(estimated_parameters))) {
         param_base <- estimated_parameters$parameter_name[i]
-        scale <- estimated_parameters$scale[i]
+        scale      <- estimated_parameters$scale[i]
 
         if (scale == "global") {
-            # Global parameters - single entry
             if (param_base %in% param_cols) {
-                param_inventory <- rbind(param_inventory, data.frame(
-                    parameter = param_base,
-                    display_name = estimated_parameters$display_name[i],
-                    category = estimated_parameters$category[i],
-                    scale = scale,
-                    location = "",
-                    distribution = estimated_parameters$distribution[i],
-                    posterior_distribution = if ("posterior_distribution" %in% names(estimated_parameters))
-                        estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
-                    posterior_lower = if ("posterior_lower" %in% names(estimated_parameters))
-                        estimated_parameters$posterior_lower[i] else NA_real_,
-                    posterior_upper = if ("posterior_upper" %in% names(estimated_parameters))
-                        estimated_parameters$posterior_upper[i] else NA_real_,
+                inv_idx <- inv_idx + 1L
+                inventory_rows[[inv_idx]] <- data.frame(
+                    parameter              = param_base,
+                    display_name           = estimated_parameters$display_name[i],
+                    category               = estimated_parameters$category[i],
+                    scale                  = scale,
+                    location               = "",
+                    distribution           = estimated_parameters$distribution[i],
+                    posterior_distribution = if (has_post_dist)  estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
+                    posterior_lower        = if (has_post_lower) estimated_parameters$posterior_lower[i]        else NA_real_,
+                    posterior_upper        = if (has_post_upper) estimated_parameters$posterior_upper[i]        else NA_real_,
                     stringsAsFactors = FALSE
-                ))
+                )
             }
         } else if (scale == "location") {
-            # Location-specific parameters - one entry per location
             for (iso in location_suffixes) {
-                param_name <- paste0(param_base, "_", iso)
-                if (param_name %in% param_cols) {
-                    param_inventory <- rbind(param_inventory, data.frame(
-                        parameter = param_name,
-                        display_name = paste(estimated_parameters$display_name[i], iso),
-                        category = estimated_parameters$category[i],
-                        scale = scale,
-                        location = iso,
-                        distribution = estimated_parameters$distribution[i],
-                        posterior_distribution = if ("posterior_distribution" %in% names(estimated_parameters))
-                            estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
-                        posterior_lower = if ("posterior_lower" %in% names(estimated_parameters))
-                            estimated_parameters$posterior_lower[i] else NA_real_,
-                        posterior_upper = if ("posterior_upper" %in% names(estimated_parameters))
-                            estimated_parameters$posterior_upper[i] else NA_real_,
+                param_name_full <- paste0(param_base, "_", iso)
+                if (param_name_full %in% param_cols) {
+                    inv_idx <- inv_idx + 1L
+                    inventory_rows[[inv_idx]] <- data.frame(
+                        parameter              = param_name_full,
+                        display_name           = paste(estimated_parameters$display_name[i], iso),
+                        category               = estimated_parameters$category[i],
+                        scale                  = scale,
+                        location               = iso,
+                        distribution           = estimated_parameters$distribution[i],
+                        posterior_distribution = if (has_post_dist)  estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
+                        posterior_lower        = if (has_post_lower) estimated_parameters$posterior_lower[i]        else NA_real_,
+                        posterior_upper        = if (has_post_upper) estimated_parameters$posterior_upper[i]        else NA_real_,
                         stringsAsFactors = FALSE
-                    ))
+                    )
                 }
             }
         }
     }
 
+    param_inventory <- if (inv_idx > 0L) {
+        do.call(rbind, inventory_rows[seq_len(inv_idx)])
+    } else {
+        param_inventory  # return empty frame as initialised
+    }
+
     # Add any remaining parameters not in estimated_parameters template.
-    # Must include all 9 columns that param_inventory was initialised with,
-    # including posterior_distribution / posterior_lower / posterior_upper
-    # added by the prior-update work — omitting them causes an rbind column
-    # mismatch crash.
+    # These get scale = "unknown" and are intentionally excluded from posteriors.json.
     remaining_params <- setdiff(param_cols, param_inventory$parameter)
     if (length(remaining_params) > 0) {
-        for (param in remaining_params) {
-            param_inventory <- rbind(param_inventory, data.frame(
-                parameter            = param,
-                display_name         = param,
-                category             = "other",
-                scale                = "unknown",
-                location             = "",
-                distribution         = "unknown",
+        remaining_rows <- lapply(remaining_params, function(param) {
+            data.frame(
+                parameter              = param,
+                display_name           = param,
+                category               = "other",
+                scale                  = "unknown",
+                location               = "",
+                distribution           = "unknown",
                 posterior_distribution = NA_character_,
-                posterior_lower      = NA_real_,
-                posterior_upper      = NA_real_,
-                stringsAsFactors     = FALSE
-            ))
-        }
+                posterior_lower        = NA_real_,
+                posterior_upper        = NA_real_,
+                stringsAsFactors       = FALSE
+            )
+        })
+        param_inventory <- rbind(param_inventory, do.call(rbind, remaining_rows))
     }
 
     if (verbose) {
@@ -384,7 +391,7 @@ calc_model_posterior_quantiles <- function(results,
             quantile_results$display_name[row_idx] <- param_inventory$display_name[i]
             quantile_results$category[row_idx] <- param_inventory$category[i]
             quantile_results$scale[row_idx] <- param_inventory$scale[i]
-            quantile_results$iso_code[row_idx] <- ifelse(param_inventory$location[i] == "", NA_character_, param_inventory$location[i])
+            quantile_results$iso_code[row_idx] <- param_inventory$location[i]
             quantile_results$distribution[row_idx] <- param_inventory$distribution[i]
             quantile_results$posterior_distribution[row_idx] <- param_inventory$posterior_distribution[i]
             quantile_results$posterior_lower[row_idx] <- param_inventory$posterior_lower[i]
@@ -428,7 +435,7 @@ calc_model_posterior_quantiles <- function(results,
             quantile_results$display_name[row_idx] <- param_inventory$display_name[i]
             quantile_results$category[row_idx] <- param_inventory$category[i]
             quantile_results$scale[row_idx] <- param_inventory$scale[i]
-            quantile_results$iso_code[row_idx] <- ifelse(param_inventory$location[i] == "", NA_character_, param_inventory$location[i])
+            quantile_results$iso_code[row_idx] <- param_inventory$location[i]
             quantile_results$distribution[row_idx] <- param_inventory$distribution[i]
             quantile_results$posterior_distribution[row_idx] <- param_inventory$posterior_distribution[i]
             quantile_results$posterior_lower[row_idx] <- param_inventory$posterior_lower[i]

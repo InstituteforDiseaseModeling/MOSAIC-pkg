@@ -169,18 +169,11 @@ calc_model_posterior_distributions <- function(
             param_row$prior_distribution
         }
 
-        # Handle both column names (for backward compatibility)
-        if ("scale" %in% names(param_row)) {
-            param_scale <- param_row$scale
-        } else if ("param_type" %in% names(param_row)) {
-            param_scale <- param_row$param_type
-        } else {
-            param_scale <- "unknown"
-        }
+        param_scale <- if ("param_type" %in% names(param_row)) param_row$param_type else "unknown"
 
         # Determine if location-specific
         location <- param_row$location
-        if (is.na(location) || location == "" || location == "NA") {
+        if (is.na(location) || location == "") {
             location <- NULL
         }
 
@@ -191,15 +184,6 @@ calc_model_posterior_distributions <- function(
             param_base <- param_name
         }
 
-        # Map seasonality parameter names (handle both a_1_j and a1 formats)
-        if (param_base %in% c("a_1_j", "a_2_j", "b_1_j", "b_2_j")) {
-            param_base_original <- param_base
-            param_base <- gsub("_j$", "", param_base)  # Remove _j suffix
-            param_base <- gsub("_", "", param_base)    # Remove underscores: a_1 -> a1
-            if (verbose && i == 1) {
-                message("  Mapping seasonality parameter: ", param_base_original, " -> ", param_base)
-            }
-        }
 
         # Get quantiles
         q_low <- param_row$q0.025
@@ -210,11 +194,11 @@ calc_model_posterior_distributions <- function(
         # Note: With small sample sizes (n<30), median is more stable than KDE mode
         if ("mode" %in% names(param_row) && !is.na(param_row$mode)) {
             mode_val <- param_row$mode
-            # Check if mode is reasonable (within CI)
+            # Check if mode is reasonable (within CI); always warn — this is a data quality signal
             if (mode_val < q_low || mode_val > q_high) {
-                if (verbose) {
-                    message("  Warning: Mode outside CI for ", param_name, ", using median instead")
-                }
+                message("  Warning: Mode outside CI for ", param_name,
+                        " (mode=", round(mode_val, 4), ", CI=[", round(q_low, 4), ",", round(q_high, 4), "]),",
+                        " using median instead")
                 mode_val <- q_med
             }
         } else {
