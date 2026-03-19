@@ -163,9 +163,10 @@ test_that("get_location_config correctly subsets time-varying parameters", {
      
      for (param in time_params) {
           if (!is.null(config_default[[param]]) && is.matrix(config_default[[param]])) {
-               # Should be subset to single row (now a vector)
+               # Single-location subsetting may return a 1-row matrix; compare values
                if (nrow(config_default[[param]]) > 0) {
-                    expect_equal(eth_config[[param]], config_default[[param]][eth_idx,],
+                    expect_equal(as.numeric(eth_config[[param]]),
+                              as.numeric(config_default[[param]][eth_idx,]),
                               info = paste("Time-varying parameter", param, "should be correctly subset"))
                }
           }

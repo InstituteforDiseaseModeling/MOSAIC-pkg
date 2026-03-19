@@ -1,12 +1,12 @@
 library(testthat)
 library(MOSAIC)
 
-# Set up test environment
-setup({
-  set_root_directory("~/MOSAIC")
-})
+# Set root directory (required for sample_parameters to load defaults)
+tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
+
 
 test_that("beta_j0_tot and p_beta are sampled correctly", {
+  skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
   # Sample parameters with fixed seed for reproducibility
   config <- sample_parameters(seed = 123, verbose = FALSE)
   

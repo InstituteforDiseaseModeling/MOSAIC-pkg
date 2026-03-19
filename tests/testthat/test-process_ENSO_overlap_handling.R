@@ -1,11 +1,12 @@
 test_that("process_ENSO_data handles overlapping data correctly", {
-  
+
   # Skip if dependencies not available
   skip_if_not_installed("dplyr")
   skip_if_not_installed("zoo")
   skip_if_not_installed("lubridate")
   skip_if_not_installed("ISOweek")
-  
+  skip_if_not_installed("mockery")
+
   # Create mock historical data
   mock_historical_enso <- data.frame(
     year = c(2025, 2025, 2025),
@@ -81,13 +82,14 @@ test_that("process_ENSO_data handles overlapping data correctly", {
 })
 
 test_that("process_ENSO_data works without overlaps", {
-  
+
   # Skip if dependencies not available
   skip_if_not_installed("dplyr")
-  skip_if_not_installed("zoo") 
+  skip_if_not_installed("zoo")
   skip_if_not_installed("lubridate")
   skip_if_not_installed("ISOweek")
-  
+  skip_if_not_installed("mockery")
+
   # Create mock data with no overlaps
   mock_historical_enso <- data.frame(
     year = c(2025, 2025),
@@ -144,7 +146,7 @@ test_that("process_ENSO_data works without overlaps", {
 })
 
 test_that("overlap detection and reporting works correctly", {
-  
+
   # This test focuses on the overlap detection logic itself
   # Create test data with known overlaps
   test_df <- data.frame(
@@ -156,17 +158,19 @@ test_that("overlap detection and reporting works correctly", {
     month = c(9, 9, 10, 10),
     stringsAsFactors = FALSE
   )
-  
-  # Sort as the function does
-  test_df <- test_df[base::order(test_df$date, test_df$variable, test_df$data_source), ]
-  
+
+  # Sort as process_ENSO_data does: by date, variable, then sort_priority
+  # where historical = 1, forecast = 2 (so historical comes first)
+  sort_priority <- ifelse(test_df$data_source == "historical", 1, 2)
+  test_df <- test_df[base::order(test_df$date, test_df$variable, sort_priority), ]
+
   # Find duplicates as the function does
-  duplicated_entries <- test_df[base::duplicated(test_df[, c("date", "variable")]) | 
+  duplicated_entries <- test_df[base::duplicated(test_df[, c("date", "variable")]) |
                                base::duplicated(test_df[, c("date", "variable")], fromLast = TRUE), ]
-  
+
   expect_true(nrow(duplicated_entries) == 4)  # All 4 rows are part of duplicates
-  
-  # Test deduplication - should keep first occurrence (historical)
+
+  # Test deduplication - should keep first occurrence (historical due to sort order)
   deduplicated <- test_df[!base::duplicated(test_df[, c("date", "variable")]), ]
   expect_true(nrow(deduplicated) == 2)  # Should have 2 unique date-variable combinations
   expect_true(all(deduplicated$data_source == "historical"))  # Should keep historical

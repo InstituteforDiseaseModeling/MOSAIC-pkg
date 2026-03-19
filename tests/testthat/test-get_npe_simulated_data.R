@@ -43,24 +43,24 @@ test_that("get_npe_simulated_data extracts multi-location data", {
     expect_equal(result$cases[result$j == "KEN"], c(5, 8, 12))
 })
 
-test_that("get_npe_simulated_data includes deaths when requested", {
+test_that("get_npe_simulated_data returns cases-only data frame", {
+    # include_deaths parameter was removed; function always returns j, t, cases
     laser_result <- list(
         results = list(
-            expected_cases = matrix(c(10, 15, 5, 8), nrow = 2),
-            disease_deaths = matrix(c(1, 2, 0, 1), nrow = 2)
+            expected_cases = matrix(c(10, 15, 5, 8), nrow = 2)
+        ),
+        params = list(
+            location_name = c("ETH", "KEN")
         )
     )
 
-    config <- list(
-        location_name = c("ETH", "KEN")
-    )
+    result <- get_npe_simulated_data(laser_result)
 
-    result <- get_npe_simulated_data(laser_result, config, include_deaths = TRUE)
-
-    expect_equal(ncol(result), 4)
-    expect_true("deaths" %in% names(result))
-    expect_equal(result$deaths[result$j == "ETH"], c(1, 2))
-    expect_equal(result$deaths[result$j == "KEN"], c(0, 1))
+    expect_equal(ncol(result), 3)
+    expect_equal(names(result), c("j", "t", "cases"))
+    # matrix(c(10, 15, 5, 8), nrow=2) fills by column: row1=[10,5], row2=[15,8]
+    expect_equal(result$cases[result$j == "ETH"], c(10, 5))
+    expect_equal(result$cases[result$j == "KEN"], c(15, 8))
 })
 
 test_that("get_npe_simulated_data extracts location codes from laser_result params", {
@@ -91,7 +91,8 @@ test_that("get_npe_simulated_data uses numeric indices when no location info ava
 })
 
 
-test_that("get_npe_simulated_data handles NA/Inf values", {
+test_that("get_npe_simulated_data passes through NA/Inf values", {
+    # Function no longer replaces NA/Inf with 0; it preserves raw values
     laser_result <- list(
         results = list(
             expected_cases = c(10, NA, 22, NaN, Inf)
@@ -102,9 +103,11 @@ test_that("get_npe_simulated_data handles NA/Inf values", {
 
     result <- get_npe_simulated_data(laser_result)
 
-    expect_equal(result$cases, c(10, 0, 22, 0, 0))
-    expect_false(any(is.na(result$cases)))
-    expect_false(any(!is.finite(result$cases)))
+    expect_equal(result$cases[1], 10)
+    expect_true(is.na(result$cases[2]))
+    expect_equal(result$cases[3], 22)
+    expect_true(is.nan(result$cases[4]))
+    expect_true(is.infinite(result$cases[5]))
 })
 
 test_that("get_npe_simulated_data validates output structure", {
@@ -114,7 +117,7 @@ test_that("get_npe_simulated_data validates output structure", {
         )
     )
 
-    result <- get_npe_simulated_data(laser_result, validate = TRUE)
+    result <- get_npe_simulated_data(laser_result)
 
     expect_true(is.data.frame(result))
     expect_true(is.character(result$j))
@@ -136,7 +139,7 @@ test_that("get_npe_simulated_data errors on missing results field", {
 
     expect_error(
         get_npe_simulated_data(laser_result),
-        "must contain 'results'"
+        "expected_cases"
     )
 })
 

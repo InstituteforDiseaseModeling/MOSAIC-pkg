@@ -54,16 +54,27 @@ testthat::test_that("errors on zero-sum weights", {
      )
 })
 
-# 6. Non-integer observed error
-testthat::test_that("errors on non-integer observed values", {
+# 6. Non-integer observed error when zero_buffer is FALSE
+testthat::test_that("errors on non-integer observed values when zero_buffer=FALSE", {
+     # With zero_buffer=FALSE, non-integer observed values should error
      expect_error(
           MOSAIC::calc_log_likelihood_poisson(
                observed = c(1.5, 2),
                estimated = c(1, 2),
                weights = NULL,
+               zero_buffer = FALSE,
                verbose = FALSE
           ), "observed must contain non-negative integer counts for Poisson"
      )
+     # With zero_buffer=TRUE (default), non-integer observed values are rounded
+     ll <- MOSAIC::calc_log_likelihood_poisson(
+          observed = c(1.5, 2),
+          estimated = c(1, 2),
+          weights = NULL,
+          zero_buffer = TRUE,
+          verbose = FALSE
+     )
+     expect_true(is.finite(ll))
 })
 
 # 7. Overdispersion warning when var/mean > 1.5

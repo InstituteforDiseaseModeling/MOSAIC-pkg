@@ -79,23 +79,22 @@ testthat::test_that("defaults to Poisson (k=Inf) when variance <= mean", {
      est <- obs
      expect_message(
           ll_nb <- MOSAIC::calc_log_likelihood_negbin(obs, est, k = NULL, verbose = TRUE),
-          "defaulting to Poisson"
+          "using Poisson"
      )
-     ll_pois <- calc_log_likelihood_poisson(obs, est, verbose = FALSE)
+     ll_pois <- MOSAIC::calc_log_likelihood_poisson(obs, est, verbose = FALSE)
      expect_equal(ll_nb, ll_pois, tolerance = 1e-8)
 })
 
-# 8. Provided k used correctly with message and warning for near-Poisson
-testthat::test_that("uses provided k and warns when k < 1.5", {
+# 8. Provided k is floored to k_min when too small
+testthat::test_that("uses k_min floor when provided k is too small", {
      obs <- c(0, 1, 2)
      est <- c(1, 1, 1)
+     # k=1 < k_min=3 (default), so function floors to k_min and messages about it
      expect_message(
-          expect_warning(
-               ll <- MOSAIC::calc_log_likelihood_negbin(obs, est, k = 1, verbose = TRUE),
-               "near-Poisson"
-          ),
-          "Using provided k = 1.00"
+          ll <- MOSAIC::calc_log_likelihood_negbin(obs, est, k = 1, verbose = TRUE),
+          "k_min"
      )
+     expect_true(is.finite(ll))
 })
 
 # 9. Correct NB log-likelihood calculation
@@ -113,6 +112,7 @@ testthat::test_that("matches manual Negative Binomial log-likelihood formula", {
           observed = observed,
           estimated = estimated,
           k = k_param,
+          k_min = 0,  # Disable flooring so k=2 is used as-is
           weights = NULL,
           verbose = FALSE
      )
@@ -134,6 +134,7 @@ testthat::test_that("matches manual calculation with weights", {
           observed = observed,
           estimated = estimated,
           k = k_param,
+          k_min = 0,  # Disable flooring so k=2 is used as-is
           weights = weights,
           verbose = FALSE
      )

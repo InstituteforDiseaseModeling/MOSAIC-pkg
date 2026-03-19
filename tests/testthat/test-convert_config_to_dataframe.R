@@ -77,8 +77,8 @@ test_that("convert_config_to_dataframe works with single location config", {
      expect_s3_class(df, "data.frame")
      expect_equal(nrow(df), 1)
      
-     # For single location, parameters should not have location suffixes
-     expect_true("beta_j0_env" %in% names(df))
+     # Single location parameters have location suffix (e.g., _ETH)
+     expect_true(any(grepl("beta_j0_env", names(df))))
      expect_true("seed" %in% names(df))
 })
 

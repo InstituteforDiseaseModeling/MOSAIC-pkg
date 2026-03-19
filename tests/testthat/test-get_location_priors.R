@@ -124,17 +124,25 @@ test_that("get_location_priors preserves metadata", {
 
 test_that("get_location_priors preserves all parameter attributes", {
      eth_priors <- get_location_priors(iso = "ETH")
-     
-     # Check that parameter structure is preserved
+
+     # Check that location-specific parameter structure is preserved.
+     # Location priors have nested structure: {description, location: {ISO: {distribution, parameters}}}
      if (length(eth_priors$parameters_location) > 0) {
           for (param_name in names(eth_priors$parameters_location)) {
                param <- eth_priors$parameters_location[[param_name]]
-               
-               # Check standard attributes exist
-               expect_true("parameter_name" %in% names(param))
-               expect_true("description" %in% names(param))
-               expect_true("distribution" %in% names(param))
-               expect_true("parameters" %in% names(param))
+
+               # Top level should have description and location
+               expect_true("description" %in% names(param) || "location" %in% names(param),
+                    info = paste("Parameter", param_name, "should have description or location field"))
+
+               # If location-specific, check nested structure
+               if ("location" %in% names(param) && "ETH" %in% names(param$location)) {
+                    loc_prior <- param$location$ETH
+                    expect_true("distribution" %in% names(loc_prior),
+                         info = paste("Location prior for", param_name, "should have distribution"))
+                    expect_true("parameters" %in% names(loc_prior),
+                         info = paste("Location prior for", param_name, "should have parameters"))
+               }
           }
      }
 })
