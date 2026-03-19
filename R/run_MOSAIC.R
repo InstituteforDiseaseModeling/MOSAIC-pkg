@@ -543,17 +543,18 @@ run_MOSAIC <- function(config,
   # WRITE SETUP FILES (with cluster metadata)
   # ===========================================================================
 
-  # Capture cluster metadata for debugging
-  cluster_metadata <- .mosaic_get_cluster_metadata()
+  # Capture full environment snapshot (versions, system, git, data)
+  env_snapshot <- .mosaic_capture_environment(
+    config = config, priors = priors, control = control
+  )
+  .mosaic_write_json(env_snapshot, file.path(dirs$env, "environment.json"), control$io)
+  log_msg("  Saved %s", "0_environment/environment.json")
 
   sim_params <- list(
-    control = control,  # Complete control object for reproducibility
+    control = control,
     n_iterations = n_iterations,
     iso_code = iso_code,
     timestamp = Sys.time(),
-    R_version = R.version.string,
-    MOSAIC_version = as.character(utils::packageVersion("MOSAIC")),
-    cluster_metadata = cluster_metadata,
     paths = list(
       dir_output = dirs$root,
       dir_setup = dirs$setup,

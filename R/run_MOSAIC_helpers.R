@@ -402,6 +402,7 @@
 .mosaic_ensure_dir_tree <- function(dir_output, run_npe, clean_output) {
   d <- list(
     root = dir_output,
+    env = file.path(dir_output, "0_environment"),
     setup = file.path(dir_output, "0_setup"),
     bfrs = file.path(dir_output, "1_bfrs"),
     bfrs_cfg = file.path(dir_output, "1_bfrs/config"),

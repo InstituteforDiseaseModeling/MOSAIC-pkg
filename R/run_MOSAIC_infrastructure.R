@@ -258,6 +258,124 @@
   invisible(success)
 }
 
+#' Capture Full Environment Snapshot
+#'
+#' Records all version, system, and runtime information needed to reproduce
+#' a calibration run. Written to 0_environment/environment.json.
+#'
+#' @param config Model configuration (for priors metadata)
+#' @param priors Prior distributions (for priors metadata)
+#' @param control Control object (for parallel settings)
+#' @return Named list with sections: R, python, system, git, data
+#' @noRd
+.mosaic_capture_environment <- function(config = NULL, priors = NULL, control = NULL) {
+
+  # --- R environment ---
+  r_env <- list(
+    version = R.version.string,
+    platform = R.version$platform,
+    arch = R.version$arch,
+    MOSAIC = as.character(utils::packageVersion("MOSAIC"))
+  )
+
+  # Key R package versions (critical dependencies only)
+  r_pkgs <- c("reticulate", "arrow", "data.table", "dplyr", "sf", "cli")
+  for (pkg in r_pkgs) {
+    r_env[[paste0("pkg_", pkg)]] <- tryCatch(
+      as.character(utils::packageVersion(pkg)),
+      error = function(e) NA_character_
+    )
+  }
+
+  # --- Python environment ---
+  py_env <- list()
+  tryCatch({
+    sys <- reticulate::import("sys", delay_load = FALSE)
+    py_env$version <- strsplit(as.character(sys$version), " ")[[1]][1]
+    py_env$executable <- as.character(sys$executable)
+
+    importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
+    py_pkgs <- c("laser-cholera", "laser-core", "numpy", "torch",
+                 "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
+    for (pkg in py_pkgs) {
+      key <- gsub("-", "_", pkg)
+      py_env[[paste0("pkg_", key)]] <- tryCatch(
+        as.character(importlib$version(pkg)),
+        error = function(e) NA_character_
+      )
+    }
+  }, error = function(e) {
+    py_env$error <<- paste("Python not available:", e$message)
+  })
+
+  # --- System / cluster ---
+  sys_info <- Sys.info()
+  system_env <- list(
+    hostname = unname(sys_info["nodename"]),
+    user = unname(sys_info["user"]),
+    os = unname(sys_info["sysname"]),
+    os_version = unname(sys_info["release"]),
+    n_cores_available = parallel::detectCores(),
+    n_cores_requested = if (!is.null(control)) control$parallel$n_cores else NA_integer_
+  )
+
+  # SLURM/PBS job metadata
+  cluster_vars <- c(
+    "SLURM_JOB_ID", "SLURM_JOB_NAME", "SLURM_NODELIST",
+    "SLURM_NTASKS", "SLURM_CPUS_PER_TASK", "SLURM_MEM_PER_NODE",
+    "PBS_JOBID", "PBS_JOBNAME", "PBS_NODEFILE", "PBS_NP", "PBS_NUM_NODES"
+  )
+  for (var in cluster_vars) {
+    val <- Sys.getenv(var)
+    if (val != "") system_env[[tolower(var)]] <- val
+  }
+
+  # --- Git ---
+  git_env <- list()
+  tryCatch({
+    pkg_dir <- system.file(package = "MOSAIC")
+    # Use the package source directory if we're in a dev context
+    git_dir <- if (file.exists(file.path(".", ".git"))) "." else pkg_dir
+    git_env$sha <- trimws(system2("git", c("-C", git_dir, "rev-parse", "--short", "HEAD"),
+                                  stdout = TRUE, stderr = FALSE))
+    git_env$branch <- trimws(system2("git", c("-C", git_dir, "rev-parse", "--abbrev-ref", "HEAD"),
+                                     stdout = TRUE, stderr = FALSE))
+    git_env$dirty <- system2("git", c("-C", git_dir, "diff", "--quiet"),
+                             stdout = FALSE, stderr = FALSE) != 0
+    git_env$remote <- tryCatch(
+      trimws(system2("git", c("-C", git_dir, "remote", "get-url", "origin"),
+                      stdout = TRUE, stderr = FALSE)),
+      error = function(e) NA_character_,
+      warning = function(w) NA_character_
+    )
+  }, error = function(e) {
+    git_env$error <<- paste("Git not available:", e$message)
+  })
+
+  # --- Data versions ---
+  data_env <- list()
+  if (!is.null(priors) && !is.null(priors$metadata)) {
+    data_env$priors_version <- priors$metadata$version
+    data_env$priors_date <- as.character(priors$metadata$date)
+  }
+
+  # Hash of default_parameters.json for change detection
+  default_params_path <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
+  if (file.exists(default_params_path)) {
+    data_env$default_parameters_md5 <- tools::md5sum(default_params_path)
+    names(data_env$default_parameters_md5) <- NULL
+  }
+
+  list(
+    timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    R = r_env,
+    python = py_env,
+    system = system_env,
+    git = git_env,
+    data = data_env
+  )
+}
+
 #' Log Cluster Metadata
 #'
 #' Captures SLURM/PBS job metadata for debugging.
