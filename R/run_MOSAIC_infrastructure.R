@@ -269,30 +269,14 @@
 #' @return Named list with sections: R, python, system, git, data
 #' @noRd
 .mosaic_capture_environment <- function(config = NULL, priors = NULL, control = NULL) {
-
-  # Top-level safety net: environment capture must never crash a calibration run
-  tryCatch(
-    .mosaic_capture_environment_impl(config, priors, control),
-    error = function(e) {
-      warning("Environment capture failed: ", e$message, call. = FALSE)
-      list(timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
-           error = paste("Capture failed:", e$message))
-    }
-  )
-}
-
-#' @noRd
-.mosaic_capture_environment_impl <- function(config = NULL, priors = NULL, control = NULL) {
+  tryCatch({
 
   # --- R environment ---
   r_env <- list(
     version = R.version.string,
     platform = R.version$platform,
-    arch = R.version$arch,
     MOSAIC = as.character(utils::packageVersion("MOSAIC"))
   )
-
-  # Key R package versions (critical dependencies only)
   r_pkgs <- c("reticulate", "arrow", "data.table", "dplyr", "sf", "cli")
   for (pkg in r_pkgs) {
     r_env[[paste0("pkg_", pkg)]] <- tryCatch(
@@ -302,16 +286,13 @@
   }
 
   # --- Python environment ---
-  # Only query Python if reticulate has already bound to an interpreter.
-  # Calling reticulate::import() before binding can trigger side effects
-  # (wrong interpreter, unexpected init) — especially on clusters.
+  # Only query if reticulate has already bound to avoid side effects on clusters
   py_env <- list()
   if (requireNamespace("reticulate", quietly = TRUE) &&
       reticulate::py_available(initialize = FALSE)) {
     tryCatch({
       sys <- reticulate::import("sys", delay_load = FALSE)
       py_env$version <- strsplit(as.character(sys$version), " ")[[1]][1]
-      py_env$executable <- as.character(sys$executable)
 
       importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
       py_pkgs <- c("laser-cholera", "laser-core", "numpy", "torch",
@@ -336,12 +317,9 @@
     hostname = unname(sys_info["nodename"]),
     user = unname(sys_info["user"]),
     os = unname(sys_info["sysname"]),
-    os_version = unname(sys_info["release"]),
     n_cores_available = n_cores,
     n_cores_requested = if (!is.null(control)) control$parallel$n_cores else NA_integer_
   )
-
-  # SLURM/PBS job metadata
   cluster_vars <- c(
     "SLURM_JOB_ID", "SLURM_JOB_NAME", "SLURM_NODELIST",
     "SLURM_NTASKS", "SLURM_CPUS_PER_TASK", "SLURM_MEM_PER_NODE",
@@ -355,7 +333,6 @@
   # --- Git ---
   git_env <- list()
   if (nzchar(Sys.which("git"))) {
-    # Find repo root: prefer package source dir, fall back to working dir
     .git_cmd <- function(...) {
       out <- tryCatch(
         system2("git", c(...), stdout = TRUE, stderr = FALSE),
@@ -364,25 +341,13 @@
       if (is.null(out) || !is.character(out) || length(out) == 0) return(NA_character_)
       trimws(out[1])
     }
-
     pkg_dir <- system.file(package = "MOSAIC")
-    git_dir <- if (file.exists(file.path(".", ".git"))) {
-      "."
-    } else if (file.exists(file.path(pkg_dir, ".git"))) {
-      pkg_dir
-    } else {
-      NA_character_
-    }
-
+    git_dir <- if (file.exists(file.path(".", ".git"))) "."
+               else if (file.exists(file.path(pkg_dir, ".git"))) pkg_dir
+               else NA_character_
     if (!is.na(git_dir)) {
       git_env$sha    <- .git_cmd("-C", git_dir, "rev-parse", "--short", "HEAD")
       git_env$branch <- .git_cmd("-C", git_dir, "rev-parse", "--abbrev-ref", "HEAD")
-      git_env$remote <- .git_cmd("-C", git_dir, "remote", "get-url", "origin")
-      git_env$dirty  <- tryCatch(
-        system2("git", c("-C", git_dir, "diff", "--quiet"),
-                stdout = FALSE, stderr = FALSE) != 0L,
-        error = function(e) NA, warning = function(w) NA
-      )
     }
   }
 
@@ -392,8 +357,6 @@
     data_env$priors_version <- priors$metadata$version
     data_env$priors_date <- as.character(priors$metadata$date)
   }
-
-  # Hash of default_parameters.json for change detection
   default_params_path <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
   if (file.exists(default_params_path)) {
     md5 <- tryCatch(tools::md5sum(default_params_path), error = function(e) NA_character_)
@@ -408,6 +371,12 @@
     git = git_env,
     data = data_env
   )
+
+  }, error = function(e) {
+    warning("Environment capture failed: ", e$message, call. = FALSE)
+    list(timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+         error = paste("Capture failed:", e$message))
+  })
 }
 
 #' Log Cluster Metadata
