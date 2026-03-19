@@ -274,11 +274,9 @@
       }
     }
 
-    # Explicit garbage collection to prevent Python object buildup
-    # Run every 10 iterations to balance cleanup vs overhead
-    if (j %% 10 == 0) {
+    # Explicit garbage collection on last iteration to prevent Python object buildup
+    if (j == n_iterations) {
       gc(verbose = FALSE)
-      reticulate::import("gc")$collect()
     }
   }
 
@@ -327,11 +325,12 @@
     .mosaic_write_parquet(collapsed_df, out_file, io)
   }
 
-  # CRITICAL: Cleanup Python objects after EACH simulation completes
-  # This prevents accumulation across thousands of simulations in large batches
-  # In predictive phase with 70K+ sims, this prevents finalizer queue saturation
+  # R GC every sim to process reticulate finalizer queue;
+  # Python full GC every 100 sims (frequent full sweeps are counterproductive)
   gc(verbose = FALSE)
-  reticulate::import("gc")$collect()
+  if (sim_id %% 100L == 0L) {
+    reticulate::import("gc")$collect()
+  }
 
   return(file.exists(output_file))
 }
