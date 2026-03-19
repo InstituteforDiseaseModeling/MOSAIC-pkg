@@ -156,7 +156,8 @@
       config = config,
       seed = sim_id,
       sample_args = sampling_args,
-      verbose = FALSE  # Suppress verbose output (progress bar shows overall progress)
+      verbose = FALSE,
+      validate = FALSE  # Skip per-sim validation (priors guarantee valid ranges)
     )
   }, error = function(e) {
     # Log error details for debugging

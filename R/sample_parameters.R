@@ -61,6 +61,7 @@
 #'   These override values in sample_args if both are provided.
 #'
 #' @param verbose Logical indicating whether to print progress messages. Default TRUE.
+#' @param validate Logical indicating whether to run post-sampling validation. Default TRUE.
 #'
 #' @return A MOSAIC config list with sampled parameter values.
 #'
@@ -104,6 +105,7 @@ sample_parameters <- function(
 
   # Other options
   verbose = TRUE,
+  validate = TRUE,
 
   # Individual sampling controls for backward compatibility
   ...
@@ -303,11 +305,12 @@ sample_parameters <- function(
   # Update seed in config
   config_sampled$seed <- seed
 
-  # Validate the sampled config
-  is_valid <- validate_sampled_config(config_sampled, verbose)
-
-  if (!is_valid) {
-    warning("Sampled config failed validation checks. Please review the warnings above.")
+  # Validate the sampled config (skip in worker hot loop for performance)
+  if (validate) {
+    is_valid <- validate_sampled_config(config_sampled, verbose)
+    if (!is_valid) {
+      warning("Sampled config failed validation checks. Please review the warnings above.")
+    }
   }
 
   if (verbose) {
