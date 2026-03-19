@@ -272,7 +272,7 @@
     }
 
     # Seed used for the first iteration (mirrors run_MOSAIC.R line 224)
-    seed_iter_1 <- (sim_id - 1L) * n_iterations + 1L
+    seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
 
     row_df <- data.frame(
       sim      = as.integer(sim_id),
@@ -319,7 +319,7 @@
 #' Mirrors \code{\link{run_MOSAIC}} exactly except the R \code{parallel} cluster
 #' is replaced by a Dask cluster. Each LASER simulation runs as a pure-Python
 #' Dask task — no R subprocess on workers. Workers call
-#' \code{laser_cholera.metapop.model.run_model()} directly, return case/death
+#' \code{laser.cholera.metapop.model.run_model()} directly, return case/death
 #' arrays, and likelihood computation happens in R after gathering.
 #'
 #' This enables scaling across Azure/cloud nodes (via Coiled.io) without the
@@ -354,9 +354,6 @@
 #'   }
 #'   If \code{NULL}, defaults to \code{list(type="coiled")} with all sub-fields
 #'   at their defaults.
-#' @param resume Logical. If \code{TRUE}, continues from existing checkpoint.
-#'   Default \code{FALSE}.
-#'
 #' @return Invisibly returns same list as \code{\link{run_MOSAIC}}:
 #'   \code{dirs}, \code{files}, \code{summary}.
 #'
@@ -381,8 +378,7 @@ run_MOSAIC_dask <- function(config,
                              priors,
                              dir_output,
                              control   = NULL,
-                             dask_spec = NULL,
-                             resume    = FALSE) {
+                             dask_spec = NULL) {
 
   # ===========================================================================
   # ARGUMENT VALIDATION
@@ -395,8 +391,6 @@ run_MOSAIC_dask <- function(config,
       !missing(priors) && is.list(priors) && length(priors) > 0,
     "dir_output is required and must be character string" =
       !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L,
-    "resume must be logical" =
-      is.logical(resume) && length(resume) == 1L
   )
 
   if (!"location_name" %in% names(config)) {
@@ -547,8 +541,32 @@ run_MOSAIC_dask <- function(config,
   ]
   if (!length(param_names_estimated)) stop("No estimated parameters found for ESS tracking")
 
-  log_msg("Parameters: %d estimated (of %d total) | Locations: %s",
-          length(param_names_estimated), length(param_names_all),
+  # Derive disabled parameter names from sampling_args flags so the log
+  # message reflects the actual number being sampled in this run.
+  # Flags use "sample_<name>" convention; strip the prefix to get the config
+  # key. Handle the special-case name mappings used in sample_parameters.R.
+  disabled_base_params <- character(0)
+  if (!is.null(sampling_args)) {
+    disabled_flags <- names(sampling_args)[vapply(sampling_args, isFALSE, logical(1))]
+    disabled_base <- gsub("^sample_", "", disabled_flags)
+    special_map <- list(
+      beta_j0_tot = c("beta_j0_hum", "beta_j0_env"),
+      a1 = "a_1_j", a2 = "a_2_j",
+      b1 = "b_1_j", b2 = "b_2_j"
+    )
+    resolved <- unlist(lapply(disabled_base, function(nm) {
+      if (nm %in% names(special_map)) special_map[[nm]] else nm
+    }))
+    disabled_base_params <- unique(resolved)
+  }
+
+  param_names_sampled <- param_names_estimated[
+    !(gsub("_[A-Z]{3}$", "", param_names_estimated) %in% disabled_base_params)
+  ]
+
+  log_msg("Parameters: %d sampled (of %d estimable, %d total) | Locations: %s",
+          length(param_names_sampled), length(param_names_estimated),
+          length(param_names_all),
           paste(config$location_name, collapse = ", "))
 
   # ===========================================================================
@@ -641,20 +659,7 @@ run_MOSAIC_dask <- function(config,
   nspec      <- .mosaic_normalize_n_sims(n_simulations)
   state_file <- file.path(dirs$bfrs_diag, "run_state.rds")
 
-  state <- if (resume && file.exists(state_file)) {
-    log_msg("Attempting to resume from: %s", state_file)
-    loaded <- .mosaic_load_state_safe(state_file)
-    if (is.null(loaded)) {
-      log_msg("WARNING: Failed to load state file — starting fresh")
-      .mosaic_init_state(control, param_names_estimated, nspec)
-    } else {
-      log_msg("Resumed state (batch %d, %d sims completed)",
-              loaded$batch_number, loaded$total_sims_run)
-      loaded
-    }
-  } else {
-    .mosaic_init_state(control, param_names_estimated, nspec)
-  }
+  state <- .mosaic_init_state(control, param_names_sampled, nspec)
 
   log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
@@ -667,23 +672,11 @@ run_MOSAIC_dask <- function(config,
     target <- state$fixed_target
     log_msg("[FIXED MODE] Running exactly %d simulations", target)
 
-    done_ids <- integer()
-    if (resume) {
-      existing <- list.files(dirs$bfrs_params,
-                             pattern = "^sim_[0-9]{7}\\.parquet$",
-                             full.names = FALSE)
-      if (length(existing)) {
-        done_ids <- .mosaic_parse_sim_ids(existing,
-                                          pattern = "^sim_0*([0-9]+)\\.parquet$")
-        log_msg("Found %d existing simulations to skip", length(done_ids))
-      }
-    }
-
     all_ids <- seq_len(target)
-    sim_ids <- setdiff(all_ids, done_ids)
+    sim_ids <- all_ids
 
     if (length(sim_ids) == 0L) {
-      log_msg("Nothing to do: %d simulations already complete", length(done_ids))
+      log_msg("Nothing to do")
     } else {
       log_msg("Running %d simulations (%d-%d)",
               length(sim_ids), min(sim_ids), max(sim_ids))
@@ -812,13 +805,14 @@ run_MOSAIC_dask <- function(config,
               state$batch_number, n_success_batch, length(sim_ids),
               batch_success_rate, as.numeric(batch_runtime))
 
-      if (state$total_sims_run < control$calibration$max_simulations) {
-        state <- .mosaic_ess_check_update_state(state, dirs,
-                                                param_names_estimated, control)
-        .mosaic_save_state(state, state_file)
-      } else {
-        log_msg("Skipping ESS check (final batch)")
-      }
+      # ESS convergence check — always run so state$converged is accurate.
+      # The old guard skipped this when total_sims_run >= max_simulations,
+      # which meant the final batch never updated the converged flag and
+      # always emitted a spurious "no convergence" warning even when the
+      # target was met on that last batch.
+      state <- .mosaic_ess_check_update_state(state, dirs,
+                                              param_names_sampled, control)
+      .mosaic_save_state(state, state_file)
 
       if (state$total_sims_run >= control$calibration$max_simulations &&
           !state$converged) {
@@ -891,9 +885,18 @@ run_MOSAIC_dask <- function(config,
     q3 <- stats::quantile(valid_ll, 0.75, na.rm = TRUE)
     iqr <- q3 - q1
     iqr_mult <- control$weights$iqr_multiplier
-    results$is_outlier[results$is_valid] <-
-      valid_ll < (q1 - iqr_mult * iqr) | valid_ll > (q3 + iqr_mult * iqr)
-    log_msg("  Outliers: %d (%.1f%%)",
+    lower_threshold <- q1 - iqr_mult * iqr
+
+    # Only apply the lower fence. Log-likelihoods have a long left tail (many
+    # poor fits) but are bounded above near 0. Applying an upper fence via
+    # Q3 + k*IQR would incorrectly discard the highest-likelihood simulations
+    # — exactly the models we want to keep for the posterior. The lower fence
+    # removes pathologically bad simulations that survived the guardrails.
+    results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
+
+    log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f):", iqr_mult)
+    log_msg("    - Lower threshold: %.1f | Outliers: %d (%.1f%%)",
+            lower_threshold,
             sum(results$is_outlier),
             100 * sum(results$is_outlier) / sum(results$is_valid))
   }
@@ -920,7 +923,7 @@ run_MOSAIC_dask <- function(config,
   log_msg("Calculating parameter ESS")
   ess_results <- calc_model_ess_parameter(
     results        = results,
-    param_names    = param_names_estimated,
+    param_names    = param_names_sampled,
     likelihood_col = "likelihood",
     n_grid         = 100,
     method         = control$targets$ESS_method,
@@ -1223,8 +1226,8 @@ run_MOSAIC_dask <- function(config,
   log_msg("Saved config_best.json")
 
   # Run best model locally (single sim, not on Dask)
-  lc <- reticulate::import("laser_cholera.metapop.model")
-  best_model <- lc$run_model(paramfile = config_best, quiet = TRUE)
+  lc <- reticulate::import("laser.cholera.metapop.model")
+  best_model <- lc$run_model(paramfile = .mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
   if (control$paths$plots) {
     log_msg("Generating posterior predictive plots (best model)...")
@@ -1296,7 +1299,7 @@ run_MOSAIC_dask <- function(config,
       priors      = priors,
       config      = config,
       control     = control,
-      param_names = param_names_estimated,
+      param_names = param_names_sampled,
       dirs        = dirs,
       PATHS       = PATHS,
       verbose     = control$logging$verbose
