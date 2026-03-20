@@ -118,35 +118,14 @@
 #'
 #' @noRd
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
-                                          dir_bfrs_parameters, dir_bfrs_timeseries,
+                                          dir_bfrs_parameters,
                                           param_names_all, param_lookup, sampling_args, io,
-                                          likelihood_settings,
-                                          save_timeseries = TRUE) {
+                                          likelihood_settings) {
 
   # Pre-allocate result matrix (FIXED: proper pre-allocation)
   n_params <- length(param_names_all)
   result_matrix <- matrix(NA_real_, nrow = n_iterations, ncol = 5 + n_params)
   colnames(result_matrix) <- c('sim', 'iter', 'seed_sim', 'seed_iter', 'likelihood', param_names_all)
-
-  # Timeseries accumulators — only allocated when NPE requires them.
-  # Old approach: character matrix + O(n_j * n_t * n_iter)^2 string-search
-  #   collapse ran unconditionally even when save_timeseries = FALSE.
-  # New approach: numeric accumulator matrices summed in-place each iteration;
-  #   final mean computed in O(n_j * n_t) with vectorised arithmetic.
-  ts_cases_sum  <- NULL
-  ts_deaths_sum <- NULL
-  ts_iter_count <- 0L
-  ts_n_j        <- 0L
-  ts_n_t        <- 0L
-
-  if (save_timeseries) {
-    ts_n_j <- length(config$location_name)
-    ts_n_t <- if (!is.null(config$reported_cases)) ncol(config$reported_cases) else 0L
-    if (ts_n_j > 0L && ts_n_t > 0L) {
-      ts_cases_sum  <- matrix(0.0, nrow = ts_n_j, ncol = ts_n_t)
-      ts_deaths_sum <- matrix(0.0, nrow = ts_n_j, ncol = ts_n_t)
-    }
-  }
 
   # Sample parameters ONCE per simulation
   params_sim <- tryCatch({
@@ -254,25 +233,6 @@
       })
 
       result_matrix[j, 5] <- likelihood
-
-      # Accumulate time series outputs (only when NPE timeseries are needed)
-      if (save_timeseries && !is.null(ts_cases_sum)) {
-        est_cases_array  <- model$results$reported_cases
-        est_deaths_array <- model$results$disease_deaths
-
-        if (!is.null(est_cases_array) && !is.null(est_deaths_array)) {
-          if (!is.matrix(est_cases_array)) {
-            est_cases_array  <- matrix(est_cases_array,  nrow = 1)
-            est_deaths_array <- matrix(est_deaths_array, nrow = 1)
-          }
-          # Only accumulate if dimensions match the pre-allocated accumulators
-          if (nrow(est_cases_array) == ts_n_j && ncol(est_cases_array) == ts_n_t) {
-            ts_cases_sum  <- ts_cases_sum  + est_cases_array
-            ts_deaths_sum <- ts_deaths_sum + est_deaths_array
-            ts_iter_count <- ts_iter_count + 1L
-          }
-        }
-      }
     }
 
     # Explicit garbage collection on last iteration to prevent Python object buildup
@@ -300,31 +260,6 @@
   # Write parameter file
   output_file <- file.path(dir_bfrs_parameters, sprintf("sim_%07d.parquet", sim_id))
   .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
-
-  # Write timeseries file (NPE only) — O(n_j * n_t) vectorised mean from accumulators.
-  # No string conversion, no nested loops, no linear scan per (j,t) cell.
-  if (save_timeseries && ts_iter_count > 0L &&
-      !is.null(ts_cases_sum) && !is.null(dir_bfrs_timeseries)) {
-
-    cases_mean  <- ts_cases_sum  / ts_iter_count
-    deaths_mean <- ts_deaths_sum / ts_iter_count
-
-    # Build long-format index (row-major: j varies slowest, t fastest)
-    j_idx <- rep(seq_len(ts_n_j), times = ts_n_t)
-    t_idx <- rep(seq_len(ts_n_t), each  = ts_n_j)
-
-    collapsed_df <- data.frame(
-      sim    = sim_id,
-      iter   = 1L,
-      j      = j_idx,
-      t      = t_idx,
-      cases  = as.numeric(cases_mean),
-      deaths = as.numeric(deaths_mean)
-    )
-
-    out_file <- file.path(dir_bfrs_timeseries, sprintf("timeseries_%07d.parquet", sim_id))
-    .mosaic_write_parquet(collapsed_df, out_file, io)
-  }
 
   # R GC every sim to process reticulate finalizer queue;
   # Python full GC every 100 sims (frequent full sweeps are counterproductive)
@@ -357,10 +292,9 @@
 #'   \item Adaptive calibration with R² convergence detection
 #'   \item Single predictive batch (calculated from calibration phase)
 #'   \item Adaptive fine-tuning with 5-tier batch sizing
-#'   \item Post-hoc subset optimization for NPE priors
+#'   \item Post-hoc subset optimization
 #'   \item Posterior quantile and distribution estimation
 #'   \item Posterior predictive checks and uncertainty quantification
-#'   \item Optional: Neural Posterior Estimation (NPE) stage
 #' }
 #'
 #' @param config Named list of LASER model configuration (REQUIRED). Contains location_name,
@@ -396,7 +330,6 @@
 #'   \item{parallel}{enable, n_cores, type, progress}
 #'   \item{paths}{clean_output, plots}
 #'   \item{targets}{ESS_param, ESS_best, A_best, CVw_best, etc.}
-#'   \item{npe}{enable, weight_strategy}
 #'   \item{io}{format, compression, compression_level}
 #' }
 #'
@@ -408,7 +341,6 @@
 #'   \item \code{1_bfrs/diagnostics/}: ESS metrics, convergence results
 #'   \item \code{1_bfrs/posterior/}: Posterior quantiles and distributions
 #'   \item \code{1_bfrs/plots/}: Diagnostic, parameter, and prediction plots
-#'   \item \code{2_npe/}: Neural Posterior Estimation results (if enabled)
 #'   \item \code{3_results/}: Final combined results
 #' }
 #'
@@ -587,7 +519,6 @@ run_MOSAIC <- function(config,
   # Create directory structure
   dirs <- .mosaic_ensure_dir_tree(
     dir_output = dir_output,
-    run_npe = isTRUE(control$npe$enable),
     clean_output = isTRUE(control$paths$clean_output)
   )
 
@@ -611,7 +542,6 @@ run_MOSAIC <- function(config,
       dir_output = dirs$root,
       dir_setup = dirs$setup,
       dir_bfrs = dirs$bfrs,
-      dir_npe = if (isTRUE(control$npe$enable)) dirs$npe else NULL,
       dir_results = dirs$results
     )
   )
@@ -627,13 +557,15 @@ run_MOSAIC <- function(config,
   log_msg("  Saved %s", basename(file.path(dirs$setup, "config_base.json")))
 
   # Plot prior distributions
-  log_msg("Plotting prior distributions")
-  plot_model_distributions(
-    json_files = file.path(dirs$setup, "priors.json"),
-    method_names = "Prior",
-    output_dir = dirs$setup,
-    verbose = control$logging$verbose
-  )
+  if (control$paths$plots) {
+    log_msg("Plotting prior distributions")
+    plot_model_distributions(
+      json_files = file.path(dirs$setup, "priors.json"),
+      method_names = "Prior",
+      output_dir = dirs$setup,
+      verbose = control$logging$verbose
+    )
+  }
 
   # ===========================================================================
   # PARAMETER NAME DETECTION
@@ -787,13 +719,11 @@ run_MOSAIC <- function(config,
     # Extract likelihood settings once (avoids shipping full control to workers)
     likelihood_settings <- control$likelihood
     io_settings <- control$io
-    save_timeseries <- control$npe$enable
-    dir_bfrs_timeseries <- if (save_timeseries) dirs$bfrs_times else NULL
 
     parallel::clusterExport(cl,
       c("n_iterations", "priors", "config", "PATHS", "param_names_all", "param_lookup",
         "sampling_args", "dirs",
-        "likelihood_settings", "io_settings", "save_timeseries", "dir_bfrs_timeseries"),
+        "likelihood_settings", "io_settings"),
       envir = environment())
 
     # Create worker function on each worker using exported variables
@@ -808,13 +738,11 @@ run_MOSAIC <- function(config,
           config = config,
           PATHS = PATHS,
           dir_bfrs_parameters = dirs$bfrs_params,
-          dir_bfrs_timeseries = dir_bfrs_timeseries,
           param_names_all = param_names_all,
           param_lookup = param_lookup,
           sampling_args = sampling_args,
           io = io_settings,
-          likelihood_settings = likelihood_settings,
-          save_timeseries = save_timeseries
+          likelihood_settings = likelihood_settings
         )
       }, envir = .GlobalEnv)
       NULL
@@ -878,11 +806,9 @@ run_MOSAIC <- function(config,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id, n_iterations, priors, config, PATHS,
             dirs$bfrs_params,
-            if (control$npe$enable) dirs$bfrs_times else NULL,
             param_names_all, param_lookup, sampling_args,
             io = control$io,
-            likelihood_settings = control$likelihood,
-            save_timeseries = control$npe$enable
+            likelihood_settings = control$likelihood
           ),
           cl = cl,
           show_progress = control$parallel$progress
@@ -988,11 +914,9 @@ run_MOSAIC <- function(config,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id, n_iterations, priors, config, PATHS,
             dirs$bfrs_params,
-            if (control$npe$enable) dirs$bfrs_times else NULL,
             param_names_all, param_lookup, sampling_args,
             io = control$io,
-            likelihood_settings = control$likelihood,
-            save_timeseries = control$npe$enable
+            likelihood_settings = control$likelihood
           ),
           cl = cl,
           show_progress = control$parallel$progress
@@ -1084,7 +1008,7 @@ run_MOSAIC <- function(config,
             100 * sum(results$is_outlier) / sum(results$is_valid))
   }
 
-  results$is_retained <- results$is_finite & !results$is_outlier
+  results$is_retained <- results$is_valid & !results$is_outlier
   results$is_best_subset <- FALSE
   results$is_best_model <- FALSE
 
@@ -1413,7 +1337,7 @@ run_MOSAIC <- function(config,
 
   convergence_results_df <- data.frame(
     sim = results$sim,
-    seed = results$sim,
+    seed = results$seed_sim,
     likelihood = results$likelihood,
     aic = -2 * results$likelihood,
     delta_aic = if (is.finite(best_aic_val)) {
@@ -1605,35 +1529,6 @@ run_MOSAIC <- function(config,
     )
   }
 
-  # ===========================================================================
-  # STAGE 2: NEURAL POSTERIOR ESTIMATION (NPE)
-  # ===========================================================================
-
-  if (control$npe$enable) {
-    log_msg("Starting NPE Stage")
-
-    # Call run_NPE() with in-memory objects (embedded mode)
-    npe_result <- run_NPE(
-      # Embedded mode: pass in-memory objects
-      results = results,
-      priors = priors,
-      config = config,
-      control = control,
-      param_names = param_names_sampled,
-      dirs = dirs,
-      PATHS = PATHS,
-      verbose = control$logging$verbose
-    )
-
-    log_msg("NPE Stage complete")
-
-    # npe_result contains all NPE outputs
-    # (posterior_samples, posterior_log_probs, model, diagnostics, etc.)
-
-  } else {
-    log_msg("NPE skipped")
-  }
-
   runtime <- difftime(Sys.time(), start_time, units = "mins")
   log_msg("Calibration complete: %d batches, %d simulations, %.2f min",
           state$batch_number, state$total_sims_run, as.numeric(runtime))
@@ -1675,7 +1570,6 @@ run_mosaic <- run_MOSAIC
 #'   \item \code{likelihood}: How to score model fit (likelihood components and weights)
 #'   \item \code{targets}: When to stop (ESS convergence thresholds)
 #'   \item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
-#'   \item \code{npe}: Post-calibration stage (neural posterior estimation)
 #'   \item \code{parallel}: Infrastructure (cores, cluster type)
 #'   \item \code{io}: Output format (file format, compression)
 #'   \item \code{paths}: File management (output directories, plots)
@@ -1732,22 +1626,6 @@ run_mosaic <- run_MOSAIC
 #' @param fine_tuning List of fine-tuning batch sizes (advanced calibration). Default is:
 #'   \itemize{
 #'     \item \code{batch_sizes}: Named list with massive, large, standard, precision, final
-#'   }
-#'
-#' @param npe List of NPE settings (post-calibration stage). Default is:
-#'   \itemize{
-#'     \item \code{enable}: Enable NPE training (default: FALSE)
-#'     \item \code{weight_strategy}: Weight strategy: "continuous_best", "continuous_retained", "continuous_all", "binary_best", "binary_retained", "binary_all" (default: "continuous_best")
-#'     \item \code{architecture_tier}: Architecture size: "auto", "minimal", "small", "medium", "large", "xlarge" (default: "auto")
-#'     \item \code{n_epochs}: Maximum training epochs (default: 1000)
-#'     \item \code{batch_size}: Training batch size (default: 512)
-#'     \item \code{learning_rate}: Initial learning rate (default: 1e-3)
-#'     \item \code{validation_split}: Proportion for validation (default: 0.15)
-#'     \item \code{early_stopping}: Enable early stopping (default: TRUE)
-#'     \item \code{patience}: Early stopping patience in epochs (default: 20)
-#'     \item \code{use_gpu}: Use GPU if available (default: TRUE)
-#'     \item \code{seed}: Random seed for reproducibility (default: 42)
-#'     \item \code{n_posterior_samples}: Number of posterior samples to draw (default: 10000)
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
@@ -1844,7 +1722,6 @@ run_mosaic <- run_MOSAIC
 #'   likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
 #'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
 #'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
-#'   npe = list(enable = TRUE, weight_strategy = "best_subset"),      # Post-calibration
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
 #'   io = mosaic_io_presets("default"),                               # Output format
 #'   paths = list(clean_output = FALSE, plots = TRUE)                 # File management
@@ -1857,7 +1734,6 @@ mosaic_control_defaults <- function(calibration = NULL,
                            likelihood = NULL,
                            targets = NULL,
                            fine_tuning = NULL,
-                           npe = NULL,
                            predictions = NULL,
                            weights = NULL,
                            parallel = NULL,
@@ -2017,22 +1893,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     ESS_method = "perplexity"    # "kish" or "perplexity"
   )
 
-  # Default NPE settings
-  default_npe <- list(
-    enable = FALSE,
-    weight_strategy = "continuous_best",  # Weight strategy for NPE training
-    architecture_tier = "auto",           # Architecture size: "auto", "minimal", "small", "medium", "large", "xlarge"
-    n_epochs = 1000,                      # Maximum training epochs
-    batch_size = 512,                     # Training batch size
-    learning_rate = 1e-3,                 # Initial learning rate
-    validation_split = 0.15,              # Proportion of data for validation
-    early_stopping = TRUE,                # Enable early stopping
-    patience = 20,                        # Early stopping patience (epochs)
-    use_gpu = TRUE,                       # Use GPU if available
-    seed = 42,                            # Random seed for reproducibility
-    n_posterior_samples = 10000           # Number of posterior samples to draw after training
-  )
-
   # Default prediction settings
   default_predictions <- list(
     best_model_n_sims = 100L,           # Stochastic runs for best model
@@ -2061,14 +1921,13 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → npe → predictions → weights → parallel → io → paths → logging
+  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → predictions → weights → parallel → io → paths → logging
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
     likelihood = if (is.null(likelihood)) default_likelihood else modifyList(default_likelihood, likelihood),
     targets = if (is.null(targets)) default_targets else modifyList(default_targets, targets),
     fine_tuning = if (is.null(fine_tuning)) default_fine_tuning else modifyList(default_fine_tuning, fine_tuning),
-    npe = if (is.null(npe)) default_npe else modifyList(default_npe, npe),
     predictions = if (is.null(predictions)) default_predictions else modifyList(default_predictions, predictions),
     weights = if (is.null(weights)) default_weights else modifyList(default_weights, weights),
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),
