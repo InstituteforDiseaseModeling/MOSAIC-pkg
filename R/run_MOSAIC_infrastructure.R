@@ -446,11 +446,12 @@
 
   post_q <- utils::read.csv(pq_file, stringsAsFactors = FALSE)
 
-  # Find the quantile columns (q2.5, q50, q97.5)
+  # Find the quantile columns
+  # calc_model_posterior_quantiles() produces: q0.025, q0.25, q0.5, q0.75, q0.975
   q_cols <- names(post_q)
-  q2.5_col <- grep("^q0?\\.?025$|^q2\\.5$", q_cols, value = TRUE)[1]
-  q50_col <- grep("^q0?\\.?5$|^q50$", q_cols, value = TRUE)[1]
-  q97.5_col <- grep("^q0?\\.?975$|^q97\\.5$", q_cols, value = TRUE)[1]
+  q2.5_col <- grep("^q0\\.025$", q_cols, value = TRUE)[1]
+  q50_col <- grep("^q0\\.5$", q_cols, value = TRUE)[1]
+  q97.5_col <- grep("^q0\\.975$", q_cols, value = TRUE)[1]
 
   if (is.na(q2.5_col) || is.na(q50_col) || is.na(q97.5_col)) {
     warning("Could not find expected quantile columns in posterior_quantiles.csv", call. = FALSE)
