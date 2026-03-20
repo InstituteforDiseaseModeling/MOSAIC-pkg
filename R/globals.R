@@ -5,4 +5,5 @@ utils::globalVariables(c(
      "month_name", "year", "population", "lon", "lat", "destination", "origin"
 ))
 utils::globalVariables(c("get_distance_matrix", "mobility", "element_text", "geom_sf", "geom_text", "guide_colorbar", "guides", "margin", "xlab", "ylab"))
+utils::globalVariables(c("Param1", "Param2", "Correlation"))
 
