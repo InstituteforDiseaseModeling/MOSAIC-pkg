@@ -332,6 +332,9 @@
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
+#' @param cluster Optional pre-built cluster from \code{\link{make_mosaic_cluster}}.
+#'   When provided, skips cluster creation and teardown, reusing the existing workers.
+#'   Useful for staged estimation where multiple \code{run_MOSAIC} calls share a cluster.
 #'
 #' @return Invisibly returns a list with:
 #' \describe{
@@ -426,7 +429,8 @@
 run_MOSAIC <- function(config,
                        priors,
                        dir_output,
-                       control = NULL) {
+                       control = NULL,
+                       cluster = NULL) {
 
   # ===========================================================================
   # ARGUMENT VALIDATION
@@ -651,79 +655,41 @@ run_MOSAIC <- function(config,
     control$parallel$n_cores <- 1L
   }
 
-  # Progress bar controlled by user via control$parallel$progress
-  # (No automatic detection - user can disable if needed)
+  # Determine cluster ownership:
+  #   owns_cluster = TRUE  → we created it, we tear it down
+  #   owns_cluster = FALSE → caller provided it, caller tears it down
+  owns_cluster <- FALSE
 
-  # Only create cluster if n_cores > 1
-  if (control$parallel$n_cores > 1L) {
-    log_msg("Setting up %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
-
-    # CRITICAL: Set threading environment variables to prevent fork issues
-    # Numba (used by laser-cholera) and TBB can cause threading conflicts when forking
-    # These must be set in the main process BEFORE creating the cluster
-    Sys.setenv(
-      TBB_NUM_THREADS = "1",
-      NUMBA_NUM_THREADS = "1",
-      OMP_NUM_THREADS = "1",
-      MKL_NUM_THREADS = "1",
-      OPENBLAS_NUM_THREADS = "1"
+  if (!is.null(cluster)) {
+    # User provided a pre-built cluster (e.g. from make_mosaic_cluster)
+    cl <- cluster
+    owns_cluster <- FALSE
+    log_msg("Using pre-built cluster (%d workers)", length(cl))
+  } else if (control$parallel$n_cores > 1L) {
+    # Create cluster internally via make_mosaic_cluster
+    cl <- make_mosaic_cluster(
+      n_cores = control$parallel$n_cores,
+      type = control$parallel$type
     )
-
-    cl <- parallel::makeCluster(control$parallel$n_cores, type = control$parallel$type)
+    owns_cluster <- TRUE
+    log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
 
     # Register cleanup handler (will be called on normal exit or error)
     on.exit({
-      if (!is.null(cl)) {
+      if (owns_cluster && !is.null(cl)) {
         try({
           parallel::stopCluster(cl)
           log_msg("Cluster stopped successfully")
         }, silent = TRUE)
       }
     }, add = TRUE)
+  } else {
+    log_msg("Running sequentially (n_cores = 1)")
+    cl <- NULL
+  }
 
-    .root_dir_val <- root_dir
-    parallel::clusterExport(cl, varlist = c(".root_dir_val"), envir = environment())
-
-    parallel::clusterEvalQ(cl, {
-      # Set library path for VM user installation
-      .libPaths(c('~/R/library', .libPaths()))
-
-      library(MOSAIC)
-      library(reticulate)
-      library(arrow)
-
-      # CRITICAL: Limit each worker to single-threaded operations
-      # Without this, each worker spawns multiple threads → severe oversubscription
-      # Example: 16 workers × 8 BLAS threads = 128 total threads (worse than single-threaded!)
-      # This ensures: 16 workers × 1 thread each = 16 threads (optimal)
-
-      # BLAS threading (linear algebra operations)
-      MOSAIC:::.mosaic_set_blas_threads(1L)
-
-      # TBB/Numba threading (Python JIT compiler used by laser-cholera)
-      Sys.setenv(
-        TBB_NUM_THREADS = "1",
-        NUMBA_NUM_THREADS = "1",
-        OMP_NUM_THREADS = "1",
-        MKL_NUM_THREADS = "1",
-        OPENBLAS_NUM_THREADS = "1"
-      )
-
-      set_root_directory(.root_dir_val)
-      PATHS <- get_paths()
-
-      # Import laser-cholera ONCE per worker (not per simulation)
-      # This avoids repeated import overhead (~5ms per simulation)
-      lc <- reticulate::import("laser.cholera.metapop.model")
-      assign("lc", lc, envir = .GlobalEnv)  # Store in global for worker function
-
-      # Suppress NumPy warnings
-      warnings_py <- reticulate::import("warnings")
-      warnings_py$filterwarnings("ignore", message = "invalid value encountered in divide")
-      NULL
-    })
-
-    # Extract likelihood settings once (avoids shipping full control to workers)
+  # Export per-run data to workers (needed every run, even with reused cluster)
+  if (!is.null(cl)) {
     likelihood_settings <- control$likelihood
     io_settings <- control$io
 
@@ -733,11 +699,9 @@ run_MOSAIC <- function(config,
         "likelihood_settings", "io_settings"),
       envir = environment())
 
-    # Create worker function on each worker using exported variables
-    # This avoids anonymous function closure serialization overhead
+    # Install worker function using the exported per-run variables
     parallel::clusterCall(cl, function() {
       assign(".run_sim_worker", function(sim_id) {
-        # Use ::: to access internal function from MOSAIC namespace in PSOCK workers
         MOSAIC:::.mosaic_run_simulation_worker(
           sim_id = sim_id,
           n_iterations = n_iterations,
@@ -754,9 +718,6 @@ run_MOSAIC <- function(config,
       }, envir = .GlobalEnv)
       NULL
     })
-  } else {
-    log_msg("Running sequentially (n_cores = 1)")
-    cl <- NULL
   }
 
   # ===========================================================================
@@ -959,9 +920,10 @@ run_MOSAIC <- function(config,
     }
   }
 
-  # Stop cluster if it was created
-  if (!is.null(cl)) {
+  # Stop cluster only if we created it (not if caller provided it)
+  if (owns_cluster && !is.null(cl)) {
     parallel::stopCluster(cl)
+    cl <- NULL
   }
 
   # ===========================================================================
