@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "13.1",
+          version = "13.2",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -513,27 +513,45 @@ priors_default$parameters_global$delta_reporting_deaths <- list(
 #---------------------------------------------------
 
 # beta_j0_tot - Total base transmission rate (human + environmental)
-# Fit Gompertz distribution for beta_j0_tot
-beta_j0_tot_fit <- fit_gompertz_from_ci(
-     mode_val = 1e-6,        # Very low baseline transmission rate
-     ci_lower = 1e-8,        # Near-zero lower bound
-     ci_upper = 1e-4,        # Upper bound allows for higher transmission scenarios
-     probs = c(0.025, 0.975),
-     verbose = TRUE
-)
+#
+# Switched from Gompertz to Lognormal. Rationale:
+#   - The Gompertz fit was insensitive to the mode_val argument: the shape was
+#     driven entirely by (ci_lower, ci_upper), and the intended ci_lower=1e-8
+#     could not be achieved (actual Q2.5 = 6.93e-7, 100x off).
+#   - Raising ci_upper in the Gompertz shifted the ENTIRE distribution upward,
+#     inflating the prior median from 1.89e-5 to 3.80e-5 — too aggressive.
+#   - Lognormal allows independent control of the median (via meanlog) and the
+#     spread (via sdlog), so the upper tail can be extended without moving the
+#     prior center.
+#
+# Design: median = 2e-5, Q97.5 = 2e-4
+#   meanlog = log(2e-5) = -10.8198
+#   sdlog   = (log(2e-4) - log(2e-5)) / qnorm(0.975) = log(10) / 1.96 = 1.1748
+#
+# This gives:
+#   Q10  = 4.4e-6  Q50 = 2.0e-5  Q90 = 9.0e-5  Q97.5 = 2.0e-4
+#   P(beta_j0_env > 5e-5) = 13%  (was 6% with Gompertz)
+#   P(beta_j0_env > 1e-4) = 4%   (was <1% with Gompertz)
+#   Fraction of samples below 3e-5 (MOZ-optimal range) = 64% (was 67%)
+#
+# The extended upper tail allows exploration of dominant-waterborne settings
+# across the 40-country SSA ensemble without over-inflating the space for
+# typical endemic settings.
+
+beta_j0_tot_meanlog <- log(2e-5)
+beta_j0_tot_sdlog   <- (log(2e-4) - log(2e-5)) / qnorm(0.975)
 
 priors_default$parameters_location$beta_j0_tot <- list(
-     description = "Total base transmission rate (human + environmental)",
+     description = "Total base transmission rate (human + environmental); lognormal with median=2e-5 and Q97.5=2e-4",
      location = list()
 )
 
 for (iso in j) {
-     # Use the same Gompertz parameters for all locations
      priors_default$parameters_location$beta_j0_tot$location[[iso]] <- list(
-          distribution = "gompertz",
+          distribution = "lognormal",
           parameters = list(
-               b = beta_j0_tot_fit$b,
-               eta = beta_j0_tot_fit$eta
+               meanlog = beta_j0_tot_meanlog,
+               sdlog   = beta_j0_tot_sdlog
           )
      )
 }
