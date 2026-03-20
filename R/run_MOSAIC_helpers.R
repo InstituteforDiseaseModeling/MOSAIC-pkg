@@ -387,7 +387,7 @@
 
 #' Ensure Directory Tree Exists
 #' @noRd
-.mosaic_ensure_dir_tree <- function(dir_output, run_npe, clean_output) {
+.mosaic_ensure_dir_tree <- function(dir_output, clean_output) {
   d <- list(
     root = dir_output,
     env = file.path(dir_output, "0_environment"),
@@ -404,16 +404,6 @@
     bfrs_plots_pred = file.path(dir_output, "1_bfrs/plots/predictions"),
     results = file.path(dir_output, "3_results")
   )
-
-  # Only create NPE-specific directories when NPE is enabled
-  if (run_npe) {
-    d$bfrs_times    <- file.path(dir_output, "1_bfrs/outputs/timeseries")
-    d$npe           <- file.path(dir_output, "2_npe")
-    d$npe_model     <- file.path(dir_output, "2_npe/model")
-    d$npe_posterior <- file.path(dir_output, "2_npe/posterior")
-    d$npe_diagnostics <- file.path(dir_output, "2_npe/diagnostics")
-    d$npe_plots     <- file.path(dir_output, "2_npe/plots")
-  }
 
   if (clean_output && dir.exists(d$root)) {
     message("Cleaning output directory: ", d$root)

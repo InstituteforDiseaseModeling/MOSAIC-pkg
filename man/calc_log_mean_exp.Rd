@@ -46,7 +46,4 @@ calc_log_mean_exp(c())           # Returns NA
 calc_log_mean_exp(c(-Inf, NA))   # Returns NA
 
 }
-\seealso{
-calc_model_collapse_iterations which uses this for likelihood aggregation
-}
 \concept{utility-functions}

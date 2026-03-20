@@ -18,7 +18,7 @@ plot_model_fit_stochastic(
 }
 \arguments{
 \item{config}{A configuration list/object as produced by sample_parameters().
-Must contain all necessary parameters for running laser_cholera model including:
+Must contain all necessary parameters for running laser.cholera model including:
 \itemize{
 \item reported_cases - observed cases data
 \item reported_deaths - observed deaths data

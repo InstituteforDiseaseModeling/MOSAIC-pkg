@@ -10,7 +10,6 @@ mosaic_control_defaults(
   likelihood = NULL,
   targets = NULL,
   fine_tuning = NULL,
-  npe = NULL,
   predictions = NULL,
   weights = NULL,
   parallel = NULL,
@@ -73,22 +72,6 @@ mosaic_control_defaults(
 \item \code{batch_sizes}: Named list with massive, large, standard, precision, final
 }}
 
-\item{npe}{List of NPE settings (post-calibration stage). Default is:
-\itemize{
-\item \code{enable}: Enable NPE training (default: FALSE)
-\item \code{weight_strategy}: Weight strategy: "continuous_best", "continuous_retained", "continuous_all", "binary_best", "binary_retained", "binary_all" (default: "continuous_best")
-\item \code{architecture_tier}: Architecture size: "auto", "minimal", "small", "medium", "large", "xlarge" (default: "auto")
-\item \code{n_epochs}: Maximum training epochs (default: 1000)
-\item \code{batch_size}: Training batch size (default: 512)
-\item \code{learning_rate}: Initial learning rate (default: 1e-3)
-\item \code{validation_split}: Proportion for validation (default: 0.15)
-\item \code{early_stopping}: Enable early stopping (default: TRUE)
-\item \code{patience}: Early stopping patience in epochs (default: 20)
-\item \code{use_gpu}: Use GPU if available (default: TRUE)
-\item \code{seed}: Random seed for reproducibility (default: 42)
-\item \code{n_posterior_samples}: Number of posterior samples to draw (default: 10000)
-}}
-
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
 \item \code{best_model_n_sims}: Stochastic runs for best model (default: 100L)
@@ -133,7 +116,6 @@ calibration strategy, parameter sampling, parallelization, and output options.
 \item \code{likelihood}: How to score model fit (likelihood components and weights)
 \item \code{targets}: When to stop (ESS convergence thresholds)
 \item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
-\item \code{npe}: Post-calibration stage (neural posterior estimation)
 \item \code{parallel}: Infrastructure (cores, cluster type)
 \item \code{io}: Output format (file format, compression)
 \item \code{paths}: File management (output directories, plots)
@@ -202,7 +184,6 @@ ctrl <- mosaic_control_defaults(
   likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
-  npe = list(enable = TRUE, weight_strategy = "best_subset"),      # Post-calibration
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format
   paths = list(clean_output = FALSE, plots = TRUE)                 # File management

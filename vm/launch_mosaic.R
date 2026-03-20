@@ -4,7 +4,7 @@
 # VM-compatible script for production-level Ethiopia calibration
 # - High ESS convergence targets (1000 per param, 99% convergence)
 # - 5 iterations with adaptive batch sizing
-# - NPE enabled for posterior inference
+# - BFRS calibration with adaptive convergence
 # ==============================================================================
 #
 # ONE-LINE SETUP AND RUN:
@@ -31,7 +31,7 @@ if (!dir.exists(dir_output)) dir.create(dir_output, recursive = TRUE)
 set_root_directory("~/MOSAIC")
 
 cat("==============================================================================\n")
-cat("MOSAIC ETH Production Calibration\n")
+cat("MOSAIC Production Calibration\n")
 cat("==============================================================================\n")
 cat("Start time:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("Output directory:", dir_output, "\n")
@@ -88,15 +88,6 @@ control$likelihood$weight_deaths <- 0.05
 control$predictions$best_model_n_sims <- 100
 control$predictions$ensemble_n_sims_per_param <- 10
 
-control$npe$enable <- FALSE
-control$npe$architecture_tier <- 'minimal'
-control$npe$weight_strategy <- "binary_retained"
-control$npe$learning_rate <- 0.0001
-control$npe$validation_split <- 0.2
-control$npe$patience <- 10
-control$npe$n_posterior_samples <- 1000
-control$npe$use_gpu <- FALSE
-
 control$paths$clean_output <- TRUE
 control$io <- mosaic_io_presets("fast")
 
@@ -108,8 +99,7 @@ result <- run_MOSAIC(
      dir_output = dir_output,
      config = config,
      priors = priors,
-     control = control,
-     resume = TRUE
+     control = control
 )
 
 
@@ -120,7 +110,7 @@ end_time <- Sys.time()
 runtime <- difftime(end_time, start_time, units = "hours")
 
 cat("\n==============================================================================\n")
-cat("MOSAIC ETH Calibration Complete\n")
+cat("MOSAIC Calibration Complete\n")
 cat("==============================================================================\n")
 cat("End time:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n")
 cat("Total runtime:", round(runtime, 2), "hours\n")
@@ -210,37 +200,4 @@ if (!dir.exists(dir_output)) {
 
 cat("==============================================================================\n")
 
-# ==============================================================================
-# OPTIONAL: Run NPE Post-Hoc (Standalone Mode)
-# ==============================================================================
-# If you ran MOSAIC without NPE enabled, you can run NPE later without
-# re-running the expensive BFRS calibration:
-#
-# # Example 1: Run NPE with default settings
-# npe_result <- run_NPE(
-#   input_dir = dir_output,
-#   verbose = TRUE
-# )
-#
-# # Example 2: Experiment with different NPE weight strategies
-# npe_best <- run_NPE(
-#   input_dir = dir_output,
-#   output_dir = file.path(dir_output, "2_npe_strategy_best"),
-#   control = mosaic_control_defaults(
-#     npe = list(weight_strategy = "continuous_best")
-#   )
-# )
-#
-# npe_retained <- run_NPE(
-#   input_dir = dir_output,
-#   output_dir = file.path(dir_output, "2_npe_strategy_retained"),
-#   control = mosaic_control_defaults(
-#     npe = list(weight_strategy = "continuous_retained")
-#   )
-# )
-#
-# # Compare different strategies
-# cat("NPE Best Strategy ESS:", npe_best$npe_summary$n_posterior_samples, "\n")
-# cat("NPE Retained Strategy ESS:", npe_retained$npe_summary$n_posterior_samples, "\n")
-# ==============================================================================
 

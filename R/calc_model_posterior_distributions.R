@@ -22,7 +22,7 @@
 #'
 #' @details
 #' The function:
-#' 1. Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles or est_npe_posterior
+#' 1. Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles
 #' 2. Processes all quantile rows in the file (user controls what to include)
 #' 3. Loads the priors.json as a template structure
 #' 4. For each posterior parameter in the quantiles table:

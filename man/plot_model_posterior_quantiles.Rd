@@ -13,7 +13,7 @@ plot_model_posterior_quantiles(
 }
 \arguments{
 \item{csv_files}{Character vector of paths to posterior_quantiles.csv files
-from calc_model_posterior_quantiles(), estimate_parameters_npe(), or estimate_parameters_lampe()}
+from calc_model_posterior_quantiles()}
 
 \item{output_dir}{Directory to save plots (default: "./figures")}
 
@@ -26,7 +26,7 @@ from calc_model_posterior_quantiles(), estimate_parameters_npe(), or estimate_pa
 List of ggplot objects (invisibly)
 }
 \description{
-Creates visualizations of posterior parameter quantiles from calibration or NPE results.
+Creates visualizations of posterior parameter quantiles from calibration results.
 Generates both global parameter plots and location-specific parameter plots.
 Supports comparison of multiple posterior sources.
 }
@@ -39,8 +39,6 @@ The function creates:
 \itemize{
 \item Prior samples (dark grey)
 \item Calibration posterior (blue)
-\item NPE estimates (red/orange)
-\item Lampe estimates (bright red)
 \item Other types (automatically assigned from color palette)
 }
 \item Supports comparison of any number of estimation types
@@ -56,7 +54,7 @@ plot_model_posterior_quantiles("posterior_quantiles.csv")
 
 # Compare multiple sources
 plot_model_posterior_quantiles(
-  csv_files = c("bfrs_quantiles.csv", "npe_quantiles.csv"),
+  csv_files = c("bfrs_quantiles.csv", "other_quantiles.csv"),
   output_dir = "./comparison_plots"
 )
 }

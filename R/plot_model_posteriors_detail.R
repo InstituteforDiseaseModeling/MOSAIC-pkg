@@ -136,7 +136,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
   output_subdir <- output_dir
 
   # Get unique parameters from quantiles (only posteriors have KL values)
-  posterior_types <- c("posterior", "npe", "bfrs")
+  posterior_types <- c("posterior", "bfrs")
   params_with_posteriors <- quantiles_df %>%
     dplyr::filter(type %in% posterior_types, !is.na(kl)) %>%
     dplyr::pull(parameter) %>%
@@ -361,7 +361,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Get quantiles and KL from the quantiles_df
     param_data <- quantiles_df %>% dplyr::filter(parameter == param_name)
-    posterior_types <- c("posterior", "npe", "bfrs")
+    posterior_types <- c("posterior", "bfrs")
     posterior_data <- param_data %>% dplyr::filter(type %in% posterior_types)
     prior_data <- param_data %>% dplyr::filter(type == "prior")
 

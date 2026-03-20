@@ -21,7 +21,7 @@
 #' }
 #'
 #' @param PATHS MOSAIC paths object from \code{get_paths()}.
-#' @param results Data frame with columns: sim, seed, likelihood (and optionally others).
+#' @param results Data frame with required columns: sim, likelihood. Optional: seed_sim (used as reproducibility seed in output; falls back to sim if absent).
 #' @param output_dir Character string specifying directory to write output files.
 #' @param delta_max Numeric Δ cutoff used for truncation (default \code{6}).
 #' @param temperature Positive scalar temperature for weight scaling (default \code{1}).
@@ -102,9 +102,12 @@ calc_model_convergence <- function(PATHS,
 
     # Extract likelihood data
     loglik <- results$likelihood
-    seeds <- results$sim
     n_total <- length(loglik)
     n_successful <- sum(is.finite(loglik))
+
+    if (n_successful == 0) {
+        stop("All likelihoods are non-finite; cannot compute convergence diagnostics")
+    }
 
     if (verbose) {
         message("Processing convergence diagnostics for ", n_total, " simulations")
@@ -129,20 +132,13 @@ calc_model_convergence <- function(PATHS,
     targets <- c(ESS_min = ess_min, A_min = A_min, CVw_max = cvw_max,
                  B_min = B_min, max_w_max = max_w_max)
 
-    pass <- c(
-        ESS    = is.finite(ESS)   && ESS   >= ess_min,
-        A      = is.finite(ag$A)  && ag$A  >= A_min,
-        CVw    = is.finite(CVw)   && CVw   <= cvw_max,
-        B_size = ag$B_size        >= B_min,
-        max_w  = is.finite(max_w) && max_w <= max_w_max
-    )
-
+    # Status uses user-supplied thresholds only; "warn" at 50% of target, "fail" below
     status <- c(
-        ESS    = if (!is.finite(ESS)) "fail" else if (ESS < 500) "fail" else if (ESS < ess_min) "warn" else "pass",
-        A      = if (!is.finite(ag$A)) "fail" else if (ag$A < 0.5) "fail" else if (ag$A < A_min) "warn" else "pass",
+        ESS    = if (!is.finite(ESS)) "fail" else if (ESS < ess_min * 0.5) "fail" else if (ESS < ess_min) "warn" else "pass",
+        A      = if (!is.finite(ag$A)) "fail" else if (ag$A < A_min * 0.5) "fail" else if (ag$A < A_min) "warn" else "pass",
         CVw    = if (!is.finite(CVw)) "fail" else if (CVw > 2 * cvw_max) "fail" else if (CVw > cvw_max) "warn" else "pass",
         B_size = if (ag$B_size < 1) "fail" else if (ag$B_size < B_min) "warn" else "pass",
-        max_w  = if (!is.finite(max_w)) "fail" else if (max_w > 0.9) "fail" else if (max_w > max_w_max) "warn" else "pass"
+        max_w  = if (!is.finite(max_w)) "fail" else if (max_w > (1 + max_w_max) / 2) "fail" else if (max_w > max_w_max) "warn" else "pass"
     )
 
     n_retained <- sum(weights$retained)
@@ -160,9 +156,12 @@ calc_model_convergence <- function(PATHS,
     # Create results data frame for Parquet export
     # ============================================================================
 
+    # Prefer seed_sim (parameter reproducibility seed) when available, fall back to sim
+    seed_col <- if ("seed_sim" %in% names(results)) results$seed_sim else results$sim
+
     results_df <- data.frame(
         sim = results$sim,
-        seed = results$sim,
+        seed = seed_col,
         likelihood = loglik,
         aic = -2 * loglik,
         delta_aic = delta,

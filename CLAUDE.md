@@ -715,6 +715,62 @@ Functions follow strict prefixes indicating their purpose:
 - `remove_MOSAIC_python_env.R` - Cleanup for troubleshooting
 - `check_python_env.R`, `lock_python_env.R`, `get_python_paths.R`
 
+## Color Palette Framework
+
+The MOSAIC package includes a comprehensive color system in `R/mosaic_colors.R`. **All new plotting code should use this framework instead of hardcoded hex colors.**
+
+### Anchor Color
+Primary MOSAIC blue: `#0167AF`. This is the identity color for fitted model trajectories, cases, and posteriors.
+
+### Quick Usage
+```r
+# Semantic colors (use these for all recurring quantities)
+mosaic_colors("cases")                    # "#0167AF"
+mosaic_colors("deaths")                   # "#B5123B"
+mosaic_colors("data")                     # "#2D2D2D" (observed data, near-black)
+mosaic_colors("environmental")            # "#009988" (teal)
+mosaic_colors("vaccination")              # "#228833" (green)
+mosaic_colors("reference")               # "#888888" (gray, priors, baselines)
+mosaic_colors("compartments")             # S/E/I/R/V1/V2/W colors
+mosaic_colors("calibration")              # Prior (gray) + Posterior (blue)
+
+# Uncertainty ribbons (derived from point estimate color, NOT standalone)
+mosaic_pal_uncertainty("#0167AF")          # 50%/75%/95% graduated blues
+mosaic_pal_uncertainty("#B5123B")          # 50%/75%/95% graduated reds
+
+# Palettes for categories, maps, scenarios
+mosaic_pal_discrete(7)                    # 7 CVD-safe qualitative colors
+mosaic_pal_sequential(9, "blues")         # Sequential for maps
+mosaic_pal_diverging(11, "blue_red")      # Diverging for residuals
+mosaic_pal_scenarios(5)                   # Scenario comparison (baseline always blue)
+mosaic_pal_countries()                    # 40 SSA countries by region
+
+# ggplot2 integration
+scale_color_mosaic_d()                    # Discrete color scale
+scale_fill_mosaic_c("heat")              # Continuous fill scale
+scale_fill_mosaic_div("blue_red")        # Diverging fill scale
+scale_color_mosaic_scenario()            # Scenario color scale
+theme_mosaic()                           # Publication theme
+```
+
+### Key Design Rules
+- **`data`** color (#2D2D2D near-black) for all observed data points
+- **Prior = gray (#888888), Posterior = MOSAIC blue (#0167AF)** — only two calibration colors
+- **Uncertainty is NEVER a standalone color** — always use `mosaic_pal_uncertainty(base_color)` to derive graduated ribbons from the point estimate color
+- **Standard uncertainty levels: 50%, 75%, 95%**
+- **Scenarios always lead with baseline = MOSAIC blue** in position 1
+- **SEIR compartments**: S=muted blue, E=orange, I=red, R=gold/tan, V1=light green, V2=dark green, W=teal
+- **For 40 countries**: use `mosaic_pal_countries()` (region-grouped HCL) or facet with single color
+
+### Available Sequential Palettes
+`"blues"`, `"reds"`, `"greens"`, `"teals"`, `"heat"`, `"grays"`
+
+### Available Diverging Palettes
+`"blue_red"` (default), `"blue_orange"` (CVD-safest), `"green_purple"`
+
+### Parameter Group Colors
+Transmission=#0167AF, Disease Progression=#EE7733, Vaccination=#228833, Environmental=#009988, Observation=#888888, Mobility=#CCBB44, Seasonality=#66CCEE, Suitability=#AA3377
+
 ## Key Data Objects
 
 ### Package Data (`data/*.rda` - 17 files)

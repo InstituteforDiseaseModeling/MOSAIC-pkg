@@ -67,7 +67,6 @@ control_ETH$likelihood$weight_deaths <- 0.05
 control_ETH$predictions$best_model_n_sims <- 30
 control_ETH$predictions$ensemble_n_sims_per_param <- 5
 
-control_ETH$npe$enable <- FALSE
 
 control_ETH$paths$clean_output <- TRUE
 control_ETH$io <- mosaic_io_presets("fast")
@@ -128,7 +127,6 @@ control_ETH$likelihood$weight_deaths <- 0.05
 control_ETH$predictions$best_model_n_sims <- 30
 control_ETH$predictions$ensemble_n_sims_per_param <- 5
 
-control_ETH$npe$enable <- FALSE
 
 control_ETH$paths$clean_output <- TRUE
 control_ETH$io <- mosaic_io_presets("fast")
@@ -188,8 +186,6 @@ control$likelihood$weight_deaths <- 0.05
 
 control$predictions$best_model_n_sims <- 50
 control$predictions$ensemble_n_sims_per_param <- 10
-
-control$npe$enable <- FALSE
 
 control$paths$clean_output <- TRUE
 control$io <- mosaic_io_presets("fast")

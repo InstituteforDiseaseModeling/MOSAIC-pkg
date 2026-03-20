@@ -5,9 +5,9 @@
 \alias{run_mosaic}
 \title{Run MOSAIC Calibration Workflow}
 \usage{
-run_MOSAIC(config, priors, dir_output, control = NULL, resume = FALSE)
+run_MOSAIC(config, priors, dir_output, control = NULL)
 
-run_mosaic(config, priors, dir_output, control = NULL, resume = FALSE)
+run_mosaic(config, priors, dir_output, control = NULL)
 }
 \arguments{
 \item{config}{Named list of LASER model configuration (REQUIRED). Contains location_name,
@@ -30,8 +30,6 @@ Key settings:
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
 }}
-
-\item{resume}{Logical. If \code{TRUE}, continues from existing checkpoint. Default: FALSE.}
 }
 \value{
 Invisibly returns a list with:
@@ -56,10 +54,9 @@ Executes the full MOSAIC calibration workflow:
 \item Adaptive calibration with R² convergence detection
 \item Single predictive batch (calculated from calibration phase)
 \item Adaptive fine-tuning with 5-tier batch sizing
-\item Post-hoc subset optimization for NPE priors
+\item Post-hoc subset optimization
 \item Posterior quantile and distribution estimation
 \item Posterior predictive checks and uncertainty quantification
-\item Optional: Neural Posterior Estimation (NPE) stage
 }
 }
 \section{Control Structure}{
@@ -71,7 +68,6 @@ See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for comple
 \item{parallel}{enable, n_cores, type, progress}
 \item{paths}{clean_output, plots}
 \item{targets}{ESS_param, ESS_best, A_best, CVw_best, etc.}
-\item{npe}{enable, weight_strategy}
 \item{io}{format, compression, compression_level}
 }
 }
@@ -85,7 +81,6 @@ Results are organized in a structured directory tree:
 \item \code{1_bfrs/diagnostics/}: ESS metrics, convergence results
 \item \code{1_bfrs/posterior/}: Posterior quantiles and distributions
 \item \code{1_bfrs/plots/}: Diagnostic, parameter, and prediction plots
-\item \code{2_npe/}: Neural Posterior Estimation results (if enabled)
 \item \code{3_results/}: Final combined results
 }
 }

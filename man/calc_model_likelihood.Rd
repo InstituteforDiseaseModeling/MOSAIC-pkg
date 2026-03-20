@@ -41,7 +41,8 @@ calc_model_likelihood(
   negative_correlation_threshold = 0,
   max_timestep_ratio = 100,
   min_timestep_ratio = 0.01,
-  min_obs_for_ratio = 1
+  min_obs_for_ratio = 1,
+  min_obs_for_ratio_deaths = 10
 )
 }
 \arguments{
@@ -106,7 +107,13 @@ Automatically scaled by sqrt(100/max(peak_obs,100)) to allow more variance for s
 
 \item{min_timestep_ratio}{Minimum ratio of estimated to observed per timestep (default \code{0.01}).}
 
-\item{min_obs_for_ratio}{Minimum observed value to apply ratio checks (default \code{1}).}
+\item{min_obs_for_ratio}{Minimum observed value to apply per-timestep ratio checks
+for cases (default \code{1}).}
+
+\item{min_obs_for_ratio_deaths}{Minimum observed value to apply per-timestep ratio
+checks for deaths (default \code{10}). Higher than cases because death data is
+typically sparse, and a single timestep with 1-2 observed deaths should not floor
+the entire likelihood on a slight overprediction.}
 }
 \value{
 Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.

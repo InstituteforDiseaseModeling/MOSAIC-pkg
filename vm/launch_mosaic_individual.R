@@ -49,9 +49,9 @@
 .libPaths(c('~/R/library', .libPaths()))
 
 # Load required packages
-suppressPackageStartupMessages({
-  library(MOSAIC)
-})
+
+library(MOSAIC)
+
 
 # Attach MOSAIC environment
 MOSAIC::attach_mosaic_env(silent = TRUE)
@@ -69,7 +69,8 @@ OUTPUT_BASE <- path.expand("~/MOSAIC/output/individual")
 # Countries to calibrate (default: all 40 countries in iso_codes_mosaic)
 # To run subset, specify manually: COUNTRIES <- c("ETH", "KEN", "TZA")
 data(iso_codes_mosaic)
-COUNTRIES <- iso_codes_mosaic
+#COUNTRIES <- iso_codes_mosaic[which(iso_codes_mosaic == 'CMR'):length(iso_codes_mosaic)]
+COUNTRIES <- c('ZMB', 'ZWE')
 
 # Resume behavior
 SKIP_COMPLETED <- TRUE  # Skip countries with existing complete output
@@ -89,7 +90,7 @@ CONTROL_SETTINGS <- list(
   min_batches = 5,              # Minimum batches before convergence check
   max_batches = 10,             # Maximum batches
   target_r2 = 0.95,             # R? convergence threshold
-  max_simulations = 1e6,        # Safety limit
+  max_simulations = 50000,        # Safety limit
 
   # Targets
   ESS_param = 1000,             # Target ESS per parameter
@@ -109,9 +110,6 @@ CONTROL_SETTINGS <- list(
   # Predictions
   best_model_n_sims = 100,      # Simulations for best-fit model
   ensemble_n_sims_per_param = 10,  # Simulations per parameter set
-
-  # NPE settings
-  npe_enable = FALSE,           # Enable Neural Posterior Estimation
 
   # Parallel
   use_parallel = TRUE,          # Enable parallel execution
@@ -224,7 +222,6 @@ header <- paste0(
           CONTROL_SETTINGS$n_cores),
   sprintf("Skip completed: %s\n", ifelse(SKIP_COMPLETED, "YES", "NO")),
   sprintf("Force rerun: %s\n", ifelse(FORCE_RERUN, "YES", "NO")),
-  sprintf("NPE enabled: %s\n", ifelse(CONTROL_SETTINGS$npe_enable, "YES", "NO")),
   "==============================================================================\n\n"
 )
 log_message(header, master_log_file)
@@ -335,16 +332,6 @@ for (i in seq_along(COUNTRIES)) {
     control$predictions$best_model_n_sims <- CONTROL_SETTINGS$best_model_n_sims
     control$predictions$ensemble_n_sims_per_param <- CONTROL_SETTINGS$ensemble_n_sims_per_param
 
-    # NPE settings
-    control$npe$enable <- CONTROL_SETTINGS$npe_enable
-    control$npe$architecture_tier <- CONTROL_SETTINGS$npe_architecture
-    control$npe$weight_strategy <- CONTROL_SETTINGS$npe_weight_strategy
-    control$npe$learning_rate <- CONTROL_SETTINGS$npe_learning_rate
-    control$npe$validation_split <- CONTROL_SETTINGS$npe_validation_split
-    control$npe$patience <- CONTROL_SETTINGS$npe_patience
-    control$npe$n_posterior_samples <- CONTROL_SETTINGS$npe_n_posterior_samples
-    control$npe$use_gpu <- CONTROL_SETTINGS$npe_use_gpu
-
     # I/O and paths
     control$paths$clean_output <- CONTROL_SETTINGS$clean_output
     control$io <- mosaic_io_presets(CONTROL_SETTINGS$io_preset)
@@ -356,8 +343,7 @@ for (i in seq_along(COUNTRIES)) {
       dir_output = dir_output,
       config = config,
       priors = priors,
-      control = control,
-      resume = TRUE
+      control = control
     )
 
     log_message("   Calibration completed successfully\n", master_log_file)

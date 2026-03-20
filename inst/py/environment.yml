@@ -1,6 +1,5 @@
 name: mosaic-conda-env
 channels:
-  - pytorch                # Official PyTorch channel for GPU support
   - conda-forge
   - defaults
 dependencies:
@@ -12,14 +11,8 @@ dependencies:
   - numba=0.60.0           # Python 3.12 support added in 0.59.0 (was 0.58.1)
   - llvmlite=0.43.0        # Required by numba 0.60 (was 0.41.1)
   - packaging=24.0         # Python dependency management
-  # Neural Posterior Estimation (NPE) dependencies
-  - pytorch::pytorch=2.4.0 # Python 3.12 support added in 2.2.0 (was 2.1.2)
-  - scikit-learn=1.4.2     # Python 3.12 compatible (was 1.3.2)
   - pip:
-      - "numpy<2"          # Prevent pip deps (sbi->arviz->pandas) from upgrading to numpy 2.x
+      - "numpy<2"          # Prevent pip deps from upgrading to numpy 2.x
       - tensorflow>=2.16.0 # Via pip to avoid conda libabseil conflict with pyarrow; 2.16+ required by keras3 R package
-      - sbi==0.22.0        # Pinned to avoid numpy 2.x dependency
-      - lampe==0.9.0       # Compatible with zuko 1.3.0 (0.8.0 has FlowModule import error)
-      - zuko==1.3.0        # Pinned to avoid numpy 2.x dependency
       - laser-core==1.0.1
       - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.11.1/laser_cholera-0.11.1-py3-none-any.whl

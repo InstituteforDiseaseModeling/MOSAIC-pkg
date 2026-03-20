@@ -13,3 +13,8 @@ claude/
 *.Rcheck/
 ..Rcheck/
 sbi-logs/
+vignettes/cache/
+vignettes/figures/
+vignettes/articles/cache/
+vignettes/articles/figures/
+model/scenarios/

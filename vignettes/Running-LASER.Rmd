@@ -40,6 +40,13 @@ MOSAIC includes pre-configured parameter sets for different transmission scenari
 
 The epidemic configuration simulates outbreak dynamics with explosive growth patterns typical of cholera epidemics.
 
+```{r}
+# Run endemic scenario
+config <- MOSAIC::config_simulation_endemic
+
+model_endemic <- run_LASER(config = config, seed = 123, quiet = FALSE)
+```
+
 ```{r epidemic-example, eval=TRUE, echo=TRUE}
 library(MOSAIC)
 

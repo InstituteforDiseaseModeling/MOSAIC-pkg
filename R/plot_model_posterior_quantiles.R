@@ -1,11 +1,11 @@
 #' Plot Model Posterior Quantiles
 #'
-#' Creates visualizations of posterior parameter quantiles from calibration or NPE results.
+#' Creates visualizations of posterior parameter quantiles from calibration results.
 #' Generates both global parameter plots and location-specific parameter plots.
 #' Supports comparison of multiple posterior sources.
 #'
 #' @param csv_files Character vector of paths to posterior_quantiles.csv files
-#'   from calc_model_posterior_quantiles(), estimate_parameters_npe(), or estimate_parameters_lampe()
+#'   from calc_model_posterior_quantiles()
 #' @param output_dir Directory to save plots (default: "./figures")
 #' @param plot_types Character vector specifying which plot types to create
 #'   ("global", "location", "both"). Default: "both"
@@ -20,8 +20,6 @@
 #' - Color-coded visualization by estimation type (automatically detected):
 #'   - Prior samples (dark grey)
 #'   - Calibration posterior (blue)
-#'   - NPE estimates (red/orange)
-#'   - Lampe estimates (bright red)
 #'   - Other types (automatically assigned from color palette)
 #' - Supports comparison of any number of estimation types
 #' - Dynamically adapts to whatever types are present in the data
@@ -35,7 +33,7 @@
 #'
 #' # Compare multiple sources
 #' plot_model_posterior_quantiles(
-#'   csv_files = c("bfrs_quantiles.csv", "npe_quantiles.csv"),
+#'   csv_files = c("bfrs_quantiles.csv", "other_quantiles.csv"),
 #'   output_dir = "./comparison_plots"
 #' )
 #' }
@@ -195,8 +193,7 @@ plot_model_posterior_quantiles <- function(csv_files,
         "prior" = "#4a4a4a",        # Dark gray (neutral baseline)
         "posterior" = "#1f77b4",    # Blue (BFRS/calibration)
         "bfrs" = "#1f77b4",         # Alternative naming for BFRS
-        "npe" = "#d00000",          # Red (neural posterior estimation)
-        "smc" = "#d00000"           # Red (sequential Monte Carlo - deprecated)
+        "other" = "#d00000"         # Red (additional methods)
     )
 
     # Assign colors
