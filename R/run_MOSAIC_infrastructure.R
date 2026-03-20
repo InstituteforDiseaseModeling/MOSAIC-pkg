@@ -446,6 +446,11 @@
 
   post_q <- utils::read.csv(pq_file, stringsAsFactors = FALSE)
 
+  # Filter to posterior rows only (file contains both prior and posterior rows)
+  if ("type" %in% names(post_q)) {
+    post_q <- post_q[post_q$type == "posterior", ]
+  }
+
   # Find the quantile columns
   # calc_model_posterior_quantiles() produces: q0.025, q0.25, q0.5, q0.75, q0.975
   q_cols <- names(post_q)
