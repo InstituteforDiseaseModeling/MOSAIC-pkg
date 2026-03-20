@@ -381,12 +381,28 @@
 
   # Read parameter ESS
   ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
-  ess_min_param <- if (file.exists(ess_file)) {
+  ess_stats <- list(
+    n_params = NA_integer_, n_above_target = NA_integer_,
+    pct_above_target = NA_real_, min_ess = NA_real_, median_ess = NA_real_,
+    target = NA_real_
+  )
+  if (file.exists(ess_file)) {
     ess_df <- utils::read.csv(ess_file, stringsAsFactors = FALSE)
     if ("ess_marginal" %in% names(ess_df)) {
-      min(ess_df$ess_marginal, na.rm = TRUE)
-    } else NA_real_
-  } else NA_real_
+      ess_vals <- ess_df$ess_marginal[is.finite(ess_df$ess_marginal)]
+      ess_target <- if (!is.null(diag$targets$ess_min$value)) {
+        as.numeric(diag$targets$ess_min$value)
+      } else 100  # fallback default
+      ess_stats$n_params <- length(ess_vals)
+      ess_stats$n_above_target <- sum(ess_vals >= ess_target)
+      ess_stats$pct_above_target <- if (length(ess_vals) > 0) {
+        round(100 * ess_stats$n_above_target / length(ess_vals), 1)
+      } else NA_real_
+      ess_stats$min_ess <- if (length(ess_vals) > 0) round(min(ess_vals), 1) else NA_real_
+      ess_stats$median_ess <- if (length(ess_vals) > 0) round(stats::median(ess_vals), 1) else NA_real_
+      ess_stats$target <- ess_target
+    }
+  }
 
   wall_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
@@ -403,13 +419,18 @@
     n_simulations_total        = state$total_sims_run,
     n_simulations_successful   = state$total_sims_successful,
     n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
-    n_best_subset              = if (!is.null(diag$summary$best_subset_simulations)) diag$summary$best_subset_simulations else NA_integer_,
+    n_best_subset              = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
     # Convergence and model fit
     converged     = isTRUE(state$converged),
     r2_cases      = if (!is.na(r2_cases)) round(r2_cases, 4) else NA_real_,
     r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
-    ess_overall   = if (!is.null(diag$metrics$ess_best$value)) diag$metrics$ess_best$value else NA_real_,
-    ess_min_param = if (is.finite(ess_min_param)) round(ess_min_param, 1) else NA_real_
+    # ESS summary
+    ess_n_params        = ess_stats$n_params,
+    ess_n_above_target  = ess_stats$n_above_target,
+    ess_pct_above_target = ess_stats$pct_above_target,
+    ess_target          = ess_stats$target,
+    ess_min             = ess_stats$min_ess,
+    ess_median          = ess_stats$median_ess
   )
 
   summary_path <- file.path(dirs$results, "summary.json")

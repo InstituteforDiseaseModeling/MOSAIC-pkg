@@ -1595,17 +1595,20 @@ run_MOSAIC <- function(config,
   log_msg("  Saved 3_results/summary.json")
 
   # Print human-readable summary to log
-  r2c_str   <- if (is.na(summary_obj$r2_cases))      "NA" else sprintf("%.4f", summary_obj$r2_cases)
-  r2d_str   <- if (is.na(summary_obj$r2_deaths))     "NA" else sprintf("%.4f", summary_obj$r2_deaths)
-  ess_o_str <- if (is.na(summary_obj$ess_overall))   "NA" else sprintf("%.1f",  summary_obj$ess_overall)
-  ess_p_str <- if (is.na(summary_obj$ess_min_param)) "NA" else sprintf("%.1f",  summary_obj$ess_min_param)
-  ret_str   <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
-  best_str  <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
+  r2c_str  <- if (is.na(summary_obj$r2_cases))  "NA" else sprintf("%.4f", summary_obj$r2_cases)
+  r2d_str  <- if (is.na(summary_obj$r2_deaths)) "NA" else sprintf("%.4f", summary_obj$r2_deaths)
+  ret_str  <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
+  best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
   log_msg("  Converged: %s | R2 cases: %s | R2 deaths: %s",
           if (isTRUE(summary_obj$converged)) "YES" else "NO", r2c_str, r2d_str)
-  log_msg("  ESS (overall / min param): %s / %s", ess_o_str, ess_p_str)
+  if (!is.na(summary_obj$ess_n_params)) {
+    log_msg("  ESS: %d/%d params (%.0f%%) above target %g (min: %.1f, median: %.1f)",
+            summary_obj$ess_n_above_target, summary_obj$ess_n_params,
+            summary_obj$ess_pct_above_target, summary_obj$ess_target,
+            summary_obj$ess_min, summary_obj$ess_median)
+  }
   log_msg("  Sims: %s total, %s retained, %s best subset",
           format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)
   log_msg("===================")
