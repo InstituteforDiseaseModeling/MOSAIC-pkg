@@ -1400,6 +1400,8 @@ check_sampled_parameter <- function(config_sampled, priors,
         result$expected_mean <- params$mean
       } else if (prior_info$distribution == "uniform") {
         result$expected_mean <- (params$min + params$max) / 2
+      } else if (prior_info$distribution %in% c("fixed", "frozen")) {
+        result$expected_mean <- params$value
       }
     }
 
@@ -1434,8 +1436,9 @@ check_sampled_parameter <- function(config_sampled, priors,
         } else if (loc_params$distribution == "uniform") {
           result$expected_mean <- (loc_params$parameters$min + loc_params$parameters$max) / 2
         } else if (loc_params$distribution == "gompertz") {
-          # For Gompertz, expected mean calculation would be more complex
           result$expected_mean <- NA
+        } else if (loc_params$distribution %in% c("fixed", "frozen")) {
+          result$expected_mean <- loc_params$parameters$value
         }
       }
     }

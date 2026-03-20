@@ -177,7 +177,8 @@ validate_priors_json <- function(priors_object, verbose = TRUE) {
 
         # Check if distribution is valid
         valid_dists <- c("beta", "gamma", "normal", "lognormal",
-                        "uniform", "gompertz", "truncnorm")
+                        "uniform", "gompertz", "truncnorm",
+                        "fixed", "frozen")
         if (!tolower(dist) %in% valid_dists) {
           stop(prefix, param_name, ": Invalid distribution '", dist, "'")
         }
@@ -193,7 +194,9 @@ validate_priors_json <- function(priors_object, verbose = TRUE) {
             lognormal = list(c("meanlog", "sdlog"), c("mean", "sd")),  # Either form
             uniform = c("min", "max"),
             gompertz = c("b", "eta"),
-            truncnorm = c("mean", "sd", "a", "b")
+            truncnorm = c("mean", "sd", "a", "b"),
+            fixed = c("value"),
+            frozen = c("value")
           )
 
           required_params <- required_params_map[[tolower(dist)]]

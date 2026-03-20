@@ -27,6 +27,8 @@
 #'   \item \strong{uniform}: parameters$min, parameters$max
 #'   \item \strong{discrete_uniform}: parameters$min, parameters$max (returns integers)
 #'   \item \strong{gompertz}: parameters$b, parameters$eta
+#'   \item \strong{fixed}: parameters$value (genuinely converged, returns constant)
+#'   \item \strong{frozen}: parameters$value (frozen in previous stage, returns constant)
 #' }
 #'
 #' @examples
@@ -211,10 +213,21 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
         }
       },
 
-      # Fixed value from posterior fitting (degenerate distribution with zero variance)
+      # Fixed value from posterior fitting (genuinely converged to zero variance)
       fixed = {
         if (!"value" %in% names(params)) {
           stop("Fixed distribution requires 'value' parameter")
+        }
+        rep(params$value, n)
+      },
+
+      # Frozen parameter (sampling flag was FALSE in the previous stage).
+      # Returns the constant value. update_priors_from_posteriors() normally
+      # replaces these with the original prior before they reach the sampler,
+      # but this case handles direct use of posteriors as priors.
+      frozen = {
+        if (!"value" %in% names(params)) {
+          stop("Frozen distribution requires 'value' parameter")
         }
         rep(params$value, n)
       },

@@ -106,7 +106,8 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
     truncnorm  = c("mean", "sd", "a", "b"),
     uniform    = c("min", "max"),
     gompertz   = c("b", "eta"),
-    fixed      = c("value")
+    fixed      = c("value"),
+    frozen     = c("value")
   )
 
   # ---------------------------------------------------------------------------
@@ -151,12 +152,13 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
         next
       }
 
-      # Failed posteriors: keep original prior
-      if (dist_type == "failed") {
+      # Failed or frozen posteriors: keep original prior
+      if (dist_type %in% c("failed", "frozen")) {
         n_failed_kept <- n_failed_kept + 1L
         failed_kept_params <- c(failed_kept_params, param_name)
+        reason <- if (dist_type == "frozen") "frozen in previous stage" else "posterior fitting failed"
         if (verbose) {
-          message("  [KEEP PRIOR] ", param_name, " (global): posterior fitting failed")
+          message("  [KEEP PRIOR] ", param_name, " (global): ", reason)
         }
         next
       }
@@ -176,7 +178,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   if (verbose) {
-    message(sprintf("Global: %d replaced, %d failed (kept prior), %d skipped",
+    message(sprintf("Global: %d replaced, %d kept (frozen/failed), %d skipped",
                     n_replaced, n_failed_kept, n_skipped))
   }
 
@@ -217,12 +219,13 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
           next
         }
 
-        # Failed posteriors: keep original prior
-        if (dist_type == "failed") {
+        # Failed or frozen posteriors: keep original prior
+        if (dist_type %in% c("failed", "frozen")) {
           n_loc_failed_kept <- n_loc_failed_kept + 1L
           loc_failed_kept_params <- c(loc_failed_kept_params, paste0(param_base, "_", iso))
+          reason <- if (dist_type == "frozen") "frozen in previous stage" else "posterior fitting failed"
           if (verbose) {
-            message("  [KEEP PRIOR] ", param_base, "_", iso, ": posterior fitting failed")
+            message("  [KEEP PRIOR] ", param_base, "_", iso, ": ", reason)
           }
           next
         }
@@ -245,7 +248,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   if (verbose) {
-    message(sprintf("Location: %d replaced, %d failed (kept prior), %d skipped",
+    message(sprintf("Location: %d replaced, %d kept (frozen/failed), %d skipped",
                     n_loc_replaced, n_loc_failed_kept, n_loc_skipped))
   }
 
@@ -378,22 +381,24 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
     }
   }
 
-  # Check no "failed" markers leaked through
+  # Check no "failed" or "frozen" markers leaked through
+  non_prior_types <- c("failed", "frozen")
   for (param_name in names(updated$parameters_global)) {
     entry <- updated$parameters_global[[param_name]]
-    if (is.list(entry) && identical(entry$distribution, "failed")) {
+    if (is.list(entry) && entry$distribution %in% non_prior_types) {
       errors <- c(errors, sprintf(
-        "Failed marker leaked into output: parameters_global$%s", param_name))
+        "%s marker leaked into output: parameters_global$%s",
+        entry$distribution, param_name))
     }
   }
   for (param_base in names(updated$parameters_location)) {
     locs <- updated$parameters_location[[param_base]]$location
     for (iso in names(locs)) {
       entry <- locs[[iso]]
-      if (is.list(entry) && identical(entry$distribution, "failed")) {
+      if (is.list(entry) && entry$distribution %in% non_prior_types) {
         errors <- c(errors, sprintf(
-          "Failed marker leaked into output: parameters_location$%s$location$%s",
-          param_base, iso))
+          "%s marker leaked into output: parameters_location$%s$location$%s",
+          entry$distribution, param_base, iso))
       }
     }
   }
