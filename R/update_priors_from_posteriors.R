@@ -109,14 +109,20 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   # ---------------------------------------------------------------------------
   updated <- priors
 
-  # Update metadata
+  # Update metadata — full provenance chain so that any downstream consumer
+
+  # can trace exactly which priors and posteriors were combined.
+  prior_id <- posteriors$metadata$source_priors %||%
+              priors$metadata$version %||%
+              "unknown"
+  posterior_id <- posteriors$metadata$source_quantiles %||%
+                  posteriors$metadata$date %||%
+                  "unknown"
+
   updated$metadata$description <- "Priors updated from posterior distributions (staged estimation)"
   updated$metadata$date <- as.character(Sys.Date())
-  updated$metadata$source_posteriors <- if (!is.null(posteriors$metadata$source_quantiles)) {
-    posteriors$metadata$source_quantiles
-  } else {
-    "posteriors object"
-  }
+  updated$metadata$source_priors <- prior_id
+  updated$metadata$source_posteriors <- posterior_id
 
   # ---------------------------------------------------------------------------
   # Merge global parameters
@@ -237,16 +243,23 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   # ---------------------------------------------------------------------------
-  # Validate output integrity
-  # ---------------------------------------------------------------------------
-  .validate_updated_priors(updated, priors, verbose = verbose)
-
-  # ---------------------------------------------------------------------------
-  # Summary
+  # Record merge counts in metadata for downstream audit
   # ---------------------------------------------------------------------------
   total_replaced <- n_replaced + n_loc_replaced
   total_failed <- n_failed_kept + n_loc_failed_kept
   all_failed_params <- c(failed_kept_params, loc_failed_kept_params)
+
+  updated$metadata$merge_summary <- list(
+    n_replaced        = total_replaced,
+    n_failed_kept     = total_failed,
+    n_skipped         = n_skipped + n_loc_skipped,
+    failed_parameters = if (total_failed > 0) all_failed_params else list()
+  )
+
+  # ---------------------------------------------------------------------------
+  # Validate output integrity
+  # ---------------------------------------------------------------------------
+  .validate_updated_priors(updated, priors, verbose = verbose)
 
   if (verbose) {
     message(sprintf("\nSummary: %d posteriors merged, %d failures reverted to prior, %d skipped",
