@@ -1454,6 +1454,25 @@ run_MOSAIC <- function(config,
   lc <- reticulate::import("laser.cholera.metapop.model")
   best_model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
+  # Compute overall model-fit R² (best model vs observed data)
+  r2_cases <- tryCatch({
+    obs <- as.numeric(unlist(config_best$reported_cases))
+    est <- as.numeric(unlist(best_model$results$reported_cases))
+    valid <- is.finite(obs) & is.finite(est)
+    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+  }, error = function(e) NA_real_)
+
+  r2_deaths <- tryCatch({
+    obs <- as.numeric(unlist(config_best$reported_deaths))
+    est <- as.numeric(unlist(best_model$results$disease_deaths))
+    valid <- is.finite(obs) & is.finite(est)
+    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+  }, error = function(e) NA_real_)
+
+  log_msg("Best model fit: R²(cases) = %.4f, R²(deaths) = %.4f",
+          ifelse(is.na(r2_cases), 0, r2_cases),
+          ifelse(is.na(r2_deaths), 0, r2_deaths))
+
   if (control$paths$plots) {
     log_msg("Generating posterior predictive plots (best model)...")
     plot_model_fit_stochastic(
@@ -1570,20 +1589,22 @@ run_MOSAIC <- function(config,
 
   # Summary JSON (machine-readable run summary)
   log_msg("Writing summary...")
-  summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config, control$io)
+  summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config,
+                                             r2_cases = r2_cases, r2_deaths = r2_deaths,
+                                             io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
   # Print human-readable summary to log
-  r2_str    <- if (is.na(summary_obj$r2_final))      "NA" else sprintf("%.4f", summary_obj$r2_final)
-  cvw_str   <- if (is.na(summary_obj$cvw_best))      "NA" else sprintf("%.3f", summary_obj$cvw_best)
+  r2c_str   <- if (is.na(summary_obj$r2_cases))      "NA" else sprintf("%.4f", summary_obj$r2_cases)
+  r2d_str   <- if (is.na(summary_obj$r2_deaths))     "NA" else sprintf("%.4f", summary_obj$r2_deaths)
   ess_o_str <- if (is.na(summary_obj$ess_overall))   "NA" else sprintf("%.1f",  summary_obj$ess_overall)
   ess_p_str <- if (is.na(summary_obj$ess_min_param)) "NA" else sprintf("%.1f",  summary_obj$ess_min_param)
   ret_str   <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
   best_str  <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
-  log_msg("  Converged: %-3s | R2: %s | CVw: %s",
-          if (isTRUE(summary_obj$converged)) "YES" else "NO", r2_str, cvw_str)
+  log_msg("  Converged: %s | R2 cases: %s | R2 deaths: %s",
+          if (isTRUE(summary_obj$converged)) "YES" else "NO", r2c_str, r2d_str)
   log_msg("  ESS (overall / min param): %s / %s", ess_o_str, ess_p_str)
   log_msg("  Sims: %s total, %s retained, %s best subset",
           format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)

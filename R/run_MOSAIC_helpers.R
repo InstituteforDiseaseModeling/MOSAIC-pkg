@@ -473,8 +473,7 @@
     r_squared = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NULL,
     ess_min = if (length(state$ess_tracking) > 0) {
       round(tail(vapply(state$ess_tracking, `[[`, numeric(1), "min_ess"), 1), 1)
-    } else NULL,
-    cvw_best = NULL  # populated by convergence diagnostics, not tracked in state
+    } else NULL
   )
 
   # Atomic write: tempfile + rename

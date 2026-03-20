@@ -359,8 +359,18 @@
 # =============================================================================
 
 #' Write Summary JSON at Run Completion
+#'
+#' @param dirs Directory structure
+#' @param state Internal calibration state
+#' @param start_time POSIXct start time for wall-clock calculation
+#' @param config Base LASER config (for provenance fields)
+#' @param r2_cases R-squared for cases (best model vs observed)
+#' @param r2_deaths R-squared for deaths (best model vs observed)
+#' @param io I/O settings for JSON writing
 #' @noRd
-.mosaic_write_summary_json <- function(dirs, state, start_time, config, io) {
+.mosaic_write_summary_json <- function(dirs, state, start_time, config,
+                                       r2_cases = NA_real_, r2_deaths = NA_real_,
+                                       io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
   diag <- if (file.exists(diag_file)) {
@@ -394,12 +404,12 @@
     n_simulations_successful   = state$total_sims_successful,
     n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
     n_best_subset              = if (!is.null(diag$summary$best_subset_simulations)) diag$summary$best_subset_simulations else NA_integer_,
-    # Convergence metrics
+    # Convergence and model fit
     converged     = isTRUE(state$converged),
-    r2_final      = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NA_real_,
+    r2_cases      = if (!is.na(r2_cases)) round(r2_cases, 4) else NA_real_,
+    r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
     ess_overall   = if (!is.null(diag$metrics$ess_best$value)) diag$metrics$ess_best$value else NA_real_,
-    ess_min_param = if (is.finite(ess_min_param)) round(ess_min_param, 1) else NA_real_,
-    cvw_best      = if (!is.null(diag$metrics$cvw_B$value)) diag$metrics$cvw_B$value else NA_real_
+    ess_min_param = if (is.finite(ess_min_param)) round(ess_min_param, 1) else NA_real_
   )
 
   summary_path <- file.path(dirs$results, "summary.json")
