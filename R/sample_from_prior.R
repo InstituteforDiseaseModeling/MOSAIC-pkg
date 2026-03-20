@@ -200,7 +200,7 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
         if (params$b <= 0 || params$eta <= 0) {
           stop("Gompertz requires b > 0 and eta > 0")
         }
-        
+
         # Check if rgompertz function exists (from fit_gompertz_from_ci.R)
         if (exists("rgompertz", mode = "function")) {
           rgompertz(n, b = params$b, eta = params$eta)
@@ -210,7 +210,21 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
           (1/params$b) * log(1 - (params$b/params$eta) * log(1 - u))
         }
       },
-      
+
+      # Fixed value from posterior fitting (degenerate distribution with zero variance)
+      fixed = {
+        if (!"value" %in% names(params)) {
+          stop("Fixed distribution requires 'value' parameter")
+        }
+        rep(params$value, n)
+      },
+
+      # Failed posterior fit — return NA so the caller falls back to config default
+      failed = {
+        if (verbose) message("Distribution fitting failed for this parameter; returning NA")
+        rep(NA_real_, n)
+      },
+
       # Default case for unknown distribution
       stop(sprintf("Unknown distribution type: %s", dist_type))
     )
