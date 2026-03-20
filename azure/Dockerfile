@@ -2,7 +2,7 @@ FROM rocker/geospatial:4.4
 
 LABEL maintainer="MOSAIC Team"
 LABEL description="MOSAIC for Coiled.io - Auto-scaling cloud workflows"
-LABEL version="0.13.24"
+LABEL version="0.14.62"
 
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
@@ -115,22 +115,19 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
     cat('✓ MOSAIC R package installed\n')"
 
 # ============================================================
-# Install Python dependencies (LASER-cholera, PyTorch, NPE)
+# Install Python dependencies + Dask/Coiled (single layer)
 # ============================================================
-# This creates conda environment: ~/.virtualenvs/r-mosaic
-# Packages: laser-cholera==0.9.1, pytorch==2.1.2, sbi==0.22.0, zuko, lampe
-RUN R -e "MOSAIC::install_dependencies(force = TRUE)"
-
-# ============================================================
-# Install Dask/Distributed/Coiled for orchestration
-# ============================================================
-# Install to r-mosaic virtualenv (created by install_dependencies)
-# coiled is needed when this container is used as the R orchestrator
-# (run_MOSAIC_dask connects to Coiled.io via reticulate::import("coiled"))
-RUN /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir \
-    dask \
-    distributed \
-    coiled
+# Combined into one RUN to keep image small:
+# 1. install_dependencies() creates conda env from environment.yml
+# 2. Strip TensorFlow (~2-3 GB, only needed for suitability modeling)
+# 3. Install dask/distributed/coiled for orchestration
+# 4. Clean conda and pip caches
+RUN R -e "MOSAIC::install_dependencies(force = TRUE)" && \
+    /root/.virtualenvs/r-mosaic/bin/pip uninstall -y tensorflow 2>/dev/null && \
+    /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir dask distributed coiled && \
+    conda clean --all -y 2>/dev/null; \
+    rm -rf /root/.cache/pip /tmp/* && \
+    echo "✓ Python deps installed, TensorFlow stripped, caches cleaned"
 
 # ============================================================
 # Fix OpenSSL version mismatch
@@ -149,6 +146,22 @@ RUN if [ -f /root/.virtualenvs/r-mosaic/lib/libcrypto.so.3 ]; then \
       echo "✓ OpenSSL updated to $(openssl version)"; \
     else \
       echo "⚠ virtualenv libcrypto not found, skipping OpenSSL fix"; \
+    fi
+
+# ============================================================
+# Fix libexpat version mismatch
+# ============================================================
+# The r-mosaic virtualenv bundles libexpat 2.7.x (via conda) but the Ubuntu
+# base ships 2.6.1 which lacks XML_SetAllocTrackerActivationThreshold.
+# When reticulate loads Python through R, LD paths resolve to the system lib,
+# causing ImportError on pyexpat. Same fix pattern as OpenSSL above.
+RUN if [ -f /root/.virtualenvs/r-mosaic/lib/libexpat.so.1 ]; then \
+      cp /root/.virtualenvs/r-mosaic/lib/libexpat.so.1 \
+         /usr/lib/x86_64-linux-gnu/libexpat.so.1 && \
+      ldconfig && \
+      echo "✓ libexpat updated from virtualenv"; \
+    else \
+      echo "⚠ virtualenv libexpat not found, skipping fix"; \
     fi
 
 # ============================================================

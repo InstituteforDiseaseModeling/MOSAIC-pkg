@@ -2,7 +2,7 @@
 
 **Function**: `run_MOSAIC_dask()` in `R/run_MOSAIC_dask.R`
 **Worker module**: `inst/python/mosaic_dask_worker.py`
-**Last Updated**: 2026-03-02
+**Last Updated**: 2026-03-19
 
 ---
 
@@ -55,10 +55,11 @@ R orchestrator (continued)
 ### 1. Docker image with MOSAIC
 
 The worker image `idmmosaicacr.azurecr.io/mosaic-worker:latest` is hosted on Azure Container Registry (ACR) to avoid Docker Hub pull rate limits. It includes:
-- MOSAIC R package (v0.13.24)
-- `laser_cholera==0.9.1`
-- PyTorch, SBI, Zuko (for NPE)
-- Dask / distributed
+- MOSAIC R package (v0.14.62)
+- `laser-cholera==0.11.1` (import as `laser.cholera`)
+- `laser-core==1.0.1`
+- PyTorch 2.4.0, SBI, Zuko (for NPE)
+- Dask / distributed / Coiled
 - MOSAIC-data repo (`/workspace/MOSAIC/MOSAIC-data`)
 
 See [ACR_SETUP.md](ACR_SETUP.md) for full ACR configuration details.
@@ -78,6 +79,11 @@ az acr login --name idmmosaicacr
 docker push idmmosaicacr.azurecr.io/mosaic-worker:latest
 ```
 
+**Verify image timestamp after push:**
+```bash
+az acr repository show-tags --name idmmosaicacr --repository mosaic-worker --detail --orderby time_desc
+```
+
 ### 2. Coiled software environment
 
 `mosaic-acr-workers` is a **Coiled software environment** — a cloud-side definition stored in your Coiled account that tells Coiled workers which Docker image to use (from ACR). It is not a conda environment.
@@ -90,13 +96,14 @@ coiled env list                # lists your Coiled-side software environments
 
 You should see `mosaic-acr-workers` in the output.
 
-**Recreate if needed** (e.g. after pushing a new Docker image):
+**Recreate after pushing a new Docker image** (always pass `workspace` explicitly):
 ```python
 import coiled
 coiled.create_software_environment(
     name='mosaic-acr-workers',
     container='idmmosaicacr.azurecr.io/mosaic-worker:latest',
-    force_rebuild=True
+    force_rebuild=True,
+    workspace='idm-coiled-idmad-r2'
 )
 ```
 
@@ -171,7 +178,7 @@ ctrl <- mosaic_control_defaults(
 dask_spec <- list(
   type         = "coiled",
   n_workers    = 2,
-  software     = "mosaic-docker-workers",
+  software     = "mosaic-acr-workers",
   vm_types     = c("Standard_D8s_v6"),
   region       = "westus2",
   idle_timeout = "30 minutes"
@@ -245,7 +252,7 @@ ctrl <- mosaic_control_defaults(
 dask_spec <- list(
   type         = "coiled",
   n_workers    = 2,
-  software     = "mosaic-docker-workers",
+  software     = "mosaic-acr-workers",
   vm_types     = c("Standard_D8s_v6"),
   region       = "westus2",
   idle_timeout = "30 minutes"
@@ -373,18 +380,7 @@ dask_spec <- list(type = "scheduler", address = "tcp://127.0.0.1:XXXX")
 
 ## Resuming an Interrupted Run
 
-```r
-result <- run_MOSAIC_dask(
-  config     = config,
-  priors     = priors,
-  dir_output = "./output/ETH_dask_test",   # same dir as interrupted run
-  control    = ctrl,
-  dask_spec  = dask_spec,
-  resume     = TRUE                         # skips already-completed sim IDs
-)
-```
-
-The run state is checkpointed to `<dir_output>/1_bfrs/diagnostics/run_state.rds` after every batch.
+The run state is checkpointed to `<dir_output>/1_bfrs/diagnostics/run_state.rds` after every batch (in auto mode). To resume, re-run with the same `dir_output` — the function detects existing state and continues from the last completed batch.
 
 ---
 
@@ -455,7 +451,7 @@ R CMD INSTALL .
 ### Worker returns `success=False`
 
 Check the error message in the R log — it prints `res$error` and `res$traceback` for failed futures. Common causes:
-- `laser_cholera` not importable on worker → verify Docker image has it: `docker run --rm idmmosaicacr.azurecr.io/mosaic-worker:latest python -c "import laser_cholera"`
+- `laser.cholera` not importable on worker → verify Docker image has it: `docker run --rm idmmosaicacr.azurecr.io/mosaic-worker:latest python -c "import laser.cholera"`
 - `TypeError: 'int' object is not iterable` → a scalar field in `sampled_params` is being treated as a vector by LASER; check `_VECTOR_FIELDS` list in `mosaic_dask_worker.py`
 - Memory error on worker → reduce `n_iterations` or increase VM size
 
@@ -502,7 +498,7 @@ Workers write parquet files directly to Azure Blob Storage using the `azure-stor
 |------|---------|
 | `R/run_MOSAIC_dask.R` | R function `run_MOSAIC_dask()` — orchestrator |
 | `inst/python/mosaic_dask_worker.py` | Python worker function — runs on Dask nodes |
-| `azure/Dockerfile` | Worker Docker image (MOSAIC + laser_cholera + dask) |
+| `azure/Dockerfile` | Worker Docker image (MOSAIC + laser.cholera + dask) |
 | `azure/run_mosaic_dask_bfrs.py` | Original partial Python implementation (reference) |
 | `azure/STATUS_AND_NEXT_STEPS.md` | Prior session context and known issues |
 | `azure/STORAGE_MOUNTING_INVESTIGATION.md` | Why filesystem mounting (CIFS/BlobFuse) was ruled out |

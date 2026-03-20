@@ -59,14 +59,17 @@ ctrl$npe$enable <- FALSE
 ctrl$paths$clean_output <- TRUE
 ctrl$paths$plots        <- FALSE
 ctrl$io <- mosaic_io_presets("fast")
+# ctrl$io$save_simresults <- TRUE  # Enable to write per-sim parquet for validation
 
 dask_spec <- list(
   type         = "coiled",
-  n_workers    = 400,
+  n_workers    = 100,
   software     = "mosaic-acr-workers",
-  vm_types     = c("Standard_D2s_v6"),
+  scheduler_vm_types = c("Standard_D8s_v6"),
+  vm_types     = c("Standard_D4s_v6"),
   region       = "westus2",
-  idle_timeout = "30 minutes"
+  idle_timeout = "30 minutes",
+  worker_options = list(nthreads = 1L)
 )
 
 result <- run_MOSAIC_dask(

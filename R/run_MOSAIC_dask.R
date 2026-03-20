@@ -157,9 +157,19 @@
 
   # Build lookup: sim_id → worker result
   result_lookup <- list()
+  n_worker_errors <- 0L
   for (res in gathered) {
     key <- as.character(res$sim_id)
     result_lookup[[key]] <- res
+    if (!isTRUE(res$success) && n_worker_errors < 3L) {
+      n_worker_errors <- n_worker_errors + 1L
+      err_msg <- if (!is.null(res$error)) res$error else "unknown"
+      log_msg("  Worker error (sim %s): %s", key, err_msg)
+    }
+  }
+  if (n_worker_errors > 0L) {
+    total_errors <- sum(!vapply(gathered, function(r) isTRUE(r$success), logical(1)))
+    log_msg("  Total worker errors: %d/%d", total_errors, length(gathered))
   }
 
   # ---------------------------------------------------------------------------
@@ -501,6 +511,12 @@ run_MOSAIC_dask <- function(config,
     clean_output = isTRUE(control$paths$clean_output)
   )
 
+  # Skip per-sim simulation results files (validation only, heavy I/O).
+  # Set control$io$save_simresults = TRUE to re-enable for debugging.
+  if (!isTRUE(control$io$save_simresults)) {
+    dirs$bfrs_simresults <- NULL
+  }
+
   # ===========================================================================
   # SETUP FILES
   # ===========================================================================
@@ -606,7 +622,14 @@ run_MOSAIC_dask <- function(config,
     cluster_name <- paste0("mosaic-dask-",
                            format(Sys.time(), "%Y%m%d-%H%M%S"))
 
-    # Build optional args (e.g. host_setup_script for Docker Hub auth)
+    # Build Coiled cluster args.
+    # Tested options for large images (>10 GB) that may hit pull timeouts:
+    #   timeout              = 1500L        # client-side wait (seconds)
+    #   environ              = list(COILED_STARTUP_TIMEOUT = "900")
+    #   scheduler_disk_size  = "120 GiB"    # more disk for image extraction
+    #   worker_disk_size     = "120 GiB"
+    #   scheduler_options    = list(idle_timeout = "30 minutes")
+    #   spot_policy          = "spot_with_fallback"
     cluster_args <- list(
       name                = cluster_name,
       n_workers           = as.integer(n_workers_req),
@@ -614,13 +637,19 @@ run_MOSAIC_dask <- function(config,
       scheduler_vm_types  = as.list(dask_spec$scheduler_vm_types),
       region              = dask_spec$region,
       software            = dask_spec$software,
+      workspace           = dask_spec$workspace,
       shutdown_on_close   = TRUE,
       idle_timeout        = dask_spec$idle_timeout
     )
 
-    if (!is.null(dask_spec$host_setup_script)) {
-      cluster_args$host_setup_script <- dask_spec$host_setup_script
-      log_msg("Using host_setup_script for worker VM init")
+    # Pass through optional Coiled args from dask_spec
+    for (opt in c("timeout", "environ", "scheduler_disk_size",
+                  "worker_disk_size", "scheduler_options", "worker_options",
+                  "spot_policy", "host_setup_script")) {
+      if (!is.null(dask_spec[[opt]])) {
+        cluster_args[[opt]] <- dask_spec[[opt]]
+        if (opt == "host_setup_script") log_msg("Using host_setup_script for worker VM init")
+      }
     }
 
     cluster <- do.call(coiled_mod$Cluster, cluster_args)
