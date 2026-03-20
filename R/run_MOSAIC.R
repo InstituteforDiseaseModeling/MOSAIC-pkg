@@ -1537,7 +1537,7 @@ run_MOSAIC <- function(config,
         # Try new signature first (always creates both aggregate and per-location plots)
         plot_model_ppc(
           predictions_dir = dirs$res_fig_pred,
-          output_dir = dirs$res_fig_pred,
+          output_dir = dirs$res_figures,
           verbose = control$logging$verbose
         )
       },

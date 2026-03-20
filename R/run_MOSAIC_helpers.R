@@ -405,7 +405,7 @@
     res_fig_post       = file.path(dir_output, "3_results/figures/posterior"),
     res_fig_post_detail = file.path(dir_output, "3_results/figures/posterior/detail"),
     res_fig_pred       = file.path(dir_output, "3_results/figures/predictions"),
-    res_fig_pred_ppc   = file.path(dir_output, "3_results/figures/predictions/ppc")
+    res_fig_ppc        = file.path(dir_output, "3_results/figures/ppc")
   )
 
   if (clean_output && dir.exists(d$root)) {
