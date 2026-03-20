@@ -219,6 +219,98 @@ test_that("calc_model_convergence works with current API", {
   unlink(output_dir, recursive = TRUE)
 })
 
+test_that("calc_model_convergence prefers seed_sim over sim for seed column", {
+  tmp_dir <- tempdir()
+  mock_paths <- list(ROOT = tmp_dir)
+  output_dir <- file.path(tmp_dir, "conv_seed_test")
+
+  # When seed_sim is present, output seed column should use it
+  results_with_seed_sim <- data.frame(
+    sim = 1:10,
+    seed_sim = 101:110,
+    likelihood = 1500 + rnorm(10, sd = 1)
+  )
+  result <- calc_model_convergence(
+    PATHS = mock_paths,
+    results = results_with_seed_sim,
+    output_dir = output_dir,
+    verbose = FALSE
+  )
+  conv_data <- arrow::read_parquet(file.path(output_dir, "convergence_results.parquet"))
+  expect_equal(conv_data$seed, 101:110)
+  expect_equal(conv_data$sim, 1:10)
+
+  # When seed_sim is absent, fall back to sim
+  output_dir_2 <- file.path(tmp_dir, "conv_seed_test_2")
+  results_no_seed_sim <- data.frame(
+    sim = 1:10,
+    likelihood = 1500 + rnorm(10, sd = 1)
+  )
+  result2 <- calc_model_convergence(
+    PATHS = mock_paths,
+    results = results_no_seed_sim,
+    output_dir = output_dir_2,
+    verbose = FALSE
+  )
+  conv_data_2 <- arrow::read_parquet(file.path(output_dir_2, "convergence_results.parquet"))
+  expect_equal(conv_data_2$seed, 1:10)
+
+  unlink(c(output_dir, output_dir_2), recursive = TRUE)
+})
+
+test_that("calc_model_convergence errors on all non-finite likelihoods", {
+  tmp_dir <- tempdir()
+  mock_paths <- list(ROOT = tmp_dir)
+  output_dir <- file.path(tmp_dir, "conv_nonfinite")
+
+  results_bad <- data.frame(
+    sim = 1:5,
+    likelihood = rep(-Inf, 5)
+  )
+  expect_error(
+    calc_model_convergence(
+      PATHS = mock_paths,
+      results = results_bad,
+      output_dir = output_dir,
+      verbose = FALSE
+    ),
+    "non-finite"
+  )
+
+  unlink(output_dir, recursive = TRUE)
+})
+
+test_that("calc_model_convergence status thresholds respect user parameters", {
+  tmp_dir <- tempdir()
+  mock_paths <- list(ROOT = tmp_dir)
+  output_dir <- file.path(tmp_dir, "conv_thresh")
+
+  # Create data that produces moderate ESS (~50-100 range)
+  set.seed(99)
+  results_df <- data.frame(
+    sim = seq_len(200),
+    likelihood = 1500 + rnorm(200, sd = 3)
+  )
+
+  # With very low ess_min, ESS should pass (not fail due to hard-coded 500)
+  result <- calc_model_convergence(
+    PATHS = mock_paths,
+    results = results_df,
+    output_dir = output_dir,
+    ess_min = 1,
+    A_min = 0.01,
+    cvw_max = 100,
+    B_min = 1,
+    max_w_max = 0.99,
+    verbose = FALSE
+  )
+  # With such permissive targets, everything should pass
+
+  expect_equal(result$status, "PASS")
+
+  unlink(output_dir, recursive = TRUE)
+})
+
 test_that("calc_model_convergence with edge cases", {
   tmp_dir <- tempdir()
   mock_paths <- list(ROOT = tmp_dir)

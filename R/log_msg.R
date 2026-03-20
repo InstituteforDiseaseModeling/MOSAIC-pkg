@@ -17,7 +17,7 @@
 #'
 #' This is particularly useful for:
 #' \itemize{
-#'   \item Model calibration workflows (logs entire BFRS → NPE sequence)
+#'   \item Model calibration workflows (logs BFRS calibration sequence)
 #'   \item Long-running simulations
 #'   \item Parallel processing tasks
 #'   \item Debugging and progress tracking

@@ -12,7 +12,7 @@ plot_model_fit(
 )
 }
 \arguments{
-\item{model}{A laser-cholera Model object (class 'laser_cholera.metapop.model.Model')
+\item{model}{A laser-cholera Model object (class 'laser.cholera.metapop.model.Model')
 output from lc$run_model(paramfile = config). Must contain:
 \itemize{
 \item results$expected_cases - predicted cases

@@ -43,8 +43,6 @@ control_ETH$likelihood$weight_deaths <- 0.05
 control_ETH$predictions$best_model_n_sims <- 30
 control_ETH$predictions$ensemble_n_sims_per_param <- 5
 
-control_ETH$npe$enable <- FALSE
-
 control_ETH$paths$clean_output <- TRUE
 control_ETH$io <- mosaic_io_presets("fast")
 
@@ -52,6 +50,5 @@ result_ETH <- run_MOSAIC(
      dir_output = dir_output,
      config = config_ETH,
      priors = priors_ETH,
-     control = control_ETH,
-     resume = FALSE
+     control = control_ETH
 )

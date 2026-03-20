@@ -32,10 +32,10 @@
 "prop_V2_initial","Initial Two-Dose Vaccinated Proportion","Proportion with two vaccine doses at start","proportion","beta","location","initial_conditions",31,"02","01","06","beta",NA,NA
 "beta_j0_tot","Total Base Transmission Rate","Total base transmission rate (human + environmental)","per day","gompertz","location","transmission",32,"02","02","01","gompertz",NA,NA
 "p_beta","Human-to-Human Proportion","Proportion of total transmission that is human-to-human","proportion","beta","location","transmission",33,"02","02","02","beta",NA,NA
-"a_1","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",34,"02","03","01","normal",NA,NA
-"a_2","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",35,"02","03","02","normal",NA,NA
-"b_1","Seasonality Coefficient b1","First Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",36,"02","03","03","normal",NA,NA
-"b_2","Seasonality Coefficient b2","Second Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",37,"02","03","04","normal",NA,NA
+"a_1_j","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",34,"02","03","01","normal",NA,NA
+"a_2_j","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",35,"02","03","02","normal",NA,NA
+"b_1_j","Seasonality Coefficient b1","First Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",36,"02","03","03","normal",NA,NA
+"b_2_j","Seasonality Coefficient b2","Second Fourier sine coefficient for seasonality","dimensionless","normal","location","seasonality",37,"02","03","04","normal",NA,NA
 "psi_star_a","Suitability Shape/Gain","Shape/gain parameter for logit calibration of NN suitability (a>1 sharpens, a<1 flattens)","dimensionless","truncnorm","location","environmental",38,"02","04","01","truncnorm",NA,NA
 "psi_star_b","Suitability Scale/Offset","Scale/offset parameter for logit calibration (shifts baseline up/down)","dimensionless","normal","location","environmental",39,"02","04","02","normal",NA,NA
 "psi_star_z","Suitability Smoothing","Smoothing weight for causal EWMA (z=1: no smoothing, z<1: smoothing)","proportion","beta","location","environmental",40,"02","04","03","beta",NA,NA

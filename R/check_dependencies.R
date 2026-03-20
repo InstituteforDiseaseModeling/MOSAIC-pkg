@@ -92,12 +92,10 @@ check_dependencies <- function() {
      # Track capabilities
      core_working <- TRUE
      suitability_working <- TRUE
-     npe_working <- TRUE
 
      # Define package categories
      core_packages <- c("laser.cholera", "laser.core", "numpy", "h5py", "pyarrow")
      suitability_packages <- c("tensorflow", "keras")
-     npe_packages <- c("torch", "sbi", "lampe", "zuko", "sklearn")
 
      if (file.exists(env_yml_path)) {
 
@@ -152,8 +150,6 @@ check_dependencies <- function() {
                     pkg_category <- "core"
                } else if (pkg_import_name %in% suitability_packages) {
                     pkg_category <- "suitability"
-               } else if (pkg_import_name %in% npe_packages) {
-                    pkg_category <- "npe"
                }
 
                # tensorflow and keras cannot be imported in the same process as torch
@@ -215,9 +211,6 @@ check_dependencies <- function() {
                          } else if (pkg_category == "suitability") {
                               suitability_working <<- FALSE
                               cli::cli_alert_warning("{pkg_import_name} [suitability] cannot be imported: {e$message}")
-                         } else if (pkg_category == "npe") {
-                              npe_working <<- FALSE
-                              cli::cli_alert_warning("{pkg_import_name} [NPE] cannot be imported: {e$message}")
                          } else {
                               cli::cli_alert_warning("{pkg_import_name} cannot be imported: {e$message}")
                          }
@@ -286,13 +279,6 @@ check_dependencies <- function() {
           } else {
                cli::cli_alert_warning("Suitability estimation: Limited - TensorFlow/Keras import issues")
                cli::cli_text("   Pre-computed suitability maps can still be used")
-          }
-
-          if (npe_working) {
-               cli::cli_alert_success("Neural Posterior Estimation: PyTorch/sbi/lampe available")
-          } else {
-               cli::cli_alert_warning("Neural Posterior Estimation: Limited - Some packages missing")
-               cli::cli_text("   Other calibration methods still available (BFRS, etc.)")
           }
 
           cli::cli_text("")

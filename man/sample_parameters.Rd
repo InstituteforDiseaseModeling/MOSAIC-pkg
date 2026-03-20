@@ -11,6 +11,7 @@ sample_parameters(
   seed,
   sample_args = NULL,
   verbose = TRUE,
+  validate = TRUE,
   ...
 )
 }
@@ -73,6 +74,8 @@ Available options include:
 If NULL, all parameters are sampled (default behavior).}
 
 \item{verbose}{Logical indicating whether to print progress messages. Default TRUE.}
+
+\item{validate}{Logical indicating whether to run post-sampling validation. Default TRUE.}
 
 \item{...}{Additional individual sample_* arguments for backward compatibility.
 These override values in sample_args if both are provided.}

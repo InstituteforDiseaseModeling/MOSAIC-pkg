@@ -1,41 +1,33 @@
 #' Plot Multi-Method Parameter Distributions
 #'
 #' Creates visualizations comparing parameter distributions across multiple methods
-#' (e.g., priors, BFRS posteriors, NPE posteriors) using a flexible vector-based interface.
+#' (e.g., priors, BFRS posteriors) using a flexible vector-based interface.
 #' Parameters are organized by biological category and ordered consistently across all plots.
 #'
 #' @param json_files Vector of paths to JSON distribution files
 #' @param method_names Vector of method names corresponding to each JSON file (for legends and colors)
 #' @param output_dir Directory to save generated plots
-#' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4", "NPE" = "#d00000"))
+#' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4"))
 #'
 #' @return Invisibly returns a list of generated plot objects
 #'
 #' @examples
 #' \dontrun{
-#' # Compare three methods
+#' # Compare prior and posterior
 #' plot_model_distributions(
-#'   json_files = c("priors.json", "posteriors_bfrs.json", "posterior/posteriors.json"),
-#'   method_names = c("Prior", "BFRS", "NPE"),
+#'   json_files = c("priors.json", "posteriors.json"),
+#'   method_names = c("Prior", "Posterior"),
 #'   output_dir = "plots"
 #' )
 #'
-#' # Compare just prior and NPE
+#' # Use custom colors
 #' plot_model_distributions(
-#'   json_files = c("priors.json", "posterior/posteriors.json"),
-#'   method_names = c("Prior", "NPE"),
-#'   output_dir = "plots"
-#' )
-#'
-#' # Use custom colors (MOSAIC defaults shown)
-#' plot_model_distributions(
-#'   json_files = c("priors.json", "posteriors_bfrs.json", "posterior/posteriors.json"),
-#'   method_names = c("Prior", "BFRS", "NPE"),
+#'   json_files = c("priors.json", "posteriors.json"),
+#'   method_names = c("Prior", "Posterior"),
 #'   output_dir = "plots",
 #'   custom_colors = c(
-#'     "Prior" = "#4a4a4a",  # Dark gray
-#'     "BFRS" = "#1f77b4",   # Blue
-#'     "NPE" = "#d00000"     # Red
+#'     "Prior" = "#4a4a4a",     # Dark gray
+#'     "Posterior" = "#1f77b4"  # Blue
 #'   )
 #' )
 #' }
@@ -139,8 +131,6 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     "Priors" = "#4a4a4a",   # Alternative naming
     "BFRS" = "#1f77b4",     # Blue (Bayesian retrospective)
     "Posterior" = "#1f77b4", # Alternative naming for BFRS
-    "NPE" = "#d00000",      # Red (neural posterior estimation)
-    "SMC" = "#d00000",      # Red (sequential Monte Carlo - deprecated)
     "MCMC" = "#CC79A7",     # Reddish purple (other methods)
     "ABC" = "#009E73",      # Bluish green (other methods)
     "SBC" = "#F0E442"       # Yellow (diagnostics)

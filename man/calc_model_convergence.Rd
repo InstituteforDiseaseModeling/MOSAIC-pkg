@@ -21,7 +21,7 @@ calc_model_convergence(
 \arguments{
 \item{PATHS}{MOSAIC paths object from \code{get_paths()}.}
 
-\item{results}{Data frame with columns: sim, seed, likelihood (and optionally others).}
+\item{results}{Data frame with required columns: sim, likelihood. Optional: seed_sim (used as reproducibility seed in output; falls back to sim if absent).}
 
 \item{output_dir}{Character string specifying directory to write output files.}
 

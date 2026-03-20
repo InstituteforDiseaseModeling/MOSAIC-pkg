@@ -2,9 +2,19 @@
 % Please edit documentation in R/calc_kl_divergence.R
 \name{calc_kl_divergence}
 \alias{calc_kl_divergence}
+\alias{calculate_kl_divergence}
 \title{Calculate Kullback-Leibler Divergence Between Two Distributions}
 \usage{
 calc_kl_divergence(
+  samples1,
+  weights1 = NULL,
+  samples2,
+  weights2 = NULL,
+  n_points = 1000,
+  eps = 1e-10
+)
+
+calculate_kl_divergence(
   samples1,
   weights1 = NULL,
   samples2,

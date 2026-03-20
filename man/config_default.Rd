@@ -8,6 +8,8 @@
 A named \strong{list} created by \code{make_default_LASER_config()}, whose
 elements include:
 \itemize{
+\item \strong{Metadata} – \code{metadata$version}, \code{metadata$date}, \code{metadata$description}
+for provenance tracking;
 \item \strong{Scalars} – biological constants (\code{phi_1}, \code{gamma_1}, \code{epsilon}, …);
 \item \strong{Vectors} – initial populations (\code{S_j_initial}, \code{I_j_initial}, …),
 initial proportions (optional: \code{prop_S_initial}, \code{prop_I_initial}, …),
