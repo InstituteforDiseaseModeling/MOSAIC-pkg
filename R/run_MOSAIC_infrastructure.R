@@ -401,7 +401,7 @@
 
 #' Write Summary JSON at Run Completion
 #' @noRd
-.mosaic_write_summary_json <- function(dirs, state, start_time, io) {
+.mosaic_write_summary_json <- function(dirs, state, start_time, config, io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
   diag <- if (file.exists(diag_file)) {
@@ -422,15 +422,25 @@
   wall_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
   summary_obj <- list(
-    converged = isTRUE(state$converged),
-    wall_time_seconds = round(wall_time, 1),
-    n_simulations_total = state$total_sims_run,
-    n_retained = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
-    n_best_subset = if (!is.null(diag$summary$best_subset_simulations)) diag$summary$best_subset_simulations else NA_integer_,
-    r2_final = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NA_real_,
-    ess_overall = if (!is.null(diag$metrics$ess_best$value)) diag$metrics$ess_best$value else NA_real_,
+    # Provenance: what was run and when
+    location      = paste(config$location_name, collapse = ", "),
+    date_start    = config$date_start,
+    date_stop     = config$date_stop,
+    timestamp     = format(start_time, "%Y-%m-%dT%H:%M:%S%z"),
+    mode          = if (!is.null(state$mode)) state$mode else NA_character_,
+    # Run statistics
+    wall_time_seconds          = round(wall_time, 1),
+    n_batches                  = state$batch_number,
+    n_simulations_total        = state$total_sims_run,
+    n_simulations_successful   = state$total_sims_successful,
+    n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
+    n_best_subset              = if (!is.null(diag$summary$best_subset_simulations)) diag$summary$best_subset_simulations else NA_integer_,
+    # Convergence metrics
+    converged     = isTRUE(state$converged),
+    r2_final      = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NA_real_,
+    ess_overall   = if (!is.null(diag$metrics$ess_best$value)) diag$metrics$ess_best$value else NA_real_,
     ess_min_param = if (is.finite(ess_min_param)) round(ess_min_param, 1) else NA_real_,
-    cvw_best = if (!is.null(diag$metrics$cvw_B$value)) diag$metrics$cvw_B$value else NA_real_
+    cvw_best      = if (!is.null(diag$metrics$cvw_B$value)) diag$metrics$cvw_B$value else NA_real_
   )
 
   summary_path <- file.path(dirs$results, "summary.json")
