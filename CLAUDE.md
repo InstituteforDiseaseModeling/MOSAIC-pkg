@@ -26,7 +26,6 @@ This file provides comprehensive guidance for Claude Code when working with the 
 **Deep Dives:**
 - [Python Integration](#python-integration)
 - [Likelihood Calculation](#likelihood-calculation)
-- [NPE Performance](#critical-npe-performance-optimization) ⚡ PERFORMANCE CRITICAL
 
 **Troubleshooting & Reference:**
 - [When Things Go Wrong](#-when-things-go-wrong)
@@ -86,14 +85,13 @@ Rscript -e "MOSAIC::check_dependencies()"        # Verify Python env
 # Git
 git log --oneline -10                            # Recent commits
 git diff                                          # See changes
-git log --grep="NPE"                             # Search commits
+git log --grep="keyword"                          # Search commits
 ```
 
 **Critical paths (DON'T BREAK THESE):**
 - `run_MOSAIC()` → R/run_MOSAIC.R:575 (main calibration workflow)
 - `calc_model_likelihood()` → R/calc_model_likelihood.R:66 (called 1000s of times)
 - `sample_parameters()` → R/sample_parameters.R (301 parameters)
-- NPE optimization → outputs/ subdirectory pattern (100-1200× speedup)
 
 **File rules:**
 - ✅ Use `./claude/` for ALL temporary/exploratory files
@@ -168,7 +166,7 @@ Rscript -e "library(MOSAIC); help(package='MOSAIC')"
 | Bug in run_MOSAIC | [run_MOSAIC Workflow](#the-run_mosaic-workflow-centerpiece-of-the-package), [Key Files](#key-files-reference) |
 | Bug in likelihood | [Likelihood Calculation](#likelihood-calculation), [Performance](#5-performance-standards) |
 | Add parameter | [Parameter System](#parameter-system-architecture), [Common Tasks](#common-tasks-step-by-step) |
-| Performance issue | [NPE Optimization](#critical-npe-performance-optimization), [Performance Standards](#5-performance-standards) |
+| Performance issue | [Performance Standards](#5-performance-standards) |
 | Documentation | [Documentation Standards](#7-documentation-standards) |
 | Any change | [Development Standards](#working-with-claude-code-development-standards) (always!) |
 
@@ -285,7 +283,7 @@ Rscript /tmp/test_likelihood_performance.R
 
 **Key Capabilities:**
 - Cholera transmission simulation using metapopulation SEIR models
-- Neural Posterior Estimation (NPE) for Bayesian calibration
+- Bayesian Filtering with Resampling (BFRS) for calibration
 - Environmental suitability modeling with climate forcing
 - Vaccination and WASH intervention analysis
 - Spatial transmission dynamics with human mobility
@@ -367,10 +365,9 @@ These directories are excluded from package builds:
 The `run_MOSAIC()` / `run_mosaic_iso()` workflow is **the centerpiece of the MOSAIC package**. It orchestrates the complete Bayesian calibration pipeline from prior sampling through posterior estimation.
 
 **Files:**
-- `R/run_MOSAIC.R` (2,028 lines) - Main workflow and public API (NPE stage refactored out to run_NPE.R in v0.13.0)
+- `R/run_MOSAIC.R` (2,028 lines) - Main workflow and public API
 - `R/run_MOSAIC_helpers.R` (1,037 lines) - Internal helpers and validation
 - `R/run_MOSAIC_infrastructure.R` (350 lines) - Directory setup and I/O
-- `R/run_NPE.R` (1000+ lines) - Standalone NPE workflow (see NPE section)
 
 ### Two User Interfaces
 
@@ -456,22 +453,28 @@ Three-phase adaptive calibration:
 - Refines posterior around high-likelihood regions
 
 **Outputs:**
-Results are written to `dir_output/1_bfrs/` with parameter files, simulation outputs, and convergence diagnostics.
-
-**Note:** Output directory structure is subject to change as the package evolves.
-
-#### **STAGE 2: Neural Posterior Estimation (NPE)** *(Optional)*
-
-- **When enabled:** `control$npe$enable = TRUE`
-- Trains normalizing flow model on BFRS results
-- Provides fast posterior sampling without additional simulations
-- Uses PyTorch/Zuko for neural density estimation
-- **Standalone mode:** `run_NPE()` can be called post-hoc on any BFRS output directory without re-running calibration — useful for experimenting with different weight strategies (`continuous_best`, `continuous_retained`, etc.)
-- **NA handling (v0.13.5):** Interior NAs in observed data are linearly interpolated; boundary NAs set to 0 (prevents artificial "no cases" observations from misleading the model)
-- **Input validation (v0.13.4):** `train_npe()` validates X, y, weights before tensor conversion — catches NaN/Inf data corruption early
-
-**Outputs:**
-Results are written to `dir_output/2_npe/` with trained model, posterior samples, and diagnostics.
+**Output directory structure (v0.17.0+):**
+```
+dir_output/
+├── _README.md                          # Written at COMPLETION (completion signal)
+├── 1_inputs/                           # Immutable run inputs
+│   ├── environment.json                # R/Python versions, git SHA, platform
+│   ├── config.json                     # Base LASER configuration
+│   ├── priors.json                     # Prior distributions
+│   └── control.json                    # Run settings (n_sims, batch_size, etc.)
+├── 2_calibration/                      # Calibration outputs
+│   ├── samples.parquet                 # All parameter draws + likelihood + weights
+│   ├── samples/                        # Individual sim files (temporary)
+│   ├── best_model/config_best.json     # Best-fit LASER config
+│   ├── posterior/                       # posteriors.json, posterior_quantiles.csv
+│   ├── diagnostics/                    # convergence_results.parquet, ESS, etc.
+│   └── state/run_state.json            # Lightweight workflow state (JSON)
+└── 3_results/                          # Curated outputs for downstream use
+    ├── summary.json                    # Written at COMPLETION
+    ├── posterior/parameter_estimates.csv
+    ├── predictions/all_predictions.csv
+    └── figures/                        # diagnostics/, posterior/, predictions/
+```
 
 ### Control Structure
 
@@ -527,13 +530,6 @@ control <- mosaic_control_defaults(
       precision = 2500,
       final = 1000
     )
-  ),
-
-  # === NEURAL POSTERIOR ESTIMATION ===
-  npe = list(
-    enable = FALSE,                # Set TRUE to enable NPE stage
-    weight_strategy = "quantile",  # or "threshold"
-    quantile = 0.95                # Use top 5% of weighted samples
   ),
 
   # === LIKELIHOOD CALCULATION ===
@@ -612,11 +608,11 @@ MOSAIC:::.mosaic_set_blas_threads(1L)
 ### Output Structure
 
 **Main directories:**
-- `dir_output/1_bfrs/` - Stage 1 calibration results (parameters, simulations, diagnostics)
-- `dir_output/2_npe/` - Stage 2 NPE results (if enabled)
-- `dir_output/results/` - Final posterior summaries and visualizations
+- `dir_output/1_inputs/` - Immutable run inputs (config, priors, control, environment)
+- `dir_output/2_calibration/` - Calibration outputs (samples, posterior, diagnostics, state)
+- `dir_output/3_results/` - Curated outputs for downstream use (summary, figures, predictions)
 
-**Note:** Specific file structure is subject to change as the package evolves. Use functions like `read_calibration_results()` rather than hardcoding file paths.
+See the directory tree above in the Workflow Stages section for the full layout.
 
 ### Performance Considerations
 
@@ -638,7 +634,6 @@ MOSAIC:::.mosaic_set_blas_threads(1L)
 **Memory Usage:**
 - ~1-2 GB per worker (LASER simulations)
 - Scale accordingly: 16 cores ≈ 32 GB RAM
-- NPE training: Additional 4-8 GB for PyTorch
 
 ## Function Organization (223 Files)
 
@@ -666,16 +661,7 @@ Functions follow strict prefixes indicating their purpose:
 **Run MOSAIC Workflow (CENTERPIECE):**
 - `run_MOSAIC.R` - Main calibration workflow (2,028 lines)
 - `run_MOSAIC_helpers.R` - Internal helpers (1,037 lines)
-- `run_MOSAIC_infrastructure.R` - Directory setup (350 lines)
-- `run_NPE.R` - Standalone NPE workflow (1000+ lines); dual-mode: embedded (called by run_MOSAIC) OR standalone post-hoc on any BFRS output
-
-**Neural Posterior Estimation (NPE):**
-- `npe.R` - Main NPE workflow (train_npe, sample_posterior, etc.)
-- `npe_utils.R` - Helper functions for data preparation
-- `npe_diagnostics.R` - Convergence & quality checks
-- `npe_plots.R` - Posterior visualization
-- `npe_posterior.R` - Posterior sampling & analysis
-- `calc_npe_diagnostics.R` - Quantitative diagnostics
+- `run_MOSAIC_infrastructure.R` - Directory setup, output generation, state management
 
 **Parameter System:**
 - `sample_parameters.R` - Sample from priors (301 parameters: 21 global + 280 location-specific)
@@ -808,7 +794,6 @@ Transmission=#0167AF, Disease Progression=#EE7733, Vaccination=#228833, Environm
 **Three capability tiers:**
 1. **Core** (required): laser-cholera, laser-core, numpy, h5py, pyarrow
 2. **Suitability** (optional): tensorflow, keras
-3. **NPE** (optional): torch, sbi, lampe, zuko, scikit-learn
 
 **Install/Check:**
 ```r
@@ -825,10 +810,10 @@ MOSAIC::install_dependencies(force = TRUE)
 
 ### Critical: Thread Safety
 
-**ALWAYS set BLAS threads to 1 before importing PyTorch** to prevent cluster deadlocks:
+**ALWAYS set BLAS threads to 1 for parallel workers** to prevent cluster deadlocks:
 
 ```r
-# This is built into train_npe() but critical for custom PyTorch usage
+# This is built into run_MOSAIC() but critical for custom parallel usage
 if (exists(".mosaic_set_blas_threads", envir = asNamespace("MOSAIC"))) {
   MOSAIC:::.mosaic_set_blas_threads(1L)
 }
@@ -838,15 +823,12 @@ Sys.setenv(
   MKL_NUM_THREADS = "1",
   OPENBLAS_NUM_THREADS = "1",
   NUMEXPR_NUM_THREADS = "1",
-  TBB_NUM_THREADS = "1",       # Intel TBB (used by some PyTorch backends)
+  TBB_NUM_THREADS = "1",       # Intel TBB
   NUMBA_NUM_THREADS = "1"      # Numba JIT (used by laser-cholera)
 )
-
-# Then import
-torch <- reticulate::import("torch")
 ```
 
-**Why:** PyTorch initializes BLAS/MKL on import. Numba (used by laser-cholera) and Intel TBB also spawn threads. Without all six env vars, parallel workers can trigger "Attempted to fork from a non-main thread" deadlocks on clusters.
+**Why:** Numba (used by laser-cholera) and BLAS libraries spawn threads. Without these env vars, parallel workers can trigger "Attempted to fork from a non-main thread" deadlocks on clusters.
 
 ### LASER Model Integration
 
@@ -966,64 +948,6 @@ ll <- calc_model_likelihood(
 )
 ```
 
-## CRITICAL: NPE Performance Optimization
-
-### Problem: 40K Simulation Files
-
-During BFRS sampling, ~40K simulations create individual `out_NNNNNNN.parquet` files. Only 1-5% receive non-zero NPE weights.
-
-### WRONG Approach (Removed in v0.8.7)
-```
-# OLD: Combined all files, then filtered
-simulations.parquet (194 MB, all 40K) → filter to weighted → 2-5 MB
-Time: 30-120 seconds
-Memory: High
-```
-
-### CORRECT Approach (Current)
-```
-outputs/                          # Subdirectory for organization
-├── timeseries_0000001.parquet   # Individual simulation files
-├── timeseries_0000002.parquet
-└── ... (39,465 files)
-
-simulations.parquet               # Metadata only (18 MB)
-convergence_results.parquet       # Diagnostics
-priors.json                       # Parameter priors
-
-# Load only weighted simulation files directly
-Time: 0.1-0.5 seconds
-Memory: Low
-Speedup: 100-1200× faster (2-3 orders of magnitude)
-```
-
-### Implementation Details
-
-**Directory structure created at:** `R/run_MOSAIC.R` (directory setup section)
-
-**Output file creation:** `.mosaic_run_simulation_worker()` line 268 writes to `outputs/` subdirectory
-
-**Loading logic:** `R/npe.R` in `.prepare_npe_data()` function
-```r
-# Load only weighted simulation files
-outputs_dir <- file.path(iteration_dir, "outputs")
-weighted_files <- sprintf("timeseries_%07d.parquet", sim_ids_weighted)
-# Read each file directly
-```
-
-**Cleanup:** After NPE completes
-```r
-# Remove entire outputs/ directory
-unlink(file.path(iteration_dir, "outputs"), recursive = TRUE)
-# Frees 50-200 MB disk space
-```
-
-**IMPORTANT:**
-- ❌ DO NOT combine individual files into `outputs.parquet`
-- ✅ DO organize files in `outputs/` subdirectory
-- ✅ DO keep individual files until NPE training completes
-- ✅ Entire `outputs/` directory removed automatically after NPE
-
 ## Testing
 
 ### Running Tests
@@ -1049,7 +973,6 @@ Rscript -e "testthat::test_file('tests/testthat/test-calc_spatial_correlation.R'
 - Model evaluation: `test-calc_model_likelihood.R`, `test-calc_model_convergence.R`
 - Spatial: `test-calc_spatial_correlation.R`, `test-calc_spatial_hazard.R`
 - Initial conditions: `test-est_initial_E_I.R`, `test-est_initial_R.R`, `test-est_initial_V1_V2.R`
-- NPE: `test-npe_v5_2.R`, `test-get_npe_observed_data.R`, `test-get_npe_simulated_data.R`
 - Configuration: `test-convert_config_to_dataframe.R`, `test-get_location_config.R`
 - Statistics: `test-weighted_statistics.R`, `test-calc_kl_divergence.R`
 
@@ -1183,7 +1106,7 @@ Rscript -e "pkgdown::build_site()"
 ## Key Design Principles
 
 - **Version every commit:** Enables exact bug reproduction. `git log --grep="v0.13.25"` finds the change instantly.
-- **NPE uses `outputs/` subdirectory:** Load only weighted files (1-5%) directly — 100-1200× faster than combining all 40K files first.
+- **Simulation files in `samples/` subdirectory:** Individual `sim_*.parquet` files combined after calibration; subdirectory cleaned up.
 - **Thread safety (6 env vars):** BLAS, OpenMP, Intel TBB, and Numba all need `= "1"` per worker or parallel execution deadlocks.
 - **`get_paths()` everywhere:** Hardcoded paths break across machines. User calls `set_root_directory()` once; `get_paths()` handles the rest.
 - **No placeholder code:** Every commit is production-ready. Can't implement fully? Don't commit — ask for help.
@@ -1302,24 +1225,19 @@ ls -la ~/.virtualenvs/r-mosaic/bin/python
 
 ---
 
-### PyTorch Hangs When Importing (Cluster Deadlock)
+### Parallel Worker Deadlock
 
-**Symptom:** Code hangs indefinitely when running `torch <- reticulate::import("torch")`
+**Symptom:** Workers hang during LASER simulation
 
-**Cause:** BLAS threading conflict
+**Cause:** BLAS/Numba threading conflict
 
-**Fix is built into run_MOSAIC and train_npe, but for custom code:**
+**Fix is built into run_MOSAIC, but for custom parallel code:**
 ```r
-# BEFORE importing torch:
 MOSAIC:::.mosaic_set_blas_threads(1L)
-
 Sys.setenv(
   OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1",
   NUMEXPR_NUM_THREADS = "1", TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1"
 )
-
-# NOW safe to import:
-torch <- reticulate::import("torch")
 ```
 
 ---
@@ -1407,24 +1325,13 @@ When something breaks, run through this checklist:
    - Guardrails for numerical stability
    - **Critical for understanding calibration**
 
-8. **`R/npe.R`** (1500+ lines)
-   - Core NPE functions (train_npe, sample_posterior, etc.)
-   - PyTorch integration
-   - **Reference for NPE internals**
-
-8b. **`R/run_NPE.R`** (1000+ lines)
-   - Standalone NPE workflow callable post-hoc
-   - Dual-mode: embedded (called by run_MOSAIC) OR standalone on existing BFRS output
-   - Experiment with weight strategies without re-running calibration
-   - **Reference for advanced calibration**
-
-9. **`R/get_paths.R`** (81 lines)
+8. **`R/get_paths.R`** (81 lines)
    - Defines all directory paths
    - **Must use for all file operations**
 
-10. **`R/check_dependencies.R`** (274 lines)
+9. **`R/check_dependencies.R`** (274 lines)
     - Comprehensive environment diagnostics
-    - Three capability tiers (core, suitability, NPE)
+    - Two capability tiers (core, suitability)
     - **Reference for troubleshooting**
 
 ### Configuration Files
@@ -1466,7 +1373,6 @@ When something breaks, run through this checklist:
 **Python Packages (managed automatically):**
 - **Core:** laser-cholera, laser-core, numpy, h5py, pyarrow
 - **Suitability:** tensorflow, keras
-- **NPE:** torch, sbi, lampe, zuko, scikit-learn
 
 ## Additional Resources
 
@@ -1515,7 +1421,7 @@ Claude Code working on MOSAIC must act as a **production systems software engine
 | `config_default` | `data-raw/make_default_LASER_config_files.R` → `metadata$version` | Any change to default parameter values, date range, locations, or config structure |
 | `priors_default` | `data-raw/make_priors.R` → `metadata$version` | Any change to prior distributions, bounds, or parameter additions/removals |
 
-After bumping a data object version, rebuild the `.rda` and `.json` artifacts by re-running the corresponding `data-raw/make_*.R` script. Both versions are recorded in `0_environment/environment.json` during calibration for full provenance tracking.
+After bumping a data object version, rebuild the `.rda` and `.json` artifacts by re-running the corresponding `data-raw/make_*.R` script. Both versions are recorded in `1_inputs/environment.json` during calibration for full provenance tracking.
 
 #### 3. Testing Requirements
 
@@ -1552,7 +1458,7 @@ R CMD check .
 - `run_mosaic_iso()` / `run_MOSAIC()` - Complete calibration pipeline
 - `calc_model_likelihood()` - Likelihood calculation
 - `sample_parameters()` - Parameter sampling
-- NPE training workflow
+- Weight calculation and subset selection
 - Parallel execution on clusters
 
 **Before committing, verify:**
@@ -1577,14 +1483,14 @@ test_params <- sample_parameters(seed = 123, priors = priors, config = config)
 
 **NEVER regress performance:**
 - Consider performance implications before coding
-- Preserve critical optimizations (NPE outputs/ subdirectory, vectorization)
+- Preserve critical optimizations (vectorization, efficient file I/O)
 - Profile before/after if touching hot paths (use small test cases)
 
 **Hot paths (be extra careful):**
 - `run_MOSAIC()` - Main calibration loop
 - `calc_model_likelihood()` - Called thousands of times
 - `.mosaic_run_simulation_worker()` - Parallel worker
-- `.prepare_npe_data()` - NPE data loading
+- `.mosaic_load_and_combine_results()` - Simulation data loading
 
 **Scaling awareness:** See [Why design for scale, test small](#why-design-for-scale-test-small) for detailed guidance. Test with 10-100 examples, think about 40K. Pre-allocate, avoid growing objects, vectorize, consider memory (N workers × ~2 GB per worker), ensure thread safety (BLAS threads = 1).
 

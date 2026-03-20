@@ -296,6 +296,17 @@ plot_model_convergence <- function(results_dir,
         print(p)
     }
 
+    # Save companion CSV (rank | log_likelihood | group)
+    csv_data <- data.frame(
+        rank = plot_data$rank,
+        log_likelihood = plot_data$loglik,
+        group = ifelse(seq_len(nrow(plot_data)) == best_idx, "best",
+                       ifelse(plot_data$retained, "retained", "excluded")),
+        stringsAsFactors = FALSE
+    )
+    csv_file <- file.path(plots_dir, "convergence_diagnostic.csv")
+    utils::write.csv(csv_data, csv_file, row.names = FALSE)
+
     # Save plot
     plot_file <- file.path(plots_dir, "convergence_diagnostic.pdf")
     ggplot2::ggsave(plot_file, plot = p,

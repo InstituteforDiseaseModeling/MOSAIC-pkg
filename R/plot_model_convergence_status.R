@@ -410,6 +410,18 @@ plot_model_convergence_status <- function(results_dir,
 
     if (verbose) message("Successfully processed ", nrow(metrics_data), " metrics")
 
+    # Save companion CSV
+    csv_out <- data.frame(
+        metric = metrics_data$Metric,
+        description = metrics_data$Description,
+        value = metrics_data$Value,
+        target = metrics_data$Target,
+        status = metrics_data$Status,
+        stringsAsFactors = FALSE
+    )
+    csv_file <- file.path(plots_dir, "convergence_status.csv")
+    utils::write.csv(csv_out, csv_file, row.names = FALSE)
+
     # --- Create plot ------------------------------------------------------------
     # Increased height to accommodate parameter table, new B_size_upper row, and footer
     pdf(file.path(plots_dir, "convergence_status.pdf"), width = 14, height = 15)

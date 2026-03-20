@@ -38,8 +38,8 @@
 #' \dontrun{
 #' # From predictions directory (auto-discovers CSV files)
 #' plot_model_ppc(
-#'   predictions_dir = "output/1_bfrs/plots/predictions",
-#'   output_dir = "output/1_bfrs/plots"
+#'   predictions_dir = "output/3_results/figures/predictions",
+#'   output_dir = "output/3_results/figures/predictions"
 #' )
 #'
 #' # Specific locations only

@@ -97,96 +97,27 @@
 # STATE MANAGEMENT
 # =============================================================================
 
-#' Validate Run State Structure
+#' Mark Run State as Completed
 #'
-#' Ensures loaded state has expected structure and types.
-#' Prevents crashes from version incompatibilities.
+#' Reads the run_state.json file and updates its status to "completed".
+#' Called at the very end of a successful run.
 #'
-#' @param state Loaded state object
-#' @return Validated state, or NULL if invalid
+#' @param state_file Path to run_state.json
 #' @noRd
-.mosaic_validate_state <- function(state) {
-  required_fields <- c(
-    "total_sims_run", "total_sims_successful", "batch_number",
-    "phase", "converged", "mode"
+.mosaic_finalize_state <- function(state_file) {
+  if (!file.exists(state_file)) return(invisible(NULL))
+  persisted <- tryCatch(
+    jsonlite::read_json(state_file),
+    error = function(e) NULL
   )
-
-  # Check all required fields exist
-  missing <- setdiff(required_fields, names(state))
-  if (length(missing) > 0) {
-    warning("State missing fields: ", paste(missing, collapse = ", "),
-            call. = FALSE)
-    return(NULL)
-  }
-
-  # Type validation
-  type_checks <- list(
-    total_sims_run = is.numeric,
-    total_sims_successful = is.numeric,
-    batch_number = is.numeric,
-    phase = is.character,
-    converged = is.logical,
-    mode = is.character
-  )
-
-  for (field in names(type_checks)) {
-    if (!type_checks[[field]](state[[field]])) {
-      warning("State field '", field, "' has wrong type", call. = FALSE)
-      return(NULL)
-    }
-  }
-
-  # Value validation
-  if (state$total_sims_run < 0 || state$batch_number < 0) {
-    warning("State has negative counts", call. = FALSE)
-    return(NULL)
-  }
-
-  if (!state$mode %in% c("auto", "fixed")) {
-    warning("State has invalid mode: ", state$mode, call. = FALSE)
-    return(NULL)
-  }
-
-  # BUG FIX #1: Add missing phase tracking fields for backward compatibility
-  if (is.null(state$phase_batch_count)) {
-    state$phase_batch_count <- 0L
-    message("Added missing phase_batch_count field (legacy state file)")
-  }
-  if (is.null(state$phase_last)) {
-    state$phase_last <- NULL
-    message("Added missing phase_last field (legacy state file)")
-  }
-
-  state
-}
-
-#' Safe State Save with Locking
-#' @noRd
-.mosaic_save_state_safe <- function(state, path) {
-  # For single-process runs, locking is not needed
-  # For cluster runs, the flock implementation needs improvement
-  # Just use atomic write for now
-  .mosaic_atomic_write(state, path, saveRDS)
-}
-
-#' Safe State Load with Locking
-#' @noRd
-.mosaic_load_state_safe <- function(path) {
-  if (!file.exists(path)) {
-    return(NULL)
-  }
-
-  # For single-process runs, locking is not needed
-  # Just load and validate
-  state <- tryCatch({
-    readRDS(path)
-  }, error = function(e) {
-    warning("Failed to load state: ", e$message, call. = FALSE)
-    NULL
-  })
-
-  # Validate structure
-  .mosaic_validate_state(state)
+  if (is.null(persisted)) return(invisible(NULL))
+  persisted$status <- "completed"
+  persisted$updated_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
+  tmp <- tempfile(tmpdir = dirname(state_file), fileext = ".json.tmp")
+  on.exit(unlink(tmp), add = TRUE)
+  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  file.rename(tmp, state_file)
+  invisible(state_file)
 }
 
 # =============================================================================
@@ -256,7 +187,7 @@
 #' Capture Full Environment Snapshot
 #'
 #' Records all version, system, and runtime information needed to reproduce
-#' a calibration run. Written to 0_environment/environment.json.
+#' a calibration run. Written to 1_inputs/environment.json.
 #'
 #' @param config Model configuration (for priors metadata)
 #' @param priors Prior distributions (for priors metadata)
@@ -462,4 +393,143 @@
   }
 
   valid_ids
+}
+
+# =============================================================================
+# OUTPUT GENERATION
+# =============================================================================
+
+#' Write Summary JSON at Run Completion
+#' @noRd
+.mosaic_write_summary_json <- function(dirs, state, start_time, io) {
+  # Read convergence diagnostics
+  diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
+  diag <- if (file.exists(diag_file)) {
+    jsonlite::read_json(diag_file)
+  } else {
+    list()
+  }
+
+  # Read parameter ESS
+  ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
+  ess_min_param <- if (file.exists(ess_file)) {
+    ess_df <- utils::read.csv(ess_file, stringsAsFactors = FALSE)
+    if ("ess_marginal" %in% names(ess_df)) {
+      min(ess_df$ess_marginal, na.rm = TRUE)
+    } else NA_real_
+  } else NA_real_
+
+  wall_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+
+  summary_obj <- list(
+    converged = isTRUE(state$converged),
+    wall_time_seconds = round(wall_time, 1),
+    n_simulations_total = state$total_sims_run,
+    n_retained = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
+    n_best_subset = if (!is.null(diag$summary$best_subset_simulations)) diag$summary$best_subset_simulations else NA_integer_,
+    r2_final = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NA_real_,
+    ess_overall = if (!is.null(diag$metrics$ess_best$value)) diag$metrics$ess_best$value else NA_real_,
+    ess_min_param = if (is.finite(ess_min_param)) round(ess_min_param, 1) else NA_real_,
+    cvw_best = if (!is.null(diag$metrics$cvw_B$value)) diag$metrics$cvw_B$value else NA_real_
+  )
+
+  summary_path <- file.path(dirs$results, "summary.json")
+  .mosaic_write_json(summary_obj, summary_path, io)
+  summary_obj
+}
+
+#' Write Parameter Estimates CSV to Results
+#' @noRd
+.mosaic_write_parameter_estimates <- function(dirs) {
+  pq_file <- file.path(dirs$cal_posterior, "posterior_quantiles.csv")
+  if (!file.exists(pq_file)) return(invisible(NULL))
+
+  post_q <- utils::read.csv(pq_file, stringsAsFactors = FALSE)
+
+  # Find the quantile columns (q2.5, q50, q97.5)
+  q_cols <- names(post_q)
+  q2.5_col <- grep("^q0?\\.?025$|^q2\\.5$", q_cols, value = TRUE)[1]
+  q50_col <- grep("^q0?\\.?5$|^q50$", q_cols, value = TRUE)[1]
+  q97.5_col <- grep("^q0?\\.?975$|^q97\\.5$", q_cols, value = TRUE)[1]
+
+  if (is.na(q2.5_col) || is.na(q50_col) || is.na(q97.5_col)) {
+    warning("Could not find expected quantile columns in posterior_quantiles.csv", call. = FALSE)
+    return(invisible(NULL))
+  }
+
+  param_est <- data.frame(
+    parameter = post_q$parameter,
+    median    = post_q[[q50_col]],
+    Q2.5      = post_q[[q2.5_col]],
+    Q97.5     = post_q[[q97.5_col]],
+    stringsAsFactors = FALSE
+  )
+
+  out_path <- file.path(dirs$res_posterior, "parameter_estimates.csv")
+  utils::write.csv(param_est, out_path, row.names = FALSE)
+  invisible(out_path)
+}
+
+#' Write _README.md at Run Completion (Completion Signal)
+#' @noRd
+.mosaic_write_readme <- function(dirs, config, summary_obj) {
+  iso <- if (!is.null(config$location_name)) {
+    paste(config$location_name, collapse = ", ")
+  } else "unknown"
+
+  date_range <- if (!is.null(config$date_start) && !is.null(config$date_stop)) {
+    paste(config$date_start, "to", config$date_stop)
+  } else "unknown"
+
+  mosaic_ver <- tryCatch(
+    as.character(utils::packageVersion("MOSAIC")),
+    error = function(e) "unknown"
+  )
+
+  # Convergence verdict
+  status <- if (isTRUE(summary_obj$converged)) "CONVERGED" else "DID NOT CONVERGE"
+
+  lines <- c(
+    paste0("# MOSAIC Calibration: ", iso),
+    "",
+    "## Run Identity",
+    "",
+    paste0("- **Locations**: ", iso),
+    paste0("- **Period**: ", date_range),
+    paste0("- **Run date**: ", format(Sys.time(), "%Y-%m-%d %H:%M")),
+    paste0("- **MOSAIC version**: ", mosaic_ver),
+    paste0("- **Output path**: `", dirs$root, "`"),
+    "",
+    "## Convergence",
+    "",
+    paste0("**Status: ", status, "**"),
+    "",
+    paste0("| Metric | Value |"),
+    paste0("|--------|-------|"),
+    paste0("| Total simulations | ", summary_obj$n_simulations_total, " |"),
+    paste0("| Retained | ", ifelse(is.na(summary_obj$n_retained), "N/A", summary_obj$n_retained), " |"),
+    paste0("| Best subset | ", ifelse(is.na(summary_obj$n_best_subset), "N/A", summary_obj$n_best_subset), " |"),
+    paste0("| R-squared | ", ifelse(is.na(summary_obj$r2_final), "N/A", round(summary_obj$r2_final, 4)), " |"),
+    paste0("| ESS (min param) | ", ifelse(is.na(summary_obj$ess_min_param), "N/A", round(summary_obj$ess_min_param, 1)), " |"),
+    paste0("| CVw (best) | ", ifelse(is.na(summary_obj$cvw_best), "N/A", round(summary_obj$cvw_best, 2)), " |"),
+    paste0("| Wall time | ", round(summary_obj$wall_time_seconds / 60, 1), " min |"),
+    "",
+    "## Directory Guide",
+    "",
+    "| I want to... | Go to |",
+    "|---|---|",
+    "| See run inputs (config, priors) | `1_inputs/` |",
+    "| Get posterior parameter estimates | `3_results/posterior/parameter_estimates.csv` |",
+    "| See model fit plots | `3_results/figures/predictions/` |",
+    "| See convergence diagnostics | `3_results/figures/diagnostics/` |",
+    "| See prior vs posterior | `3_results/figures/posterior/` |",
+    "| Get raw calibration samples | `2_calibration/samples.parquet` |",
+    "| Get full posterior distributions | `2_calibration/posterior/posteriors.json` |",
+    "| Get best-fit model config | `2_calibration/best_model/config_best.json` |",
+    ""
+  )
+
+  readme_path <- file.path(dirs$root, "_README.md")
+  writeLines(lines, readme_path)
+  invisible(readme_path)
 }
