@@ -118,7 +118,7 @@
 #'
 #' @noRd
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
-                                          dir_bfrs_parameters,
+                                          dir_cal_samples,
                                           param_names_all, param_lookup, sampling_args, io,
                                           likelihood_settings) {
 
@@ -146,6 +146,24 @@
   })
 
   if (is.null(params_sim)) return(FALSE)
+
+  # Guardrails: clamp transmission parameters to prevent laser-cholera ValueError
+  # (GitHub #24: p = -np.expm1(-rate) produces p > 1 when rate < 0)
+  if (!is.null(params_sim$beta_j0_tot)) {
+    params_sim$beta_j0_tot <- pmax(params_sim$beta_j0_tot, 1e-10)
+  }
+  if (!is.null(params_sim$beta_j0_hum)) {
+    params_sim$beta_j0_hum <- pmax(params_sim$beta_j0_hum, 0)
+  }
+  if (!is.null(params_sim$beta_j0_env)) {
+    params_sim$beta_j0_env <- pmax(params_sim$beta_j0_env, 0)
+  }
+  if (!is.null(params_sim$p_beta)) {
+    params_sim$p_beta <- pmin(pmax(params_sim$p_beta, 1e-6), 1 - 1e-6)
+  }
+  if (!is.null(params_sim$tau_i)) {
+    params_sim$tau_i <- pmin(pmax(params_sim$tau_i, 0), 1)
+  }
 
   # Import laser-cholera (explicit check, no inherits)
   # Parallel mode: lc exists in worker global environment
@@ -258,7 +276,7 @@
   }
 
   # Write parameter file
-  output_file <- file.path(dir_bfrs_parameters, sprintf("sim_%07d.parquet", sim_id))
+  output_file <- file.path(dir_cal_samples, sprintf("sim_%07d.parquet", sim_id))
   .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
 
   # R GC every sim to process reticulate finalizer queue;
@@ -336,11 +354,11 @@
 #' @section Output Files:
 #' Results are organized in a structured directory tree:
 #' \itemize{
-#'   \item \code{0_setup/}: Configuration files (JSON format)
-#'   \item \code{1_bfrs/outputs/}: Simulation results (Parquet format)
-#'   \item \code{1_bfrs/diagnostics/}: ESS metrics, convergence results
-#'   \item \code{1_bfrs/posterior/}: Posterior quantiles and distributions
-#'   \item \code{1_bfrs/plots/}: Diagnostic, parameter, and prediction plots
+#'   \item \code{1_inputs/}: Configuration files (JSON format)
+#'   \item \code{2_calibration/samples/}: Simulation results (Parquet format)
+#'   \item \code{2_calibration/diagnostics/}: ESS metrics, convergence results
+#'   \item \code{2_calibration/posterior/}: Posterior quantiles and distributions
+#'   \item \code{3_results/figures/}: Diagnostic, parameter, and prediction plots
 #'   \item \code{3_results/}: Final combined results
 #' }
 #'
@@ -530,8 +548,8 @@ run_MOSAIC <- function(config,
   env_snapshot <- .mosaic_capture_environment(
     config = config, priors = priors, control = control
   )
-  .mosaic_write_json(env_snapshot, file.path(dirs$env, "environment.json"), control$io)
-  log_msg("  Saved %s", "0_environment/environment.json")
+  .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
+  log_msg("  Saved %s", "1_inputs/environment.json")
 
   sim_params <- list(
     control = control,
@@ -540,29 +558,29 @@ run_MOSAIC <- function(config,
     timestamp = Sys.time(),
     paths = list(
       dir_output = dirs$root,
-      dir_setup = dirs$setup,
-      dir_bfrs = dirs$bfrs,
+      dir_inputs = dirs$inputs,
+      dir_calibration = dirs$calibration,
       dir_results = dirs$results
     )
   )
 
   log_msg("Writing setup files...")
-  .mosaic_write_json(sim_params, file.path(dirs$setup, "simulation_params.json"), control$io)
-  log_msg("  Saved %s", basename(file.path(dirs$setup, "simulation_params.json")))
+  .mosaic_write_json(sim_params, file.path(dirs$inputs, "control.json"), control$io)
+  log_msg("  Saved %s", "control.json")
 
-  .mosaic_write_json(priors, file.path(dirs$setup, "priors.json"), control$io)
-  log_msg("  Saved %s", basename(file.path(dirs$setup, "priors.json")))
+  .mosaic_write_json(priors, file.path(dirs$inputs, "priors.json"), control$io)
+  log_msg("  Saved %s", "priors.json")
 
-  .mosaic_write_json(config, file.path(dirs$setup, "config_base.json"), control$io)
-  log_msg("  Saved %s", basename(file.path(dirs$setup, "config_base.json")))
+  .mosaic_write_json(config, file.path(dirs$inputs, "config.json"), control$io)
+  log_msg("  Saved %s", "config.json")
 
   # Plot prior distributions
   if (control$paths$plots) {
     log_msg("Plotting prior distributions")
     plot_model_distributions(
-      json_files = file.path(dirs$setup, "priors.json"),
+      json_files = file.path(dirs$inputs, "priors.json"),
       method_names = "Prior",
-      output_dir = dirs$setup,
+      output_dir = dirs$inputs,
       verbose = control$logging$verbose
     )
   }
@@ -737,7 +755,7 @@ run_MOSAIC <- function(config,
           priors = priors,
           config = config,
           PATHS = PATHS,
-          dir_bfrs_parameters = dirs$bfrs_params,
+          dir_cal_samples = dirs$cal_samples,
           param_names_all = param_names_all,
           param_lookup = param_lookup,
           sampling_args = sampling_args,
@@ -757,7 +775,7 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   nspec <- .mosaic_normalize_n_sims(n_simulations)
-  state_file <- file.path(dirs$bfrs_diag, "run_state.rds")
+  state_file <- file.path(dirs$cal_state, "run_state.json")
 
   state <- .mosaic_init_state(control, param_names_sampled, nspec)
 
@@ -765,7 +783,7 @@ run_MOSAIC <- function(config,
   start_time <- Sys.time()
 
   # Upfront disk space check (once, not per file write)
-  if (!.mosaic_check_disk_space(dirs$bfrs_out, required_mb = 500)) {
+  if (!.mosaic_check_disk_space(dirs$calibration, required_mb = 500)) {
     stop("Insufficient disk space to begin calibration. At least 500 MB required.", call. = FALSE)
   }
 
@@ -805,7 +823,7 @@ run_MOSAIC <- function(config,
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id, n_iterations, priors, config, PATHS,
-            dirs$bfrs_params,
+            dirs$cal_samples,
             param_names_all, param_lookup, sampling_args,
             io = control$io,
             likelihood_settings = control$likelihood
@@ -913,7 +931,7 @@ run_MOSAIC <- function(config,
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id, n_iterations, priors, config, PATHS,
-            dirs$bfrs_params,
+            dirs$cal_samples,
             param_names_all, param_lookup, sampling_args,
             io = control$io,
             likelihood_settings = control$likelihood
@@ -963,7 +981,7 @@ run_MOSAIC <- function(config,
   log_msg("Combining simulation files")
 
   # Get list of simulation files
-  parquet_files <- list.files(dirs$bfrs_params, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+  parquet_files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
 
   # Load and combine all simulation files
   # Default: streaming (memory-safe for large runs)
@@ -975,7 +993,7 @@ run_MOSAIC <- function(config,
   }
 
   results <- .mosaic_load_and_combine_results(
-    dir_params = dirs$bfrs_params,
+    dir_params = dirs$cal_samples,
     method = load_method,
     verbose = TRUE
   )
@@ -1017,7 +1035,7 @@ run_MOSAIC <- function(config,
   }
 
   # Write combined simulations and clean up shards
-  simulations_file <- file.path(dirs$bfrs_out, "simulations.parquet")
+  simulations_file <- file.path(dirs$calibration, "samples.parquet")
   .mosaic_write_parquet(results, simulations_file, control$io)
 
   # Delete individual simulation files after combining
@@ -1042,7 +1060,7 @@ run_MOSAIC <- function(config,
     verbose = control$logging$verbose
   )
 
-  ess_file <- file.path(dirs$bfrs_diag, "parameter_ess.csv")
+  ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
   write.csv(ess_results, ess_file, row.names = FALSE)
   log_msg("Saved %s", ess_file)
 
@@ -1286,7 +1304,7 @@ run_MOSAIC <- function(config,
     meets_all_criteria = final_converged,
     timestamp = Sys.time()
   )
-  summary_file <- file.path(dirs$bfrs_diag, "subset_selection_summary.csv")
+  summary_file <- file.path(dirs$cal_diag, "subset_selection_summary.csv")
   write.csv(subset_summary, summary_file, row.names = FALSE)
   log_msg("Saved %s", summary_file)
 
@@ -1354,24 +1372,24 @@ run_MOSAIC <- function(config,
     is_best_subset = results$is_best_subset
   )
 
-  convergence_file <- file.path(dirs$bfrs_diag, "convergence_results.parquet")
+  convergence_file <- file.path(dirs$cal_diag, "convergence_results.parquet")
   .mosaic_write_parquet(convergence_results_df, convergence_file, control$io)
   log_msg("Saved %s", convergence_file)
 
-  diagnostics_file <- file.path(dirs$bfrs_diag, "convergence_diagnostics.json")
+  diagnostics_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
   jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE)
   log_msg("Saved %s", diagnostics_file)
 
   if (control$paths$plots) {
     log_msg("Generating convergence diagnostic plots...")
     plot_model_convergence(
-      results_dir = dirs$bfrs_diag,
-      plots_dir = dirs$bfrs_plots_diag,
+      results_dir = dirs$cal_diag,
+      plots_dir = dirs$res_fig_diag,
       verbose = control$logging$verbose
     )
     plot_model_convergence_status(
-      results_dir = dirs$bfrs_diag,
-      plots_dir = dirs$bfrs_plots_diag,
+      results_dir = dirs$cal_diag,
+      plots_dir = dirs$res_fig_diag,
       verbose = control$logging$verbose
     )
   }
@@ -1384,15 +1402,15 @@ run_MOSAIC <- function(config,
   posterior_quantiles <- calc_model_posterior_quantiles(
     results = results,
     probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
-    output_dir = dirs$bfrs_post,
+    output_dir = dirs$cal_posterior,
     verbose = control$logging$verbose
   )
-  log_msg("Saved %s", file.path(dirs$bfrs_post, "posterior_quantiles.csv"))
+  log_msg("Saved %s", file.path(dirs$cal_posterior, "posterior_quantiles.csv"))
 
   if (control$paths$plots) {
     plot_model_posterior_quantiles(
-      csv_files = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-      output_dir = dirs$bfrs_plots_post,
+      csv_files = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+      output_dir = dirs$res_fig_post,
       verbose = control$logging$verbose
     )
   }
@@ -1400,26 +1418,26 @@ run_MOSAIC <- function(config,
   # Calculate posterior distributions
   log_msg("Calculating posterior distributions")
   calc_model_posterior_distributions(
-    quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-    priors_file = file.path(dirs$setup, "priors.json"),
-    output_dir = dirs$bfrs_post,
+    quantiles_file = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+    priors_file = file.path(dirs$inputs, "priors.json"),
+    output_dir = dirs$cal_posterior,
     verbose = control$logging$verbose
   )
-  log_msg("Saved %s", file.path(dirs$bfrs_post, "posteriors.json"))
+  log_msg("Saved %s", file.path(dirs$cal_posterior, "posteriors.json"))
 
   if (control$paths$plots) {
     plot_model_distributions(
-      json_files = c(file.path(dirs$setup, "priors.json"),
-                    file.path(dirs$bfrs_post, "posteriors.json")),
+      json_files = c(file.path(dirs$inputs, "priors.json"),
+                    file.path(dirs$cal_posterior, "posteriors.json")),
       method_names = c("Prior", "Posterior"),
-      output_dir = dirs$bfrs_plots_post
+      output_dir = dirs$res_fig_post
     )
     plot_model_posteriors_detail(
-      quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-      results_file = file.path(dirs$bfrs_out, "simulations.parquet"),
-      priors_file = file.path(dirs$setup, "priors.json"),
-      posteriors_file = file.path(dirs$bfrs_post, "posteriors.json"),
-      output_dir = file.path(dirs$bfrs_plots_post, "detail"),
+      quantiles_file = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+      results_file = file.path(dirs$calibration, "samples.parquet"),
+      priors_file = file.path(dirs$inputs, "priors.json"),
+      posteriors_file = file.path(dirs$cal_posterior, "posteriors.json"),
+      output_dir = dirs$res_fig_post_detail,
       verbose = control$logging$verbose
     )
   }
@@ -1441,7 +1459,7 @@ run_MOSAIC <- function(config,
     verbose = FALSE
   )
 
-  config_best_file <- file.path(dirs$bfrs_cfg, "config_best.json")
+  config_best_file <- file.path(dirs$cal_best_model, "config_best.json")
   jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE)
   log_msg("Saved %s", config_best_file)
 
@@ -1453,7 +1471,7 @@ run_MOSAIC <- function(config,
     plot_model_fit_stochastic(
       config = config_best,
       n_simulations = control$predictions$best_model_n_sims,
-      output_dir = dirs$bfrs_plots_pred,
+      output_dir = dirs$res_fig_pred,
       envelope_quantiles = c(0.025, 0.975),
       save_predictions = TRUE,
       parallel = control$parallel$enable,
@@ -1488,13 +1506,33 @@ run_MOSAIC <- function(config,
       PATHS = PATHS,
       priors = priors,
       sampling_args = sampling_args,
-      output_dir = dirs$bfrs_plots_pred,
+      output_dir = dirs$res_fig_pred,
       save_predictions = TRUE,
       parallel = control$parallel$enable,
       n_cores = control$parallel$n_cores,
       root_dir = root_dir,
       verbose = control$logging$verbose
     )
+  }
+
+  # ===========================================================================
+  # COMBINE PREDICTION CSVs
+  # ===========================================================================
+
+  # Combine per-location prediction CSVs into all_predictions.csv
+  pred_csvs <- list.files(dirs$res_fig_pred, pattern = "^predictions_(ensemble|stochastic)_.*\\.csv$", full.names = TRUE)
+  if (length(pred_csvs) > 0) {
+    all_preds <- tryCatch({
+      pred_list <- lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE)
+      do.call(rbind, pred_list)
+    }, error = function(e) {
+      log_msg("Warning: Could not combine prediction CSVs: %s", e$message)
+      NULL
+    })
+    if (!is.null(all_preds)) {
+      utils::write.csv(all_preds, file.path(dirs$res_predictions, "all_predictions.csv"), row.names = FALSE)
+      log_msg("Combined %d prediction files into all_predictions.csv", length(pred_csvs))
+    }
   }
 
   # ===========================================================================
@@ -1509,8 +1547,8 @@ run_MOSAIC <- function(config,
       {
         # Try new signature first (always creates both aggregate and per-location plots)
         plot_model_ppc(
-          predictions_dir = dirs$bfrs_plots_pred,
-          output_dir = dirs$bfrs_plots,
+          predictions_dir = dirs$res_fig_pred,
+          output_dir = dirs$res_fig_pred,
           verbose = control$logging$verbose
         )
       },
@@ -1533,14 +1571,35 @@ run_MOSAIC <- function(config,
   log_msg("Calibration complete: %d batches, %d simulations, %.2f min",
           state$batch_number, state$total_sims_run, as.numeric(runtime))
 
+  # ===========================================================================
+  # WRITE RESULTS SUMMARY
+  # ===========================================================================
+
+  # Parameter estimates (tidy CSV for downstream use)
+  log_msg("Writing parameter estimates...")
+  .mosaic_write_parameter_estimates(dirs)
+  log_msg("  Saved 3_results/posterior/parameter_estimates.csv")
+
+  # Summary JSON (machine-readable run summary)
+  log_msg("Writing summary...")
+  summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, control$io)
+  log_msg("  Saved 3_results/summary.json")
+
+  # Finalize run state (mark as completed)
+  .mosaic_finalize_state(state_file)
+
+  # _README.md (completion signal — written LAST, only on success)
+  .mosaic_write_readme(dirs, config, summary_obj)
+  log_msg("  Saved _README.md (completion signal)")
+
   # Return invisibly
   invisible(list(
     dirs = dirs,
     files = list(
-      simulations = simulations_file,
-      ess_csv = file.path(dirs$bfrs_diag, "parameter_ess.csv"),
-      posterior_quantiles = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-      posteriors_json = file.path(dirs$bfrs_post, "posteriors.json")
+      simulations = file.path(dirs$calibration, "samples.parquet"),
+      ess_csv = file.path(dirs$cal_diag, "parameter_ess.csv"),
+      posterior_quantiles = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+      posteriors_json = file.path(dirs$cal_posterior, "posteriors.json")
     ),
     summary = list(
       batches = state$batch_number,

@@ -389,20 +389,23 @@
 #' @noRd
 .mosaic_ensure_dir_tree <- function(dir_output, clean_output) {
   d <- list(
-    root = dir_output,
-    env = file.path(dir_output, "0_environment"),
-    setup = file.path(dir_output, "0_setup"),
-    bfrs = file.path(dir_output, "1_bfrs"),
-    bfrs_cfg = file.path(dir_output, "1_bfrs/config"),
-    bfrs_diag = file.path(dir_output, "1_bfrs/diagnostics"),
-    bfrs_out = file.path(dir_output, "1_bfrs/outputs"),
-    bfrs_params = file.path(dir_output, "1_bfrs/outputs/parameters"),
-    bfrs_post = file.path(dir_output, "1_bfrs/posterior"),
-    bfrs_plots = file.path(dir_output, "1_bfrs/plots"),
-    bfrs_plots_diag = file.path(dir_output, "1_bfrs/plots/diagnostics"),
-    bfrs_plots_post = file.path(dir_output, "1_bfrs/plots/posterior"),
-    bfrs_plots_pred = file.path(dir_output, "1_bfrs/plots/predictions"),
-    results = file.path(dir_output, "3_results")
+    root              = dir_output,
+    inputs            = file.path(dir_output, "1_inputs"),
+    calibration       = file.path(dir_output, "2_calibration"),
+    cal_samples       = file.path(dir_output, "2_calibration/samples"),
+    cal_best_model    = file.path(dir_output, "2_calibration/best_model"),
+    cal_posterior      = file.path(dir_output, "2_calibration/posterior"),
+    cal_diag          = file.path(dir_output, "2_calibration/diagnostics"),
+    cal_state         = file.path(dir_output, "2_calibration/state"),
+    results           = file.path(dir_output, "3_results"),
+    res_posterior      = file.path(dir_output, "3_results/posterior"),
+    res_predictions    = file.path(dir_output, "3_results/predictions"),
+    res_figures        = file.path(dir_output, "3_results/figures"),
+    res_fig_diag       = file.path(dir_output, "3_results/figures/diagnostics"),
+    res_fig_post       = file.path(dir_output, "3_results/figures/posterior"),
+    res_fig_post_detail = file.path(dir_output, "3_results/figures/posterior/detail"),
+    res_fig_pred       = file.path(dir_output, "3_results/figures/predictions"),
+    res_fig_pred_ppc   = file.path(dir_output, "3_results/figures/predictions/ppc")
   )
 
   if (clean_output && dir.exists(d$root)) {
@@ -440,20 +443,45 @@
     fixed_target = nspec$fixed_target,
     # BUG FIX #1: Track phase iterations to prevent premature phase transitions
     phase_batch_count = 0L,
-    phase_last = NULL
+    phase_last = NULL,
+    # Internal timestamp for state file provenance
+    .created_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
   )
 }
 
-#' Save State to RDS (Deprecated - Use Safe Version)
+#' Save Run State as JSON
 #'
-#' @description
-#' **Deprecated**: Use `.mosaic_save_state_safe()` instead for file locking.
-#' This function now redirects to the safe version for backward compatibility.
+#' Writes a lightweight JSON representation of the workflow state.
+#' The persisted state is a slim subset of the full in-memory state,
+#' containing only what is needed for monitoring and future resume.
+#' Uses atomic write via tempfile + rename.
 #'
 #' @noRd
 .mosaic_save_state <- function(state, path) {
-  # Redirect to safe version with locking
-  .mosaic_save_state_safe(state, path)
+  # Extract only the fields needed for monitoring / resume
+  persisted <- list(
+    schema_version = 1L,
+    status = "running",
+    created_at = if (!is.null(state$.created_at)) state$.created_at
+                 else format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    updated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    phase = state$phase,
+    batch = state$batch_number,
+    sims_completed = state$total_sims_successful,
+    sims_target = if (identical(state$mode, "fixed")) state$fixed_target else NULL,
+    converged = isTRUE(state$converged),
+    r_squared = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NULL,
+    ess_min = if (length(state$ess_tracking) > 0) {
+      round(tail(vapply(state$ess_tracking, `[[`, numeric(1), "min_ess"), 1), 1)
+    } else NULL,
+    cvw_best = NULL  # populated by convergence diagnostics, not tracked in state
+  )
+
+  # Atomic write: tempfile + rename
+  tmp <- tempfile(tmpdir = dirname(path), fileext = ".json.tmp")
+  on.exit(unlink(tmp), add = TRUE)
+  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  file.rename(tmp, path)
 }
 
 #' Decide Next Batch Size
@@ -552,7 +580,7 @@
 .mosaic_ess_check_update_state <- function(state, dirs, param_names_est, control) {
 
   # Load all simulation files fresh from disk
-  files <- list.files(dirs$bfrs_params, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
+  files <- list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$", full.names = TRUE)
   if (!length(files)) return(state)
 
   log_msg("Checking ESS convergence...")
@@ -562,7 +590,7 @@
   # This is much faster and more memory-efficient than rbindlist for large datasets
   ess_check_results <- tryCatch({
     .mosaic_load_and_combine_results(
-      dir_params = dirs$bfrs_params,
+      dir_params = dirs$cal_samples,
       method = "streaming",
       verbose = FALSE
     )

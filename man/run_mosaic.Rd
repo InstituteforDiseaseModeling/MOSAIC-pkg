@@ -76,11 +76,11 @@ See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for comple
 
 Results are organized in a structured directory tree:
 \itemize{
-\item \code{0_setup/}: Configuration files (JSON format)
-\item \code{1_bfrs/outputs/}: Simulation results (Parquet format)
-\item \code{1_bfrs/diagnostics/}: ESS metrics, convergence results
-\item \code{1_bfrs/posterior/}: Posterior quantiles and distributions
-\item \code{1_bfrs/plots/}: Diagnostic, parameter, and prediction plots
+\item \code{1_inputs/}: Configuration files (JSON format)
+\item \code{2_calibration/samples/}: Simulation results (Parquet format)
+\item \code{2_calibration/diagnostics/}: ESS metrics, convergence results
+\item \code{2_calibration/posterior/}: Posterior quantiles and distributions
+\item \code{3_results/figures/}: Diagnostic, parameter, and prediction plots
 \item \code{3_results/}: Final combined results
 }
 }

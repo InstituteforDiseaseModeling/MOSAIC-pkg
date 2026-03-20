@@ -857,7 +857,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
     ),
     location = list(
       params = c("beta_j0_env", "beta_j0_hum", "tau_i", "theta_j",
-                "a_1", "a_2", "b_1", "b_2",
+                "a_1_j", "a_2_j", "b_1_j", "b_2_j",
                 "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
                 "epidemic_threshold"),
       type = "vector"
