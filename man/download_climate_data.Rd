@@ -2,7 +2,7 @@
 % Please edit documentation in R/download_climate_data.R
 \name{download_climate_data}
 \alias{download_climate_data}
-\title{Download and Save Climate Data for Multiple Countries (Parquet Format, Multiple Models and Variables)}
+\title{Download and Save Climate Data by Country (Parquet Format)}
 \usage{
 download_climate_data(
   PATHS,
@@ -16,75 +16,32 @@ download_climate_data(
 )
 }
 \arguments{
-\item{PATHS}{A list containing paths where raw and processed data are stored.
-PATHS is typically the output of the \code{get_paths()} function and should include:
+\item{PATHS}{A list containing paths (typically from \code{get_paths()}):
 \itemize{
-\item \strong{DATA_SHAPEFILES}: Path to the directory containing country shapefiles.
-\item \strong{DATA_CLIMATE}: Path to the directory where processed climate data will be saved.
+\item \strong{DATA_SHAPEFILES}: Directory containing country shapefiles.
+\item \strong{DATA_CLIMATE}: Directory for processed climate data.
+\item \strong{DATA_RAW}: Directory for raw climate data.
 }}
 
-\item{iso_codes}{A character vector of ISO3 country codes for which climate data should be downloaded.}
+\item{iso_codes}{Character vector of ISO3 country codes.}
 
-\item{n_points}{An integer specifying the number of grid points to generate within each country for which climate data will be downloaded.}
+\item{n_points}{Integer, number of grid points per country.}
 
-\item{date_start}{A character string representing the start date for the climate data (in "YYYY-MM-DD" format).}
+\item{date_start}{Character, start date ("YYYY-MM-DD").}
 
-\item{date_stop}{A character string representing the end date for the climate data (in "YYYY-MM-DD" format).}
+\item{date_stop}{Character, end date ("YYYY-MM-DD").}
 
-\item{climate_models}{A character vector of climate models to use. Available models include:
-\itemize{
-\item \strong{CMCC_CM2_VHR4}
-\item \strong{FGOALS_f3_H}
-\item \strong{HiRAM_SIT_HR}
-\item \strong{MRI_AGCM3_2_S}
-\item \strong{EC_Earth3P_HR}
-\item \strong{MPI_ESM1_2_XR}
-\item \strong{NICAM16_8S}
-}}
+\item{climate_models}{Character vector of climate model names.}
 
-\item{climate_variables}{A character vector of climate variables to retrieve. See details for available variables.}
+\item{climate_variables}{Character vector of climate variables (overridden internally).}
 
-\item{api_key}{A character string representing the API key required to access the climate data API.}
+\item{api_key}{Character, API key or \code{"free"}.}
 }
 \value{
-The function does not return a value. It downloads the climate data for each country, climate model, and climate variable, saving the results as Parquet files in the specified directory.
+Invisible NULL. Saves Parquet files to \code{PATHS$DATA_RAW/climate/}.
 }
 \description{
-This function downloads daily climate data for a list of specified countries, saving the data as Parquet files. The data includes both historical and future climate variables at grid points within each country for a specified set of climate models and variables.
-}
-\details{
-This function uses country shapefiles to generate a grid of points within each country, at which climate data is downloaded. The function retrieves climate data for the specified date range (\code{date_start} to \code{date_stop}) and the specified climate models and variables. The data is saved for each country, climate model, and climate variable in a Parquet file named \verb{climate_data_\{climate_model\}_\{climate_variable\}_\{date_start\}_\{date_stop\}_\{ISO3\}.parquet}.
-
-The available climate variables include:
-\itemize{
-\item \strong{temperature_2m_mean}, \strong{temperature_2m_max}, \strong{temperature_2m_min}
-\item \strong{wind_speed_10m_mean}, \strong{wind_speed_10m_max}
-\item \strong{cloud_cover_mean}
-\item \strong{shortwave_radiation_sum}
-\item \strong{relative_humidity_2m_mean}, \strong{relative_humidity_2m_max}, \strong{relative_humidity_2m_min}
-\item \strong{dew_point_2m_mean}, \strong{dew_point_2m_min}, \strong{dew_point_2m_max}
-\item \strong{precipitation_sum}, \strong{rain_sum}, \strong{snowfall_sum}
-\item \strong{pressure_msl_mean}
-\item \strong{soil_moisture_0_to_10cm_mean}
-\item \strong{et0_fao_evapotranspiration_sum}
-}
-}
-\examples{
-\dontrun{
-# Define paths for raw and processed data using get_paths()
-PATHS <- get_paths()
-
-# ISO3 country codes for African countries
-iso_codes <- c("ZAF", "KEN", "NGA")
-
-# API key for climate data API
-api_key <- "your-api-key-here"
-
-# Download climate data for multiple models and variables and save it for the specified countries
-download_climate_data(PATHS, iso_codes, n_points = 5,
-                      date_start = "1970-01-01", date_stop = "2030-12-31",
-                      climate_models = c("MRI_AGCM3_2_S", "EC_Earth3P_HR"),
-                      climate_variables = c("temperature_2m_mean", "precipitation_sum"), api_key)
-}
-
+Downloads daily climate data for countries identified by ISO3 codes.
+Generates a grid of points within each country's shapefile, fetches climate
+data from the API, and saves per-variable Parquet files.
 }
