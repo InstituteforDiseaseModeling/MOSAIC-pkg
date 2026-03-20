@@ -771,10 +771,9 @@ run_MOSAIC <- function(config,
   log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
 
-  # Upfront disk space check (once, not per file write)
-  if (!.mosaic_check_disk_space(dirs$calibration, required_mb = 500)) {
-    stop("Insufficient disk space to begin calibration. At least 500 MB required.", call. = FALSE)
-  }
+  # Disk space check removed in v0.17.10 — fragile across platforms (macOS df
+  # output parsing) and low value on local machines. Cluster deployments should
+  # check quotas at the job scheduler level, not inside R.
 
   # ===========================================================================
   # SIMULATION: FIXED MODE

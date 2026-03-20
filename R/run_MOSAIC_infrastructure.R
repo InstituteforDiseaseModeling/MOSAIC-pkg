@@ -9,47 +9,6 @@
 # FILE SYSTEM SAFETY
 # =============================================================================
 
-#' Check Available Disk Space
-#'
-#' Validates sufficient disk space before large write operations.
-#' Critical for cluster environments with quotas.
-#'
-#' @param path Directory to check
-#' @param required_mb Minimum required space in MB
-#' @return Logical, TRUE if sufficient space
-#' @noRd
-.mosaic_check_disk_space <- function(path, required_mb = 100) {
-  # Ensure directory exists or use parent
-  check_path <- if (dir.exists(path)) path else dirname(path)
-
-  tryCatch({
-    # Get filesystem info (cross-platform)
-    if (.Platform$OS.type == "unix") {
-      # Use df command on Unix-like systems
-      cmd <- sprintf("df -m '%s' | tail -1 | awk '{print $4}'", check_path)
-      available_mb <- as.numeric(system(cmd, intern = TRUE))
-    } else {
-      # Windows: use fsutil or assume sufficient space
-      # Note: fsutil requires admin, so we skip check on Windows
-      return(TRUE)
-    }
-
-    if (is.na(available_mb) || available_mb < required_mb) {
-      warning(sprintf(
-        "Low disk space: %.1f MB available, %.1f MB required at %s",
-        available_mb, required_mb, check_path
-      ), call. = FALSE, immediate. = TRUE)
-      return(FALSE)
-    }
-
-    TRUE
-  }, error = function(e) {
-    # If check fails, log warning but allow operation
-    warning("Could not verify disk space: ", e$message, call. = FALSE)
-    TRUE
-  })
-}
-
 #' Atomic Write
 #'
 #' Implements atomic write via write-to-temp-and-rename.
