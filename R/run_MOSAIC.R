@@ -1526,19 +1526,29 @@ run_MOSAIC <- function(config,
   # COMBINE PREDICTION CSVs
   # ===========================================================================
 
-  # Combine per-location prediction CSVs into all_predictions.csv
-  pred_csvs <- list.files(dirs$res_fig_pred, pattern = "^predictions_(ensemble|stochastic)_.*\\.csv$", full.names = TRUE)
-  if (length(pred_csvs) > 0) {
-    all_preds <- tryCatch({
-      pred_list <- lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE)
-      do.call(rbind, pred_list)
-    }, error = function(e) {
-      log_msg("Warning: Could not combine prediction CSVs: %s", e$message)
-      NULL
-    })
-    if (!is.null(all_preds)) {
-      utils::write.csv(all_preds, file.path(dirs$res_predictions, "all_predictions.csv"), row.names = FALSE)
-      log_msg("Combined %d prediction files into all_predictions.csv", length(pred_csvs))
+  # Combine per-location prediction CSVs by type (ensemble and stochastic have
+  # different column schemas and cannot be rbind'd together)
+  for (pred_type in c("ensemble", "stochastic")) {
+    pred_csvs <- list.files(dirs$res_fig_pred,
+                            pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
+                            full.names = TRUE)
+    if (length(pred_csvs) > 1) {
+      combined <- tryCatch({
+        pred_list <- lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE)
+        do.call(rbind, pred_list)
+      }, error = function(e) {
+        log_msg("Warning: Could not combine %s prediction CSVs: %s", pred_type, e$message)
+        NULL
+      })
+      if (!is.null(combined)) {
+        out_file <- file.path(dirs$res_predictions, sprintf("all_predictions_%s.csv", pred_type))
+        utils::write.csv(combined, out_file, row.names = FALSE)
+        log_msg("Combined %d %s prediction files into %s", length(pred_csvs), pred_type, basename(out_file))
+      }
+    } else if (length(pred_csvs) == 1) {
+      # Single location — copy directly rather than combining
+      out_file <- file.path(dirs$res_predictions, sprintf("all_predictions_%s.csv", pred_type))
+      file.copy(pred_csvs, out_file, overwrite = TRUE)
     }
   }
 
