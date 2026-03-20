@@ -1,0 +1,152 @@
+#' Plot Posterior Parameter Correlation Heatmap
+#'
+#' Generates a heatmap of pairwise Spearman correlations between parameters in
+#' the posterior (best subset), revealing trade-offs and redundancies. Parameters
+#' are clustered hierarchically and only correlations exceeding a threshold are
+#' labeled.
+#'
+#' @param results_file Path to samples.parquet file containing calibration results
+#' @param priors_file Path to priors.json (used for parameter descriptions)
+#' @param output_dir Directory to write the output figure
+#' @param cor_threshold Minimum absolute correlation to display as text label.
+#'   Default 0.3.
+#' @param max_params Maximum number of parameters to display. The top
+#'   \code{max_params} most-correlated parameters are selected. Default 25.
+#' @param verbose Print progress messages
+#'
+#' @return Invisible NULL. Writes a PNG file to \code{output_dir}.
+#'
+#' @export
+plot_model_parameter_correlation <- function(results_file,
+                                             priors_file = NULL,
+                                             output_dir = ".",
+                                             cor_threshold = 0.3,
+                                             max_params = 25,
+                                             verbose = TRUE) {
+
+  if (!file.exists(results_file)) {
+    warning("Results file not found: ", results_file)
+    return(invisible(NULL))
+  }
+
+  results <- arrow::read_parquet(results_file)
+
+  # Identify parameter columns (exclude metadata, status, weight columns)
+  meta_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood",
+                 "is_finite", "is_valid", "is_outlier", "is_retained",
+                 "is_best_subset", "is_best_model",
+                 "weight_all", "weight_retained", "weight_best",
+                 "N_j_initial")
+
+  param_cols <- setdiff(names(results), meta_cols)
+
+  # Use best subset if available, otherwise retained
+
+  if ("is_best_subset" %in% names(results) && any(results$is_best_subset)) {
+    sims <- results[results$is_best_subset == TRUE, param_cols, drop = FALSE]
+    subset_label <- "best subset"
+  } else if ("is_retained" %in% names(results) && any(results$is_retained)) {
+    sims <- results[results$is_retained == TRUE, param_cols, drop = FALSE]
+    subset_label <- "retained"
+  } else {
+    sims <- results[, param_cols, drop = FALSE]
+    subset_label <- "all"
+  }
+
+  # Remove zero-variance columns (unsampled parameters)
+  vars <- apply(sims, 2, stats::var, na.rm = TRUE)
+  param_cols_active <- names(vars[vars > 0 & !is.na(vars)])
+
+  if (length(param_cols_active) < 3) {
+    warning("Fewer than 3 active parameters. Cannot compute correlation matrix.")
+    return(invisible(NULL))
+  }
+
+  sims <- sims[, param_cols_active, drop = FALSE]
+
+  # Compute Spearman correlation matrix
+  cor_mat <- stats::cor(sims, use = "pairwise.complete.obs", method = "spearman")
+
+  # Select top correlated parameters
+  cor_long <- as.data.frame(as.table(cor_mat))
+  names(cor_long) <- c("param1", "param2", "cor")
+  cor_long <- cor_long[as.character(cor_long$param1) < as.character(cor_long$param2), ]
+  cor_long <- cor_long[order(-abs(cor_long$cor)), ]
+
+  top_params <- unique(c(as.character(cor_long$param1), as.character(cor_long$param2)))
+  top_params <- head(top_params, max_params)
+
+  cor_subset <- cor_mat[top_params, top_params]
+
+  # Hierarchical clustering for ordering
+  if (nrow(cor_subset) > 2) {
+    dist_mat <- stats::as.dist(1 - abs(cor_subset))
+    hc <- stats::hclust(dist_mat, method = "complete")
+    ord <- hc$order
+    cor_subset <- cor_subset[ord, ord]
+  }
+
+  # Clean labels
+  clean_label <- function(x) {
+    x <- gsub("_([A-Z]{3})$", " (\\1)", x)
+    x <- gsub("_", " ", x)
+    x
+  }
+
+  rownames(cor_subset) <- clean_label(rownames(cor_subset))
+  colnames(cor_subset) <- clean_label(colnames(cor_subset))
+
+  # Convert to long format
+  cor_plot_df <- as.data.frame(as.table(cor_subset))
+  names(cor_plot_df) <- c("Param1", "Param2", "Correlation")
+  cor_plot_df$Param1 <- factor(cor_plot_df$Param1, levels = rownames(cor_subset))
+  cor_plot_df$Param2 <- factor(cor_plot_df$Param2, levels = colnames(cor_subset))
+
+  # Text labels for strong correlations (off-diagonal only)
+  cor_plot_df$label <- ifelse(
+    abs(cor_plot_df$Correlation) >= cor_threshold &
+      as.character(cor_plot_df$Param1) != as.character(cor_plot_df$Param2),
+    sprintf("%.2f", cor_plot_df$Correlation),
+    ""
+  )
+
+  n_params <- length(top_params)
+  n_sims <- nrow(sims)
+
+  p <- ggplot2::ggplot(cor_plot_df,
+                       ggplot2::aes(x = .data$Param1, y = .data$Param2,
+                                    fill = .data$Correlation)) +
+    ggplot2::geom_tile(color = "white", linewidth = 0.3) +
+    ggplot2::geom_text(ggplot2::aes(label = .data$label),
+                       size = max(1.5, 3 - n_params / 15),
+                       color = "white") +
+    ggplot2::scale_fill_gradientn(
+      colors = mosaic_pal_diverging(11, "blue_red"),
+      limits = c(-1, 1),
+      name = "Spearman\ncorrelation"
+    ) +
+    ggplot2::labs(
+      title = "Posterior Parameter Correlations",
+      subtitle = sprintf("Top %d parameters by |correlation| (%s, n = %d)",
+                         n_params, subset_label, n_sims)
+    ) +
+    theme_mosaic(base_size = 8) +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1,
+                                           size = max(5, 8 - n_params / 8)),
+      axis.text.y = ggplot2::element_text(size = max(5, 8 - n_params / 8)),
+      axis.title = ggplot2::element_blank(),
+      panel.grid = ggplot2::element_blank()
+    )
+
+  # Size adapts to number of parameters
+  fig_size <- max(8, n_params * 0.4 + 2)
+
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  out_file <- file.path(output_dir, "parameter_correlation.png")
+  ggplot2::ggsave(out_file, p, width = fig_size, height = fig_size - 1,
+                  dpi = 150, bg = "white")
+
+  if (verbose) log_msg("Saved %s", out_file)
+  invisible(NULL)
+}
