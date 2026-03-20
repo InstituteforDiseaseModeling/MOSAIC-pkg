@@ -1577,10 +1577,6 @@ run_MOSAIC <- function(config,
   # Finalize run state (mark as completed)
   .mosaic_finalize_state(state_file)
 
-  # _README.md (completion signal — written LAST, only on success)
-  .mosaic_write_readme(dirs, config, summary_obj)
-  log_msg("  Saved _README.md (completion signal)")
-
   # Return invisibly
   invisible(list(
     dirs = dirs,
