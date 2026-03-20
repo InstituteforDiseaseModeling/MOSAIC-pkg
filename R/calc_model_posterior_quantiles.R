@@ -76,6 +76,11 @@ calc_model_posterior_quantiles <- function(results,
             mode_idx <- which.max(kde$y)
             mode_val <- kde$x[mode_idx]
 
+            # Clamp to observed data range: Gaussian kernel can bleed outside
+            # [min, max] for boundary-concentrated distributions (e.g. discrete
+            # integers piled at 0), producing an artifact like mode = -0.0012.
+            mode_val <- max(min(samples), min(max(samples), mode_val))
+
             return(mode_val)
 
         }, error = function(e) {
