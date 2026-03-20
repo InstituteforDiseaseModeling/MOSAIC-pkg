@@ -314,7 +314,7 @@ test_that("accepts file paths and loads JSON", {
 # Metadata update
 # =============================================================================
 
-test_that("output metadata is updated", {
+test_that("output metadata records full provenance and merge counts", {
   priors <- make_test_priors()
   posteriors <- make_test_posteriors()
 
@@ -322,7 +322,14 @@ test_that("output metadata is updated", {
 
   expect_true(grepl("staged estimation", result$metadata$description, ignore.case = TRUE))
   expect_equal(result$metadata$date, as.character(Sys.Date()))
+  expect_true(!is.null(result$metadata$source_priors))
   expect_true(!is.null(result$metadata$source_posteriors))
+
+  # Merge summary present with counts
+  ms <- result$metadata$merge_summary
+  expect_true(is.list(ms))
+  expect_true(ms$n_replaced > 0)
+  expect_equal(ms$n_failed_kept, 0)
 })
 
 
