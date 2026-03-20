@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "13.2",
+          version = "13.3",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -1838,12 +1838,12 @@ for (iso in j) {
 # psi_star_k - Time offset parameter for suitability calibration (location-specific)
 # Biological rationale: k > 0 delays the suitability signal (epidemic follows/lags the peak),
 # k < 0 advances it (epidemic precedes the peak).
-# We require k >= 0: epidemics should occur AFTER or DURING a suitability peak, not before it.
-# The epidemic lags suitability because V. cholerae must first accumulate in the environment
-# (typically 1-4 weeks after conditions become favourable) before transmission peaks.
-# Upper bound 90 days: long enough to capture slow accumulation in low-WASH settings.
+# Both directions are permitted: in some settings epidemics may precede a broad suitability
+# peak (e.g. early season explosive outbreaks) or lag it (slow accumulation in low-WASH areas).
+# Bounds [-90, 90] cover the full plausible range; centred at 0 with sd=25 keeps most mass
+# within ±50 days while allowing the data to identify the direction.
 priors_default$parameters_location$psi_star_k <- list(
-     description = "Time offset in days for suitability calibration (k>0: epidemic lags suitability peak; k<0: epidemic precedes suitability peak). Bounded to [0, 90]: epidemics occur after or during favourable conditions.",
+     description = "Time offset in days for suitability calibration (k>0: epidemic lags suitability peak; k<0: epidemic precedes suitability peak). Bounded to [-90, 90]: both lag and advance are permitted.",
      location = list()
 )
 
@@ -1851,10 +1851,10 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_k$location[[iso]] <- list(
           distribution = "truncnorm",
           parameters = list(
-               mean = 0,        # Centered at no lag; data pulls toward typical 7-30 day lag
-               sd = 25,         # Allows exploration of 0-90 day lags
-               a = 0,           # Lower bound: k >= 0 (epidemic cannot precede suitability peak)
-               b = 90           # Upper bound: 90 days max lag
+               mean = 0,        # Centered at no offset; data identifies direction
+               sd = 25,         # Most mass within ±50 days
+               a = -90,         # Lower bound: up to 90 days advance
+               b = 90           # Upper bound: up to 90 days lag
           )
      )
 }
