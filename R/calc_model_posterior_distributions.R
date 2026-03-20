@@ -51,6 +51,22 @@ calc_model_posterior_distributions <- function(
     verbose = TRUE
 ) {
 
+    # Distribution-specific parameter fields recognised by sample_from_prior().
+    # fit_*_from_ci() functions return additional diagnostic fields (fitted_mode,
+    # fitted_mean, fitted_var, fitted_sd, fitted_ci, input_mode, input_ci, etc.)
+    # that are useful for one-time inspection but should NOT be persisted into
+    # posteriors.json.  Keeping only the canonical fields ensures posteriors.json
+    # stays clean across staged-estimation cycles where posteriors become priors.
+    .dist_core_fields <- list(
+        beta       = c("shape1", "shape2"),
+        gamma      = c("shape", "rate"),
+        lognormal  = c("meanlog", "sdlog"),
+        normal     = c("mean", "sd"),
+        truncnorm  = c("mean", "sd", "a", "b"),
+        uniform    = c("min", "max"),
+        gompertz   = c("b", "eta")
+    )
+
     if (verbose) message("\n=== Calculating Posterior Distributions from Quantiles ===\n")
 
     # Validate inputs
@@ -367,18 +383,6 @@ calc_model_posterior_distributions <- function(
                     ci_upper = q_high,
                     verbose = FALSE
                 )
-            } else if (dist_type == "derived") {
-                # Derived parameters (e.g., beta_j0_hum, beta_j0_env) are rate parameters
-                # Fit gamma distribution to empirical posterior quantiles
-                fitted_dist <- fit_gamma_from_ci(
-                    mode_val = mode_val,
-                    ci_lower = q_low,
-                    ci_upper = q_high,
-                    verbose = FALSE
-                )
-                if (verbose) {
-                    message("  Fitted gamma distribution to derived parameter ", param_name)
-                }
             } else {
                 if (verbose) {
                     message("  Warning: Unknown distribution type '", dist_type, "' for ", param_name)
@@ -442,11 +446,19 @@ calc_model_posterior_distributions <- function(
         # Update posteriors structure based on parameter type and location
         success <- FALSE
 
-        # Create properly structured distribution object
-        # The plot function expects {distribution: "type", parameters: {...}}
+        # Create properly structured distribution object.
+        # Strip fitted diagnostics (fitted_mode, fitted_ci, etc.) so that only
+        # the canonical distribution parameters are persisted.  This keeps
+        # posteriors.json clean for downstream use as priors in staged estimation.
+        core_fields <- .dist_core_fields[[dist_type]]
+        clean_params <- if (!is.null(core_fields)) {
+            fitted_dist[intersect(names(fitted_dist), core_fields)]
+        } else {
+            fitted_dist
+        }
         structured_dist <- list(
             distribution = dist_type,
-            parameters = fitted_dist
+            parameters = clean_params
         )
 
         if (param_scale == "global") {
@@ -464,15 +476,14 @@ calc_model_posterior_distributions <- function(
                     posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
                     success <- TRUE
                 } else {
-                    # Location doesn't exist - add it (handles derived params with multiple locations)
+                    # Location doesn't exist in template — add it
                     posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
                     success <- TRUE
                 }
             } else {
-                # Parameter doesn't exist in priors template (e.g., derived parameters)
-                # Create structure dynamically and add to posteriors
+                # Parameter doesn't exist in priors template — create dynamically
                 if (verbose) {
-                    message(sprintf("  Adding derived parameter '%s' to posteriors structure", param_base))
+                    message(sprintf("  Adding new parameter '%s' to posteriors structure", param_base))
                 }
 
                 # Initialize parameter structure with location slot
