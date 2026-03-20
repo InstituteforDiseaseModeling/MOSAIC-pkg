@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "13.3",
+          version = "13.5",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -489,6 +489,7 @@ priors_default$parameters_global$zeta_2 <- list(
 # Incubation is already handled by the E compartment (iota parameter); this
 # captures only the lag from symptom onset to surveillance report.
 # Prior: TruncNorm(mean=2, sd=2, a=0, b=7) — mode near 1-2 days, hard ceiling at 7.
+# sd=2 preserves exploration of 3-7 day delays, realistic for paper-based reporting in SSA.
 # Sampled value is rounded to the nearest integer before passing to make_LASER_config().
 priors_default$parameters_global$delta_reporting_cases <- list(
      description = "Symptom-onset-to-case reporting delay in days (integer, 0-7)",
@@ -499,12 +500,14 @@ priors_default$parameters_global$delta_reporting_cases <- list(
 # delta_reporting_deaths - Symptom-onset-to-death reporting delay
 # Incubation is already handled by the E compartment (iota parameter); this
 # captures the lag from symptom onset through clinical progression to death report.
-# Prior: TruncNorm(mean=4, sd=3, a=0, b=14) — mode near 3-5 days, hard ceiling at 14.
+# Prior: TruncNorm(mean=4, sd=3, a=1, b=14) — mode near 3-5 days, hard ceiling at 14.
+# Lower bound a=1: same-day death reporting is implausible (onset, death, and national
+# registration cannot all occur within the same day in any realistic surveillance system).
 # Sampled value is rounded to the nearest integer before passing to make_LASER_config().
 priors_default$parameters_global$delta_reporting_deaths <- list(
-     description = "Symptom-onset-to-death reporting delay in days (integer, 0-14)",
+     description = "Symptom-onset-to-death reporting delay in days (integer, 1-14)",
      distribution = "truncnorm",
-     parameters = list(mean = 4, sd = 3, a = 0, b = 14)
+     parameters = list(mean = 4, sd = 3, a = 1, b = 14)
 )
 
 
