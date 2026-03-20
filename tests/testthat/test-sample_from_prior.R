@@ -379,3 +379,24 @@ test_that("sample_from_prior handles gompertz distribution if available", {
     skip("rgompertz function not available")
   }
 })
+
+test_that("sample_from_prior handles fixed distribution", {
+  prior <- list(distribution = "fixed", parameters = list(value = 42))
+  result <- sample_from_prior(n = 5, prior = prior)
+  expect_length(result, 5)
+  expect_true(all(result == 42))
+})
+
+test_that("sample_from_prior handles frozen distribution", {
+  prior <- list(distribution = "frozen", parameters = list(value = 1e-06))
+  result <- sample_from_prior(n = 5, prior = prior)
+  expect_length(result, 5)
+  expect_true(all(result == 1e-06))
+})
+
+test_that("sample_from_prior handles failed distribution", {
+  prior <- list(distribution = "failed", parameters = list())
+  result <- sample_from_prior(n = 3, prior = prior)
+  expect_length(result, 3)
+  expect_true(all(is.na(result)))
+})

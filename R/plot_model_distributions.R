@@ -125,28 +125,17 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   method_names <- names(methods_data)
 
   # MOSAIC color scheme for calibration methods
-  # Consistent colors across all distribution and quantile plots
+  # Uses mosaic_colors() framework for consistency across all plots
+  cal_cols <- mosaic_colors("calibration")
   standard_colors <- list(
-    "Prior" = "#4a4a4a",    # Dark gray (neutral baseline)
-    "Priors" = "#4a4a4a",   # Alternative naming
-    "BFRS" = "#1f77b4",     # Blue (Bayesian retrospective)
-    "Posterior" = "#1f77b4", # Alternative naming for BFRS
-    "MCMC" = "#CC79A7",     # Reddish purple (other methods)
-    "ABC" = "#009E73",      # Bluish green (other methods)
-    "SBC" = "#F0E442"       # Yellow (diagnostics)
+    "Prior" = unname(cal_cols["Prior"]),
+    "Priors" = unname(cal_cols["Prior"]),
+    "BFRS" = unname(cal_cols["Posterior"]),
+    "Posterior" = unname(cal_cols["Posterior"])
   )
 
   # Fallback palette for methods not in standard list
-  # Uses Paul Tol's bright qualitative palette (colorblind-friendly)
-  fallback_palette <- c(
-    "#4477AA",  # Blue
-    "#EE6677",  # Red
-    "#228833",  # Green
-    "#CCBB44",  # Yellow
-    "#66CCEE",  # Cyan
-    "#AA3377",  # Purple
-    "#BBBBBB"   # Grey
-  )
+  fallback_palette <- mosaic_pal_discrete(7)
 
   # Assign colors
   if (!is.null(custom_colors)) {
@@ -539,7 +528,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     dist_only <- list()
     for (mn in names(param_distributions)) {
       if (!is.null(param_distributions[[mn]]$distribution) &&
-          param_distributions[[mn]]$distribution == "fixed") {
+          param_distributions[[mn]]$distribution %in% c("fixed", "frozen")) {
         val <- as.numeric(param_distributions[[mn]]$parameters$value)
         if (is.finite(val)) fixed_values[[mn]] <- val
       } else {
@@ -667,14 +656,12 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
     p <- p +
       x_scale +
-      ggplot2::theme_minimal() +
+      theme_mosaic() +
       ggplot2::theme(
         plot.title = ggplot2::element_text(size = 11, face = "bold", hjust = 0.5),
-        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0.5, color = "gray50", face = "italic"),
+        plot.subtitle = ggplot2::element_text(size = 9, hjust = 0.5, face = "italic",
+                                              color = "#666666"),
         axis.title.y = ggplot2::element_blank(),
-        axis.title.x = ggplot2::element_text(size = 9),
-        panel.grid.minor = ggplot2::element_blank(),
-        panel.grid.major = ggplot2::element_line(color = "gray90"),
         legend.position = "none"
       ) +
       ggplot2::labs(

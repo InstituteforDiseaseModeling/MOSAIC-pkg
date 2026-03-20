@@ -10,6 +10,10 @@
 #' @param quantiles_file Path to the posterior_quantiles.csv file (default: "./results/posterior_quantiles.csv")
 #' @param priors_file Path to the priors.json file to use as template
 #' @param output_dir Directory to save posteriors.json (default: "./results")
+#' @param control Optional control list (or path to control.json). When provided,
+#'   sampling flags are used to distinguish frozen parameters (sampling flag FALSE,
+#'   tagged \code{"frozen"}) from genuinely converged parameters (sampling flag TRUE,
+#'   tagged \code{"fixed"}).
 #' @param verbose Logical; print progress messages (default: TRUE)
 #'
 #' @return List containing:
@@ -48,6 +52,7 @@ calc_model_posterior_distributions <- function(
     quantiles_file = "./results/posterior_quantiles.csv",
     priors_file,
     output_dir = "./results",
+    control = NULL,
     verbose = TRUE
 ) {
 
@@ -68,6 +73,36 @@ calc_model_posterior_distributions <- function(
     )
 
     if (verbose) message("\n=== Calculating Posterior Distributions from Quantiles ===\n")
+
+    # ---- Build frozen-parameter set from control ----
+    # Parameters with sample_X = FALSE were deliberately frozen for this stage.
+    # They get tagged "frozen" (not "fixed") so update_priors_from_posteriors()
+    # can restore the original prior for the next stage.
+    frozen_params <- character()
+    if (!is.null(control)) {
+        if (is.character(control) && length(control) == 1L) {
+            if (file.exists(control)) {
+                if (verbose) message("Loading control from: ", control)
+                control <- jsonlite::read_json(control)
+            } else {
+                warning("Control file not found: ", control, " — skipping frozen detection")
+                control <- NULL
+            }
+        }
+        if (is.list(control) && !is.null(control$sampling)) {
+            sampling_flags <- control$sampling
+            for (flag_name in names(sampling_flags)) {
+                if (startsWith(flag_name, "sample_") && identical(sampling_flags[[flag_name]], FALSE)) {
+                    param_base_name <- sub("^sample_", "", flag_name)
+                    frozen_params <- c(frozen_params, param_base_name)
+                }
+            }
+            if (verbose && length(frozen_params) > 0) {
+                message("  Frozen parameters (sample_* = FALSE): ",
+                        paste(frozen_params, collapse = ", "))
+            }
+        }
+    }
 
     # Validate inputs
     if (!file.exists(quantiles_file)) {
@@ -241,32 +276,35 @@ calc_model_posterior_distributions <- function(
             next
         }
 
-        # Detect near-zero-variance parameters (fixed / not sampled).
-        # When a parameter is held constant across all simulations, all three
-        # quantiles are identical. The downstream bounds correction would
-        # artificially expand the CI and produce a misleading "posterior".
-        # Instead, remove the parameter from the posteriors object so the
-        # distribution plot only shows the prior curve.
+        # Detect near-zero-variance parameters.
+        # Two distinct cases:
+        #   "frozen" — sampling flag was FALSE (user deliberately froze it)
+        #   "fixed"  — sampling flag was TRUE but posterior converged to a point
+        # update_priors_from_posteriors() restores original priors for "frozen"
+        # and propagates "fixed" as-is.
         relative_range <- if (abs(q_med) > 1e-10) {
             abs(q_high - q_low) / abs(q_med)
         } else {
             abs(q_high - q_low)
         }
         if (relative_range < 1e-4) {
+            # Determine frozen vs fixed
+            is_frozen <- param_base %in% frozen_params
+            marker_type <- if (is_frozen) "frozen" else "fixed"
+            tag <- if (is_frozen) "FROZEN" else "FIXED"
+
             if (verbose) {
-                message(sprintf("  [FIXED] %s - near-zero variance (q_low=%.6g, q_high=%.6g); storing as point value",
-                                param_name, q_low, q_high))
+                message(sprintf("  [%s] %s - near-zero variance (q_low=%.6g, q_high=%.6g); storing as point value",
+                                tag, param_name, q_low, q_high))
             }
-            # Store as a "fixed" marker so the distribution plotter can draw
-            # a vertical line at the point value instead of a density curve.
-            fixed_marker <- list(
-                distribution = "fixed",
+            point_marker <- list(
+                distribution = marker_type,
                 parameters   = list(value = q_med)
             )
             if (param_scale == "global") {
-                posteriors$parameters_global[[param_base]] <- fixed_marker
+                posteriors$parameters_global[[param_base]] <- point_marker
             } else if (param_scale == "location" && !is.null(location)) {
-                posteriors$parameters_location[[param_base]]$location[[location]] <- fixed_marker
+                posteriors$parameters_location[[param_base]]$location[[location]] <- point_marker
             }
             n_updated <- n_updated + 1
             next

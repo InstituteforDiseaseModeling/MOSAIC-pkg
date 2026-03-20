@@ -162,6 +162,71 @@ test_that("fixed posteriors are propagated", {
 
 
 # =============================================================================
+# Frozen posteriors (sampling flag was FALSE in previous stage)
+# =============================================================================
+
+test_that("frozen posteriors revert to original prior", {
+  priors <- make_test_priors()
+  posteriors <- make_test_posteriors()
+
+  # beta_j0_tot was frozen (sample_beta_j0_tot = FALSE) in Stage 1
+  posteriors$parameters_location$beta_j0_tot$location$ETH <- list(
+    distribution = "frozen",
+    parameters = list(value = 1e-06)
+  )
+  posteriors$parameters_location$beta_j0_tot$location$MOZ <- list(
+    distribution = "frozen",
+    parameters = list(value = 1e-06)
+  )
+
+  result <- update_priors_from_posteriors(priors, posteriors, verbose = FALSE)
+
+  # Both locations should keep original gompertz prior, not frozen marker
+  expect_equal(result$parameters_location$beta_j0_tot$location$ETH$distribution, "gompertz")
+  expect_equal(result$parameters_location$beta_j0_tot$location$ETH$parameters$b, 100)
+  expect_equal(result$parameters_location$beta_j0_tot$location$MOZ$distribution, "gompertz")
+  expect_equal(result$parameters_location$beta_j0_tot$location$MOZ$parameters$b, 50)
+})
+
+test_that("frozen global posteriors revert to original prior", {
+  priors <- make_test_priors()
+  posteriors <- make_test_posteriors()
+
+  # gamma_1 was frozen in Stage 1
+  posteriors$parameters_global$gamma_1 <- list(
+    distribution = "frozen",
+    parameters = list(value = 0.1)
+  )
+
+  result <- update_priors_from_posteriors(priors, posteriors, verbose = FALSE)
+
+  # gamma_1 should keep original uniform prior
+  expect_equal(result$parameters_global$gamma_1$distribution, "uniform")
+  expect_equal(result$parameters_global$gamma_1$parameters$min, 0.05)
+  expect_equal(result$parameters_global$gamma_1$parameters$max, 0.5)
+})
+
+test_that("validation rejects frozen markers in output", {
+  priors <- make_test_priors()
+  posteriors <- make_test_posteriors()
+
+  # This should work fine (frozen gets replaced with original prior)
+  posteriors$parameters_global$gamma_1 <- list(
+    distribution = "frozen",
+    parameters = list(value = 0.1)
+  )
+
+  result <- update_priors_from_posteriors(priors, posteriors, verbose = FALSE)
+
+  # No frozen markers should remain
+  for (param_name in names(result$parameters_global)) {
+    expect_true(result$parameters_global[[param_name]]$distribution != "frozen",
+                info = paste("frozen marker leaked for:", param_name))
+  }
+})
+
+
+# =============================================================================
 # Failed posteriors
 # =============================================================================
 

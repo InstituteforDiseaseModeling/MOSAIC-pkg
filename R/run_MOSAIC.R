@@ -1409,6 +1409,7 @@ run_MOSAIC <- function(config,
     quantiles_file = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
     priors_file = file.path(dirs$inputs, "priors.json"),
     output_dir = dirs$cal_posterior,
+    control = control,
     verbose = control$logging$verbose
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posteriors.json"))
@@ -1427,6 +1428,34 @@ run_MOSAIC <- function(config,
       posteriors_file = file.path(dirs$cal_posterior, "posteriors.json"),
       output_dir = dirs$res_fig_post_detail,
       verbose = control$logging$verbose
+    )
+  }
+
+  # ===========================================================================
+  # PARAMETER SENSITIVITY AND CORRELATION
+  # ===========================================================================
+
+  if (control$paths$plots) {
+    log_msg("Generating parameter sensitivity and correlation plots...")
+
+    tryCatch(
+      plot_model_parameter_sensitivity(
+        results_file = file.path(dirs$calibration, "samples.parquet"),
+        priors_file = file.path(dirs$inputs, "priors.json"),
+        output_dir = dirs$res_fig_diag,
+        verbose = control$logging$verbose
+      ),
+      error = function(e) log_msg("Warning: parameter sensitivity plot failed: %s", e$message)
+    )
+
+    tryCatch(
+      plot_model_parameter_correlation(
+        results_file = file.path(dirs$calibration, "samples.parquet"),
+        priors_file = file.path(dirs$inputs, "priors.json"),
+        output_dir = dirs$res_fig_diag,
+        verbose = control$logging$verbose
+      ),
+      error = function(e) log_msg("Warning: parameter correlation plot failed: %s", e$message)
     )
   }
 
