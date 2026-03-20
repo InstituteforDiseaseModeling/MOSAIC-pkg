@@ -71,16 +71,21 @@
 update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
 
   # ---------------------------------------------------------------------------
-  # Load from file paths if needed
+  # Load from file paths if needed; capture paths for provenance
   # ---------------------------------------------------------------------------
+  priors_path <- NULL
+  posteriors_path <- NULL
+
   if (is.character(priors) && length(priors) == 1L) {
     if (!file.exists(priors)) stop("Priors file not found: ", priors)
     if (verbose) message("Loading priors from: ", priors)
+    priors_path <- priors
     priors <- jsonlite::read_json(priors)
   }
   if (is.character(posteriors) && length(posteriors) == 1L) {
     if (!file.exists(posteriors)) stop("Posteriors file not found: ", posteriors)
     if (verbose) message("Loading posteriors from: ", posteriors)
+    posteriors_path <- posteriors
     posteriors <- jsonlite::read_json(posteriors)
   }
 
@@ -110,14 +115,16 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   updated <- priors
 
   # Update metadata — full provenance chain so that any downstream consumer
-
   # can trace exactly which priors and posteriors were combined.
-  prior_id <- posteriors$metadata$source_priors %||%
+  # Priority: file path passed by caller > path embedded in metadata > version/date > "in-memory"
+  prior_id <- priors_path %||%
+              posteriors$metadata$source_priors %||%
               priors$metadata$version %||%
-              "unknown"
-  posterior_id <- posteriors$metadata$source_quantiles %||%
+              "in-memory list"
+  posterior_id <- posteriors_path %||%
+                  posteriors$metadata$source_quantiles %||%
                   posteriors$metadata$date %||%
-                  "unknown"
+                  "in-memory list"
 
   updated$metadata$description <- "Priors updated from posterior distributions (staged estimation)"
   updated$metadata$date <- as.character(Sys.Date())

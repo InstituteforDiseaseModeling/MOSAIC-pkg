@@ -332,6 +332,31 @@ test_that("output metadata records full provenance and merge counts", {
   expect_equal(ms$n_failed_kept, 0)
 })
 
+test_that("provenance uses file paths when provided, falls back for lists", {
+  priors <- make_test_priors()
+  posteriors <- make_test_posteriors()
+
+  # List inputs: source_posteriors should use embedded metadata or "in-memory list"
+  result_list <- update_priors_from_posteriors(priors, posteriors, verbose = FALSE)
+  # posteriors has source_quantiles in metadata
+  expect_equal(result_list$metadata$source_posteriors, "posterior_quantiles.csv")
+  # priors has version "1.0.0" in metadata (no source_priors in posteriors)
+  expect_equal(result_list$metadata$source_priors, "1.0.0")
+
+  # File path inputs: should use the actual file paths
+  tmp_dir <- tempdir()
+  priors_path <- file.path(tmp_dir, "prov_priors.json")
+  post_path <- file.path(tmp_dir, "prov_posteriors.json")
+  writeLines(jsonlite::toJSON(priors, auto_unbox = TRUE, pretty = TRUE), priors_path)
+  writeLines(jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE), post_path)
+
+  result_file <- update_priors_from_posteriors(priors_path, post_path, verbose = FALSE)
+  expect_equal(result_file$metadata$source_priors, priors_path)
+  expect_equal(result_file$metadata$source_posteriors, post_path)
+
+  unlink(c(priors_path, post_path))
+})
+
 
 # =============================================================================
 # Posterior with extra location not in priors (should skip, not crash)
