@@ -574,17 +574,6 @@ run_MOSAIC <- function(config,
   .mosaic_write_json(config, file.path(dirs$inputs, "config.json"), control$io)
   log_msg("  Saved %s", "config.json")
 
-  # Plot prior distributions
-  if (control$paths$plots) {
-    log_msg("Plotting prior distributions")
-    plot_model_distributions(
-      json_files = file.path(dirs$inputs, "priors.json"),
-      method_names = "Prior",
-      output_dir = dirs$inputs,
-      verbose = control$logging$verbose
-    )
-  }
-
   # ===========================================================================
   # PARAMETER NAME DETECTION
   # ===========================================================================
