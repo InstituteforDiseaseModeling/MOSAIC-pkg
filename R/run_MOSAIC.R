@@ -1571,8 +1571,24 @@ run_MOSAIC <- function(config,
 
   # Summary JSON (machine-readable run summary)
   log_msg("Writing summary...")
-  summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, control$io)
+  summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config, control$io)
   log_msg("  Saved 3_results/summary.json")
+
+  # Print human-readable summary to log
+  r2_str    <- if (is.na(summary_obj$r2_final))      "NA" else sprintf("%.4f", summary_obj$r2_final)
+  cvw_str   <- if (is.na(summary_obj$cvw_best))      "NA" else sprintf("%.3f", summary_obj$cvw_best)
+  ess_o_str <- if (is.na(summary_obj$ess_overall))   "NA" else sprintf("%.1f",  summary_obj$ess_overall)
+  ess_p_str <- if (is.na(summary_obj$ess_min_param)) "NA" else sprintf("%.1f",  summary_obj$ess_min_param)
+  ret_str   <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
+  best_str  <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
+  log_msg("=== Run Summary ===")
+  log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
+  log_msg("  Converged: %-3s | R2: %s | CVw: %s",
+          if (isTRUE(summary_obj$converged)) "YES" else "NO", r2_str, cvw_str)
+  log_msg("  ESS (overall / min param): %s / %s", ess_o_str, ess_p_str)
+  log_msg("  Sims: %s total, %s retained, %s best subset",
+          format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)
+  log_msg("===================")
 
   # Finalize run state (mark as completed)
   .mosaic_finalize_state(state_file)
