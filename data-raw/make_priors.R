@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "13.0",
+          version = "13.1",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -1818,8 +1818,14 @@ for (iso in j) {
 }
 
 # psi_star_k - Time offset parameter for suitability calibration (location-specific)
+# Biological rationale: k > 0 delays the suitability signal (epidemic follows/lags the peak),
+# k < 0 advances it (epidemic precedes the peak).
+# We require k >= 0: epidemics should occur AFTER or DURING a suitability peak, not before it.
+# The epidemic lags suitability because V. cholerae must first accumulate in the environment
+# (typically 1-4 weeks after conditions become favourable) before transmission peaks.
+# Upper bound 90 days: long enough to capture slow accumulation in low-WASH settings.
 priors_default$parameters_location$psi_star_k <- list(
-     description = "Time offset in days for suitability calibration (k>0: forward/delay, k<0: backward/advance)",
+     description = "Time offset in days for suitability calibration (k>0: epidemic lags suitability peak; k<0: epidemic precedes suitability peak). Bounded to [0, 90]: epidemics occur after or during favourable conditions.",
      location = list()
 )
 
@@ -1827,10 +1833,10 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_k$location[[iso]] <- list(
           distribution = "truncnorm",
           parameters = list(
-               mean = 0,        # Centered at no offset (no assumed lag direction)
-               sd = 25,         # Wide enough to explore 0 to -90 days
-               a = -90,         # Lower bound: -90 days
-               b = 0            # Upper bound: k<=0 enforces advance-only (corrects NN forward-timing offset)
+               mean = 0,        # Centered at no lag; data pulls toward typical 7-30 day lag
+               sd = 25,         # Allows exploration of 0-90 day lags
+               a = 0,           # Lower bound: k >= 0 (epidemic cannot precede suitability peak)
+               b = 90           # Upper bound: 90 days max lag
           )
      )
 }
