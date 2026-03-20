@@ -4,7 +4,7 @@
 #' to posterior distributions through retained and best subsets, with ESS and KL metrics.
 #'
 #' @param quantiles_file Path to the posterior_quantiles.csv file from calc_model_posterior_quantiles
-#' @param results_file Path to simulations.parquet file containing all simulation results
+#' @param results_file Path to samples.parquet file containing all simulation results
 #' @param priors_file Path to priors.json file
 #' @param posteriors_file Path to posteriors.json file (optional, for theoretical distributions)
 #' @param diagnostics_file Path to convergence_diagnostics.json file (optional, for ESS values)
@@ -17,7 +17,7 @@
 #' \dontrun{
 #' plot_model_posteriors(
 #'   quantiles_file = "./results/posterior_quantiles.csv",
-#'   results_file = "./results/simulations.parquet",
+#'   results_file = "./results/samples.parquet",
 #'   priors_file = "./priors.json",
 #'   posteriors_file = "./results/posteriors.json",
 #'   output_dir = "./results/plots"
