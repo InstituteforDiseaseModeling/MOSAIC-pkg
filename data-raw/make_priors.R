@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "12.1",
+          version = "13.0",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -1434,9 +1434,14 @@ for (loc in names(initial_conditions_S$parameters_location$prop_S_initial$parame
 
 
 # Add mu_j_baseline priors from disease mortality data
-# This is the baseline IFR for the threshold-dependent IFR model
-
-mu_inflation <- 0.1  # Inflate mu variance
+# mu_j_baseline is the daily per-capita mortality rate applied to the Isym stock in LASER.
+# In LASER: reported_cases = Isym × rho / chi, disease_deaths = Isym × mu_j_baseline
+# Therefore: deaths/reported_cases = mu_j_baseline × chi / rho
+# Solving: mu_j_baseline = observed_reported_CFR × rho / chi
+#
+# Previous formula (WRONG): mu_j_baseline = CFR × sigma × rho (≈ CFR × 0.09)
+# Correct formula:           mu_j_baseline = CFR × rho / chi    (≈ CFR × 0.43)
+# The error caused a ~5× under-estimate of mu_j_baseline.
 
 # Load disease mortality parameter data
 mu_file <- file.path(PATHS$MODEL_INPUT, "param_mu_disease_mortality.csv")
@@ -1450,7 +1455,7 @@ if (file.exists(mu_file)) {
 
      # Initialize mu_j_baseline prior structure
      priors_default$parameters_location$mu_j_baseline <- list(
-          description = "Baseline infection fatality ratio (IFR) per location, adjusted from CFR using IFR = CFR × σ × ρ",
+          description = "Baseline daily mortality rate per symptomatic infected (per day), derived from observed reported CFR: mu_j_baseline = reported_CFR × rho / chi",
           location = list()
      )
 
@@ -1502,83 +1507,61 @@ if (file.exists(mu_file)) {
                          ci_upper <- 0.08
                     }
 
-                    # Ensure bounds are reasonable
-                    ci_lower <- max(ci_lower*(1-mu_inflation), 0.001)  # Minimum 0.1% CFR
-                    ci_upper <- min(ci_upper*(1+mu_inflation), 0.5)    # Maximum 50% CFR
-                    mean_cfr <- max(min(mean_cfr, 0.4), 0.002)  # Keep mean in reasonable range
+                    # Clamp mean CFR to plausible range; ci_lower/ci_upper not used in fitting
+                    mean_cfr <- max(min(mean_cfr, 0.4), 0.002)  # Keep mean in [0.2%, 40%]
 
                     #----------------------------------------
-                    # Convert CFR to IFR using simple scalar adjustment
+                    # Convert observed reported CFR to mu_j_baseline
                     #----------------------------------------
-                    # IFR = CFR × σ × ρ
-                    # where σ = proportion symptomatic ≈ 0.24
-                    #       ρ = reporting rate ≈ 0.63
+                    # In LASER: reported_cases = Isym × rho / chi, disease_deaths = Isym × mu_j_baseline
+                    # Therefore: deaths/reported_cases = mu_j_baseline × chi / rho
+                    # Solving: mu_j_baseline = observed_reported_CFR × rho / chi
+                    #
+                    # rho: mean of rho prior Beta(6.8143, 17.8944) ≈ 0.275
+                    # chi: weighted average of chi_endemic (0.52) and chi_epidemic (0.76),
+                    #      approximately 50/50 across surveillance period ≈ 0.64
 
-                    sigma_mean <- 0.24  # Proportion symptomatic
-                    rho_mean <- 0.6 * mean(c(0.5, 0.75))    # Average reporting rate
+                    rho_mean <- 0.275   # Mean of rho prior Beta(6.8143, 17.8944)
+                    chi_mean <- 0.64    # Weighted avg chi_endemic(0.52) / chi_epidemic(0.76)
 
-                    # Calculate adjustment factor
-                    cfr_to_ifr_adjustment <- sigma_mean * rho_mean  # ≈ 0.15
+                    # Correct adjustment factor
+                    cfr_to_mu_adjustment <- rho_mean / chi_mean  # ≈ 0.43
 
-                    # Convert CFR to IFR
-                    mean_ifr <- mean_cfr * cfr_to_ifr_adjustment
-                    ci_lower_ifr <- ci_lower * cfr_to_ifr_adjustment
-                    ci_upper_ifr <- ci_upper * cfr_to_ifr_adjustment
+                    # Convert observed reported CFR to mu_j_baseline mean
+                    mean_mu <- mean_cfr * cfr_to_mu_adjustment
 
-                    cat(sprintf("  %s: CFR=%.3f%% -> IFR=%.3f%% (adjustment factor=%.3f)\n",
-                                loc, mean_cfr*100, mean_ifr*100, cfr_to_ifr_adjustment))
+                    cat(sprintf("  %s: reported_CFR=%.3f%% -> mu_j_baseline=%.6f (adjustment=%.3f)\n",
+                                loc, mean_cfr * 100, mean_mu, cfr_to_mu_adjustment))
 
-                    # Try to fit gamma distribution (now using IFR instead of CFR)
-                    tryCatch({
-                         gamma_fit <- MOSAIC::fit_gamma_from_ci(
-                              mode_val = mean_ifr,
-                              ci_lower = ci_lower_ifr,
-                              ci_upper = ci_upper_ifr,
-                              method = "optimization",
-                              verbose = FALSE
+                    # Fit gamma using derived mean and a fixed target CV of 50%.
+                    # The CFR data CIs are extremely tight (large Beta shape params)
+                    # which would produce an over-confident prior. CV=50% (shape=4)
+                    # allows the data to substantially update mu_j_baseline.
+                    target_cv <- 0.5   # 50% CV → shape = 4
+                    target_shape <- 1 / target_cv^2   # shape = 1/CV^2 = 4
+                    target_rate  <- target_shape / mean_mu
+
+                    priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
+                         distribution = "gamma",
+                         parameters = list(
+                              shape = target_shape,
+                              rate  = target_rate
                          )
+                    )
 
-                         priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
-                              distribution = "gamma",
-                              parameters = list(
-                                   shape = gamma_fit$shape,
-                                   rate = gamma_fit$rate
-                              )
-                         )
-
-                         n_mu_j_added <- n_mu_j_added + 1
-
-                    }, error = function(e) {
-                         # Fallback to simple moment matching (using IFR)
-                         var_ifr <- ((ci_upper_ifr - ci_lower_ifr) / 4)^2  # Approximate variance
-                         shape <- mean_ifr^2 / var_ifr
-                         rate <- mean_ifr / var_ifr
-
-                         # Ensure reasonable parameters
-                         shape <- max(shape, 1.5)
-                         rate <- max(rate, 10)
-
-                         priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
-                              distribution = "gamma",
-                              parameters = list(
-                                   shape = shape,
-                                   rate = rate
-                              )
-                         )
-
-                         n_mu_j_added <- n_mu_j_added + 1
-                    })
+                    n_mu_j_added <- n_mu_j_added + 1
                }
           }
 
           # Add default if location not found
           if (is.null(priors_default$parameters_location$mu_j_baseline$location[[loc]])) {
-               # Default gamma parameters for ~0.3% IFR (after CFR->IFR adjustment)
+               # Default: assume 0.35% reported CFR × (rho/chi = 0.43) ≈ 0.0015 mean
+               # Shape=4 (CV=50%) to allow substantial data updating
                priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
                     distribution = "gamma",
                     parameters = list(
-                         shape = 2,
-                         rate = 667   # Gives mean of 0.003 (0.3% IFR)
+                         shape = 4,
+                         rate  = 2667   # Gives mean = 4/2667 ≈ 0.0015
                     )
                )
                n_mu_j_added <- n_mu_j_added + 1
@@ -1591,17 +1574,17 @@ if (file.exists(mu_file)) {
 
      # Add default gamma priors for all locations
      priors_default$parameters_location$mu_j_baseline <- list(
-          description = "Baseline infection fatality ratio (IFR) per location",
+          description = "Baseline daily mortality rate per symptomatic infected (per day), derived from observed reported CFR: mu_j_baseline = reported_CFR × rho / chi",
           location = list()
      )
 
      for (loc in j) {
-          # Default gamma parameters for ~0.3% IFR
+          # Default: 0.35% reported CFR × (0.275/0.64) ≈ 0.0015, CV=50% (shape=4)
           priors_default$parameters_location$mu_j_baseline$location[[loc]] <- list(
                distribution = "gamma",
                parameters = list(
-                    shape = 2,
-                    rate = 667   # Gives mean of 0.003 (0.3% IFR)
+                    shape = 4,
+                    rate  = 2667   # Gives mean = 4/2667 ≈ 0.0015
                )
           )
      }
