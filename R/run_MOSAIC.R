@@ -224,7 +224,8 @@
             est_deaths = est_deaths,
             weights_time = likelihood_settings$.weights_time_resolved,
             weights_location = likelihood_settings$weights_location,
-            nb_k_min = likelihood_settings$nb_k_min,
+            nb_k_min_cases = likelihood_settings$nb_k_min_cases,
+            nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
             add_max_terms = likelihood_settings$add_max_terms,
             add_peak_timing = likelihood_settings$add_peak_timing,
             add_peak_magnitude = likelihood_settings$add_peak_magnitude,
@@ -1936,7 +1937,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Time/location weighting ===
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
-    nb_k_min = 3,                    # Minimum NB dispersion floor
+    nb_k_min_cases = 3,              # Minimum NB dispersion floor (cases)
+    nb_k_min_deaths = 3,             # Minimum NB dispersion floor (deaths)
 
     # === Guardrails ===
     enable_guardrails = FALSE,       # Enable sanity checks on model output
