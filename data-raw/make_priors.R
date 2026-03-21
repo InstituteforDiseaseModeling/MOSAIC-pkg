@@ -29,7 +29,7 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "13.5",
+          version = "13.6",
           date = Sys.Date(),
           description = "Default informative prior distributions for MOSAIC model parameters"
      ),
@@ -74,10 +74,16 @@ priors_default$parameters_global$decay_days_long <- list(
 # decay_days_long's lower bound of 30, preventing boundary equality violations
 # in make_LASER_config(). The swap constraint in sample_parameters.R also
 # protects against accidental crossings.
+# Changed from Uniform(0.01, 29) to TruncNorm(mean=16, sd=7, a=0.01, b=29):
+# MOZ calibration_test_19 posterior concentrated tightly at ~19.5 days from a
+# Uniform prior, indicating the data strongly favours 3-week minimum environmental
+# persistence. The Uniform prior wasted substantial mass below 5 days. TruncNorm
+# centred at 16 days (median ≈ 16) with sd=7 covers the plausible range while
+# concentrating mass in the evidence-supported region (68% CI ≈ 9–23 days).
 priors_default$parameters_global$decay_days_short <- list(
      description = "Minimum V. cholerae survival time (days)",
-     distribution = "uniform",
-     parameters = list(min = 0.01, max = 29)
+     distribution = "truncnorm",
+     parameters = list(mean = 16, sd = 7, a = 0.01, b = 29)
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation
@@ -465,14 +471,20 @@ priors_default$parameters_global$sigma <- list(
 # zeta_1 - Symptomatic shedding rate (bacteria per infected person per day, LASER total-count units)
 # Equilibrium analysis: W_eq = zeta_1 * Isym * (1-theta) / delta. With kappa fixed at 1e6,
 # delta=1/30, Isym=1000, theta=0.5, the linear-saturation transition occurs at zeta_1* ~ 33.
-# Prior centered at median=100 (3x above transition) with sdlog=3.0 gives approximately
-# equal mass across regimes: ~36% linear (zeta<33), ~30% transition (33-330),
-# ~32% mild saturation (330-33k), ~3% strong saturation (>33k).
-# 95% CI=[0.28, 35777]; LASER default (7.5) at ~19th percentile.
+# Updated from Lognormal(log(100), sdlog=3.0) to Lognormal(log(665), sdlog=2.0):
+# MOZ calibration_test_19 posterior shifted to median ~2,300 (23x higher than prior median of
+# 100) and was the dominant driver of model fit (PRCC=0.72). The old prior placed ~36% of
+# mass in the sub-transition linear regime (zeta<33) where environmental transmission is
+# negligible — an implausibly low regime. The new prior (median=665) places only ~5% of
+# mass below 33, concentrating mass in the saturation-adjacent regime consistent with the
+# calibration evidence. Tightening sdlog from 3.0 to 2.0 reduces the upper tail while still
+# covering 4+ orders of magnitude (95% CI ≈ [13, 33,400]).
+# Regime mass at new prior: ~5% linear (<33), ~23% transition (33-330),
+# ~63% mild saturation (330-33k), ~9% strong saturation (>33k).
 priors_default$parameters_global$zeta_1 <- list(
      description = "Symptomatic shedding rate (total bacteria per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(100), sdlog = 3.0)
+     parameters = list(meanlog = log(665), sdlog = 2.0)
 )
 
 # zeta_2 - Asymptomatic shedding rate (bacteria per infected person per day, LASER total-count units)
@@ -1822,6 +1834,18 @@ for (iso in j) {
      )
 }
 
+# MOZ-specific override: posterior from calibration_test_19 consistently shifted positive
+# (posterior mean=+0.40 from prior mean=0), indicating the raw NN suitability scores are
+# systematically slightly underestimated for Mozambique. Tighten sd slightly (2.5->2.0)
+# since the 2.5 prior was wider than evidence supports for this location.
+priors_default$parameters_location$psi_star_b$location[["MOZ"]] <- list(
+     distribution = "normal",
+     parameters = list(
+          mean = 0.4,   # Evidence-based shift: posterior mean from calibration_test_19
+          sd = 2.0      # Slightly tighter than global; 95% CI: [-3.52, 4.32]
+     )
+)
+
 # psi_star_z - Smoothing weight parameter for causal EWMA (location-specific)
 priors_default$parameters_location$psi_star_z <- list(
      description = "Smoothing weight for causal EWMA of calibrated suitability (z=1: no smoothing, z<1: smoothing)",
@@ -1861,6 +1885,20 @@ for (iso in j) {
           )
      )
 }
+
+# MOZ-specific override: posterior from calibration_test_19 shifted to mean ≈ -4.5 days,
+# indicating Mozambique epidemics slightly precede the suitability peak (epidemic leads
+# suitability by ~5 days). Re-centre the prior at -5 and tighten sd (25->20) to
+# concentrate mass on the evidence-supported direction while preserving full [-90,90] range.
+priors_default$parameters_location$psi_star_k$location[["MOZ"]] <- list(
+     distribution = "truncnorm",
+     parameters = list(
+          mean = -5,   # Evidence-based: epidemic slightly precedes suitability peak in MOZ
+          sd = 20,     # Slightly tighter than global; most mass within ±40 days
+          a = -90,     # Lower bound unchanged
+          b = 90       # Upper bound unchanged
+     )
+)
 
 
 # Save to file and add to MOSAIC R package
