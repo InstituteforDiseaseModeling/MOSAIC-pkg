@@ -530,6 +530,16 @@
       as.integer(res$batch_size)
     }
 
+    # Cap predictive batch to avoid multi-hour single batches with no checkpointing.
+    # If the predicted size exceeds the cap, run cap-sized batches with ESS
+    # re-evaluation between each (the main loop handles this naturally since
+    # predictive_done isn't set until .mosaic_ess_check_update_state marks it).
+    max_pred <- control$calibration$max_predictive_batch
+    if (!is.null(max_pred) && size > max_pred) {
+      log_msg("  Capping predictive batch: %d → %d (max_predictive_batch)", size, max_pred)
+      size <- as.integer(max_pred)
+    }
+
     return(list(
       phase = "predictive",
       batch_size = size
