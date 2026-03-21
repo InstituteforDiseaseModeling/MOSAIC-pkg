@@ -28,8 +28,8 @@
 #' @param weights_location Optional length-\code{n_locations} non-negative weights.
 #' @param weights_time Optional length-\code{n_time_steps} non-negative weights.
 #' @param config Optional LASER configuration list containing location_name, date_start, and date_stop.
-#' @param nb_k_min Numeric; minimum NB dispersion floor used for the core NB likelihood
-#'   and WIS quantiles. Default \code{3}.
+#' @param nb_k_min_cases Numeric; minimum NB dispersion floor for cases. Default \code{3}.
+#' @param nb_k_min_deaths Numeric; minimum NB dispersion floor for deaths. Default \code{3}.
 #' @param zero_buffer Kept for backward compatibility (not used by the NB core).
 #' @param verbose Logical; if \code{TRUE}, prints component summaries per location.
 #'
@@ -77,7 +77,8 @@ calc_model_likelihood <- function(obs_cases,
                                   weights_location = NULL,
                                   weights_time     = NULL,
                                   config           = NULL,
-                                  nb_k_min         = 3,
+                                  nb_k_min_cases   = 3,
+                                  nb_k_min_deaths  = 3,
                                   zero_buffer      = TRUE,   # kept for compatibility
                                   verbose          = FALSE,
                                   # ---- toggles (Balanced defaults) ----
@@ -264,8 +265,8 @@ calc_model_likelihood <- function(obs_cases,
           # intentional — it ensures the likelihood reflects data noise characteristics
           # rather than calibration quality. The k_min floor prevents the NB from
           # collapsing to a near-Poisson kernel for low-variance series.
-          k_c <- if (have_cases)  nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min) else Inf
-          k_d <- if (have_deaths) nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min) else Inf
+          k_c <- if (have_cases)  nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min_cases) else Inf
+          k_d <- if (have_deaths) nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min_deaths) else Inf
 
           # Core NB time series LL (pass k and k_min explicitly)
           ll_cases  <- if (have_cases) MOSAIC::calc_log_likelihood(
@@ -274,7 +275,7 @@ calc_model_likelihood <- function(obs_cases,
                family    = "negbin",
                weights   = mask_weights(weights_time, obs_c, est_c),
                k         = k_c,
-               k_min     = nb_k_min,
+               k_min     = nb_k_min_cases,
                verbose   = FALSE
           ) else 0
 
@@ -284,7 +285,7 @@ calc_model_likelihood <- function(obs_cases,
                family    = "negbin",
                weights   = mask_weights(weights_time, obs_d, est_d),
                k         = k_d,
-               k_min     = nb_k_min,
+               k_min     = nb_k_min_deaths,
                verbose   = FALSE
           ) else 0
 
