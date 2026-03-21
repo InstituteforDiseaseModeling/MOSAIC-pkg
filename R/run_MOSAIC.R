@@ -691,21 +691,8 @@ run_MOSAIC <- function(config,
     cl <- NULL
   }
 
-  # ---------------------------------------------------------------------------
-  # Resolve weights_time: time_weight_halflife builds an exponential decay
-  # vector; explicit weights_time takes precedence. The resolved vector is
-  # stored in a private slot so it can be shipped to workers as-is.
-  # ---------------------------------------------------------------------------
-  if (!is.null(control$likelihood$weights_time)) {
-    control$likelihood$.weights_time_resolved <- control$likelihood$weights_time
-  } else if (!is.null(control$likelihood$time_weight_halflife)) {
-    hl <- control$likelihood$time_weight_halflife
-    n_ts <- ncol(as.matrix(config$reported_cases))
-    control$likelihood$.weights_time_resolved <- exp(-log(2) * seq(0, n_ts - 1) / hl)
-    log_msg("Time weighting: exponential decay with half-life = %g timesteps (%d total)", hl, n_ts)
-  } else {
-    control$likelihood$.weights_time_resolved <- NULL
-  }
+  # Resolve weights_time into the private slot used by the worker
+  control$likelihood$.weights_time_resolved <- control$likelihood$weights_time
 
   # Export per-run data to workers (needed every run, even with reused cluster)
   if (!is.null(cl)) {
@@ -1948,7 +1935,6 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # === Time/location weighting ===
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
-    time_weight_halflife = NULL,     # Numeric; half-life in timesteps for exponential decay (NULL = off)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
     nb_k_min = 3,                    # Minimum NB dispersion floor
 
