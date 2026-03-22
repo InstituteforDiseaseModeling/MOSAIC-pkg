@@ -366,10 +366,14 @@
 #' @param config Base LASER config (for provenance fields)
 #' @param r2_cases R-squared for cases (best model vs observed)
 #' @param r2_deaths R-squared for deaths (best model vs observed)
+#' @param r2_cases_ensemble R-squared for cases (ensemble mean vs observed)
+#' @param r2_deaths_ensemble R-squared for deaths (ensemble mean vs observed)
 #' @param io I/O settings for JSON writing
 #' @noRd
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
                                        r2_cases = NA_real_, r2_deaths = NA_real_,
+                                       r2_cases_ensemble = NA_real_,
+                                       r2_deaths_ensemble = NA_real_,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -420,10 +424,12 @@
     n_simulations_successful   = state$total_sims_successful,
     n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
     n_best_subset              = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
-    # Convergence and model fit
+    # Convergence and model fit (best = single best model, ensemble = mean of N stochastic runs)
     converged     = isTRUE(state$converged),
     r2_cases      = if (!is.na(r2_cases)) round(r2_cases, 4) else NA_real_,
     r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
+    r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
+    r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
     # ESS summary
     ess_n_params        = ess_stats$n_params,
     ess_n_above_target  = ess_stats$n_above_target,

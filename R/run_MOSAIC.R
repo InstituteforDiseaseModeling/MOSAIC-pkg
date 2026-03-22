@@ -1467,9 +1467,67 @@ run_MOSAIC <- function(config,
     if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
   }, error = function(e) NA_real_)
 
-  log_msg("Best model fit: R²(cases) = %.4f, R²(deaths) = %.4f",
+  log_msg("Best model R²: cases = %.4f, deaths = %.4f",
           ifelse(is.na(r2_cases), 0, r2_cases),
           ifelse(is.na(r2_deaths), 0, r2_deaths))
+
+  # Ensemble R²: re-run best model N times with different seeds, compute
+  # mean prediction, then cor(obs, mean_est)². More stable than single-model
+  # R² because it averages over stochastic variability.
+  n_ensemble_r2 <- control$predictions$best_model_n_sims
+  r2_cases_ensemble <- NA_real_
+  r2_deaths_ensemble <- NA_real_
+
+  if (n_ensemble_r2 > 1) {
+    log_msg("Computing ensemble R² (%d stochastic runs)...", n_ensemble_r2)
+
+    ensemble_results <- tryCatch({
+      obs_cases_vec <- as.numeric(unlist(config_best$reported_cases))
+      obs_deaths_vec <- as.numeric(unlist(config_best$reported_deaths))
+      n_ts <- length(obs_cases_vec)
+
+      # Run N stochastic replicates of the best model
+      cases_matrix <- matrix(NA_real_, nrow = n_ensemble_r2, ncol = n_ts)
+      deaths_matrix <- matrix(NA_real_, nrow = n_ensemble_r2, ncol = n_ts)
+
+      for (i in seq_len(n_ensemble_r2)) {
+        config_best$seed <- as.integer(best_seed_sim * 1000L + i)
+        m <- tryCatch(
+          lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best),
+                       quiet = TRUE),
+          error = function(e) NULL
+        )
+        if (!is.null(m)) {
+          cases_matrix[i, ] <- as.numeric(unlist(m$results$reported_cases))
+          deaths_matrix[i, ] <- as.numeric(unlist(m$results$disease_deaths))
+        }
+      }
+
+      # Compute mean across replicates
+      mean_cases <- colMeans(cases_matrix, na.rm = TRUE)
+      mean_deaths <- colMeans(deaths_matrix, na.rm = TRUE)
+
+      # R² from ensemble mean
+      valid_c <- is.finite(obs_cases_vec) & is.finite(mean_cases)
+      valid_d <- is.finite(obs_deaths_vec) & is.finite(mean_deaths)
+
+      list(
+        r2_cases = if (sum(valid_c) > 2) stats::cor(obs_cases_vec[valid_c], mean_cases[valid_c])^2 else NA_real_,
+        r2_deaths = if (sum(valid_d) > 2) stats::cor(obs_deaths_vec[valid_d], mean_deaths[valid_d])^2 else NA_real_
+      )
+    }, error = function(e) {
+      log_msg("Warning: ensemble R² computation failed: %s", e$message)
+      list(r2_cases = NA_real_, r2_deaths = NA_real_)
+    })
+
+    r2_cases_ensemble <- ensemble_results$r2_cases
+    r2_deaths_ensemble <- ensemble_results$r2_deaths
+
+    log_msg("Ensemble R² (%d runs): cases = %.4f, deaths = %.4f",
+            n_ensemble_r2,
+            ifelse(is.na(r2_cases_ensemble), 0, r2_cases_ensemble),
+            ifelse(is.na(r2_deaths_ensemble), 0, r2_deaths_ensemble))
+  }
 
   if (control$paths$plots) {
     log_msg("Generating posterior predictive plots (best model)...")
@@ -1599,18 +1657,23 @@ run_MOSAIC <- function(config,
   log_msg("Writing summary...")
   summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config,
                                              r2_cases = r2_cases, r2_deaths = r2_deaths,
+                                             r2_cases_ensemble = r2_cases_ensemble,
+                                             r2_deaths_ensemble = r2_deaths_ensemble,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
   # Print human-readable summary to log
   r2c_str  <- if (is.na(summary_obj$r2_cases))  "NA" else sprintf("%.4f", summary_obj$r2_cases)
   r2d_str  <- if (is.na(summary_obj$r2_deaths)) "NA" else sprintf("%.4f", summary_obj$r2_deaths)
+  r2ce_str <- if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble)
+  r2de_str <- if (is.na(summary_obj$r2_deaths_ensemble)) "NA" else sprintf("%.4f", summary_obj$r2_deaths_ensemble)
   ret_str  <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
   best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
-  log_msg("  Converged: %s | R2 cases: %s | R2 deaths: %s",
-          if (isTRUE(summary_obj$converged)) "YES" else "NO", r2c_str, r2d_str)
+  log_msg("  Converged: %s", if (isTRUE(summary_obj$converged)) "YES" else "NO")
+  log_msg("  R2 best model: cases = %s | deaths = %s", r2c_str, r2d_str)
+  log_msg("  R2 ensemble:   cases = %s | deaths = %s", r2ce_str, r2de_str)
   if (!is.na(summary_obj$ess_n_params)) {
     log_msg("  ESS: %d/%d params (%.0f%%) above target %g (min: %.1f, median: %.1f)",
             summary_obj$ess_n_above_target, summary_obj$ess_n_params,
