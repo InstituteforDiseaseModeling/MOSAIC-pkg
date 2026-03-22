@@ -83,20 +83,22 @@ plot_model_ppc <- function(predictions_dir = NULL,
     # ============================================================================
 
     palette <- list(
-        observed    = "black",
-        cases_pred  = "steelblue",
-        deaths_pred = "darkred",
-        reference   = "gray50",
-        smooth      = "darkorange",
-        alert       = "red",
-        grid        = "gray85"
+        observed    = unname(mosaic_colors("data")),
+        cases_pred  = unname(mosaic_colors("cases")),
+        deaths_pred = unname(mosaic_colors("deaths")),
+        reference   = unname(mosaic_colors("reference")),
+        smooth      = unname(mosaic_colors("highlight")),
+        alert       = unname(mosaic_colors("highlight")),
+        grid        = "#E8E8E8"
     )
 
-    col_shade_obs    <- rgb(0,           0,           0,           alpha = 0.2)
-    col_shade_cases  <- rgb(70/255,  130/255,  180/255,  alpha = 0.2)
-    col_shade_deaths <- rgb(139/255,   0,           0,           alpha = 0.2)
-    col_points_cases  <- rgb(70/255,  130/255,  180/255,  alpha = 0.4)
-    col_points_deaths <- rgb(139/255,   0,           0,           alpha = 0.4)
+    cases_rgb  <- grDevices::col2rgb(palette$cases_pred) / 255
+    deaths_rgb <- grDevices::col2rgb(palette$deaths_pred) / 255
+    col_shade_obs    <- rgb(0, 0, 0, alpha = 0.2)
+    col_shade_cases  <- rgb(cases_rgb[1], cases_rgb[2], cases_rgb[3], alpha = 0.2)
+    col_shade_deaths <- rgb(deaths_rgb[1], deaths_rgb[2], deaths_rgb[3], alpha = 0.2)
+    col_points_cases  <- rgb(cases_rgb[1], cases_rgb[2], cases_rgb[3], alpha = 0.4)
+    col_points_deaths <- rgb(deaths_rgb[1], deaths_rgb[2], deaths_rgb[3], alpha = 0.4)
 
     # ============================================================================
     # Load data
@@ -478,9 +480,9 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
                 # Correlation — only meaningful when both variables have variance
                 if (sd(lx_pred) > 0 && sd(lx_obs) > 0) {
-                    r_val <- round(cor(lx_pred, lx_obs), 3)
+                    r2_val <- round(cor(lx_pred, lx_obs)^2, 3)
                     text(min(lx_pred), max(lx_obs),
-                         paste0("r = ", r_val), pos = 4, cex = 0.9, font = 2)
+                         paste0("R\u00b2 = ", r2_val), pos = 4, cex = 0.9, font = 2)
                 }
 
                 leg_labels <- "1:1 Line"

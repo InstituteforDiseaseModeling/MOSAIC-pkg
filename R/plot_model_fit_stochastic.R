@@ -516,13 +516,13 @@ plot_model_fit_stochastic <- function(config,
         sum_obs_deaths <- sum(obs_deaths_i, na.rm = TRUE)
         sum_pred_deaths <- round(sum(pred_deaths_i, na.rm = TRUE))
 
-        # Calculate correlations
-        cor_cases <- tryCatch({
-            round(cor(obs_cases_i, pred_cases_i, use = "complete.obs"), 3)
+        # Calculate R² (correlation-based)
+        r2_cases <- tryCatch({
+            round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
 
-        cor_deaths <- tryCatch({
-            round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs"), 3)
+        r2_deaths <- tryCatch({
+            round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
 
         # Create plot
@@ -534,7 +534,7 @@ plot_model_fit_stochastic <- function(config,
                                 alpha = 0.3) +
             # Observed points
             ggplot2::geom_point(ggplot2::aes(y = observed),
-                              color = "black",
+                              color = mosaic_colors("data"),
                               size = 1.5,
                               alpha = 0.6) +
             # Mean prediction line
@@ -544,25 +544,16 @@ plot_model_fit_stochastic <- function(config,
             ggplot2::facet_grid(metric ~ .,
                               scales = "free_y",
                               switch = "y") +
-            ggplot2::scale_color_manual(values = c("Suspected Cases" = "steelblue",
-                                                  "Deaths" = "darkred"),
+            ggplot2::scale_color_manual(values = c("Suspected Cases" = unname(mosaic_colors("cases")),
+                                                  "Deaths" = unname(mosaic_colors("deaths"))),
                                        guide = "none") +
-            ggplot2::scale_fill_manual(values = c("Suspected Cases" = "steelblue",
-                                                 "Deaths" = "darkred"),
+            ggplot2::scale_fill_manual(values = c("Suspected Cases" = unname(mosaic_colors("cases")),
+                                                 "Deaths" = unname(mosaic_colors("deaths"))),
                                       guide = "none") +
             ggplot2::scale_y_continuous(labels = scales::comma) +
-            ggplot2::theme_minimal(base_size = 10) +
+            theme_mosaic(base_size = 10) +
             ggplot2::theme(
-                strip.text = ggplot2::element_text(size = 9, face = "bold"),
-                strip.background = ggplot2::element_blank(),
-                panel.grid.minor = ggplot2::element_blank(),
-                panel.grid.major = ggplot2::element_line(linewidth = 0.25, color = "gray85"),
-                axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
-                axis.text.y = ggplot2::element_text(size = 8),
-                axis.title = ggplot2::element_text(size = 10),
-                plot.title = ggplot2::element_text(size = 12, face = "bold", hjust = 0.5),
-                plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5),
-                plot.caption = ggplot2::element_text(size = 8, hjust = 1, face = "italic"),
+                axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
                 strip.placement = "outside"
             ) +
             ggplot2::labs(
@@ -577,10 +568,10 @@ plot_model_fit_stochastic <- function(config,
                 caption = paste0(
                     "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_cases), "NA", cor_cases),
+                    ", R\u00b2 = ", ifelse(is.na(r2_cases), "NA", r2_cases),
                     " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_deaths), "NA", cor_deaths),
+                    ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
@@ -625,8 +616,8 @@ plot_model_fit_stochastic <- function(config,
         all_obs_cases <- if(is.matrix(obs_cases)) as.vector(obs_cases) else obs_cases
         all_pred_cases <- if(is.matrix(cases_stats$mean)) as.vector(cases_stats$mean) else cases_stats$mean
 
-        cor_cases_overall <- tryCatch({
-            round(cor(all_obs_cases, all_pred_cases, use = "complete.obs"), 3)
+        r2_cases_overall <- tryCatch({
+            round(cor(all_obs_cases, all_pred_cases, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
 
         sum_obs_cases_all <- sum(obs_cases, na.rm = TRUE)
@@ -636,16 +627,16 @@ plot_model_fit_stochastic <- function(config,
             # Confidence envelope
             ggplot2::geom_ribbon(ggplot2::aes(ymin = predicted_lower,
                                              ymax = predicted_upper),
-                                fill = "steelblue",
+                                fill = mosaic_color_variant(unname(mosaic_colors("cases")), "lighten", 0.3),
                                 alpha = 0.3) +
             # Observed points
             ggplot2::geom_point(ggplot2::aes(y = observed),
-                              color = "black",
+                              color = mosaic_colors("data"),
                               size = 1.5,
                               alpha = 0.6) +
             # Mean prediction line
             ggplot2::geom_line(ggplot2::aes(y = predicted_mean),
-                             color = "steelblue",
+                             color = mosaic_colors("cases"),
                              linewidth = 0.8) +
             # Facet by location
             ggplot2::facet_wrap(~ location,
@@ -677,7 +668,7 @@ plot_model_fit_stochastic <- function(config,
                 caption = paste0(
                     "Total Cases: Obs = ", format(sum_obs_cases_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases_all, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_cases_overall), "NA", cor_cases_overall),
+                    ", R\u00b2 = ", ifelse(is.na(r2_cases_overall), "NA", r2_cases_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
@@ -734,8 +725,8 @@ plot_model_fit_stochastic <- function(config,
         all_obs_deaths <- if(is.matrix(obs_deaths)) as.vector(obs_deaths) else obs_deaths
         all_pred_deaths <- if(is.matrix(deaths_stats$mean)) as.vector(deaths_stats$mean) else deaths_stats$mean
 
-        cor_deaths_overall <- tryCatch({
-            round(cor(all_obs_deaths, all_pred_deaths, use = "complete.obs"), 3)
+        r2_deaths_overall <- tryCatch({
+            round(cor(all_obs_deaths, all_pred_deaths, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
 
         sum_obs_deaths_all <- sum(obs_deaths, na.rm = TRUE)
@@ -745,16 +736,16 @@ plot_model_fit_stochastic <- function(config,
             # Confidence envelope
             ggplot2::geom_ribbon(ggplot2::aes(ymin = predicted_lower,
                                              ymax = predicted_upper),
-                                fill = "darkred",
+                                fill = mosaic_color_variant(unname(mosaic_colors("deaths")), "lighten", 0.3),
                                 alpha = 0.3) +
             # Observed points
             ggplot2::geom_point(ggplot2::aes(y = observed),
-                              color = "black",
+                              color = mosaic_colors("data"),
                               size = 1.5,
                               alpha = 0.6) +
             # Mean prediction line
             ggplot2::geom_line(ggplot2::aes(y = predicted_mean),
-                             color = "darkred",
+                             color = mosaic_colors("deaths"),
                              linewidth = 0.8) +
             # Facet by location
             ggplot2::facet_wrap(~ location,
@@ -786,7 +777,7 @@ plot_model_fit_stochastic <- function(config,
                 caption = paste0(
                     "Total Deaths: Obs = ", format(sum_obs_deaths_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths_all, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_deaths_overall), "NA", cor_deaths_overall),
+                    ", R\u00b2 = ", ifelse(is.na(r2_deaths_overall), "NA", r2_deaths_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
