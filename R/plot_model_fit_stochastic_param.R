@@ -707,8 +707,8 @@ plot_model_fit_stochastic_param <- function(
         sum_obs_deaths <- sum(obs_deaths_i, na.rm = TRUE)
         sum_pred_deaths <- round(sum(pred_deaths_i, na.rm = TRUE))
 
-        cor_cases <- tryCatch(round(cor(obs_cases_i, pred_cases_i, use = "complete.obs"), 3), error = function(e) NA)
-        cor_deaths <- tryCatch(round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs"), 3), error = function(e) NA)
+        r2_cases <- tryCatch(round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3), error = function(e) NA)
+        r2_deaths <- tryCatch(round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3), error = function(e) NA)
 
         # Create plot with layered uncertainty
         p_individual <- ggplot2::ggplot(loc_data, ggplot2::aes(x = date))
@@ -741,20 +741,16 @@ plot_model_fit_stochastic_param <- function(
                              linewidth = 0.75) +
             # Facet by metric
             ggplot2::facet_grid(metric ~ ., scales = "free_y", switch = "y") +
-            ggplot2::scale_color_manual(values = c("Suspected Cases" = "steelblue", "Deaths" = "darkred"),
+            ggplot2::scale_color_manual(values = c("Suspected Cases" = unname(mosaic_colors("cases")),
+                                                  "Deaths" = unname(mosaic_colors("deaths"))),
                                        guide = "none") +
-            ggplot2::scale_fill_manual(values = c("Suspected Cases" = "steelblue", "Deaths" = "darkred"),
+            ggplot2::scale_fill_manual(values = c("Suspected Cases" = unname(mosaic_colors("cases")),
+                                                 "Deaths" = unname(mosaic_colors("deaths"))),
                                       guide = "none") +
             ggplot2::scale_y_continuous(labels = scales::comma) +
-            ggplot2::theme_minimal(base_size = 10) +
+            theme_mosaic(base_size = 10) +
             ggplot2::theme(
-                strip.text = ggplot2::element_text(size = 9, face = "bold"),
-                strip.background = ggplot2::element_blank(),
-                panel.grid.minor = ggplot2::element_blank(),
-                axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
-                plot.title = ggplot2::element_text(size = 12, face = "bold", hjust = 0.5),
-                plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5),
-                plot.caption = ggplot2::element_text(size = 8, hjust = 1, face = "italic"),
+                axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
                 strip.placement = "outside"
             ) +
             ggplot2::labs(
@@ -774,10 +770,10 @@ plot_model_fit_stochastic_param <- function(
                     ), " confidence intervals\n",
                     "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_cases), "NA", cor_cases),
+                    ", R\u00b2 = ", ifelse(is.na(r2_cases), "NA", r2_cases),
                     " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_deaths), "NA", cor_deaths)
+                    ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths)
                 )
             )
 

@@ -341,13 +341,13 @@ plot_model_fit <- function(model,
             pred_cases_i <- extract_location_data(pred_cases, i)
             pred_deaths_i <- extract_location_data(pred_deaths, i)
 
-            # Calculate correlations (handling NAs)
-            cor_cases <- tryCatch({
-                round(cor(obs_cases_i, pred_cases_i, use = "complete.obs"), 3)
+            # Calculate R² (correlation-based)
+            r2_cases <- tryCatch({
+                round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3)
             }, error = function(e) NA)
 
-            cor_deaths <- tryCatch({
-                round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs"), 3)
+            r2_deaths <- tryCatch({
+                round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3)
             }, error = function(e) NA)
 
             # Calculate sums
@@ -359,9 +359,9 @@ plot_model_fit <- function(model,
             # Create individual location plot
             p_individual <- ggplot2::ggplot(loc_data,
                                            ggplot2::aes(x = date, y = count)) +
-                # Observed data as points (black)
+                # Observed data as points
                 ggplot2::geom_point(data = dplyr::filter(loc_data, type == "observed"),
-                                  color = "black",
+                                  color = mosaic_colors("data"),
                                   size = 1.5,
                                   alpha = 0.6) +
                 # Predicted data as lines
@@ -373,22 +373,13 @@ plot_model_fit <- function(model,
                 ggplot2::facet_grid(metric ~ .,
                                   scales = "free_y",
                                   switch = "y") +
-                ggplot2::scale_color_manual(values = c("Cases" = "steelblue",
-                                                      "Deaths" = "darkred"),
+                ggplot2::scale_color_manual(values = c("Cases" = unname(mosaic_colors("cases")),
+                                                      "Deaths" = unname(mosaic_colors("deaths"))),
                                            guide = "none") +
                 ggplot2::scale_y_continuous(labels = scales::comma) +
-                ggplot2::theme_minimal(base_size = 10) +
+                theme_mosaic(base_size = 10) +
                 ggplot2::theme(
-                    strip.text = ggplot2::element_text(size = 9, face = "bold"),
-                    strip.background = ggplot2::element_blank(),
-                    panel.grid.minor = ggplot2::element_blank(),
-                    panel.grid.major = ggplot2::element_line(linewidth = 0.25, color = "gray85"),
-                    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
-                    axis.text.y = ggplot2::element_text(size = 8),
-                    axis.title = ggplot2::element_text(size = 10),
-                    plot.title = ggplot2::element_text(size = 12, face = "bold", hjust = 0.5),
-                    plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5),
-                    plot.caption = ggplot2::element_text(size = 8, hjust = 1, face = "italic"),
+                    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
                     strip.placement = "outside"
                 ) +
                 ggplot2::labs(
@@ -403,10 +394,10 @@ plot_model_fit <- function(model,
                     caption = paste0(
                         "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
                         ", Pred = ", format(sum_pred_cases, big.mark = ","),
-                        ", Cor = ", ifelse(is.na(cor_cases), "NA", cor_cases),
+                        ", R\u00b2 = ", ifelse(is.na(r2_cases), "NA", r2_cases),
                         " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
                         ", Pred = ", format(sum_pred_deaths, big.mark = ","),
-                        ", Cor = ", ifelse(is.na(cor_deaths), "NA", cor_deaths),
+                        ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths),
                         "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                     )
                 )
@@ -449,12 +440,12 @@ plot_model_fit <- function(model,
         cases_data <- plot_data_long %>%
             dplyr::filter(metric == "Cases")
         
-        # Calculate overall correlation and sums for cases
-        cor_cases_overall <- tryCatch({
+        # Calculate overall R² for cases
+        r2_cases_overall <- tryCatch({
             if (is.matrix(obs_cases)) {
-                round(cor(as.vector(obs_cases), as.vector(pred_cases), use = "complete.obs"), 3)
+                round(cor(as.vector(obs_cases), as.vector(pred_cases), use = "complete.obs")^2, 3)
             } else {
-                round(cor(obs_cases, pred_cases, use = "complete.obs"), 3)
+                round(cor(obs_cases, pred_cases, use = "complete.obs")^2, 3)
             }
         }, error = function(e) NA)
         
@@ -503,7 +494,7 @@ plot_model_fit <- function(model,
                 caption = paste0(
                     "Total Cases: Obs = ", format(sum_obs_cases_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases_all, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_cases_overall), "NA", cor_cases_overall),
+                    ", R\u00b2 = ", ifelse(is.na(r2_cases_overall), "NA", r2_cases_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
@@ -557,12 +548,12 @@ plot_model_fit <- function(model,
         deaths_data <- plot_data_long %>%
             dplyr::filter(metric == "Deaths")
         
-        # Calculate overall correlation and sums for deaths
-        cor_deaths_overall <- tryCatch({
+        # Calculate overall R² for deaths
+        r2_deaths_overall <- tryCatch({
             if (is.matrix(obs_deaths)) {
-                round(cor(as.vector(obs_deaths), as.vector(pred_deaths), use = "complete.obs"), 3)
+                round(cor(as.vector(obs_deaths), as.vector(pred_deaths), use = "complete.obs")^2, 3)
             } else {
-                round(cor(obs_deaths, pred_deaths, use = "complete.obs"), 3)
+                round(cor(obs_deaths, pred_deaths, use = "complete.obs")^2, 3)
             }
         }, error = function(e) NA)
         
@@ -611,7 +602,7 @@ plot_model_fit <- function(model,
                 caption = paste0(
                     "Total Deaths: Obs = ", format(sum_obs_deaths_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths_all, big.mark = ","),
-                    ", Cor = ", ifelse(is.na(cor_deaths_overall), "NA", cor_deaths_overall),
+                    ", R\u00b2 = ", ifelse(is.na(r2_deaths_overall), "NA", r2_deaths_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
