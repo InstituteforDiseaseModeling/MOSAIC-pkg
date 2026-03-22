@@ -67,14 +67,14 @@ plot_model_parameter_correlation <- function(results_file,
   # Compute Spearman correlation matrix
   cor_mat <- stats::cor(sims, use = "pairwise.complete.obs", method = "spearman")
 
-  # Select top correlated parameters
-  cor_long <- as.data.frame(as.table(cor_mat))
-  names(cor_long) <- c("param1", "param2", "cor")
-  cor_long <- cor_long[as.character(cor_long$param1) < as.character(cor_long$param2), ]
-  cor_long <- cor_long[order(-abs(cor_long$cor)), ]
-
-  top_params <- unique(c(as.character(cor_long$param1), as.character(cor_long$param2)))
-  top_params <- head(top_params, max_params)
+  # Select top parameters by mean absolute off-diagonal Spearman correlation.
+  # Ranking by mean |r| identifies parameters that are broadly correlated across
+  # the posterior, rather than parameters that happen to appear in the single
+  # highest-correlation pair (which was the previous, incorrect approach).
+  diag(cor_mat) <- NA
+  mean_abs_cor <- rowMeans(abs(cor_mat), na.rm = TRUE)
+  diag(cor_mat) <- 1
+  top_params <- names(sort(mean_abs_cor, decreasing = TRUE)[seq_len(min(max_params, length(mean_abs_cor)))])
 
   cor_subset <- cor_mat[top_params, top_params]
 
@@ -102,23 +102,34 @@ plot_model_parameter_correlation <- function(results_file,
   cor_plot_df$Param1 <- factor(cor_plot_df$Param1, levels = rownames(cor_subset))
   cor_plot_df$Param2 <- factor(cor_plot_df$Param2, levels = colnames(cor_subset))
 
-  # Text labels for strong correlations (off-diagonal only)
-  cor_plot_df$label <- ifelse(
-    abs(cor_plot_df$Correlation) >= cor_threshold &
-      as.character(cor_plot_df$Param1) != as.character(cor_plot_df$Param2),
-    sprintf("%.2f", cor_plot_df$Correlation),
-    ""
-  )
-
   n_params <- length(top_params)
   n_sims <- nrow(sims)
+
+  # Significance test for each Spearman r: t = r * sqrt((n-2)/(1-r^2)) ~ t(n-2).
+  # Only label off-diagonal cells that meet the threshold AND are significant.
+  off_diag <- as.character(cor_plot_df$Param1) != as.character(cor_plot_df$Param2)
+  r_vals <- cor_plot_df$Correlation
+  t_stat <- r_vals * sqrt((n_sims - 2) / pmax(1 - r_vals^2, 1e-10))
+  p_vals <- 2 * stats::pt(-abs(t_stat), df = n_sims - 2)
+  cor_plot_df$sig <- ifelse(!off_diag, "",
+                     ifelse(p_vals < 0.001, "***",
+                     ifelse(p_vals < 0.01,  "**",
+                     ifelse(p_vals < 0.05,  "*", ""))))
+
+  cor_plot_df$label <- ifelse(
+    abs(cor_plot_df$Correlation) >= cor_threshold &
+      off_diag &
+      cor_plot_df$sig != "",
+    paste0(sprintf("%.2f", cor_plot_df$Correlation), cor_plot_df$sig),
+    ""
+  )
 
   p <- ggplot2::ggplot(cor_plot_df,
                        ggplot2::aes(x = .data$Param1, y = .data$Param2,
                                     fill = .data$Correlation)) +
     ggplot2::geom_tile(color = "white", linewidth = 0.3) +
     ggplot2::geom_text(ggplot2::aes(label = .data$label),
-                       size = max(1.5, 3 - n_params / 15),
+                       size = max(2.5, 3.5 - n_params / 20),
                        color = "white") +
     ggplot2::scale_fill_gradientn(
       colors = mosaic_pal_diverging(11, "blue_red"),
@@ -127,20 +138,20 @@ plot_model_parameter_correlation <- function(results_file,
     ) +
     ggplot2::labs(
       title = "Posterior Parameter Correlations",
-      subtitle = sprintf("Top %d parameters by |correlation| (%s, n = %d)",
-                         n_params, subset_label, n_sims)
+      subtitle = sprintf("Top %d parameters by mean |correlation| (%s, n = %d); labels: r \u2265 %.1f and significant (*p<0.05 **p<0.01 ***p<0.001)",
+                         n_params, subset_label, n_sims, cor_threshold)
     ) +
-    theme_mosaic(base_size = 8) +
+    theme_mosaic(base_size = 11) +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1,
-                                           size = max(5, 8 - n_params / 8)),
-      axis.text.y = ggplot2::element_text(size = max(5, 8 - n_params / 8)),
+                                           size = max(7, 10 - n_params / 6)),
+      axis.text.y = ggplot2::element_text(size = max(7, 10 - n_params / 6)),
       axis.title = ggplot2::element_blank(),
       panel.grid = ggplot2::element_blank()
     )
 
   # Size adapts to number of parameters
-  fig_size <- max(8, n_params * 0.4 + 2)
+  fig_size <- max(10, n_params * 0.5 + 2)
 
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   out_file <- file.path(output_dir, "parameter_correlation.png")
