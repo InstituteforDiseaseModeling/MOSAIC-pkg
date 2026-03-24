@@ -70,6 +70,7 @@ Imports:
   rnaturalearthdata,
   RhpcBLASctl,
   scales,
+  sensitivity,
   sf,
   slider,
   sp,
