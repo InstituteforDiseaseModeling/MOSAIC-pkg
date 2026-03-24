@@ -87,35 +87,82 @@ plot_model_parameter_sensitivity <- function(results_file,
   }
 
   # -----------------------------------------------------------------------
-  # Importance-weighted resampling from posterior
+  # Sample selection: prefer best_subset when weights are degenerate
   # -----------------------------------------------------------------------
-  weight_col <- if ("weight_retained" %in% names(sims) &&
-                    any(is.finite(sims$weight_retained) & sims$weight_retained > 0)) {
-    "weight_retained"
-  } else if ("weight_all" %in% names(sims) &&
-             any(is.finite(sims$weight_all) & sims$weight_all > 0)) {
-    "weight_all"
-  } else {
-    NULL
+  # Compute ESS of weight_retained to detect degenerate posteriors.
+  # ESS = (sum w)^2 / sum(w^2). When one sample dominates (ESS << n),
+  # importance-weighted resampling just replicates that sample, inflating
+  # all R2-HSIC values uniformly. In that case use is_best_subset directly.
+  .compute_ess <- function(w) {
+    w <- w[is.finite(w) & w > 0]
+    if (length(w) == 0) return(0)
+    sum(w)^2 / sum(w^2)
   }
 
-  n_use <- min(n_samples, n_total)
+  has_best_subset <- "is_best_subset" %in% names(results) &&
+                     any(results$is_best_subset == TRUE, na.rm = TRUE)
 
-  if (!is.null(weight_col)) {
-    w <- sims[[weight_col]]
-    w[!is.finite(w) | w < 0] <- 0
-    idx <- sample(n_total, size = n_use, prob = w + .Machine$double.eps, replace = TRUE)
+  w_retained <- if ("weight_retained" %in% names(sims)) sims$weight_retained else NULL
+  ess_retained <- if (!is.null(w_retained)) .compute_ess(w_retained) else 0
+  ess_threshold <- max(10, n_samples * 0.05)   # ESS must be >= 5% of requested n
+
+  if (ess_retained < ess_threshold && has_best_subset) {
+    # Degenerate weights: fall back to best_subset samples
+    sims_sub <- results[results$is_best_subset == TRUE, ]
+    n_use <- nrow(sims_sub)
+    subset_label <- sprintf("best_subset (ESS of retained = %.0f < threshold %.0f)",
+                            ess_retained, ess_threshold)
+    # Use U-statistic at small n: V-stat positive bias is non-trivial when n < 200
+    estimator_type <- if (n_use < 200) "U-stat" else "V-stat"
+    if (verbose) {
+      log_msg(paste0("Warning: ESS of weight_retained = %.0f (n = %d). ",
+                     "Falling back to best_subset (n = %d, estimator = %s)."),
+              ess_retained, n_total, n_use, estimator_type)
+    }
   } else {
-    idx <- sample(n_total, size = n_use, replace = FALSE)
+    # Normal path: importance-weighted resampling
+    weight_col <- if (!is.null(w_retained) && ess_retained >= ess_threshold) {
+      "weight_retained"
+    } else if ("weight_all" %in% names(sims) &&
+               any(is.finite(sims$weight_all) & sims$weight_all > 0)) {
+      "weight_all"
+    } else {
+      NULL
+    }
+
+    n_use <- min(n_samples, n_total)
+
+    if (!is.null(weight_col)) {
+      w <- sims[[weight_col]]
+      w[!is.finite(w) | w < 0] <- 0
+      idx <- sample(n_total, size = n_use, prob = w + .Machine$double.eps, replace = TRUE)
+    } else {
+      idx <- sample(n_total, size = n_use, replace = FALSE)
+    }
+
+    sims_sub <- sims[idx, ]
+    subset_label <- if (!is.null(weight_col)) "importance-weighted" else "uniform"
+    estimator_type <- "V-stat"
   }
 
-  sims_sub <- sims[idx, ]
+  # Remove zero-variance columns again after subset selection (some params may
+  # be frozen in the best_subset that were variable in the full sample)
+  vars2 <- apply(sims_sub[, param_cols_active, drop = FALSE], 2,
+                 stats::var, na.rm = TRUE)
+  param_cols_active <- names(vars2[vars2 > 0 & !is.na(vars2)])
+  p <- length(param_cols_active)
+
+  if (p < 2) {
+    warning("Fewer than 2 active parameters after subset selection.")
+    return(invisible(NULL))
+  }
+
   params_df <- as.data.frame(sims_sub[, param_cols_active, drop = FALSE])
-  y_vec <- sims_sub$likelihood
+  y_vec     <- sims_sub$likelihood
 
   if (verbose) {
-    log_msg("Computing HSIC sensitivity (n=%d draws, p=%d params, kernel=%s)",
-            n_use, p, kernel)
+    log_msg("Computing HSIC sensitivity (n=%d, p=%d params, kernel=%s, estimator=%s)",
+            nrow(params_df), p, kernel, estimator_type)
   }
 
   # -----------------------------------------------------------------------
@@ -149,7 +196,7 @@ plot_model_parameter_sensitivity <- function(results_file,
       kernelY        = "rbf",
       paramX         = NA,
       paramY         = NA,
-      estimator.type = "V-stat",
+      estimator.type = estimator_type,
       test.method    = "No"   # significance computed separately via testHSIC
     )
     res <- sensitivity::tell(res, y_vec)  # must capture return value
@@ -244,8 +291,7 @@ plot_model_parameter_sensitivity <- function(results_file,
   # -----------------------------------------------------------------------
   # Plot
   # -----------------------------------------------------------------------
-  weight_label <- if (!is.null(weight_col)) "importance-weighted" else "uniform"
-  sig_note <- sprintf("bars coloured by significance (*p<0.05 **p<0.01 ***p<0.001)")
+  sig_note <- "bars coloured by significance (*p<0.05 **p<0.01 ***p<0.001)"
 
   p_sens <- ggplot2::ggplot(
     sens_top,
@@ -268,7 +314,7 @@ plot_model_parameter_sensitivity <- function(results_file,
       title    = "Parameter Sensitivity (HSIC)",
       subtitle = sprintf(
         "Top %d of %d parameters by R\u00b2-HSIC with log-likelihood (%s, n = %d); %s",
-        top_n, p, weight_label, n_use, sig_note
+        top_n, p, subset_label, nrow(params_df), sig_note
       ),
       x = expression(R^2 * "-HSIC  (kernel independence measure)"),
       y = NULL
