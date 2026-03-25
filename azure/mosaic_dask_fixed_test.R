@@ -29,7 +29,7 @@ priors <- get_location_priors(iso = "ETH")
 ctrl <- mosaic_control_defaults()
 
 # Calibration: fixed mode
-ctrl$calibration$n_simulations <- 50000
+ctrl$calibration$n_simulations <- 1000
 ctrl$calibration$batch_size    <- 10000
 ctrl$calibration$n_iterations  <- 5
 
@@ -59,6 +59,7 @@ ctrl$npe$enable <- FALSE
 ctrl$paths$clean_output <- TRUE
 ctrl$paths$plots        <- FALSE
 ctrl$io <- mosaic_io_presets("fast")
+ctrl$io$load_chunk_size <- 5000
 # ctrl$io$save_simresults <- TRUE  # Enable to write per-sim parquet for validation
 
 dask_spec <- list(
@@ -67,6 +68,7 @@ dask_spec <- list(
   software     = "mosaic-acr-workers",
   scheduler_vm_types = c("Standard_D8s_v6"),
   vm_types     = c("Standard_D4s_v6"),
+  timeout      = 1200,
   region       = "westus2",
   idle_timeout = "30 minutes",
   worker_options = list(nthreads = 1L)
