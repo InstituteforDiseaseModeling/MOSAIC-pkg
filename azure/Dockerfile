@@ -2,7 +2,7 @@ FROM rocker/geospatial:4.4
 
 LABEL maintainer="MOSAIC Team"
 LABEL description="MOSAIC for Coiled.io - Auto-scaling cloud workflows"
-LABEL version="0.14.62"
+LABEL version="0.17.33"
 
 # Prevent interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
@@ -93,7 +93,8 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
         'furrr', \
         'slider', \
         'RhpcBLASctl', \
-        'truncnorm' \
+        'truncnorm', \
+        'sensitivity' \
     )); \
     # Install older ggrepel compatible with R 4.4 \
     remotes::install_version('ggrepel', version = '0.9.5', repos = 'https://cloud.r-project.org'); \
