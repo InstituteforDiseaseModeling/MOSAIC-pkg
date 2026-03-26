@@ -119,6 +119,7 @@
 #' @noRd
 .mosaic_run_simulation_worker <- function(sim_id, n_iterations, priors, config, PATHS,
                                           dir_cal_samples,
+                                          dir_cal_simresults = NULL,
                                           param_names_all, param_lookup, sampling_args, io,
                                           likelihood_settings) {
 
@@ -164,6 +165,9 @@
   if (!is.null(params_sim$tau_i)) {
     params_sim$tau_i <- pmin(pmax(params_sim$tau_i, 0), 1)
   }
+
+  # Pre-allocate simresults collector (validation mode only)
+  simresults_raw <- if (!is.null(dir_cal_simresults)) vector("list", n_iterations) else NULL
 
   # Import laser-cholera (explicit check, no inherits)
   # Parallel mode: lc exists in worker global environment
@@ -255,6 +259,29 @@
       })
 
       result_matrix[j, 5] <- likelihood
+
+      # Capture raw per-(j, t) output for validation simresults
+      if (!is.null(simresults_raw)) {
+        raw_cases  <- model$results$reported_cases
+        raw_deaths <- model$results$disease_deaths
+        if (!is.null(raw_cases) && !is.null(raw_deaths)) {
+          if (!is.matrix(raw_cases))  raw_cases  <- matrix(raw_cases,  nrow = 1)
+          if (!is.matrix(raw_deaths)) raw_deaths <- matrix(raw_deaths, nrow = 1)
+          n_j_raw <- nrow(raw_cases)
+          n_t_raw <- ncol(raw_cases)
+          simresults_raw[[j]] <- data.frame(
+            sim    = sim_id,
+            iter   = as.integer(j),
+            j      = rep(seq_len(n_j_raw), times = n_t_raw),
+            t      = rep(seq_len(n_t_raw), each  = n_j_raw),
+            cases  = as.numeric(raw_cases),
+            deaths = as.numeric(raw_deaths)
+          )
+          if (!is.null(params_sim$psi_jt)) {
+            simresults_raw[[j]]$psi_jt <- params_sim$psi_jt[cbind(simresults_raw[[j]]$j, simresults_raw[[j]]$t)]
+          }
+        }
+      }
     }
 
     # Explicit garbage collection on last iteration to prevent Python object buildup
@@ -282,6 +309,21 @@
   # Write parameter file
   output_file <- file.path(dir_cal_samples, sprintf("sim_%07d.parquet", sim_id))
   .mosaic_write_parquet(as.data.frame(result_matrix), output_file, io)
+
+  # Write raw simulation results for validation (when save_simresults = TRUE)
+  if (!is.null(simresults_raw) && !is.null(dir_cal_simresults)) {
+    simresults_raw <- Filter(Negate(is.null), simresults_raw)
+    if (length(simresults_raw) > 0) {
+      raw_df <- do.call(rbind, simresults_raw)
+      param_vals <- as.numeric(result_matrix[1, param_names_all])
+      for (pi in seq_along(param_names_all)) {
+        raw_df[[param_names_all[pi]]] <- param_vals[pi]
+      }
+      simresults_file <- file.path(dir_cal_simresults,
+                                   sprintf("simresults_%07d.parquet", sim_id))
+      .mosaic_write_parquet(raw_df, simresults_file, io)
+    }
+  }
 
   # R GC every sim to process reticulate finalizer queue;
   # Python full GC every 100 sims (frequent full sweeps are counterproductive)
@@ -548,6 +590,13 @@ run_MOSAIC <- function(config,
     clean_output = isTRUE(control$paths$clean_output)
   )
 
+  # Conditionally create simresults directory for validation output
+  save_simresults <- isTRUE(control$io$save_simresults)
+  if (save_simresults) {
+    dirs$cal_simresults <- file.path(dir_output, "2_calibration/simulation_results")
+    dir.create(dirs$cal_simresults, recursive = TRUE, showWarnings = FALSE)
+  }
+
   # ===========================================================================
   # WRITE SETUP FILES (with cluster metadata)
   # ===========================================================================
@@ -716,6 +765,7 @@ run_MOSAIC <- function(config,
           config = config,
           PATHS = PATHS,
           dir_cal_samples = dirs$cal_samples,
+          dir_cal_simresults = dirs$cal_simresults,
           param_names_all = param_names_all,
           param_lookup = param_lookup,
           sampling_args = sampling_args,
@@ -949,9 +999,12 @@ run_MOSAIC <- function(config,
     "streaming"  # Safe default
   }
 
+  load_chunk_size <- control$io$load_chunk_size %||% 5000L
+
   results <- .mosaic_load_and_combine_results(
     dir_params = dirs$cal_samples,
     method = load_method,
+    chunk_size = load_chunk_size,
     verbose = TRUE
   )
 
@@ -2073,6 +2126,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     compression = "zstd",
     compression_level = 3L,
     load_method = "streaming",         # "streaming" (memory-safe) or "rbind" (legacy)
+    load_chunk_size = 5000L,           # Files per chunk when loading many small parquets
+    save_simresults = FALSE,           # Save raw per-(sim,iter,j,t) output for validation
     verbose_weights = FALSE            # Print detailed weight calculation diagnostics
   )
 

@@ -291,6 +291,7 @@
 #' @noRd
 .mosaic_load_and_combine_results <- function(dir_params,
                                              method = c("streaming", "rbind"),
+                                             chunk_size = 5000L,
                                              verbose = TRUE) {
 
   method <- match.arg(method)
@@ -313,10 +314,34 @@
   # Choose loading strategy
   results <- switch(method,
     streaming = {
-      # Arrow streaming: memory-safe, works for any dataset size
-      arrow::open_dataset(dir_params, format = "parquet") %>%
-        dplyr::collect() %>%
-        as.data.frame()
+      # Chunked loading: process files in batches to avoid OOM with many small parquets.
+      # Arrow's open_dataset() %>% collect() materializes everything at once, which causes
+      # OOM with 40K+ single-row parquets (10-20KB overhead per file expands to several GB).
+      n_files <- length(files)
+      if (n_files <= chunk_size) {
+        # Small enough to load in one shot
+        arrow::open_dataset(dir_params, format = "parquet") %>%
+          dplyr::collect() %>%
+          as.data.frame()
+      } else {
+        # Chunked approach: rbindlist on batches to reduce working set
+        n_chunks <- ceiling(n_files / chunk_size)
+        if (verbose) log_msg("Loading in %d chunks of up to %d files", n_chunks, chunk_size)
+        chunk_list <- vector("list", n_chunks)
+        for (ci in seq_len(n_chunks)) {
+          idx_start <- (ci - 1L) * chunk_size + 1L
+          idx_end <- min(ci * chunk_size, n_files)
+          chunk_files <- files[idx_start:idx_end]
+          chunk_list[[ci]] <- data.table::rbindlist(
+            lapply(chunk_files, arrow::read_parquet),
+            fill = TRUE
+          )
+          if (verbose && ci %% 5 == 0) {
+            log_msg("  Loaded chunk %d/%d (%d files)", ci, n_chunks, idx_end)
+          }
+        }
+        as.data.frame(data.table::rbindlist(chunk_list, fill = TRUE))
+      }
     },
 
     rbind = {
@@ -397,6 +422,7 @@
     cal_posterior      = file.path(dir_output, "2_calibration/posterior"),
     cal_diag          = file.path(dir_output, "2_calibration/diagnostics"),
     cal_state         = file.path(dir_output, "2_calibration/state"),
+    cal_simresults    = NULL,  # Created conditionally when save_simresults = TRUE
     results           = file.path(dir_output, "3_results"),
     res_posterior      = file.path(dir_output, "3_results/posterior"),
     res_predictions    = file.path(dir_output, "3_results/predictions"),
@@ -601,6 +627,7 @@
     .mosaic_load_and_combine_results(
       dir_params = dirs$cal_samples,
       method = "streaming",
+      chunk_size = control$io$load_chunk_size %||% 5000L,
       verbose = FALSE
     )
   }, error = function(e) NULL)
