@@ -145,11 +145,56 @@ These were combined into a single commit adapting the features to upstream's new
 | **Conflicts resolved** | 4 minor (all in `azure/` files during cherry-pick) |
 | **Files modified vs upstream** | `R/run_MOSAIC.R`, `R/run_MOSAIC_helpers.R` + all `azure/` and `inst/python/` Dask files |
 
+## Step 6: Pass 1 — Sync run_MOSAIC_dask.R with upstream (runtime + correctness)
+
+Gap analysis identified 14 areas where `run_MOSAIC_dask.R` diverged from upstream's `run_MOSAIC.R`. These were categorized into:
+- **Must-fix (runtime errors)** — code that would crash at runtime
+- **Should-fix (correctness)** — code that runs but produces wrong results
+- **Nice-to-have (feature parity)** — new upstream features not yet ported (deferred to Pass 2)
+
+### Runtime error fixes (would crash without these)
+
+| Fix | Details |
+|-----|---------|
+| `.mosaic_ensure_dir_tree()` call | Removed `run_npe` parameter (upstream removed it in v0.16.1). Old call would error: "unused argument" |
+| Directory names (`bfrs_*` → `cal_*`) | Renamed 35+ references: `dirs$bfrs_params` → `dirs$cal_samples`, `dirs$bfrs_diag` → `dirs$cal_diag`, `dirs$bfrs_post` → `dirs$cal_posterior`, `dirs$bfrs_cfg` → `dirs$cal_best_model`, `dirs$bfrs_out` → `dirs$calibration`, `dirs$bfrs_plots_*` → `dirs$res_fig_*`, `dirs$setup` → `dirs$inputs`. Old names return NULL from upstream's dir tree → writes to NULL paths |
+| NPE stage removal | Removed `if (control$npe$enable) { run_NPE(...) }` block. `run_NPE()` no longer exists (moved to `deprecated/npe_removed_v0.15.0/`) |
+| State file path | Changed from `dirs$bfrs_diag/run_state.rds` to `dirs$cal_state/run_state.json` to match upstream's state management |
+
+### Correctness fixes
+
+| Fix | Details |
+|-----|---------|
+| Transmission guardrails | Added post-sampling clamping: `beta_j0_tot >= 1e-10`, `beta_j0_hum >= 0`, `beta_j0_env >= 0`, `p_beta` in `[1e-6, 1-1e-6]`, `tau_i` in `[0, 1]`. Prevents laser-cholera ValueError from negative rates (v0.17.4) |
+| `validate = FALSE` | Added to `sample_parameters()` call. Skips per-sim validation (priors guarantee valid ranges), matching upstream's worker optimization (v0.14.83) |
+| Likelihood settings | Switched from `control$likelihood$*` to pre-resolved `likelihood_settings$*` pattern. Added 4 missing args: `weights_time`, `weights_location`, `nb_k_min_cases`, `nb_k_min_deaths` (v0.17.26–v0.17.28) |
+| `is_retained` definition | Changed from `is_finite & !is_outlier` to `is_valid & !is_outlier`. `is_valid` includes the floor-likelihood check (`!= -999999999`), matching upstream (v0.17.4) |
+| `convergence_results_df$seed` | Changed from `results$sim` to `results$seed_sim` — was using wrong column |
+| Subset search input | Changed `grid_search_best_subset(results = results, ...)` to `results[results$is_retained, ]`. Upstream filters to retained-only before search (v0.14.72) |
+| Fallback subset | Also filters to `results[results$is_retained, ]` before ranking, matching upstream |
+| `special_map` cleanup | Removed stale `a1 = "a_1_j", a2 = "a_2_j", b1 = "b_1_j", b2 = "b_2_j"` entries. Upstream renamed sampling flags to `sample_a_1_j` etc. directly (v0.14.63–v0.14.65) |
+| `calc_model_posterior_distributions()` | Added missing `control = control` argument |
+| `chunk_size` | Added to `.mosaic_load_and_combine_results()` call in post-processing |
+| PPC output directory | Changed from `dirs$res_figures` to `dirs$res_fig_ppc` (upstream v0.17.9) |
+| Setup file names | Renamed `simulation_params.json` → `control.json`, `config_base.json` → `config.json` to match upstream convention |
+| Prior plot gating | Wrapped in `if (isTRUE(control$paths$plots))` guard (upstream v0.15.1) |
+
+### Changes: +115 / -117 lines in `R/run_MOSAIC_dask.R`
+
 ## TODO / Follow-up
 
+### Pass 2 (feature parity — deferred)
+- [ ] Add `environment.json` provenance tracking (`.mosaic_capture_environment()`)
+- [ ] Add `summary.json` output (`.mosaic_write_summary_json()`)
+- [ ] Add `parameter_estimates.csv` output
+- [ ] Add best-model R² and ensemble R² computation
+- [ ] Add prediction CSV combining
+- [ ] Add state finalization (`.mosaic_finalize_state()`)
+- [ ] Add parameter sensitivity (HSIC) and correlation heatmap plots
+- [ ] Port `param_lookup` / `.mosaic_extract_param_row()` for parquet writing (perf)
+- [ ] Port ESS param detection to `scale`-column approach (replaces regex)
+
+### Infrastructure
 - [ ] Push `validate_dask_local_sim_take3` to origin
-- [ ] Update `R/run_MOSAIC_dask.R` to match upstream's new dir structure (`cal_samples`, `cal_simresults`, etc.)
-- [ ] Update `R/run_MOSAIC_dask.R` to use upstream's new worker patterns (`param_lookup`, `likelihood_settings`, `make_mosaic_cluster()`)
-- [ ] Decide whether to keep NPE references in `run_MOSAIC_dask.R` or remove (upstream dropped embedded NPE)
 - [ ] Rebuild Docker image with upstream's updated `environment.yml`
 - [ ] Run validation test to confirm Dask vs local equivalence still holds on new codebase
