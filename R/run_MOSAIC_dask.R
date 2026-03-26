@@ -63,6 +63,7 @@
 #' @noRd
 .mosaic_run_batch_dask <- function(sim_ids, n_iterations, priors, config, PATHS,
                                     sampling_args, dirs, param_names_all, control,
+                                    likelihood_settings,
                                     client, base_config_future,
                                     mosaic_worker) {
 
@@ -85,7 +86,8 @@
         config     = config,
         seed       = sim_id,
         sample_args = sampling_args,
-        verbose    = FALSE
+        verbose    = FALSE,
+        validate   = FALSE
       ),
       error = function(e) {
         warning("Param sampling failed for sim ", sim_id, ": ", e$message,
@@ -93,6 +95,17 @@
         NULL
       }
     )
+
+    # Guardrails: clamp transmission parameters to prevent laser-cholera ValueError
+    if (!is.null(params_list[[idx]])) {
+      p <- params_list[[idx]]
+      if (!is.null(p$beta_j0_tot)) p$beta_j0_tot <- pmax(p$beta_j0_tot, 1e-10)
+      if (!is.null(p$beta_j0_hum)) p$beta_j0_hum <- pmax(p$beta_j0_hum, 0)
+      if (!is.null(p$beta_j0_env)) p$beta_j0_env <- pmax(p$beta_j0_env, 0)
+      if (!is.null(p$p_beta))      p$p_beta      <- pmin(pmax(p$p_beta, 1e-6), 1 - 1e-6)
+      if (!is.null(p$tau_i))       p$tau_i       <- pmin(pmax(p$tau_i, 0), 1)
+      params_list[[idx]] <- p
+    }
   }
 
   # ---------------------------------------------------------------------------
@@ -254,24 +267,28 @@
           est_cases    = est_cases,
           obs_deaths   = obs_deaths,
           est_deaths   = est_deaths,
-          add_max_terms         = control$likelihood$add_max_terms,
-          add_peak_timing       = control$likelihood$add_peak_timing,
-          add_peak_magnitude    = control$likelihood$add_peak_magnitude,
-          add_cumulative_total  = control$likelihood$add_cumulative_total,
-          add_wis               = control$likelihood$add_wis,
-          weight_cases          = control$likelihood$weight_cases,
-          weight_deaths         = control$likelihood$weight_deaths,
-          weight_max_terms      = control$likelihood$weight_max_terms,
-          weight_peak_timing    = control$likelihood$weight_peak_timing,
-          weight_peak_magnitude = control$likelihood$weight_peak_magnitude,
-          weight_cumulative_total = control$likelihood$weight_cumulative_total,
-          weight_wis            = control$likelihood$weight_wis,
-          sigma_peak_time       = control$likelihood$sigma_peak_time,
-          sigma_peak_log        = control$likelihood$sigma_peak_log,
-          penalty_unmatched_peak = control$likelihood$penalty_unmatched_peak,
-          enable_guardrails     = control$likelihood$enable_guardrails,
-          floor_likelihood      = control$likelihood$floor_likelihood,
-          guardrail_verbose     = control$likelihood$guardrail_verbose
+          weights_time          = likelihood_settings$.weights_time_resolved,
+          weights_location      = likelihood_settings$weights_location,
+          nb_k_min_cases        = likelihood_settings$nb_k_min_cases,
+          nb_k_min_deaths       = likelihood_settings$nb_k_min_deaths,
+          add_max_terms         = likelihood_settings$add_max_terms,
+          add_peak_timing       = likelihood_settings$add_peak_timing,
+          add_peak_magnitude    = likelihood_settings$add_peak_magnitude,
+          add_cumulative_total  = likelihood_settings$add_cumulative_total,
+          add_wis               = likelihood_settings$add_wis,
+          weight_cases          = likelihood_settings$weight_cases,
+          weight_deaths         = likelihood_settings$weight_deaths,
+          weight_max_terms      = likelihood_settings$weight_max_terms,
+          weight_peak_timing    = likelihood_settings$weight_peak_timing,
+          weight_peak_magnitude = likelihood_settings$weight_peak_magnitude,
+          weight_cumulative_total = likelihood_settings$weight_cumulative_total,
+          weight_wis            = likelihood_settings$weight_wis,
+          sigma_peak_time       = likelihood_settings$sigma_peak_time,
+          sigma_peak_log        = likelihood_settings$sigma_peak_log,
+          penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak,
+          enable_guardrails     = likelihood_settings$enable_guardrails,
+          floor_likelihood      = likelihood_settings$floor_likelihood,
+          guardrail_verbose     = likelihood_settings$guardrail_verbose
         ),
         error = function(e) {
           warning("Likelihood failed sim ", sim_id, " iter ", ji, ": ",
@@ -315,7 +332,7 @@
       row_df[[pname]] <- as.numeric(raw_params[pname])
     }
 
-    out_file <- file.path(dirs$bfrs_params,
+    out_file <- file.path(dirs$cal_samples,
                           sprintf("sim_%07d.parquet", sim_id))
     .mosaic_write_parquet(row_df, out_file, control$io)
     success_indicators[idx] <- file.exists(out_file)
@@ -507,52 +524,35 @@ run_MOSAIC_dask <- function(config,
 
   dirs <- .mosaic_ensure_dir_tree(
     dir_output   = dir_output,
-    run_npe      = isTRUE(control$npe$enable),
     clean_output = isTRUE(control$paths$clean_output)
   )
 
-  # Skip per-sim simulation results files (validation only, heavy I/O).
-  # Set control$io$save_simresults = TRUE to re-enable for debugging.
-  if (!isTRUE(control$io$save_simresults)) {
-    dirs$bfrs_simresults <- NULL
+  # Conditionally create simresults directory for validation output
+  save_simresults <- isTRUE(control$io$save_simresults)
+  if (save_simresults) {
+    dirs$cal_simresults <- file.path(dir_output, "2_calibration/simulation_results")
+    dir.create(dirs$cal_simresults, recursive = TRUE, showWarnings = FALSE)
   }
 
   # ===========================================================================
   # SETUP FILES
   # ===========================================================================
 
-  cluster_metadata <- .mosaic_get_cluster_metadata()
-  sim_params <- list(
-    control          = control,
-    n_iterations     = n_iterations,
-    iso_code         = iso_code,
-    timestamp        = Sys.time(),
-    R_version        = R.version.string,
-    MOSAIC_version   = as.character(utils::packageVersion("MOSAIC")),
-    cluster_metadata = cluster_metadata,
-    dask_spec        = dask_spec,
-    paths = list(
-      dir_output = dirs$root,
-      dir_setup  = dirs$setup,
-      dir_bfrs   = dirs$bfrs,
-      dir_npe    = if (isTRUE(control$npe$enable)) dirs$npe else NULL,
-      dir_results = dirs$results
-    )
-  )
-
   log_msg("Writing setup files...")
-  .mosaic_write_json(sim_params, file.path(dirs$setup, "simulation_params.json"), control$io)
-  .mosaic_write_json(priors,     file.path(dirs$setup, "priors.json"),            control$io)
-  .mosaic_write_json(config,     file.path(dirs$setup, "config_base.json"),       control$io)
-  log_msg("  Saved simulation_params.json, priors.json, config_base.json")
+  .mosaic_write_json(control, file.path(dirs$inputs, "control.json"), control$io)
+  .mosaic_write_json(priors,  file.path(dirs$inputs, "priors.json"),  control$io)
+  .mosaic_write_json(config,  file.path(dirs$inputs, "config.json"),  control$io)
+  log_msg("  Saved control.json, priors.json, config.json")
 
-  log_msg("Plotting prior distributions")
-  plot_model_distributions(
-    json_files   = file.path(dirs$setup, "priors.json"),
-    method_names = "Prior",
-    output_dir   = dirs$setup,
-    verbose      = control$logging$verbose
-  )
+  if (isTRUE(control$paths$plots)) {
+    log_msg("Plotting prior distributions")
+    plot_model_distributions(
+      json_files   = file.path(dirs$inputs, "priors.json"),
+      method_names = "Prior",
+      output_dir   = dirs$inputs,
+      verbose      = control$logging$verbose
+    )
+  }
 
   # ===========================================================================
   # PARAMETER NAME DETECTION
@@ -586,9 +586,7 @@ run_MOSAIC_dask <- function(config,
     disabled_flags <- names(sampling_args)[vapply(sampling_args, isFALSE, logical(1))]
     disabled_base <- gsub("^sample_", "", disabled_flags)
     special_map <- list(
-      beta_j0_tot = c("beta_j0_hum", "beta_j0_env"),
-      a1 = "a_1_j", a2 = "a_2_j",
-      b1 = "b_1_j", b2 = "b_2_j"
+      beta_j0_tot = c("beta_j0_hum", "beta_j0_env")
     )
     resolved <- unlist(lapply(disabled_base, function(nm) {
       if (nm %in% names(special_map)) special_map[[nm]] else nm
@@ -604,6 +602,17 @@ run_MOSAIC_dask <- function(config,
           length(param_names_sampled), length(param_names_estimated),
           length(param_names_all),
           paste(config$location_name, collapse = ", "))
+
+  # Resolve likelihood settings once (avoids closure over control in batch func)
+  likelihood_settings <- control$likelihood
+  if (!is.null(likelihood_settings$weights_time)) {
+    n_t <- ncol(config$reported_cases)
+    wt_raw <- likelihood_settings$weights_time
+    if (length(wt_raw) == 1L) wt_raw <- rep(wt_raw, n_t)
+    likelihood_settings$.weights_time_resolved <- wt_raw / sum(wt_raw) * n_t
+  } else {
+    likelihood_settings$.weights_time_resolved <- NULL
+  }
 
   # ===========================================================================
   # DASK CLUSTER SETUP
@@ -706,7 +715,7 @@ run_MOSAIC_dask <- function(config,
   # ===========================================================================
 
   nspec      <- .mosaic_normalize_n_sims(n_simulations)
-  state_file <- file.path(dirs$bfrs_diag, "run_state.rds")
+  state_file <- file.path(dirs$cal_state, "run_state.json")
 
   state <- .mosaic_init_state(control, param_names_sampled, nspec)
 
@@ -752,6 +761,7 @@ run_MOSAIC_dask <- function(config,
           dirs               = dirs,
           param_names_all    = param_names_all,
           control            = control,
+          likelihood_settings = likelihood_settings,
           client             = client,
           base_config_future = base_config_future,
           mosaic_worker      = mosaic_worker
@@ -856,6 +866,7 @@ run_MOSAIC_dask <- function(config,
         dirs               = dirs,
         param_names_all    = param_names_all,
         control            = control,
+        likelihood_settings = likelihood_settings,
         client             = client,
         base_config_future = base_config_future,
         mosaic_worker      = mosaic_worker
@@ -928,7 +939,7 @@ run_MOSAIC_dask <- function(config,
   post_start <- Sys.time()
   log_msg("Combining simulation files")
 
-  parquet_files <- list.files(dirs$bfrs_params,
+  parquet_files <- list.files(dirs$cal_samples,
                                pattern = "^sim_.*\\.parquet$",
                                full.names = TRUE)
 
@@ -938,9 +949,12 @@ run_MOSAIC_dask <- function(config,
     "streaming"
   }
 
+  load_chunk_size <- control$io$load_chunk_size %||% 5000L
+
   results <- .mosaic_load_and_combine_results(
-    dir_params = dirs$bfrs_params,
+    dir_params = dirs$cal_samples,
     method     = load_method,
+    chunk_size = load_chunk_size,
     verbose    = TRUE
   )
 
@@ -971,14 +985,14 @@ run_MOSAIC_dask <- function(config,
             100 * sum(results$is_outlier) / sum(results$is_valid))
   }
 
-  results$is_retained    <- results$is_finite & !results$is_outlier
+  results$is_retained    <- results$is_valid & !results$is_outlier
   results$is_best_subset <- FALSE
   results$is_best_model  <- FALSE
   if (any(results$is_valid)) {
     results$is_best_model[which.max(results$likelihood)] <- TRUE
   }
 
-  simulations_file <- file.path(dirs$bfrs_out, "simulations.parquet")
+  simulations_file <- file.path(dirs$calibration, "simulations.parquet")
   .mosaic_write_parquet(results, simulations_file, control$io)
 
   if (length(parquet_files) > 0) {
@@ -999,7 +1013,7 @@ run_MOSAIC_dask <- function(config,
     method         = control$targets$ESS_method,
     verbose        = control$logging$verbose
   )
-  ess_file <- file.path(dirs$bfrs_diag, "parameter_ess.csv")
+  ess_file <- file.path(dirs$cal_diag, "parameter_ess.csv")
   write.csv(ess_results, ess_file, row.names = FALSE)
   log_msg("Saved %s", ess_file)
 
@@ -1019,7 +1033,7 @@ run_MOSAIC_dask <- function(config,
     log_msg("  Testing tier '%s'...", tier$name)
 
     tier_result <- grid_search_best_subset(
-      results    = results,
+      results    = results[results$is_retained, ],
       target_ESS = tier$ESS_B,
       target_A   = tier$A,
       target_CVw = tier$CVw,
@@ -1050,10 +1064,11 @@ run_MOSAIC_dask <- function(config,
     percentile_used   <- (n_top_final / nrow(results)) * 100
     convergence_tier  <- tier_used
   } else {
-    n_top_final       <- min(control$targets$max_best_subset, nrow(results))
-    results_ranked    <- results[order(results$likelihood, decreasing = TRUE), ]
+    retained_for_fallback <- results[results$is_retained, ]
+    n_top_final       <- min(control$targets$max_best_subset, nrow(retained_for_fallback))
+    results_ranked    <- retained_for_fallback[order(retained_for_fallback$likelihood, decreasing = TRUE), ]
     top_subset_final  <- results_ranked[1:n_top_final, ]
-    rm(results_ranked)
+    rm(results_ranked, retained_for_fallback)
     percentile_used   <- (n_top_final / nrow(results)) * 100
     convergence_tier  <- "fallback"
     log_msg("  All tiers failed — using fallback (top %d sims)", n_top_final)
@@ -1160,7 +1175,7 @@ run_MOSAIC_dask <- function(config,
     meets_all_criteria = final_converged,
     timestamp          = Sys.time()
   )
-  summary_file <- file.path(dirs$bfrs_diag, "subset_selection_summary.csv")
+  summary_file <- file.path(dirs$cal_diag, "subset_selection_summary.csv")
   write.csv(subset_summary, summary_file, row.names = FALSE)
   log_msg("Saved %s", summary_file)
 
@@ -1196,7 +1211,7 @@ run_MOSAIC_dask <- function(config,
   best_aic_val <- .mosaic_safe_min(-2 * results$likelihood[is.finite(results$likelihood)])
   convergence_results_df <- data.frame(
     sim        = results$sim,
-    seed       = results$sim,
+    seed       = results$seed_sim,
     likelihood = results$likelihood,
     aic        = -2 * results$likelihood,
     delta_aic  = if (is.finite(best_aic_val)) {
@@ -1210,10 +1225,10 @@ run_MOSAIC_dask <- function(config,
     is_best_subset = results$is_best_subset
   )
 
-  convergence_file <- file.path(dirs$bfrs_diag, "convergence_results.parquet")
+  convergence_file <- file.path(dirs$cal_diag, "convergence_results.parquet")
   .mosaic_write_parquet(convergence_results_df, convergence_file, control$io)
 
-  diagnostics_file <- file.path(dirs$bfrs_diag, "convergence_diagnostics.json")
+  diagnostics_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
   jsonlite::write_json(diagnostics, diagnostics_file,
                        pretty = TRUE, auto_unbox = TRUE)
   log_msg("Saved convergence_results.parquet and convergence_diagnostics.json")
@@ -1221,13 +1236,13 @@ run_MOSAIC_dask <- function(config,
   if (control$paths$plots) {
     log_msg("Generating convergence diagnostic plots...")
     plot_model_convergence(
-      results_dir = dirs$bfrs_diag,
-      plots_dir   = dirs$bfrs_plots_diag,
+      results_dir = dirs$cal_diag,
+      plots_dir   = dirs$res_fig_diag,
       verbose     = control$logging$verbose
     )
     plot_model_convergence_status(
-      results_dir = dirs$bfrs_diag,
-      plots_dir   = dirs$bfrs_plots_diag,
+      results_dir = dirs$cal_diag,
+      plots_dir   = dirs$res_fig_diag,
       verbose     = control$logging$verbose
     )
   }
@@ -1237,41 +1252,42 @@ run_MOSAIC_dask <- function(config,
   posterior_quantiles <- calc_model_posterior_quantiles(
     results    = results,
     probs      = c(0.025, 0.25, 0.5, 0.75, 0.975),
-    output_dir = dirs$bfrs_post,
+    output_dir = dirs$cal_posterior,
     verbose    = control$logging$verbose
   )
   log_msg("Saved posterior_quantiles.csv")
 
   if (control$paths$plots) {
     plot_model_posterior_quantiles(
-      csv_files  = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-      output_dir = dirs$bfrs_plots_post,
+      csv_files  = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+      output_dir = dirs$res_fig_post,
       verbose    = control$logging$verbose
     )
   }
 
   log_msg("Calculating posterior distributions")
   calc_model_posterior_distributions(
-    quantiles_file = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-    priors_file    = file.path(dirs$setup, "priors.json"),
-    output_dir     = dirs$bfrs_post,
+    quantiles_file = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+    priors_file    = file.path(dirs$inputs, "priors.json"),
+    output_dir     = dirs$cal_posterior,
+    control        = control,
     verbose        = control$logging$verbose
   )
   log_msg("Saved posteriors.json")
 
   if (control$paths$plots) {
     plot_model_distributions(
-      json_files   = c(file.path(dirs$setup, "priors.json"),
-                       file.path(dirs$bfrs_post, "posteriors.json")),
+      json_files   = c(file.path(dirs$inputs, "priors.json"),
+                       file.path(dirs$cal_posterior, "posteriors.json")),
       method_names = c("Prior", "Posterior"),
-      output_dir   = dirs$bfrs_plots_post
+      output_dir   = dirs$res_fig_post
     )
     plot_model_posteriors_detail(
-      quantiles_file  = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-      results_file    = file.path(dirs$bfrs_out, "simulations.parquet"),
-      priors_file     = file.path(dirs$setup, "priors.json"),
-      posteriors_file = file.path(dirs$bfrs_post, "posteriors.json"),
-      output_dir      = file.path(dirs$bfrs_plots_post, "detail"),
+      quantiles_file  = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+      results_file    = file.path(dirs$calibration, "simulations.parquet"),
+      priors_file     = file.path(dirs$inputs, "priors.json"),
+      posteriors_file = file.path(dirs$cal_posterior, "posteriors.json"),
+      output_dir      = file.path(dirs$res_fig_post, "detail"),
       verbose         = control$logging$verbose
     )
   }
@@ -1290,7 +1306,7 @@ run_MOSAIC_dask <- function(config,
     verbose     = FALSE
   )
 
-  config_best_file <- file.path(dirs$bfrs_cfg, "config_best.json")
+  config_best_file <- file.path(dirs$cal_best_model, "config_best.json")
   jsonlite::write_json(config_best, config_best_file,
                        pretty = TRUE, auto_unbox = TRUE)
   log_msg("Saved config_best.json")
@@ -1304,7 +1320,7 @@ run_MOSAIC_dask <- function(config,
     plot_model_fit_stochastic(
       config             = config_best,
       n_simulations      = control$predictions$best_model_n_sims,
-      output_dir         = dirs$bfrs_plots_pred,
+      output_dir         = dirs$res_fig_pred,
       envelope_quantiles = c(0.025, 0.975),
       save_predictions   = TRUE,
       parallel           = control$parallel$enable,
@@ -1336,7 +1352,7 @@ run_MOSAIC_dask <- function(config,
       PATHS                       = PATHS,
       priors                      = priors,
       sampling_args               = sampling_args,
-      output_dir                  = dirs$bfrs_plots_pred,
+      output_dir                  = dirs$res_fig_pred,
       save_predictions            = TRUE,
       parallel                    = control$parallel$enable,
       n_cores                     = control$parallel$n_cores,
@@ -1348,8 +1364,8 @@ run_MOSAIC_dask <- function(config,
   if (control$paths$plots) {
     ppc_result <- tryCatch(
       plot_model_ppc(
-        predictions_dir = dirs$bfrs_plots_pred,
-        output_dir      = dirs$bfrs_plots,
+        predictions_dir = dirs$res_fig_pred,
+        output_dir      = dirs$res_fig_ppc,
         verbose         = control$logging$verbose
       ),
       error = function(e) {
@@ -1361,24 +1377,6 @@ run_MOSAIC_dask <- function(config,
     )
   }
 
-  # --- NPE stage ---
-  if (control$npe$enable) {
-    log_msg("Starting NPE Stage")
-    npe_result <- run_NPE(
-      results     = results,
-      priors      = priors,
-      config      = config,
-      control     = control,
-      param_names = param_names_sampled,
-      dirs        = dirs,
-      PATHS       = PATHS,
-      verbose     = control$logging$verbose
-    )
-    log_msg("NPE Stage complete")
-  } else {
-    log_msg("NPE skipped")
-  }
-
   runtime <- difftime(Sys.time(), start_time, units = "mins")
   log_msg("Dask calibration complete: %d batches, %d simulations, %.2f min",
           state$batch_number, state$total_sims_run, as.numeric(runtime))
@@ -1387,9 +1385,9 @@ run_MOSAIC_dask <- function(config,
     dirs  = dirs,
     files = list(
       simulations       = simulations_file,
-      ess_csv           = file.path(dirs$bfrs_diag, "parameter_ess.csv"),
-      posterior_quantiles = file.path(dirs$bfrs_post, "posterior_quantiles.csv"),
-      posteriors_json   = file.path(dirs$bfrs_post, "posteriors.json")
+      ess_csv           = file.path(dirs$cal_diag, "parameter_ess.csv"),
+      posterior_quantiles = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+      posteriors_json   = file.path(dirs$cal_posterior, "posteriors.json")
     ),
     summary = list(
       batches      = state$batch_number,
