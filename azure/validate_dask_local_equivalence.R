@@ -95,12 +95,11 @@ ctrl <- mosaic_control_defaults(
     type    = "PSOCK",           # in workers via clusterExport (not in sequential mode)
     progress = TRUE
   ),
-  npe   = list(enable = FALSE),
   paths = list(
     clean_output = TRUE,
     plots        = FALSE         # skip plots for speed
   ),
-  io = mosaic_io_presets("fast")
+  io = c(mosaic_io_presets("fast"), save_simresults = TRUE)
 )
 
 # =============================================================================
@@ -110,7 +109,7 @@ ctrl <- mosaic_control_defaults(
 dir_local <- file.path(BASE_OUTPUT, paste0("validate_local_", run_stamp))
 
 # Known path to simulations parquet (written before post-processing)
-local_parquet <- file.path(dir_local, "1_bfrs", "outputs", "simulations.parquet")
+local_parquet <- file.path(dir_local, "2_calibration", "samples.parquet")
 
 cat("-------------------------------------------------------------\n")
 cat("LEG 1: run_MOSAIC (local, parallel)\n")
@@ -140,7 +139,7 @@ cat(sprintf("\nLeg 1 complete: %.1fs\n\n", t_local))
 
 # Verify local parquet exists
 if (!file.exists(local_parquet)) {
-  stop("Local simulations.parquet not found at: ", local_parquet,
+  stop("Local samples.parquet not found at: ", local_parquet,
        "\n  run_MOSAIC failed before writing simulation results.")
 }
 
@@ -151,7 +150,7 @@ if (!file.exists(local_parquet)) {
 dir_dask <- file.path(BASE_OUTPUT, paste0("validate_dask_", run_stamp))
 
 # Known path to simulations parquet
-dask_parquet <- file.path(dir_dask, "1_bfrs", "outputs", "simulations.parquet")
+dask_parquet <- file.path(dir_dask, "2_calibration", "samples.parquet")
 
 cat("-------------------------------------------------------------\n")
 cat("LEG 2: run_MOSAIC_dask (Dask cluster)\n")
@@ -180,7 +179,7 @@ cat(sprintf("\nLeg 2 complete: %.1fs\n\n", t_dask))
 
 # Verify dask parquet exists
 if (!file.exists(dask_parquet)) {
-  stop("Dask simulations.parquet not found at: ", dask_parquet,
+  stop("Dask samples.parquet not found at: ", dask_parquet,
        "\n  run_MOSAIC_dask failed before writing simulation results.")
 }
 
@@ -308,7 +307,8 @@ cat(sprintf("  Parameters with |diff| < 1e-10: %d / %d\n", n_param_close, length
 
 # --- 3. seed_sim / seed_iter comparison ---
 cat("\n--- Seed comparison ---\n")
-seed_sim_match  <- identical(local_sims$seed_sim, dask_sims$seed_sim)
+seed_sim_match  <- identical(as.integer(local_sims$seed_sim),
+                             as.integer(dask_sims$seed_sim))
 seed_iter_match <- identical(as.integer(local_sims$seed_iter),
                              as.integer(dask_sims$seed_iter))
 cat(sprintf("  seed_sim  match: %s\n", seed_sim_match))

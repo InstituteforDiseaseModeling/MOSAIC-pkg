@@ -43,12 +43,18 @@
 #' Extract Per-Simulation Sampled Parameters
 #'
 #' Returns only the scalar/vector parameters that sample_parameters() modifies.
-#' Matrix fields are excluded because they live in the broadcast base_config.
+#' Most matrix fields are excluded because they live in the broadcast
+#' base_config. However, psi_jt is INCLUDED here because
+#' apply_psi_star_calibration() modifies it in-place per simulation — the
+#' broadcast base_config has stale (uncalibrated) psi_jt.
 #' @noRd
 .extract_sampled_params <- function(params_sim) {
-  # Exclude fields that are in the broadcast base_config
+  # Exclude fields that are in the broadcast base_config AND are never
+  # modified by sample_parameters().  psi_jt is intentionally NOT excluded:
+  # apply_psi_star_calibration() recalculates it per-sim using psi_star_*
+  # params, so the per-sim version must override the broadcast base_config.
   base_fields <- c(
-    "b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
+    "b_jt", "d_jt", "mu_jt", "nu_1_jt", "nu_2_jt",
     "reported_cases", "reported_deaths",
     "date_start", "date_stop", "location_name", "seed",
     "N_j_initial", "longitude", "latitude"
@@ -336,6 +342,41 @@
                           sprintf("sim_%07d.parquet", sim_id))
     .mosaic_write_parquet(row_df, out_file, control$io)
     success_indicators[idx] <- file.exists(out_file)
+
+    # Write raw per-(iter, j, t) simresults for validation (mirrors run_MOSAIC.R)
+    if (!is.null(dirs$cal_simresults)) {
+      simresults_iters <- vector("list", n_iter_got)
+      for (ji in seq_len(n_iter_got)) {
+        iter_res   <- res$iterations[[ji]]
+        est_cases  <- matrix(unlist(iter_res$expected_cases),
+                             nrow = n_locs, byrow = FALSE)
+        est_deaths <- matrix(unlist(iter_res$disease_deaths),
+                             nrow = n_locs, byrow = FALSE)
+        n_j_raw <- nrow(est_cases)
+        n_t_raw <- ncol(est_cases)
+        sr_df <- data.frame(
+          sim    = sim_id,
+          iter   = as.integer(ji),
+          j      = rep(seq_len(n_j_raw), times = n_t_raw),
+          t      = rep(seq_len(n_t_raw), each  = n_j_raw),
+          cases  = as.numeric(est_cases),
+          deaths = as.numeric(est_deaths)
+        )
+        psi_jt <- params_list[[idx]]$psi_jt
+        if (!is.null(psi_jt)) {
+          if (!is.matrix(psi_jt)) psi_jt <- matrix(psi_jt, nrow = 1)
+          sr_df$psi_jt <- psi_jt[cbind(sr_df$j, sr_df$t)]
+        }
+        simresults_iters[[ji]] <- sr_df
+      }
+      raw_df <- do.call(rbind, simresults_iters)
+      for (pname in param_names_all) {
+        raw_df[[pname]] <- as.numeric(raw_params[pname])
+      }
+      sr_file <- file.path(dirs$cal_simresults,
+                           sprintf("simresults_%07d.parquet", sim_id))
+      .mosaic_write_parquet(raw_df, sr_file, control$io)
+    }
 
     # Free this sim's data immediately — each result holds large case/death
     # arrays from Python. Without this, 20K results peak at several GB.
@@ -992,7 +1033,7 @@ run_MOSAIC_dask <- function(config,
     results$is_best_model[which.max(results$likelihood)] <- TRUE
   }
 
-  simulations_file <- file.path(dirs$calibration, "simulations.parquet")
+  simulations_file <- file.path(dirs$calibration, "samples.parquet")
   .mosaic_write_parquet(results, simulations_file, control$io)
 
   if (length(parquet_files) > 0) {
@@ -1284,7 +1325,7 @@ run_MOSAIC_dask <- function(config,
     )
     plot_model_posteriors_detail(
       quantiles_file  = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
-      results_file    = file.path(dirs$calibration, "simulations.parquet"),
+      results_file    = file.path(dirs$calibration, "samples.parquet"),
       priors_file     = file.path(dirs$inputs, "priors.json"),
       posteriors_file = file.path(dirs$cal_posterior, "posteriors.json"),
       output_dir      = file.path(dirs$res_fig_post, "detail"),
