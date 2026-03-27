@@ -97,8 +97,8 @@ coiled login
 ## 6. Clone Repositories
 
 ```bash
-git clone https://github.com/tinghf/MOSAIC-pkg ~/MOSAIC/MOSAIC-pkg
-cd ~/MOSAIC/MOSAIC-pkg && git checkout validate_dask_local_sim_take2
+git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg ~/MOSAIC/MOSAIC-pkg
+cd ~/MOSAIC/MOSAIC-pkg && git checkout tt/azure-coiled
 
 git clone https://github.com/InstituteforDiseaseModeling/MOSAIC-data ~/MOSAIC/MOSAIC-data
 ```
