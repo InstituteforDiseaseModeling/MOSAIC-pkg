@@ -1,0 +1,485 @@
+{
+  "metadata": {
+    "version": "2.0",
+    "date": "2026-03-25",
+    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
+  },
+  "parameters_global": {
+    "alpha_1": {
+      "description": "Population mixing within metapops (0-1, 1 = well-mixed)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 7,
+        "shape2": 8
+      }
+    },
+    "alpha_2": {
+      "description": "Degree of frequency driven transmission (0-1)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 7.5,
+        "shape2": 7.5
+      }
+    },
+    "decay_days_long": {
+      "description": "Maximum V. cholerae survival time (days)",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 30,
+        "max": 365
+      }
+    },
+    "decay_days_short": {
+      "description": "Minimum V. cholerae survival time (days)",
+      "distribution": "truncnorm",
+      "parameters": {
+        "mean": 16,
+        "sd": 7,
+        "a": 0.01,
+        "b": 29
+      }
+    },
+    "decay_shape_1": {
+      "description": "First shape parameter of Beta distribution for V. cholerae decay",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 0.1,
+        "max": 10
+      }
+    },
+    "decay_shape_2": {
+      "description": "Second shape parameter of Beta distribution for V. cholerae decay",
+      "distribution": "uniform",
+      "parameters": {
+        "min": 0.1,
+        "max": 10
+      }
+    },
+    "epsilon": {
+      "description": "Natural immunity waning rate (per day)",
+      "distribution": "lognormal",
+      "parameters": {
+        "mean": 0.0004,
+        "sd": 0.0004
+      }
+    },
+    "gamma_1": {
+      "description": "Symptomatic/severe shedding duration rate (per day)",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": -2.3026,
+        "sdlog": 0.5
+      }
+    },
+    "gamma_2": {
+      "description": "Asymptomatic/mild shedding duration rate (per day)",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": -0.6931,
+        "sdlog": 0.4
+      }
+    },
+    "iota": {
+      "description": "Incubation rate (1/days)",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": -0.337,
+        "sdlog": 0.4
+      }
+    },
+    "kappa": {
+      "description": "Concentration of V. cholerae for 50% infectious dose",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": 13.878,
+        "sdlog": 0.25
+      }
+    },
+    "mobility_gamma": {
+      "description": "Mobility distance decay parameter",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 3.7212,
+        "rate": 2
+      }
+    },
+    "mobility_omega": {
+      "description": "Mobility population scaling parameter",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 2.2251,
+        "rate": 2
+      }
+    },
+    "omega_1": {
+      "description": "Vaccine waning rate (one dose, per day)",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 23.33,
+        "rate": 31693.8276
+      }
+    },
+    "omega_2": {
+      "description": "Vaccine waning rate (two dose, per day)",
+      "distribution": "gamma",
+      "parameters": {
+        "shape": 2.7133,
+        "rate": 5079.2397
+      }
+    },
+    "phi_1": {
+      "description": "Initial vaccine effectiveness (one dose)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 91.843,
+        "shape2": 25.4934
+      }
+    },
+    "phi_2": {
+      "description": "Initial vaccine effectiveness (two dose)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 115.0976,
+        "shape2": 35.3227
+      }
+    },
+    "chi_endemic": {
+      "description": "PPV among suspected cases during endemic periods (Weins et al. 2023, all settings)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 5.4299,
+        "shape2": 5.009
+      }
+    },
+    "chi_epidemic": {
+      "description": "PPV among suspected cases during epidemic periods (Weins et al. 2023, during outbreaks)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 4.7881,
+        "shape2": 1.5328
+      }
+    },
+    "rho": {
+      "description": "Care-seeking rate: probability a symptomatic infection is reported as suspected (GEMS + Wiens 2025)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 6.8143,
+        "shape2": 17.8944
+      }
+    },
+    "sigma": {
+      "description": "Proportion symptomatic",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 4.3,
+        "shape2": 13.51
+      }
+    },
+    "zeta_1": {
+      "description": "Symptomatic shedding rate (total bacteria per infected person per day)",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": 6.4998,
+        "sdlog": 2
+      }
+    },
+    "zeta_2": {
+      "description": "Asymptomatic shedding rate (total bacteria per infected person per day)",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": 2.3026,
+        "sdlog": 3
+      }
+    },
+    "delta_reporting_cases": {
+      "description": "Symptom-onset-to-case reporting delay in days (integer, 0-7)",
+      "distribution": "truncnorm",
+      "parameters": {
+        "mean": 1,
+        "sd": 1.5,
+        "a": 0,
+        "b": 7
+      }
+    },
+    "delta_reporting_deaths": {
+      "description": "Symptom-onset-to-death reporting delay in days (integer, 1-14)",
+      "distribution": "truncnorm",
+      "parameters": {
+        "mean": 4,
+        "sd": 3,
+        "a": 1,
+        "b": 14
+      }
+    }
+  },
+  "parameters_location": {
+    "beta_j0_tot": {
+      "description": "Total base transmission rate (human + environmental); lognormal with median=2e-5 and Q97.5=2e-4",
+      "location": {
+        "MOZ": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": -10.8198,
+            "sdlog": 1.1748
+          }
+        }
+      }
+    },
+    "p_beta": {
+      "description": "Proportion of total base transmission that is human-to-human (0-1)",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 7.0308,
+            "shape2": 13.2443
+          }
+        }
+      }
+    },
+    "tau_i": {
+      "description": "Country-level travel probabilities",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 0.5092,
+            "shape2": 25453.1634
+          }
+        }
+      }
+    },
+    "theta_j": {
+      "description": "WASH coverage index (proportion with adequate WASH)",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 235.5965,
+            "shape2": 127.9096
+          }
+        }
+      }
+    },
+    "a_1_j": {
+      "description": "Seasonality Fourier coefficient a_1_j (cases)",
+      "location": {
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0.3767,
+            "sd": 0.1203
+          }
+        }
+      }
+    },
+    "a_2_j": {
+      "description": "Seasonality Fourier coefficient a_2_j (cases)",
+      "location": {
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": -0.7575,
+            "sd": 0.1205
+          }
+        }
+      }
+    },
+    "b_1_j": {
+      "description": "Seasonality Fourier coefficient b_1_j (cases)",
+      "location": {
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 1.1565,
+            "sd": 0.1208
+          }
+        }
+      }
+    },
+    "b_2_j": {
+      "description": "Seasonality Fourier coefficient b_2_j (cases)",
+      "location": {
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0.0876,
+            "sd": 0.1206
+          }
+        }
+      }
+    },
+    "prop_V1_initial": {
+      "description": "Initial proportion in one-dose vaccine (V1) compartment",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 410.5026,
+            "shape2": 13790.714
+          }
+        }
+      }
+    },
+    "prop_V2_initial": {
+      "description": "Initial proportion in two-dose vaccine (V2) compartment",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 0.5,
+            "shape2": 99.5
+          }
+        }
+      }
+    },
+    "prop_E_initial": {
+      "description": "Initial proportion in exposed (E) compartment",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 0.3,
+            "shape2": 99999
+          }
+        }
+      }
+    },
+    "prop_I_initial": {
+      "description": "Initial proportion in infected (I) compartment",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 0.3,
+            "shape2": 99999
+          }
+        }
+      }
+    },
+    "prop_R_initial": {
+      "description": "Initial proportion in recovered/immune (R) compartment",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 1.6,
+            "shape2": 11.54
+          }
+        }
+      }
+    },
+    "prop_S_initial": {
+      "description": "Initial proportion in susceptible (S) compartment",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 30,
+            "shape2": 7.5
+          }
+        }
+      }
+    },
+    "mu_j_baseline": {
+      "description": "Baseline daily mortality rate per symptomatic infected (per day)",
+      "location": {
+        "MOZ": {
+          "distribution": "gamma",
+          "parameters": {
+            "shape": 2,
+            "rate": 1176
+          }
+        }
+      }
+    },
+    "mu_j_slope": {
+      "description": "Temporal trend in baseline IFR (proportion change over simulation period)",
+      "location": {
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0,
+            "sd": 0.05
+          }
+        }
+      }
+    },
+    "mu_j_epidemic_factor": {
+      "description": "Proportional increase in IFR during epidemic periods",
+      "location": {
+        "MOZ": {
+          "distribution": "gamma",
+          "parameters": {
+            "shape": 1.5,
+            "rate": 0.5
+          }
+        }
+      }
+    },
+    "epidemic_threshold": {
+      "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation",
+      "location": {
+        "MOZ": {
+          "distribution": "lognormal",
+          "parameters": {
+            "meanlog": -11.4186,
+            "sdlog": 0.5
+          }
+        }
+      }
+    },
+    "psi_star_a": {
+      "description": "Shape/gain parameter for logit calibration of NN suitability psi",
+      "location": {
+        "MOZ": {
+          "distribution": "truncnorm",
+          "parameters": {
+            "mean": 1,
+            "sd": 1,
+            "a": 0,
+            "b": "Inf"
+          }
+        }
+      }
+    },
+    "psi_star_b": {
+      "description": "Scale/offset parameter for logit calibration of NN suitability psi",
+      "location": {
+        "MOZ": {
+          "distribution": "normal",
+          "parameters": {
+            "mean": 0.4,
+            "sd": 2
+          }
+        }
+      }
+    },
+    "psi_star_z": {
+      "description": "Smoothing weight for causal EWMA of calibrated suitability",
+      "location": {
+        "MOZ": {
+          "distribution": "beta",
+          "parameters": {
+            "shape1": 1,
+            "shape2": 1
+          }
+        }
+      }
+    },
+    "psi_star_k": {
+      "description": "Time offset in days for suitability calibration",
+      "location": {
+        "MOZ": {
+          "distribution": "truncnorm",
+          "parameters": {
+            "mean": -5,
+            "sd": 20,
+            "a": -90,
+            "b": 90
+          }
+        }
+      }
+    }
+  }
+}

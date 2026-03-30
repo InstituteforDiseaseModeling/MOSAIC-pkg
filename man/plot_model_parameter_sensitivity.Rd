@@ -2,45 +2,66 @@
 % Please edit documentation in R/plot_model_parameter_sensitivity.R
 \name{plot_model_parameter_sensitivity}
 \alias{plot_model_parameter_sensitivity}
-\title{Plot Parameter Sensitivity Ranking (PRCC)}
+\title{Plot Parameter Sensitivity Ranking (HSIC)}
 \usage{
 plot_model_parameter_sensitivity(
   results_file,
   priors_file = NULL,
   output_dir = ".",
   max_params = 30,
+  n_samples = 2000,
+  kernel = "rbf",
+  test_method = "Asymptotic",
   verbose = TRUE
 )
 }
 \arguments{
-\item{results_file}{Path to samples.parquet file containing calibration results}
+\item{results_file}{Path to samples.parquet file containing calibration results.}
 
-\item{priors_file}{Path to priors.json (used for parameter descriptions in labels)}
+\item{priors_file}{Path to priors.json (used for parameter descriptions in labels).}
 
-\item{output_dir}{Directory to write the output figure}
+\item{output_dir}{Directory to write the output figure and CSV.}
 
 \item{max_params}{Maximum number of parameters to display. Default 30.}
 
-\item{verbose}{Print progress messages}
+\item{n_samples}{Maximum number of posterior draws to use. Samples are drawn with
+replacement using importance weights. Default 2000.}
+
+\item{kernel}{Kernel type for input parameters passed to
+\code{\link[sensitivity]{sensiHSIC}}. One of \code{"rbf"} (default),
+\code{"laplace"}, or \code{"dcov"}.}
+
+\item{test_method}{Significance test method. \code{"Asymptotic"} (default, fast,
+requires n >= 100) or \code{"Permutation"} (exact, slower).}
+
+\item{verbose}{Print progress messages.}
 }
 \value{
-A data.frame with columns \code{parameter}, \code{prcc}, \code{description},
-and \code{method} (invisibly). Writes a PNG file to \code{output_dir}.
+A data.frame with columns \code{parameter}, \code{hsic_r2},
+\code{p_value}, \code{sig}, and \code{description} (invisibly). Writes a PNG
+and CSV to \code{output_dir}.
 }
 \description{
-Computes Partial Rank Correlation Coefficients (PRCC) between each sampled
-parameter and log-likelihood, then plots a ranked horizontal bar chart. PRCC
-isolates the unique contribution of each parameter after controlling for all
-others via rank-transformed linear regression (Marino et al. 2008).
+Computes R²-HSIC (Hilbert-Schmidt Independence Criterion) between each sampled
+parameter and the log-likelihood, then plots a ranked horizontal bar chart.
+HSIC measures statistical dependence without assuming linearity, monotonicity,
+or independence among inputs, making it valid for importance-weighted posterior
+samples where parameters are correlated (Da Veiga 2015).
 }
 \details{
-When the number of parameters approaches the number of simulations
-(\code{n / p < 5}), a warning is emitted because the regression step becomes
-unstable. In that case the function falls back to marginal Spearman rank
-correlation and labels the plot accordingly.
+The R²-HSIC index equals zero if and only if the parameter and log-likelihood are
+statistically independent (under the RBF kernel), and equals one if the
+log-likelihood is a deterministic function of that parameter alone.
+
+Significance is assessed via an asymptotic Gamma approximation of the null
+distribution (valid when n >= 100). Bars are coloured by significance level.
 }
 \references{
-Marino S, Hogue IB, Ray CJ, Kirschner DE (2008). A methodology for
-performing global uncertainty and sensitivity analysis in systems biology.
-\emph{J Theor Biol} 254(1):178-196.
+Da Veiga S (2015). Global sensitivity analysis with dependence measures.
+\emph{Journal of Statistical Computation and Simulation} 85(7):1283-1305.
+\url{https://arxiv.org/abs/1311.2483}
+
+Gretton A, Bousquet O, Smola A, Scholkopf B (2005). Measuring statistical
+dependence with Hilbert-Schmidt norms. \emph{Algorithmic Learning Theory},
+LNCS 3734:63-77.
 }

@@ -8,6 +8,7 @@ calc_model_posterior_distributions(
   quantiles_file = "./results/posterior_quantiles.csv",
   priors_file,
   output_dir = "./results",
+  control = NULL,
   verbose = TRUE
 )
 }
@@ -17,6 +18,11 @@ calc_model_posterior_distributions(
 \item{priors_file}{Path to the priors.json file to use as template}
 
 \item{output_dir}{Directory to save posteriors.json (default: "./results")}
+
+\item{control}{Optional control list (or path to control.json). When provided,
+sampling flags are used to distinguish frozen parameters (sampling flag FALSE,
+tagged \code{"frozen"}) from genuinely converged parameters (sampling flag TRUE,
+tagged \code{"fixed"}).}
 
 \item{verbose}{Logical; print progress messages (default: TRUE)}
 }
