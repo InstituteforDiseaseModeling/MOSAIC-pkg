@@ -38,6 +38,8 @@ Supported distributions:
 \item \strong{uniform}: parameters$min, parameters$max
 \item \strong{discrete_uniform}: parameters$min, parameters$max (returns integers)
 \item \strong{gompertz}: parameters$b, parameters$eta
+\item \strong{fixed}: parameters$value (genuinely converged, returns constant)
+\item \strong{frozen}: parameters$value (frozen in previous stage, returns constant)
 }
 }
 \examples{

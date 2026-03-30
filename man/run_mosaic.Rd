@@ -5,9 +5,9 @@
 \alias{run_mosaic}
 \title{Run MOSAIC Calibration Workflow}
 \usage{
-run_MOSAIC(config, priors, dir_output, control = NULL)
+run_MOSAIC(config, priors, dir_output, control = NULL, cluster = NULL)
 
-run_mosaic(config, priors, dir_output, control = NULL)
+run_mosaic(config, priors, dir_output, control = NULL, cluster = NULL)
 }
 \arguments{
 \item{config}{Named list of LASER model configuration (REQUIRED). Contains location_name,
@@ -30,6 +30,10 @@ Key settings:
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
 }}
+
+\item{cluster}{Optional pre-built cluster from \code{\link{make_mosaic_cluster}}.
+When provided, skips cluster creation and teardown, reusing the existing workers.
+Useful for staged estimation where multiple \code{run_MOSAIC} calls share a cluster.}
 }
 \value{
 Invisibly returns a list with:

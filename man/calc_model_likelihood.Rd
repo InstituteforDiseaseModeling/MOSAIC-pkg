@@ -14,7 +14,8 @@ calc_model_likelihood(
   weights_location = NULL,
   weights_time = NULL,
   config = NULL,
-  nb_k_min = 3,
+  nb_k_min_cases = 3,
+  nb_k_min_deaths = 3,
   zero_buffer = TRUE,
   verbose = FALSE,
   add_max_terms = TRUE,
@@ -61,8 +62,9 @@ Default 1.}
 
 \item{config}{Optional LASER configuration list containing location_name, date_start, and date_stop.}
 
-\item{nb_k_min}{Numeric; minimum NB dispersion floor used for the core NB likelihood
-and WIS quantiles. Default \code{3}.}
+\item{nb_k_min_cases}{Numeric; minimum NB dispersion floor for cases. Default \code{3}.}
+
+\item{nb_k_min_deaths}{Numeric; minimum NB dispersion floor for deaths. Default \code{3}.}
 
 \item{zero_buffer}{Kept for backward compatibility (not used by the NB core).}
 
