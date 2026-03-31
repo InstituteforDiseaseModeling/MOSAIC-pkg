@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "2.0",
-    "date": "2026-03-25",
+    "date": "2026-03-31",
     "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
   },
   "parameters_global": {
@@ -214,12 +214,12 @@
   },
   "parameters_location": {
     "beta_j0_tot": {
-      "description": "Total base transmission rate (human + environmental); lognormal with median=2e-5 and Q97.5=2e-4",
+      "description": "Total base transmission rate (human + environmental); lognormal with median=1e-5 and Q97.5=1e-4",
       "location": {
         "MOZ": {
           "distribution": "lognormal",
           "parameters": {
-            "meanlog": -10.8198,
+            "meanlog": -11.5129,
             "sdlog": 1.1748
           }
         }
@@ -315,8 +315,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 410.5026,
-            "shape2": 13790.714
+            "shape1": 498.5837,
+            "shape2": 17313.6429
           }
         }
       }

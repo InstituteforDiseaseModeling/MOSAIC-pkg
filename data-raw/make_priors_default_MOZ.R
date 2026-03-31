@@ -30,7 +30,7 @@ dem_annual <- read.csv(
 
 priors_default_MOZ <- list(
      metadata = list(
-          version = "2.0",
+          version = "2.1",
           date = Sys.Date(),
           description = "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
      ),
@@ -329,12 +329,14 @@ priors_default_MOZ$parameters_global$delta_reporting_deaths <- list(
 # Location-specific parameters: MOZ only
 #========================================
 
-# beta_j0_tot - Total base transmission rate (MOZ uses same prior as default)
-beta_j0_tot_meanlog <- log(2e-5)
-beta_j0_tot_sdlog <- (log(2e-4) - log(2e-5)) / qnorm(0.975)
+# beta_j0_tot - Total base transmission rate (MOZ-specific)
+# Calibration consistently lands at 5e-6 to 1e-5 for MOZ (tests 32-33).
+# Prior centered at 1e-5 with Q97.5=1e-4 to reduce wasted sims from high-end draws.
+beta_j0_tot_meanlog <- log(1e-5)
+beta_j0_tot_sdlog <- (log(1e-4) - log(1e-5)) / qnorm(0.975)
 
 priors_default_MOZ$parameters_location$beta_j0_tot <- list(
-     description = "Total base transmission rate (human + environmental); lognormal with median=2e-5 and Q97.5=2e-4",
+     description = "Total base transmission rate (human + environmental); lognormal with median=1e-5 and Q97.5=1e-4",
      location = list(
           MOZ = list(distribution = "lognormal",
                      parameters = list(meanlog = beta_j0_tot_meanlog, sdlog = beta_j0_tot_sdlog))

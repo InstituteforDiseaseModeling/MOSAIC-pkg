@@ -145,7 +145,7 @@ tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_theta_WASH.csv'))
 theta_j <- setNames(tmp$parameter_value[tmp$j == j], j)
 
 message("Set transmission parameters")
-beta_j0_tot <- setNames(2e-5, j)
+beta_j0_tot <- setNames(1e-5, j)
 p_beta <- setNames(0.33, j)
 beta_j0_hum <- p_beta * beta_j0_tot
 beta_j0_env <- (1 - p_beta) * beta_j0_tot
@@ -277,7 +277,7 @@ default_args <- list(
 config_default_MOZ <- do.call(make_LASER_config, default_args)
 
 config_default_MOZ$metadata <- list(
-     version = "2.1",
+     version = "2.2",
      date = as.character(Sys.Date()),
      description = "MOZ-specific LASER configuration with extended date range (2017-2026). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )
