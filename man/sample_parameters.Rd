@@ -70,6 +70,9 @@ Available options include:
 \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
 \item sample_psi_star_k: Suitability calibration time offset (default TRUE)
 \item sample_initial_conditions: Initial condition proportions (default TRUE)
+\item ic_moment_match: Derive E/I from observed week-1 cases and the sampled
+reporting chain (sigma, rho, chi_endemic, iota). Only active when
+sample_initial_conditions is TRUE. (default FALSE)
 }
 If NULL, all parameters are sampled (default behavior).}
 

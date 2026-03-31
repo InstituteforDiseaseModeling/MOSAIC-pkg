@@ -2024,8 +2024,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_psi_star_z = TRUE,        # Psi-star parameter z
     sample_psi_star_k = TRUE,        # Psi-star parameter k
 
-    # === INITIAL CONDITIONS (1) ===
-    sample_initial_conditions = TRUE  # Initial compartment proportions
+    # === INITIAL CONDITIONS ===
+    sample_initial_conditions = TRUE,  # Initial compartment proportions
+    ic_moment_match = FALSE            # Derive E/I from observed week-1 cases + reporting chain
   )
 
   # Default likelihood calculation settings
