@@ -709,6 +709,8 @@ plot_model_fit_stochastic_param <- function(
 
         r2_cases <- tryCatch(round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3), error = function(e) NA)
         r2_deaths <- tryCatch(round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3), error = function(e) NA)
+        bias_cases <- tryCatch(round(calc_bias_ratio(obs_cases_i, pred_cases_i), 2), error = function(e) NA)
+        bias_deaths <- tryCatch(round(calc_bias_ratio(obs_deaths_i, pred_deaths_i), 2), error = function(e) NA)
 
         # Create plot with layered uncertainty
         p_individual <- ggplot2::ggplot(loc_data, ggplot2::aes(x = date))
@@ -771,9 +773,11 @@ plot_model_fit_stochastic_param <- function(
                     "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_cases), "NA", r2_cases),
+                    ", Bias = ", ifelse(is.na(bias_cases), "NA", bias_cases),
                     " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths, big.mark = ","),
-                    ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths)
+                    ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths),
+                    ", Bias = ", ifelse(is.na(bias_deaths), "NA", bias_deaths)
                 )
             )
 

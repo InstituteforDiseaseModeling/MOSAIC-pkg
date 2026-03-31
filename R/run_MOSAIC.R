@@ -1505,7 +1505,7 @@ run_MOSAIC <- function(config,
   lc <- reticulate::import("laser.cholera.metapop.model")
   best_model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
-  # Compute overall model-fit R² (best model vs observed data)
+  # Compute overall model-fit R² and bias ratio (best model vs observed data)
   r2_cases <- tryCatch({
     obs <- as.numeric(unlist(config_best$reported_cases))
     est <- as.numeric(unlist(best_model$results$reported_cases))
@@ -1520,9 +1520,19 @@ run_MOSAIC <- function(config,
     if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
   }, error = function(e) NA_real_)
 
-  log_msg("Best model R²: cases = %.4f, deaths = %.4f",
+  bias_ratio_cases <- tryCatch({
+    calc_bias_ratio(config_best$reported_cases, best_model$results$reported_cases)
+  }, error = function(e) NA_real_)
+
+  bias_ratio_deaths <- tryCatch({
+    calc_bias_ratio(config_best$reported_deaths, best_model$results$disease_deaths)
+  }, error = function(e) NA_real_)
+
+  log_msg("Best model R²: cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
           ifelse(is.na(r2_cases), 0, r2_cases),
-          ifelse(is.na(r2_deaths), 0, r2_deaths))
+          ifelse(is.na(bias_ratio_cases), 0, bias_ratio_cases),
+          ifelse(is.na(r2_deaths), 0, r2_deaths),
+          ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
   # Ensemble R²: re-run best model N times with different seeds, compute
   # mean prediction, then cor(obs, mean_est)². More stable than single-model
@@ -1530,6 +1540,8 @@ run_MOSAIC <- function(config,
   n_ensemble_r2 <- control$predictions$best_model_n_sims
   r2_cases_ensemble <- NA_real_
   r2_deaths_ensemble <- NA_real_
+  bias_ratio_cases_ensemble <- NA_real_
+  bias_ratio_deaths_ensemble <- NA_real_
 
   if (n_ensemble_r2 > 1) {
     log_msg("Computing ensemble R² (%d stochastic runs)...", n_ensemble_r2)
@@ -1566,20 +1578,26 @@ run_MOSAIC <- function(config,
 
       list(
         r2_cases = if (sum(valid_c) > 2) stats::cor(obs_cases_vec[valid_c], mean_cases[valid_c])^2 else NA_real_,
-        r2_deaths = if (sum(valid_d) > 2) stats::cor(obs_deaths_vec[valid_d], mean_deaths[valid_d])^2 else NA_real_
+        r2_deaths = if (sum(valid_d) > 2) stats::cor(obs_deaths_vec[valid_d], mean_deaths[valid_d])^2 else NA_real_,
+        bias_cases = calc_bias_ratio(obs_cases_vec, mean_cases),
+        bias_deaths = calc_bias_ratio(obs_deaths_vec, mean_deaths)
       )
     }, error = function(e) {
       log_msg("Warning: ensemble R² computation failed: %s", e$message)
-      list(r2_cases = NA_real_, r2_deaths = NA_real_)
+      list(r2_cases = NA_real_, r2_deaths = NA_real_, bias_cases = NA_real_, bias_deaths = NA_real_)
     })
 
     r2_cases_ensemble <- ensemble_results$r2_cases
     r2_deaths_ensemble <- ensemble_results$r2_deaths
+    bias_ratio_cases_ensemble <- ensemble_results$bias_cases
+    bias_ratio_deaths_ensemble <- ensemble_results$bias_deaths
 
-    log_msg("Ensemble R² (%d runs): cases = %.4f, deaths = %.4f",
+    log_msg("Ensemble R² (%d runs): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
             n_ensemble_r2,
             ifelse(is.na(r2_cases_ensemble), 0, r2_cases_ensemble),
-            ifelse(is.na(r2_deaths_ensemble), 0, r2_deaths_ensemble))
+            ifelse(is.na(bias_ratio_cases_ensemble), 0, bias_ratio_cases_ensemble),
+            ifelse(is.na(r2_deaths_ensemble), 0, r2_deaths_ensemble),
+            ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
   }
 
   if (control$paths$plots) {
@@ -1712,14 +1730,23 @@ run_MOSAIC <- function(config,
                                              r2_cases = r2_cases, r2_deaths = r2_deaths,
                                              r2_cases_ensemble = r2_cases_ensemble,
                                              r2_deaths_ensemble = r2_deaths_ensemble,
+                                             bias_ratio_cases = bias_ratio_cases,
+                                             bias_ratio_deaths = bias_ratio_deaths,
+                                             bias_ratio_cases_ensemble = bias_ratio_cases_ensemble,
+                                             bias_ratio_deaths_ensemble = bias_ratio_deaths_ensemble,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
   # Print human-readable summary to log
-  r2c_str  <- if (is.na(summary_obj$r2_cases))  "NA" else sprintf("%.4f", summary_obj$r2_cases)
-  r2d_str  <- if (is.na(summary_obj$r2_deaths)) "NA" else sprintf("%.4f", summary_obj$r2_deaths)
-  r2ce_str <- if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble)
-  r2de_str <- if (is.na(summary_obj$r2_deaths_ensemble)) "NA" else sprintf("%.4f", summary_obj$r2_deaths_ensemble)
+  fmt_r2b <- function(r2, bias) {
+    r2s <- if (is.na(r2)) "NA" else sprintf("%.4f", r2)
+    bs  <- if (is.na(bias)) "" else sprintf(" (bias=%.2f)", bias)
+    paste0(r2s, bs)
+  }
+  r2c_str  <- fmt_r2b(summary_obj$r2_cases, summary_obj$bias_ratio_cases)
+  r2d_str  <- fmt_r2b(summary_obj$r2_deaths, summary_obj$bias_ratio_deaths)
+  r2ce_str <- fmt_r2b(summary_obj$r2_cases_ensemble, summary_obj$bias_ratio_cases_ensemble)
+  r2de_str <- fmt_r2b(summary_obj$r2_deaths_ensemble, summary_obj$bias_ratio_deaths_ensemble)
   ret_str  <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
   best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
   log_msg("=== Run Summary ===")

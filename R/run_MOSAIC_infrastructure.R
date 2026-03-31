@@ -374,6 +374,10 @@
                                        r2_cases = NA_real_, r2_deaths = NA_real_,
                                        r2_cases_ensemble = NA_real_,
                                        r2_deaths_ensemble = NA_real_,
+                                       bias_ratio_cases = NA_real_,
+                                       bias_ratio_deaths = NA_real_,
+                                       bias_ratio_cases_ensemble = NA_real_,
+                                       bias_ratio_deaths_ensemble = NA_real_,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -430,6 +434,10 @@
     r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
     r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
     r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
+    bias_ratio_cases   = if (!is.na(bias_ratio_cases)) round(bias_ratio_cases, 4) else NA_real_,
+    bias_ratio_deaths  = if (!is.na(bias_ratio_deaths)) round(bias_ratio_deaths, 4) else NA_real_,
+    bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
+    bias_ratio_deaths_ensemble = if (!is.na(bias_ratio_deaths_ensemble)) round(bias_ratio_deaths_ensemble, 4) else NA_real_,
     # ESS summary
     ess_n_params        = ess_stats$n_params,
     ess_n_above_target  = ess_stats$n_above_target,

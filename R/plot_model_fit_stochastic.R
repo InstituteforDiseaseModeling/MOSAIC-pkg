@@ -516,7 +516,7 @@ plot_model_fit_stochastic <- function(config,
         sum_obs_deaths <- sum(obs_deaths_i, na.rm = TRUE)
         sum_pred_deaths <- round(sum(pred_deaths_i, na.rm = TRUE))
 
-        # Calculate R² (correlation-based)
+        # Calculate R² (correlation-based) and bias ratio
         r2_cases <- tryCatch({
             round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
@@ -524,6 +524,9 @@ plot_model_fit_stochastic <- function(config,
         r2_deaths <- tryCatch({
             round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
+
+        bias_cases <- tryCatch(round(calc_bias_ratio(obs_cases_i, pred_cases_i), 2), error = function(e) NA)
+        bias_deaths <- tryCatch(round(calc_bias_ratio(obs_deaths_i, pred_deaths_i), 2), error = function(e) NA)
 
         # Create plot
         p_individual <- ggplot2::ggplot(loc_data, ggplot2::aes(x = date)) +
@@ -569,9 +572,11 @@ plot_model_fit_stochastic <- function(config,
                     "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_cases), "NA", r2_cases),
+                    ", Bias = ", ifelse(is.na(bias_cases), "NA", bias_cases),
                     " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths),
+                    ", Bias = ", ifelse(is.na(bias_deaths), "NA", bias_deaths),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
@@ -619,6 +624,7 @@ plot_model_fit_stochastic <- function(config,
         r2_cases_overall <- tryCatch({
             round(cor(all_obs_cases, all_pred_cases, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
+        bias_cases_overall <- tryCatch(round(calc_bias_ratio(all_obs_cases, all_pred_cases), 2), error = function(e) NA)
 
         sum_obs_cases_all <- sum(obs_cases, na.rm = TRUE)
         sum_pred_cases_all <- round(sum(cases_stats$mean, na.rm = TRUE))
@@ -669,6 +675,7 @@ plot_model_fit_stochastic <- function(config,
                     "Total Cases: Obs = ", format(sum_obs_cases_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases_all, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_cases_overall), "NA", r2_cases_overall),
+                    ", Bias = ", ifelse(is.na(bias_cases_overall), "NA", bias_cases_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
@@ -728,6 +735,7 @@ plot_model_fit_stochastic <- function(config,
         r2_deaths_overall <- tryCatch({
             round(cor(all_obs_deaths, all_pred_deaths, use = "complete.obs")^2, 3)
         }, error = function(e) NA)
+        bias_deaths_overall <- tryCatch(round(calc_bias_ratio(all_obs_deaths, all_pred_deaths), 2), error = function(e) NA)
 
         sum_obs_deaths_all <- sum(obs_deaths, na.rm = TRUE)
         sum_pred_deaths_all <- round(sum(deaths_stats$mean, na.rm = TRUE))
@@ -778,6 +786,7 @@ plot_model_fit_stochastic <- function(config,
                     "Total Deaths: Obs = ", format(sum_obs_deaths_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths_all, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_deaths_overall), "NA", r2_deaths_overall),
+                    ", Bias = ", ifelse(is.na(bias_deaths_overall), "NA", bias_deaths_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
