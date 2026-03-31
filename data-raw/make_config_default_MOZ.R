@@ -6,8 +6,10 @@ library(MOSAIC)
 MOSAIC::set_root_directory("/Users/johngiles/MOSAIC")
 PATHS <- MOSAIC::get_paths()
 
-# Start at first surveillance data point (JHU data begins 2017-06-19 for MOZ)
-date_start <- as.Date("2017-06-19")
+# Start ~2 weeks before first positive obs (day 58 = 2017-08-15 in original series).
+# The 43-day buffer allows moment-matched ICs to generate natural transmission
+# dynamics before the first observed cases appear, avoiding phantom early cases.
+date_start <- as.Date("2017-08-01")
 date_stop <- as.Date("2026-03-31")
 
 message("Set simulation time steps and locations")
@@ -275,7 +277,7 @@ default_args <- list(
 config_default_MOZ <- do.call(make_LASER_config, default_args)
 
 config_default_MOZ$metadata <- list(
-     version = "2.0",
+     version = "2.1",
      date = as.character(Sys.Date()),
      description = "MOZ-specific LASER configuration with extended date range (2017-2026). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )
