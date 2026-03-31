@@ -1580,11 +1580,16 @@ run_MOSAIC <- function(config,
         r2_cases = if (sum(valid_c) > 2) stats::cor(obs_cases_vec[valid_c], mean_cases[valid_c])^2 else NA_real_,
         r2_deaths = if (sum(valid_d) > 2) stats::cor(obs_deaths_vec[valid_d], mean_deaths[valid_d])^2 else NA_real_,
         bias_cases = calc_bias_ratio(obs_cases_vec, mean_cases),
-        bias_deaths = calc_bias_ratio(obs_deaths_vec, mean_deaths)
+        bias_deaths = calc_bias_ratio(obs_deaths_vec, mean_deaths),
+        mean_cases = mean_cases,
+        mean_deaths = mean_deaths,
+        obs_cases = obs_cases_vec,
+        obs_deaths = obs_deaths_vec
       )
     }, error = function(e) {
       log_msg("Warning: ensemble R² computation failed: %s", e$message)
-      list(r2_cases = NA_real_, r2_deaths = NA_real_, bias_cases = NA_real_, bias_deaths = NA_real_)
+      list(r2_cases = NA_real_, r2_deaths = NA_real_, bias_cases = NA_real_, bias_deaths = NA_real_,
+           mean_cases = NULL, mean_deaths = NULL, obs_cases = NULL, obs_deaths = NULL)
     })
 
     r2_cases_ensemble <- ensemble_results$r2_cases
@@ -1598,6 +1603,54 @@ run_MOSAIC <- function(config,
             ifelse(is.na(bias_ratio_cases_ensemble), 0, bias_ratio_cases_ensemble),
             ifelse(is.na(r2_deaths_ensemble), 0, r2_deaths_ensemble),
             ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
+
+    # Windowed model fit metrics (trailing windows of observed data)
+    if (!is.null(ensemble_results$mean_cases)) {
+      n_ts <- length(ensemble_results$obs_cases)
+      dates_vec <- seq.Date(as.Date(config_best$date_start), by = "day", length.out = n_ts)
+
+      fit_windows <- if (!is.null(control$predictions$fit_windows)) {
+        control$predictions$fit_windows
+      } else {
+        c(365, 120, 90, 60, 30)
+      }
+
+      windowed_metrics <- .mosaic_compute_windowed_metrics(
+        obs_cases  = ensemble_results$obs_cases,
+        est_cases  = ensemble_results$mean_cases,
+        obs_deaths = ensemble_results$obs_deaths,
+        est_deaths = ensemble_results$mean_deaths,
+        dates      = dates_vec,
+        windows    = fit_windows
+      )
+
+      # Write CSV
+      wm_path <- file.path(dirs$results, "model_fit_windows.csv")
+      utils::write.csv(windowed_metrics, wm_path, row.names = FALSE)
+      log_msg("Saved 3_results/model_fit_windows.csv")
+
+      # Log summary
+      full_row <- windowed_metrics[windowed_metrics$window == "full", ]
+      short_windows <- windowed_metrics[windowed_metrics$window != "full", ]
+      if (nrow(short_windows) > 0) {
+        last_row <- short_windows[nrow(short_windows), ]
+        log_msg("Windowed fit: R2_cases [full=%.3f, %s=%.3f] | Bias [full=%.2f, %s=%.2f]",
+                full_row$r2_cases, last_row$window, last_row$r2_cases,
+                full_row$bias_cases, last_row$window, last_row$bias_cases)
+      }
+
+      # Plot
+      if (control$paths$plots) {
+        wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
+        tryCatch({
+          .mosaic_plot_windowed_metrics(windowed_metrics, wm_plot_path,
+                                        location = paste(config_best$location_name, collapse = ", "))
+          log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
+        }, error = function(e) {
+          log_msg("Warning: windowed metrics plot failed: %s", e$message)
+        })
+      }
+    }
   }
 
   if (control$paths$plots) {
