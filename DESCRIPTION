@@ -91,6 +91,7 @@ Suggests:
   shinyWidgets,
   withr,
   tensorflow,
-  keras3  
+  keras3,
+  torch
 Config/Needs/website: rmarkdown
 Config/testthat/edition: 3

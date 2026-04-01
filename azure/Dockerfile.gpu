@@ -1,0 +1,35 @@
+# GPU-accelerated MOSAIC worker image
+# Extends the standard CPU image with R torch (bundles its own CUDA libs)
+# Build: docker build -f azure/Dockerfile.gpu -t mosaic-worker:gpu .
+# Run:   docker run --gpus all mosaic-worker:gpu nvidia-smi
+FROM mosaic-worker:latest
+
+LABEL description="MOSAIC GPU worker - torch for batched likelihood"
+LABEL version="0.17.33-gpu"
+
+# ============================================================
+# Install torch R package
+# torch::install_torch() downloads LibTorch with bundled CUDA
+# runtime — no system CUDA toolkit needed for R-side GPU compute
+# ============================================================
+RUN R -e "install.packages('torch', repos = 'https://cloud.r-project.org')" && \
+    R -e "torch::install_torch()" && \
+    R -e "library(torch); \
+          cat('torch installed:', torch_is_installed(), '\n'); \
+          cat('CUDA available:', cuda_is_available(), '\n')"
+
+# ============================================================
+# Re-install MOSAIC from local source (picks up GPU code)
+# ============================================================
+COPY . /tmp/MOSAIC-pkg
+RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
+    remotes::install_local('/tmp/MOSAIC-pkg', \
+        dependencies = FALSE, \
+        upgrade = 'never', \
+        force = TRUE); \
+    cat('MOSAIC version:', as.character(packageVersion('MOSAIC')), '\n'); \
+    stopifnot(is.function(MOSAIC::calc_model_likelihood_gpu))" && \
+    rm -rf /tmp/MOSAIC-pkg
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

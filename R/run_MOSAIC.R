@@ -2068,7 +2068,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     enable = FALSE,
     n_cores = 1L,
     type = "PSOCK",
-    progress = TRUE
+    progress = TRUE,
+    use_gpu = FALSE
   )
 
   # Default path settings
