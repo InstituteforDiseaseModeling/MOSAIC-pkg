@@ -680,6 +680,7 @@ run_MOSAIC <- function(config,
   disabled_base_params <- character(0)
   if (!is.null(sampling_args)) {
     disabled_flags <- names(sampling_args)[vapply(sampling_args, isFALSE, logical(1))]
+    disabled_flags <- disabled_flags[startsWith(disabled_flags, "sample_")]
     disabled_base <- gsub("^sample_", "", disabled_flags)
     special_map <- list(
       beta_j0_tot = c("beta_j0_tot", "beta_j0_hum", "beta_j0_env"),
