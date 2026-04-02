@@ -824,10 +824,18 @@
   prop_converged <- if (n_ess_computed > 0L) n_converged / n_ess_computed else 0
 
   if (prop_converged >= control$targets$ESS_param_prop) {
-    state$converged <- TRUE
-    log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (computed on %d/%d params)",
-            prop_converged * 100, control$targets$ESS_param,
-            n_ess_computed, length(param_names_est))
+    # Only declare convergence after min_batches to ensure sufficient exploration.
+    # Early batches can spuriously meet ESS targets with small samples.
+    if (state$batch_number >= control$calibration$min_batches) {
+      state$converged <- TRUE
+      log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (computed on %d/%d params)",
+              prop_converged * 100, control$targets$ESS_param,
+              n_ess_computed, length(param_names_est))
+    } else {
+      log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d — continuing",
+              prop_converged * 100, control$targets$ESS_param,
+              state$batch_number, control$calibration$min_batches)
+    }
   }
 
   # Clean up and return
