@@ -1,0 +1,26 @@
+name: Tests (Docker)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, tt/**]
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    container:
+      image: idmmosaicacr.azurecr.io/mosaic-worker:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install package from checkout
+        run: R CMD INSTALL .
+
+      - name: Run tests
+        run: Rscript -e "devtools::test('.')"
