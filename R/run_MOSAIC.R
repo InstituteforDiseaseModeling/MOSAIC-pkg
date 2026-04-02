@@ -682,7 +682,9 @@ run_MOSAIC <- function(config,
     disabled_flags <- names(sampling_args)[vapply(sampling_args, isFALSE, logical(1))]
     disabled_base <- gsub("^sample_", "", disabled_flags)
     special_map <- list(
-      beta_j0_tot = c("beta_j0_hum", "beta_j0_env")
+      beta_j0_tot = c("beta_j0_tot", "beta_j0_hum", "beta_j0_env"),
+      initial_conditions = c("prop_S_initial", "prop_E_initial", "prop_I_initial",
+                             "prop_R_initial", "prop_V1_initial", "prop_V2_initial")
     )
     resolved <- unlist(lapply(disabled_base, function(nm) {
       if (nm %in% names(special_map)) special_map[[nm]] else nm
