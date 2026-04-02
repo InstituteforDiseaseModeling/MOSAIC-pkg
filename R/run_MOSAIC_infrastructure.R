@@ -74,7 +74,7 @@
   persisted$updated_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
   tmp <- tempfile(tmpdir = dirname(state_file), fileext = ".json.tmp")
   on.exit(unlink(tmp), add = TRUE)
-  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
   file.rename(tmp, state_file)
   invisible(state_file)
 }

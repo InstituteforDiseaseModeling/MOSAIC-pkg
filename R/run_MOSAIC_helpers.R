@@ -267,7 +267,7 @@
 .mosaic_write_json <- function(obj, path, io) {
   # Define write function
   write_func <- function(data, file) {
-    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE)
+    jsonlite::write_json(data, file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   }
 
   # Use NFS-safe atomic write
@@ -505,7 +505,7 @@
   # Atomic write: tempfile + rename
   tmp <- tempfile(tmpdir = dirname(path), fileext = ".json.tmp")
   on.exit(unlink(tmp), add = TRUE)
-  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
   file.rename(tmp, path)
 }
 

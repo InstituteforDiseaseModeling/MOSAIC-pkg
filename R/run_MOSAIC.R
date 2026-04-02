@@ -1390,7 +1390,7 @@ run_MOSAIC <- function(config,
   log_msg("Saved %s", convergence_file)
 
   diagnostics_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
-  jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE)
+  jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved %s", diagnostics_file)
 
   if (control$paths$plots) {
@@ -1502,7 +1502,7 @@ run_MOSAIC <- function(config,
   )
 
   config_best_file <- file.path(dirs$cal_best_model, "config_best.json")
-  jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE)
+  jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved %s", config_best_file)
 
   lc <- reticulate::import("laser.cholera.metapop.model")

@@ -1274,7 +1274,7 @@ run_MOSAIC_dask <- function(config,
 
   diagnostics_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
   jsonlite::write_json(diagnostics, diagnostics_file,
-                       pretty = TRUE, auto_unbox = TRUE)
+                       pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved convergence_results.parquet and convergence_diagnostics.json")
 
   if (control$paths$plots) {
@@ -1352,7 +1352,7 @@ run_MOSAIC_dask <- function(config,
 
   config_best_file <- file.path(dirs$cal_best_model, "config_best.json")
   jsonlite::write_json(config_best, config_best_file,
-                       pretty = TRUE, auto_unbox = TRUE)
+                       pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved config_best.json")
 
   # Run best model locally (single sim, not on Dask)
