@@ -1628,9 +1628,9 @@ run_MOSAIC <- function(config,
       )
 
       # Write CSV
-      wm_path <- file.path(dirs$results, "model_fit_windows.csv")
+      wm_path <- file.path(dirs$res_fig_diag, "model_fit_windows.csv")
       utils::write.csv(windowed_metrics, wm_path, row.names = FALSE)
-      log_msg("Saved 3_results/model_fit_windows.csv")
+      log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.csv")
 
       # Log summary
       full_row <- windowed_metrics[windowed_metrics$window == "full", ]
