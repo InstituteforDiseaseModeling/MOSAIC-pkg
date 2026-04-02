@@ -398,9 +398,11 @@
     ess_df <- utils::read.csv(ess_file, stringsAsFactors = FALSE)
     if ("ess_marginal" %in% names(ess_df)) {
       ess_vals <- ess_df$ess_marginal[is.finite(ess_df$ess_marginal)]
-      ess_target <- if (!is.null(diag$targets$ess_min$value)) {
-        as.numeric(diag$targets$ess_min$value)
-      } else 100  # fallback default
+      ess_target <- if (!is.null(diag$targets$ess_param$value)) {
+        as.numeric(diag$targets$ess_param$value)
+      } else if (!is.null(diag$targets$ess_min$value)) {
+        as.numeric(diag$targets$ess_min$value)  # legacy fallback
+      } else 100  # default fallback
       ess_stats$n_params <- length(ess_vals)
       ess_stats$n_above_target <- sum(ess_vals >= ess_target)
       ess_stats$pct_above_target <- if (length(ess_vals) > 0) {
