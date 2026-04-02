@@ -463,10 +463,19 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
   n_locations <- length(locations)
 
+  # IC proportion params are controlled by sample_initial_conditions, not individual flags
+  ic_prop_names <- c("prop_S_initial", "prop_E_initial", "prop_I_initial",
+                     "prop_R_initial", "prop_V1_initial", "prop_V2_initial")
+
   for (param_name in names(location_params)) {
 
     # Check if we should sample this parameter
     should_sample <- sampling_flags[[param_name]]
+
+    # IC proportions are governed by the sample_initial_conditions flag
+    if (param_name %in% ic_prop_names) {
+      should_sample <- FALSE  # Never sample here — handled by sample_initial_conditions_impl
+    }
 
     # Default to TRUE if flag not found (for backward compatibility)
     if (is.null(should_sample)) should_sample <- TRUE
@@ -602,6 +611,15 @@ sample_initial_conditions_impl <- function(config_sampled, location_params,
 
   if (isTRUE(ic_moment_match)) {
     sampled_props <- moment_match_E_I(config_sampled, sampled_props, locations, verbose)
+  }
+
+  # Update prop_*_initial fields to match the final normalized proportions
+  ic_compartments_all <- colnames(sampled_props)
+  for (comp in ic_compartments_all) {
+    prop_field <- paste0("prop_", comp, "_initial")
+    if (prop_field %in% names(config_sampled)) {
+      config_sampled[[prop_field]] <- sampled_props[, comp]
+    }
   }
 
   # Normalize and convert to counts
