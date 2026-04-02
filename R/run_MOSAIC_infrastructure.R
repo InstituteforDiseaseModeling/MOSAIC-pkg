@@ -622,7 +622,8 @@
       ) +
       ggplot2::scale_y_continuous(
         name = expression(R^2 ~ "(cor"^2 * ")"),
-        limits = c(0, max(1.0, max(r2_vals, na.rm = TRUE) * 1.3)),
+        limits = c(0, max(1.0, max(r2_vals, na.rm = TRUE) * 1.3,
+                       max(bias_vals / 2, na.rm = TRUE) * 1.2)),
         sec.axis = ggplot2::sec_axis(~ . * 2, name = "Bias Ratio")
       ) +
       ggplot2::labs(title = title, x = NULL) +
