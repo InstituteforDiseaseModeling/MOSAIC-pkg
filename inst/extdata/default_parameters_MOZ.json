@@ -80,7 +80,7 @@
   "prop_V2_initial": 0,
   "mu_j_baseline": 0.0039274978969,
   "mu_j_slope": -0.05,
-  "mu_j_epidemic_factor": 1.78,
+  "mu_j_epidemic_factor": 1.25,
   "delta_reporting_cases": 0,
   "delta_reporting_deaths": 5,
   "mu_jt": [

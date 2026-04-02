@@ -96,7 +96,7 @@ mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
 names(mu_j_baseline) <- j
 
 mu_j_slope <- setNames(-0.05, j)              # MOZ 7 best: -0.099; slight declining trend default
-mu_j_epidemic_factor <- setNames(1.78, j)      # MOZ 7 best: 1.78; 2.78x mortality during epidemics
+mu_j_epidemic_factor <- setNames(1.25, j)      # Prior mean of Gamma(2.5, 2.0); 2.25x mortality during epidemics
 
 message("Get vaccination rate (nu_jt)")
 if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC_WHO.csv'))) {
@@ -277,7 +277,7 @@ default_args <- list(
 config_default_MOZ <- do.call(make_LASER_config, default_args)
 
 config_default_MOZ$metadata <- list(
-     version = "2.2",
+     version = "2.3",
      date = as.character(Sys.Date()),
      description = "MOZ-specific LASER configuration with extended date range (2017-2026). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )

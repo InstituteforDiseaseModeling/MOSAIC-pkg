@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "version": "2.0",
-    "date": "2026-03-31",
+    "version": "2.2",
+    "date": "2026-04-02",
     "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
   },
   "parameters_global": {
@@ -315,8 +315,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 498.5837,
-            "shape2": 17313.6429
+            "shape1": 495.9824,
+            "shape2": 17359.5861
           }
         }
       }
@@ -411,8 +411,8 @@
         "MOZ": {
           "distribution": "gamma",
           "parameters": {
-            "shape": 1.5,
-            "rate": 0.5
+            "shape": 2.5,
+            "rate": 2
           }
         }
       }
