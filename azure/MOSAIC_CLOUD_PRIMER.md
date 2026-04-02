@@ -246,17 +246,11 @@ results <- client$gather(futures)
 This translation is used in `run_MOSAIC_dask.R` to convert the R config list into a
 Python dict that `client$scatter()` can broadcast to workers.
 
-**Python environment**: reticulate needs to know which Python to use. In MOSAIC's case,
-it should point to the `mosaic-coiled` conda environment (which has `coiled` and
-`dask.distributed` installed). This is set via:
-```bash
-conda activate mosaic-coiled
-R   # start R from this shell; reticulate inherits the active Python
-```
-Or explicitly:
-```r
-Sys.setenv(RETICULATE_PYTHON = "~/.conda/envs/mosaic-coiled/bin/python")
-```
+**Python environment**: `coiled` and `dask.distributed` are included in MOSAIC's
+standard Python environment (`~/.virtualenvs/r-mosaic`, defined in
+`inst/py/environment.yml`). No separate environment is needed. `run_MOSAIC_dask()`
+calls `check_python_env()` at startup to confirm the correct environment is active —
+the same environment that all other MOSAIC functions use for LASER simulations.
 
 ---
 

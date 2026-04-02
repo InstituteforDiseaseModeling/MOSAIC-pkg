@@ -75,36 +75,37 @@ Follow the prompts and allow conda to initialize your shell. Restart your termin
 
 ---
 
-### Step 1.2 — Create the local orchestration conda environment
+### Step 1.2 — Ensure the MOSAIC Python environment is installed
 
-This environment is tiny — it only contains `coiled`, `dask`, and `pyarrow`. All
-MOSAIC dependencies live inside the Docker image on workers, not here.
+`coiled` and `dask.distributed` are now part of the standard MOSAIC Python environment
+(`~/.virtualenvs/r-mosaic`), defined in `inst/py/environment.yml`. No separate
+orchestration environment is needed — `run_MOSAIC_dask()` uses the same Python that
+all other MOSAIC functions use.
 
 ```bash
-# Navigate to MOSAIC-pkg
-cd ~/MOSAIC/MOSAIC-pkg
+# If MOSAIC's Python environment is already installed (check):
+ls ~/.virtualenvs/r-mosaic/bin/python
 
-# Create the environment from the provided spec
-conda env create -f azure/environment.yml
-
-# This creates an environment named "mosaic-local-orchestrate"
-# Verify it was created:
-conda env list
-# You should see "mosaic-local-orchestrate" in the list
+# Verify coiled and dask are present:
+~/.virtualenvs/r-mosaic/bin/python -c "import coiled, dask.distributed; print('OK')"
 ```
 
-What `azure/environment.yml` installs: Python 3.11, coiled, dask, distributed,
-numpy, pandas, pyarrow. That's it — a minimal environment for orchestration.
+If the environment does not exist yet, install it from R:
+```r
+MOSAIC::install_dependencies()
+```
 
-> **If you already have a conda environment with coiled and dask** (e.g. `mosaic-coiled`
-> from previous work), you can reuse it instead of creating a new one. The environment
-> name just needs to have `coiled` and `dask.distributed` importable.
+If the environment exists but predates the addition of coiled+dask (i.e., the check
+above fails), install them directly into the existing environment:
+```bash
+~/.virtualenvs/r-mosaic/bin/pip install "dask[distributed]" coiled
+```
 
 ---
 
 ### Step 1.3 — Create a Coiled account and log in
 
-Coiled provisions your cloud workers. You need a free account.
+Coiled provisions your cloud workers. You need an account.
 
 **Step 1.3a: Create account**
 
@@ -117,18 +118,17 @@ your subscription.
 > IDM Research 2 Azure subscription. Ask Tony to add you to this workspace instead of
 > creating your own, to share the existing Docker image and infrastructure.
 
-**Step 1.3b: Install the Coiled CLI and log in**
+**Step 1.3b: Log in to Coiled**
 
 ```bash
-# Activate your orchestration environment first
-conda activate mosaic-local-orchestrate
+# Use the coiled CLI inside the MOSAIC Python environment
+~/.virtualenvs/r-mosaic/bin/coiled login
 
-# Log in to Coiled (opens a browser window for OAuth)
-coiled login
+# Opens a browser for OAuth. After approval, credentials are saved to:
+# ~/.config/dask/coiled.yaml
 
-# Credentials are saved to: ~/.config/dask/coiled.yaml
-# Verify you're logged in:
-coiled whoami
+# Verify:
+~/.virtualenvs/r-mosaic/bin/coiled whoami
 ```
 
 **What `coiled login` does**: Opens a browser where you authenticate with your Coiled
@@ -137,40 +137,26 @@ is used by both the `coiled` CLI and by Python/R code that imports `coiled`.
 
 ---
 
-### Step 1.4 — Point reticulate at the orchestration Python environment
+### Step 1.4 — Verify reticulate uses the MOSAIC Python environment
 
-When you run `run_MOSAIC_dask()` from R, it uses reticulate to import Python modules
-(`coiled`, `dask.distributed`). Reticulate needs to find the right Python environment.
+`run_MOSAIC_dask()` calls `MOSAIC::check_python_env()` at startup, which confirms
+that reticulate is using `~/.virtualenvs/r-mosaic`. Since coiled and dask are now
+installed there, no additional configuration is needed — the same env that runs
+LASER simulations also handles Dask orchestration.
 
-**The simplest approach**: always activate the conda environment before starting R:
-
-```bash
-conda activate mosaic-local-orchestrate
-R
-```
-
-**To make this permanent** (add to `~/.Rprofile`):
+**Verify in R**:
 
 ```r
-# ~/.Rprofile
-local({
-  coiled_python <- path.expand("~/.conda/envs/mosaic-local-orchestrate/bin/python")
-  if (file.exists(coiled_python)) {
-    Sys.setenv(RETICULATE_PYTHON = coiled_python)
-  }
-})
+library(MOSAIC)
+MOSAIC::check_python_env()              # should confirm r-mosaic is active
+reticulate::import("coiled")            # should print: Module(coiled)
+reticulate::import("dask.distributed")  # should print: Module(dask.distributed)
 ```
 
-**Verify the setup in R**:
-
+If `check_python_env()` reports a different Python is active, run:
 ```r
-library(reticulate)
-reticulate::import("coiled")          # Should print: Module(coiled)
-reticulate::import("dask.distributed") # Should print: Module(dask.distributed)
+MOSAIC::use_mosaic_env()
 ```
-
-If you see `ImportError: No module named 'coiled'`, the wrong Python is active.
-Check `reticulate::py_config()` to see which Python reticulate is using.
 
 ---
 
@@ -740,18 +726,16 @@ print('Done.')
 
 ### "ImportError: No module named 'coiled'" in R
 
-Reticulate is using the wrong Python. Fix:
+Reticulate is using the wrong Python (not `~/.virtualenvs/r-mosaic`). Fix:
 
-```bash
-conda activate mosaic-local-orchestrate
-R   # start R from this activated environment
+```r
+MOSAIC::use_mosaic_env()
+reticulate::import("coiled")  # should now work
 ```
 
-Or in R before calling the function:
-```r
-Sys.setenv(RETICULATE_PYTHON = path.expand("~/.conda/envs/mosaic-local-orchestrate/bin/python"))
-library(reticulate)
-reticulate::import("coiled")  # should now work
+If coiled is genuinely missing from the r-mosaic environment:
+```bash
+~/.virtualenvs/r-mosaic/bin/pip install "dask[distributed]" coiled
 ```
 
 ---
@@ -828,14 +812,11 @@ and in your Azure Cost Management portal.
 ## Quick Reference
 
 ```bash
-# Activate local Python env
-conda activate mosaic-local-orchestrate
-
-# Verify Coiled auth
-coiled whoami
+# Verify Coiled auth (uses MOSAIC Python env)
+~/.virtualenvs/r-mosaic/bin/coiled whoami
 
 # List Coiled software environments
-coiled env list
+~/.virtualenvs/r-mosaic/bin/coiled env list
 
 # Build and push Docker image
 docker build -f azure/Dockerfile -t mosaic-worker:latest .
