@@ -6,9 +6,9 @@
 \usage{
 plot_model_fit_stochastic(
   config,
-  n_simulations = 100,
+  n_simulations = 100L,
   output_dir,
-  envelope_quantiles = c(0.1, 0.9),
+  envelope_quantiles = c(0.025, 0.975),
   save_predictions = FALSE,
   parallel = FALSE,
   n_cores = NULL,
@@ -17,84 +17,40 @@ plot_model_fit_stochastic(
 )
 }
 \arguments{
-\item{config}{A configuration list/object as produced by sample_parameters().
-Must contain all necessary parameters for running laser.cholera model including:
-\itemize{
-\item reported_cases - observed cases data
-\item reported_deaths - observed deaths data
-\item location_name - location identifiers
-\item date_start and date_stop - time range for the plot
-}}
+\item{config}{Named list. Model configuration as returned by
+\code{\link{sample_parameters}}.}
 
-\item{n_simulations}{Integer specifying number of stochastic simulations to run.
-Default is 100.}
+\item{n_simulations}{Integer. Number of stochastic simulations. Default \code{100L}.}
 
-\item{output_dir}{Character string specifying the directory where plots should
-be saved. Directory will be created if it doesn't exist.}
+\item{output_dir}{Character. Directory for plots and prediction CSVs.}
 
-\item{envelope_quantiles}{Numeric vector of length 2 specifying the quantiles
-for the confidence envelope. Default is c(0.1, 0.9) for 80\% CI.}
+\item{envelope_quantiles}{Numeric vector of length 2. Uncertainty envelope
+quantiles. Default \code{c(0.025, 0.975)}.}
 
-\item{save_predictions}{Logical indicating whether to save prediction data to CSV files.
-Default is FALSE. If TRUE, saves predictions_stochastic_{location}.csv for each location.}
+\item{save_predictions}{Logical. Save per-location prediction CSVs. Default
+\code{FALSE}.}
 
-\item{parallel}{Logical indicating whether to use parallel computation. Default is FALSE.
-When TRUE, simulations are run in parallel across multiple cores.}
+\item{parallel}{Logical. Use R parallel cluster. Default \code{FALSE}.}
 
-\item{n_cores}{Integer specifying number of cores to use for parallel computation.
-Default is NULL (uses detectCores() - 1). Only used when parallel = TRUE.}
+\item{n_cores}{Integer or \code{NULL}. Cores when \code{parallel = TRUE}.}
 
-\item{root_dir}{Character string specifying the root directory for MOSAIC project.
-Required when parallel = TRUE. Workers need this to initialize PATHS correctly.}
+\item{root_dir}{Character. MOSAIC root directory (required when
+\code{parallel = TRUE}).}
 
-\item{verbose}{Logical indicating whether to print progress messages. Default is TRUE.}
+\item{verbose}{Logical. Print progress. Default \code{TRUE}.}
 }
 \value{
-Invisibly returns a list containing:
-\itemize{
-\item \code{individual}: Named list of plots for each location
-\item \code{cases_faceted}: Faceted plot of cases by location (if n_locations > 1)
-\item \code{deaths_faceted}: Faceted plot of deaths by location (if n_locations > 1)
-\item \code{simulation_stats}: Statistics from the simulations including
-successful run count and aggregated predictions
-}
+Invisibly returns the plot list from \code{\link{plot_model_ensemble}},
+which includes \code{simulation_stats} containing the ensemble object fields.
 }
 \description{
-Runs multiple stochastic simulations of a model configuration and creates
-timeseries plots showing mean predictions with confidence envelopes.
-}
-\details{
-This function performs multiple stochastic runs of the laser-cholera model
-with identical configuration but different random seeds. It then aggregates
-the results to show:
-\itemize{
-\item Mean predictions across all simulations
-\item Confidence envelopes based on specified quantiles
-\item Observed data for comparison
-\item Summary statistics (total counts, correlations)
-}
+Convenience wrapper that calls \code{\link{calc_model_ensemble}} followed by
+\code{\link{plot_model_ensemble}}. Preserved for backward compatibility.
 
-Unlike plot_model_fit(), this function does not calculate or display likelihood
-values, focusing instead on prediction uncertainty through stochastic simulation.
+For new code, prefer calling the two functions separately so the ensemble
+object can be reused for R² and bias ratio calculations without running a
+second set of simulations.
 }
-\examples{
-\dontrun{
-# Sample parameters for best model
-best_config <- sample_parameters(PATHS, priors = priors,
-                                 config = base_config, seed = 123)
-
-# Create stochastic plots with 100 simulations
-plots <- plot_model_fit_stochastic(
-    config = best_config,
-    n_simulations = 100,
-    output_dir = "output/plots",
-    envelope_quantiles = c(0.1, 0.9),
-    save_predictions = TRUE  # Save predictions to CSV
-)
-# Saves: predictions_stochastic_ETH.csv (or other location names)
-
-# Access individual plots
-plots$individual[["ETH"]]  # Individual location plot for Ethiopia
-}
-
+\seealso{
+\code{\link{calc_model_ensemble}}, \code{\link{plot_model_ensemble}}
 }

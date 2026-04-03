@@ -1537,112 +1537,95 @@ run_MOSAIC <- function(config,
           ifelse(is.na(r2_deaths), 0, r2_deaths),
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
-  # Ensemble R²: re-run best model N times with different seeds, compute
-  # mean prediction, then cor(obs, mean_est)². More stable than single-model
-  # R² because it averages over stochastic variability.
-  n_ensemble_r2 <- control$predictions$best_model_n_sims
-  r2_cases_ensemble <- NA_real_
-  r2_deaths_ensemble <- NA_real_
-  bias_ratio_cases_ensemble <- NA_real_
+  # ===========================================================================
+  # ENSEMBLE R², WINDOWED METRICS, AND PREDICTIVE PLOTS
+  # ===========================================================================
+
+  # Run ensemble once via calc_model_ensemble(). The same object is then used
+  # for (a) R²/bias ratios, (b) windowed fit metrics, and (c) predictive plots
+  # when plots = TRUE. This avoids running simulations twice.
+
+  n_ensemble_r2              <- control$predictions$best_model_n_sims
+  r2_cases_ensemble          <- NA_real_
+  r2_deaths_ensemble         <- NA_real_
+  bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
 
-  if (n_ensemble_r2 > 1) {
-    log_msg("Computing ensemble R² (%d stochastic runs)...", n_ensemble_r2)
+  if (n_ensemble_r2 > 1L) {
+    log_msg("Computing ensemble R\u00b2 (%d stochastic runs)...", n_ensemble_r2)
 
-    ensemble_results <- tryCatch({
-      obs_cases_vec <- as.numeric(unlist(config_best$reported_cases))
-      obs_deaths_vec <- as.numeric(unlist(config_best$reported_deaths))
-      n_ts <- length(obs_cases_vec)
-
-      # Run N stochastic replicates of the best model
-      cases_matrix <- matrix(NA_real_, nrow = n_ensemble_r2, ncol = n_ts)
-      deaths_matrix <- matrix(NA_real_, nrow = n_ensemble_r2, ncol = n_ts)
-
-      for (i in seq_len(n_ensemble_r2)) {
-        config_best$seed <- as.integer(best_seed_sim * 1000L + i)
-        m <- tryCatch(
-          lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best),
-                       quiet = TRUE),
-          error = function(e) NULL
-        )
-        if (!is.null(m)) {
-          cases_matrix[i, ] <- as.numeric(unlist(m$results$reported_cases))
-          deaths_matrix[i, ] <- as.numeric(unlist(m$results$disease_deaths))
-        }
+    ensemble <- tryCatch(
+      calc_model_ensemble(
+        config             = config_best,
+        n_simulations      = n_ensemble_r2,
+        envelope_quantiles = c(0.025, 0.975),
+        parallel           = control$parallel$enable,
+        n_cores            = control$parallel$n_cores,
+        root_dir           = root_dir,
+        verbose            = FALSE
+      ),
+      error = function(e) {
+        log_msg("Warning: calc_model_ensemble failed: %s", e$message)
+        NULL
       }
+    )
 
-      # Compute mean across replicates
-      mean_cases <- colMeans(cases_matrix, na.rm = TRUE)
-      mean_deaths <- colMeans(deaths_matrix, na.rm = TRUE)
+    if (!is.null(ensemble)) {
 
-      # R² from ensemble mean
-      valid_c <- is.finite(obs_cases_vec) & is.finite(mean_cases)
-      valid_d <- is.finite(obs_deaths_vec) & is.finite(mean_deaths)
+      # R² and bias directly from ensemble means — no extra simulations
+      mean_c_flat <- as.numeric(ensemble$cases_stats$mean)
+      mean_d_flat <- as.numeric(ensemble$deaths_stats$mean)
+      obs_c_flat  <- as.numeric(ensemble$obs_cases)
+      obs_d_flat  <- as.numeric(ensemble$obs_deaths)
 
-      list(
-        r2_cases = if (sum(valid_c) > 2) stats::cor(obs_cases_vec[valid_c], mean_cases[valid_c])^2 else NA_real_,
-        r2_deaths = if (sum(valid_d) > 2) stats::cor(obs_deaths_vec[valid_d], mean_deaths[valid_d])^2 else NA_real_,
-        bias_cases = calc_bias_ratio(obs_cases_vec, mean_cases),
-        bias_deaths = calc_bias_ratio(obs_deaths_vec, mean_deaths),
-        mean_cases = mean_cases,
-        mean_deaths = mean_deaths,
-        obs_cases = obs_cases_vec,
-        obs_deaths = obs_deaths_vec
-      )
-    }, error = function(e) {
-      log_msg("Warning: ensemble R² computation failed: %s", e$message)
-      list(r2_cases = NA_real_, r2_deaths = NA_real_, bias_cases = NA_real_, bias_deaths = NA_real_,
-           mean_cases = NULL, mean_deaths = NULL, obs_cases = NULL, obs_deaths = NULL)
-    })
+      valid_c <- is.finite(obs_c_flat) & is.finite(mean_c_flat)
+      valid_d <- is.finite(obs_d_flat) & is.finite(mean_d_flat)
 
-    r2_cases_ensemble <- ensemble_results$r2_cases
-    r2_deaths_ensemble <- ensemble_results$r2_deaths
-    bias_ratio_cases_ensemble <- ensemble_results$bias_cases
-    bias_ratio_deaths_ensemble <- ensemble_results$bias_deaths
+      r2_cases_ensemble  <- if (sum(valid_c) > 2L)
+        stats::cor(obs_c_flat[valid_c], mean_c_flat[valid_c])^2 else NA_real_
+      r2_deaths_ensemble <- if (sum(valid_d) > 2L)
+        stats::cor(obs_d_flat[valid_d], mean_d_flat[valid_d])^2 else NA_real_
 
-    log_msg("Ensemble R² (%d runs): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-            n_ensemble_r2,
-            ifelse(is.na(r2_cases_ensemble), 0, r2_cases_ensemble),
-            ifelse(is.na(bias_ratio_cases_ensemble), 0, bias_ratio_cases_ensemble),
-            ifelse(is.na(r2_deaths_ensemble), 0, r2_deaths_ensemble),
-            ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
+      bias_ratio_cases_ensemble  <- tryCatch(
+        calc_bias_ratio(obs_c_flat, mean_c_flat), error = function(e) NA_real_)
+      bias_ratio_deaths_ensemble <- tryCatch(
+        calc_bias_ratio(obs_d_flat, mean_d_flat), error = function(e) NA_real_)
 
-    # Windowed model fit metrics (trailing windows of observed data)
-    if (!is.null(ensemble_results$mean_cases)) {
-      n_ts <- length(ensemble_results$obs_cases)
+      log_msg("Ensemble R\u00b2 (%d runs): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+              n_ensemble_r2,
+              ifelse(is.na(r2_cases_ensemble),          0, r2_cases_ensemble),
+              ifelse(is.na(bias_ratio_cases_ensemble),  0, bias_ratio_cases_ensemble),
+              ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
+              ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
+
+      # Windowed model fit metrics
+      n_ts      <- ensemble$n_time_points
       dates_vec <- seq.Date(as.Date(config_best$date_start), by = "day", length.out = n_ts)
 
-      fit_windows <- if (!is.null(control$predictions$fit_windows)) {
-        control$predictions$fit_windows
-      } else {
-        c(365, 120, 90, 60, 30)
-      }
+      fit_windows <- control$predictions$fit_windows %||% c(365L, 120L, 90L, 60L, 30L)
 
       windowed_metrics <- .mosaic_compute_windowed_metrics(
-        obs_cases  = ensemble_results$obs_cases,
-        est_cases  = ensemble_results$mean_cases,
-        obs_deaths = ensemble_results$obs_deaths,
-        est_deaths = ensemble_results$mean_deaths,
+        obs_cases  = obs_c_flat,
+        est_cases  = mean_c_flat,
+        obs_deaths = obs_d_flat,
+        est_deaths = mean_d_flat,
         dates      = dates_vec,
         windows    = fit_windows
       )
 
-      # Write CSV
       wm_path <- file.path(dirs$res_fig_diag, "model_fit_windows.csv")
       utils::write.csv(windowed_metrics, wm_path, row.names = FALSE)
       log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.csv")
 
-      # Log summary
-      full_row <- windowed_metrics[windowed_metrics$window == "full", ]
+      full_row      <- windowed_metrics[windowed_metrics$window == "full", ]
       short_windows <- windowed_metrics[windowed_metrics$window != "full", ]
-      if (nrow(short_windows) > 0) {
+      if (nrow(short_windows) > 0L) {
         last_row <- short_windows[nrow(short_windows), ]
         log_msg("Windowed fit: R2_cases [full=%.3f, %s=%.3f] | Bias [full=%.2f, %s=%.2f]",
                 full_row$r2_cases, last_row$window, last_row$r2_cases,
                 full_row$bias_cases, last_row$window, last_row$bias_cases)
       }
 
-      # Plot
       if (control$paths$plots) {
         wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
         tryCatch({
@@ -1653,21 +1636,49 @@ run_MOSAIC <- function(config,
           log_msg("Warning: windowed metrics plot failed: %s", e$message)
         })
       }
-    }
-  }
 
-  if (control$paths$plots) {
+      # Predictive plots — reuse ensemble, no second set of simulations
+      if (control$paths$plots) {
+        log_msg("Generating posterior predictive plots (best model)...")
+        plot_model_ensemble(
+          ensemble         = ensemble,
+          output_dir       = dirs$res_fig_pred,
+          save_predictions = TRUE,
+          verbose          = control$logging$verbose
+        )
+      }
+
+    } else {
+      # Ensemble failed — fall back to plots-only call if plots requested
+      if (control$paths$plots) {
+        log_msg("Generating posterior predictive plots (best model, ensemble failed)...")
+        plot_model_fit_stochastic(
+          config             = config_best,
+          n_simulations      = n_ensemble_r2,
+          output_dir         = dirs$res_fig_pred,
+          envelope_quantiles = c(0.025, 0.975),
+          save_predictions   = TRUE,
+          parallel           = control$parallel$enable,
+          n_cores            = control$parallel$n_cores,
+          root_dir           = root_dir,
+          verbose            = control$logging$verbose
+        )
+      }
+    }
+
+  } else if (control$paths$plots) {
+    # n_ensemble_r2 <= 1: no ensemble metrics, but still generate plots
     log_msg("Generating posterior predictive plots (best model)...")
     plot_model_fit_stochastic(
-      config = config_best,
-      n_simulations = control$predictions$best_model_n_sims,
-      output_dir = dirs$res_fig_pred,
+      config             = config_best,
+      n_simulations      = max(2L, n_ensemble_r2),
+      output_dir         = dirs$res_fig_pred,
       envelope_quantiles = c(0.025, 0.975),
-      save_predictions = TRUE,
-      parallel = control$parallel$enable,
-      n_cores = control$parallel$n_cores,
-      root_dir = root_dir,
-      verbose = control$logging$verbose
+      save_predictions   = TRUE,
+      parallel           = control$parallel$enable,
+      n_cores            = control$parallel$n_cores,
+      root_dir           = root_dir,
+      verbose            = control$logging$verbose
     )
   }
 
