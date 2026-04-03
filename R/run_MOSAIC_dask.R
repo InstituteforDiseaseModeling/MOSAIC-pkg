@@ -1663,6 +1663,9 @@ run_MOSAIC_dask <- function(config,
           format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)
   log_msg("===================")
 
+  # Finalize run state: marks run_state.json as completed and writes _README.md
+  .mosaic_finalize_state(state_file)
+
   invisible(list(
     dirs  = dirs,
     files = list(
