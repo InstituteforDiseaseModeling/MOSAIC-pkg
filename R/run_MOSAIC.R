@@ -1774,19 +1774,6 @@ run_MOSAIC <- function(config,
   jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved %s", config_best_file)
 
-  # Limit OpenMP threads in the main process before any LASER calls.
-  # laser-cholera 0.12.1 added scipy as a dependency, which introduces libgomp
-  # (GNU OpenMP). Combined with libiomp5 (Intel OpenMP from numba/KMP), this
-  # causes a multi-OpenMP-runtime SIGSEGV on macOS ARM when the main process
-  # first initializes LASER threads after PSOCK workers have terminated.
-  # Limiting to 1 thread prevents the conflict. These calls are single-sim
-  # (PPC check) so there is no performance cost.
-  Sys.setenv(OMP_NUM_THREADS    = "1",
-             OPENBLAS_NUM_THREADS = "1",
-             MKL_NUM_THREADS    = "1",
-             NUMBA_NUM_THREADS  = "1",
-             TBB_NUM_THREADS    = "1")
-
   lc <- reticulate::import("laser.cholera.metapop.model")
   best_model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
