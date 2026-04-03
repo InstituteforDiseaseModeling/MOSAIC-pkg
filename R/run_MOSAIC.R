@@ -993,14 +993,21 @@ run_MOSAIC <- function(config,
           show_progress = control$parallel$progress
         )
       } else {
-        # Sequential: define inline
+        # Sequential: define inline (use named args to avoid positional shift)
         .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
-            sim_id, n_iterations, priors, config, PATHS,
-            dirs$cal_samples,
-            param_names_all, param_lookup, sampling_args,
-            io = control$io,
+            sim_id             = sim_id,
+            n_iterations       = n_iterations,
+            priors             = priors,
+            config             = config,
+            PATHS              = PATHS,
+            dir_cal_samples    = dirs$cal_samples,
+            dir_cal_simresults = dirs$cal_simresults,
+            param_names_all    = param_names_all,
+            param_lookup       = param_lookup,
+            sampling_args      = sampling_args,
+            io                 = control$io,
             likelihood_settings = control$likelihood
           ),
           cl = cl,
@@ -1117,14 +1124,21 @@ run_MOSAIC <- function(config,
           show_progress = control$parallel$progress
         )
       } else {
-        # Sequential: define inline
+        # Sequential: define inline (use named args to avoid positional shift)
         .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
-            sim_id, n_iterations, priors, config, PATHS,
-            dirs$cal_samples,
-            param_names_all, param_lookup, sampling_args,
-            io = control$io,
+            sim_id             = sim_id,
+            n_iterations       = n_iterations,
+            priors             = priors,
+            config             = config,
+            PATHS              = PATHS,
+            dir_cal_samples    = dirs$cal_samples,
+            dir_cal_simresults = dirs$cal_simresults,
+            param_names_all    = param_names_all,
+            param_lookup       = param_lookup,
+            sampling_args      = sampling_args,
+            io                 = control$io,
             likelihood_settings = control$likelihood
           ),
           cl = cl,
