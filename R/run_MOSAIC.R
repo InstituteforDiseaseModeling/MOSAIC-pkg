@@ -741,9 +741,12 @@ run_MOSAIC <- function(config,
   # Resolve weights_time into the private slot used by the worker
   control$likelihood$.weights_time_resolved <- control$likelihood$weights_time
 
-  # Initialise Dask-related variables to NULL so the on.exit handler is always safe
-  client  <- NULL
-  cluster <- cluster  # preserve caller-provided R cluster
+  # Initialise Dask-related variables to NULL so the on.exit handler is always safe.
+  # Never alias the caller-provided R cluster here — if dask_spec is provided the
+  # caller retains full ownership of any R cluster they passed; it is not used and
+  # not touched by the Dask code path.
+  client      <- NULL
+  dask_cluster <- NULL  # Dask/Coiled cluster object (distinct from R cluster arg)
 
   if (use_dask) {
 
@@ -788,24 +791,24 @@ run_MOSAIC <- function(config,
         }
       }
 
-      cluster <- do.call(coiled_mod$Cluster, cluster_args)
-      client  <- dask_dist$Client(cluster)
+      dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
+      client       <- dask_dist$Client(dask_cluster)
     } else {
       log_msg("Connecting to Dask scheduler: %s", dask_spec$address)
-      client  <- dask_dist$Client(dask_spec$address)
+      client <- dask_dist$Client(dask_spec$address)
     }
 
     log_msg("Dask dashboard: %s", client$dashboard_link)
 
     # Register cleanup (runs on normal exit OR error).
-    # client/cluster are set to NULL after graceful close before post-processing,
+    # client/dask_cluster are set to NULL after graceful close before post-processing,
     # so this only fires if an error occurs during the batch loop.
     on.exit({
       if (!is.null(client)) {
         try({ client$close(); log_msg("Dask client closed (on.exit)") }, silent = TRUE)
       }
-      if (!is.null(cluster)) {
-        try({ cluster$close(); log_msg("Dask cluster closed (on.exit)") }, silent = TRUE)
+      if (!is.null(dask_cluster)) {
+        try({ dask_cluster$close(); log_msg("Dask cluster closed (on.exit)") }, silent = TRUE)
       }
     }, add = TRUE)
 
@@ -1192,17 +1195,17 @@ run_MOSAIC <- function(config,
     }, error = function(e) {
       log_msg("  Dask client close failed (may already be disconnected): %s", e$message)
     })
-    if (!is.null(cluster)) {
+    if (!is.null(dask_cluster)) {
       tryCatch({
-        cluster$close()
+        dask_cluster$close()
         log_msg("  Dask cluster closed")
       }, error = function(e) {
         log_msg("  Dask cluster close failed: %s", e$message)
       })
     }
     # Null out so the on.exit handler doesn't double-close
-    client  <- NULL
-    cluster <- NULL
+    client       <- NULL
+    dask_cluster <- NULL
     gc(verbose = FALSE)
   }
 
