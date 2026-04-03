@@ -1,0 +1,50 @@
+name: Smoke Tests (Docker)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, tt/**]
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+
+    container:
+      image: idmmosaicacr.azurecr.io/mosaic-worker:latest
+
+    env:
+      RETICULATE_PYTHON: /root/.virtualenvs/r-mosaic/bin/python
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install package from checkout
+        run: R CMD INSTALL .
+
+      - name: Run testthat tests
+        run: Rscript -e "devtools::test('.')"
+
+      - name: Run Smoke test (sample → LASER → likelihood)
+        run: |
+          Rscript -e '
+            library(MOSAIC)
+            set_root_directory("/workspace/MOSAIC")
+            config <- get_location_config(iso = "ETH")
+            priors <- get_location_priors(iso = "ETH")
+            sampled_config <- sample_parameters(seed = 1, priors = priors, config = config)
+            model  <- run_LASER(config = sampled_config, seed = 1L)
+            est_cases  <- as.matrix(model$results$reported_cases)
+            est_deaths <- as.matrix(model$results$disease_deaths)
+            ll <- calc_model_likelihood(
+              obs_cases  = sampled_config$reported_cases,
+              est_cases  = est_cases,
+              obs_deaths = sampled_config$reported_deaths,
+              est_deaths = est_deaths
+            )
+            stopifnot(is.finite(ll))
+            cat("Smoke test passed. LL =", ll, "\n")
+          '
