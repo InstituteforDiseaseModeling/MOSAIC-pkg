@@ -1577,6 +1577,36 @@ run_MOSAIC_dask <- function(config,
     )
   }
 
+  # ===========================================================================
+  # COMBINE PREDICTION CSVs
+  # ===========================================================================
+
+  # Combine per-location prediction CSVs by type (ensemble and stochastic have
+  # different column schemas and cannot be rbind'd together).
+  # Only runs when plots = TRUE (prediction CSVs are a side-effect of plot fns).
+  for (pred_type in c("ensemble", "stochastic")) {
+    pred_csvs <- list.files(dirs$res_fig_pred,
+                            pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
+                            full.names = TRUE)
+    if (length(pred_csvs) > 1) {
+      combined <- tryCatch({
+        do.call(rbind, lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE))
+      }, error = function(e) {
+        log_msg("Warning: Could not combine %s prediction CSVs: %s", pred_type, e$message)
+        NULL
+      })
+      if (!is.null(combined)) {
+        out_file <- file.path(dirs$res_predictions, sprintf("all_predictions_%s.csv", pred_type))
+        utils::write.csv(combined, out_file, row.names = FALSE)
+        log_msg("Combined %d %s prediction files into %s",
+                length(pred_csvs), pred_type, basename(out_file))
+      }
+    } else if (length(pred_csvs) == 1) {
+      out_file <- file.path(dirs$res_predictions, sprintf("all_predictions_%s.csv", pred_type))
+      file.copy(pred_csvs, out_file, overwrite = TRUE)
+    }
+  }
+
   runtime <- difftime(Sys.time(), start_time, units = "mins")
   log_msg("Dask calibration complete: %d batches, %d simulations, %.2f min",
           state$batch_number, state$total_sims_run, as.numeric(runtime))
