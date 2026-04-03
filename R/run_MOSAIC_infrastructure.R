@@ -195,26 +195,24 @@
 
   # --- Python environment ---
   # Only query if reticulate has already bound to avoid side effects on clusters
-  py_env <- list()
-  if (requireNamespace("reticulate", quietly = TRUE) &&
-      reticulate::py_available(initialize = FALSE)) {
+  py_env <- if (requireNamespace("reticulate", quietly = TRUE) &&
+                reticulate::py_available(initialize = FALSE)) {
     tryCatch({
-      sys <- reticulate::import("sys", delay_load = FALSE)
-      py_env$version <- strsplit(as.character(sys$version), " ")[[1]][1]
-
+      sys      <- reticulate::import("sys", delay_load = FALSE)
+      py_ver   <- strsplit(as.character(sys$version), " ")[[1]][1]
       importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      py_pkgs <- c("laser-cholera", "laser-core", "numpy", "torch",
-                   "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
-      for (pkg in py_pkgs) {
-        key <- gsub("-", "_", pkg)
-        py_env[[paste0("pkg_", key)]] <- tryCatch(
-          as.character(importlib$version(pkg)),
-          error = function(e) NA_character_
-        )
-      }
+      py_pkgs  <- c("laser-cholera", "laser-core", "numpy", "torch",
+                    "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
+      pkg_versions <- lapply(py_pkgs, function(pkg) {
+        tryCatch(as.character(importlib$version(pkg)), error = function(e) NA_character_)
+      })
+      names(pkg_versions) <- paste0("pkg_", gsub("-", "_", py_pkgs))
+      c(list(version = py_ver), pkg_versions)
     }, error = function(e) {
-      py_env$error <<- paste("Python query failed:", e$message)
+      list(error = paste("Python query failed:", e$message))
     })
+  } else {
+    list()
   }
 
   # --- System / cluster ---

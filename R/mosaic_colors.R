@@ -869,10 +869,7 @@ scale_fill_mosaic_scenario <- function(...) {
 # Internal Helpers
 # =============================================================================
 
-# Null-coalescing operator (if not already defined)
-if (!exists("%||%", envir = asNamespace("MOSAIC"), inherits = FALSE)) {
-  `%||%` <- function(a, b) if (is.null(a)) b else a
-}
+# %||% is defined in R/aaa_utils.R (loaded first alphabetically)
 
 # Apply alpha transparency to hex colors
 .apply_alpha <- function(cols, alpha) {
