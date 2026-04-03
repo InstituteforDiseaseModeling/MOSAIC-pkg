@@ -1366,6 +1366,39 @@ run_MOSAIC_dask <- function(config,
   lc <- reticulate::import("laser.cholera.metapop.model")
   best_model <- lc$run_model(paramfile = .mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
+  # ===========================================================================
+  # MODEL FIT METRICS (BEST MODEL)
+  # ===========================================================================
+
+  # Single-model R² and bias ratio
+  r2_cases <- tryCatch({
+    obs   <- as.numeric(unlist(config_best$reported_cases))
+    est   <- as.numeric(unlist(best_model$results$reported_cases))
+    valid <- is.finite(obs) & is.finite(est)
+    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+  }, error = function(e) NA_real_)
+
+  r2_deaths <- tryCatch({
+    obs   <- as.numeric(unlist(config_best$reported_deaths))
+    est   <- as.numeric(unlist(best_model$results$disease_deaths))
+    valid <- is.finite(obs) & is.finite(est)
+    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+  }, error = function(e) NA_real_)
+
+  bias_ratio_cases <- tryCatch({
+    calc_bias_ratio(config_best$reported_cases, best_model$results$reported_cases)
+  }, error = function(e) NA_real_)
+
+  bias_ratio_deaths <- tryCatch({
+    calc_bias_ratio(config_best$reported_deaths, best_model$results$disease_deaths)
+  }, error = function(e) NA_real_)
+
+  log_msg("Best model R\u00b2: cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+          ifelse(is.na(r2_cases),        0, r2_cases),
+          ifelse(is.na(bias_ratio_cases), 0, bias_ratio_cases),
+          ifelse(is.na(r2_deaths),        0, r2_deaths),
+          ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
+
   if (control$paths$plots) {
     log_msg("Generating posterior predictive plots (best model)...")
     plot_model_fit_stochastic(
