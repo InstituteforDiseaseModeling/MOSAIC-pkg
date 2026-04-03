@@ -738,8 +738,20 @@ run_MOSAIC <- function(config,
   # CLUSTER INITIALISATION
   # ===========================================================================
 
-  # Resolve weights_time into the private slot used by the worker
-  control$likelihood$.weights_time_resolved <- control$likelihood$weights_time
+  # Resolve and normalize weights_time into the private slot used by all workers.
+  # Normalize to sum to n_t (number of time points) so the scale is independent
+  # of user-supplied magnitude. Applied once here for both R and Dask paths;
+  # the Dask path also has its own copy of this logic for the likelihood_settings
+  # local variable it builds — that redundant normalization is harmless.
+  if (!is.null(control$likelihood$weights_time)) {
+    n_t_cfg <- if (is.matrix(config$reported_cases)) ncol(config$reported_cases) else
+                 length(config$reported_cases)
+    wt_raw <- control$likelihood$weights_time
+    if (length(wt_raw) == 1L) wt_raw <- rep(wt_raw, n_t_cfg)
+    control$likelihood$.weights_time_resolved <- wt_raw / sum(wt_raw) * n_t_cfg
+  } else {
+    control$likelihood$.weights_time_resolved <- NULL
+  }
 
   # Initialise Dask-related variables to NULL so the on.exit handler is always safe.
   # Never alias the caller-provided R cluster here — if dask_spec is provided the
