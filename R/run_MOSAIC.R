@@ -1727,14 +1727,32 @@ run_MOSAIC <- function(config,
   best_idx <- which.max(results$likelihood)
   best_seed_sim <- results$seed_sim[best_idx]
 
-  config_best <- sample_parameters(
-    PATHS = PATHS,
-    priors = priors,
-    config = config,
-    seed = best_seed_sim,
-    sample_args = sampling_args,
-    verbose = FALSE
+  config_best <- tryCatch(
+    sample_parameters(
+      PATHS       = PATHS,
+      priors      = priors,
+      config      = config,
+      seed        = best_seed_sim,
+      sample_args = sampling_args,
+      verbose     = FALSE
+    ),
+    error = function(e) {
+      log_msg("ERROR: sample_parameters failed for best seed %d: %s", best_seed_sim, e$message)
+      log_msg("  Post-processing (PPC, ensemble, summary) will be skipped.")
+      NULL
+    }
   )
+
+  if (is.null(config_best)) {
+    # Finalize state so the run is not left perpetually "running" in monitoring
+    .mosaic_finalize_state(state_file)
+    return(invisible(list(
+      dirs    = dirs,
+      files   = list(),
+      summary = list(converged = isTRUE(state$converged),
+                     error     = "sample_parameters failed for best seed")
+    )))
+  }
 
   config_best_file <- file.path(dirs$cal_best_model, "config_best.json")
   jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
