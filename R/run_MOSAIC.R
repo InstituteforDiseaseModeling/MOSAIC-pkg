@@ -1611,8 +1611,10 @@ run_MOSAIC <- function(config,
     } else {
       rep(NA_real_, nrow(results))
     },
-    w = results$weight_best,
+    # w_tilde: normalized importance weights (sum to 1 over best subset)
+    # w: unnormalized weights scaled to n (w = w_tilde * n, for ESS calcs)
     w_tilde = results$weight_best,
+    w = results$weight_best * nrow(results),
     retained = results$is_best_subset,
     # Additional columns for two-tier structure
     w_retained = results$weight_retained,
