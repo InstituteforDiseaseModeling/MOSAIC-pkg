@@ -222,7 +222,7 @@ calc_model_convergence <- function(PATHS,
 
     # Write JSON file
     diagnostics_file <- file.path(output_dir, "convergence_diagnostics.json")
-    jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE)
+    jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
     files_written <- c("convergence_results.parquet", "convergence_diagnostics.json")
 

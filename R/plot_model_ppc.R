@@ -478,11 +478,14 @@ plot_model_ppc <- function(predictions_dir = NULL,
                     }, error = function(e) {})
                 }
 
-                # Correlation — only meaningful when both variables have variance
+                # Correlation and bias — only meaningful when both variables have variance
                 if (sd(lx_pred) > 0 && sd(lx_obs) > 0) {
                     r2_val <- round(cor(lx_pred, lx_obs)^2, 3)
+                    bias_val <- round(calc_bias_ratio(lx_obs, lx_pred), 2)
+                    annotation <- paste0("R\u00b2 = ", r2_val,
+                                         if (!is.na(bias_val)) paste0(" | Bias = ", bias_val) else "")
                     text(min(lx_pred), max(lx_obs),
-                         paste0("R\u00b2 = ", r2_val), pos = 4, cex = 0.9, font = 2)
+                         annotation, pos = 4, cex = 0.9, font = 2)
                 }
 
                 leg_labels <- "1:1 Line"

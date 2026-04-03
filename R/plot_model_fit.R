@@ -341,7 +341,7 @@ plot_model_fit <- function(model,
             pred_cases_i <- extract_location_data(pred_cases, i)
             pred_deaths_i <- extract_location_data(pred_deaths, i)
 
-            # Calculate R² (correlation-based)
+            # Calculate R² (correlation-based) and bias ratio
             r2_cases <- tryCatch({
                 round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3)
             }, error = function(e) NA)
@@ -349,6 +349,9 @@ plot_model_fit <- function(model,
             r2_deaths <- tryCatch({
                 round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3)
             }, error = function(e) NA)
+
+            bias_cases <- tryCatch(round(calc_bias_ratio(obs_cases_i, pred_cases_i), 2), error = function(e) NA)
+            bias_deaths <- tryCatch(round(calc_bias_ratio(obs_deaths_i, pred_deaths_i), 2), error = function(e) NA)
 
             # Calculate sums
             sum_obs_cases <- sum(obs_cases_i, na.rm = TRUE)
@@ -395,9 +398,11 @@ plot_model_fit <- function(model,
                         "Cases: Obs = ", format(sum_obs_cases, big.mark = ","),
                         ", Pred = ", format(sum_pred_cases, big.mark = ","),
                         ", R\u00b2 = ", ifelse(is.na(r2_cases), "NA", r2_cases),
+                        ", Bias = ", ifelse(is.na(bias_cases), "NA", bias_cases),
                         " | Deaths: Obs = ", format(sum_obs_deaths, big.mark = ","),
                         ", Pred = ", format(sum_pred_deaths, big.mark = ","),
                         ", R\u00b2 = ", ifelse(is.na(r2_deaths), "NA", r2_deaths),
+                        ", Bias = ", ifelse(is.na(bias_deaths), "NA", bias_deaths),
                         "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                     )
                 )
@@ -440,7 +445,7 @@ plot_model_fit <- function(model,
         cases_data <- plot_data_long %>%
             dplyr::filter(metric == "Cases")
         
-        # Calculate overall R² for cases
+        # Calculate overall R² and bias ratio for cases
         r2_cases_overall <- tryCatch({
             if (is.matrix(obs_cases)) {
                 round(cor(as.vector(obs_cases), as.vector(pred_cases), use = "complete.obs")^2, 3)
@@ -448,7 +453,8 @@ plot_model_fit <- function(model,
                 round(cor(obs_cases, pred_cases, use = "complete.obs")^2, 3)
             }
         }, error = function(e) NA)
-        
+        bias_cases_overall <- tryCatch(round(calc_bias_ratio(obs_cases, pred_cases), 2), error = function(e) NA)
+
         sum_obs_cases_all <- sum(obs_cases, na.rm = TRUE)
         sum_pred_cases_all <- round(sum(pred_cases, na.rm = TRUE))
         
@@ -495,6 +501,7 @@ plot_model_fit <- function(model,
                     "Total Cases: Obs = ", format(sum_obs_cases_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_cases_all, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_cases_overall), "NA", r2_cases_overall),
+                    ", Bias = ", ifelse(is.na(bias_cases_overall), "NA", bias_cases_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )
@@ -548,7 +555,7 @@ plot_model_fit <- function(model,
         deaths_data <- plot_data_long %>%
             dplyr::filter(metric == "Deaths")
         
-        # Calculate overall R² for deaths
+        # Calculate overall R² and bias ratio for deaths
         r2_deaths_overall <- tryCatch({
             if (is.matrix(obs_deaths)) {
                 round(cor(as.vector(obs_deaths), as.vector(pred_deaths), use = "complete.obs")^2, 3)
@@ -556,7 +563,8 @@ plot_model_fit <- function(model,
                 round(cor(obs_deaths, pred_deaths, use = "complete.obs")^2, 3)
             }
         }, error = function(e) NA)
-        
+        bias_deaths_overall <- tryCatch(round(calc_bias_ratio(obs_deaths, pred_deaths), 2), error = function(e) NA)
+
         sum_obs_deaths_all <- sum(obs_deaths, na.rm = TRUE)
         sum_pred_deaths_all <- round(sum(pred_deaths, na.rm = TRUE))
         
@@ -603,6 +611,7 @@ plot_model_fit <- function(model,
                     "Total Deaths: Obs = ", format(sum_obs_deaths_all, big.mark = ","),
                     ", Pred = ", format(sum_pred_deaths_all, big.mark = ","),
                     ", R\u00b2 = ", ifelse(is.na(r2_deaths_overall), "NA", r2_deaths_overall),
+                    ", Bias = ", ifelse(is.na(bias_deaths_overall), "NA", bias_deaths_overall),
                     "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
                 )
             )

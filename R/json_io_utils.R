@@ -51,7 +51,7 @@ write_model_json <- function(object, path, type = c("priors", "posteriors"), val
     path,
     pretty = TRUE,
     auto_unbox = TRUE,  # Critical: prevents array wrapping of scalars
-    digits = 10,        # Preserve numerical precision
+    digits = NA,         # Full floating-point precision
     na = "null"         # Handle NA consistently
   )
 
