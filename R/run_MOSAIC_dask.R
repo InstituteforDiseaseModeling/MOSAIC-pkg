@@ -1511,37 +1511,34 @@ run_MOSAIC_dask <- function(config,
       }
 
     } else {
-      # Ensemble failed — fall back to plot function if plots requested
-      if (control$paths$plots) {
-        log_msg("Generating posterior predictive plots (best model, ensemble failed)...")
-        plot_model_fit_stochastic(
-          config             = config_best,
-          n_simulations      = n_ensemble_r2,
-          output_dir         = dirs$res_fig_pred,
-          envelope_quantiles = c(0.025, 0.975),
-          save_predictions   = TRUE,
-          parallel           = control$parallel$enable,
-          n_cores            = control$parallel$n_cores,
-          root_dir           = root_dir,
-          verbose            = control$logging$verbose
-        )
-      }
+      log_msg("Warning: calc_model_ensemble failed — skipping ensemble R² and predictive plots")
     }
 
   } else if (control$paths$plots) {
-    # n_ensemble_r2 <= 1: no ensemble metrics, still generate plots
-    log_msg("Generating posterior predictive plots (best model)...")
-    plot_model_fit_stochastic(
-      config             = config_best,
-      n_simulations      = max(2L, n_ensemble_r2),
-      output_dir         = dirs$res_fig_pred,
-      envelope_quantiles = c(0.025, 0.975),
-      save_predictions   = TRUE,
-      parallel           = control$parallel$enable,
-      n_cores            = control$parallel$n_cores,
-      root_dir           = root_dir,
-      verbose            = control$logging$verbose
+    # n_ensemble_r2 <= 1: no ensemble metrics wanted, but still generate plots
+    log_msg("Generating posterior predictive plots (best model, n_simulations = 2)...")
+    ensemble_plot <- tryCatch(
+      calc_model_ensemble(
+        config             = config_best,
+        n_simulations      = 2L,
+        envelope_quantiles = c(0.025, 0.975),
+        parallel           = FALSE,
+        root_dir           = root_dir,
+        verbose            = FALSE
+      ),
+      error = function(e) {
+        log_msg("Warning: ensemble for plots failed: %s", e$message)
+        NULL
+      }
     )
+    if (!is.null(ensemble_plot)) {
+      plot_model_ensemble(
+        ensemble         = ensemble_plot,
+        output_dir       = dirs$res_fig_pred,
+        save_predictions = TRUE,
+        verbose          = control$logging$verbose
+      )
+    }
   }
 
   if (control$paths$plots && sum(results$is_best_subset) > 0) {

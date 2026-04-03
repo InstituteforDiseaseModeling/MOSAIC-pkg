@@ -37,12 +37,9 @@ Renders timeseries plots from a \code{mosaic_ensemble} object produced by
 \code{\link{calc_model_ensemble}}. Optionally saves per-location prediction
 CSVs for downstream use.
 
-This is the plotting half of what was previously bundled inside
-\code{\link{plot_model_fit_stochastic}}. Accepting a pre-computed ensemble
-object means simulations are never run twice when both metrics and plots are
-needed.
+Accepting a pre-computed ensemble object means simulations are never run
+twice when both metrics and plots are needed.
 }
 \seealso{
-\code{\link{calc_model_ensemble}} to compute the ensemble,
-\code{\link{plot_model_fit_stochastic}} for the combined convenience wrapper.
+\code{\link{calc_model_ensemble}} to compute the ensemble.
 }

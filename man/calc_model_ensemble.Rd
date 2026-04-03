@@ -63,13 +63,11 @@ Runs \code{n_simulations} stochastic LASER simulations of a single model
 configuration (typically \code{config_best}) with different random seeds and
 aggregates the results into mean predictions and uncertainty envelopes.
 
-This is the computation half of what was previously bundled inside
-\code{\link{plot_model_fit_stochastic}}. Separating computation from plotting
-allows ensemble results to be used for R², bias ratios, windowed fit metrics,
-and summary statistics without necessarily generating plots, and avoids running
-the simulations twice when both metrics and plots are needed.
+Separating computation from plotting allows ensemble results to be used for
+R², bias ratios, windowed fit metrics, and summary statistics without
+necessarily generating plots, and avoids running simulations twice when both
+metrics and plots are needed.
 }
 \seealso{
-\code{\link{plot_model_ensemble}} to render plots from this object,
-\code{\link{plot_model_fit_stochastic}} for the combined convenience wrapper.
+\code{\link{plot_model_ensemble}} to render plots from this object.
 }

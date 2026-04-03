@@ -5,10 +5,8 @@
 #' \code{\link{calc_model_ensemble}}. Optionally saves per-location prediction
 #' CSVs for downstream use.
 #'
-#' This is the plotting half of what was previously bundled inside
-#' \code{\link{plot_model_fit_stochastic}}. Accepting a pre-computed ensemble
-#' object means simulations are never run twice when both metrics and plots are
-#' needed.
+#' Accepting a pre-computed ensemble object means simulations are never run
+#' twice when both metrics and plots are needed.
 #'
 #' @param ensemble A \code{mosaic_ensemble} object returned by
 #'   \code{\link{calc_model_ensemble}}.
@@ -26,8 +24,7 @@
 #'   \item{simulation_stats}{Simulation metadata from the ensemble object.}
 #' }
 #'
-#' @seealso \code{\link{calc_model_ensemble}} to compute the ensemble,
-#'   \code{\link{plot_model_fit_stochastic}} for the combined convenience wrapper.
+#' @seealso \code{\link{calc_model_ensemble}} to compute the ensemble.
 #'
 #' @export
 #' @importFrom ggplot2 ggplot aes geom_ribbon geom_point geom_line facet_grid
