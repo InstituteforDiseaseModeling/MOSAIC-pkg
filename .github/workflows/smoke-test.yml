@@ -10,7 +10,7 @@ on:
 permissions: read-all
 
 jobs:
-  test:
+  smoke-test:
     runs-on: ubuntu-latest
 
     container:
@@ -25,10 +25,10 @@ jobs:
       - name: Install package from checkout
         run: R CMD INSTALL .
 
-      - name: Run tests
+      - name: Run testthat tests
         run: Rscript -e "devtools::test('.')"
 
-      - name: Smoke test (sample → LASER → likelihood)
+      - name: Run Smoke test (sample → LASER → likelihood)
         run: |
           Rscript -e '
             library(MOSAIC)
