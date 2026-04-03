@@ -1669,17 +1669,23 @@ run_MOSAIC_dask <- function(config,
   invisible(list(
     dirs  = dirs,
     files = list(
-      simulations       = simulations_file,
-      ess_csv           = file.path(dirs$cal_diag, "parameter_ess.csv"),
+      simulations         = file.path(dirs$calibration, "samples.parquet"),
+      ess_csv             = file.path(dirs$cal_diag,     "parameter_ess.csv"),
       posterior_quantiles = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
-      posteriors_json   = file.path(dirs$cal_posterior, "posteriors.json")
+      posteriors_json     = file.path(dirs$cal_posterior, "posteriors.json"),
+      parameter_estimates = file.path(dirs$res_posterior, "parameter_estimates.csv"),
+      summary_json        = file.path(dirs$results,       "summary.json")
     ),
     summary = list(
       batches      = state$batch_number,
       sims_total   = state$total_sims_run,
       sims_success = state$total_sims_successful,
       converged    = isTRUE(state$converged),
-      runtime_min  = as.numeric(runtime)
+      runtime_min  = as.numeric(runtime),
+      r2_cases     = r2_cases,
+      r2_deaths    = r2_deaths,
+      r2_cases_ensemble  = r2_cases_ensemble,
+      r2_deaths_ensemble = r2_deaths_ensemble
     )
   ))
 }
