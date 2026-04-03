@@ -379,8 +379,15 @@
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
 #' @param cluster Optional pre-built cluster from \code{\link{make_mosaic_cluster}}.
-#'   When provided, skips cluster creation and teardown, reusing the existing workers.
-#'   Useful for staged estimation where multiple \code{run_MOSAIC} calls share a cluster.
+#'   When provided (and \code{dask_spec = NULL}), skips cluster creation and teardown,
+#'   reusing the existing workers. Useful for staged estimation where multiple
+#'   \code{run_MOSAIC} calls share a cluster. Ignored when \code{dask_spec} is set.
+#' @param dask_spec Optional named list specifying a Dask/Coiled cluster. When
+#'   provided the function dispatches simulations via Dask workers instead of a local
+#'   R cluster. Fields: \code{type} ("coiled" or "scheduler"), \code{n_workers},
+#'   \code{software}, \code{workspace}, \code{vm_types}, \code{region},
+#'   \code{idle_timeout}, etc. When \code{NULL} (default) the local R parallel
+#'   backend is used.
 #'
 #' @return Invisibly returns a list with:
 #' \describe{
@@ -475,8 +482,9 @@
 run_MOSAIC <- function(config,
                        priors,
                        dir_output,
-                       control = NULL,
-                       cluster = NULL) {
+                       control   = NULL,
+                       cluster   = NULL,
+                       dask_spec = NULL) {
 
   # ===========================================================================
   # ARGUMENT VALIDATION
@@ -498,6 +506,30 @@ run_MOSAIC <- function(config,
 
   # Extract iso_code from config for logging
   iso_code <- config$location_name
+
+  # Determine backend: Dask if dask_spec provided, R parallel otherwise
+  use_dask <- !is.null(dask_spec)
+
+  # Normalise and validate dask_spec defaults
+  if (use_dask) {
+    if (!is.list(dask_spec)) {
+      stop("dask_spec must be a named list or NULL", call. = FALSE)
+    }
+    dask_spec$type              <- dask_spec$type              %||% "coiled"
+    dask_spec$software          <- dask_spec$software          %||% "mosaic-acr-workers"
+    dask_spec$vm_types          <- dask_spec$vm_types          %||% c("Standard_D8s_v6")
+    dask_spec$scheduler_vm_types <- dask_spec$scheduler_vm_types %||% c("Standard_D4s_v6")
+    dask_spec$region            <- dask_spec$region            %||% "westus2"
+    dask_spec$idle_timeout      <- dask_spec$idle_timeout      %||% "2 hours"
+
+    if (!dask_spec$type %in% c("coiled", "scheduler")) {
+      stop("dask_spec$type must be 'coiled' or 'scheduler'", call. = FALSE)
+    }
+    if (dask_spec$type == "scheduler" &&
+        (is.null(dask_spec$address) || !nzchar(dask_spec$address))) {
+      stop("dask_spec$address must be set when type='scheduler'", call. = FALSE)
+    }
+  }
 
   # ===========================================================================
   # SETUP MOSAIC ROOT DIRECTORY
@@ -703,81 +735,199 @@ run_MOSAIC <- function(config,
           paste(config$location_name, collapse = ', '))
 
   # ===========================================================================
-  # SETUP PARALLEL CLUSTER (OR SEQUENTIAL EXECUTION)
+  # CLUSTER INITIALISATION
   # ===========================================================================
-
-  # Force sequential if parallel is disabled
-  if (!isTRUE(control$parallel$enable)) {
-    control$parallel$n_cores <- 1L
-  }
-
-  # Determine cluster ownership:
-  #   owns_cluster = TRUE  → we created it, we tear it down
-  #   owns_cluster = FALSE → caller provided it, caller tears it down
-  owns_cluster <- FALSE
-
-  if (!is.null(cluster)) {
-    # User provided a pre-built cluster (e.g. from make_mosaic_cluster)
-    cl <- cluster
-    owns_cluster <- FALSE
-    log_msg("Using pre-built cluster (%d workers)", length(cl))
-  } else if (control$parallel$n_cores > 1L) {
-    # Create cluster internally via make_mosaic_cluster
-    cl <- make_mosaic_cluster(
-      n_cores = control$parallel$n_cores,
-      type = control$parallel$type
-    )
-    owns_cluster <- TRUE
-    log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
-
-    # Register cleanup handler (will be called on normal exit or error)
-    on.exit({
-      if (owns_cluster && !is.null(cl)) {
-        try({
-          parallel::stopCluster(cl)
-          log_msg("Cluster stopped successfully")
-        }, silent = TRUE)
-      }
-    }, add = TRUE)
-  } else {
-    log_msg("Running sequentially (n_cores = 1)")
-    cl <- NULL
-  }
 
   # Resolve weights_time into the private slot used by the worker
   control$likelihood$.weights_time_resolved <- control$likelihood$weights_time
 
-  # Export per-run data to workers (needed every run, even with reused cluster)
-  if (!is.null(cl)) {
+  # Initialise Dask-related variables to NULL so the on.exit handler is always safe
+  client  <- NULL
+  cluster <- cluster  # preserve caller-provided R cluster
+
+  if (use_dask) {
+
+    # --- Dask / Coiled cluster ---
+
+    # Force sequential if parallel is disabled (n_cores controls n_workers default)
+    if (!isTRUE(control$parallel$enable)) {
+      control$parallel$n_cores <- 1L
+    }
+
+    dask_dist <- reticulate::import("dask.distributed")
+
+    if (dask_spec$type == "coiled") {
+      coiled_mod <- reticulate::import("coiled")
+      n_workers_req <- dask_spec$n_workers %||% control$parallel$n_cores
+
+      log_msg("Creating Coiled cluster: %d workers (%s, %s)",
+              n_workers_req, dask_spec$vm_types[1], dask_spec$region)
+
+      cluster_name <- paste0("mosaic-dask-",
+                             format(Sys.time(), "%Y%m%d-%H%M%S"))
+
+      cluster_args <- list(
+        name                = cluster_name,
+        n_workers           = as.integer(n_workers_req),
+        worker_vm_types     = as.list(dask_spec$vm_types),
+        scheduler_vm_types  = as.list(dask_spec$scheduler_vm_types),
+        region              = dask_spec$region,
+        software            = dask_spec$software,
+        workspace           = dask_spec$workspace,
+        shutdown_on_close   = TRUE,
+        idle_timeout        = dask_spec$idle_timeout
+      )
+
+      # Pass through optional Coiled args from dask_spec
+      for (opt in c("timeout", "environ", "scheduler_disk_size",
+                    "worker_disk_size", "scheduler_options", "worker_options",
+                    "spot_policy", "host_setup_script")) {
+        if (!is.null(dask_spec[[opt]])) {
+          cluster_args[[opt]] <- dask_spec[[opt]]
+          if (opt == "host_setup_script") log_msg("Using host_setup_script for worker VM init")
+        }
+      }
+
+      cluster <- do.call(coiled_mod$Cluster, cluster_args)
+      client  <- dask_dist$Client(cluster)
+    } else {
+      log_msg("Connecting to Dask scheduler: %s", dask_spec$address)
+      client  <- dask_dist$Client(dask_spec$address)
+    }
+
+    log_msg("Dask dashboard: %s", client$dashboard_link)
+
+    # Register cleanup (runs on normal exit OR error).
+    # client/cluster are set to NULL after graceful close before post-processing,
+    # so this only fires if an error occurs during the batch loop.
+    on.exit({
+      if (!is.null(client)) {
+        try({ client$close(); log_msg("Dask client closed (on.exit)") }, silent = TRUE)
+      }
+      if (!is.null(cluster)) {
+        try({ cluster$close(); log_msg("Dask cluster closed (on.exit)") }, silent = TRUE)
+      }
+    }, add = TRUE)
+
+    # Upload Python worker module to all workers
+    worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+    if (!nzchar(worker_py_path) || !file.exists(worker_py_path)) {
+      stop("Cannot find inst/python/mosaic_dask_worker.py — was the package reinstalled?",
+           call. = FALSE)
+    }
+    client$upload_file(worker_py_path)
+    log_msg("Uploaded mosaic_dask_worker.py to all workers")
+
+    # client$upload_file() adds the module to each worker's sys.path, but the
+    # local Python process doesn't know about it yet. Add the module's directory
+    # to local sys.path so reticulate::import() can find it here too.
+    reticulate::py_run_string(paste0(
+      "import sys\n",
+      "_mw_dir = '", dirname(worker_py_path), "'\n",
+      "if _mw_dir not in sys.path:\n",
+      "    sys.path.insert(0, _mw_dir)"
+    ))
+    mosaic_worker <- reticulate::import("mosaic_dask_worker")
+
+    # Resolve likelihood settings once (avoids closure over control in batch func)
     likelihood_settings <- control$likelihood
-    io_settings <- control$io
+    if (!is.null(likelihood_settings$weights_time)) {
+      n_t <- ncol(config$reported_cases)
+      wt_raw <- likelihood_settings$weights_time
+      if (length(wt_raw) == 1L) wt_raw <- rep(wt_raw, n_t)
+      likelihood_settings$.weights_time_resolved <- wt_raw / sum(wt_raw) * n_t
+    } else {
+      likelihood_settings$.weights_time_resolved <- NULL
+    }
 
-    parallel::clusterExport(cl,
-      c("n_iterations", "priors", "config", "PATHS", "param_names_all", "param_lookup",
-        "sampling_args", "dirs",
-        "likelihood_settings", "io_settings"),
-      envir = environment())
+    # Scatter base config (matrices + metadata) to all workers ONCE
+    log_msg("Broadcasting base config to workers...")
+    base_config_py     <- reticulate::r_to_py(.extract_base_config(config))
+    base_config_future <- client$scatter(base_config_py, broadcast = TRUE)
+    log_msg("  Base config broadcast complete")
 
-    # Install worker function using the exported per-run variables
-    parallel::clusterCall(cl, function() {
-      assign(".run_sim_worker", function(sim_id) {
-        MOSAIC:::.mosaic_run_simulation_worker(
-          sim_id = sim_id,
-          n_iterations = n_iterations,
-          priors = priors,
-          config = config,
-          PATHS = PATHS,
-          dir_cal_samples = dirs$cal_samples,
-          dir_cal_simresults = dirs$cal_simresults,
-          param_names_all = param_names_all,
-          param_lookup = param_lookup,
-          sampling_args = sampling_args,
-          io = io_settings,
-          likelihood_settings = likelihood_settings
-        )
-      }, envir = .GlobalEnv)
-      NULL
-    })
+    # cl is not used in Dask mode
+    cl <- NULL
+
+  } else {
+
+    # --- Local R parallel cluster ---
+
+    # Force sequential if parallel is disabled
+    if (!isTRUE(control$parallel$enable)) {
+      control$parallel$n_cores <- 1L
+    }
+
+    # Determine cluster ownership:
+    #   owns_cluster = TRUE  → we created it, we tear it down
+    #   owns_cluster = FALSE → caller provided it, caller tears it down
+    owns_cluster <- FALSE
+
+    if (!is.null(cluster)) {
+      # User provided a pre-built cluster (e.g. from make_mosaic_cluster)
+      cl <- cluster
+      owns_cluster <- FALSE
+      log_msg("Using pre-built cluster (%d workers)", length(cl))
+    } else if (control$parallel$n_cores > 1L) {
+      # Create cluster internally via make_mosaic_cluster
+      cl <- make_mosaic_cluster(
+        n_cores = control$parallel$n_cores,
+        type = control$parallel$type
+      )
+      owns_cluster <- TRUE
+      log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
+
+      # Register cleanup handler (will be called on normal exit or error)
+      on.exit({
+        if (owns_cluster && !is.null(cl)) {
+          try({
+            parallel::stopCluster(cl)
+            log_msg("Cluster stopped successfully")
+          }, silent = TRUE)
+        }
+      }, add = TRUE)
+    } else {
+      log_msg("Running sequentially (n_cores = 1)")
+      cl <- NULL
+    }
+
+    # Export per-run data to workers (needed every run, even with reused cluster)
+    if (!is.null(cl)) {
+      likelihood_settings <- control$likelihood
+      io_settings <- control$io
+
+      parallel::clusterExport(cl,
+        c("n_iterations", "priors", "config", "PATHS", "param_names_all", "param_lookup",
+          "sampling_args", "dirs",
+          "likelihood_settings", "io_settings"),
+        envir = environment())
+
+      # Install worker function using the exported per-run variables
+      parallel::clusterCall(cl, function() {
+        assign(".run_sim_worker", function(sim_id) {
+          MOSAIC:::.mosaic_run_simulation_worker(
+            sim_id = sim_id,
+            n_iterations = n_iterations,
+            priors = priors,
+            config = config,
+            PATHS = PATHS,
+            dir_cal_samples = dirs$cal_samples,
+            dir_cal_simresults = dirs$cal_simresults,
+            param_names_all = param_names_all,
+            param_lookup = param_lookup,
+            sampling_args = sampling_args,
+            io = io_settings,
+            likelihood_settings = likelihood_settings
+          )
+        }, envir = .GlobalEnv)
+        NULL
+      })
+    }
+
+    # Dask variables not used in R parallel mode
+    mosaic_worker      <- NULL
+    base_config_future <- NULL
+
   }
 
   # ===========================================================================
@@ -817,10 +967,26 @@ run_MOSAIC <- function(config,
 
       batch_start_time <- Sys.time()
 
-      # Use worker function (parallel mode uses pre-defined .run_sim_worker on workers)
-      if (!is.null(cl)) {
+      # Dispatch batch: Dask or R parallel/sequential
+      success_indicators <- if (use_dask) {
+        .mosaic_run_batch_dask(
+          sim_ids             = sim_ids,
+          n_iterations        = n_iterations,
+          priors              = priors,
+          config              = config,
+          PATHS               = PATHS,
+          sampling_args       = sampling_args,
+          dirs                = dirs,
+          param_names_all     = param_names_all,
+          control             = control,
+          likelihood_settings = likelihood_settings,
+          client              = client,
+          base_config_future  = base_config_future,
+          mosaic_worker       = mosaic_worker
+        )
+      } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
-        success_indicators <- .mosaic_run_batch(
+        .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .run_sim_worker(sim_id),
           cl = cl,
@@ -828,7 +994,7 @@ run_MOSAIC <- function(config,
         )
       } else {
         # Sequential: define inline
-        success_indicators <- .mosaic_run_batch(
+        .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id, n_iterations, priors, config, PATHS,
@@ -925,10 +1091,26 @@ run_MOSAIC <- function(config,
       # Run batch
       batch_start_time <- Sys.time()
 
-      # Use worker function (parallel mode uses pre-defined .run_sim_worker on workers)
-      if (!is.null(cl)) {
+      # Dispatch batch: Dask or R parallel/sequential
+      success_indicators <- if (use_dask) {
+        .mosaic_run_batch_dask(
+          sim_ids             = sim_ids,
+          n_iterations        = n_iterations,
+          priors              = priors,
+          config              = config,
+          PATHS               = PATHS,
+          sampling_args       = sampling_args,
+          dirs                = dirs,
+          param_names_all     = param_names_all,
+          control             = control,
+          likelihood_settings = likelihood_settings,
+          client              = client,
+          base_config_future  = base_config_future,
+          mosaic_worker       = mosaic_worker
+        )
+      } else if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
-        success_indicators <- .mosaic_run_batch(
+        .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .run_sim_worker(sim_id),
           cl = cl,
@@ -936,7 +1118,7 @@ run_MOSAIC <- function(config,
         )
       } else {
         # Sequential: define inline
-        success_indicators <- .mosaic_run_batch(
+        .mosaic_run_batch(
           sim_ids = sim_ids,
           worker_func = function(sim_id) .mosaic_run_simulation_worker(
             sim_id, n_iterations, priors, config, PATHS,
@@ -980,10 +1162,34 @@ run_MOSAIC <- function(config,
     }
   }
 
-  # Stop cluster only if we created it (not if caller provided it)
-  if (owns_cluster && !is.null(cl)) {
+  # Stop R cluster only if we created it (not if caller provided it)
+  if (!use_dask && exists("owns_cluster") && owns_cluster && !is.null(cl)) {
     parallel::stopCluster(cl)
     cl <- NULL
+  }
+
+  # Close Dask cluster before R-heavy post-processing to prevent Python event
+  # loop starvation / TLS heartbeat timeouts
+  if (use_dask && !is.null(client)) {
+    log_msg("Closing Dask cluster (all results gathered, no longer needed)")
+    tryCatch({
+      client$close()
+      log_msg("  Dask client closed")
+    }, error = function(e) {
+      log_msg("  Dask client close failed (may already be disconnected): %s", e$message)
+    })
+    if (!is.null(cluster)) {
+      tryCatch({
+        cluster$close()
+        log_msg("  Dask cluster closed")
+      }, error = function(e) {
+        log_msg("  Dask cluster close failed: %s", e$message)
+      })
+    }
+    # Null out so the on.exit handler doesn't double-close
+    client  <- NULL
+    cluster <- NULL
+    gc(verbose = FALSE)
   }
 
   # ===========================================================================
@@ -1857,7 +2063,7 @@ run_mosaic <- run_MOSAIC
 #' Build Complete MOSAIC Control Structure
 #'
 #' @description
-#' Creates a complete control structure for \code{run_mosaic()} and \code{run_mosaic_iso()}.
+#' Creates a complete control structure for \code{run_mosaic()}.
 #' This is the primary interface for configuring MOSAIC execution settings, consolidating
 #' calibration strategy, parameter sampling, parallelization, and output options.
 #'
@@ -1955,7 +2161,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{plots}: Generate diagnostic plots (default: TRUE)
 #'   }
 #'
-#' @return A complete control list suitable for passing to \code{run_mosaic()} or \code{run_mosaic_iso()}.
+#' @return A complete control list suitable for passing to \code{run_mosaic()}.
 #'
 #' @examples
 #' # Default control settings

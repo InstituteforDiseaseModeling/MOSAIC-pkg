@@ -5,9 +5,23 @@
 \alias{run_mosaic}
 \title{Run MOSAIC Calibration Workflow}
 \usage{
-run_MOSAIC(config, priors, dir_output, control = NULL, cluster = NULL)
+run_MOSAIC(
+  config,
+  priors,
+  dir_output,
+  control = NULL,
+  cluster = NULL,
+  dask_spec = NULL
+)
 
-run_mosaic(config, priors, dir_output, control = NULL, cluster = NULL)
+run_mosaic(
+  config,
+  priors,
+  dir_output,
+  control = NULL,
+  cluster = NULL,
+  dask_spec = NULL
+)
 }
 \arguments{
 \item{config}{Named list of LASER model configuration (REQUIRED). Contains location_name,
@@ -32,8 +46,16 @@ Key settings:
 }}
 
 \item{cluster}{Optional pre-built cluster from \code{\link{make_mosaic_cluster}}.
-When provided, skips cluster creation and teardown, reusing the existing workers.
-Useful for staged estimation where multiple \code{run_MOSAIC} calls share a cluster.}
+When provided (and \code{dask_spec = NULL}), skips cluster creation and teardown,
+reusing the existing workers. Useful for staged estimation where multiple
+\code{run_MOSAIC} calls share a cluster. Ignored when \code{dask_spec} is set.}
+
+\item{dask_spec}{Optional named list specifying a Dask/Coiled cluster. When
+provided the function dispatches simulations via Dask workers instead of a local
+R cluster. Fields: \code{type} ("coiled" or "scheduler"), \code{n_workers},
+\code{software}, \code{workspace}, \code{vm_types}, \code{region},
+\code{idle_timeout}, etc. When \code{NULL} (default) the local R parallel
+backend is used.}
 }
 \value{
 Invisibly returns a list with:
