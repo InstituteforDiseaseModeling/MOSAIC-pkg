@@ -24,3 +24,22 @@ jobs:
 
       - name: Run tests
         run: Rscript -e "devtools::test('.')"
+
+      - name: Smoke test (sample → LASER → likelihood)
+        run: |
+          Rscript -e '
+            library(MOSAIC)
+            set_root_directory("/workspace/MOSAIC")
+            config <- get_location_config(iso = "ETH")
+            priors <- get_location_priors(iso = "ETH")
+            params <- sample_parameters(seed = 1, priors = priors, config = config)
+            model  <- run_LASER(paramfile = params$config_path, seed = 1L)
+            ll     <- calc_model_likelihood(
+              obs_cases  = params$obs_cases,
+              est_cases  = model$expected_cases,
+              obs_deaths = params$obs_deaths,
+              est_deaths = model$expected_deaths
+            )
+            stopifnot(is.finite(ll))
+            cat("Smoke test passed. LL =", ll, "\n")
+          '
