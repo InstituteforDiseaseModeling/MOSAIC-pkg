@@ -816,8 +816,30 @@ run_MOSAIC <- function(config,
         }
       }
 
-      dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
-      client       <- dask_dist$Client(dask_cluster)
+      # Cluster creation with retry — transient Azure provisioning failures
+      # (e.g. "Timed out waiting for process to phone home") are common and
+      # resolve on retry without any code change needed.
+      max_cluster_attempts <- 3L
+      cluster_attempt      <- 0L
+      repeat {
+        cluster_attempt <- cluster_attempt + 1L
+        tryCatch({
+          dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
+          client       <- dask_dist$Client(dask_cluster)
+          break   # success
+        }, error = function(e) {
+          try({ if (!is.null(dask_cluster)) dask_cluster$close() }, silent = TRUE)
+          dask_cluster <<- NULL
+          if (cluster_attempt >= max_cluster_attempts)
+            stop("Coiled cluster creation failed after ", max_cluster_attempts,
+                 " attempts: ", e$message, call. = FALSE)
+          wait_secs <- 30L * cluster_attempt
+          log_msg("Cluster creation attempt %d/%d failed: %s",
+                  cluster_attempt, max_cluster_attempts, e$message)
+          log_msg("  Retrying in %ds...", wait_secs)
+          Sys.sleep(wait_secs)
+        })
+      }
     } else {
       log_msg("Connecting to Dask scheduler: %s", dask_spec$address)
       client <- dask_dist$Client(dask_spec$address)
