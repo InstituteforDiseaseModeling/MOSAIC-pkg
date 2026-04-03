@@ -1362,7 +1362,7 @@
 
     for (ji in seq_len(n_iter_got)) {
       iter_res   <- iter_list[[ji]]
-      est_cases  <- matrix(unlist(iter_res$expected_cases),
+      est_cases  <- matrix(unlist(iter_res$reported_cases),
                            nrow = n_locs, byrow = FALSE)
       est_deaths <- matrix(unlist(iter_res$disease_deaths),
                            nrow = n_locs, byrow = FALSE)
@@ -1449,7 +1449,7 @@
       simresults_iters <- vector("list", n_iter_got)
       for (ji in seq_len(n_iter_got)) {
         iter_res   <- res$iterations[[ji]]
-        est_cases  <- matrix(unlist(iter_res$expected_cases),
+        est_cases  <- matrix(unlist(iter_res$reported_cases),
                              nrow = n_locs, byrow = FALSE)
         est_deaths <- matrix(unlist(iter_res$disease_deaths),
                              nrow = n_locs, byrow = FALSE)
