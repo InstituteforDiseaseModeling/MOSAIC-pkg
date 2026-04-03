@@ -1611,6 +1611,58 @@ run_MOSAIC_dask <- function(config,
   log_msg("Dask calibration complete: %d batches, %d simulations, %.2f min",
           state$batch_number, state$total_sims_run, as.numeric(runtime))
 
+  # ===========================================================================
+  # WRITE RESULTS SUMMARY
+  # ===========================================================================
+
+  # Parameter estimates (tidy CSV for downstream use)
+  log_msg("Writing parameter estimates...")
+  .mosaic_write_parameter_estimates(dirs)
+  log_msg("  Saved 3_results/posterior/parameter_estimates.csv")
+
+  # Summary JSON (machine-readable run summary)
+  log_msg("Writing summary...")
+  summary_obj <- .mosaic_write_summary_json(
+    dirs, state, start_time, config,
+    r2_cases                   = r2_cases,
+    r2_deaths                  = r2_deaths,
+    r2_cases_ensemble          = r2_cases_ensemble,
+    r2_deaths_ensemble         = r2_deaths_ensemble,
+    bias_ratio_cases           = bias_ratio_cases,
+    bias_ratio_deaths          = bias_ratio_deaths,
+    bias_ratio_cases_ensemble  = bias_ratio_cases_ensemble,
+    bias_ratio_deaths_ensemble = bias_ratio_deaths_ensemble,
+    io                         = control$io
+  )
+  log_msg("  Saved 3_results/summary.json")
+
+  # Human-readable summary to log
+  fmt_r2b <- function(r2, bias) {
+    r2s <- if (is.na(r2)) "NA" else sprintf("%.4f", r2)
+    bs  <- if (is.na(bias)) "" else sprintf(" (bias=%.2f)", bias)
+    paste0(r2s, bs)
+  }
+  r2c_str  <- fmt_r2b(summary_obj$r2_cases,          summary_obj$bias_ratio_cases)
+  r2d_str  <- fmt_r2b(summary_obj$r2_deaths,         summary_obj$bias_ratio_deaths)
+  r2ce_str <- fmt_r2b(summary_obj$r2_cases_ensemble,  summary_obj$bias_ratio_cases_ensemble)
+  r2de_str <- fmt_r2b(summary_obj$r2_deaths_ensemble, summary_obj$bias_ratio_deaths_ensemble)
+  ret_str  <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),    big.mark = ",")
+  best_str <- if (is.na(summary_obj$n_best_subset)) "NA" else format(as.integer(summary_obj$n_best_subset), big.mark = ",")
+  log_msg("=== Run Summary ===")
+  log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
+  log_msg("  Converged: %s", if (isTRUE(summary_obj$converged)) "YES" else "NO")
+  log_msg("  R2 best model: cases = %s | deaths = %s", r2c_str,  r2d_str)
+  log_msg("  R2 ensemble:   cases = %s | deaths = %s", r2ce_str, r2de_str)
+  if (!is.na(summary_obj$ess_n_params)) {
+    log_msg("  ESS: %d/%d params (%.0f%%) above target %g (min: %.1f, median: %.1f)",
+            summary_obj$ess_n_above_target, summary_obj$ess_n_params,
+            summary_obj$ess_pct_above_target, summary_obj$ess_target,
+            summary_obj$ess_min, summary_obj$ess_median)
+  }
+  log_msg("  Sims: %s total, %s retained, %s best subset",
+          format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)
+  log_msg("===================")
+
   invisible(list(
     dirs  = dirs,
     files = list(
