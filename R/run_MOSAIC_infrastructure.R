@@ -78,7 +78,8 @@
   file.rename(tmp, state_file)
 
   # Write _README.md completion signal to run root directory
-  dir_output <- dirname(dirname(state_file))  # state_file is in 2_calibration/state/
+  # state_file path: dir_output/2_calibration/state/run_state.json (3 levels deep)
+  dir_output <- dirname(dirname(dirname(state_file)))
   readme_path <- file.path(dir_output, "_README.md")
   readme_lines <- c(
     "# MOSAIC Run Complete",
