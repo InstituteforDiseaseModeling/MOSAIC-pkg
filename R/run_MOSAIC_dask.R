@@ -1552,7 +1552,7 @@ run_MOSAIC_dask <- function(config,
   }
 
   if (control$paths$plots && sum(results$is_best_subset) > 0) {
-    log_msg("Generating ensemble predictions...")
+    log_msg("Generating parameter uncertainty ensemble (posterior parameter configs × stochastic LASER)...")
     best_subset_results <- results[results$is_best_subset == TRUE, ]
     param_seeds  <- best_subset_results$seed_sim
     param_weights <- best_subset_results$weight_best[
