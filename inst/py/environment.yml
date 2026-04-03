@@ -16,3 +16,6 @@ dependencies:
       - tensorflow>=2.16.0 # Via pip to avoid conda libabseil conflict with pyarrow; 2.16+ required by keras3 R package
       - laser-core==1.0.1
       - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.11.1/laser_cholera-0.11.1-py3-none-any.whl
+      # Dask distributed computing and Coiled cloud orchestration (required by run_MOSAIC_dask())
+      - dask[distributed]
+      - coiled

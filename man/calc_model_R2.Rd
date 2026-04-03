@@ -7,7 +7,7 @@
 calc_model_R2(
   observed,
   estimated,
-  method = c("sse", "corr"),
+  method = c("corr", "sse"),
   bounded = FALSE,
   na_rm = TRUE,
   finite_only = TRUE,
@@ -20,7 +20,7 @@ calc_model_R2(
 
 \item{estimated}{Numeric vector or matrix (same length after flattening).}
 
-\item{method}{One of \code{"sse"} (default) or \code{"corr"}.}
+\item{method}{One of \code{"corr"} (default) or \code{"sse"}.}
 
 \item{bounded}{Logical; if \code{TRUE}, clamp the result to \eqn{[0,1]}. Default \code{FALSE}.}
 
@@ -39,9 +39,9 @@ Scalar \eqn{R^2}. May be negative for \code{method="sse"} unless \code{bounded=T
 Computes \eqn{R^2} between an observed series and model estimates.
 Supports two definitions:
 \itemize{
-\item \code{method = "sse"} (default): \eqn{R^2 = 1 - \mathrm{SSE}/\mathrm{SST}} with optional weights.
+\item \code{method = "corr"} (default): \eqn{R^2 = \mathrm{cor}(y,\hat y)^2} (Pearson), always in \eqn{[0,1]}.
+\item \code{method = "sse"}: \eqn{R^2 = 1 - \mathrm{SSE}/\mathrm{SST}} with optional weights.
 This can be \emph{negative} when the model underperforms the intercept-only baseline.
-\item \code{method = "corr"}: \eqn{R^2 = \mathrm{cor}(y,\hat y)^2} (Pearson), always in \eqn{[0,1]}.
 }
 }
 \seealso{

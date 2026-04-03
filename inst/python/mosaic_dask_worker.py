@@ -167,7 +167,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
                     {
                         "j": int,                       # 1-based iteration index
                         "seed": int,                    # seed used for this iter
-                        "expected_cases": list[list],   # shape: n_locs × n_time
+                        "reported_cases": list[list],   # shape: n_locs × n_time
                         "disease_deaths": list[list],   # shape: n_locs × n_time
                     },
                     ...
@@ -216,8 +216,10 @@ def run_laser_sim(sim_id: int, n_iterations: int,
                 "seed": seed_ij,
                 # Convert numpy → nested Python lists for JSON-safe transport
                 # back to R via reticulate/Dask gather.
-                "expected_cases": np.array(
-                    model.results.expected_cases
+                # Use reported_cases (PPV-adjusted: Isym*rho/chi) to match
+                # the R parallel worker path in .mosaic_run_simulation_worker.
+                "reported_cases": np.array(
+                    model.results.reported_cases
                 ).tolist(),
                 "disease_deaths": np.array(
                     model.results.disease_deaths

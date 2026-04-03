@@ -74,8 +74,31 @@
   persisted$updated_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
   tmp <- tempfile(tmpdir = dirname(state_file), fileext = ".json.tmp")
   on.exit(unlink(tmp), add = TRUE)
-  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
   file.rename(tmp, state_file)
+
+  # Write _README.md completion signal to run root directory
+  # state_file path: dir_output/2_calibration/state/run_state.json (3 levels deep)
+  dir_output <- dirname(dirname(dirname(state_file)))
+  readme_path <- file.path(dir_output, "_README.md")
+  readme_lines <- c(
+    "# MOSAIC Run Complete",
+    "",
+    paste0("**Status:** completed"),
+    paste0("**Completed:** ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+    "",
+    "## Output Structure",
+    "",
+    "| Directory | Contents |",
+    "|-----------|----------|",
+    "| `1_inputs/` | Immutable run inputs (config, priors, control, environment) |",
+    "| `2_calibration/` | Calibration outputs (samples, posterior, diagnostics, state) |",
+    "| `3_results/` | Curated outputs for downstream use (summary, figures, predictions) |",
+    "",
+    "See `3_results/summary.json` for key metrics and `2_calibration/samples.parquet` for all parameter draws."
+  )
+  writeLines(readme_lines, readme_path)
+
   invisible(state_file)
 }
 
@@ -172,26 +195,24 @@
 
   # --- Python environment ---
   # Only query if reticulate has already bound to avoid side effects on clusters
-  py_env <- list()
-  if (requireNamespace("reticulate", quietly = TRUE) &&
-      reticulate::py_available(initialize = FALSE)) {
+  py_env <- if (requireNamespace("reticulate", quietly = TRUE) &&
+                reticulate::py_available(initialize = FALSE)) {
     tryCatch({
-      sys <- reticulate::import("sys", delay_load = FALSE)
-      py_env$version <- strsplit(as.character(sys$version), " ")[[1]][1]
-
+      sys      <- reticulate::import("sys", delay_load = FALSE)
+      py_ver   <- strsplit(as.character(sys$version), " ")[[1]][1]
       importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      py_pkgs <- c("laser-cholera", "laser-core", "numpy", "torch",
-                   "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
-      for (pkg in py_pkgs) {
-        key <- gsub("-", "_", pkg)
-        py_env[[paste0("pkg_", key)]] <- tryCatch(
-          as.character(importlib$version(pkg)),
-          error = function(e) NA_character_
-        )
-      }
+      py_pkgs  <- c("laser-cholera", "laser-core", "numpy", "torch",
+                    "pyarrow", "h5py", "sbi", "zuko", "scikit-learn")
+      pkg_versions <- lapply(py_pkgs, function(pkg) {
+        tryCatch(as.character(importlib$version(pkg)), error = function(e) NA_character_)
+      })
+      names(pkg_versions) <- paste0("pkg_", gsub("-", "_", py_pkgs))
+      c(list(version = py_ver), pkg_versions)
     }, error = function(e) {
-      py_env$error <<- paste("Python query failed:", e$message)
+      list(error = paste("Python query failed:", e$message))
     })
+  } else {
+    list()
   }
 
   # --- System / cluster ---
@@ -374,6 +395,10 @@
                                        r2_cases = NA_real_, r2_deaths = NA_real_,
                                        r2_cases_ensemble = NA_real_,
                                        r2_deaths_ensemble = NA_real_,
+                                       bias_ratio_cases = NA_real_,
+                                       bias_ratio_deaths = NA_real_,
+                                       bias_ratio_cases_ensemble = NA_real_,
+                                       bias_ratio_deaths_ensemble = NA_real_,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -394,9 +419,11 @@
     ess_df <- utils::read.csv(ess_file, stringsAsFactors = FALSE)
     if ("ess_marginal" %in% names(ess_df)) {
       ess_vals <- ess_df$ess_marginal[is.finite(ess_df$ess_marginal)]
-      ess_target <- if (!is.null(diag$targets$ess_min$value)) {
-        as.numeric(diag$targets$ess_min$value)
-      } else 100  # fallback default
+      ess_target <- if (!is.null(diag$targets$ess_param$value)) {
+        as.numeric(diag$targets$ess_param$value)
+      } else if (!is.null(diag$targets$ess_min$value)) {
+        as.numeric(diag$targets$ess_min$value)  # legacy fallback
+      } else 100  # default fallback
       ess_stats$n_params <- length(ess_vals)
       ess_stats$n_above_target <- sum(ess_vals >= ess_target)
       ess_stats$pct_above_target <- if (length(ess_vals) > 0) {
@@ -430,6 +457,10 @@
     r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
     r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
     r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
+    bias_ratio_cases   = if (!is.na(bias_ratio_cases)) round(bias_ratio_cases, 4) else NA_real_,
+    bias_ratio_deaths  = if (!is.na(bias_ratio_deaths)) round(bias_ratio_deaths, 4) else NA_real_,
+    bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
+    bias_ratio_deaths_ensemble = if (!is.na(bias_ratio_deaths_ensemble)) round(bias_ratio_deaths_ensemble, 4) else NA_real_,
     # ESS summary
     ess_n_params        = ess_stats$n_params,
     ess_n_above_target  = ess_stats$n_above_target,
@@ -480,5 +511,173 @@
   out_path <- file.path(dirs$res_posterior, "parameter_estimates.csv")
   utils::write.csv(param_est, out_path, row.names = FALSE)
   invisible(out_path)
+}
+
+
+#' Compute R² and Bias Ratio Across Trailing Time Windows
+#'
+#' @param obs_cases Numeric vector of observed cases.
+#' @param est_cases Numeric vector of estimated cases (same length).
+#' @param obs_deaths Numeric vector of observed deaths.
+#' @param est_deaths Numeric vector of estimated deaths.
+#' @param dates Date vector of same length as obs/est vectors.
+#' @param windows Integer vector of trailing observation counts (e.g. c(365, 120, 90, 60, 30)).
+#' @return data.frame with one row per window plus a "full" row.
+#' @noRd
+.mosaic_compute_windowed_metrics <- function(obs_cases, est_cases,
+                                             obs_deaths, est_deaths,
+                                             dates, windows = c(365, 120, 90, 60, 30)) {
+
+  valid_idx_c <- which(!is.na(obs_cases) & is.finite(obs_cases))
+  valid_idx_d <- which(!is.na(obs_deaths) & is.finite(obs_deaths))
+
+  compute_row <- function(label, idx_c, idx_d) {
+    # Cases
+    r2_c <- bias_c <- NA_real_
+    if (length(idx_c) > 2) {
+      o <- obs_cases[idx_c]; e <- est_cases[idx_c]
+      v <- is.finite(o) & is.finite(e)
+      if (sum(v) > 2) r2_c <- stats::cor(o[v], e[v])^2
+      bias_c <- calc_bias_ratio(o, e)
+    }
+    # Deaths
+    r2_d <- bias_d <- NA_real_
+    if (length(idx_d) > 2) {
+      o <- obs_deaths[idx_d]; e <- est_deaths[idx_d]
+      v <- is.finite(o) & is.finite(e)
+      if (sum(v) > 2) r2_d <- stats::cor(o[v], e[v])^2
+      bias_d <- calc_bias_ratio(o, e)
+    }
+
+    # Date range from cases (primary)
+    idx_all <- sort(unique(c(idx_c, idx_d)))
+    date_start <- if (length(idx_all) > 0) as.character(dates[min(idx_all)]) else NA_character_
+    date_end   <- if (length(idx_all) > 0) as.character(dates[max(idx_all)]) else NA_character_
+
+    data.frame(
+      window     = label,
+      n_obs      = max(length(idx_c), length(idx_d)),
+      date_start = date_start,
+      date_end   = date_end,
+      r2_cases   = round(r2_c, 4),
+      bias_cases = round(bias_c, 4),
+      r2_deaths  = round(r2_d, 4),
+      bias_deaths = round(bias_d, 4),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  rows <- list()
+
+  # Full series
+  rows[[1]] <- compute_row("full", valid_idx_c, valid_idx_d)
+
+  # Trailing windows
+  for (w in windows) {
+    idx_c <- if (length(valid_idx_c) >= w) tail(valid_idx_c, w) else integer(0)
+    idx_d <- if (length(valid_idx_d) >= w) tail(valid_idx_d, w) else integer(0)
+    if (length(idx_c) == 0 && length(idx_d) == 0) next
+    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w), idx_c, idx_d)
+  }
+
+  do.call(rbind, rows)
+}
+
+
+#' Plot Windowed Model Fit Metrics (R² + Bias Ratio)
+#'
+#' Generates a 2-panel figure (cases/deaths) showing R² as bars and bias ratio
+#' as an overlaid line with a reference at 1.0.
+#'
+#' @param metrics_df data.frame from .mosaic_compute_windowed_metrics().
+#' @param output_path File path for the saved PNG.
+#' @param location Character string for the title.
+#' @noRd
+.mosaic_plot_windowed_metrics <- function(metrics_df, output_path, location = "") {
+
+  if (nrow(metrics_df) < 1) return(invisible(NULL))
+
+  # Ordered factor for x-axis
+  window_labels <- metrics_df$window
+  window_display <- gsub("^last_", "", window_labels)
+  window_display[window_display == "full"] <- "Full"
+  window_display[window_display != "Full"] <- paste0(window_display[window_display != "Full"], "d")
+  # Add observation counts
+  window_display <- paste0(window_display, "\n(n=", metrics_df$n_obs, ")")
+  metrics_df$window_label <- factor(window_display, levels = window_display)
+
+  col_cases  <- mosaic_colors("cases")
+  col_deaths <- mosaic_colors("deaths")
+
+  make_panel <- function(r2_col, bias_col, color, title) {
+    r2_vals   <- metrics_df[[r2_col]]
+    bias_vals <- metrics_df[[bias_col]]
+    r2_vals[is.na(r2_vals)]     <- 0
+    bias_vals[is.na(bias_vals)] <- NA
+
+    # Base bar plot
+    p <- ggplot2::ggplot(metrics_df, ggplot2::aes(x = window_label)) +
+      ggplot2::geom_col(
+        ggplot2::aes(y = .data[[r2_col]]),
+        fill = color, alpha = 0.7, width = 0.6
+      ) +
+      # Bias line on secondary axis (scaled: bias mapped to 0-1 range for overlay)
+      ggplot2::geom_line(
+        ggplot2::aes(y = .data[[bias_col]] / 2, group = 1),
+        color = mosaic_colors("data"), linewidth = 1.0, na.rm = TRUE
+      ) +
+      ggplot2::geom_point(
+        ggplot2::aes(y = .data[[bias_col]] / 2),
+        color = mosaic_colors("data"), size = 3, na.rm = TRUE
+      ) +
+      # Reference line at bias = 1.0 (mapped to 0.5 on left axis)
+      ggplot2::geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50", linewidth = 0.5) +
+      # R² value labels on bars
+      ggplot2::geom_text(
+        ggplot2::aes(y = .data[[r2_col]], label = sprintf("%.3f", .data[[r2_col]])),
+        vjust = -0.5, size = 3, color = color
+      ) +
+      # Bias value labels on points
+      ggplot2::geom_text(
+        ggplot2::aes(y = .data[[bias_col]] / 2,
+                     label = ifelse(is.na(.data[[bias_col]]), "", sprintf("%.2f", .data[[bias_col]]))),
+        vjust = -1.2, size = 2.8, color = mosaic_colors("data"), na.rm = TRUE
+      ) +
+      ggplot2::scale_y_continuous(
+        name = expression(R^2 ~ "(cor"^2 * ")"),
+        limits = c(0, max(1.0, max(r2_vals, na.rm = TRUE) * 1.3,
+                       max(bias_vals / 2, na.rm = TRUE) * 1.2)),
+        sec.axis = ggplot2::sec_axis(~ . * 2, name = "Bias Ratio")
+      ) +
+      ggplot2::labs(title = title, x = NULL) +
+      ggplot2::theme_minimal(base_size = 11) +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(face = "bold", size = 12),
+        axis.title.y.left = ggplot2::element_text(color = color),
+        axis.title.y.right = ggplot2::element_text(color = mosaic_colors("data")),
+        panel.grid.minor = ggplot2::element_blank()
+      )
+
+    p
+  }
+
+  p_cases  <- make_panel("r2_cases", "bias_cases", col_cases, "Cases")
+  p_deaths <- make_panel("r2_deaths", "bias_deaths", col_deaths, "Deaths")
+
+  title <- if (nchar(location) > 0) {
+    paste0("Model Fit by Time Window: ", location)
+  } else {
+    "Model Fit by Time Window"
+  }
+
+  p_combined <- cowplot::plot_grid(p_cases, p_deaths, ncol = 1, rel_heights = c(1, 1))
+  p_final <- cowplot::plot_grid(
+    cowplot::ggdraw() + cowplot::draw_label(title, fontface = "bold", size = 14),
+    p_combined,
+    ncol = 1, rel_heights = c(0.06, 0.94)
+  )
+
+  ggplot2::ggsave(output_path, p_final, width = 10, height = 8, dpi = 150)
+  invisible(output_path)
 }
 

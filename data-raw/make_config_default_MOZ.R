@@ -6,8 +6,10 @@ library(MOSAIC)
 MOSAIC::set_root_directory("/Users/johngiles/MOSAIC")
 PATHS <- MOSAIC::get_paths()
 
-# Start at first surveillance data point (JHU data begins 2017-06-19 for MOZ)
-date_start <- as.Date("2017-06-19")
+# Start ~2 weeks before first positive obs (day 58 = 2017-08-15 in original series).
+# The 43-day buffer allows moment-matched ICs to generate natural transmission
+# dynamics before the first observed cases appear, avoiding phantom early cases.
+date_start <- as.Date("2017-08-01")
 date_stop <- as.Date("2026-03-31")
 
 message("Set simulation time steps and locations")
@@ -94,7 +96,7 @@ mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
 names(mu_j_baseline) <- j
 
 mu_j_slope <- setNames(-0.05, j)              # MOZ 7 best: -0.099; slight declining trend default
-mu_j_epidemic_factor <- setNames(1.78, j)      # MOZ 7 best: 1.78; 2.78x mortality during epidemics
+mu_j_epidemic_factor <- setNames(1.25, j)      # Prior mean of Gamma(2.5, 2.0); 2.25x mortality during epidemics
 
 message("Get vaccination rate (nu_jt)")
 if (file.exists(file.path(PATHS$MODEL_INPUT, 'param_nu_vaccination_rate_GTFCC_WHO.csv'))) {
@@ -143,7 +145,7 @@ tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_theta_WASH.csv'))
 theta_j <- setNames(tmp$parameter_value[tmp$j == j], j)
 
 message("Set transmission parameters")
-beta_j0_tot <- setNames(2e-5, j)
+beta_j0_tot <- setNames(1e-5, j)
 p_beta <- setNames(0.33, j)
 beta_j0_hum <- p_beta * beta_j0_tot
 beta_j0_env <- (1 - p_beta) * beta_j0_tot
@@ -275,7 +277,7 @@ default_args <- list(
 config_default_MOZ <- do.call(make_LASER_config, default_args)
 
 config_default_MOZ$metadata <- list(
-     version = "2.0",
+     version = "2.3",
      date = as.character(Sys.Date()),
      description = "MOZ-specific LASER configuration with extended date range (2017-2026). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )

@@ -102,10 +102,10 @@ Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param 
 }}
 }
 \value{
-A complete control list suitable for passing to \code{run_mosaic()} or \code{run_mosaic_iso()}.
+A complete control list suitable for passing to \code{run_mosaic()}.
 }
 \description{
-Creates a complete control structure for \code{run_mosaic()} and \code{run_mosaic_iso()}.
+Creates a complete control structure for \code{run_mosaic()}.
 This is the primary interface for configuring MOSAIC execution settings, consolidating
 calibration strategy, parameter sampling, parallelization, and output options.
 

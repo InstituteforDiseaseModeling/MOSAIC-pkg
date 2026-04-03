@@ -1007,7 +1007,7 @@ est_suitability <- function(PATHS,
      )
 
      config_path <- file.path(PATHS$MODEL_INPUT, "psi_suitability_config.json")
-     jsonlite::write_json(config_info, config_path, pretty = TRUE, auto_unbox = TRUE)
+     jsonlite::write_json(config_info, config_path, pretty = TRUE, auto_unbox = TRUE, digits = NA)
      message("Model configuration saved to: ", config_path)
 
 }

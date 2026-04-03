@@ -91,12 +91,23 @@ calc_model_posterior_distributions <- function(
         }
         if (is.list(control) && !is.null(control$sampling)) {
             sampling_flags <- control$sampling
+            # Map flag names to actual parameter names (same special cases as run_MOSAIC.R)
+            special_map <- list(
+              beta_j0_tot = c("beta_j0_tot", "beta_j0_hum", "beta_j0_env"),
+              initial_conditions = c("prop_S_initial", "prop_E_initial", "prop_I_initial",
+                                     "prop_R_initial", "prop_V1_initial", "prop_V2_initial")
+            )
             for (flag_name in names(sampling_flags)) {
                 if (startsWith(flag_name, "sample_") && identical(sampling_flags[[flag_name]], FALSE)) {
                     param_base_name <- sub("^sample_", "", flag_name)
-                    frozen_params <- c(frozen_params, param_base_name)
+                    if (param_base_name %in% names(special_map)) {
+                        frozen_params <- c(frozen_params, special_map[[param_base_name]])
+                    } else {
+                        frozen_params <- c(frozen_params, param_base_name)
+                    }
                 }
             }
+            frozen_params <- unique(frozen_params)
             if (verbose && length(frozen_params) > 0) {
                 message("  Frozen parameters (sample_* = FALSE): ",
                         paste(frozen_params, collapse = ", "))

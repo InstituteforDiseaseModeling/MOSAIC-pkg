@@ -327,7 +327,7 @@ update_forecast_json <- function(enso_forecasts = NULL,
       forecasts = enso_forecasts
     )
     
-    jsonlite::write_json(enso_config, enso_file, pretty = TRUE, auto_unbox = TRUE)
+    jsonlite::write_json(enso_config, enso_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
     message("Updated ENSO forecast file: ", enso_file)
   }
   
@@ -349,7 +349,7 @@ update_forecast_json <- function(enso_forecasts = NULL,
       forecasts = list(DMI = dmi_forecasts)
     )
     
-    jsonlite::write_json(dmi_config, dmi_file, pretty = TRUE, auto_unbox = TRUE)
+    jsonlite::write_json(dmi_config, dmi_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
     message("Updated DMI forecast file: ", dmi_file)
   }
   

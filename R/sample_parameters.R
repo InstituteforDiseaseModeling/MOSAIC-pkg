@@ -55,6 +55,9 @@
 #'     \item sample_psi_star_z: Suitability calibration smoothing (default TRUE)
 #'     \item sample_psi_star_k: Suitability calibration time offset (default TRUE)
 #'     \item sample_initial_conditions: Initial condition proportions (default TRUE)
+#'     \item ic_moment_match: Derive E/I from observed week-1 cases and the sampled
+#'       reporting chain (sigma, rho, chi_endemic, iota). Only active when
+#'       sample_initial_conditions is TRUE. (default FALSE)
 #'   }
 #'   If NULL, all parameters are sampled (default behavior).
 #' @param ... Additional individual sample_* arguments for backward compatibility.
@@ -165,7 +168,10 @@ sample_parameters <- function(
     sample_psi_star_k = TRUE,
 
     # Initial conditions sampling control
-    sample_initial_conditions = TRUE
+    sample_initial_conditions = TRUE,
+
+    # IC moment-matching: derive E/I from observed week-1 cases
+    ic_moment_match = FALSE
   )
 
   # Start with defaults
@@ -295,7 +301,8 @@ sample_parameters <- function(
       config_sampled,
       priors$parameters_location,
       locations,
-      verbose
+      ic_moment_match = ic_moment_match,
+      verbose = verbose
     )
   }
 
@@ -339,8 +346,8 @@ extract_sampling_flags <- function(env) {
   # Filter to only sample_* variables
   sample_vars <- grep("^sample_", all_vars, value = TRUE)
 
-  # Exclude sample_initial_conditions as it's handled separately
-  sample_vars <- setdiff(sample_vars, "sample_initial_conditions")
+  # Exclude IC controls as they're handled separately
+  sample_vars <- setdiff(sample_vars, c("sample_initial_conditions", "ic_moment_match"))
 
   # Create list with cleaned names
   flags <- lapply(sample_vars, function(var) {
@@ -456,10 +463,19 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
   n_locations <- length(locations)
 
+  # IC proportion params are controlled by sample_initial_conditions, not individual flags
+  ic_prop_names <- c("prop_S_initial", "prop_E_initial", "prop_I_initial",
+                     "prop_R_initial", "prop_V1_initial", "prop_V2_initial")
+
   for (param_name in names(location_params)) {
 
     # Check if we should sample this parameter
     should_sample <- sampling_flags[[param_name]]
+
+    # IC proportions are governed by the sample_initial_conditions flag
+    if (param_name %in% ic_prop_names) {
+      should_sample <- FALSE  # Never sample here — handled by sample_initial_conditions_impl
+    }
 
     # Default to TRUE if flag not found (for backward compatibility)
     if (is.null(should_sample)) should_sample <- TRUE
@@ -583,11 +599,28 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 #' Sample initial condition proportions and convert to counts with normalization
 #' @noRd
 sample_initial_conditions_impl <- function(config_sampled, location_params,
-                                          locations, verbose) {
+                                          locations, ic_moment_match = FALSE,
+                                          verbose = FALSE) {
   if (verbose) cat("\nProcessing initial conditions...\n")
 
   # Sample proportions for each compartment
   sampled_props <- sample_ic_proportions(location_params, locations, verbose)
+
+  # Moment-match: override E and I proportions using observed week-1 cases
+  # and the already-sampled reporting chain parameters
+
+  if (isTRUE(ic_moment_match)) {
+    sampled_props <- moment_match_E_I(config_sampled, sampled_props, locations, verbose)
+  }
+
+  # Update prop_*_initial fields to match the final normalized proportions
+  ic_compartments_all <- colnames(sampled_props)
+  for (comp in ic_compartments_all) {
+    prop_field <- paste0("prop_", comp, "_initial")
+    if (prop_field %in% names(config_sampled)) {
+      config_sampled[[prop_field]] <- sampled_props[, comp]
+    }
+  }
 
   # Normalize and convert to counts
   config_sampled <- props_to_counts(config_sampled, sampled_props, locations, verbose)
@@ -740,6 +773,110 @@ sample_ic_proportions <- function(location_params, locations, verbose) {
      }
 
      return(sampled_props)
+}
+
+
+#' Moment-match E and I initial proportions
+#'
+#' Derives E and I proportions from observed week-1 cases and the already-sampled
+#' reporting chain parameters (sigma, rho, chi_endemic, iota), then re-normalises
+#' all compartments to sum to 1.
+#'
+#' @param config_sampled Config list with already-sampled parameters and reported_cases.
+#' @param sampled_props Matrix of IC proportions (rows = locations, cols = S/V1/V2/E/I/R).
+#' @param locations Character vector of location names (ISO codes).
+#' @param verbose Logical for progress messages.
+#' @return Updated sampled_props matrix with moment-matched E and I.
+#' @noRd
+moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) {
+
+  # Extract reporting chain parameters (already sampled)
+  sigma       <- config_sampled$sigma        # symptomatic fraction
+  rho         <- config_sampled$rho          # care-seeking rate
+  chi_endemic <- config_sampled$chi_endemic  # PPV among suspected cases
+  iota        <- config_sampled$iota         # incubation rate (E→I)
+
+  # Find the first 7-day window with positive observed cases
+  obs_raw <- as.numeric(unlist(config_sampled$reported_cases))
+  positive_idx <- which(!is.na(obs_raw) & obs_raw > 0)
+
+  if (length(positive_idx) == 0) {
+    if (verbose) cat("  - ic_moment_match: no positive obs data found, using prior ICs\n")
+    return(sampled_props)
+  }
+
+  # Use the first 7 days starting from the first positive observation
+  first_pos <- positive_idx[1]
+  window_end <- min(first_pos + 6, length(obs_raw))
+  obs_week1 <- mean(obs_raw[first_pos:window_end], na.rm = TRUE)
+
+  if (!is.finite(obs_week1) || obs_week1 <= 0) {
+    if (verbose) cat("  - ic_moment_match: no valid early obs data, using prior ICs\n")
+    return(sampled_props)
+  }
+
+  # Guard: reporting chain product must be positive and non-trivial
+  reporting_product <- sigma * rho  # cases = I * sigma * rho / chi_endemic
+  if (!is.finite(reporting_product) || reporting_product < 1e-10) {
+    if (verbose) cat("  - ic_moment_match: sigma*rho near zero, using prior ICs\n")
+    return(sampled_props)
+  }
+
+  # Derive I proportion: obs_week1 = I * sigma * rho / chi_endemic
+  # Therefore: I = obs_week1 * chi_endemic / (sigma * rho)
+  N_j <- config_sampled$N_j_initial
+  n_locations <- length(locations)
+
+  for (j in seq_along(locations)) {
+
+    I_count <- obs_week1 * chi_endemic / reporting_product
+    E_count <- I_count * iota  # E scales with I via incubation rate
+
+    # Convert to proportions of population
+    prop_I <- I_count / N_j[j]
+    prop_E <- E_count / N_j[j]
+
+    # Cap: E + I cannot exceed 10% of population (biological plausibility)
+    max_EI <- 0.10
+    if ((prop_E + prop_I) > max_EI) {
+      scale_factor <- max_EI / (prop_E + prop_I)
+      prop_E <- prop_E * scale_factor
+      prop_I <- prop_I * scale_factor
+    }
+
+    # Floor: ensure at least 1 person in E and I
+    prop_E <- max(prop_E, 1 / N_j[j])
+    prop_I <- max(prop_I, 1 / N_j[j])
+
+    # Set moment-matched E and I
+    sampled_props[j, "E"] <- prop_E
+    sampled_props[j, "I"] <- prop_I
+
+    # Re-normalise: adjust S to absorb the change
+    other_sum <- sum(sampled_props[j, c("V1", "V2", "E", "I", "R")])
+
+    if (other_sum >= 1) {
+      sampled_props[j, "S"] <- 0
+      sampled_props[j, c("V1", "V2", "E", "I", "R")] <-
+        sampled_props[j, c("V1", "V2", "E", "I", "R")] / other_sum
+    } else {
+      sampled_props[j, "S"] <- 1 - other_sum
+    }
+
+    # Numerical sanity
+    sampled_props[j, ] <- pmax(sampled_props[j, ], 0)
+    s <- sum(sampled_props[j, ])
+    if (abs(s - 1) > 1e-12) {
+      sampled_props[j, ] <- sampled_props[j, ] / s
+    }
+
+    if (verbose) {
+      cat(sprintf("  - ic_moment_match [%s]: obs_wk1=%.1f, I=%.0f, E=%.0f (sigma=%.4f, rho=%.4f, chi=%.4f)\n",
+                  locations[j], obs_week1, I_count, E_count, sigma, rho, chi_endemic))
+    }
+  }
+
+  return(sampled_props)
 }
 
 
