@@ -45,17 +45,24 @@ Key settings:
 \item \code{parallel}: Cluster settings for parallel execution
 }}
 
-\item{cluster}{Optional pre-built cluster from \code{\link{make_mosaic_cluster}}.
-When provided (and \code{dask_spec = NULL}), skips cluster creation and teardown,
-reusing the existing workers. Useful for staged estimation where multiple
-\code{run_MOSAIC} calls share a cluster. Ignored when \code{dask_spec} is set.}
+\item{cluster}{Optional pre-built R parallel cluster from
+\code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
+When provided, skips cluster creation and teardown, reusing existing workers.
+Useful for staged estimation where multiple \code{run_MOSAIC} calls share a
+cluster. When \code{dask_spec} is provided this argument is not used; the
+caller retains ownership of any cluster passed and is responsible for stopping
+it after \code{run_MOSAIC} returns.}
 
 \item{dask_spec}{Optional named list specifying a Dask/Coiled cluster. When
-provided the function dispatches simulations via Dask workers instead of a local
-R cluster. Fields: \code{type} ("coiled" or "scheduler"), \code{n_workers},
-\code{software}, \code{workspace}, \code{vm_types}, \code{region},
-\code{idle_timeout}, etc. When \code{NULL} (default) the local R parallel
-backend is used.}
+provided, simulations are dispatched to Dask workers instead of a local R
+parallel cluster. Required fields: \code{type} ("coiled" or "scheduler").
+Coiled fields: \code{n_workers}, \code{software}, \code{workspace} (required
+for multi-workspace Coiled accounts), \code{vm_types}, \code{scheduler_vm_types},
+\code{region}, \code{idle_timeout}. Scheduler fields: \code{address}.
+Optional Coiled pass-through fields: \code{timeout}, \code{environ},
+\code{scheduler_disk_size}, \code{worker_disk_size}, \code{scheduler_options},
+\code{worker_options}, \code{spot_policy}, \code{host_setup_script}.
+When \code{NULL} (default) the local R parallel backend is used.}
 }
 \value{
 Invisibly returns a list with:
