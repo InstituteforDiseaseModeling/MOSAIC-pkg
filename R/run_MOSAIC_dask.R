@@ -579,6 +579,13 @@ run_MOSAIC_dask <- function(config,
   # SETUP FILES
   # ===========================================================================
 
+  # Capture full environment snapshot (versions, system, git, data)
+  env_snapshot <- .mosaic_capture_environment(
+    config = config, priors = priors, control = control
+  )
+  .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
+  log_msg("  Saved %s", "1_inputs/environment.json")
+
   log_msg("Writing setup files...")
   .mosaic_write_json(control, file.path(dirs$inputs, "control.json"), control$io)
   .mosaic_write_json(priors,  file.path(dirs$inputs, "priors.json"),  control$io)
