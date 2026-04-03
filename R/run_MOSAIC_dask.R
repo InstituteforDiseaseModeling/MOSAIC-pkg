@@ -592,16 +592,6 @@ run_MOSAIC_dask <- function(config,
   .mosaic_write_json(config,  file.path(dirs$inputs, "config.json"),  control$io)
   log_msg("  Saved control.json, priors.json, config.json")
 
-  if (isTRUE(control$paths$plots)) {
-    log_msg("Plotting prior distributions")
-    plot_model_distributions(
-      json_files   = file.path(dirs$inputs, "priors.json"),
-      method_names = "Prior",
-      output_dir   = dirs$inputs,
-      verbose      = control$logging$verbose
-    )
-  }
-
   # ===========================================================================
   # PARAMETER NAME DETECTION
   # ===========================================================================
@@ -1296,6 +1286,26 @@ run_MOSAIC_dask <- function(config,
       plots_dir   = dirs$res_fig_diag,
       verbose     = control$logging$verbose
     )
+
+    log_msg("Generating parameter sensitivity and correlation plots...")
+    tryCatch(
+      plot_model_parameter_sensitivity(
+        results_file = file.path(dirs$calibration, "samples.parquet"),
+        priors_file  = file.path(dirs$inputs, "priors.json"),
+        output_dir   = dirs$res_fig_diag,
+        verbose      = control$logging$verbose
+      ),
+      error = function(e) log_msg("Warning: parameter sensitivity plot failed: %s", e$message)
+    )
+    tryCatch(
+      plot_model_parameter_correlation(
+        results_file = file.path(dirs$calibration, "samples.parquet"),
+        priors_file  = file.path(dirs$inputs, "priors.json"),
+        output_dir   = dirs$res_fig_diag,
+        verbose      = control$logging$verbose
+      ),
+      error = function(e) log_msg("Warning: parameter correlation plot failed: %s", e$message)
+    )
   }
 
   # --- Posterior quantiles & distributions ---
@@ -1576,7 +1586,7 @@ run_MOSAIC_dask <- function(config,
     ppc_result <- tryCatch(
       plot_model_ppc(
         predictions_dir = dirs$res_fig_pred,
-        output_dir      = dirs$res_fig_ppc,
+        output_dir      = dirs$res_figures,
         verbose         = control$logging$verbose
       ),
       error = function(e) {

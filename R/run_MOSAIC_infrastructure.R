@@ -76,6 +76,28 @@
   on.exit(unlink(tmp), add = TRUE)
   jsonlite::write_json(persisted, tmp, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
   file.rename(tmp, state_file)
+
+  # Write _README.md completion signal to run root directory
+  dir_output <- dirname(dirname(state_file))  # state_file is in 2_calibration/state/
+  readme_path <- file.path(dir_output, "_README.md")
+  readme_lines <- c(
+    "# MOSAIC Run Complete",
+    "",
+    paste0("**Status:** completed"),
+    paste0("**Completed:** ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+    "",
+    "## Output Structure",
+    "",
+    "| Directory | Contents |",
+    "|-----------|----------|",
+    "| `1_inputs/` | Immutable run inputs (config, priors, control, environment) |",
+    "| `2_calibration/` | Calibration outputs (samples, posterior, diagnostics, state) |",
+    "| `3_results/` | Curated outputs for downstream use (summary, figures, predictions) |",
+    "",
+    "See `3_results/summary.json` for key metrics and `2_calibration/samples.parquet` for all parameter draws."
+  )
+  writeLines(readme_lines, readme_path)
+
   invisible(state_file)
 }
 
