@@ -131,6 +131,9 @@ calc_model_ensemble <- function(config,
 
   if (verbose) message("Running ", n_simulations, " stochastic LASER simulations...")
 
+  pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
+  on.exit(pbapply::pboptions(pbo), add = TRUE)
+
   if (parallel) {
 
     n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
