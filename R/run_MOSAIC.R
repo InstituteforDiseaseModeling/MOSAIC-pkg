@@ -2219,7 +2219,7 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
-#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 100L)
+#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 10L)
 #'     \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
 #'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
 #'   }
@@ -2492,7 +2492,7 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default prediction settings
   default_predictions <- list(
-    best_model_n_sims = 100L,           # Stochastic runs for best model
+    best_model_n_sims = 10L,            # Stochastic runs for best model
     ensemble_n_param_sets = 50L,        # Number of parameter sets in ensemble
     ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
   )
