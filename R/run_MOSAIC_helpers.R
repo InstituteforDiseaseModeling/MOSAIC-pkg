@@ -1494,3 +1494,185 @@
 
   success_indicators
 }
+
+
+# =============================================================================
+# Post-calibration Dask dispatch
+# =============================================================================
+
+#' Dispatch post-calibration LASER simulations via Dask
+#'
+#' Opens a fresh Coiled cluster, dispatches ensemble and/or stochastic
+#' parameter uncertainty simulations, gathers results, and closes the cluster.
+#' Returns pre-computed results that can be passed to calc_model_ensemble()
+#' and plot_model_fit_stochastic_param() via their precomputed_results argument.
+#'
+#' @param dask_spec Named list. Same Dask/Coiled spec as run_MOSAIC().
+#' @param config_best Config list for the best-fit model (for ensemble sims).
+#' @param param_configs List of config lists for posterior parameter sets (for stochastic sims).
+#'   NULL to skip stochastic dispatch.
+#' @param n_ensemble Integer. Number of ensemble sims (different seeds, same config_best).
+#' @param n_stochastic_per Integer. Number of stochastic sims per param config.
+#' @param log_msg Function. Logging function (from run_MOSAIC scope).
+#' @return Named list with $ensemble_results and $stochastic_results (or NULL for each).
+#' @keywords internal
+.mosaic_postca_dask <- function(dask_spec, config_best, param_configs = NULL,
+                                n_ensemble = 100L, n_stochastic_per = 10L,
+                                log_msg = message) {
+
+  coiled_mod <- reticulate::import("coiled")
+  dask_dist  <- reticulate::import("dask.distributed")
+
+  # Use fewer workers for post-cal (much less work than calibration)
+  n_workers <- min(dask_spec$n_workers %||% 20L, 20L)
+
+  log_msg("Opening Dask cluster for post-calibration (%d workers)...", n_workers)
+
+  cluster_args <- list(
+    name               = paste0("mosaic-postca-", format(Sys.time(), "%H%M%S")),
+    n_workers          = as.integer(n_workers),
+    worker_vm_types    = as.list(dask_spec$vm_types),
+    scheduler_vm_types = as.list(dask_spec$scheduler_vm_types),
+    region             = dask_spec$region,
+    software           = dask_spec$software,
+    shutdown_on_close  = TRUE,
+    idle_timeout       = "10 minutes"
+  )
+  if (!is.null(dask_spec$workspace)) {
+    cluster_args$workspace <- dask_spec$workspace
+  }
+
+  dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
+  client <- dask_dist$Client(dask_cluster)
+
+  on.exit({
+    tryCatch({ client$close() }, error = function(e) NULL)
+    tryCatch({ dask_cluster$close() }, error = function(e) NULL)
+  }, add = TRUE)
+
+  # Upload worker module
+  worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+  client$upload_file(worker_py_path)
+  mosaic_worker <- reticulate::import("mosaic_dask_worker")
+
+  # Helper: serialize config to JSON + extract large matrix fields
+  .config_to_json_and_matrices <- function(cfg) {
+    matrix_fields <- c("b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
+                        "reported_cases", "reported_deaths")
+    matrices <- list()
+    cfg_for_json <- cfg
+    for (f in matrix_fields) {
+      if (!is.null(cfg[[f]])) {
+        matrices[[f]] <- cfg[[f]]
+        cfg_for_json[[f]] <- NULL
+      }
+    }
+    cfg_json <- jsonlite::toJSON(cfg_for_json, auto_unbox = TRUE, digits = NA)
+    list(json = as.character(cfg_json),
+         matrices = reticulate::r_to_py(matrices))
+  }
+
+  ensemble_results    <- NULL
+  stochastic_results  <- NULL
+
+  # --- Ensemble sims (one config_best, many seeds) ---
+  if (n_ensemble > 0L && !is.null(config_best)) {
+    log_msg("Dispatching %d ensemble sims...", n_ensemble)
+    prep <- .config_to_json_and_matrices(config_best)
+    extra_future <- client$scatter(prep$matrices, broadcast = TRUE)
+
+    futures <- vector("list", n_ensemble)
+    for (i in seq_len(n_ensemble)) {
+      futures[[i]] <- client$submit(
+        mosaic_worker$run_laser_postca,
+        as.integer(i),          # task_id
+        as.integer(i),          # seed = 1..n_ensemble
+        prep$json,
+        extra_future
+      )
+    }
+
+    raw <- client$gather(futures)
+    log_msg("Gathered %d ensemble results", length(raw))
+
+    # Convert to format expected by calc_model_ensemble (list of lists with
+    # $reported_cases as matrix, $disease_deaths as matrix, $success)
+    ensemble_results <- lapply(raw, function(r) {
+      if (isTRUE(r$success)) {
+        list(
+          reported_cases = matrix(unlist(r$reported_cases),
+                                  nrow = length(r$reported_cases), byrow = TRUE),
+          disease_deaths = matrix(unlist(r$disease_deaths),
+                                  nrow = length(r$disease_deaths), byrow = TRUE),
+          success = TRUE,
+          seed = r$seed
+        )
+      } else {
+        list(success = FALSE, seed = r$seed, error = r$error %||% "unknown")
+      }
+    })
+  }
+
+  # --- Stochastic param sims (many configs × many seeds) ---
+  if (!is.null(param_configs) && length(param_configs) > 0 && n_stochastic_per > 0L) {
+    n_param_sets <- length(param_configs)
+    total <- n_param_sets * n_stochastic_per
+    log_msg("Dispatching %d stochastic param sims (%d configs × %d sims)...",
+            total, n_param_sets, n_stochastic_per)
+
+    # Serialize all param configs
+    preps <- lapply(param_configs, .config_to_json_and_matrices)
+
+    # Scatter matrix fields per config (they differ because of psi_jt calibration)
+    matrix_futures <- lapply(preps, function(p) client$scatter(p$matrices))
+
+    futures <- vector("list", total)
+    task_meta <- vector("list", total)
+    idx <- 0L
+    for (p in seq_len(n_param_sets)) {
+      for (s in seq_len(n_stochastic_per)) {
+        idx <- idx + 1L
+        stoch_seed <- as.integer((p * 1000L) + s)
+        futures[[idx]] <- client$submit(
+          mosaic_worker$run_laser_postca,
+          as.integer(idx),
+          stoch_seed,
+          preps[[p]]$json,
+          matrix_futures[[p]]
+        )
+        task_meta[[idx]] <- list(param_idx = p, stoch_idx = s)
+      }
+    }
+
+    raw <- client$gather(futures)
+    log_msg("Gathered %d stochastic results", length(raw))
+
+    # Convert to format expected by plot_model_fit_stochastic_param
+    stochastic_results <- lapply(seq_along(raw), function(i) {
+      r <- raw[[i]]
+      meta <- task_meta[[i]]
+      if (isTRUE(r$success)) {
+        list(
+          param_idx = meta$param_idx,
+          stoch_idx = meta$stoch_idx,
+          reported_cases = matrix(unlist(r$reported_cases),
+                                  nrow = length(r$reported_cases), byrow = TRUE),
+          disease_deaths = matrix(unlist(r$disease_deaths),
+                                  nrow = length(r$disease_deaths), byrow = TRUE),
+          success = TRUE
+        )
+      } else {
+        list(param_idx = meta$param_idx, stoch_idx = meta$stoch_idx,
+             success = FALSE, error = r$error %||% "unknown")
+      }
+    })
+  }
+
+  log_msg("Closing post-calibration Dask cluster")
+  # on.exit handles close
+
+  list(
+    ensemble_results   = ensemble_results,
+    stochastic_results = stochastic_results
+  )
+}

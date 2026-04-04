@@ -40,6 +40,9 @@
 #' @param verbose Logical indicating whether to print progress messages. Default is TRUE.
 #' @param plot_decomposed Logical indicating whether to create additional plots
 #'   showing decomposed uncertainty. Default is FALSE.
+#' @param precomputed_results Optional list of pre-gathered LASER results (e.g. from Dask).
+#'   Each element must have \code{$param_idx}, \code{$stoch_idx}, \code{$reported_cases},
+#'   \code{$disease_deaths}, and \code{$success}. When provided, local LASER execution is skipped.
 #'
 #' @return Invisibly returns a list containing:
 #'   \itemize{
@@ -115,7 +118,8 @@ plot_model_fit_stochastic_param <- function(
     n_cores = NULL,
     root_dir = NULL,
     verbose = TRUE,
-    plot_decomposed = FALSE) {
+    plot_decomposed = FALSE,
+    precomputed_results = NULL) {
 
     # ============================================================================
     # Input validation and mode determination
@@ -314,6 +318,28 @@ plot_model_fit_stochastic_param <- function(
     cases_array <- array(NA, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
     deaths_array <- array(NA, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
 
+    if (!is.null(precomputed_results)) {
+      # Use pre-gathered LASER results (e.g. from Dask) instead of running locally.
+      # Expected format: list of lists, each with $param_idx, $stoch_idx,
+      # $reported_cases (matrix), $disease_deaths (matrix), $success
+      if (verbose) message("Using ", length(precomputed_results), " precomputed LASER results (skipping local execution)")
+      for (result in precomputed_results) {
+        if (isTRUE(result$success)) {
+          p <- result$param_idx
+          s <- result$stoch_idx
+          if (is.matrix(result$reported_cases)) {
+            cases_array[,,p,s] <- result$reported_cases
+            deaths_array[,,p,s] <- result$disease_deaths
+          } else {
+            cases_array[1,,p,s] <- result$reported_cases
+            deaths_array[1,,p,s] <- result$disease_deaths
+          }
+        }
+      }
+
+    } else {
+    # --- Local execution (parallel or sequential) ---
+
     # Worker function (must be self-contained for parallel execution)
     run_param_stoch_simulation <- function(task_info, param_configs_list) {
         param_idx <- task_info$param_idx
@@ -505,6 +531,8 @@ plot_model_fit_stochastic_param <- function(
             }
         }
     }
+
+    } # end of else block for precomputed_results
 
     # ============================================================================
     # Calculate statistics

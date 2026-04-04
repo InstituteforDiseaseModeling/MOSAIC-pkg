@@ -1807,14 +1807,69 @@ run_MOSAIC <- function(config,
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
   # ===========================================================================
+  # PRE-DISPATCH POST-CAL SIMS VIA DASK (if applicable)
+  # ===========================================================================
+  # When the calibration used Dask, dispatch ensemble + stochastic uncertainty
+  # sims to a fresh (smaller) Dask cluster rather than running them locally.
+  # This avoids hours of local LASER execution after a 30-min cloud calibration.
+
+  n_ensemble_r2              <- control$predictions$best_model_n_sims
+  postca_dask                <- NULL
+
+  if (use_dask && !is.null(dask_spec)) {
+    # Build stochastic param configs (same logic as the stochastic section below)
+    stoch_param_configs <- NULL
+    n_stochastic_per    <- control$predictions$ensemble_n_sims_per_param %||% 10L
+
+    if (control$paths$plots && sum(results$is_best_subset) > 0) {
+      best_subset_results <- results[results$is_best_subset == TRUE, ]
+      stoch_param_seeds   <- best_subset_results$seed_sim
+      stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+
+      if (length(stoch_param_weights) > 0) {
+        # Filter to non-zero weights and sample configs
+        nonzero_idx <- stoch_param_weights > 0
+        stoch_param_seeds   <- stoch_param_seeds[nonzero_idx]
+        stoch_param_weights <- stoch_param_weights[nonzero_idx]
+
+        stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
+          tryCatch(
+            sample_parameters(
+              PATHS = PATHS, priors = priors, config = config,
+              seed = seed_i, sample_args = sampling_args, verbose = FALSE
+            ),
+            error = function(e) NULL
+          )
+        })
+        # Remove NULLs
+        stoch_param_configs <- Filter(Negate(is.null), stoch_param_configs)
+      }
+    }
+
+    postca_dask <- tryCatch(
+      .mosaic_postca_dask(
+        dask_spec       = dask_spec,
+        config_best     = config_best,
+        param_configs   = stoch_param_configs,
+        n_ensemble      = n_ensemble_r2,
+        n_stochastic_per = n_stochastic_per,
+        log_msg         = log_msg
+      ),
+      error = function(e) {
+        log_msg("WARNING: Post-cal Dask dispatch failed: %s", e$message)
+        log_msg("  Falling back to local execution for ensemble/stochastic sims")
+        NULL
+      }
+    )
+  }
+
+  # ===========================================================================
   # ENSEMBLE R², WINDOWED METRICS, AND PREDICTIVE PLOTS
   # ===========================================================================
 
   # Run ensemble once via calc_model_ensemble(). The same object is then used
   # for (a) R²/bias ratios, (b) windowed fit metrics, and (c) predictive plots
   # when plots = TRUE. This avoids running simulations twice.
-
-  n_ensemble_r2              <- control$predictions$best_model_n_sims
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
@@ -1825,13 +1880,14 @@ run_MOSAIC <- function(config,
 
     ensemble <- tryCatch(
       calc_model_ensemble(
-        config             = config_best,
-        n_simulations      = n_ensemble_r2,
-        envelope_quantiles = c(0.025, 0.975),
-        parallel           = control$parallel$enable,
-        n_cores            = control$parallel$n_cores,
-        root_dir           = root_dir,
-        verbose            = FALSE
+        config              = config_best,
+        n_simulations       = n_ensemble_r2,
+        envelope_quantiles  = c(0.025, 0.975),
+        parallel            = control$parallel$enable,
+        n_cores             = control$parallel$n_cores,
+        root_dir            = root_dir,
+        verbose             = FALSE,
+        precomputed_results = postca_dask$ensemble_results
       ),
       error = function(e) {
         log_msg("Warning: calc_model_ensemble failed: %s", e$message)
@@ -1978,7 +2034,8 @@ run_MOSAIC <- function(config,
       parallel = control$parallel$enable,
       n_cores = control$parallel$n_cores,
       root_dir = root_dir,
-      verbose = control$logging$verbose
+      verbose = control$logging$verbose,
+      precomputed_results = postca_dask$stochastic_results
     )
   }
 
