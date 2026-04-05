@@ -390,15 +390,15 @@ for (iso in names(locations)) {
             verbose             = TRUE
           ),
           error = function(e) {
-            log_msg("[%s] Adaptive weights failed (%s) — using fallback 0.30/0.70", iso, e$message)
+            log_msg("[%s] Adaptive weights failed (%s) — using fallback 0.50/0.50", iso, e$message)
             NULL
           }
         )
       }
 
       # Fallback to Design B defaults if adaptive computation failed
-      w_cases  <- if (!is.null(adaptive)) adaptive$weight_cases  else 0.30
-      w_deaths <- if (!is.null(adaptive)) adaptive$weight_deaths else 0.70
+      w_cases  <- if (!is.null(adaptive)) adaptive$weight_cases  else 0.50
+      w_deaths <- if (!is.null(adaptive)) adaptive$weight_deaths else 0.50
 
       log_msg("[%s] S3 weights: w_cases=%.3f w_deaths=%.3f (%s)",
               iso, w_cases, w_deaths,
