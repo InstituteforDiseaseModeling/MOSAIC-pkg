@@ -25,19 +25,28 @@
 #
 # 3-STAGE PIPELINE
 # ----------------
-#   S1  Cases    Auto, Design B settings (soft narrowing).
+#   S1  Cases    Auto. ESS_param=100, prop=0.80, A=0.70, CVw=2.0.
 #                All 43 params free. Default priors. NB only.
-#                weight_cases=1.0, weight_deaths=0.1.
+#                weight_cases=1.0, weight_deaths=0.1. max_batches=20.
 #
-#   S2  Deaths   Auto, Design B settings (soft narrowing, all 4 must converge).
-#                4 CFR params free, all else frozen to S1 best config.
-#                weight_cases=0.0, weight_deaths=1.0.
+#   S2  Deaths   Auto. ESS_param=100, prop=1.00 (all 4 must converge),
+#                A=0.70, CVw=1.5. 4 CFR params free, S1 config frozen.
+#                weight_cases=0.0, weight_deaths=1.0. max_batches=20.
 #
-#   S3  Joint    Auto, Design B settings (heavy convergence here).
-#                All 43 params free.
-#                Priors = S1 posteriors + inflate_priors(S2 posteriors, f=2.0)
-#                  on CFR params only.
-#                Weights = mosaic_adaptive_s3_weights() from S1/S2 summaries.
+#   Pre-S3:      inflate_priors(ALL params, f=1.5) — broadens both
+#                transmission (S1) and CFR (S2) posteriors before S3 to
+#                prevent IS weight collapse in the joint stage.
+#                mosaic_adaptive_s3_weights() sets per-country w_cases/w_deaths.
+#
+#   S3  Joint    Auto. ESS_param=500, prop=0.95, A=0.90, CVw=1.0.
+#                All 43 params free. Full convergence. max_batches=50.
+#
+# CONVERGENCE SETTINGS GROUNDED IN:
+#   ESS targets:   Gelman et al. 2014 (BDA3 ESS ≥ 100-500)
+#   Agreement (A): Elvira et al. 2022; MOSAIC docs target A > 0.7-0.8
+#   CVw targets:   Kong et al. 1994 (CVw ≲ 2)
+#   target_r2:     R² of ESS ~ sqrt(n) trajectory; default 0.90
+#   Inflation:     Liu & West 2001 (kernel smoothing / variance tempering)
 #
 # LOCATIONS: NGA Nigeria | MOZ Mozambique | ETH Ethiopia | KEN Kenya | COD DRC
 # All single-location models (mobility frozen).
@@ -65,52 +74,55 @@ locations <- list(
   COD = "DRC"
 )
 
-# CFR parameters inflated between S2 and S3
-CFR_PARAMS <- c("mu_j_baseline", "mu_j_slope",
-                "mu_j_epidemic_factor", "epidemic_threshold")
-
-# Variance inflation factor for CFR priors before S3
-S2_INFLATION_FACTOR <- 2.0
+# Variance inflation factor applied to ALL priors before S3.
+# f=1.5 inflates pre-truncation variance by 1.5x (mean preserved) for every
+# fitted distribution — both transmission params (from S1) and CFR params
+# (from S2). Prevents IS weight collapse in S3 when the joint optimum differs
+# from the staged single-outcome optima (Liu & West 2001).
+S3_INFLATION_FACTOR <- 1.5
 
 # =============================================================================
-# DESIGN B SETTINGS
+# DESIGN B SETTINGS — revised from test_42 analysis
 # =============================================================================
-# From test_42 analysis: soft early stages, heavy S3. Design B consistently
-# produced better deaths bias and used 40-60% fewer total sims than Design A.
+# Settings grounded in MOSAIC calibration documentation and literature:
+#   ESS targets:   Gelman et al. 2014 (BDA3), Bürkner 2017
+#   Agreement (A): Elvira et al. 2022; docs target A > 0.7-0.8
+#   CVw targets:   Kong et al. 1994 (CVw ≲ 2 for balanced weights)
+#   target_r2:     R² of ESS ~ sqrt(n) trajectory; default 0.90
 
 design_B <- list(
   s1 = list(
     batch_size     = 1000L,
-    min_batches    = 2L,
-    max_batches    = 8L,
-    target_r2      = 0.20,
-    ESS_param      = 50L,
-    ESS_param_prop = 0.50,
-    ESS_best       = 30L,
-    A_best         = 0.25,
-    CVw_best       = 3.0
+    min_batches    = 1L,
+    max_batches    = 20L,
+    target_r2      = 0.90,
+    ESS_param      = 100L,
+    ESS_param_prop = 0.80,   # 80% of 43 params = ~34 must hit ESS_param
+    ESS_best       = 100L,
+    A_best         = 0.70,   # Agreement Index ≥ 0.70 (docs: target > 0.7-0.8)
+    CVw_best       = 2.0     # Kong et al. 1994: CVw ≲ 2
   ),
   s2 = list(
     batch_size     = 500L,
-    min_batches    = 2L,
-    max_batches    = 10L,
-    target_r2      = 0.01,   # disabled — ESS drives convergence in deaths-only
+    min_batches    = 1L,
+    max_batches    = 20L,
+    target_r2      = 0.90,
     ESS_param      = 100L,
-    ESS_param_prop = 0.75,
-    ESS_best       = 50L,
-    A_best         = 0.20,
-    CVw_best       = 2.5
+    ESS_param_prop = 1.00,   # ALL 4 CFR params must converge
+    ESS_best       = 100L,
+    A_best         = 0.70,   # Agreement Index ≥ 0.70
+    CVw_best       = 1.5     # Tighter than S1: 4 params, smoother posterior
   ),
   s3 = list(
     batch_size     = 1000L,
-    min_batches    = 5L,
-    max_batches    = 25L,
-    target_r2      = 0.40,
-    ESS_param      = 250L,
-    ESS_param_prop = 0.80,
-    ESS_best       = 150L,
-    A_best         = 0.05,
-    CVw_best       = 1.5
+    min_batches    = 3L,
+    max_batches    = 50L,
+    target_r2      = 0.90,
+    ESS_param      = 500L,   # Full convergence: BDA3/Bürkner target ESS 500+
+    ESS_param_prop = 0.95,   # 95% of 43 params = ~41 must hit ESS_param
+    ESS_best       = 500L,
+    A_best         = 0.90,   # High consensus for final production posterior
+    CVw_best       = 1.0     # Tight weight balance for final stage
   )
 )
 
@@ -392,22 +404,27 @@ for (iso in names(locations)) {
               iso, w_cases, w_deaths,
               if (!is.null(adaptive) && !isTRUE(adaptive$degenerate)) "adaptive" else "fallback")
 
-      # --- Build S3 priors: S1 posteriors + inflated S2 CFR posteriors ---
-      # Step 1: update from S2 posteriors (all params, including CFR)
+      # --- Build S3 priors: S1 + S2 posteriors, all params inflated ---
+      # Step 1: chain S2 posteriors on top of S1 posteriors.
+      #   priors_s3_base contains:
+      #     - Transmission params: S1 posteriors (cases-only)
+      #     - CFR params: S2 posteriors (deaths-only)
       priors_s3_base <- update_priors_from_posteriors(
         priors     = priors_s2,
         posteriors = s2_posteriors,
         verbose    = FALSE
       )
 
-      # Step 2: inflate only CFR params to prevent S3 weight collapse
-      log_msg("[%s] Inflating CFR priors x%.1f before S3: %s",
-              iso, S2_INFLATION_FACTOR, paste(CFR_PARAMS, collapse = ", "))
+      # Step 2: inflate ALL params by f=1.5 before S3.
+      # Applies to both transmission params (S1 posteriors) and CFR params
+      # (S2 posteriors). Prevents IS weight collapse when the S3 joint optimum
+      # differs from the staged single-outcome optima (Liu & West 2001).
+      # f=1.5 broadens pre-truncation variance 1.5x while preserving means.
+      log_msg("[%s] Inflating ALL priors x%.1f before S3", iso, S3_INFLATION_FACTOR)
       priors_s3 <- inflate_priors(
         priors           = priors_s3_base,
-        inflation_factor = S2_INFLATION_FACTOR,
-        params           = CFR_PARAMS,
-        verbose          = TRUE
+        inflation_factor = S3_INFLATION_FACTOR,
+        verbose          = FALSE   # suppress per-param messages for 43 params
       )
 
       log_msg("[%s] S3: Joint (auto, ESS=%d, prop=%.0f%%, A_best=%.0f%%)",
