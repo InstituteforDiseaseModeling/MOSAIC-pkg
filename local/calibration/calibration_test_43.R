@@ -93,7 +93,7 @@ S3_INFLATION_FACTOR <- 1.5
 design_B <- list(
   s1 = list(
     batch_size     = 1000L,
-    min_batches    = 1L,
+    min_batches    = 3L,
     max_batches    = 20L,
     target_r2      = 0.90,
     ESS_param      = 100L,
@@ -104,7 +104,7 @@ design_B <- list(
   ),
   s2 = list(
     batch_size     = 500L,
-    min_batches    = 1L,
+    min_batches    = 3L,
     max_batches    = 20L,
     target_r2      = 0.90,
     ESS_param      = 100L,
@@ -473,7 +473,7 @@ fmt_n <- function(v) if (is.null(v) || is.na(v)) "  ----" else sprintf("%6d", as
 log_msg(paste(rep("=", 80), collapse = ""))
 log_msg("CALIBRATION TEST 43 — RESULTS SUMMARY")
 log_msg(paste(rep("=", 80), collapse = ""))
-log_msg("Design B + inflate_priors(CFR, f=%.1f) + adaptive_s3_weights", S2_INFLATION_FACTOR)
+log_msg("Design B + inflate_priors(ALL params, f=%.1f) + adaptive_s3_weights", S3_INFLATION_FACTOR)
 log_msg("")
 
 for (metric in c("r2_cases", "r2_deaths", "bias_ratio_cases", "bias_ratio_deaths")) {
