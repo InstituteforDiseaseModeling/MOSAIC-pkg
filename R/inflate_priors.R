@@ -10,60 +10,49 @@
 #'
 #' The technique is known as kernel smoothing, covariance inflation, or
 #' variance tempering in the Sequential Monte Carlo literature (Liu & West
-#' 2001; Del Moral et al. 2006). For staged cholera calibration, it is
-#' typically applied to CFR parameters after the deaths-only stage and before
-#' the joint stage, allowing the joint stage to explore parameter combinations
-#' that the deaths-only stage could not anticipate.
+#' 2001; Del Moral et al. 2006).
 #'
-#' @param priors List. A priors or posteriors object as returned by
-#'   \code{\link{get_location_priors}} or \code{\link{update_priors_from_posteriors}}.
-#'   Must have \code{parameters_global} and \code{parameters_location} slots.
-#' @param inflation_factor Numeric scalar > 0. Variance multiplier. A value of
-#'   2.0 doubles the variance of each distribution while preserving its mean.
-#'   Values < 1.0 deflate (not recommended). Default 2.0.
-#' @param params Optional character vector. Base parameter names to inflate
-#'   (e.g. \code{c("mu_j_baseline", "mu_j_slope")}). When \code{NULL} (default)
-#'   all non-fixed, non-frozen parameters are inflated. Location-specific
-#'   parameters are matched on base name (inflating \code{"mu_j_baseline"}
-#'   inflates all locations).
-#' @param verbose Logical. Print per-parameter inflation diagnostics. Default
-#'   \code{TRUE}.
+#' @section Methods:
+#' Each distribution is inflated using the most appropriate method:
 #'
-#' @return A priors list with the same structure as \code{priors} but with
-#'   inflated distribution parameters. Metadata is updated to record the
-#'   inflation factor applied.
-#'
-#' @details
-#' \strong{Supported distributions and inflation algebra:}
-#'
+#' \strong{Analytic (exact):}
 #' \describe{
-#'   \item{beta(shape1, shape2)}{Precision \code{s = shape1+shape2} reduced by
-#'     \code{f}: \code{s_new = (s+1)/f - 1}. Maximum inflatable factor is
-#'     \code{f_max = s + 1}; entries exceeding this are skipped with a warning.}
-#'   \item{gamma(shape, rate)}{Both halved by \code{f}:
-#'     \code{shape_new = shape/f}, \code{rate_new = rate/f}. Always valid.}
-#'   \item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}:
-#'     \code{sdlog_new = sqrt(log(1 + f*(exp(sdlog^2)-1)))}; \code{meanlog}
+#'   \item{beta(shape1, shape2)}{Reduce precision \code{s = α+β} by factor \code{f}.
+#'     Maximum inflatable factor is \code{f_max = s+1}.}
+#'   \item{gamma(shape, rate)}{\code{shape_new = shape/f, rate_new = rate/f}.}
+#'   \item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}; \code{meanlog}
 #'     adjusted to preserve natural-scale mean.}
-#'   \item{lognormal(mean, sd)}{Natural-scale sd scaled: \code{sd_new = sqrt(f)*sd}.}
-#'   \item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}. Mean unchanged.}
-#'   \item{truncnorm(mean, sd, a, b)}{sd scaled, then pre-truncation mean
-#'     found by root-finding to preserve the actual truncated mean.}
+#'   \item{lognormal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
+#'   \item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
 #'   \item{uniform(min, max)}{Bounds extended symmetrically around midpoint.
-#'     Skipped with a warning if new bounds violate positivity (min was >= 0
-#'     but new_min < 0).}
-#'   \item{fixed / frozen / failed / gompertz}{Skipped silently (fixed/frozen)
-#'     or with a warning (gompertz).}
+#'     Skipped with a warning if new bounds violate positivity.}
 #' }
 #'
-#' @references
-#' Liu, J. S., & West, M. (2001). Combined parameter and state estimation in
-#' simulation-based filtering. In Sequential Monte Carlo Methods in Practice
-#' (pp. 197-223). Springer.
+#' \strong{Analytic with empirical fallback:}
+#' \describe{
+#'   \item{truncnorm(mean, sd, a, b)}{Root-finding preserves actual truncated
+#'     mean. Due to active bounds, the achieved variance ratio may be less than
+#'     \code{inflation_factor}. Falls back to empirical refit if root-find fails.}
+#' }
 #'
-#' Del Moral, P., Doucet, A., & Jasra, A. (2006). Sequential Monte Carlo
-#' samplers. Journal of the Royal Statistical Society: Series B, 68(3),
-#' 411-436.
+#' \strong{Empirical (sample → inflate → refit):}
+#' \describe{
+#'   \item{gompertz(b, eta)}{No closed-form moments. Sampled empirically,
+#'     variance inflated, distribution refit via MLE.}
+#'   \item{Any other distribution}{Universal empirical fallback.}
+#' }
+#'
+#' @param priors List. A priors or posteriors object with \code{parameters_global}
+#'   and \code{parameters_location} slots.
+#' @param inflation_factor Numeric scalar > 0. Variance multiplier. \code{2.0}
+#'   doubles variance while preserving the mean. Default 2.0.
+#' @param params Optional character vector. Base parameter names to inflate.
+#'   When \code{NULL} all non-fixed/frozen parameters are inflated.
+#' @param n_samples Integer. Number of samples for empirical fallback methods
+#'   (truncnorm fallback, gompertz). Default 10000L.
+#' @param verbose Logical. Print per-parameter inflation messages. Default TRUE.
+#'
+#' @return A priors list with inflated distribution parameters. Metadata updated.
 #'
 #' @seealso \code{\link{update_priors_from_posteriors}},
 #'   \code{\link{mosaic_adaptive_s3_weights}}
@@ -72,6 +61,7 @@
 inflate_priors <- function(priors,
                            inflation_factor = 2.0,
                            params           = NULL,
+                           n_samples        = 10000L,
                            verbose          = TRUE) {
 
   # ---------------------------------------------------------------------------
@@ -88,16 +78,117 @@ inflate_priors <- function(priors,
   }
   if (inflation_factor < 1 && verbose)
     message("inflate_priors: inflation_factor < 1 deflates variance.")
-
   if (!all(c("parameters_global", "parameters_location") %in% names(priors)))
     stop("priors must have parameters_global and parameters_location slots", call. = FALSE)
 
   f <- inflation_factor
 
   # ---------------------------------------------------------------------------
-  # Bias deficiency transform — used internally to check entry validity only
+  # Empirical fallback: sample → mean-preserving scale → refit
+  # Used for: gompertz, truncnorm when root-find fails, any unknown distribution
   # ---------------------------------------------------------------------------
+  .inflate_empirical <- function(entry, param_name) {
+    dist <- tolower(entry$distribution)
+    p    <- entry$parameters
 
+    # Sample from the current distribution
+    samples <- tryCatch(
+      sample_from_prior(n = n_samples, prior = entry),
+      error = function(e) NULL
+    )
+    if (is.null(samples) || length(samples) < 10 || !all(is.finite(samples)))
+      return(NULL)
+
+    # Mean-preserving variance inflation: x_new = mean + sqrt(f)*(x - mean)
+    mu_s     <- mean(samples)
+    inflated <- mu_s + sqrt(f) * (samples - mu_s)
+
+    # Refit the original distribution type to the inflated samples
+    new_params <- tryCatch({
+      switch(dist,
+
+        normal = list(mean = mean(inflated), sd = sd(inflated)),
+
+        beta = {
+          x <- pmax(1e-6, pmin(1 - 1e-6, inflated))
+          m <- mean(x); v <- var(x)
+          conc <- m * (1 - m) / v - 1
+          if (!is.finite(conc) || conc <= 0)
+            stop("Beta MOM: non-positive concentration")
+          list(shape1 = m * conc, shape2 = (1 - m) * conc)
+        },
+
+        gamma = {
+          x <- pmax(1e-300, inflated)
+          m <- mean(x); v <- var(x)
+          if (v <= 0) stop("Gamma MOM: zero variance in samples")
+          list(shape = m^2 / v, rate = m / v)
+        },
+
+        lognormal = {
+          x <- pmax(1e-300, inflated)
+          if (!is.null(p$meanlog)) {
+            ls <- log(x)
+            list(meanlog = mean(ls), sdlog = sd(ls))
+          } else {
+            list(mean = mean(x), sd = sd(x))
+          }
+        },
+
+        # truncnorm: keep original bounds, refit (mean, sd) via MLE
+        truncnorm = {
+          a_n <- if (identical(p$a, Inf)  || identical(p$a, "Inf"))   Inf  else
+                 if (identical(p$a, -Inf) || identical(p$a, "-Inf")) -Inf  else
+                 as.numeric(p$a)
+          b_n <- if (identical(p$b, Inf)  || identical(p$b, "Inf"))   Inf  else
+                 if (identical(p$b, -Inf) || identical(p$b, "-Inf")) -Inf  else
+                 as.numeric(p$b)
+          # Clip samples to feasible region
+          x <- pmax(if (is.finite(a_n)) a_n + 1e-10 else -1e15,
+                    pmin(if (is.finite(b_n)) b_n - 1e-10 else  1e15, inflated))
+          # MLE for pre-truncation (mu, sigma) with fixed bounds
+          nll <- function(par) {
+            mu_p <- par[1]; sig_p <- exp(par[2])
+            -sum(truncnorm::dtruncnorm(x, a = a_n, b = b_n,
+                                       mean = mu_p, sd = sig_p, log = TRUE))
+          }
+          init <- c(mean(x), log(max(sd(x), 1e-6)))
+          fit  <- stats::optim(init, nll, method = "BFGS",
+                               control = list(maxit = 500L))
+          list(mean = fit$par[1], sd = exp(fit$par[2]),
+               a = p$a, b = p$b)
+        },
+
+        # Gompertz: MLE on positive samples
+        gompertz = {
+          x <- pmax(1e-10, inflated)
+          nll_g <- function(par) {
+            b_p   <- exp(par[1])
+            eta_p <- exp(par[2])
+            -sum(log(eta_p) + b_p * x - (eta_p / b_p) * (exp(b_p * x) - 1))
+          }
+          fit_g <- stats::optim(c(0, 0), nll_g, method = "Nelder-Mead",
+                                control = list(maxit = 2000L))
+          list(b = exp(fit_g$par[1]), eta = exp(fit_g$par[2]))
+        },
+
+        stop("empirical refit: unsupported distribution '", dist, "'")
+      )
+    }, error = function(e) {
+      warning(sprintf(
+        "inflate_priors: empirical refit failed for '%s' (%s). Skipping.",
+        param_name, e$message), call. = FALSE)
+      NULL
+    })
+
+    if (is.null(new_params)) return(NULL)
+    entry$parameters <- new_params
+    entry
+  }
+
+  # ---------------------------------------------------------------------------
+  # Analytic inflation per distribution type
+  # ---------------------------------------------------------------------------
   .inflate_entry <- function(entry, param_name) {
     if (!all(c("distribution", "parameters") %in% names(entry)))
       return(entry)
@@ -105,12 +196,14 @@ inflate_priors <- function(priors,
     dist <- tolower(entry$distribution)
     p    <- entry$parameters
 
-    # Skip degenerate / non-distribution states
     if (dist %in% c("fixed", "frozen", "failed")) return(entry)
+
+    # Track method used for logging
+    method_used <- "analytic"
 
     new_entry <- switch(dist,
 
-      # --- Beta ---
+      # --- Beta (analytic, exact) ---
       beta = {
         a <- p$shape1; b <- p$shape2
         if (is.null(a) || is.null(b) || !is.finite(a) || !is.finite(b))
@@ -136,7 +229,7 @@ inflate_priors <- function(priors,
         entry
       },
 
-      # --- Gamma ---
+      # --- Gamma (analytic, exact) ---
       gamma = {
         if (is.null(p$shape) || is.null(p$rate)) return(entry)
         entry$parameters$shape <- p$shape / f
@@ -144,78 +237,96 @@ inflate_priors <- function(priors,
         entry
       },
 
-      # --- Lognormal ---
+      # --- Lognormal (analytic, exact) ---
       lognormal = {
         if (!is.null(p$meanlog) && !is.null(p$sdlog)) {
-          # Standard log-scale parameterisation
-          mu_nat  <- exp(p$meanlog + p$sdlog^2 / 2)
-          cv2_old <- exp(p$sdlog^2) - 1
+          mu_nat      <- exp(p$meanlog + p$sdlog^2 / 2)
+          cv2_old     <- exp(p$sdlog^2) - 1
           new_sdlog   <- sqrt(log(1 + f * cv2_old))
           new_meanlog <- log(mu_nat) - new_sdlog^2 / 2
           entry$parameters$meanlog <- new_meanlog
           entry$parameters$sdlog   <- new_sdlog
         } else if (!is.null(p$mean) && !is.null(p$sd)) {
-          # Natural-scale parameterisation (e.g. epsilon)
           entry$parameters$sd <- sqrt(f) * p$sd
         } else {
-          warning(sprintf("inflate_priors: lognormal '%s' has unrecognised parameters. Skipping.",
-                          param_name), call. = FALSE)
+          warning(sprintf(
+            "inflate_priors: lognormal '%s' unrecognised parameters. Skipping.",
+            param_name), call. = FALSE)
           return(entry)
         }
         entry
       },
 
-      # --- Normal ---
+      # --- Normal (analytic, exact) ---
       normal = {
         if (is.null(p$sd)) return(entry)
         entry$parameters$sd <- sqrt(f) * p$sd
         entry
       },
 
-      # --- Truncated normal ---
+      # --- Truncated normal (analytic with empirical fallback) ---
+      # Root-find preserves actual truncated mean exactly.
+      # Variance ratio may be < f due to active bounds — this is inherent to
+      # the truncated family. Falls back to empirical MLE refit when root-find
+      # fails (e.g. etruncnorm saturates for extreme sd values).
       truncnorm = {
         if (!all(c("mean", "sd", "a", "b") %in% names(p))) return(entry)
-        a_bound <- if (identical(p$a, Inf) || identical(p$a, "Inf"))   Inf  else
-                   if (identical(p$a, -Inf)|| identical(p$a, "-Inf")) -Inf  else
+
+        a_bound <- if (identical(p$a, Inf)  || identical(p$a, "Inf"))   Inf  else
+                   if (identical(p$a, -Inf) || identical(p$a, "-Inf")) -Inf  else
                    as.numeric(p$a)
-        b_bound <- if (identical(p$b, Inf) || identical(p$b, "Inf"))   Inf  else
-                   if (identical(p$b, -Inf)|| identical(p$b, "-Inf")) -Inf  else
+        b_bound <- if (identical(p$b, Inf)  || identical(p$b, "Inf"))   Inf  else
+                   if (identical(p$b, -Inf) || identical(p$b, "-Inf")) -Inf  else
                    as.numeric(p$b)
+
         sd_new   <- sqrt(f) * p$sd
         mu_trunc <- tryCatch(
           truncnorm::etruncnorm(a_bound, b_bound, p$mean, p$sd),
-          error = function(e) p$mean  # fall back to pre-truncation mean
+          error = function(e) p$mean
         )
-        # Root-find pre-truncation mean that preserves truncated mean
+
+        # Search interval: stay close to the feasible region to avoid etruncnorm
+        # saturation at extreme mean values (which causes uniroot sign failure)
+        lo <- if (is.finite(a_bound)) a_bound - 3 * sd_new else mu_trunc - 10 * sd_new
+        hi <- if (is.finite(b_bound)) b_bound + 3 * sd_new else mu_trunc + 10 * sd_new
+
         new_mean <- tryCatch({
-          lo <- if (is.finite(a_bound)) a_bound - 20 * sd_new else mu_trunc - 20 * sd_new
-          hi <- if (is.finite(b_bound)) b_bound + 20 * sd_new else mu_trunc + 20 * sd_new
           stats::uniroot(
             function(m) truncnorm::etruncnorm(a_bound, b_bound, m, sd_new) - mu_trunc,
             interval = c(lo, hi),
             tol = 1e-8
           )$root
         }, error = function(e) {
-          warning(sprintf(
-            "inflate_priors: truncnorm '%s' root-find failed (%s). Using scaled sd, original mean.",
-            param_name, e$message), call. = FALSE)
-          p$mean
+          # Root-find failed — fall back to empirical refit
+          method_used <<- "empirical (truncnorm fallback)"
+          emp <- .inflate_empirical(entry, param_name)
+          if (!is.null(emp)) {
+            entry <<- emp
+          } else {
+            warning(sprintf(
+              "inflate_priors: truncnorm '%s' analytic and empirical both failed. Skipping.",
+              param_name), call. = FALSE)
+          }
+          NA_real_  # signal that entry was already updated
         })
-        entry$parameters$mean <- new_mean
-        entry$parameters$sd   <- sd_new
+
+        if (!is.na(new_mean)) {
+          entry$parameters$mean <- new_mean
+          entry$parameters$sd   <- sd_new
+        }
         entry
       },
 
-      # --- Uniform ---
+      # --- Uniform (analytic, exact) ---
       uniform = {
         if (is.null(p$min) || is.null(p$max)) return(entry)
-        mu           <- (p$min + p$max) / 2
-        half_new     <- sqrt(f) * (p$max - p$min) / 2
-        new_min      <- mu - half_new
-        new_max      <- mu + half_new
+        mu       <- (p$min + p$max) / 2
+        half_new <- sqrt(f) * (p$max - p$min) / 2
+        new_min  <- mu - half_new
+        new_max  <- mu + half_new
         if (new_min < 0 && p$min >= 0) {
           warning(sprintf(
-            "inflate_priors: uniform '%s' inflation yields new_min=%.4f (was %.4f >= 0). Skipping.",
+            "inflate_priors: uniform '%s' yields new_min=%.4f (was %.4f >= 0). Skipping.",
             param_name, new_min, p$min), call. = FALSE)
           return(entry)
         }
@@ -224,41 +335,54 @@ inflate_priors <- function(priors,
         entry
       },
 
-      # --- Gompertz ---
+      # --- Gompertz (empirical only — no closed-form moments) ---
       gompertz = {
-        warning(sprintf(
-          "inflate_priors: gompertz '%s' inflation not implemented. Skipping.",
-          param_name), call. = FALSE)
-        entry
+        method_used <<- "empirical"
+        emp <- .inflate_empirical(entry, param_name)
+        if (is.null(emp)) {
+          warning(sprintf(
+            "inflate_priors: gompertz '%s' empirical refit failed. Skipping.",
+            param_name), call. = FALSE)
+          return(entry)
+        }
+        emp
       },
 
-      # --- Unknown ---
+      # --- Unknown distribution — empirical fallback ---
       {
-        if (verbose)
-          message(sprintf("  inflate_priors: unknown distribution '%s' for '%s'. Skipping.",
-                          dist, param_name))
-        entry
+        method_used <<- "empirical (unknown dist)"
+        emp <- .inflate_empirical(entry, param_name)
+        if (is.null(emp)) {
+          if (verbose) message(sprintf(
+            "  inflate_priors: unknown distribution '%s' for '%s'. Skipping.", dist, param_name))
+          return(entry)
+        }
+        emp
       }
     )  # end switch
 
+    if (verbose) message(sprintf(
+      "  inflate_priors: [%-10s] %-35s %s",
+      dist, param_name, if (method_used == "analytic") "inflated" else
+        paste("inflated (", method_used, ")")))
+
     new_entry
-  }  # end .inflate_entry
+  }
 
   # ---------------------------------------------------------------------------
   # Helper: should this parameter be inflated?
   # ---------------------------------------------------------------------------
   .should_inflate <- function(base_name, full_name) {
-    if (is.null(params)) return(TRUE)  # inflate all
+    if (is.null(params)) return(TRUE)
     base_name %in% params || full_name %in% params
   }
 
   # ---------------------------------------------------------------------------
   # Walk and inflate
   # ---------------------------------------------------------------------------
-  result   <- priors
+  result     <- priors
   n_inflated <- 0L
 
-  # Global parameters
   for (pname in names(result$parameters_global)) {
     if (!.should_inflate(pname, pname)) next
     old_entry <- result$parameters_global[[pname]]
@@ -266,13 +390,9 @@ inflate_priors <- function(priors,
     if (!identical(old_entry, new_entry)) {
       result$parameters_global[[pname]] <- new_entry
       n_inflated <- n_inflated + 1L
-      if (verbose) message(sprintf(
-        "  inflate_priors: [global] %-30s dist=%-10s inflated",
-        pname, old_entry$distribution))
     }
   }
 
-  # Location-specific parameters
   for (base_name in names(result$parameters_location)) {
     loc_block <- result$parameters_location[[base_name]]
     if (is.null(loc_block$location)) next
@@ -284,14 +404,10 @@ inflate_priors <- function(priors,
       if (!identical(old_entry, new_entry)) {
         result$parameters_location[[base_name]]$location[[iso]] <- new_entry
         n_inflated <- n_inflated + 1L
-        if (verbose) message(sprintf(
-          "  inflate_priors: [location] %-30s dist=%-10s inflated",
-          full_name, old_entry$distribution))
       }
     }
   }
 
-  # Update metadata
   result$metadata$description <- paste0(
     result$metadata$description %||% "",
     sprintf(" [variance inflated x%.2f on %d params]", f, n_inflated)
@@ -300,8 +416,7 @@ inflate_priors <- function(priors,
   result$metadata$inflation_date   <- as.character(Sys.Date())
 
   if (verbose)
-    message(sprintf("inflate_priors: inflated %d parameter entries (factor=%.2f).",
-                    n_inflated, f))
+    message(sprintf("inflate_priors: inflated %d entries (factor=%.2f).", n_inflated, f))
 
   invisible(result)
 }

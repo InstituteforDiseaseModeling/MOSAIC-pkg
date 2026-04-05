@@ -4,30 +4,31 @@
 \alias{inflate_priors}
 \title{Inflate Prior or Posterior Distributions by a Variance Factor}
 \usage{
-inflate_priors(priors, inflation_factor = 2, params = NULL, verbose = TRUE)
+inflate_priors(
+  priors,
+  inflation_factor = 2,
+  params = NULL,
+  n_samples = 10000L,
+  verbose = TRUE
+)
 }
 \arguments{
-\item{priors}{List. A priors or posteriors object as returned by
-\code{\link{get_location_priors}} or \code{\link{update_priors_from_posteriors}}.
-Must have \code{parameters_global} and \code{parameters_location} slots.}
+\item{priors}{List. A priors or posteriors object with \code{parameters_global}
+and \code{parameters_location} slots.}
 
-\item{inflation_factor}{Numeric scalar > 0. Variance multiplier. A value of
-2.0 doubles the variance of each distribution while preserving its mean.
-Values < 1.0 deflate (not recommended). Default 2.0.}
+\item{inflation_factor}{Numeric scalar > 0. Variance multiplier. \code{2.0}
+doubles variance while preserving the mean. Default 2.0.}
 
-\item{params}{Optional character vector. Base parameter names to inflate
-(e.g. \code{c("mu_j_baseline", "mu_j_slope")}). When \code{NULL} (default)
-all non-fixed, non-frozen parameters are inflated. Location-specific
-parameters are matched on base name (inflating \code{"mu_j_baseline"}
-inflates all locations).}
+\item{params}{Optional character vector. Base parameter names to inflate.
+When \code{NULL} all non-fixed/frozen parameters are inflated.}
 
-\item{verbose}{Logical. Print per-parameter inflation diagnostics. Default
-\code{TRUE}.}
+\item{n_samples}{Integer. Number of samples for empirical fallback methods
+(truncnorm fallback, gompertz). Default 10000L.}
+
+\item{verbose}{Logical. Print per-parameter inflation messages. Default TRUE.}
 }
 \value{
-A priors list with the same structure as \code{priors} but with
-inflated distribution parameters. Metadata is updated to record the
-inflation factor applied.
+A priors list with inflated distribution parameters. Metadata updated.
 }
 \description{
 Takes a priors or posteriors list object and inflates the variance of each
@@ -39,43 +40,40 @@ target different objectives.
 
 The technique is known as kernel smoothing, covariance inflation, or
 variance tempering in the Sequential Monte Carlo literature (Liu & West
-2001; Del Moral et al. 2006). For staged cholera calibration, it is
-typically applied to CFR parameters after the deaths-only stage and before
-the joint stage, allowing the joint stage to explore parameter combinations
-that the deaths-only stage could not anticipate.
+2001; Del Moral et al. 2006).
 }
-\details{
-\strong{Supported distributions and inflation algebra:}
+\section{Methods}{
 
+Each distribution is inflated using the most appropriate method:
+
+\strong{Analytic (exact):}
 \describe{
-\item{beta(shape1, shape2)}{Precision \code{s = shape1+shape2} reduced by
-\code{f}: \code{s_new = (s+1)/f - 1}. Maximum inflatable factor is
-\code{f_max = s + 1}; entries exceeding this are skipped with a warning.}
-\item{gamma(shape, rate)}{Both halved by \code{f}:
-\code{shape_new = shape/f}, \code{rate_new = rate/f}. Always valid.}
-\item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}:
-\code{sdlog_new = sqrt(log(1 + f*(exp(sdlog^2)-1)))}; \code{meanlog}
+\item{beta(shape1, shape2)}{Reduce precision \code{s = α+β} by factor \code{f}.
+Maximum inflatable factor is \code{f_max = s+1}.}
+\item{gamma(shape, rate)}{\code{shape_new = shape/f, rate_new = rate/f}.}
+\item{lognormal(meanlog, sdlog)}{CV² scaled by \code{f}; \code{meanlog}
 adjusted to preserve natural-scale mean.}
-\item{lognormal(mean, sd)}{Natural-scale sd scaled: \code{sd_new = sqrt(f)*sd}.}
-\item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}. Mean unchanged.}
-\item{truncnorm(mean, sd, a, b)}{sd scaled, then pre-truncation mean
-found by root-finding to preserve the actual truncated mean.}
+\item{lognormal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
+\item{normal(mean, sd)}{\code{sd_new = sqrt(f)*sd}.}
 \item{uniform(min, max)}{Bounds extended symmetrically around midpoint.
-Skipped with a warning if new bounds violate positivity (min was >= 0
-but new_min < 0).}
-\item{fixed / frozen / failed / gompertz}{Skipped silently (fixed/frozen)
-or with a warning (gompertz).}
+Skipped with a warning if new bounds violate positivity.}
 }
-}
-\references{
-Liu, J. S., & West, M. (2001). Combined parameter and state estimation in
-simulation-based filtering. In Sequential Monte Carlo Methods in Practice
-(pp. 197-223). Springer.
 
-Del Moral, P., Doucet, A., & Jasra, A. (2006). Sequential Monte Carlo
-samplers. Journal of the Royal Statistical Society: Series B, 68(3),
-411-436.
+\strong{Analytic with empirical fallback:}
+\describe{
+\item{truncnorm(mean, sd, a, b)}{Root-finding preserves actual truncated
+mean. Due to active bounds, the achieved variance ratio may be less than
+\code{inflation_factor}. Falls back to empirical refit if root-find fails.}
 }
+
+\strong{Empirical (sample → inflate → refit):}
+\describe{
+\item{gompertz(b, eta)}{No closed-form moments. Sampled empirically,
+variance inflated, distribution refit via MLE.}
+\item{Any other distribution}{Universal empirical fallback.}
+}
+}
+
 \seealso{
 \code{\link{update_priors_from_posteriors}},
 \code{\link{mosaic_adaptive_s3_weights}}
