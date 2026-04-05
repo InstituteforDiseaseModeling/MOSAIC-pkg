@@ -33,7 +33,7 @@
 #                A=0.70, CVw=1.5. 4 CFR params free, S1 config frozen.
 #                weight_cases=0.0, weight_deaths=1.0. max_batches=10.
 #
-#   Pre-S3:      inflate_priors(ALL params, f=1.5) — broadens both
+#   Pre-S3:      inflate_priors(ALL params, f=2.0) — broadens both
 #                transmission (S1) and CFR (S2) posteriors before S3 to
 #                prevent IS weight collapse in the joint stage.
 #                mosaic_adaptive_s3_weights() sets per-country w_cases/w_deaths.
@@ -75,7 +75,7 @@ locations <- list(
 )
 
 # Variance inflation factor applied to ALL priors before S3.
-# f=1.5 inflates pre-truncation variance by 1.5x (mean preserved) for every
+# f=2.0 inflates pre-truncation variance by 2.0x (mean preserved) for every
 # fitted distribution — both transmission params (from S1) and CFR params
 # (from S2). Prevents IS weight collapse in S3 when the joint optimum differs
 # from the staged single-outcome optima (Liu & West 2001).
@@ -415,11 +415,11 @@ for (iso in names(locations)) {
         verbose    = FALSE
       )
 
-      # Step 2: inflate ALL params by f=1.5 before S3.
+      # Step 2: inflate ALL params by f=2.0 before S3.
       # Applies to both transmission params (S1 posteriors) and CFR params
       # (S2 posteriors). Prevents IS weight collapse when the S3 joint optimum
       # differs from the staged single-outcome optima (Liu & West 2001).
-      # f=1.5 broadens pre-truncation variance 1.5x while preserving means.
+      # f=2.0 doubles pre-truncation variance while preserving means.
       log_msg("[%s] Inflating ALL priors x%.1f before S3", iso, S3_INFLATION_FACTOR)
       priors_s3 <- inflate_priors(
         priors           = priors_s3_base,
