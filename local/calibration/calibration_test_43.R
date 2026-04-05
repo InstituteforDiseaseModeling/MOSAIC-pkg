@@ -107,9 +107,9 @@ design_B <- list(
     min_batches    = 5L,
     max_batches    = 20L,
     target_r2      = 0.90,
-    ESS_param      = 100L,
+    ESS_param      = 200L,
     ESS_param_prop = 1.00,   # ALL 4 CFR params must converge
-    ESS_best       = 100L,
+    ESS_best       = 200L,
     A_best         = 0.70,   # Agreement Index ≥ 0.70
     CVw_best       = 1.5     # Tighter than S1: 4 params, smoother posterior
   ),
