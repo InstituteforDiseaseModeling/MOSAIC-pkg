@@ -98,9 +98,9 @@ design_B <- list(
     target_r2      = 0.90,
     ESS_param      = 200L,
     ESS_param_prop = 0.95,   # 95% of 43 params = ~41 must hit ESS_param
-    ESS_best       = 200L,
-    A_best         = 0.70,   # Agreement Index ≥ 0.70 (docs: target > 0.7-0.8)
-    CVw_best       = 2.0     # Kong et al. 1994: CVw ≲ 2
+    ESS_best       = 300L,   # Production standard (ETH_1, 10_countries runs)
+    A_best         = 0.95,   # Production standard (achieved >0.99 in production)
+    CVw_best       = 0.5     # Production standard (achieved 0.24-0.56 in production)
   ),
   s2 = list(
     batch_size     = 500L,
@@ -109,9 +109,9 @@ design_B <- list(
     target_r2      = 0.90,
     ESS_param      = 200L,
     ESS_param_prop = 1.00,   # ALL 4 CFR params must converge
-    ESS_best       = 200L,
-    A_best         = 0.70,   # Agreement Index ≥ 0.70
-    CVw_best       = 1.5     # Tighter than S1: 4 params, smoother posterior
+    ESS_best       = 300L,   # Production standard
+    A_best         = 0.95,   # Production standard
+    CVw_best       = 0.5     # Production standard
   ),
   s3 = list(
     batch_size     = 500L,
@@ -120,9 +120,9 @@ design_B <- list(
     target_r2      = 0.90,
     ESS_param      = 500L,   # Full convergence: BDA3/Bürkner target ESS 500+
     ESS_param_prop = 0.95,   # 95% of 43 params = ~41 must hit ESS_param
-    ESS_best       = 500L,
-    A_best         = 0.90,   # High consensus for final production posterior
-    CVw_best       = 1.0     # Tight weight balance for final stage
+    ESS_best       = 300L,   # Production standard
+    A_best         = 0.95,   # Production standard
+    CVw_best       = 0.5     # Production standard
   )
 )
 
