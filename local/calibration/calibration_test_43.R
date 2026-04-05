@@ -93,7 +93,7 @@ S3_INFLATION_FACTOR <- 1.5
 design_B <- list(
   s1 = list(
     batch_size     = 1000L,
-    min_batches    = 3L,
+    min_batches    = 5L,
     max_batches    = 20L,
     target_r2      = 0.90,
     ESS_param      = 100L,
@@ -104,7 +104,7 @@ design_B <- list(
   ),
   s2 = list(
     batch_size     = 500L,
-    min_batches    = 3L,
+    min_batches    = 5L,
     max_batches    = 20L,
     target_r2      = 0.90,
     ESS_param      = 100L,
@@ -115,7 +115,7 @@ design_B <- list(
   ),
   s3 = list(
     batch_size     = 1000L,
-    min_batches    = 3L,
+    min_batches    = 5L,
     max_batches    = 50L,
     target_r2      = 0.90,
     ESS_param      = 500L,   # Full convergence: BDA3/Bürkner target ESS 500+
