@@ -724,7 +724,9 @@
     # Model: ESS = intercept + slope × sqrt(n)
     # Solving for n: n = ((target_ess - intercept) / slope)^2
     target_ess <- control$targets$ESS_param
-    est_sims <- if (slope > 0 && (target_ess - intercept) > 0) {
+    # Guard against NA/NaN coefficients (occurs when ess_df has only 1 row,
+    # making the 2-parameter lm underdetermined — R sets slope=NA)
+    est_sims <- if (isTRUE(slope > 0) && isTRUE((target_ess - intercept) > 0)) {
       ((target_ess - intercept) / slope)^2
     } else {
       NA_real_
