@@ -92,7 +92,7 @@ S3_INFLATION_FACTOR <- 1.5
 
 design_B <- list(
   s1 = list(
-    batch_size     = 1000L,
+    batch_size     = 500L,
     min_batches    = 5L,
     max_batches    = 20L,
     target_r2      = 0.90,
@@ -114,7 +114,7 @@ design_B <- list(
     CVw_best       = 1.5     # Tighter than S1: 4 params, smoother posterior
   ),
   s3 = list(
-    batch_size     = 1000L,
+    batch_size     = 500L,
     min_batches    = 5L,
     max_batches    = 50L,
     target_r2      = 0.90,
