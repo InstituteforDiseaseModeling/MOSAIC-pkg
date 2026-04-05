@@ -79,7 +79,7 @@ locations <- list(
 # fitted distribution — both transmission params (from S1) and CFR params
 # (from S2). Prevents IS weight collapse in S3 when the joint optimum differs
 # from the staged single-outcome optima (Liu & West 2001).
-S3_INFLATION_FACTOR <- 1.5
+S3_INFLATION_FACTOR <- 2.0
 
 # =============================================================================
 # DESIGN B SETTINGS — revised from test_42 analysis
@@ -96,9 +96,9 @@ design_B <- list(
     min_batches    = 5L,
     max_batches    = 20L,
     target_r2      = 0.90,
-    ESS_param      = 100L,
-    ESS_param_prop = 0.80,   # 80% of 43 params = ~34 must hit ESS_param
-    ESS_best       = 100L,
+    ESS_param      = 200L,
+    ESS_param_prop = 0.95,   # 95% of 43 params = ~41 must hit ESS_param
+    ESS_best       = 200L,
     A_best         = 0.70,   # Agreement Index ≥ 0.70 (docs: target > 0.7-0.8)
     CVw_best       = 2.0     # Kong et al. 1994: CVw ≲ 2
   ),
