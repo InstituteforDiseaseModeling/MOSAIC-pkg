@@ -149,8 +149,9 @@ inflate_priors <- function(priors,
           # MLE for pre-truncation (mu, sigma) with fixed bounds
           nll <- function(par) {
             mu_p <- par[1]; sig_p <- exp(par[2])
-            -sum(truncnorm::dtruncnorm(x, a = a_n, b = b_n,
-                                       mean = mu_p, sd = sig_p, log = TRUE))
+            d <- truncnorm::dtruncnorm(x, a = a_n, b = b_n,
+                                       mean = mu_p, sd = sig_p)
+            -sum(log(pmax(d, 1e-300)))
           }
           init <- c(mean(x), log(max(sd(x), 1e-6)))
           fit  <- stats::optim(init, nll, method = "BFGS",
@@ -265,10 +266,13 @@ inflate_priors <- function(priors,
       },
 
       # --- Truncated normal (analytic with empirical fallback) ---
-      # Root-find preserves actual truncated mean exactly.
-      # Variance ratio may be < f due to active bounds — this is inherent to
-      # the truncated family. Falls back to empirical MLE refit when root-find
-      # fails (e.g. etruncnorm saturates for extreme sd values).
+      # Exact variance targeting via nested root-find.
+      # Simple sd scaling (sqrt(f)*sd) under-inflates when bounds are active
+      # because clipping reduces the achievable variance — the ratio is NOT
+      # constant (varies from ~40% to 80% of target across entries and f).
+      # Instead: outer root-find finds sd_new such that the actual post-
+      # truncation variance equals f * old_variance, while the inner root-find
+      # preserves the truncated mean. Falls back to empirical if infeasible.
       truncnorm = {
         if (!all(c("mean", "sd", "a", "b") %in% names(p))) return(entry)
 
@@ -279,40 +283,121 @@ inflate_priors <- function(priors,
                    if (identical(p$b, -Inf) || identical(p$b, "-Inf")) -Inf  else
                    as.numeric(p$b)
 
-        sd_new   <- sqrt(f) * p$sd
-        mu_trunc <- tryCatch(
+        mu_trunc  <- tryCatch(
           truncnorm::etruncnorm(a_bound, b_bound, p$mean, p$sd),
           error = function(e) p$mean
         )
+        old_var   <- tryCatch(
+          truncnorm::vtruncnorm(a_bound, b_bound, p$mean, p$sd),
+          error = function(e) p$sd^2
+        )
+        target_var <- f * old_var
 
-        # Search interval: stay close to the feasible region to avoid etruncnorm
-        # saturation at extreme mean values (which causes uniroot sign failure)
-        lo <- if (is.finite(a_bound)) a_bound - 3 * sd_new else mu_trunc - 10 * sd_new
-        hi <- if (is.finite(b_bound)) b_bound + 3 * sd_new else mu_trunc + 10 * sd_new
+        # Max achievable variance is (b-a)²/12 (uniform distribution limit).
+        # If both bounds are finite, check feasibility.
+        max_var <- if (is.finite(a_bound) && is.finite(b_bound))
+                     (b_bound - a_bound)^2 / 12 else Inf
 
-        new_mean <- tryCatch({
-          stats::uniroot(
-            function(m) truncnorm::etruncnorm(a_bound, b_bound, m, sd_new) - mu_trunc,
-            interval = c(lo, hi),
-            tol = 1e-8
-          )$root
-        }, error = function(e) {
-          # Root-find failed — fall back to empirical refit
-          method_used <<- "empirical (truncnorm fallback)"
-          emp <- .inflate_empirical(entry, param_name)
-          if (!is.null(emp)) {
-            entry <<- emp
-          } else {
-            warning(sprintf(
-              "inflate_priors: truncnorm '%s' analytic and empirical both failed. Skipping.",
-              param_name), call. = FALSE)
+        if (is.finite(max_var) && target_var >= max_var * 0.999) {
+          warning(sprintf(
+            "inflate_priors: truncnorm '%s' target variance (%.4f) near/above maximum achievable (%.4f). Capping.",
+            param_name, target_var, max_var), call. = FALSE)
+          target_var <- max_var * 0.95
+        }
+
+        # Inner helper: find pre-truncation mean that preserves truncated mean,
+        # given a candidate sd value. Returns NA on failure.
+        # Search interval uses bound-width not sd to avoid etruncnorm saturation
+        # at large sd values (at m << a or m >> b, etruncnorm → bound endpoint).
+        bw <- if (is.finite(a_bound) && is.finite(b_bound))
+                b_bound - a_bound else p$sd * 20
+        .find_mean <- function(sd_cand) {
+          lo_m <- if (is.finite(a_bound)) a_bound - 3*bw else mu_trunc - 10*sd_cand
+          hi_m <- if (is.finite(b_bound)) b_bound + 3*bw else mu_trunc + 10*sd_cand
+          tryCatch(
+            stats::uniroot(
+              function(m) truncnorm::etruncnorm(a_bound, b_bound, m, sd_cand) - mu_trunc,
+              interval = c(lo_m, hi_m), tol = 1e-8
+            )$root,
+            error = function(e) NA_real_
+          )
+        }
+
+        # Outer search: bisection over sd_new to achieve target_var.
+        # Using bisection (not uniroot) because the objective may return NA at
+        # large sd values where the inner root-find saturates. Bisection handles
+        # NA cleanly by shrinking the upper bound when inner fails.
+        result <- tryCatch({
+          bound_range <- if (is.finite(a_bound) && is.finite(b_bound))
+                           b_bound - a_bound else p$sd * 100
+          sd_lo_b <- p$sd * 0.01
+          sd_hi_b <- min(p$sd * 20, 5 * bound_range)
+
+          .var_at <- function(sd_cand) {
+            mn <- .find_mean(sd_cand)
+            if (is.na(mn)) return(NA_real_)
+            tryCatch(truncnorm::vtruncnorm(a_bound, b_bound, mn, sd_cand),
+                     error = function(e) NA_real_)
           }
-          NA_real_  # signal that entry was already updated
+
+          # For one-sided bounds (b=Inf), expand sd_hi if target not yet reached
+          v_hi_check <- .var_at(sd_hi_b)
+          if (!is.na(v_hi_check) && v_hi_check < target_var)
+            sd_hi_b <- sd_hi_b * 5
+
+          # For doubly-bounded cases, etruncnorm saturates at (a+b)/2 when
+          # sd >> (b-a), making mean-preservation infeasible for mu_trunc ≠
+          # midpoint. Find the maximum feasible sd via binary shrink (≤20 steps).
+          if (is.finite(a_bound) && is.finite(b_bound)) {
+            for (.k in seq_len(20L)) {
+              if (!is.na(.var_at(sd_hi_b))) break
+              sd_hi_b <- sd_hi_b * 0.5
+            }
+            # If still infeasible or max achievable var < target, warn and cap
+            v_max <- .var_at(sd_hi_b)
+            if (is.na(v_max) || v_max < target_var) {
+              if (!is.na(v_max))
+                warning(sprintf(
+                  "inflate_priors: truncnorm '%s' target variance (%.4f) exceeds maximum achievable with mean-preservation (%.4f). Inflating to maximum feasible.",
+                  param_name, target_var, v_max), call. = FALSE)
+              target_var <- if (!is.na(v_max)) v_max * 0.999 else old_var * 1.01
+            }
+          }
+
+          # Bisection: 60 iterations → precision ~sd_range/2^60 (machine eps)
+          # Track the best (sd, mean) pair seen so far at v closest to target
+          best_sd <- NA_real_; best_mn <- NA_real_; best_gap <- Inf
+          for (iter in seq_len(60L)) {
+            sd_mid <- (sd_lo_b + sd_hi_b) / 2
+            mn_mid <- .find_mean(sd_mid)
+            if (is.na(mn_mid)) { sd_hi_b <- sd_mid; next }
+            v_mid <- tryCatch(
+              truncnorm::vtruncnorm(a_bound, b_bound, mn_mid, sd_mid),
+              error = function(e) NA_real_
+            )
+            if (is.na(v_mid)) { sd_hi_b <- sd_mid; next }
+            gap <- abs(v_mid - target_var)
+            if (gap < best_gap) { best_gap <- gap; best_sd <- sd_mid; best_mn <- mn_mid }
+            if (v_mid < target_var) sd_lo_b <- sd_mid else sd_hi_b <- sd_mid
+            if ((sd_hi_b - sd_lo_b) / max(sd_mid, 1e-10) < 1e-7) break
+          }
+          if (is.na(best_sd)) stop("bisection: no feasible (sd, mean) found")
+          if (best_gap / target_var > 0.05)
+            warning(sprintf(
+              "inflate_priors: truncnorm '%s' achieved variance within %.1f%% of target (mean-preservation constraint with active bounds).",
+              param_name, best_gap / target_var * 100), call. = FALSE)
+          list(sd_new = best_sd, mean_new = best_mn)
+        }, error = function(e) {
+          method_used <<- "empirical (truncnorm fallback)"
+          .inflate_empirical(entry, param_name)
         })
 
-        if (!is.na(new_mean)) {
-          entry$parameters$mean <- new_mean
-          entry$parameters$sd   <- sd_new
+        if (is.list(result) && !is.null(result$sd_new)) {
+          entry$parameters$mean <- result$mean_new
+          entry$parameters$sd   <- result$sd_new
+        } else if (!is.null(result)) {
+          # empirical returned a full entry
+          entry <- result
         }
         entry
       },
