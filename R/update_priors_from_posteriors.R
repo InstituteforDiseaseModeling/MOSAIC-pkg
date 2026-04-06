@@ -170,6 +170,24 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
         next
       }
 
+      # Guard: reject distribution family changes (except when prior is uniform).
+      # A posterior fitted as e.g. gompertz replacing a lognormal prior can
+      # produce pathological parameter values after further processing
+      # (inflate_priors, staged estimation). Only uniform priors are allowed to
+      # change family because they have no informative shape and any fitted
+      # continuous distribution is an improvement.
+      prior_dist <- updated$parameters_global[[param_name]]$distribution
+      if (!is.null(prior_dist) &&
+          !identical(tolower(prior_dist), "uniform") &&
+          !identical(tolower(dist_type), tolower(prior_dist))) {
+        if (verbose) message("  [KEEP PRIOR] ", param_name,
+                             " (global): posterior family '", dist_type,
+                             "' differs from prior family '", prior_dist, "'")
+        n_failed_kept <- n_failed_kept + 1L
+        failed_kept_params <- c(failed_kept_params, param_name)
+        next
+      }
+
       # Clean parameters: keep only canonical fields
       clean_entry <- .clean_posterior_entry(post_entry, dist_core_fields)
       updated$parameters_global[[param_name]] <- clean_entry
@@ -178,7 +196,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   if (verbose) {
-    message(sprintf("Global: %d replaced, %d kept (frozen/failed), %d skipped",
+    message(sprintf("Global: %d replaced, %d kept (frozen/failed/family-mismatch), %d skipped",
                     n_replaced, n_failed_kept, n_skipped))
   }
 
@@ -239,6 +257,19 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
           next
         }
 
+        # Guard: reject distribution family changes (except when prior is uniform)
+        prior_dist_loc <- updated$parameters_location[[param_base]]$location[[iso]]$distribution
+        if (!is.null(prior_dist_loc) &&
+            !identical(tolower(prior_dist_loc), "uniform") &&
+            !identical(tolower(dist_type), tolower(prior_dist_loc))) {
+          if (verbose) message("  [KEEP PRIOR] ", param_base, "_", iso,
+                               ": posterior family '", dist_type,
+                               "' differs from prior family '", prior_dist_loc, "'")
+          n_loc_failed_kept <- n_loc_failed_kept + 1L
+          loc_failed_kept_params <- c(loc_failed_kept_params, paste0(param_base, "_", iso))
+          next
+        }
+
         # Clean and replace
         clean_entry <- .clean_posterior_entry(post_entry, dist_core_fields)
         updated$parameters_location[[param_base]]$location[[iso]] <- clean_entry
@@ -248,7 +279,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   }
 
   if (verbose) {
-    message(sprintf("Location: %d replaced, %d kept (frozen/failed), %d skipped",
+    message(sprintf("Location: %d replaced, %d kept (frozen/failed/family-mismatch), %d skipped",
                     n_loc_replaced, n_loc_failed_kept, n_loc_skipped))
   }
 

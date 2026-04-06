@@ -315,8 +315,8 @@ mosaic_pal_discrete <- function(n,
 #' @param palette Palette name: \code{"blues"} (default), \code{"reds"},
 #'   \code{"greens"}, \code{"teals"}, \code{"heat"}, \code{"grays"}.
 #' @param direction \code{1} (light to dark) or \code{-1} (dark to light).
-#' @param begin Start position in [0, 1] (default 0).
-#' @param end End position in [0, 1] (default 1).
+#' @param begin Start position in \[0, 1\] (default 0).
+#' @param end End position in \[0, 1\] (default 1).
 #'
 #' @return Character vector of hex color codes.
 #'
@@ -772,8 +772,8 @@ scale_fill_mosaic_d <- function(palette = "default", direction = 1, alpha = 1, .
 #' @param palette Palette name: \code{"blues"}, \code{"reds"}, \code{"greens"},
 #'   \code{"teals"}, \code{"heat"}, \code{"grays"}.
 #' @param direction \code{1} (light to dark) or \code{-1}.
-#' @param begin Start position in [0, 1].
-#' @param end End position in [0, 1].
+#' @param begin Start position in \[0, 1\].
+#' @param end End position in \[0, 1\].
 #' @param ... Passed to \code{\link[ggplot2]{scale_colour_gradientn}}.
 #'
 #' @return A ggplot2 scale object.

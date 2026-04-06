@@ -24,9 +24,9 @@ scale_fill_mosaic_c(palette = "blues", direction = 1, begin = 0, end = 1, ...)
 
 \item{direction}{\code{1} (light to dark) or \code{-1}.}
 
-\item{begin}{Start position in \link{0, 1}.}
+\item{begin}{Start position in [0, 1].}
 
-\item{end}{End position in \link{0, 1}.}
+\item{end}{End position in [0, 1].}
 
 \item{...}{Passed to \code{\link[ggplot2]{scale_colour_gradientn}}.}
 }

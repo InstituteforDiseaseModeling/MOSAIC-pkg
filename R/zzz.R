@@ -1,49 +1,62 @@
 .onLoad <- function(libname, pkgname) {
 
-     # CRITICAL FIX: Allow duplicate OpenMP libraries
-     # PyTorch and data.table both use OpenMP (libomp.dylib on macOS)
-     # Without this, loading data.table after PyTorch causes R to crash with:
-     # "OMP: Error #15: Initializing libomp.dylib, but found libomp.dylib already initialized"
+     # ===========================================================================
+     # OpenMP / threading safety
+     # ===========================================================================
      #
-     # This is a known issue when mixing packages with OpenMP:
-     # - PyTorch (via reticulate) loads libomp from conda/Homebrew
-     # - data.table loads libomp from R compilation
-     # - Both try to initialize OpenMP → crash
+     # MOSAIC loads three packages that each bundle their own OpenMP runtime:
      #
-     # Setting KMP_DUPLICATE_LIB_OK=TRUE allows both to coexist
-     # This is the standard workaround for R packages using OpenMP with Python
+     #   libomp    — Clang/LLVM OpenMP, loaded by data.table (macOS ARM)
+     #   libiomp5  — Intel KMP OpenMP, loaded by numba (laser-cholera JIT)
+     #   libgomp   — GNU OpenMP, loaded by scipy (laser-cholera >= 0.12.1)
+     #
+     # pip, conda, and R package managers install these independently with no
+     # coordination. Having all three in the same process causes SIGSEGV crashes
+     # at __kmp_suspend_initialize_thread when any runtime initialises threads
+     # after another has already claimed shared data structures.
+     #
+     # KMP_DUPLICATE_LIB_OK=TRUE suppresses "duplicate library" errors (same
+     # library loaded twice) but does NOT prevent GNU + Intel cross-runtime
+     # conflicts. The root fix is to stop numba loading libiomp5 at all by
+     # switching it to the workqueue threading backend, which uses numba's own
+     # built-in thread pool and requires no external OpenMP library.
+
+     # Switch numba to its workqueue threading backend.
+     # This eliminates libiomp5 from the process, leaving only libomp (data.table)
+     # and libgomp (scipy) which coexist without conflict.
+     # Performance impact is negligible for laser-cholera's spatial SEIR kernels.
+     if (Sys.getenv("NUMBA_THREADING_LAYER") == "") {
+          Sys.setenv(NUMBA_THREADING_LAYER = "workqueue")
+     }
+
+     # Allow duplicate loads of the same OpenMP library (belt-and-suspenders for
+     # libomp, which data.table and macOS system tools may both load).
      if (Sys.getenv("KMP_DUPLICATE_LIB_OK") == "") {
           Sys.setenv(KMP_DUPLICATE_LIB_OK = "TRUE")
      }
 
-     # Additional OpenMP safety: Limit thread affinity issues
-     # MKL and OpenMP can conflict on thread binding
+     # Prevent Intel KMP from pinning threads to cores — can cause deadlocks when
+     # multiple runtimes are present.
      if (Sys.getenv("KMP_AFFINITY") == "") {
           Sys.setenv(KMP_AFFINITY = "none")
      }
 
-     # CRITICAL: Force data.table to single-threaded mode
-     # When PyTorch (via reticulate) has already initialized OpenMP,
-     # data.table's multi-threaded operations cause segfaults even with
-     # KMP_DUPLICATE_LIB_OK=TRUE. The conflict occurs during actual operations,
-     # not just library loading.
-     #
-     # Solution: Force data.table to use single-threaded mode via environment variable
-     # This is read by data.table during initialization and cannot be changed after loading
+     # Force data.table to single-threaded mode. data.table reads this at
+     # initialisation; setting it here (before data.table loads) ensures it
+     # never attempts multi-threaded OpenMP operations that could conflict.
      if (Sys.getenv("R_DATATABLE_NUM_THREADS") == "") {
           Sys.setenv(R_DATATABLE_NUM_THREADS = "1")
      }
 
-     # Also set general OpenMP thread limit as a backup
-     # (though data.table primarily respects R_DATATABLE_NUM_THREADS)
+     # General OpenMP thread limit — suppresses thread oversubscription and
+     # reduces the surface area for cross-runtime conflicts in the main process.
+     # PSOCK workers and Dask cloud workers set their own limits independently.
      if (Sys.getenv("OMP_NUM_THREADS") == "") {
           Sys.setenv(OMP_NUM_THREADS = "1")
      }
 
-     # Suppress OpenMP informational messages
-     # LASER (laser-cholera) uses deprecated omp_set_nested() which triggers
-     # "OMP: Info #276" warnings in newer OpenMP versions (5.0+)
-     # This is harmless but clutters output - suppress info-level messages
+     # Suppress Intel KMP informational messages (e.g. "OMP: Info #276" from
+     # deprecated omp_set_nested() calls in older laser-cholera versions).
      if (Sys.getenv("KMP_WARNINGS") == "") {
           Sys.setenv(KMP_WARNINGS = "0")
      }

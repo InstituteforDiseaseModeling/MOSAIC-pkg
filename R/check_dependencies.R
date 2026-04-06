@@ -129,10 +129,11 @@ check_dependencies <- function() {
 
                # Handle special import name mappings
                import_map <- c(
-                    "pytorch" = "torch",
-                    "scikit-learn" = "sklearn",
-                    "laser-cholera" = "laser.cholera",
-                    "laser-core" = "laser.core"
+                    "pytorch"          = "torch",
+                    "scikit-learn"     = "sklearn",
+                    "laser-cholera"    = "laser.cholera",
+                    "laser-core"       = "laser.core",
+                    "dask[distributed]" = "dask.distributed"
                )
 
                if (pkg_import_name %in% names(import_map)) {
