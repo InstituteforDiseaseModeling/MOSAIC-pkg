@@ -733,13 +733,17 @@
     }
 
     # Print model fit diagnostics
+    # slope/r2 may be NA when ESS has plateaued (constant response → rank-deficient lm)
+    slope_print <- if (is.finite(slope)) slope else 0
+    r2_print    <- if (is.finite(r2))    r2    else 0
     log_msg("Calibration convergence check (batch %d):", state$batch_number)
     if (!is.na(est_sims)) {
       log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: %.0f",
-              intercept, slope, r2, control$calibration$target_r2, round(est_sims))
+              intercept, slope_print, r2_print, control$calibration$target_r2, round(est_sims))
     } else {
-      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: N/A",
-              intercept, slope, r2, control$calibration$target_r2)
+      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: N/A%s",
+              intercept, slope_print, r2_print, control$calibration$target_r2,
+              if (!is.finite(slope)) " [ESS plateau — slope undefined]" else "")
     }
     log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
             nrow(ess_df), state$batch_number, min(ess_df$sims), max(ess_df$sims))
