@@ -79,7 +79,7 @@ dask_spec <- list(
 # ---------------------------------------------------------------------------
 # Run adaptive calibration
 # ---------------------------------------------------------------------------
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = dir_output,

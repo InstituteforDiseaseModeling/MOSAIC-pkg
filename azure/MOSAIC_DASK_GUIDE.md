@@ -1,8 +1,8 @@
 # MOSAIC Dask Calibration Guide
 
-**Function**: `run_MOSAIC_dask()` in `R/run_MOSAIC_dask.R`
+**Function**: `run_MOSAIC(... , dask_spec = list(...))` in `R/run_MOSAIC.R`
 **Worker module**: `inst/python/mosaic_dask_worker.py`
-**Last Updated**: 2026-03-19
+**Last Updated**: 2026-04-03
 
 ---
 
@@ -10,7 +10,7 @@
 
 MOSAIC's existing `run_MOSAIC()` uses R's built-in `parallel::makeCluster()`, which is limited to one machine. For multi-country runs this is the **only option** — country coupling (mobility, shared environmental suitability) happens *inside* each LASER simulation, so you cannot parallelize at the country level. Each simulation must see all countries simultaneously.
 
-`run_MOSAIC_dask()` replaces the R cluster with a Dask cluster spanning multiple cloud VMs (via Coiled.io on Azure), dispatching each LASER simulation as a pure-Python Dask task. LASER is already Python (`laser_cholera`); workers call it directly without any R subprocess.
+`run_MOSAIC(dask_spec = ...)` replaces the R cluster with a Dask cluster spanning multiple cloud VMs (via Coiled.io on Azure), dispatching each LASER simulation as a pure-Python Dask task. LASER is already Python (`laser_cholera`); workers call it directly without any R subprocess.
 
 ---
 
@@ -109,7 +109,7 @@ coiled.create_software_environment(
 
 ### 3. Local R environment
 
-The R session that calls `run_MOSAIC_dask()` needs:
+The R session that calls `run_MOSAIC()` needs:
 - MOSAIC package installed
 - `reticulate` with access to a Python environment that has `coiled` and `dask.distributed`
 - `coiled login` authenticated (run once in terminal)
@@ -139,7 +139,7 @@ Runs 50 ETH simulations across 2 Coiled workers — verifies the full pipeline e
 |---|---|---|
 | R packages needed locally | None | Full MOSAIC + deps |
 | Coiled credentials | Mount `~/.config/coiled` | `coiled login` before starting R |
-| Gets `run_MOSAIC_dask()` | Installs from local source in container | Must be installed locally |
+| Gets `run_MOSAIC()` | Installs from local source in container | Must be installed locally |
 
 ---
 
@@ -184,7 +184,7 @@ dask_spec <- list(
   idle_timeout = "30 minutes"
 )
 
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = dir_output,
@@ -212,7 +212,7 @@ docker run --rm \
 ```
 
 What happens:
-- `R CMD INSTALL /src/MOSAIC-pkg` — installs `run_MOSAIC_dask()` from your local source into the container's R library (~60 s; all deps already present)
+- `R CMD INSTALL /src/MOSAIC-pkg` — installs `run_MOSAIC()` from your local source into the container's R library (~60 s; all deps already present)
 - `Rscript /src/MOSAIC-pkg/azure/mosaic_dask_test.R` — runs the calibration; connects to Coiled using the mounted credentials
 
 #### Step 3: Verify outputs
@@ -258,7 +258,7 @@ dask_spec <- list(
   idle_timeout = "30 minutes"
 )
 
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = "./output/ETH_dask_test",
@@ -330,7 +330,7 @@ dask_spec <- list(
   idle_timeout = "2 hours"
 )
 
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = "./output/ETH_KEN_TZA_production",
@@ -351,7 +351,7 @@ dask_spec <- list(
   address = "tcp://10.0.0.5:8786"   # scheduler address
 )
 
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = "./output/my_run",
@@ -487,7 +487,7 @@ Coiled workers are billed per-second and shut down automatically (`shutdown_on_c
 
 Currently uses **Option A** output: workers return `expected_cases`/`disease_deaths` arrays in-memory via `client.gather()`. The Dask scheduler holds all gathered results in RAM. For batches >1000 sims this can exhaust scheduler memory.
 
-**TODO — Option B** (see `@section Output storage` in `run_MOSAIC_dask` roxygen docs):
+**TODO — Option B** (see `@section Output storage` in `run_MOSAIC` roxygen docs):
 Workers write parquet files directly to Azure Blob Storage using the `azure-storage-blob` Python SDK. R orchestrator reads back via `AzureStor`. This removes the scheduler memory bottleneck and enables 10K+ sim batches. Requires `AZURE_STORAGE_CONNECTION_STRING` on workers (pass via `coiled.Cluster(environ={"AZURE_STORAGE_CONNECTION_STRING": ...})`).
 
 ---
@@ -496,7 +496,7 @@ Workers write parquet files directly to Azure Blob Storage using the `azure-stor
 
 | File | Purpose |
 |------|---------|
-| `R/run_MOSAIC_dask.R` | R function `run_MOSAIC_dask()` — orchestrator |
+| `R/run_MOSAIC.R` | R function `run_MOSAIC(dask_spec = ...)` — orchestrator |
 | `inst/python/mosaic_dask_worker.py` | Python worker function — runs on Dask nodes |
 | `azure/Dockerfile` | Worker Docker image (MOSAIC + laser.cholera + dask) |
 | `azure/run_mosaic_dask_bfrs.py` | Original partial Python implementation (reference) |

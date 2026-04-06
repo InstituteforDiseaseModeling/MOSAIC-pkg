@@ -125,7 +125,7 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 # 4. Clean conda and pip caches
 RUN R -e "MOSAIC::install_dependencies(force = TRUE)" && \
     /root/.virtualenvs/r-mosaic/bin/pip uninstall -y tensorflow 2>/dev/null && \
-    /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir dask distributed coiled && \
+    /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir dask distributed coiled "bokeh>=3.1.0" && \
     conda clean --all -y 2>/dev/null; \
     rm -rf /root/.cache/pip /tmp/* && \
     echo "✓ Python deps installed, TensorFlow stripped, caches cleaned"
