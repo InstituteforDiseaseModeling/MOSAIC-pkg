@@ -25,12 +25,12 @@
 #
 # 3-STAGE PIPELINE
 # ----------------
-#   S1  Cases    Auto. ESS_param=100, prop=0.80, A=0.70, CVw=2.0.
+#   S1  Cases    Auto. ESS_param=500, prop=0.95, A=0.95, CVw=0.5.
 #                All 43 params free. Default priors. NB only.
 #                weight_cases=1.0, weight_deaths=0.1. max_batches=10.
 #
-#   S2  Deaths   Auto. ESS_param=100, prop=1.00 (all 4 must converge),
-#                A=0.70, CVw=1.5. 4 CFR params free, S1 config frozen.
+#   S2  Deaths   Auto. ESS_param=500, prop=1.00 (all 4 must converge),
+#                A=0.95, CVw=0.5. 4 CFR params free, S1 config frozen.
 #                weight_cases=0.0, weight_deaths=1.0. max_batches=10.
 #
 #   Pre-S3:      inflate_priors(ALL params, f=2.0) — broadens both
@@ -96,7 +96,7 @@ design_B <- list(
     min_batches    = 5L,
     max_batches    = 10L,
     target_r2      = 0.90,
-    ESS_param      = 200L,
+    ESS_param      = 500L,
     ESS_param_prop = 0.95,   # 95% of 43 params = ~41 must hit ESS_param
     ESS_best       = 300L,   # Production standard (ETH_1, 10_countries runs)
     A_best         = 0.95,   # Production standard (achieved >0.99 in production)
@@ -107,7 +107,7 @@ design_B <- list(
     min_batches    = 5L,
     max_batches    = 10L,
     target_r2      = 0.90,
-    ESS_param      = 200L,
+    ESS_param      = 500L,
     ESS_param_prop = 1.00,   # ALL 4 CFR params must converge
     ESS_best       = 300L,   # Production standard
     A_best         = 0.95,   # Production standard
