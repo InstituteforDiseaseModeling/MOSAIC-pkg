@@ -2,7 +2,7 @@
 % Please edit documentation in R/calc_model_likelihood.R
 \name{calc_model_likelihood}
 \alias{calc_model_likelihood}
-\title{Compute the total model likelihood (Simplified)}
+\title{Compute the total model likelihood}
 \usage{
 calc_model_likelihood(
   obs_cases,
@@ -16,14 +16,11 @@ calc_model_likelihood(
   config = NULL,
   nb_k_min_cases = 3,
   nb_k_min_deaths = 3,
-  zero_buffer = TRUE,
   verbose = FALSE,
-  add_max_terms = TRUE,
-  add_peak_timing = TRUE,
-  add_peak_magnitude = TRUE,
-  add_cumulative_total = TRUE,
-  add_wis = TRUE,
-  weight_max_terms = 0.5,
+  add_peak_timing = FALSE,
+  add_peak_magnitude = FALSE,
+  add_cumulative_total = FALSE,
+  add_wis = FALSE,
   weight_peak_timing = 0.5,
   weight_peak_magnitude = 0.5,
   weight_cumulative_total = 0.3,
@@ -32,108 +29,61 @@ calc_model_likelihood(
   sigma_peak_log = 0.5,
   penalty_unmatched_peak = -3,
   wis_quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
-  cumulative_timepoints = c(0.25, 0.5, 0.75, 1),
-  enable_guardrails = TRUE,
-  floor_likelihood = -999999999,
-  guardrail_verbose = FALSE,
-  cumulative_over_ratio = 10,
-  cumulative_under_ratio = 0.1,
-  min_cumulative_for_check = 100,
-  negative_correlation_threshold = 0,
-  max_timestep_ratio = 100,
-  min_timestep_ratio = 0.01,
-  min_obs_for_ratio = 1,
-  min_obs_for_ratio_deaths = 10
+  cumulative_timepoints = c(0.25, 0.5, 0.75, 1)
 )
 }
 \arguments{
-\item{obs_cases, est_cases}{Matrices \code{n_locations x n_time_steps} of observed
-and estimated cases.}
+\item{obs_cases, est_cases}{Matrices \code{n_locations x n_time_steps}.}
 
-\item{obs_deaths, est_deaths}{Matrices \code{n_locations x n_time_steps} of observed
-and estimated deaths.}
+\item{obs_deaths, est_deaths}{Matrices \code{n_locations x n_time_steps}.}
 
-\item{weight_cases, weight_deaths}{Optional scalar weights for case/death blocks.
-Default 1.}
+\item{weight_cases, weight_deaths}{Scalar weights for case/death blocks. Default 1.}
 
-\item{weights_location}{Optional length-\code{n_locations} non-negative weights.}
+\item{weights_location}{Length-\code{n_locations} non-negative weights.}
 
-\item{weights_time}{Optional length-\code{n_time_steps} non-negative weights.}
+\item{weights_time}{Length-\code{n_time_steps} non-negative weights.}
 
-\item{config}{Optional LASER configuration list containing location_name, date_start, and date_stop.}
+\item{config}{Optional LASER config list (location_name, date_start, date_stop).}
 
-\item{nb_k_min_cases}{Numeric; minimum NB dispersion floor for cases. Default \code{3}.}
+\item{nb_k_min_cases}{Minimum NB dispersion floor for cases. Default \code{3}.}
 
-\item{nb_k_min_deaths}{Numeric; minimum NB dispersion floor for deaths. Default \code{3}.}
+\item{nb_k_min_deaths}{Minimum NB dispersion floor for deaths. Default \code{3}.}
 
-\item{zero_buffer}{Kept for backward compatibility (not used by the NB core).}
+\item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints component summaries per location.}
-
-\item{add_max_terms}{Logical; legacy max Poisson terms. Default \code{FALSE}.}
-
-\item{add_peak_timing, add_peak_magnitude, add_cumulative_total}{Logical; default \code{TRUE}.}
+\item{add_peak_timing, add_peak_magnitude, add_cumulative_total}{Logical; default \code{FALSE}.}
 
 \item{add_wis}{Logical; default \code{FALSE}.}
 
-\item{weight_max_terms}{Component weight for max terms. Default \code{0.5}.}
+\item{weight_peak_timing, weight_peak_magnitude, weight_cumulative_total}{Component weights.}
 
-\item{weight_peak_timing, weight_peak_magnitude, weight_cumulative_total}{Component weights. Defaults \code{0.5, 0.5, 0.3}.}
-
-\item{weight_wis}{Component weight for optional WIS term.}
+\item{weight_wis}{Component weight for WIS term. Default \code{0.8}.}
 
 \item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{1}.}
 
-\item{sigma_peak_log}{Base SD on log-scale for peak magnitude; default \code{0.5}.
-Automatically scaled by sqrt(100/max(peak_obs,100)) to allow more variance for smaller peaks.}
+\item{sigma_peak_log}{Base SD on log-scale for peak magnitude; default \code{0.5}.}
 
-\item{penalty_unmatched_peak}{Log-likelihood penalty for unmatched peaks; default \code{-3}.}
+\item{penalty_unmatched_peak}{LL penalty for unmatched peaks; default \code{-3}.}
 
 \item{wis_quantiles}{Quantiles for WIS if enabled.}
 
-\item{cumulative_timepoints}{Fractions for cumulative progression; default \code{c(0.25,0.5,0.75,1)}.}
-
-\item{enable_guardrails}{Logical; default \code{TRUE}.}
-
-\item{floor_likelihood}{Numeric; hard floor returned on violations. Default \code{-999999999}.}
-
-\item{guardrail_verbose}{Logical; print guardrail reasons.}
-
-\item{cumulative_over_ratio, cumulative_under_ratio}{Cumulative ratio bounds (default \code{10}, \code{0.1}).}
-
-\item{min_cumulative_for_check}{Minimum observed total to apply ratio checks; default \code{100}.}
-
-\item{negative_correlation_threshold}{Correlation floor; default \code{0} (requires positive correlation).}
-
-\item{max_timestep_ratio}{Maximum ratio of estimated to observed per timestep (default \code{100}).}
-
-\item{min_timestep_ratio}{Minimum ratio of estimated to observed per timestep (default \code{0.01}).}
-
-\item{min_obs_for_ratio}{Minimum observed value to apply per-timestep ratio checks
-for cases (default \code{1}).}
-
-\item{min_obs_for_ratio_deaths}{Minimum observed value to apply per-timestep ratio
-checks for deaths (default \code{10}). Higher than cases because death data is
-typically sparse, and a single timestep with 1-2 observed deaths should not floor
-the entire likelihood on a slight overprediction.}
+\item{cumulative_timepoints}{Fractions for cumulative progression.}
 }
 \value{
-Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.
-May be \code{NA_real_} if all locations contribute nothing.
+Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
+or \code{NA_real_} if all locations contribute nothing.
 }
 \description{
-A simplified, robust wrapper for scoring model fits in MOSAIC.
-The core is a Negative Binomial (NB) time-series log-likelihood per
-location and outcome (cases, deaths) with a weighted MoM dispersion
-estimate and a small \code{k_min} floor.
+Scores model fits against observed data using a Negative Binomial (NB)
+time-series log-likelihood per location and outcome (cases, deaths) with
+a weighted MoM dispersion estimate and a \code{k_min} floor.
 }
 \details{
-By default, three "shape" terms are included with modest weights:
-(1) multi-peak timing (Normal on time differences for matched peaks),
-(2) multi-peak magnitude (log-Normal on ratios with adaptive sigma), and
-(3) cumulative progression (NB at a few cumulative fractions).
+Optional shape terms can be enabled: peak timing (Normal), peak magnitude
+(log-Normal with adaptive sigma), cumulative progression (NB at cumulative
+fractions), and Weighted Interval Score (WIS). All default to OFF.
 
-Minimal inline guardrails floor the score on egregious fits (cumulative
-over/under prediction, per-timestep caps, and negative correlation).
-Optional max terms and WIS are kept but OFF by default.
+Non-finite per-location LL values are replaced with \code{-Inf} (zero
+importance weight). The NB likelihood naturally produces very negative
+scores for bad fits without needing artificial guardrails.
 }

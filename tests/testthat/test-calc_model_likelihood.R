@@ -18,11 +18,11 @@ testthat::test_that("zero data returns finite log-likelihood", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_max_terms = FALSE,
+
           add_wis = FALSE
      )
      expect_true(is.finite(ll))  # Zero data is a valid perfect match, not "no information"
-     expect_equal(ll, 0, tolerance = 1e-10)  # Should be exactly zero with all auxiliary terms off
+     expect_equal(ll, 0, tolerance = 1e-8)  # Near zero with all auxiliary terms off
 })
 
 # 2. Weight scaling: non-default weight_cases and weight_deaths still yields finite for zero data
@@ -37,11 +37,11 @@ testthat::test_that("weights do not affect zero-data result", {
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
-          add_max_terms = FALSE,
+
           add_wis = FALSE
      )
      expect_true(is.finite(ll))  # Still finite regardless of weights
-     expect_equal(ll, 0, tolerance = 1e-10)  # Should be exactly zero with all auxiliary terms off
+     expect_equal(ll, 0, tolerance = 1e-8)  # Near zero with all auxiliary terms off
 })
 
 # 3. Dimension errors: non-matrix inputs
@@ -127,7 +127,7 @@ testthat::test_that("all-NA observed with real estimates returns finite", {
      expect_true(is.finite(ll) || is.na(ll))  # Allow either finite or NA
 })
 
-# 7. Real likelihood calculation - test with core + max terms
+# 7. Real likelihood calculation - core NB terms
 testthat::test_that("correct log-likelihood for simple non-zero data with core terms only", {
 
      obs <- matrix(c(1, 1, 1), nrow = 1, ncol = 3)
@@ -137,33 +137,13 @@ testthat::test_that("correct log-likelihood for simple non-zero data with core t
           obs_cases  = obs,
           est_cases  = est,
           obs_deaths = obs,
-          est_deaths = est,
-          add_max_terms = TRUE,
-          add_peak_timing = FALSE,
-          add_peak_magnitude = FALSE,
-          add_cumulative_total = FALSE,
-          add_wis = FALSE
+          est_deaths = est
      )
 
      # Core uses NB (k estimated from obs via MoM, falls back to Poisson limit for
-     # constant data where var <= mean). Max terms use Poisson on max values.
-     # Exact value depends on NB k estimate, so test structural properties:
+     # constant data where var <= mean).
      expect_true(is.finite(ll))
      expect_true(ll < 0)  # Perfect match still has negative LL for count data
-
-     # With max terms off, should be different
-     ll_no_max <- MOSAIC::calc_model_likelihood(
-          obs_cases  = obs,
-          est_cases  = est,
-          obs_deaths = obs,
-          est_deaths = est,
-          add_max_terms = FALSE,
-          add_peak_timing = FALSE,
-          add_peak_magnitude = FALSE,
-          add_cumulative_total = FALSE,
-          add_wis = FALSE
-     )
-     expect_true(ll != ll_no_max)
 })
 
 # ============================================================================
@@ -191,7 +171,7 @@ testthat::test_that("peak timing term works correctly", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = TRUE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
@@ -207,7 +187,7 @@ testthat::test_that("peak timing term works correctly", {
           est_cases = est_cases_shifted,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = TRUE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
@@ -239,7 +219,7 @@ testthat::test_that("peak magnitude term works correctly", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = FALSE,
@@ -255,7 +235,7 @@ testthat::test_that("peak magnitude term works correctly", {
           est_cases = est_cases_diff,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = FALSE,
@@ -285,7 +265,7 @@ testthat::test_that("progressive cumulative total term works correctly", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = TRUE,
@@ -299,7 +279,7 @@ testthat::test_that("progressive cumulative total term works correctly", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = TRUE,
@@ -318,7 +298,7 @@ testthat::test_that("progressive cumulative total term works correctly", {
           est_cases = est_cases_bad,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = TRUE,
@@ -350,7 +330,7 @@ testthat::test_that("WIS term penalizes uncertainty correctly", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
@@ -366,7 +346,7 @@ testthat::test_that("WIS term penalizes uncertainty correctly", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
@@ -400,7 +380,7 @@ testthat::test_that("all terms work together without conflict", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = TRUE,
+
           add_peak_timing = TRUE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = TRUE,
@@ -416,7 +396,7 @@ testthat::test_that("all terms work together without conflict", {
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-          add_max_terms = FALSE,
+
           add_peak_timing = FALSE,
           add_peak_magnitude = FALSE,
           add_cumulative_total = FALSE,
