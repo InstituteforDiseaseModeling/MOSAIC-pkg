@@ -96,19 +96,9 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   .validate_posteriors_structure(posteriors, label = "posteriors")
 
   # ---------------------------------------------------------------------------
-  # Canonical distribution parameter fields (mirrors calc_model_posterior_distributions)
+  # Canonical distribution parameter fields (shared with calc_model_posterior_distributions)
   # ---------------------------------------------------------------------------
-  dist_core_fields <- list(
-    beta       = c("shape1", "shape2"),
-    gamma      = c("shape", "rate"),
-    lognormal  = c("meanlog", "sdlog"),
-    normal     = c("mean", "sd"),
-    truncnorm  = c("mean", "sd", "a", "b"),
-    uniform    = c("min", "max"),
-    gompertz   = c("b", "eta"),
-    fixed      = c("value"),
-    frozen     = c("value")
-  )
+  dist_core_fields <- .mosaic_dist_core_fields()
 
   # ---------------------------------------------------------------------------
   # Start from a deep copy of priors (base of the output)

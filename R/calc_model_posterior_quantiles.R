@@ -7,6 +7,12 @@
 #'   and index columns (is_finite, is_retained, is_best_subset)
 #' @param probs Numeric vector of quantile probabilities (default: c(0.025, 0.25, 0.5, 0.75, 0.975))
 #' @param output_dir Directory path to save results (default: "./results")
+#' @param priors Optional priors list (as returned by \code{get_location_priors}).
+#'   When provided, prior distribution families are read from this object instead of
+#'   the static \code{estimated_parameters} lookup. This ensures posterior fitting
+#'   uses the actual prior family, which is critical for staged estimation with
+#'   country-specific priors. When NULL (default), falls back to the static lookup
+#'   for backward compatibility.
 #' @param verbose Logical; print progress messages (default: TRUE)
 #'
 #' @return Data frame with both prior and posterior quantiles plus KL divergence
@@ -24,6 +30,7 @@
 calc_model_posterior_quantiles <- function(results,
                                          probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
                                          output_dir = "./results",
+                                         priors = NULL,
                                          verbose = TRUE) {
 
     if (verbose) message("Calculating prior and posterior parameter quantiles...")
@@ -46,6 +53,24 @@ calc_model_posterior_quantiles <- function(results,
 
     # Load estimated parameters template
     data(estimated_parameters, package = "MOSAIC", envir = environment())
+
+    # -----------------------------------------------------------------------
+    # Helper: look up actual prior distribution family from the priors object.
+    # Returns NULL when priors is not provided (falls back to static lookup).
+    # -----------------------------------------------------------------------
+    .lookup_prior_family <- function(param_base, iso = NULL) {
+        if (is.null(priors)) return(NULL)
+        if (is.null(iso) || iso == "") {
+            entry <- priors$parameters_global[[param_base]]
+        } else {
+            entry <- priors$parameters_location[[param_base]]$location[[iso]]
+        }
+        if (!is.null(entry) && !is.null(entry$distribution)) {
+            tolower(entry$distribution)
+        } else {
+            NULL
+        }
+    }
 
     # Helper function to calculate mode from KDE
     calc_mode_kde <- function(samples, weights = NULL) {
@@ -268,14 +293,30 @@ calc_model_posterior_quantiles <- function(results,
         if (scale == "global") {
             if (param_base %in% param_cols) {
                 inv_idx <- inv_idx + 1L
+
+                # Use actual prior family when priors are provided (issue #64 fix).
+                # Fall back to static estimated_parameters lookup for backward compat.
+                actual_family <- .lookup_prior_family(param_base)
+                static_dist   <- estimated_parameters$distribution[i]
+                static_post   <- if (has_post_dist) estimated_parameters$posterior_distribution[i] else static_dist
+
+                prior_dist <- if (!is.null(actual_family)) actual_family else static_dist
+                # For posterior fitting: use actual prior family unless prior is
+                # uniform (uninformative priors benefit from data-driven family).
+                post_dist  <- if (!is.null(actual_family) && actual_family != "uniform") {
+                    actual_family
+                } else {
+                    static_post
+                }
+
                 inventory_rows[[inv_idx]] <- data.frame(
                     parameter              = param_base,
                     display_name           = estimated_parameters$display_name[i],
                     category               = estimated_parameters$category[i],
                     scale                  = scale,
                     location               = "",
-                    distribution           = estimated_parameters$distribution[i],
-                    posterior_distribution = if (has_post_dist)  estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
+                    distribution           = prior_dist,
+                    posterior_distribution  = post_dist,
                     posterior_lower        = if (has_post_lower) estimated_parameters$posterior_lower[i]        else NA_real_,
                     posterior_upper        = if (has_post_upper) estimated_parameters$posterior_upper[i]        else NA_real_,
                     stringsAsFactors = FALSE
@@ -286,14 +327,26 @@ calc_model_posterior_quantiles <- function(results,
                 param_name_full <- paste0(param_base, "_", iso)
                 if (param_name_full %in% param_cols) {
                     inv_idx <- inv_idx + 1L
+
+                    actual_family <- .lookup_prior_family(param_base, iso)
+                    static_dist   <- estimated_parameters$distribution[i]
+                    static_post   <- if (has_post_dist) estimated_parameters$posterior_distribution[i] else static_dist
+
+                    prior_dist <- if (!is.null(actual_family)) actual_family else static_dist
+                    post_dist  <- if (!is.null(actual_family) && actual_family != "uniform") {
+                        actual_family
+                    } else {
+                        static_post
+                    }
+
                     inventory_rows[[inv_idx]] <- data.frame(
                         parameter              = param_name_full,
                         display_name           = paste(estimated_parameters$display_name[i], iso),
                         category               = estimated_parameters$category[i],
                         scale                  = scale,
                         location               = iso,
-                        distribution           = estimated_parameters$distribution[i],
-                        posterior_distribution = if (has_post_dist)  estimated_parameters$posterior_distribution[i] else estimated_parameters$distribution[i],
+                        distribution           = prior_dist,
+                        posterior_distribution  = post_dist,
                         posterior_lower        = if (has_post_lower) estimated_parameters$posterior_lower[i]        else NA_real_,
                         posterior_upper        = if (has_post_upper) estimated_parameters$posterior_upper[i]        else NA_real_,
                         stringsAsFactors = FALSE

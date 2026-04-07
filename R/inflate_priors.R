@@ -99,9 +99,19 @@ inflate_priors <- function(priors,
     if (is.null(samples) || length(samples) < 10 || !all(is.finite(samples)))
       return(NULL)
 
-    # Mean-preserving variance inflation: x_new = mean + sqrt(f)*(x - mean)
-    mu_s     <- mean(samples)
-    inflated <- mu_s + sqrt(f) * (samples - mu_s)
+    # Variance inflation. For distributions on (0, inf) (gamma, lognormal,
+    # gompertz), inflate in log-space to prevent negative samples when the
+    # distribution is concentrated near zero.  For other distributions use the
+    # standard mean-preserving linear scaling.
+    positive_dists <- c("gamma", "lognormal", "gompertz")
+    if (dist %in% positive_dists && all(samples > 0)) {
+      log_s    <- log(samples)
+      log_mu   <- mean(log_s)
+      inflated <- exp(log_mu + sqrt(f) * (log_s - log_mu))
+    } else {
+      mu_s     <- mean(samples)
+      inflated <- mu_s + sqrt(f) * (samples - mu_s)
+    }
 
     # Refit the original distribution type to the inflated samples
     new_params <- tryCatch({

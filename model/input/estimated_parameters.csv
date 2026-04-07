@@ -1,7 +1,7 @@
 "parameter_name","display_name","description","units","distribution","scale","category","order","order_scale","order_category","order_parameter","posterior_distribution","posterior_lower","posterior_upper"
 "alpha_1","Population Mixing","Population mixing within metapops (0-1, 1 = well-mixed)","proportion","beta","global","transmission",1,"01","01","01","beta",NA,NA
 "alpha_2","Frequency-Driven Transmission","Degree of frequency driven transmission (0-1)","proportion","beta","global","transmission",2,"01","01","02","beta",NA,NA
-"decay_days_short","Minimum V. cholerae Survival","Minimum V. cholerae survival time in environment","days","uniform","global","environmental",3,"01","02","01","lognormal",NA,NA
+"decay_days_short","Minimum V. cholerae Survival","Minimum V. cholerae survival time in environment","days","truncnorm","global","environmental",3,"01","02","01","truncnorm",NA,NA
 "decay_days_long","Maximum V. cholerae Survival","Maximum V. cholerae survival time in environment","days","uniform","global","environmental",4,"01","02","02","lognormal",NA,NA
 "decay_shape_1","Decay Shape Parameter 1","First shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",5,"01","02","03","gamma",NA,NA
 "decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",6,"01","02","04","gamma",NA,NA
@@ -30,7 +30,7 @@
 "prop_R_initial","Initial Recovered Proportion","Proportion of population recovered/immune at start","proportion","beta","location","initial_conditions",29,"02","01","04","beta",NA,NA
 "prop_V1_initial","Initial One-Dose Vaccinated Proportion","Proportion with one vaccine dose at start","proportion","beta","location","initial_conditions",30,"02","01","05","beta",NA,NA
 "prop_V2_initial","Initial Two-Dose Vaccinated Proportion","Proportion with two vaccine doses at start","proportion","beta","location","initial_conditions",31,"02","01","06","beta",NA,NA
-"beta_j0_tot","Total Base Transmission Rate","Total base transmission rate (human + environmental)","per day","gompertz","location","transmission",32,"02","02","01","gompertz",NA,NA
+"beta_j0_tot","Total Base Transmission Rate","Total base transmission rate (human + environmental)","per day","lognormal","location","transmission",32,"02","02","01","lognormal",NA,NA
 "p_beta","Human-to-Human Proportion","Proportion of total transmission that is human-to-human","proportion","beta","location","transmission",33,"02","02","02","beta",NA,NA
 "a_1_j","Seasonality Coefficient a1","First Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",34,"02","03","01","normal",NA,NA
 "a_2_j","Seasonality Coefficient a2","Second Fourier cosine coefficient for seasonality","dimensionless","normal","location","seasonality",35,"02","03","02","normal",NA,NA

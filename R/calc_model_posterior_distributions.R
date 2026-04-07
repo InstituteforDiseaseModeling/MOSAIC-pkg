@@ -62,15 +62,7 @@ calc_model_posterior_distributions <- function(
     # that are useful for one-time inspection but should NOT be persisted into
     # posteriors.json.  Keeping only the canonical fields ensures posteriors.json
     # stays clean across staged-estimation cycles where posteriors become priors.
-    .dist_core_fields <- list(
-        beta       = c("shape1", "shape2"),
-        gamma      = c("shape", "rate"),
-        lognormal  = c("meanlog", "sdlog"),
-        normal     = c("mean", "sd"),
-        truncnorm  = c("mean", "sd", "a", "b"),
-        uniform    = c("min", "max"),
-        gompertz   = c("b", "eta")
-    )
+    .dist_core_fields <- .mosaic_dist_core_fields()
 
     if (verbose) message("\n=== Calculating Posterior Distributions from Quantiles ===\n")
 
@@ -490,6 +482,24 @@ calc_model_posterior_distributions <- function(
                 }
             }
             next
+        }
+
+        # Validate fit quality: check that fitted CI approximately covers empirical CI
+        if (!is.null(fitted_dist$fitted_ci) && length(fitted_dist$fitted_ci) == 2 &&
+            is.finite(q_low) && is.finite(q_high) && q_low != 0 && q_high != 0) {
+            ci_ratio_low  <- fitted_dist$fitted_ci[1] / q_low
+            ci_ratio_high <- fitted_dist$fitted_ci[2] / q_high
+            if (!is.finite(ci_ratio_low))  ci_ratio_low  <- 1
+            if (!is.finite(ci_ratio_high)) ci_ratio_high <- 1
+            if (ci_ratio_low < 0.5 || ci_ratio_low > 2.0 ||
+                ci_ratio_high < 0.5 || ci_ratio_high > 2.0) {
+                if (verbose) {
+                    message(sprintf("  [POOR FIT] %s (%s): fitted CI [%.4g, %.4g] vs empirical [%.4g, %.4g]",
+                                    param_name, dist_type,
+                                    fitted_dist$fitted_ci[1], fitted_dist$fitted_ci[2],
+                                    q_low, q_high))
+                }
+            }
         }
 
         # Update posteriors structure based on parameter type and location

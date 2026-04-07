@@ -165,9 +165,10 @@ global_params <- data.frame(
     # Transmission
     "beta", "beta",
     # Environmental - reordered
-    # decay_days_short, decay_days_long, decay_shape_1, decay_shape_2: Uniform (unchanged)
+    # decay_days_short: TruncNorm (updated from Uniform in make_priors.R)
+    # decay_days_long, decay_shape_1, decay_shape_2: Uniform (unchanged)
     # zeta_1, zeta_2, kappa: updated to Lognormal in make_priors.R (v0.14.30)
-    "uniform", "uniform", "uniform", "uniform", "lognormal", "lognormal", "lognormal",
+    "truncnorm", "uniform", "uniform", "uniform", "lognormal", "lognormal", "lognormal",
     # Disease - reordered
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
@@ -236,10 +237,11 @@ global_params <- data.frame(
 global_params$posterior_distribution <- c(
   # Transmission: beta prior → beta posterior
   "beta", "beta",
-  # Environmental: decay_days_short/long uniform → lognormal posterior (positive durations);
+  # Environmental: decay_days_short truncnorm → truncnorm posterior (updated from uniform/lognormal);
+  #   decay_days_long uniform → lognormal posterior (positive durations);
   #   decay_shape_1/2 uniform → gamma posterior (positive shape parameters);
   #   zeta_1, zeta_2, kappa: lognormal prior → lognormal posterior (unchanged)
-  "lognormal", "lognormal", "gamma", "gamma", "lognormal", "lognormal", "lognormal",
+  "truncnorm", "lognormal", "gamma", "gamma", "lognormal", "lognormal", "lognormal",
   # Disease: unchanged
   "lognormal", "beta", "lognormal", "lognormal",
   # Immunity: unchanged
@@ -342,8 +344,8 @@ transmission_params <- data.frame(
   units = c(
     "per day", "proportion"
   ),
-  distribution = c("gompertz", "beta"),
-  posterior_distribution = c("gompertz", "beta"),
+  distribution = c("lognormal", "beta"),
+  posterior_distribution = c("lognormal", "beta"),
   posterior_lower = rep(NA_real_, 2),
   posterior_upper = rep(NA_real_, 2),
   scale = "location",

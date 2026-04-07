@@ -1680,6 +1680,7 @@ run_MOSAIC <- function(config,
     results = results,
     probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
     output_dir = dirs$cal_posterior,
+    priors = priors,
     verbose = control$logging$verbose
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posterior_quantiles.csv"))
