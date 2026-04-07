@@ -11,7 +11,7 @@ download_climate_data(
   date_start,
   date_stop,
   climate_models,
-  climate_variables,
+  climate_variables = NULL,
   api_key
 )
 }
@@ -42,9 +42,9 @@ PATHS is typically the output of the \code{get_paths()} function and should incl
 \item \strong{NICAM16_8S}
 }}
 
-\item{climate_variables}{A character vector of climate variables to retrieve. See details for available variables.}
+\item{climate_variables}{A character vector of climate variables to retrieve, or \code{NULL} (default) to use all available variables. See details for available variables.}
 
-\item{api_key}{A character string representing the API key required to access the climate data API.}
+\item{api_key}{A character string representing the API key required to access the climate data API. Use \code{"free"} for the free tier (rate-limited).}
 }
 \value{
 The function does not return a value. It downloads the climate data for each country, climate model, and climate variable, saving the results as Parquet files in the specified directory.
@@ -63,7 +63,7 @@ The available climate variables include:
 \item \strong{shortwave_radiation_sum}
 \item \strong{relative_humidity_2m_mean}, \strong{relative_humidity_2m_max}, \strong{relative_humidity_2m_min}
 \item \strong{dew_point_2m_mean}, \strong{dew_point_2m_min}, \strong{dew_point_2m_max}
-\item \strong{precipitation_sum}, \strong{rain_sum}, \strong{snowfall_sum}
+\item \strong{precipitation_sum}
 \item \strong{pressure_msl_mean}
 \item \strong{soil_moisture_0_to_10cm_mean}
 \item \strong{et0_fao_evapotranspiration_sum}

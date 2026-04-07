@@ -9,7 +9,6 @@
 #'   \item \strong{DATA_CLIMATE}: Path to the directory where processed climate data will be saved.
 #' }
 #' @param iso_codes A character vector of ISO3 country codes for which climate data should be downloaded.
-#' @param api_key A character string representing the API key required to access the climate data API.
 #' @param n_points An integer specifying the number of grid points to generate within each country for which climate data will be downloaded.
 #' @param date_start A character string representing the start date for the climate data (in "YYYY-MM-DD" format).
 #' @param date_stop A character string representing the end date for the climate data (in "YYYY-MM-DD" format).
@@ -23,7 +22,8 @@
 #'   \item \strong{MPI_ESM1_2_XR}
 #'   \item \strong{NICAM16_8S}
 #' }
-#' @param climate_variables A character vector of climate variables to retrieve. See details for available variables.
+#' @param climate_variables A character vector of climate variables to retrieve, or \code{NULL} (default) to use all available variables. See details for available variables.
+#' @param api_key A character string representing the API key required to access the climate data API. Use \code{"free"} for the free tier (rate-limited).
 #'
 #' @return The function does not return a value. It downloads the climate data for each country, climate model, and climate variable, saving the results as Parquet files in the specified directory.
 #'
@@ -37,13 +37,12 @@
 #'   \item \strong{shortwave_radiation_sum}
 #'   \item \strong{relative_humidity_2m_mean}, \strong{relative_humidity_2m_max}, \strong{relative_humidity_2m_min}
 #'   \item \strong{dew_point_2m_mean}, \strong{dew_point_2m_min}, \strong{dew_point_2m_max}
-#'   \item \strong{precipitation_sum}, \strong{rain_sum}, \strong{snowfall_sum}
+#'   \item \strong{precipitation_sum}
 #'   \item \strong{pressure_msl_mean}
 #'   \item \strong{soil_moisture_0_to_10cm_mean}
 #'   \item \strong{et0_fao_evapotranspiration_sum}
 #' }
 #'
-#' @importFrom dplyr select mutate
 #' @importFrom lubridate year month week yday
 #' @importFrom sf st_read st_coordinates
 #' @importFrom glue glue
@@ -74,72 +73,209 @@ download_climate_data <- function(PATHS,
                                   date_start,
                                   date_stop,
                                   climate_models,
-                                  climate_variables,
+                                  climate_variables = NULL,
                                   api_key) {
 
-     climate_variables <- c(
-          "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
-          "wind_speed_10m_mean", "wind_speed_10m_max", "cloud_cover_mean",
-          "shortwave_radiation_sum", "relative_humidity_2m_mean",
-          "relative_humidity_2m_max", "relative_humidity_2m_min",
-          "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
-          "precipitation_sum", "pressure_msl_mean", "soil_moisture_0_to_10cm_mean",
-          "et0_fao_evapotranspiration_sum"
-     )
+     if (is.null(climate_variables)) climate_variables <- .climate_variables_all()
 
+     # Ensure output directory exists, if not, create it
+     .ensure_climate_dir(PATHS)
+     is_free <- identical(api_key, "free")
+
+     .check_free_tier_quota(api_key, climate_models, climate_variables,
+                            n_units = length(iso_codes), n_pts_per_unit = n_points,
+                            date_start = date_start, date_stop = date_stop)
+
+     units <- lapply(setNames(iso_codes, iso_codes), function(iso) {
+          shp <- sf::st_read(
+               dsn = file.path(PATHS$DATA_SHAPEFILES, paste0(iso, "_ADM0.shp")),
+               quiet = TRUE)
+          coords <- as.data.frame(sf::st_coordinates(MOSAIC::generate_country_grid_n(shp, n_points)))
+          list(id = iso, lat = coords$Y, lon = coords$X)
+     })
+
+     .process_and_save_units(units, mode = "country", PATHS = PATHS,
+                             date_start = date_start, date_stop = date_stop,
+                             climate_models = climate_models,
+                             climate_variables = climate_variables,
+                             api_key = api_key, is_free = is_free)
+}
+
+#' Download and Save Climate Data for Custom Shapes (Parquet Format)
+#'
+#' Downloads daily climate data for regions defined by sf polygon shapes.
+#' Generates a grid of points within each shape, fetches climate data,
+#' and saves per-variable Parquet files with a \code{region_id} column.
+#'
+#' @inheritParams download_climate_data
+#' @param shapes A named list of sf polygon objects. Names become unit IDs.
+#'
+#' @return Invisible NULL. Saves Parquet files to \code{PATHS$DATA_RAW/climate/}.
+#' @export
+download_climate_data_shapes <- function(PATHS, shapes, n_points,
+                                         date_start, date_stop,
+                                         climate_models, climate_variables = NULL, api_key) {
+
+     if (is.null(climate_variables)) climate_variables <- .climate_variables_all()
+     .ensure_climate_dir(PATHS)
+     is_free <- identical(api_key, "free")
+
+     .check_free_tier_quota(api_key, climate_models, climate_variables,
+                            n_units = length(shapes), n_pts_per_unit = n_points,
+                            date_start = date_start, date_stop = date_stop)
+
+     units <- lapply(names(shapes), function(nm) {
+          coords <- as.data.frame(sf::st_coordinates(MOSAIC::generate_country_grid_n(shapes[[nm]], n_points)))
+          list(id = nm, lat = coords$Y, lon = coords$X)
+     })
+
+     .process_and_save_units(units, mode = "region", PATHS = PATHS,
+                             date_start = date_start, date_stop = date_stop,
+                             climate_models = climate_models,
+                             climate_variables = climate_variables,
+                             api_key = api_key, is_free = is_free)
+}
+
+#' Download and Save Climate Data for Explicit Points (Parquet Format)
+#'
+#' Downloads daily climate data for explicit lat/lon points. Points with the
+#' same \code{id} are grouped together. If no \code{id} column exists, all
+#' points form a single unit with id \code{"custom"}.
+#'
+#' @inheritParams download_climate_data
+#' @param points A data.frame with columns \code{lat}, \code{lon}, and optional \code{id}.
+#'
+#' @return Invisible NULL. Saves Parquet files to \code{PATHS$DATA_RAW/climate/}.
+#' @export
+download_climate_data_points <- function(PATHS, points,
+                                         date_start, date_stop,
+                                         climate_models, climate_variables = NULL, api_key) {
+
+     if (is.null(climate_variables)) climate_variables <- .climate_variables_all()
+     .ensure_climate_dir(PATHS)
+     is_free <- identical(api_key, "free")
+
+     pts <- if (!"id" %in% names(points)) transform(points, id = "custom") else points
+     n_pts_per_unit <- if ("id" %in% names(points)) {
+          mean(as.integer(table(points$id)))
+     } else {
+          nrow(points)
+     }
+     n_units <- length(unique(pts$id))
+
+     .check_free_tier_quota(api_key, climate_models, climate_variables,
+                            n_units = n_units, n_pts_per_unit = n_pts_per_unit,
+                            date_start = date_start, date_stop = date_stop)
+
+     units <- lapply(split(pts, pts$id), function(g) list(id = g$id[1], lat = g$lat, lon = g$lon))
+
+     .process_and_save_units(units, mode = "region", PATHS = PATHS,
+                             date_start = date_start, date_stop = date_stop,
+                             climate_models = climate_models,
+                             climate_variables = climate_variables,
+                             api_key = api_key, is_free = is_free)
+}
+
+
+# --- Private helpers (dot-prefixed, not exported by exportPattern) ---
+
+.climate_variables_all <- function() {
+     c("temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
+       "wind_speed_10m_mean", "wind_speed_10m_max", "cloud_cover_mean",
+       "shortwave_radiation_sum", "relative_humidity_2m_mean",
+       "relative_humidity_2m_max", "relative_humidity_2m_min",
+       "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
+       "precipitation_sum", "pressure_msl_mean", "soil_moisture_0_to_10cm_mean",
+       "et0_fao_evapotranspiration_sum")
+}
+
+.ensure_climate_dir <- function(PATHS) {
      # Ensure output directory exists, if not, create it
      if (!dir.exists(PATHS$DATA_CLIMATE)) {
           dir.create(PATHS$DATA_CLIMATE, recursive = TRUE)
      }
+}
+
+.check_free_tier_quota <- function(api_key, climate_models, climate_variables,
+                                   n_units, n_pts_per_unit, date_start, date_stop) {
+     if (!identical(api_key, "free")) return(invisible(NULL))
+
+     n_days <- as.integer(as.Date(date_stop) - as.Date(date_start)) + 1L
+     estimated_calls <- length(climate_models) * n_units * n_pts_per_unit *
+          length(climate_variables) * 263.5 * (n_days / 36500)
+
+     if (estimated_calls > 0.8 * 300000L) {
+          warning(glue::glue(
+               "Estimated API call-equivalent cost ({round(estimated_calls)}) exceeds ",
+               "80% of the free tier monthly limit (300000). ",
+               "The request may hit the free API limit."
+          ))
+     }
+}
+
+.process_and_save_units <- function(units, mode, PATHS, date_start, date_stop,
+                                    climate_models, climate_variables,
+                                    api_key, is_free) {
+
+     n_cores <- max(1L, parallel::detectCores() - 1L)
 
      # Loop through each climate model
      for (climate_model in climate_models) {
 
-          # Loop through each ISO3 country code
-          for (country_iso_code in iso_codes) {
+          process_unit <- function(unit) {
+               message(glue::glue("Downloading climate data for {unit$id} using {climate_model} at {length(unit$lat)} points"))
 
-               # Loop through each climate variable
-               for (climate_variable in climate_variables) {
-
-                    message(glue::glue("Downloading daily {climate_variable} data for {country_iso_code} using {climate_model} at {n_points} points"))
-
-                    # Convert ISO3 code to country name and read country shapefile
-                    country_name <- MOSAIC::convert_iso_to_country(country_iso_code)
-                    country_shp <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, paste0(country_iso_code, "_ADM0.shp")), quiet = TRUE)
-
-                    # Generate grid points within the country
-                    grid_points <- MOSAIC::generate_country_grid_n(country_shp, n_points = n_points)
-                    coords <- sf::st_coordinates(grid_points)
-                    coords <- as.data.frame(coords)
-                    rm(grid_points)
-                    rm(country_shp)
-
-                    # Download climate data for the generated grid points for the current climate variable
-                    climate_data <- MOSAIC::get_climate_future(lat = coords$Y,
-                                                               lon = coords$X,
-                                                               date_start = date_start,
-                                                               date_stop = date_stop,
-                                                               climate_variables = climate_variable,  # Single variable per loop
-                                                               climate_model = climate_model,
-                                                               api_key = api_key)
-
-                    # Add additional metadata columns
-                    climate_data <- data.frame(
-                         country_name = country_name,
-                         iso_code = country_iso_code,
-                         year = lubridate::year(climate_data$date),
-                         month = lubridate::month(climate_data$date),
-                         week = lubridate::week(climate_data$date),
-                         doy = lubridate::yday(climate_data$date),
-                         climate_data
-                    )
-
-                    # Save climate data as Parquet, including the climate model and variable in the file name
-                    arrow::write_parquet(climate_data,
-                                         sink = file.path(PATHS$DATA_RAW, paste0("climate/climate_data_", climate_model, "_", climate_variable, "_", date_start, "_", date_stop, "_", country_iso_code, ".parquet")))
+               # Download climate data for the generated grid points
+               climate_data <- MOSAIC::get_climate_future(
+                    lat = unit$lat, lon = unit$lon,
+                    date_start = date_start, date_stop = date_stop,
+                    climate_variables = climate_variables,
+                    climate_model = climate_model, api_key = api_key
+               )
+               if (is.null(climate_data) || nrow(climate_data) == 0) {
+                    warning(glue::glue("No data returned for {unit$id} / {climate_model} — skipping"))
+                    return(NULL)
                }
+
+               meta <- if (mode == "country") {
+                    data.frame(
+                         country_name = MOSAIC::convert_iso_to_country(unit$id),
+                         iso_code     = unit$id,
+                         stringsAsFactors = FALSE
+                    )
+               } else {
+                    data.frame(region_id = unit$id, stringsAsFactors = FALSE)
+               }
+
+               # Add additional metadata columns
+               climate_data <- data.frame(
+                    meta,
+                    year  = lubridate::year(climate_data$date),
+                    month = lubridate::month(climate_data$date),
+                    week  = lubridate::week(climate_data$date),
+                    doy   = lubridate::yday(climate_data$date),
+                    climate_data
+               )
+
+               # Save climate data as Parquet, including the climate model and variable in the file name
+               for (climate_variable in climate_variables) {
+                    variable_data <- climate_data[climate_data$variable_name == climate_variable, ]
+                    if (nrow(variable_data) == 0) next
+                    arrow::write_parquet(
+                         variable_data,
+                         sink = file.path(PATHS$DATA_RAW, paste0(
+                              "climate/climate_data_", climate_model, "_", climate_variable, "_",
+                              date_start, "_", date_stop, "_", unit$id, ".parquet")))
+               }
+               if (is_free) Sys.sleep(0.11)
+          }
+
+          if (!is_free && .Platform$OS.type != "windows") {
+               parallel::mclapply(units, process_unit, mc.cores = n_cores)
+          } else {
+               lapply(units, process_unit)
           }
      }
 
-     message(glue::glue("Raw climate data saved for all countries, variables, and models here: {PATHS$DATA_RAW}/climate"))
+     message(glue::glue("Raw climate data saved for all units, variables, and models here: {PATHS$DATA_RAW}/climate"))
 }
