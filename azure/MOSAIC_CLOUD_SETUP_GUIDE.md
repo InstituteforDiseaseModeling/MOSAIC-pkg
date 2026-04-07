@@ -1,7 +1,7 @@
 # MOSAIC Cloud Parallel Calibration — Setup Guide
 
 **What this document covers**: Step-by-step instructions for setting up and running
-`run_MOSAIC_dask()` from scratch. Each step explains what is happening and where.
+`run_MOSAIC()` from scratch. Each step explains what is happening and where.
 
 **Before starting**: Read `MOSAIC_CLOUD_PRIMER.md` for conceptual background on all tools.
 
@@ -22,7 +22,7 @@ A. YOUR LOCAL MACHINE
 B. COILED WORKER VMs (cloud, Azure westus2)
    Has: Docker image with MOSAIC + Python + LASER
    Does: Runs LASER simulations
-   Provisioned automatically by Coiled when you call run_MOSAIC_dask()
+   Provisioned automatically by Coiled when you call run_MOSAIC()
    Billed per-second, terminated when run completes
 
 C. AZURE CONTAINER REGISTRY (ACR)
@@ -79,7 +79,7 @@ Follow the prompts and allow conda to initialize your shell. Restart your termin
 
 `coiled` and `dask.distributed` are now part of the standard MOSAIC Python environment
 (`~/.virtualenvs/r-mosaic`), defined in `inst/py/environment.yml`. No separate
-orchestration environment is needed — `run_MOSAIC_dask()` uses the same Python that
+orchestration environment is needed — `run_MOSAIC()` uses the same Python that
 all other MOSAIC functions use.
 
 ```bash
@@ -139,7 +139,7 @@ is used by both the `coiled` CLI and by Python/R code that imports `coiled`.
 
 ### Step 1.4 — Verify reticulate uses the MOSAIC Python environment
 
-`run_MOSAIC_dask()` calls `MOSAIC::check_python_env()` at startup, which confirms
+`run_MOSAIC()` calls `MOSAIC::check_python_env()` at startup, which confirms
 that reticulate is using `~/.virtualenvs/r-mosaic`. Since coiled and dask are now
 installed there, no additional configuration is needed — the same env that runs
 LASER simulations also handles Dask orchestration.
@@ -364,7 +364,7 @@ dask_spec <- list(
 )
 
 # Run!
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = "./output/ETH_dask_test",
@@ -470,7 +470,7 @@ dask_spec <- list(
   idle_timeout = "2 hours"
 )
 
-result <- run_MOSAIC_dask(
+result <- run_MOSAIC(
   config     = config,
   priors     = priors,
   dir_output = "./output/ETH_production",
@@ -766,7 +766,7 @@ If this fails, the image is stale or broken — rebuild it (Part 5).
 ### "You have reached your pull rate limit" (Docker Hub error)
 
 This happens if using a Docker Hub image instead of ACR. The default `software` in
-`run_MOSAIC_dask()` is `"mosaic-acr-workers"` which uses ACR. If you explicitly
+`run_MOSAIC()` is `"mosaic-acr-workers"` which uses ACR. If you explicitly
 specified a Docker Hub image, switch to ACR.
 
 ---

@@ -62,7 +62,7 @@ coiled.create_software_environment(
 
 ### 5. Code defaults updated
 
-In `R/run_MOSAIC_dask.R`, the default `dask_spec$software` was changed from `"mosaic-docker-workers"` to `"mosaic-acr-workers"`.
+In `R/run_MOSAIC.R`, the default `dask_spec$software` was changed from `"mosaic-docker-workers"` to `"mosaic-acr-workers"`.
 
 ## Usage
 
@@ -82,10 +82,10 @@ docker run --rm \
 
 ```r
 # Uses ACR image by default (no change needed)
-run_MOSAIC_dask(config, priors, dir_output)
+run_MOSAIC(config, priors, dir_output)
 
 # Or explicitly:
-run_MOSAIC_dask(config, priors, dir_output,
+run_MOSAIC(config, priors, dir_output,
                 dask_spec = list(software = "mosaic-acr-workers"))
 ```
 
@@ -133,8 +133,8 @@ ACR Standard tier: ~$0.667/day (~$20/month). Includes 100 GB storage. Data trans
 If needed, switch back by passing the old software environment:
 
 ```r
-run_MOSAIC_dask(config, priors, dir_output,
+run_MOSAIC(config, priors, dir_output,
                 dask_spec = list(software = "mosaic-docker-workers"))
 ```
 
-Or change the default in `R/run_MOSAIC_dask.R` line 375 back to `"mosaic-docker-workers"`.
+Or change the default in `R/run_MOSAIC.R` line 375 back to `"mosaic-docker-workers"`.

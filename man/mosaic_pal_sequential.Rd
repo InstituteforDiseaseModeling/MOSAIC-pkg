@@ -14,9 +14,9 @@ mosaic_pal_sequential(n, palette = "blues", direction = 1, begin = 0, end = 1)
 
 \item{direction}{\code{1} (light to dark) or \code{-1} (dark to light).}
 
-\item{begin}{Start position in \link{0, 1} (default 0).}
+\item{begin}{Start position in [0, 1] (default 0).}
 
-\item{end}{End position in \link{0, 1} (default 1).}
+\item{end}{End position in [0, 1] (default 1).}
 }
 \value{
 Character vector of hex color codes.

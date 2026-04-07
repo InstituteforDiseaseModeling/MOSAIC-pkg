@@ -2,7 +2,7 @@
 # =============================================================================
 # validate_dask_local_equivalence.R
 # =============================================================================
-# Level 3 end-to-end validation: run_MOSAIC() vs run_MOSAIC_dask()
+# Level 3 end-to-end validation: run_MOSAIC() local vs run_MOSAIC() with dask_spec
 #
 # Runs 20 sims (sim_ids 1:20) through BOTH code paths with identical:
 #   - config, priors, control (same likelihood settings)
@@ -144,7 +144,7 @@ if (!file.exists(local_parquet)) {
 }
 
 # =============================================================================
-# LEG 2: run_MOSAIC_dask (Dask cluster)
+# LEG 2: run_MOSAIC with dask_spec (Dask cluster)
 # =============================================================================
 
 dir_dask <- file.path(BASE_OUTPUT, paste0("validate_dask_", run_stamp))
@@ -153,14 +153,14 @@ dir_dask <- file.path(BASE_OUTPUT, paste0("validate_dask_", run_stamp))
 dask_parquet <- file.path(dir_dask, "2_calibration", "samples.parquet")
 
 cat("-------------------------------------------------------------\n")
-cat("LEG 2: run_MOSAIC_dask (Dask cluster)\n")
+cat("LEG 2: run_MOSAIC with dask_spec (Dask cluster)\n")
 cat(sprintf("  Output → %s\n", dir_dask))
 cat("-------------------------------------------------------------\n")
 
 t_dask_start <- Sys.time()
 
 result_dask <- tryCatch(
-  run_MOSAIC_dask(
+  run_MOSAIC(
     config     = config,
     priors     = priors,
     dir_output = dir_dask,
@@ -168,7 +168,7 @@ result_dask <- tryCatch(
     dask_spec  = DASK_SPEC
   ),
   error = function(e) {
-    cat(sprintf("\n  NOTE: run_MOSAIC_dask post-processing error (non-fatal):\n    %s\n", e$message))
+    cat(sprintf("\n  NOTE: run_MOSAIC (dask) post-processing error (non-fatal):\n    %s\n", e$message))
     cat("  Simulations parquet should still be available for comparison.\n\n")
     NULL
   }
@@ -180,7 +180,7 @@ cat(sprintf("\nLeg 2 complete: %.1fs\n\n", t_dask))
 # Verify dask parquet exists
 if (!file.exists(dask_parquet)) {
   stop("Dask samples.parquet not found at: ", dask_parquet,
-       "\n  run_MOSAIC_dask failed before writing simulation results.")
+       "\n  run_MOSAIC (dask) failed before writing simulation results.")
 }
 
 # =============================================================================
@@ -325,7 +325,7 @@ all_params_match <- all(param_max_diffs < 1e-10)
 seeds_match <- seed_sim_match && seed_iter_match
 
 if (all_ll_match && all_params_match && seeds_match) {
-  cat("  PASS: run_MOSAIC and run_MOSAIC_dask produce identical results\n")
+  cat("  PASS: run_MOSAIC (local) and run_MOSAIC (dask) produce identical results\n")
 } else if (n_close == N_SIMS && all_params_match) {
   cat("  PASS (NEAR-EXACT): likelihoods within 1e-6, params match\n")
   cat("  (Small float diffs likely from JSON round-trip or numpy precision)\n")

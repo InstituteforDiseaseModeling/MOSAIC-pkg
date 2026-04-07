@@ -33,7 +33,7 @@ machines — but you *can* split *simulations* across machines.
 Run each LASER simulation as an independent task dispatched to a worker machine in the
 cloud. R remains the orchestrator (handling parameter sampling, likelihood computation,
 and results aggregation); Python workers run the computationally expensive LASER
-simulations. This is what `run_MOSAIC_dask()` implements.
+simulations. This is what `run_MOSAIC()` implements.
 
 ---
 
@@ -69,7 +69,7 @@ and result transport.
    functions             functions
 ```
 
-**Key API methods** (used in `run_MOSAIC_dask.R` via reticulate):
+**Key API methods** (used in `run_MOSAIC.R` via reticulate):
 
 | Method | What it does in MOSAIC |
 |--------|------------------------|
@@ -243,12 +243,12 @@ results <- client$gather(futures)
 - R character → Python str
 - R integer → Python int
 
-This translation is used in `run_MOSAIC_dask.R` to convert the R config list into a
+This translation is used in `run_MOSAIC.R` to convert the R config list into a
 Python dict that `client$scatter()` can broadcast to workers.
 
 **Python environment**: `coiled` and `dask.distributed` are included in MOSAIC's
 standard Python environment (`~/.virtualenvs/r-mosaic`, defined in
-`inst/py/environment.yml`). No separate environment is needed. `run_MOSAIC_dask()`
+`inst/py/environment.yml`). No separate environment is needed. `run_MOSAIC()`
 calls `check_python_env()` at startup to confirm the correct environment is active —
 the same environment that all other MOSAIC functions use for LASER simulations.
 
@@ -260,7 +260,7 @@ the same environment that all other MOSAIC functions use for LASER simulations.
 
 MOSAIC now has two parallel execution strategies:
 
-| | `run_MOSAIC()` | `run_MOSAIC_dask()` |
+| | `run_MOSAIC()` | `run_MOSAIC()` |
 |---|---|---|
 | **Workers** | R processes (via `parallel::makeCluster`) | Python Dask workers (local or Coiled cloud) |
 | **Scale** | 1 machine, up to ~32 cores | Many machines, up to 1000s of cores |
@@ -279,7 +279,7 @@ Both functions produce the same output directory structure (`1_inputs/`, `2_cali
 YOUR LOCAL MACHINE (or Azure orchestrator VM)
 ┌────────────────────────────────────────────────────────────┐
 │  R session                                                  │
-│  ├── MOSAIC::run_MOSAIC_dask()                             │
+│  ├── MOSAIC::run_MOSAIC()                             │
 │  ├── sample_parameters()    ← parameter draws, all in R    │
 │  ├── client$scatter()       ← sends base_config to cloud   │
 │  ├── client$map()           ← dispatches simulations        │
@@ -334,7 +334,7 @@ using the sampled `psi_star_*` parameters — the broadcast copy would be stale.
 
 ### 3.4 The New R Functions
 
-**`run_MOSAIC_dask(config, priors, dir_output, control, dask_spec)`**
+**`run_MOSAIC(config, priors, dir_output, control, dask_spec)`**
 The main entry point. Takes the same `config` and `priors` as `run_MOSAIC()`, plus a
 `dask_spec` list describing the cluster:
 
@@ -366,7 +366,7 @@ Before merging, Tony ran three rounds of equivalence validation:
 **Take 3 (March 26, 2026 — current, PASS)**:
 - 50 simulations, ETH, 1 iteration
 - Local: 8 PSOCK workers with `run_MOSAIC()`
-- Dask: 5 × Standard_D4s_v6 with `run_MOSAIC_dask()`
+- Dask: 5 × Standard_D4s_v6 with `run_MOSAIC()`
 - **Parameter match: 56/56 exact** (all sampled parameters identical)
 - **Simulation results**: Expected stochastic divergence only (~1–2 ULP floating-point
   difference in `psi_jt` from JSON serialization propagates through the stochastic
@@ -380,7 +380,7 @@ Before merging, Tony ran three rounds of equivalence validation:
 **Memory bottleneck for large batches**: Workers currently return `expected_cases` and
 `disease_deaths` arrays in-memory via `client$gather()`. For batches of >1,000
 simulations, the scheduler holds all these arrays in RAM simultaneously. The code comments
-(see `R/run_MOSAIC_dask.R` roxygen) document a planned "Option B": workers write directly
+(see `R/run_MOSAIC.R` roxygen) document a planned "Option B": workers write directly
 to Azure Blob Storage and R reads back via `AzureStor`. This would remove the memory
 ceiling entirely.
 
@@ -400,7 +400,7 @@ account and software environment, or access to Tony's workspace.
 
 | File | Role | Where it runs |
 |------|------|----------------|
-| `R/run_MOSAIC_dask.R` | R orchestrator function | Local R / orchestrator VM |
+| `R/run_MOSAIC.R` | R orchestrator function | Local R / orchestrator VM |
 | `inst/python/mosaic_dask_worker.py` | Python worker function | Coiled worker VMs |
 | `azure/Dockerfile` | Worker image definition | Built locally, runs on worker VMs |
 | `azure/environment.yml` | Local conda env (coiled+dask only) | Your local machine |

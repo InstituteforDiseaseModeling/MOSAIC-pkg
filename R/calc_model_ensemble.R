@@ -24,6 +24,9 @@
 #' @param root_dir Character. MOSAIC root directory. Required when
 #'   \code{parallel = TRUE} so workers can call \code{set_root_directory()}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
+#' @param precomputed_results Optional list of pre-gathered LASER results (e.g. from Dask).
+#'   Each element must have \code{$reported_cases}, \code{$disease_deaths}, and \code{$success}.
+#'   When provided, local LASER execution is skipped entirely.
 #'
 #' @return A named list (S3 class \code{"mosaic_ensemble"}) containing:
 #' \describe{
@@ -55,7 +58,8 @@ calc_model_ensemble <- function(config,
                                 parallel           = FALSE,
                                 n_cores            = NULL,
                                 root_dir           = NULL,
-                                verbose            = TRUE) {
+                                verbose            = TRUE,
+                                precomputed_results = NULL) {
 
   # ---------------------------------------------------------------------------
   # Input validation
@@ -129,6 +133,16 @@ calc_model_ensemble <- function(config,
   # Run simulations
   # ---------------------------------------------------------------------------
 
+  if (!is.null(precomputed_results)) {
+    # Use pre-gathered LASER results (e.g. from Dask) instead of running locally.
+    # Expected format: list of lists, each with $reported_cases, $disease_deaths, $success
+    if (verbose) message("Using ", length(precomputed_results), " precomputed LASER results (skipping local execution)")
+    simulation_results <- precomputed_results
+    n_simulations <- length(simulation_results)
+    seeds <- seq_len(n_simulations)
+
+  } else {
+
   if (verbose) message("Running ", n_simulations, " stochastic LASER simulations...")
 
   pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
@@ -175,6 +189,8 @@ calc_model_ensemble <- function(config,
       seeds, function(s) run_single_simulation(s, config)
     )
   }
+
+  } # end precomputed_results else
 
   # ---------------------------------------------------------------------------
   # Filter successful results

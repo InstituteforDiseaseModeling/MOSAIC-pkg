@@ -249,3 +249,88 @@ def run_laser_sim(sim_id: int, n_iterations: int,
             "error": str(exc),
             "traceback": tb.format_exc(),
         }
+
+
+def run_laser_postca(task_id: int, seed: int,
+                     config_json: str, extra_fields: dict) -> dict:
+    """Run a single LASER simulation for post-calibration (ensemble / stochastic).
+
+    Unlike run_laser_sim(), this takes a complete config as JSON (not base +
+    sampled params separately) and runs a single iteration with a given seed.
+
+    Parameters
+    ----------
+    task_id : int
+        Arbitrary task identifier (for tracking).
+    seed : int
+        Stochastic seed for this LASER run.
+    config_json : str
+        Full MOSAIC config as JSON string (from R's jsonlite::toJSON).
+    extra_fields : dict
+        Dict of numpy arrays (matrices) that are too large for JSON.
+        Typically scattered once via client.scatter(broadcast=True).
+        Keys are field names (e.g. "b_jt", "psi_jt"), values are numpy arrays.
+
+    Returns
+    -------
+    dict with keys: task_id, seed, success, reported_cases, disease_deaths
+    """
+    for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS",
+                 "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ[_var] = "1"
+
+    try:
+        import laser.cholera.metapop.model as lc
+        import warnings as _warnings
+        _warnings.filterwarnings(
+            "ignore", message="invalid value encountered in divide"
+        )
+
+        config = json.loads(config_json)
+
+        # Merge in large matrix fields from scattered dict
+        if extra_fields is not None:
+            for key, val in extra_fields.items():
+                config[key] = val
+
+        # Convert vector fields to numpy arrays (same logic as _apply_sampled_params)
+        for key in _VECTOR_FIELDS:
+            if key in config and not isinstance(config[key], np.ndarray):
+                val = config[key]
+                if isinstance(val, list):
+                    config[key] = np.array(val, dtype=float)
+                elif isinstance(val, (int, float)):
+                    config[key] = np.atleast_1d(np.array(val, dtype=float))
+
+        # Convert matrix fields to numpy arrays
+        for key in _MATRIX_FIELDS:
+            if key in config and not isinstance(config[key], np.ndarray):
+                val = config[key]
+                if isinstance(val, list) and len(val) > 0:
+                    config[key] = np.array(val, dtype=float)
+
+        config["seed"] = seed
+
+        model = lc.run_model(paramfile=config, quiet=True)
+
+        result = {
+            "task_id": task_id,
+            "seed": seed,
+            "success": True,
+            "reported_cases": np.array(model.results.reported_cases).tolist(),
+            "disease_deaths": np.array(model.results.disease_deaths).tolist(),
+        }
+
+        del model
+        gc.collect()
+        return result
+
+    except Exception as exc:  # noqa: BLE001
+        gc.collect()
+        return {
+            "task_id": task_id,
+            "seed": seed,
+            "success": False,
+            "error": str(exc),
+            "traceback": tb.format_exc(),
+        }

@@ -816,8 +816,30 @@ run_MOSAIC <- function(config,
         }
       }
 
-      dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
-      client       <- dask_dist$Client(dask_cluster)
+      # Cluster creation with retry — transient Azure provisioning failures
+      # (e.g. "Timed out waiting for process to phone home") are common and
+      # resolve on retry without any code change needed.
+      max_cluster_attempts <- 3L
+      cluster_attempt      <- 0L
+      repeat {
+        cluster_attempt <- cluster_attempt + 1L
+        tryCatch({
+          dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
+          client       <- dask_dist$Client(dask_cluster)
+          break   # success
+        }, error = function(e) {
+          try({ if (!is.null(dask_cluster)) dask_cluster$close() }, silent = TRUE)
+          dask_cluster <<- NULL
+          if (cluster_attempt >= max_cluster_attempts)
+            stop("Coiled cluster creation failed after ", max_cluster_attempts,
+                 " attempts: ", e$message, call. = FALSE)
+          wait_secs <- 30L * cluster_attempt
+          log_msg("Cluster creation attempt %d/%d failed: %s",
+                  cluster_attempt, max_cluster_attempts, e$message)
+          log_msg("  Retrying in %ds...", wait_secs)
+          Sys.sleep(wait_secs)
+        })
+      }
     } else {
       log_msg("Connecting to Dask scheduler: %s", dask_spec$address)
       client <- dask_dist$Client(dask_spec$address)
@@ -1211,27 +1233,18 @@ run_MOSAIC <- function(config,
     cl <- NULL
   }
 
-  # Close Dask cluster before R-heavy post-processing to prevent Python event
-  # loop starvation / TLS heartbeat timeouts
+  # Disconnect Dask client before R-heavy post-processing to prevent Python
+  # event loop starvation / TLS heartbeat timeouts. The cluster object stays
+  # alive (holds TLS context) so we can reconnect for post-cal ensemble sims.
   if (use_dask && !is.null(client)) {
-    log_msg("Closing Dask cluster (all results gathered, no longer needed)")
+    log_msg("Disconnecting Dask client (cluster stays alive for post-cal reconnect)")
     tryCatch({
       client$close()
-      log_msg("  Dask client closed")
+      log_msg("  Client disconnected")
     }, error = function(e) {
-      log_msg("  Dask client close failed (may already be disconnected): %s", e$message)
+      log_msg("  Dask client disconnect failed: %s", e$message)
     })
-    if (!is.null(dask_cluster)) {
-      tryCatch({
-        dask_cluster$close()
-        log_msg("  Dask cluster closed")
-      }, error = function(e) {
-        log_msg("  Dask cluster close failed: %s", e$message)
-      })
-    }
-    # Null out so the on.exit handler doesn't double-close
-    client       <- NULL
-    dask_cluster <- NULL
+    client <- NULL
     gc(verbose = FALSE)
   }
 
@@ -1807,14 +1820,88 @@ run_MOSAIC <- function(config,
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
   # ===========================================================================
+  # RECONNECT DASK FOR POST-CAL SIMS (if applicable)
+  # ===========================================================================
+  # The client was disconnected before R-heavy post-processing. Now reconnect
+  # to the same (still-alive) cluster to dispatch ensemble + stochastic sims.
+
+  n_ensemble_r2   <- control$predictions$best_model_n_sims
+  postca_dask     <- NULL
+
+  if (use_dask && !is.null(dask_cluster)) {
+    postca_dask <- tryCatch({
+      log_msg("Reconnecting to Dask cluster for post-cal sims...")
+      client <- dask_cluster$get_client()
+      log_msg("  Reconnected (%d workers)", length(client$scheduler_info()$workers))
+
+      # Re-upload worker module (workers may have restarted during idle)
+      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+      client$upload_file(worker_py_path)
+      mosaic_worker <- reticulate::import("mosaic_dask_worker")
+
+      # Build stochastic param configs
+      stoch_param_configs <- NULL
+      n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
+
+      if (control$paths$plots && sum(results$is_best_subset) > 0) {
+        best_subset_results <- results[results$is_best_subset == TRUE, ]
+        stoch_param_seeds   <- best_subset_results$seed_sim
+        stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+
+        if (length(stoch_param_weights) > 0) {
+          stoch_param_configs <- lapply(stoch_param_seeds[stoch_param_weights > 0], function(seed_i) {
+            tryCatch(
+              sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                                seed = seed_i, sample_args = sampling_args, verbose = FALSE),
+              error = function(e) NULL
+            )
+          })
+          stoch_param_configs <- Filter(Negate(is.null), stoch_param_configs)
+        }
+      }
+
+      # Dispatch all post-cal sims
+      result <- .mosaic_postca_dask(
+        client           = client,
+        mosaic_worker    = mosaic_worker,
+        config_best      = config_best,
+        param_configs    = stoch_param_configs,
+        n_ensemble       = n_ensemble_r2,
+        n_stochastic_per = n_stochastic_per,
+        log_msg          = log_msg
+      )
+
+      # Close for real now
+      log_msg("Closing Dask cluster (post-cal sims complete)")
+      tryCatch(client$close(), error = function(e) NULL)
+      client <- NULL
+      if (!is.null(dask_cluster)) {
+        tryCatch(dask_cluster$close(), error = function(e) NULL)
+        dask_cluster <- NULL
+      }
+
+      result
+    }, error = function(e) {
+      log_msg("WARNING: Post-cal Dask reconnect/dispatch failed: %s", e$message)
+      log_msg("  Falling back to local execution for ensemble/stochastic sims")
+      # Clean up on failure
+      tryCatch({ if (!is.null(client)) client$close() }, error = function(e2) NULL)
+      client <<- NULL
+      if (!is.null(dask_cluster)) {
+        tryCatch(dask_cluster$close(), error = function(e2) NULL)
+        dask_cluster <<- NULL
+      }
+      NULL
+    })
+  }
+
+  # ===========================================================================
   # ENSEMBLE R², WINDOWED METRICS, AND PREDICTIVE PLOTS
   # ===========================================================================
 
   # Run ensemble once via calc_model_ensemble(). The same object is then used
   # for (a) R²/bias ratios, (b) windowed fit metrics, and (c) predictive plots
   # when plots = TRUE. This avoids running simulations twice.
-
-  n_ensemble_r2              <- control$predictions$best_model_n_sims
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
@@ -1825,12 +1912,13 @@ run_MOSAIC <- function(config,
 
     ensemble <- tryCatch(
       calc_model_ensemble(
-        config             = config_best,
-        n_simulations      = n_ensemble_r2,
-        envelope_quantiles = c(0.025, 0.975),
-        parallel           = control$parallel$enable,
-        n_cores            = control$parallel$n_cores,
-        root_dir           = root_dir,
+        config              = config_best,
+        n_simulations       = n_ensemble_r2,
+        envelope_quantiles  = c(0.025, 0.975),
+        parallel            = control$parallel$enable,
+        n_cores             = control$parallel$n_cores,
+        root_dir            = root_dir,
+        precomputed_results = postca_dask$ensemble_results,
         verbose            = FALSE
       ),
       error = function(e) {
@@ -1976,6 +2064,7 @@ run_MOSAIC <- function(config,
       output_dir = dirs$res_fig_pred,
       save_predictions = TRUE,
       parallel = control$parallel$enable,
+      precomputed_results = postca_dask$stochastic_results,
       n_cores = control$parallel$n_cores,
       root_dir = root_dir,
       verbose = control$logging$verbose
@@ -2197,7 +2286,7 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
-#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 100L)
+#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 10L)
 #'     \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
 #'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
 #'   }
@@ -2470,7 +2559,7 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default prediction settings
   default_predictions <- list(
-    best_model_n_sims = 100L,           # Stochastic runs for best model
+    best_model_n_sims = 10L,            # Stochastic runs for best model
     ensemble_n_param_sets = 50L,        # Number of parameter sets in ensemble
     ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
   )
