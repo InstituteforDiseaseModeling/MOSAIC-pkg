@@ -207,9 +207,9 @@ sample_from_prior <- function(n = 1, prior, verbose = FALSE) {
         if (exists("rgompertz", mode = "function")) {
           rgompertz(n, b = params$b, eta = params$eta)
         } else {
-          # Fallback: implement basic Gompertz sampling using inverse transform
+          # Fallback: Gompertz sampling via inverse CDF (matches qgompertz)
           u <- runif(n)
-          (1/params$b) * log(1 - (params$b/params$eta) * log(1 - u))
+          (1/params$b) * log1p((-log1p(-u)) / params$eta)
         }
       },
 

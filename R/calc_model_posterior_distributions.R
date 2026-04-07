@@ -316,17 +316,18 @@ calc_model_posterior_distributions <- function(
         # Apply bounds correction based on distribution type BEFORE fitting
         # This ensures values are in the valid range for each distribution
         if (dist_type == "beta") {
-            # Beta requires [0, 1]
-            mode_val <- max(0.001, min(0.999, mode_val))
-            q_low <- max(0.001, min(0.999, q_low))
-            q_high <- max(0.001, min(0.999, q_high))
+            # Beta requires (0, 1) — use 1e-10 to preserve near-zero posteriors
+            # (e.g. prop_E_initial, prop_I_initial with means ~0.0001%)
+            mode_val <- max(1e-10, min(1 - 1e-10, mode_val))
+            q_low <- max(1e-10, min(1 - 1e-10, q_low))
+            q_high <- max(1e-10, min(1 - 1e-10, q_high))
 
             # Ensure ordering
             if (q_low >= q_high) {
                 q_low <- mode_val - 0.1
                 q_high <- mode_val + 0.1
-                q_low <- max(0.001, min(0.999, q_low))
-                q_high <- max(0.001, min(0.999, q_high))
+                q_low <- max(1e-10, min(1 - 1e-10, q_low))
+                q_high <- max(1e-10, min(1 - 1e-10, q_high))
             }
         } else if (dist_type %in% c("gamma", "lognormal")) {
             # Gamma and lognormal require positive values
