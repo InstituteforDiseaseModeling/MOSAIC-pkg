@@ -3,8 +3,8 @@
 "alpha_2","Frequency-Driven Transmission","Degree of frequency driven transmission (0-1)","proportion","beta","global","transmission",2,"01","01","02","beta",NA,NA
 "decay_days_short","Minimum V. cholerae Survival","Minimum V. cholerae survival time in environment","days","truncnorm","global","environmental",3,"01","02","01","truncnorm",NA,NA
 "decay_days_long","Maximum V. cholerae Survival","Maximum V. cholerae survival time in environment","days","uniform","global","environmental",4,"01","02","02","lognormal",NA,NA
-"decay_shape_1","Decay Shape Parameter 1","First shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",5,"01","02","03","gamma",NA,NA
-"decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",6,"01","02","04","gamma",NA,NA
+"decay_shape_1","Decay Shape Parameter 1","First shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",5,"01","02","03","lognormal",NA,NA
+"decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",6,"01","02","04","lognormal",NA,NA
 "zeta_1","Symptomatic Shedding Rate","Shedding rate for symptomatic infections","bacteria/day (rate)","lognormal","global","environmental",7,"01","02","05","lognormal",NA,NA
 "zeta_2","Asymptomatic Shedding Rate","Shedding rate for asymptomatic infections","bacteria/day (rate)","lognormal","global","environmental",8,"01","02","06","lognormal",NA,NA
 "kappa","50% Infectious Dose","Concentration of V. cholerae for 50% infectious dose","bacteria/mL","lognormal","global","environmental",9,"01","02","07","lognormal",NA,NA

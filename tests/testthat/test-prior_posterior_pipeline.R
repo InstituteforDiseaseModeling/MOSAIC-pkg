@@ -95,7 +95,7 @@ test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", 
     likelihood = rnorm(n, -100, 10)
   )
 
-  # Prior is uniform — should allow data-driven posterior family from static lookup
+  # Prior is uniform — posterior family inferred from domain (min >= 0 → lognormal)
   priors <- list(
     metadata = list(version = "test"),
     parameters_global = list(
@@ -121,9 +121,91 @@ test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", 
   # Prior distribution should be "uniform" (the actual prior)
   expect_equal(unique(ddl$prior_distribution), "uniform")
 
-  # Posterior distribution should be from static lookup (lognormal), not "uniform"
+  # Posterior distribution should be lognormal (domain inference: min >= 0)
   expect_equal(unique(ddl$posterior_distribution), "lognormal",
-               info = "Uniform priors should allow data-driven posterior family")
+               info = "Uniform priors on (0, inf) should infer lognormal posterior")
+})
+
+
+test_that("domain inference from uniform bounds: proportion → beta, positive → lognormal, other → normal", {
+
+  # Test the internal domain inference helper directly
+  infer <- MOSAIC:::.infer_posterior_family_uniform
+
+  # [0, 1] → beta (proportion domain)
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = 0, max = 1))),
+    "beta"
+  )
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = 0.0, max = 0.5))),
+    "beta"
+  )
+
+  # [0, inf) or [a, b] with a >= 0 → lognormal (positive domain)
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = 30, max = 365))),
+    "lognormal"
+  )
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = 0.1, max = 10))),
+    "lognormal"
+  )
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = 0, max = 100))),
+    "lognormal"
+  )
+
+  # min < 0 → normal (unconstrained domain)
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = -10, max = 10))),
+    "normal"
+  )
+  expect_equal(
+    infer(list(distribution = "uniform", parameters = list(min = -1, max = 1))),
+    "normal"
+  )
+})
+
+
+test_that("uniform prior decay_shape_1 gets lognormal posterior via domain inference", {
+
+  set.seed(42)
+  n <- 200
+  results <- data.frame(
+    decay_shape_1 = runif(n, 0.1, 10),
+    is_finite = TRUE,
+    is_retained = TRUE,
+    is_best_subset = c(rep(TRUE, 50), rep(FALSE, n - 50)),
+    weight_best = c(rep(1/50, 50), rep(0, n - 50)),
+    likelihood = rnorm(n, -100, 10)
+  )
+
+  # Actual prior: Uniform(0.1, 10) → domain inference: min >= 0 → lognormal
+  priors <- list(
+    metadata = list(version = "test"),
+    parameters_global = list(
+      decay_shape_1 = list(distribution = "uniform", parameters = list(min = 0.1, max = 10))
+    ),
+    parameters_location = list()
+  )
+
+  out_dir <- tempfile("test_pq_shape_")
+  dir.create(out_dir, recursive = TRUE)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  result <- calc_model_posterior_quantiles(
+    results = results,
+    output_dir = out_dir,
+    priors = priors,
+    verbose = FALSE
+  )
+
+  ds1 <- result[result$parameter == "decay_shape_1", ]
+  expect_true(nrow(ds1) > 0)
+  expect_equal(unique(ds1$prior_distribution), "uniform")
+  expect_equal(unique(ds1$posterior_distribution), "lognormal",
+               info = "Uniform(0.1, 10) should infer lognormal via domain (min >= 0)")
 })
 
 

@@ -228,20 +228,27 @@ global_params <- data.frame(
 )
 
 # Add posterior distribution columns to global_params.
-# For parameters with uniform priors the posterior family is decoupled so that
-# the fitted posterior curve can reflect the actual shape of the weighted samples
-# rather than being forced into a flat uniform. Parameters without a uniform
-# prior retain the same family for both prior display and posterior fitting.
+#
+# RUNTIME BEHAVIOR (v0.19.25+, issue #64 fix):
+# When priors are provided to calc_model_posterior_quantiles():
+#   - Non-uniform priors: posterior is fitted in the SAME family as the prior
+#   - Uniform priors: posterior family is inferred from parameter domain:
+#       * min >= 0 and max <= 1 → beta  (proportion)
+#       * min >= 0              → lognormal  (positive real)
+#       * otherwise             → normal  (unconstrained)
+#   - The posterior_distribution column below documents the expected runtime
+#     result and serves as a fallback when priors are not provided.
+#
 # posterior_lower / posterior_upper supply hard truncation bounds passed to
 # fit_truncnorm_from_ci() for bounded integer parameters (delta_reporting_*).
 global_params$posterior_distribution <- c(
   # Transmission: beta prior → beta posterior
   "beta", "beta",
-  # Environmental: decay_days_short truncnorm → truncnorm posterior (updated from uniform/lognormal);
-  #   decay_days_long uniform → lognormal posterior (positive durations);
-  #   decay_shape_1/2 uniform → gamma posterior (positive shape parameters);
-  #   zeta_1, zeta_2, kappa: lognormal prior → lognormal posterior (unchanged)
-  "truncnorm", "lognormal", "gamma", "gamma", "lognormal", "lognormal", "lognormal",
+  # Environmental: non-uniform priors retain family; uniform priors use domain
+  #   inference at runtime (min >= 0 → lognormal):
+  #   decay_days_short: truncnorm → truncnorm; decay_days_long: uniform → lognormal;
+  #   decay_shape_1/2: uniform → lognormal; zeta_1/2, kappa: lognormal → lognormal
+  "truncnorm", "lognormal", "lognormal", "lognormal", "lognormal", "lognormal", "lognormal",
   # Disease: unchanged
   "lognormal", "beta", "lognormal", "lognormal",
   # Immunity: unchanged

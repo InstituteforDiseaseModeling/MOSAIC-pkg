@@ -1,3 +1,25 @@
+#' Infer posterior fitting family from a uniform prior's bounds
+#'
+#' Uses the parameter domain encoded in min/max to select the natural
+#' distributional family for posterior fitting when the prior is uniform.
+#'
+#' @param prior_entry A prior list with \code{$parameters$min} and \code{$parameters$max}.
+#' @return Character string: \code{"beta"}, \code{"lognormal"}, or \code{"normal"}.
+#' @keywords internal
+.infer_posterior_family_uniform <- function(prior_entry) {
+    p <- prior_entry$parameters
+    lo <- as.numeric(p$min)
+    hi <- as.numeric(p$max)
+    if (is.finite(lo) && lo >= 0 && is.finite(hi) && hi <= 1) {
+        "beta"
+    } else if (is.finite(lo) && lo >= 0) {
+        "lognormal"
+    } else {
+        "normal"
+    }
+}
+
+
 #' Calculate Prior and Posterior Quantiles with KL Divergence
 #'
 #' Calculates quantiles for both prior (all simulations) and posterior (weighted best subset)
@@ -55,22 +77,27 @@ calc_model_posterior_quantiles <- function(results,
     data(estimated_parameters, package = "MOSAIC", envir = environment())
 
     # -----------------------------------------------------------------------
-    # Helper: look up actual prior distribution family from the priors object.
+    # Helper: look up actual prior entry from the priors object.
     # Returns NULL when priors is not provided (falls back to static lookup).
     # -----------------------------------------------------------------------
-    .lookup_prior_family <- function(param_base, iso = NULL) {
+    .lookup_prior_entry <- function(param_base, iso = NULL) {
         if (is.null(priors)) return(NULL)
         if (is.null(iso) || iso == "") {
-            entry <- priors$parameters_global[[param_base]]
+            priors$parameters_global[[param_base]]
         } else {
-            entry <- priors$parameters_location[[param_base]]$location[[iso]]
+            priors$parameters_location[[param_base]]$location[[iso]]
         }
+    }
+
+    .lookup_prior_family <- function(param_base, iso = NULL) {
+        entry <- .lookup_prior_entry(param_base, iso)
         if (!is.null(entry) && !is.null(entry$distribution)) {
             tolower(entry$distribution)
         } else {
             NULL
         }
     }
+
 
     # Helper function to calculate mode from KDE
     calc_mode_kde <- function(samples, weights = NULL) {
@@ -296,15 +323,24 @@ calc_model_posterior_quantiles <- function(results,
 
                 # Use actual prior family when priors are provided (issue #64 fix).
                 # Fall back to static estimated_parameters lookup for backward compat.
-                actual_family <- .lookup_prior_family(param_base)
-                static_dist   <- estimated_parameters$distribution[i]
-                static_post   <- if (has_post_dist) estimated_parameters$posterior_distribution[i] else static_dist
+                prior_entry   <- .lookup_prior_entry(param_base)
+                actual_family <- if (!is.null(prior_entry) && !is.null(prior_entry$distribution)) {
+                    tolower(prior_entry$distribution)
+                } else {
+                    NULL
+                }
+                static_dist <- estimated_parameters$distribution[i]
+                static_post <- if (has_post_dist) estimated_parameters$posterior_distribution[i] else static_dist
 
                 prior_dist <- if (!is.null(actual_family)) actual_family else static_dist
-                # For posterior fitting: use actual prior family unless prior is
-                # uniform (uninformative priors benefit from data-driven family).
-                post_dist  <- if (!is.null(actual_family) && actual_family != "uniform") {
+                # Posterior fitting family:
+                #   - Non-uniform informative priors: fit in the prior's own family
+                #   - Uniform priors: infer family from parameter domain (bounds)
+                #   - No priors object: fall back to static lookup
+                post_dist <- if (!is.null(actual_family) && actual_family != "uniform") {
                     actual_family
+                } else if (!is.null(prior_entry) && actual_family == "uniform") {
+                    .infer_posterior_family_uniform(prior_entry)
                 } else {
                     static_post
                 }
@@ -328,13 +364,20 @@ calc_model_posterior_quantiles <- function(results,
                 if (param_name_full %in% param_cols) {
                     inv_idx <- inv_idx + 1L
 
-                    actual_family <- .lookup_prior_family(param_base, iso)
-                    static_dist   <- estimated_parameters$distribution[i]
-                    static_post   <- if (has_post_dist) estimated_parameters$posterior_distribution[i] else static_dist
+                    prior_entry   <- .lookup_prior_entry(param_base, iso)
+                    actual_family <- if (!is.null(prior_entry) && !is.null(prior_entry$distribution)) {
+                        tolower(prior_entry$distribution)
+                    } else {
+                        NULL
+                    }
+                    static_dist <- estimated_parameters$distribution[i]
+                    static_post <- if (has_post_dist) estimated_parameters$posterior_distribution[i] else static_dist
 
                     prior_dist <- if (!is.null(actual_family)) actual_family else static_dist
-                    post_dist  <- if (!is.null(actual_family) && actual_family != "uniform") {
+                    post_dist <- if (!is.null(actual_family) && actual_family != "uniform") {
                         actual_family
+                    } else if (!is.null(prior_entry) && actual_family == "uniform") {
+                        .infer_posterior_family_uniform(prior_entry)
                     } else {
                         static_post
                     }
