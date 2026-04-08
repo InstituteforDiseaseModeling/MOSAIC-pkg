@@ -170,17 +170,23 @@ inflate_priors <- function(priors,
                a = p$a, b = p$b)
         },
 
-        # Gompertz: MLE on positive samples
+        # Gompertz: refit via quantile-matching (more robust than MLE for
+        # inflated samples that may shift the distribution shape significantly)
         gompertz = {
           x <- pmax(1e-10, inflated)
-          nll_g <- function(par) {
-            b_p   <- exp(par[1])
-            eta_p <- exp(par[2])
-            -sum(log(eta_p) + b_p * x - (eta_p / b_p) * (exp(b_p * x) - 1))
-          }
-          fit_g <- stats::optim(c(0, 0), nll_g, method = "Nelder-Mead",
-                                control = list(maxit = 2000L))
-          list(b = exp(fit_g$par[1]), eta = exp(fit_g$par[2]))
+          q_low  <- as.numeric(quantile(x, 0.025))
+          q_high <- as.numeric(quantile(x, 0.975))
+          # Mode from KDE
+          kde <- tryCatch(density(x), error = function(e) NULL)
+          mode_val <- if (!is.null(kde)) kde$x[which.max(kde$y)] else median(x)
+          mode_val <- max(1e-10, mode_val)
+          fit_g <- tryCatch(
+            fit_gompertz_from_ci(mode_val = mode_val, ci_lower = q_low,
+                                 ci_upper = q_high, verbose = FALSE),
+            error = function(e) NULL
+          )
+          if (is.null(fit_g)) stop("Gompertz quantile refit failed")
+          list(b = fit_g$b, eta = fit_g$eta)
         },
 
         stop("empirical refit: unsupported distribution '", dist, "'")

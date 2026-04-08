@@ -18,13 +18,13 @@ test_that("reference: core NB only produces known value", {
 test_that("reference: core NB + cumulative produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       add_cumulative_total = TRUE)
-  expect_equal(ll, -104.09800, tolerance = 1e-4)
+  expect_equal(ll, -107.0092, tolerance = 1e-4)
 })
 
 test_that("reference: core NB + WIS produces known value", {
   ll <- MOSAIC::calc_model_likelihood(ref_obs_c, ref_est_c, ref_obs_d, ref_est_d,
                                       add_wis = TRUE)
-  expect_equal(ll, -103.31340, tolerance = 1e-4)
+  expect_equal(ll, -110.5464, tolerance = 1e-4)
 })
 
 test_that("reference: perfect match (obs == est) produces known value", {

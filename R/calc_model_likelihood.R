@@ -12,6 +12,11 @@
 #' (log-Normal with adaptive sigma), cumulative progression (NB at cumulative
 #' fractions), and Weighted Interval Score (WIS). All default to OFF.
 #'
+#' All shape terms are internally T-normalized so that weight parameters share
+#' a common scale: \code{weight = 0.25} means the term contributes roughly 25
+#' percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
+#' cumulative and WIS by \code{T} (both return per-evaluation averages).
+#'
 #' Non-finite per-location LL values are replaced with \code{-Inf} (zero
 #' importance weight). The NB likelihood naturally produces very negative
 #' scores for bad fits without needing artificial guardrails.
@@ -27,8 +32,13 @@
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{FALSE}.
 #' @param add_wis Logical; default \code{FALSE}.
-#' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total Component weights.
-#' @param weight_wis Component weight for WIS term. Default \code{0.25}.
+#' @param weight_peak_timing,weight_peak_magnitude Component weights for peak terms
+#'   (T-normalized). Default \code{0.25} each.
+#' @param weight_cumulative_total T-normalized weight for cumulative progression.
+#'   Default \code{0.25}. Same scale as other shape terms: \code{0.25} means roughly
+#'   25 percent of NB core influence.
+#' @param weight_wis Component weight for WIS term. Default \code{0.10}. Lower than
+#'   peaks/cumulative because WIS is partially redundant with the NB core (r > 0.8).
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
 #' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
 #' @param penalty_unmatched_peak LL penalty for unmatched peaks; default \code{-3}.
@@ -56,10 +66,12 @@ calc_model_likelihood <- function(obs_cases,
                                   add_cumulative_total  = FALSE,
                                   add_wis               = FALSE,
                                   # ---- component weights ----
+                                  # All shape terms are T-normalized: weight = 0.25 means
+                                  # 25% of NB core influence.
                                   weight_peak_timing       = 0.25,
                                   weight_peak_magnitude    = 0.25,
                                   weight_cumulative_total  = 0.25,
-                                  weight_wis               = 0.25,
+                                  weight_wis               = 0.10,
                                   # ---- peak controls ----
                                   sigma_peak_time  = 1,
                                   sigma_peak_log   = 0.5,
@@ -239,31 +251,42 @@ calc_model_likelihood <- function(obs_cases,
 
           # Assembly formula (per location j):
           #
-          #   ll_loc = weight_cases * NB_cases + weight_deaths * NB_deaths          [core]
-          #          + weight_cumulative * (weight_cases * cum_c + weight_deaths * cum_d)
-          #          + weight_peak_timing * (weight_cases * pt_c + weight_deaths * pt_d)
-          #          + weight_peak_mag * (weight_cases * pm_c + weight_deaths * pm_d)
-          #          + weight_wis * (weight_cases * wis_c + weight_deaths * wis_d)
+          # All shape terms are T-normalized so weights share a common scale
+          # (w = 0.25 means ~25% of NB core influence):
+          #   - NB core: sums T per-timestep NB terms → O(T). No scaling.
+          #   - Peaks: sum of N_peaks terms → O(N_peaks). Scaled by T/N_peaks → O(T).
+          #   - Cumulative: mean of 4 NB-on-cumulative-sums terms → O(log T).
+          #     Scaled by T → O(T).
+          #   - WIS: time-averaged scoring rule → O(1). Scaled by T → O(T).
+          #
+          #   ll_loc = wc * NB_cases + wd * NB_deaths                              [core, O(T)]
+          #     + (T/N_peaks) * w_pt  * (wc * pt_c  + wd * pt_d)                  [peaks]
+          #     + (T/N_peaks) * w_pm  * (wc * pm_c  + wd * pm_d)                  [peaks]
+          #     + T           * w_cum * (wc * cum_c + wd * cum_d)                  [cumulative]
+          #     + T           * w_wis * (wc * wis_c + wd * wis_d)                 [WIS]
           #
           #   ll_total = sum(weights_location[j] * ll_loc[j])
           #
-          # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component,
-          # not just the core. This is intentional — it ensures case/death balance is
-          # consistent across all terms. The effective weight on (e.g.) case peak timing
-          # is weight_peak_timing * weight_cases.
+          # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component.
+          T_obs <- n_time_steps
+
+          # Peak scale: T / N_peaks (number of matched peaks for this location)
+          n_peaks_j <- if (!is.null(peak_indices_by_loc)) length(peak_indices_by_loc[[j]]) else 0L
+          peak_scale <- if (n_peaks_j > 0) T_obs / n_peaks_j else 0
+
           ll_loc_core <-
                weight_cases  * ll_cases +
                weight_deaths * ll_deaths
 
           ll_loc_peaks <-
-               weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
-               weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
+               peak_scale * weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
+               peak_scale * weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
 
           ll_loc_cum <-
-               weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
+               T_obs * weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
           ll_loc_wis <-
-               weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
+               T_obs * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
 
           ll_loc_total <- ll_loc_core
           if (add_peak_timing || add_peak_magnitude) ll_loc_total <- ll_loc_total + ll_loc_peaks
@@ -489,8 +512,7 @@ ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
-                                         weights_time = NULL,
-                                         per_tp_ll_floor = -1e9) {
+                                         weights_time = NULL) {
      n <- length(obs_vec)
 
      # Use weights if provided
@@ -509,8 +531,6 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           # Scale k proportionally to the number of summed timesteps.
           # For independent NB(mu_i, k) variables, the sum's dispersion ≈ k * n_summed
           # (exact for identical means; reasonable upper bound for varying means).
-          # This replaces the previous fixed k_data * 2 which was always wrong
-          # except when end_idx == 2.
           cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
                k_data * end_idx
           } else {
@@ -518,23 +538,35 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           }
 
           # Use plain cumulative sums (NA-safe).
-          # weights_time is for masking non-observed timesteps in the core NB
-          # likelihood, but the cumulative term needs actual totals — using a
-          # weighted mean times end_idx would inflate the sum proportionally to
-          # the fraction of NA timesteps (e.g. 50% NAs → 2× inflation).
           idx_range <- seq_len(end_idx)
           o_cum <- sum(obs_vec[idx_range], na.rm = TRUE)
           e_cum <- sum(est_vec[idx_range], na.rm = TRUE)
 
           if (!is.finite(o_cum) || !is.finite(e_cum)) next
-          if (e_cum <= 0 && o_cum > 0) { n_vals <- n_vals + 1L; vals[n_vals] <- per_tp_ll_floor; next }
-          e_cum <- if (e_cum <= 0) .Machine$double.eps else e_cum
+
+          # Handle zero prediction the same way as the core NB:
+          # proportional penalty for zero est with nonzero obs
+          if (e_cum <= 0 && o_cum > 0) {
+               n_vals <- n_vals + 1L
+               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
+               next
+          }
+          e_cum <- if (e_cum <= 0) 1e-10 else e_cum
+
           ll_tp <- stats::dnbinom(round(o_cum), mu = e_cum, size = cum_k, log = TRUE)
-          if (!is.finite(ll_tp)) ll_tp <- per_tp_ll_floor
+          if (!is.finite(ll_tp)) {
+               # Non-finite NB result: use proportional penalty as fallback
+               n_vals <- n_vals + 1L
+               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
+               next
+          }
+          # Normalize by end_idx to convert from "LL of sum of end_idx obs"
+          # to "per-observation LL". This makes the helper output O(1),
+          # allowing uniform T-scaling at assembly like other shape terms.
           n_vals <- n_vals + 1L
-          vals[n_vals] <- ll_tp
+          vals[n_vals] <- ll_tp / end_idx
      }
-     if (n_vals == 0L) return(per_tp_ll_floor)
+     if (n_vals == 0L) return(0)  # No valid timepoints: contribute nothing
      mean(vals[seq_len(n_vals)])
 }
 
