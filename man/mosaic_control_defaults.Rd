@@ -44,14 +44,12 @@ mosaic_control_defaults(
 
 \item{likelihood}{List of likelihood calculation settings (how to score model fit). Default is:
 \itemize{
-\item \code{add_max_terms}: Add negative binomial time-series likelihood (default: FALSE)
 \item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
 \item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
 \item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
 \item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
 \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
-\item \code{enable_guardrails}: Enable sanity checks (default: FALSE)
 \item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 
@@ -167,8 +165,8 @@ ctrl <- mosaic_control_defaults(
   likelihood = list(
     add_peak_timing = TRUE,
     add_peak_magnitude = TRUE,
-    weight_peak_timing = 0.5,
-    weight_peak_magnitude = 0.5
+    weight_peak_timing = 0.25,
+    weight_peak_magnitude = 0.25
   )
 )
 

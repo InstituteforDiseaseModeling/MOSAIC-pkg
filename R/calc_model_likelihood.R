@@ -28,7 +28,7 @@
 #' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{FALSE}.
 #' @param add_wis Logical; default \code{FALSE}.
 #' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total Component weights.
-#' @param weight_wis Component weight for WIS term. Default \code{0.8}.
+#' @param weight_wis Component weight for WIS term. Default \code{0.25}.
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
 #' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
 #' @param penalty_unmatched_peak LL penalty for unmatched peaks; default \code{-3}.
