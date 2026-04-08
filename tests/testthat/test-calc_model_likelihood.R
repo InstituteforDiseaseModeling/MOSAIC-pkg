@@ -374,38 +374,36 @@ testthat::test_that("all terms work together without conflict", {
      obs_deaths <- round(obs_cases * 0.1)
      est_deaths <- round(est_cases * 0.1)
      
-     # Test with all remaining terms enabled
+     # Test with all terms enabled at nonzero weights
      ll_all <- MOSAIC::calc_model_likelihood(
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
           est_deaths = est_deaths,
-
           add_peak_timing = TRUE,
           add_peak_magnitude = TRUE,
           add_cumulative_total = TRUE,
           add_wis = TRUE,
+          weight_peak_timing = 0.25,
+          weight_peak_magnitude = 0.25,
+          weight_cumulative_total = 0.25,
+          weight_wis = 0.10,
           verbose = FALSE
      )
-     
+
      expect_true(is.finite(ll_all))
-     
+
      # Test with core only
      ll_core_only <- MOSAIC::calc_model_likelihood(
           obs_cases = obs_cases,
           est_cases = est_cases,
           obs_deaths = obs_deaths,
-          est_deaths = est_deaths,
-
-          add_peak_timing = FALSE,
-          add_peak_magnitude = FALSE,
-          add_cumulative_total = FALSE,
-          add_wis = FALSE
+          est_deaths = est_deaths
      )
-     
+
      expect_true(is.finite(ll_core_only))
-     
-     # All terms should produce different result than core only
+
+     # All terms at nonzero weights should produce different result than core only
      expect_true(ll_all != ll_core_only)
 })
 

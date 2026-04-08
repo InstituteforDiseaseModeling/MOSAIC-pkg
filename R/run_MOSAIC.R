@@ -2484,10 +2484,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Component weights ===
     weight_cases = 1.0,              # Weight for cases vs deaths
     weight_deaths = 1.0,             # Weight for deaths vs cases
-    weight_peak_timing = 0.25,       # Weight for peak timing (T-normalized)
-    weight_peak_magnitude = 0.25,    # Weight for peak magnitude (T-normalized)
-    weight_cumulative_total = 0.25,  # T-normalized (same scale as other shape terms)
-    weight_wis = 0.10,               # Weight for WIS (T-normalized, lower: redundant with NB core)
+    weight_peak_timing = 0,          # T-normalized (0.25 = 25% of NB core); default OFF
+    weight_peak_magnitude = 0,       # T-normalized; default OFF
+    weight_cumulative_total = 0,     # T-normalized (/end_idx in helper); default OFF
+    weight_wis = 0,                  # T-normalized; default OFF (try 0.10 for regularization)
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)

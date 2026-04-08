@@ -21,10 +21,10 @@ calc_model_likelihood(
   add_peak_magnitude = FALSE,
   add_cumulative_total = FALSE,
   add_wis = FALSE,
-  weight_peak_timing = 0.25,
-  weight_peak_magnitude = 0.25,
-  weight_cumulative_total = 0.25,
-  weight_wis = 0.1,
+  weight_peak_timing = 0,
+  weight_peak_magnitude = 0,
+  weight_cumulative_total = 0,
+  weight_wis = 0,
   sigma_peak_time = 1,
   sigma_peak_log = 0.5,
   penalty_unmatched_peak = -3,
@@ -56,14 +56,16 @@ calc_model_likelihood(
 \item{add_wis}{Logical; default \code{FALSE}.}
 
 \item{weight_peak_timing, weight_peak_magnitude}{Component weights for peak terms
-(T-normalized). Default \code{0.25} each.}
+(T-normalized). Default \code{0}. Set to e.g. 0.25 to contribute 25 percent of
+NB core influence.}
 
 \item{weight_cumulative_total}{T-normalized weight for cumulative progression.
-Default \code{0.25}. Same scale as other shape terms: \code{0.25} means roughly
-25 percent of NB core influence.}
+Default \code{0}. Cumulative helper is /end_idx normalized so weights are on
+the same scale as other shape terms.}
 
-\item{weight_wis}{Component weight for WIS term. Default \code{0.10}. Lower than
-peaks/cumulative because WIS is partially redundant with the NB core (r > 0.8).}
+\item{weight_wis}{Component weight for WIS term. Default \code{0}. Ablation tests
+show WIS at 0.10 provides trajectory-shape regularization equivalent to death
+weighting information.}
 
 \item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{1}.}
 
