@@ -26,9 +26,10 @@ jobs:
         run: R CMD INSTALL .
 
       - name: Run testthat tests
-        run: Rscript -e "devtools::test('.')"
+        run: Rscript -e "res <- devtools::test('.'); if (any(as.data.frame(res)\$failed > 0)) quit(status = 1)"
 
       - name: Run Smoke test (sample → LASER → likelihood)
+        if: always()
         run: |
           Rscript -e '
             library(MOSAIC)

@@ -47,7 +47,7 @@ make_test_props <- function(S = 0.80, V1 = 0.03, V2 = 0.01,
 # ===========================================================================
 
 test_that("ic_moment_match is registered in mosaic_control_defaults", {
-  ctrl <- mosaic_control_defaults()
+  ctrl <- MOSAIC::mosaic_control_defaults()
   expect_true("ic_moment_match" %in% names(ctrl$sampling))
   expect_false(ctrl$sampling$ic_moment_match)
 })
@@ -58,7 +58,7 @@ test_that("ic_moment_match is accepted by sample_parameters sample_args", {
     # Use a minimal call that exercises the arg-parsing path
     # We can't run the full function without priors/config, so test
     # via the internal default_sample_args mechanism
-    ctrl <- mosaic_control_defaults()
+    ctrl <- MOSAIC::mosaic_control_defaults()
     ctrl$sampling$ic_moment_match <- TRUE
     # Validation should pass (it's logical)
     MOSAIC:::.mosaic_validate_sampling_args(ctrl$sampling)
@@ -66,7 +66,7 @@ test_that("ic_moment_match is accepted by sample_parameters sample_args", {
 })
 
 test_that("ic_moment_match defaults to FALSE in sample_parameters", {
-  ctrl <- mosaic_control_defaults()
+  ctrl <- MOSAIC::mosaic_control_defaults()
   expect_identical(ctrl$sampling$ic_moment_match, FALSE)
 })
 
@@ -326,7 +326,9 @@ test_that("sample_parameters accepts ic_moment_match via sample_args", {
   skip_if_not_installed("MOSAIC")
   skip_on_cran()
 
-  set_root_directory("~/MOSAIC")
+  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
+  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
+  set_root_directory(root)
   config <- config_default_MOZ
   priors <- priors_default_MOZ
 
@@ -357,7 +359,9 @@ test_that("ic_moment_match=FALSE produces same result as omitting it", {
   skip_if_not_installed("MOSAIC")
   skip_on_cran()
 
-  set_root_directory("~/MOSAIC")
+  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
+  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
+  set_root_directory(root)
   config <- config_default_MOZ
   priors <- priors_default_MOZ
 
@@ -380,7 +384,9 @@ test_that("ic_moment_match=TRUE has no effect when sample_initial_conditions=FAL
   skip_if_not_installed("MOSAIC")
   skip_on_cran()
 
-  set_root_directory("~/MOSAIC")
+  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
+  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
+  set_root_directory(root)
   config <- config_default_MOZ
   priors <- priors_default_MOZ
 
@@ -405,7 +411,9 @@ test_that("ic_moment_match=TRUE reproduces reporting chain identity across seeds
   skip_if_not_installed("MOSAIC")
   skip_on_cran()
 
-  set_root_directory("~/MOSAIC")
+  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
+  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
+  set_root_directory(root)
   config <- config_default_MOZ
   priors <- priors_default_MOZ
 
