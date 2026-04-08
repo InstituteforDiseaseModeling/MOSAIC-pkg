@@ -160,7 +160,8 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
         next
       }
 
-      # Guard: reject distribution family changes (except when prior is uniform).
+      # Guard: reject distribution family changes (except when prior is uniform
+      # or posterior is "fixed" — zero-variance posteriors replace any prior).
       # A posterior fitted as e.g. gompertz replacing a lognormal prior can
       # produce pathological parameter values after further processing
       # (inflate_priors, staged estimation). Only uniform priors are allowed to
@@ -168,6 +169,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
       # continuous distribution is an improvement.
       prior_dist <- updated$parameters_global[[param_name]]$distribution
       if (!is.null(prior_dist) &&
+          !identical(tolower(dist_type), "fixed") &&
           !identical(tolower(prior_dist), "uniform") &&
           !identical(tolower(dist_type), tolower(prior_dist))) {
         if (verbose) message("  [KEEP PRIOR] ", param_name,
@@ -247,9 +249,11 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
           next
         }
 
-        # Guard: reject distribution family changes (except when prior is uniform)
+        # Guard: reject distribution family changes (except when prior is uniform
+        # or posterior is "fixed")
         prior_dist_loc <- updated$parameters_location[[param_base]]$location[[iso]]$distribution
         if (!is.null(prior_dist_loc) &&
+            !identical(tolower(dist_type), "fixed") &&
             !identical(tolower(prior_dist_loc), "uniform") &&
             !identical(tolower(dist_type), tolower(prior_dist_loc))) {
           if (verbose) message("  [KEEP PRIOR] ", param_base, "_", iso,
