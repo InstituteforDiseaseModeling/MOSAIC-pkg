@@ -83,6 +83,13 @@ Optional shape terms can be enabled: peak timing (Normal), peak magnitude
 (log-Normal with adaptive sigma), cumulative progression (NB at cumulative
 fractions), and Weighted Interval Score (WIS). All default to OFF.
 
+Shape terms are internally normalized to the same O(T) scale as the NB core
+so that the weight parameters represent actual fractional contributions.
+For example, \code{weight_peak_timing = 0.25} means peak timing contributes
+25\\% as much as the NB core to the total LL. Each shape term is scaled by
+\code{T / n_effective_observations} before weighting: peaks by \code{T / N_peaks},
+cumulative and WIS by \code{T} (since they return time-averaged scalars).
+
 Non-finite per-location LL values are replaced with \code{-Inf} (zero
 importance weight). The NB likelihood naturally produces very negative
 scores for bad fits without needing artificial guardrails.
