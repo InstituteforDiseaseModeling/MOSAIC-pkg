@@ -1391,8 +1391,7 @@
           weight_cumulative_total = likelihood_settings$weight_cumulative_total,
           weight_wis            = likelihood_settings$weight_wis,
           sigma_peak_time       = likelihood_settings$sigma_peak_time,
-          sigma_peak_log        = likelihood_settings$sigma_peak_log,
-          penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak
+          sigma_peak_log        = likelihood_settings$sigma_peak_log
         ),
         error = function(e) {
           warning("Likelihood failed sim ", sim_id, " iter ", ji, ": ",

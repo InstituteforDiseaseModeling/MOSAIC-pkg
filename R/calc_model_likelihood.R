@@ -41,7 +41,6 @@
 #'   Ablation tests show 0.10 provides trajectory-shape regularization.
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
 #' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
-#' @param penalty_unmatched_peak LL penalty for unmatched peaks; default \code{-3}.
 #' @param wis_quantiles Quantiles for WIS if enabled.
 #' @param cumulative_timepoints Fractions for cumulative progression.
 #'
@@ -68,7 +67,6 @@ calc_model_likelihood <- function(obs_cases,
                                   # ---- peak controls ----
                                   sigma_peak_time  = 1,
                                   sigma_peak_log   = 0.5,
-                                  penalty_unmatched_peak = -3,
                                   # ---- WIS (optional) ----
                                   wis_quantiles      = c(0.025, 0.25, 0.5, 0.75, 0.975),
                                   # ---- cumulative progression ----
@@ -194,13 +192,13 @@ calc_model_likelihood <- function(obs_cases,
                     if (weight_peak_timing > 0) {
                          if (have_cases) {
                               ll_peak_time_c <- .calc_peak_timing_from_indices(
-                                   est_c, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak,
+                                   est_c, loc_peak_idx, sigma_peak_time,
                                    timestep_to_weeks = timestep_to_weeks
                               )
                          }
                          if (have_deaths) {
                               ll_peak_time_d <- .calc_peak_timing_from_indices(
-                                   est_d, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak,
+                                   est_d, loc_peak_idx, sigma_peak_time,
                                    timestep_to_weeks = timestep_to_weeks
                               )
                          }
@@ -208,12 +206,12 @@ calc_model_likelihood <- function(obs_cases,
                     if (weight_peak_magnitude > 0) {
                          if (have_cases) {
                               ll_peak_mag_c <- .calc_peak_magnitude_from_indices(
-                                   obs_c, est_c, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
+                                   obs_c, est_c, loc_peak_idx, sigma_peak_log
                               )
                          }
                          if (have_deaths) {
                               ll_peak_mag_d <- .calc_peak_magnitude_from_indices(
-                                   obs_d, est_d, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
+                                   obs_d, est_d, loc_peak_idx, sigma_peak_log
                               )
                          }
                     }
@@ -329,10 +327,8 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 
 # Peak timing likelihood from precomputed indices
 .calc_peak_timing_from_indices <- function(est_vec, peak_indices, sigma_peak_time = 1,
-                                           penalty_unmatched = -3,
                                            timestep_to_weeks = 7) {
      ll_total <- 0
-     n_matched <- 0
      n_ts <- length(est_vec)
      for (peak_idx in peak_indices) {
           window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
@@ -340,18 +336,15 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
                est_peak_idx <- window[which.max(est_vec[window])]
                time_diff <- (est_peak_idx - peak_idx) / timestep_to_weeks
                ll_total <- ll_total + stats::dnorm(time_diff, 0, sigma_peak_time, log = TRUE)
-               n_matched <- n_matched + 1L
           }
      }
-     ll_total + (length(peak_indices) - n_matched) * penalty_unmatched
+     ll_total
 }
 
 # Peak magnitude likelihood from precomputed indices
 .calc_peak_magnitude_from_indices <- function(obs_vec, est_vec, peak_indices,
-                                              sigma_peak_log = 0.5,
-                                              penalty_unmatched = -3) {
+                                              sigma_peak_log = 0.5) {
      ll_total <- 0
-     n_matched <- 0
      n_ts <- length(obs_vec)
      for (peak_idx in peak_indices) {
           window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
@@ -364,11 +357,10 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
                     ll_total <- ll_total + stats::dnorm(
                          log(est_peak_val) - log(obs_peak_val), 0, adaptive_sigma, log = TRUE
                     )
-                    n_matched <- n_matched + 1L
                }
           }
      }
-     ll_total + (length(peak_indices) - n_matched) * penalty_unmatched
+     ll_total
 }
 
 # --- Legacy peak helpers (retained for external/standalone use) ---
@@ -376,8 +368,7 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 # Peak timing likelihood using epidemic_peaks data
 calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                      date_start = NULL, date_stop = NULL,
-                                     sigma_peak_time = 1,
-                                     penalty_unmatched = -3) {
+                                     sigma_peak_time = 1) {
      # Use lazy-loaded package data (cached in namespace after first access)
      epidemic_peaks <- MOSAIC::epidemic_peaks
 
@@ -423,18 +414,13 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
           }
      }
 
-     # Penalize if not all peaks were matched
-     n_unmatched <- length(peak_indices) - n_matched
-     ll_total <- ll_total + n_unmatched * penalty_unmatched
-
      return(ll_total)
 }
 
 # Peak magnitude likelihood using epidemic_peaks data
 calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                         date_start = NULL, date_stop = NULL,
-                                        sigma_peak_log = 0.5,
-                                        penalty_unmatched = -3) {
+                                        sigma_peak_log = 0.5) {
      # Use lazy-loaded package data (cached in namespace after first access)
      epidemic_peaks <- MOSAIC::epidemic_peaks
 
@@ -486,10 +472,6 @@ calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
                }
           }
      }
-     
-     # Penalize if not all peaks were matched
-     n_unmatched <- length(peak_indices) - n_matched
-     ll_total <- ll_total + n_unmatched * penalty_unmatched
      
      return(ll_total)
 }

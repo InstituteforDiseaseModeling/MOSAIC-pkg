@@ -23,7 +23,6 @@ calc_model_likelihood(
   weight_wis = 0,
   sigma_peak_time = 1,
   sigma_peak_log = 0.5,
-  penalty_unmatched_peak = -3,
   wis_quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
   cumulative_timepoints = c(0.25, 0.5, 0.75, 1)
 )
@@ -61,8 +60,6 @@ Ablation tests show 0.10 provides trajectory-shape regularization.}
 \item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{1}.}
 
 \item{sigma_peak_log}{Base SD on log-scale for peak magnitude; default \code{0.5}.}
-
-\item{penalty_unmatched_peak}{LL penalty for unmatched peaks; default \code{-3}.}
 
 \item{wis_quantiles}{Quantiles for WIS if enabled.}
 

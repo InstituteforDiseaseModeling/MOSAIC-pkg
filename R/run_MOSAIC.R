@@ -237,8 +237,7 @@
             weight_cumulative_total = likelihood_settings$weight_cumulative_total,
             weight_wis = likelihood_settings$weight_wis,
             sigma_peak_time = likelihood_settings$sigma_peak_time,
-            sigma_peak_log = likelihood_settings$sigma_peak_log,
-            penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak
+            sigma_peak_log = likelihood_settings$sigma_peak_log
           )
         } else {
           NA_real_
@@ -2476,7 +2475,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)
     sigma_peak_log = 0.5,            # Std dev for log peak magnitude
-    penalty_unmatched_peak = -3,     # Penalty when peak not detected
 
     # === Time/location weighting ===
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
