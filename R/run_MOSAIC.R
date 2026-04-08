@@ -2486,7 +2486,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     weight_deaths = 1.0,             # Weight for deaths vs cases
     weight_peak_timing = 0.25,       # Weight for peak timing (T-normalized)
     weight_peak_magnitude = 0.25,    # Weight for peak magnitude (T-normalized)
-    weight_cumulative_total = 3.0,   # Direct multiplier (NOT T-normalized; raw output already O(T))
+    weight_cumulative_total = 0.25,  # T-normalized (same scale as other shape terms)
     weight_wis = 0.10,               # Weight for WIS (T-normalized, lower: redundant with NB core)
 
     # === Peak controls ===

@@ -23,7 +23,7 @@ calc_model_likelihood(
   add_wis = FALSE,
   weight_peak_timing = 0.25,
   weight_peak_magnitude = 0.25,
-  weight_cumulative_total = 3,
+  weight_cumulative_total = 0.25,
   weight_wis = 0.1,
   sigma_peak_time = 1,
   sigma_peak_log = 0.5,
@@ -58,9 +58,9 @@ calc_model_likelihood(
 \item{weight_peak_timing, weight_peak_magnitude}{Component weights for peak terms
 (T-normalized). Default \code{0.25} each.}
 
-\item{weight_cumulative_total}{Direct multiplier for cumulative progression.
-Default \code{3.0}. Unlike peaks/WIS, the cumulative term is NOT T-normalized
-because its NB evaluations on cumulative sums are already O(T) in magnitude.}
+\item{weight_cumulative_total}{T-normalized weight for cumulative progression.
+Default \code{0.25}. Same scale as other shape terms: \code{0.25} means roughly
+25 percent of NB core influence.}
 
 \item{weight_wis}{Component weight for WIS term. Default \code{0.10}. Lower than
 peaks/cumulative because WIS is partially redundant with the NB core (r > 0.8).}
@@ -89,12 +89,10 @@ Optional shape terms can be enabled: peak timing (Normal), peak magnitude
 (log-Normal with adaptive sigma), cumulative progression (NB at cumulative
 fractions), and Weighted Interval Score (WIS). All default to OFF.
 
-Shape terms are internally normalized to the same O(T) scale as the NB core
-so that the weight parameters represent actual fractional contributions.
-For example, \code{weight_peak_timing = 0.25} means peak timing contributes
-25 percent as much as the NB core to the total LL. Each shape term is scaled by
-\code{T / n_effective_observations} before weighting: peaks by \code{T / N_peaks},
-cumulative and WIS by \code{T} (since they return time-averaged scalars).
+All shape terms are internally T-normalized so that weight parameters share
+a common scale: \code{weight = 0.25} means the term contributes roughly 25
+percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
+cumulative and WIS by \code{T} (both return per-evaluation averages).
 
 Non-finite per-location LL values are replaced with \code{-Inf} (zero
 importance weight). The NB likelihood naturally produces very negative

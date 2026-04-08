@@ -12,12 +12,10 @@
 #' (log-Normal with adaptive sigma), cumulative progression (NB at cumulative
 #' fractions), and Weighted Interval Score (WIS). All default to OFF.
 #'
-#' Shape terms are internally normalized to the same O(T) scale as the NB core
-#' so that the weight parameters represent actual fractional contributions.
-#' For example, \code{weight_peak_timing = 0.25} means peak timing contributes
-#' 25 percent as much as the NB core to the total LL. Each shape term is scaled by
-#' \code{T / n_effective_observations} before weighting: peaks by \code{T / N_peaks},
-#' cumulative and WIS by \code{T} (since they return time-averaged scalars).
+#' All shape terms are internally T-normalized so that weight parameters share
+#' a common scale: \code{weight = 0.25} means the term contributes roughly 25
+#' percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
+#' cumulative and WIS by \code{T} (both return per-evaluation averages).
 #'
 #' Non-finite per-location LL values are replaced with \code{-Inf} (zero
 #' importance weight). The NB likelihood naturally produces very negative
@@ -36,9 +34,9 @@
 #' @param add_wis Logical; default \code{FALSE}.
 #' @param weight_peak_timing,weight_peak_magnitude Component weights for peak terms
 #'   (T-normalized). Default \code{0.25} each.
-#' @param weight_cumulative_total Direct multiplier for cumulative progression.
-#'   Default \code{3.0}. Unlike peaks/WIS, the cumulative term is NOT T-normalized
-#'   because its NB evaluations on cumulative sums are already O(T) in magnitude.
+#' @param weight_cumulative_total T-normalized weight for cumulative progression.
+#'   Default \code{0.25}. Same scale as other shape terms: \code{0.25} means roughly
+#'   25 percent of NB core influence.
 #' @param weight_wis Component weight for WIS term. Default \code{0.10}. Lower than
 #'   peaks/cumulative because WIS is partially redundant with the NB core (r > 0.8).
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
@@ -68,12 +66,11 @@ calc_model_likelihood <- function(obs_cases,
                                   add_cumulative_total  = FALSE,
                                   add_wis               = FALSE,
                                   # ---- component weights ----
-                                  # Peaks and WIS are T-normalized (0.25 = 25% of NB core).
-                                  # Cumulative is NOT T-normalized (raw output already O(T));
-                                  # weight is a direct multiplier on the raw mean.
+                                  # All shape terms are T-normalized: weight = 0.25 means
+                                  # 25% of NB core influence.
                                   weight_peak_timing       = 0.25,
                                   weight_peak_magnitude    = 0.25,
-                                  weight_cumulative_total  = 3.0,
+                                  weight_cumulative_total  = 0.25,
                                   weight_wis               = 0.10,
                                   # ---- peak controls ----
                                   sigma_peak_time  = 1,
@@ -254,19 +251,19 @@ calc_model_likelihood <- function(obs_cases,
 
           # Assembly formula (per location j):
           #
-          # Normalization strategy per component:
+          # All shape terms are T-normalized so weights share a common scale
+          # (w = 0.25 means ~25% of NB core influence):
           #   - NB core: sums T per-timestep NB terms → O(T). No scaling.
-          #   - Peaks: sum N_peaks Normal terms → O(N_peaks). Scaled by T/N_peaks → O(T).
-          #   - Cumulative: mean of 4 NB terms on cumulative sums. The NB on cumulative
-          #     counts O(T*mean) is ALREADY O(T) in magnitude → NO T-scaling needed.
-          #     Weight is a direct multiplier (w=3 means 3x the raw cumulative mean).
+          #   - Peaks: sum of N_peaks terms → O(N_peaks). Scaled by T/N_peaks → O(T).
+          #   - Cumulative: mean of 4 NB-on-cumulative-sums terms → O(log T).
+          #     Scaled by T → O(T).
           #   - WIS: time-averaged scoring rule → O(1). Scaled by T → O(T).
           #
           #   ll_loc = wc * NB_cases + wd * NB_deaths                              [core, O(T)]
-          #     + (T/N_peaks) * w_pt  * (wc * pt_c  + wd * pt_d)                  [peaks, scaled to O(T)]
-          #     + (T/N_peaks) * w_pm  * (wc * pm_c  + wd * pm_d)                  [peaks, scaled to O(T)]
-          #     +               w_cum * (wc * cum_c + wd * cum_d)                  [cumulative, already O(T)]
-          #     + T           * w_wis * (wc * wis_c + wd * wis_d)                 [WIS, scaled to O(T)]
+          #     + (T/N_peaks) * w_pt  * (wc * pt_c  + wd * pt_d)                  [peaks]
+          #     + (T/N_peaks) * w_pm  * (wc * pm_c  + wd * pm_d)                  [peaks]
+          #     + T           * w_cum * (wc * cum_c + wd * cum_d)                  [cumulative]
+          #     + T           * w_wis * (wc * wis_c + wd * wis_d)                 [WIS]
           #
           #   ll_total = sum(weights_location[j] * ll_loc[j])
           #
@@ -285,9 +282,8 @@ calc_model_likelihood <- function(obs_cases,
                peak_scale * weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
                peak_scale * weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
 
-          # No T-scaling: cumulative NB on O(T*mean) counts is already O(T) magnitude
           ll_loc_cum <-
-               weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
+               T_obs * weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
           ll_loc_wis <-
                T_obs * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
@@ -552,7 +548,7 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           # proportional penalty for zero est with nonzero obs
           if (e_cum <= 0 && o_cum > 0) {
                n_vals <- n_vals + 1L
-               vals[n_vals] <- -round(o_cum) * log(1e6)  # ~-13.8 per observed unit
+               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
                next
           }
           e_cum <- if (e_cum <= 0) 1e-10 else e_cum
@@ -561,11 +557,14 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           if (!is.finite(ll_tp)) {
                # Non-finite NB result: use proportional penalty as fallback
                n_vals <- n_vals + 1L
-               vals[n_vals] <- -round(o_cum) * log(1e6)
+               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
                next
           }
+          # Normalize by end_idx to convert from "LL of sum of end_idx obs"
+          # to "per-observation LL". This makes the helper output O(1),
+          # allowing uniform T-scaling at assembly like other shape terms.
           n_vals <- n_vals + 1L
-          vals[n_vals] <- ll_tp
+          vals[n_vals] <- ll_tp / end_idx
      }
      if (n_vals == 0L) return(0)  # No valid timepoints: contribute nothing
      mean(vals[seq_len(n_vals)])
