@@ -23,7 +23,7 @@ calc_model_likelihood(
   add_wis = FALSE,
   weight_peak_timing = 0.25,
   weight_peak_magnitude = 0.25,
-  weight_cumulative_total = 0.15,
+  weight_cumulative_total = 3,
   weight_wis = 0.1,
   sigma_peak_time = 1,
   sigma_peak_log = 0.5,
@@ -58,9 +58,9 @@ calc_model_likelihood(
 \item{weight_peak_timing, weight_peak_magnitude}{Component weights for peak terms
 (T-normalized). Default \code{0.25} each.}
 
-\item{weight_cumulative_total}{Component weight for cumulative progression.
-Default \code{0.15}. Lower than peaks because cumulative sums amplify per-timestep
-differences, producing larger raw differentials.}
+\item{weight_cumulative_total}{Direct multiplier for cumulative progression.
+Default \code{3.0}. Unlike peaks/WIS, the cumulative term is NOT T-normalized
+because its NB evaluations on cumulative sums are already O(T) in magnitude.}
 
 \item{weight_wis}{Component weight for WIS term. Default \code{0.10}. Lower than
 peaks/cumulative because WIS is partially redundant with the NB core (r > 0.8).}

@@ -36,9 +36,9 @@
 #' @param add_wis Logical; default \code{FALSE}.
 #' @param weight_peak_timing,weight_peak_magnitude Component weights for peak terms
 #'   (T-normalized). Default \code{0.25} each.
-#' @param weight_cumulative_total Component weight for cumulative progression.
-#'   Default \code{0.15}. Lower than peaks because cumulative sums amplify per-timestep
-#'   differences, producing larger raw differentials.
+#' @param weight_cumulative_total Direct multiplier for cumulative progression.
+#'   Default \code{3.0}. Unlike peaks/WIS, the cumulative term is NOT T-normalized
+#'   because its NB evaluations on cumulative sums are already O(T) in magnitude.
 #' @param weight_wis Component weight for WIS term. Default \code{0.10}. Lower than
 #'   peaks/cumulative because WIS is partially redundant with the NB core (r > 0.8).
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
@@ -67,10 +67,13 @@ calc_model_likelihood <- function(obs_cases,
                                   add_peak_magnitude    = FALSE,
                                   add_cumulative_total  = FALSE,
                                   add_wis               = FALSE,
-                                  # ---- component weights (T-normalized; 0.25 = 25% of NB core) ----
+                                  # ---- component weights ----
+                                  # Peaks and WIS are T-normalized (0.25 = 25% of NB core).
+                                  # Cumulative is NOT T-normalized (raw output already O(T));
+                                  # weight is a direct multiplier on the raw mean.
                                   weight_peak_timing       = 0.25,
                                   weight_peak_magnitude    = 0.25,
-                                  weight_cumulative_total  = 0.15,
+                                  weight_cumulative_total  = 3.0,
                                   weight_wis               = 0.10,
                                   # ---- peak controls ----
                                   sigma_peak_time  = 1,
@@ -251,21 +254,18 @@ calc_model_likelihood <- function(obs_cases,
 
           # Assembly formula (per location j):
           #
-          # Shape terms are normalized to the same O(T) scale as the NB core so that
-          # weight parameters represent actual fractional contributions. The NB core
-          # sums T log-likelihood terms. Each shape term produces fewer "observations":
-          #   - Peak timing/magnitude: N_peaks terms (summed)
-          #   - Cumulative: mean of 4 terms → 1 effective observation
-          #   - WIS: time-averaged → 1 effective observation
-          #
-          # Each shape term is scaled by T / n_effective_obs before the weight is
-          # applied. This means weight=0.25 genuinely contributes 25% of the NB core
-          # influence, and weight=1.0 means equal to the NB core.
+          # Normalization strategy per component:
+          #   - NB core: sums T per-timestep NB terms → O(T). No scaling.
+          #   - Peaks: sum N_peaks Normal terms → O(N_peaks). Scaled by T/N_peaks → O(T).
+          #   - Cumulative: mean of 4 NB terms on cumulative sums. The NB on cumulative
+          #     counts O(T*mean) is ALREADY O(T) in magnitude → NO T-scaling needed.
+          #     Weight is a direct multiplier (w=3 means 3x the raw cumulative mean).
+          #   - WIS: time-averaged scoring rule → O(1). Scaled by T → O(T).
           #
           #   ll_loc = wc * NB_cases + wd * NB_deaths                              [core, O(T)]
           #     + (T/N_peaks) * w_pt  * (wc * pt_c  + wd * pt_d)                  [peaks, scaled to O(T)]
           #     + (T/N_peaks) * w_pm  * (wc * pm_c  + wd * pm_d)                  [peaks, scaled to O(T)]
-          #     + T           * w_cum * (wc * cum_c + wd * cum_d)                  [cumulative, scaled to O(T)]
+          #     +               w_cum * (wc * cum_c + wd * cum_d)                  [cumulative, already O(T)]
           #     + T           * w_wis * (wc * wis_c + wd * wis_d)                 [WIS, scaled to O(T)]
           #
           #   ll_total = sum(weights_location[j] * ll_loc[j])
@@ -285,8 +285,9 @@ calc_model_likelihood <- function(obs_cases,
                peak_scale * weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
                peak_scale * weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
 
+          # No T-scaling: cumulative NB on O(T*mean) counts is already O(T) magnitude
           ll_loc_cum <-
-               T_obs * weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
+               weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
           ll_loc_wis <-
                T_obs * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
