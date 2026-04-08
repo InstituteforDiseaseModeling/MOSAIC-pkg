@@ -2355,8 +2355,8 @@ run_mosaic <- run_MOSAIC
 #'   likelihood = list(
 #'     add_peak_timing = TRUE,
 #'     add_peak_magnitude = TRUE,
-#'     weight_peak_timing = 0.10,
-#'     weight_peak_magnitude = 0.10
+#'     weight_peak_timing = 0.25,
+#'     weight_peak_magnitude = 0.25
 #'   )
 #' )
 #'
@@ -2484,10 +2484,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     # === Component weights ===
     weight_cases = 1.0,              # Weight for cases vs deaths
     weight_deaths = 1.0,             # Weight for deaths vs cases
-    weight_peak_timing = 0.10,       # Weight for peak timing penalty (T-normalized)
-    weight_peak_magnitude = 0.10,    # Weight for peak magnitude penalty (T-normalized)
-    weight_cumulative_total = 0.10,  # Weight for cumulative mismatch (T-normalized)
-    weight_wis = 0.05,               # Weight for WIS score (lower: redundant with NB core)
+    weight_peak_timing = 0.25,       # Weight for peak timing (T-normalized)
+    weight_peak_magnitude = 0.25,    # Weight for peak magnitude (T-normalized)
+    weight_cumulative_total = 0.15,  # Weight for cumulative (lower: raw diffs compound)
+    weight_wis = 0.10,               # Weight for WIS (lower: redundant with NB core)
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)

@@ -165,8 +165,8 @@ ctrl <- mosaic_control_defaults(
   likelihood = list(
     add_peak_timing = TRUE,
     add_peak_magnitude = TRUE,
-    weight_peak_timing = 0.10,
-    weight_peak_magnitude = 0.10
+    weight_peak_timing = 0.25,
+    weight_peak_magnitude = 0.25
   )
 )
 
