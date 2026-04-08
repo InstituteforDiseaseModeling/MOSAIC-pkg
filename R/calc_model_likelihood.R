@@ -34,8 +34,11 @@
 #' @param verbose If \code{TRUE}, prints component summaries per location.
 #' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{FALSE}.
 #' @param add_wis Logical; default \code{FALSE}.
-#' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total Component weights.
-#' @param weight_wis Component weight for WIS term. Default \code{0.25}.
+#' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total Component weights
+#'   (T-normalized). Default \code{0.10} each. A value of 0.10 means the term contributes
+#'   10\% of the NB core's influence to the total LL.
+#' @param weight_wis Component weight for WIS term. Default \code{0.05}. Lower than peaks/cumulative
+#'   because WIS is partially redundant with the NB core (both use the same NB distribution).
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
 #' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
 #' @param penalty_unmatched_peak LL penalty for unmatched peaks; default \code{-3}.
@@ -62,11 +65,11 @@ calc_model_likelihood <- function(obs_cases,
                                   add_peak_magnitude    = FALSE,
                                   add_cumulative_total  = FALSE,
                                   add_wis               = FALSE,
-                                  # ---- component weights ----
-                                  weight_peak_timing       = 0.25,
-                                  weight_peak_magnitude    = 0.25,
-                                  weight_cumulative_total  = 0.25,
-                                  weight_wis               = 0.25,
+                                  # ---- component weights (T-normalized; 0.10 = 10% of NB core) ----
+                                  weight_peak_timing       = 0.10,
+                                  weight_peak_magnitude    = 0.10,
+                                  weight_cumulative_total  = 0.10,
+                                  weight_wis               = 0.05,
                                   # ---- peak controls ----
                                   sigma_peak_time  = 1,
                                   sigma_peak_log   = 0.5,
@@ -270,7 +273,7 @@ calc_model_likelihood <- function(obs_cases,
 
           # Peak scale: T / N_peaks (number of matched peaks for this location)
           n_peaks_j <- if (!is.null(peak_indices_by_loc)) length(peak_indices_by_loc[[j]]) else 0L
-          peak_scale <- if (n_peaks_j > 0) T_obs / n_peaks_j else 1
+          peak_scale <- if (n_peaks_j > 0) T_obs / n_peaks_j else 0
 
           ll_loc_core <-
                weight_cases  * ll_cases +
