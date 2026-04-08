@@ -230,24 +230,19 @@
             weights_location = likelihood_settings$weights_location,
             nb_k_min_cases = likelihood_settings$nb_k_min_cases,
             nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
-            add_max_terms = likelihood_settings$add_max_terms,
             add_peak_timing = likelihood_settings$add_peak_timing,
             add_peak_magnitude = likelihood_settings$add_peak_magnitude,
             add_cumulative_total = likelihood_settings$add_cumulative_total,
             add_wis = likelihood_settings$add_wis,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
-            weight_max_terms = likelihood_settings$weight_max_terms,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
             weight_peak_magnitude = likelihood_settings$weight_peak_magnitude,
             weight_cumulative_total = likelihood_settings$weight_cumulative_total,
             weight_wis = likelihood_settings$weight_wis,
             sigma_peak_time = likelihood_settings$sigma_peak_time,
             sigma_peak_log = likelihood_settings$sigma_peak_log,
-            penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak,
-            enable_guardrails = likelihood_settings$enable_guardrails,
-            floor_likelihood = likelihood_settings$floor_likelihood,
-            guardrail_verbose = likelihood_settings$guardrail_verbose
+            penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak
           )
         } else {
           NA_real_
@@ -2257,14 +2252,12 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param likelihood List of likelihood calculation settings (how to score model fit). Default is:
 #'   \itemize{
-#'     \item \code{add_max_terms}: Add negative binomial time-series likelihood (default: FALSE)
 #'     \item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
 #'     \item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
 #'     \item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
 #'     \item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
-#'     \item \code{enable_guardrails}: Enable sanity checks (default: FALSE)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -2482,7 +2475,7 @@ mosaic_control_defaults <- function(calibration = NULL,
   # Default likelihood calculation settings
   default_likelihood <- list(
     # === Toggle components ===
-    add_max_terms = FALSE,           # Negative binomial time-series likelihood (baseline always included)
+    # === Toggle components (all OFF by default) ===
     add_peak_timing = FALSE,         # Gaussian penalty on peak timing mismatch
     add_peak_magnitude = FALSE,      # Log-normal penalty on peak magnitude mismatch
     add_cumulative_total = FALSE,    # Penalty on cumulative case/death mismatch
@@ -2505,12 +2498,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
     nb_k_min_cases = 3,              # Minimum NB dispersion floor (cases)
-    nb_k_min_deaths = 3,             # Minimum NB dispersion floor (deaths)
-
-    # === Guardrails ===
-    enable_guardrails = FALSE,       # Enable sanity checks on model output
-    floor_likelihood = -999999999,   # Floor value for invalid likelihoods
-    guardrail_verbose = FALSE        # Print guardrail diagnostics
+    nb_k_min_deaths = 3              # Minimum NB dispersion floor (deaths)
   )
 
   # Default parallel settings
