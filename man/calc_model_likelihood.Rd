@@ -57,7 +57,7 @@ calc_model_likelihood(
 
 \item{weight_peak_timing, weight_peak_magnitude, weight_cumulative_total}{Component weights
 (T-normalized). Default \code{0.10} each. A value of 0.10 means the term contributes
-10\\% of the NB core's influence to the total LL.}
+10 percent of the NB core's influence to the total LL.}
 
 \item{weight_wis}{Component weight for WIS term. Default \code{0.05}. Lower than peaks/cumulative
 because WIS is partially redundant with the NB core (both use the same NB distribution).}
@@ -89,7 +89,7 @@ fractions), and Weighted Interval Score (WIS). All default to OFF.
 Shape terms are internally normalized to the same O(T) scale as the NB core
 so that the weight parameters represent actual fractional contributions.
 For example, \code{weight_peak_timing = 0.25} means peak timing contributes
-25\\% as much as the NB core to the total LL. Each shape term is scaled by
+25 percent as much as the NB core to the total LL. Each shape term is scaled by
 \code{T / n_effective_observations} before weighting: peaks by \code{T / N_peaks},
 cumulative and WIS by \code{T} (since they return time-averaged scalars).
 
