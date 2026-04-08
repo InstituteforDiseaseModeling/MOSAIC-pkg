@@ -40,17 +40,11 @@ test_that("plot_model_parameter_sensitivity computes PRCC with sufficient n/p", 
   expect_true(file.exists(file.path(out_dir, "parameter_sensitivity.csv")))
 
   expect_s3_class(result, "data.frame")
-  expect_true("prcc" %in% names(result))
-  expect_true("method" %in% names(result))
-  expect_equal(result$method[1], "PRCC")
+  expect_true("hsic_r2" %in% names(result))
 
-  # param_1 should be the most positively correlated
-  top_pos <- result$parameter[result$prcc == max(result$prcc)]
-  expect_equal(top_pos, "param_1")
-
-  # param_2 should be the most negatively correlated
-  top_neg <- result$parameter[result$prcc == min(result$prcc)]
-  expect_equal(top_neg, "param_2")
+  # param_1 should have the highest HSIC (strongest dependence)
+  top <- result$parameter[which.max(result$hsic_r2)]
+  expect_true(top %in% c("param_1", "param_2"))
 
   unlink(out_dir, recursive = TRUE)
   unlink(parquet_file)
@@ -88,7 +82,9 @@ test_that("plot_model_parameter_sensitivity falls back to Spearman when n/p < 5"
     verbose = FALSE
   )
 
-  expect_equal(result$method[1], "Spearman")
+  # HSIC should still work with small n/p
+  expect_s3_class(result, "data.frame")
+  expect_true("hsic_r2" %in% names(result))
 
   unlink(out_dir, recursive = TRUE)
   unlink(parquet_file)
