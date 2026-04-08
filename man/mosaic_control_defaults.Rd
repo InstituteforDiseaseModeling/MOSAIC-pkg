@@ -44,12 +44,9 @@ mosaic_control_defaults(
 
 \item{likelihood}{List of likelihood calculation settings (how to score model fit). Default is:
 \itemize{
-\item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
-\item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
-\item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
-\item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
 \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
+\item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
 \item ... (see \code{mosaic_control_defaults()} for complete list)
 }}
 
@@ -160,13 +157,11 @@ ctrl <- mosaic_control_defaults(
   )
 )
 
-# Enable peak timing and magnitude penalties in likelihood
+# Enable WIS regularizer and peak timing
 ctrl <- mosaic_control_defaults(
   likelihood = list(
-    add_peak_timing = TRUE,
-    add_peak_magnitude = TRUE,
-    weight_peak_timing = 0.25,
-    weight_peak_magnitude = 0.25
+    weight_wis = 0.10,
+    weight_peak_timing = 0.25
   )
 )
 
@@ -179,7 +174,7 @@ ctrl <- mosaic_control_defaults(
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
-  likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
+  likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure

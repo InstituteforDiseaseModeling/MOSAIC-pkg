@@ -230,10 +230,6 @@
             weights_location = likelihood_settings$weights_location,
             nb_k_min_cases = likelihood_settings$nb_k_min_cases,
             nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
-            add_peak_timing = likelihood_settings$add_peak_timing,
-            add_peak_magnitude = likelihood_settings$add_peak_magnitude,
-            add_cumulative_total = likelihood_settings$add_cumulative_total,
-            add_wis = likelihood_settings$add_wis,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
@@ -2252,12 +2248,9 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param likelihood List of likelihood calculation settings (how to score model fit). Default is:
 #'   \itemize{
-#'     \item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
-#'     \item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
-#'     \item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
-#'     \item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
+#'     \item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -2350,13 +2343,11 @@ run_mosaic <- run_MOSAIC
 #'   )
 #' )
 #'
-#' # Enable peak timing and magnitude penalties in likelihood
+#' # Enable WIS regularizer and peak timing
 #' ctrl <- mosaic_control_defaults(
 #'   likelihood = list(
-#'     add_peak_timing = TRUE,
-#'     add_peak_magnitude = TRUE,
-#'     weight_peak_timing = 0.25,
-#'     weight_peak_magnitude = 0.25
+#'     weight_wis = 0.10,
+#'     weight_peak_timing = 0.25
 #'   )
 #' )
 #'
@@ -2369,7 +2360,7 @@ run_mosaic <- run_MOSAIC
 #' ctrl <- mosaic_control_defaults(
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
 #'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
-#'   likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
+#'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
 #'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
@@ -2474,14 +2465,7 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default likelihood calculation settings
   default_likelihood <- list(
-    # === Toggle components ===
-    # === Toggle components (all OFF by default) ===
-    add_peak_timing = FALSE,         # Gaussian penalty on peak timing mismatch
-    add_peak_magnitude = FALSE,      # Log-normal penalty on peak magnitude mismatch
-    add_cumulative_total = FALSE,    # Penalty on cumulative case/death mismatch
-    add_wis = FALSE,                 # Weighted Interval Score (probabilistic scoring)
-
-    # === Component weights ===
+    # === Component weights (0 = OFF; set > 0 to enable) ===
     weight_cases = 1.0,              # Weight for cases vs deaths
     weight_deaths = 1.0,             # Weight for deaths vs cases
     weight_peak_timing = 0,          # T-normalized (0.25 = 25% of NB core); default OFF

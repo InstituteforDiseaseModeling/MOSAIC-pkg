@@ -17,10 +17,6 @@ calc_model_likelihood(
   nb_k_min_cases = 3,
   nb_k_min_deaths = 3,
   verbose = FALSE,
-  add_peak_timing = FALSE,
-  add_peak_magnitude = FALSE,
-  add_cumulative_total = FALSE,
-  add_wis = FALSE,
   weight_peak_timing = 0,
   weight_peak_magnitude = 0,
   weight_cumulative_total = 0,
@@ -51,21 +47,16 @@ calc_model_likelihood(
 
 \item{verbose}{If \code{TRUE}, prints component summaries per location.}
 
-\item{add_peak_timing, add_peak_magnitude, add_cumulative_total}{Logical; default \code{FALSE}.}
+\item{weight_peak_timing, weight_peak_magnitude}{Weights for peak terms
+(T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
+of NB core influence.}
 
-\item{add_wis}{Logical; default \code{FALSE}.}
+\item{weight_cumulative_total}{Weight for cumulative progression (T-normalized).
+Default \code{0} (OFF). Cumulative helper is /end_idx normalized so weights
+are on the same scale as other shape terms.}
 
-\item{weight_peak_timing, weight_peak_magnitude}{Component weights for peak terms
-(T-normalized). Default \code{0}. Set to e.g. 0.25 to contribute 25 percent of
-NB core influence.}
-
-\item{weight_cumulative_total}{T-normalized weight for cumulative progression.
-Default \code{0}. Cumulative helper is /end_idx normalized so weights are on
-the same scale as other shape terms.}
-
-\item{weight_wis}{Component weight for WIS term. Default \code{0}. Ablation tests
-show WIS at 0.10 provides trajectory-shape regularization equivalent to death
-weighting information.}
+\item{weight_wis}{Weight for WIS term (T-normalized). Default \code{0} (OFF).
+Ablation tests show 0.10 provides trajectory-shape regularization.}
 
 \item{sigma_peak_time}{SD (weeks) for peak timing Normal; default \code{1}.}
 
@@ -87,11 +78,12 @@ time-series log-likelihood per location and outcome (cases, deaths) with
 a weighted MoM dispersion estimate and a \code{k_min} floor.
 }
 \details{
-Optional shape terms can be enabled: peak timing (Normal), peak magnitude
-(log-Normal with adaptive sigma), cumulative progression (NB at cumulative
-fractions), and Weighted Interval Score (WIS). All default to OFF.
+Optional shape terms are enabled by setting their weight > 0: peak timing
+(Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
+progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
+All weights default to 0 (OFF).
 
-All shape terms are internally T-normalized so that weight parameters share
+Shape terms are internally T-normalized so that weight parameters share
 a common scale: \code{weight = 0.25} means the term contributes roughly 25
 percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
 cumulative and WIS by \code{T} (both return per-evaluation averages).

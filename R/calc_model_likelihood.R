@@ -8,11 +8,12 @@
 #' time-series log-likelihood per location and outcome (cases, deaths) with
 #' a weighted MoM dispersion estimate and a \code{k_min} floor.
 #'
-#' Optional shape terms can be enabled: peak timing (Normal), peak magnitude
-#' (log-Normal with adaptive sigma), cumulative progression (NB at cumulative
-#' fractions), and Weighted Interval Score (WIS). All default to OFF.
+#' Optional shape terms are enabled by setting their weight > 0: peak timing
+#' (Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
+#' progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
+#' All weights default to 0 (OFF).
 #'
-#' All shape terms are internally T-normalized so that weight parameters share
+#' Shape terms are internally T-normalized so that weight parameters share
 #' a common scale: \code{weight = 0.25} means the term contributes roughly 25
 #' percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
 #' cumulative and WIS by \code{T} (both return per-evaluation averages).
@@ -30,17 +31,14 @@
 #' @param nb_k_min_cases Minimum NB dispersion floor for cases. Default \code{3}.
 #' @param nb_k_min_deaths Minimum NB dispersion floor for deaths. Default \code{3}.
 #' @param verbose If \code{TRUE}, prints component summaries per location.
-#' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{FALSE}.
-#' @param add_wis Logical; default \code{FALSE}.
-#' @param weight_peak_timing,weight_peak_magnitude Component weights for peak terms
-#'   (T-normalized). Default \code{0}. Set to e.g. 0.25 to contribute 25 percent of
-#'   NB core influence.
-#' @param weight_cumulative_total T-normalized weight for cumulative progression.
-#'   Default \code{0}. Cumulative helper is /end_idx normalized so weights are on
-#'   the same scale as other shape terms.
-#' @param weight_wis Component weight for WIS term. Default \code{0}. Ablation tests
-#'   show WIS at 0.10 provides trajectory-shape regularization equivalent to death
-#'   weighting information.
+#' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
+#'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
+#'   of NB core influence.
+#' @param weight_cumulative_total Weight for cumulative progression (T-normalized).
+#'   Default \code{0} (OFF). Cumulative helper is /end_idx normalized so weights
+#'   are on the same scale as other shape terms.
+#' @param weight_wis Weight for WIS term (T-normalized). Default \code{0} (OFF).
+#'   Ablation tests show 0.10 provides trajectory-shape regularization.
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
 #' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
 #' @param penalty_unmatched_peak LL penalty for unmatched peaks; default \code{-3}.
@@ -62,14 +60,7 @@ calc_model_likelihood <- function(obs_cases,
                                   nb_k_min_cases   = 3,
                                   nb_k_min_deaths  = 3,
                                   verbose          = FALSE,
-                                  # ---- toggles (all OFF by default) ----
-                                  add_peak_timing       = FALSE,
-                                  add_peak_magnitude    = FALSE,
-                                  add_cumulative_total  = FALSE,
-                                  add_wis               = FALSE,
-                                  # ---- component weights (all default 0 = OFF) ----
-                                  # T-normalized: 0.25 = 25% of NB core influence.
-                                  # Enable selectively; see ablation tests (test_44 series).
+                                  # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
                                   weight_peak_timing       = 0,
                                   weight_peak_magnitude    = 0,
                                   weight_cumulative_total  = 0,
@@ -116,7 +107,7 @@ calc_model_likelihood <- function(obs_cases,
      # --- precompute peak indices per location (once, not per call) ---
      peak_indices_by_loc <- NULL
      timestep_to_weeks <- 7  # default: daily timesteps, divide by 7 to get weeks
-     if ((add_peak_timing || add_peak_magnitude) && !is.null(config)) {
+     if ((weight_peak_timing > 0 || weight_peak_magnitude > 0) && !is.null(config)) {
           location_names <- config$location_name
           date_start_cfg <- config$date_start
           date_stop_cfg <- config$date_stop
@@ -197,10 +188,10 @@ calc_model_likelihood <- function(obs_cases,
           ll_peak_time_c <- ll_peak_time_d <- 0
           ll_peak_mag_c <- ll_peak_mag_d <- 0
 
-          if ((add_peak_timing || add_peak_magnitude) && !is.null(peak_indices_by_loc)) {
+          if ((weight_peak_timing > 0 || weight_peak_magnitude > 0) && !is.null(peak_indices_by_loc)) {
                loc_peak_idx <- peak_indices_by_loc[[j]]
                if (length(loc_peak_idx) > 0) {
-                    if (add_peak_timing) {
+                    if (weight_peak_timing > 0) {
                          if (have_cases) {
                               ll_peak_time_c <- .calc_peak_timing_from_indices(
                                    est_c, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak,
@@ -214,7 +205,7 @@ calc_model_likelihood <- function(obs_cases,
                               )
                          }
                     }
-                    if (add_peak_magnitude) {
+                    if (weight_peak_magnitude > 0) {
                          if (have_cases) {
                               ll_peak_mag_c <- .calc_peak_magnitude_from_indices(
                                    obs_c, est_c, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
@@ -231,7 +222,7 @@ calc_model_likelihood <- function(obs_cases,
 
           # Cumulative progression (using data-driven k)
           ll_cum_tot_c <- ll_cum_tot_d <- 0
-          if (add_cumulative_total) {
+          if (weight_cumulative_total > 0) {
                if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c, weights_time)
                if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d, weights_time)
           }
@@ -239,7 +230,7 @@ calc_model_likelihood <- function(obs_cases,
 
           # WIS (optional) — raw negated WIS; weight_wis applied at assembly (like other components)
           ll_wis_cases <- ll_wis_deaths <- 0
-          if (add_wis) {
+          if (weight_wis > 0) {
                if (have_cases) {
                     wis_c <- compute_wis_parametric_row(obs_c, est_c, weights_time, wis_quantiles, k_use = k_c)
                     if (is.finite(wis_c)) ll_wis_cases <- -wis_c
@@ -290,10 +281,7 @@ calc_model_likelihood <- function(obs_cases,
           ll_loc_wis <-
                T_obs * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
 
-          ll_loc_total <- ll_loc_core
-          if (add_peak_timing || add_peak_magnitude) ll_loc_total <- ll_loc_total + ll_loc_peaks
-          if (add_cumulative_total)                  ll_loc_total <- ll_loc_total + ll_loc_cum
-          if (add_wis)                               ll_loc_total <- ll_loc_total + ll_loc_wis
+          ll_loc_total <- ll_loc_core + ll_loc_peaks + ll_loc_cum + ll_loc_wis
 
           # Non-finite safety net: -Inf gets zero importance weight
           if (!is.finite(ll_loc_total)) {
@@ -306,10 +294,7 @@ calc_model_likelihood <- function(obs_cases,
           if (verbose) {
                message(sprintf(
                     "Location %d: core=%.2f | peaks=%.2f | cum=%.2f | wis=%.2f -> weighted=%.2f",
-                    j, ll_loc_core,
-                    if ((add_peak_timing || add_peak_magnitude)) ll_loc_peaks else 0,
-                    if (add_cumulative_total) ll_loc_cum else 0,
-                    if (add_wis) ll_loc_wis else 0,
+                    j, ll_loc_core, ll_loc_peaks, ll_loc_cum, ll_loc_wis,
                     weights_location[j] * ll_loc_total
                ))
           }
