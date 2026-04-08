@@ -513,8 +513,7 @@ ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
-                                         weights_time = NULL,
-                                         per_tp_ll_floor = -1e9) {
+                                         weights_time = NULL) {
      n <- length(obs_vec)
 
      # Use weights if provided
@@ -533,8 +532,6 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           # Scale k proportionally to the number of summed timesteps.
           # For independent NB(mu_i, k) variables, the sum's dispersion ≈ k * n_summed
           # (exact for identical means; reasonable upper bound for varying means).
-          # This replaces the previous fixed k_data * 2 which was always wrong
-          # except when end_idx == 2.
           cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
                k_data * end_idx
           } else {
@@ -542,23 +539,32 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           }
 
           # Use plain cumulative sums (NA-safe).
-          # weights_time is for masking non-observed timesteps in the core NB
-          # likelihood, but the cumulative term needs actual totals — using a
-          # weighted mean times end_idx would inflate the sum proportionally to
-          # the fraction of NA timesteps (e.g. 50% NAs → 2× inflation).
           idx_range <- seq_len(end_idx)
           o_cum <- sum(obs_vec[idx_range], na.rm = TRUE)
           e_cum <- sum(est_vec[idx_range], na.rm = TRUE)
 
           if (!is.finite(o_cum) || !is.finite(e_cum)) next
-          if (e_cum <= 0 && o_cum > 0) { n_vals <- n_vals + 1L; vals[n_vals] <- per_tp_ll_floor; next }
-          e_cum <- if (e_cum <= 0) .Machine$double.eps else e_cum
+
+          # Handle zero prediction the same way as the core NB:
+          # proportional penalty for zero est with nonzero obs
+          if (e_cum <= 0 && o_cum > 0) {
+               n_vals <- n_vals + 1L
+               vals[n_vals] <- -round(o_cum) * log(1e6)  # ~-13.8 per observed unit
+               next
+          }
+          e_cum <- if (e_cum <= 0) 1e-10 else e_cum
+
           ll_tp <- stats::dnbinom(round(o_cum), mu = e_cum, size = cum_k, log = TRUE)
-          if (!is.finite(ll_tp)) ll_tp <- per_tp_ll_floor
+          if (!is.finite(ll_tp)) {
+               # Non-finite NB result: use proportional penalty as fallback
+               n_vals <- n_vals + 1L
+               vals[n_vals] <- -round(o_cum) * log(1e6)
+               next
+          }
           n_vals <- n_vals + 1L
           vals[n_vals] <- ll_tp
      }
-     if (n_vals == 0L) return(per_tp_ll_floor)
+     if (n_vals == 0L) return(0)  # No valid timepoints: contribute nothing
      mean(vals[seq_len(n_vals)])
 }
 
