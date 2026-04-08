@@ -52,11 +52,32 @@ testthat::test_that("errors on zero-sum weights", {
      )
 })
 
-# 5. Non-integer observed error
-testthat::test_that("errors on non-integer observed values", {
+# 5. Non-integer observed values are rounded (cross-language float safety)
+testthat::test_that("non-integer observed values are rounded silently", {
+     # c(1.5, 2) rounds to c(2, 2) — no error
+     ll <- MOSAIC::calc_log_likelihood_negbin(
+          observed = c(1.5, 2),
+          estimated = c(1, 2),
+          k = 1,
+          weights = NULL,
+          verbose = FALSE
+     )
+     expect_true(is.finite(ll))
+
+     # Float near-integers from parquet transport should not error
+     ll2 <- MOSAIC::calc_log_likelihood_negbin(
+          observed = c(2.0000000000000004, 3.0),
+          estimated = c(2, 3),
+          k = 3,
+          weights = NULL,
+          verbose = FALSE
+     )
+     expect_true(is.finite(ll2))
+
+     # Negative values still error (round doesn't help)
      expect_error(
           MOSAIC::calc_log_likelihood_negbin(
-               observed = c(1.5, 2),
+               observed = c(-1, 2),
                estimated = c(1, 2),
                k = 1,
                weights = NULL,

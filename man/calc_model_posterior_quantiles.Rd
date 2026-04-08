@@ -8,6 +8,7 @@ calc_model_posterior_quantiles(
   results,
   probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
   output_dir = "./results",
+  priors = NULL,
   verbose = TRUE
 )
 }
@@ -18,6 +19,13 @@ and index columns (is_finite, is_retained, is_best_subset)}
 \item{probs}{Numeric vector of quantile probabilities (default: c(0.025, 0.25, 0.5, 0.75, 0.975))}
 
 \item{output_dir}{Directory path to save results (default: "./results")}
+
+\item{priors}{Optional priors list (as returned by \code{get_location_priors}).
+When provided, prior distribution families are read from this object instead of
+the static \code{estimated_parameters} lookup. This ensures posterior fitting
+uses the actual prior family, which is critical for staged estimation with
+country-specific priors. When NULL (default), falls back to the static lookup
+for backward compatibility.}
 
 \item{verbose}{Logical; print progress messages (default: TRUE)}
 }
