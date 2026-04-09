@@ -106,5 +106,4 @@ Each distribution is inflated using the most appropriate method:
 
 ## See also
 
-[`update_priors_from_posteriors`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_priors_from_posteriors.md),
-[`mosaic_adaptive_s3_weights`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_adaptive_s3_weights.md)
+[`update_priors_from_posteriors`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_priors_from_posteriors.md)

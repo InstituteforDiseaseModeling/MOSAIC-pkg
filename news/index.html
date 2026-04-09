@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -45,7 +45,7 @@
 <ul><li>
 <strong>Respect control<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mi>a</mi><mi>r</mi><mi>a</mi><mi>l</mi><mi>l</mi><mi>e</mi><mi>l</mi></mrow><annotation encoding="application/x-tex">parallel</annotation></semantics></math>enable flag in prediction plotting functions</strong>
 <ul><li>
-<strong>Problem</strong>: <code>plot_model_fit_stochastic()</code> and <code><a href="../reference/plot_model_fit_stochastic_param.html">plot_model_fit_stochastic_param()</a></code> were hardcoded to use <code>parallel = TRUE</code>, ignoring the user’s <code>control$parallel$enable</code> setting</li>
+<strong>Problem</strong>: <code>plot_model_fit_stochastic()</code> and <code>plot_model_fit_stochastic_param()</code> were hardcoded to use <code>parallel = TRUE</code>, ignoring the user’s <code>control$parallel$enable</code> setting</li>
 <li>
 <strong>Solution</strong>: Changed both function calls in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> to use <code>parallel = control$parallel$enable</code> instead of hardcoded <code>TRUE</code>
 </li>

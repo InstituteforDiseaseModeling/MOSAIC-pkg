@@ -7,9 +7,9 @@
 - **Respect control$parallel$enable flag in prediction plotting
   functions**
   - **Problem**: `plot_model_fit_stochastic()` and
-    [`plot_model_fit_stochastic_param()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit_stochastic_param.md)
-    were hardcoded to use `parallel = TRUE`, ignoring the user’s
-    `control$parallel$enable` setting
+    `plot_model_fit_stochastic_param()` were hardcoded to use
+    `parallel = TRUE`, ignoring the user’s `control$parallel$enable`
+    setting
   - **Solution**: Changed both function calls in
     [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
     to use `parallel = control$parallel$enable` instead of hardcoded

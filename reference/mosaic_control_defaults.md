@@ -64,7 +64,8 @@ mosaic_control_defaults(
 
   - `max_batches`: Maximum calibration batches (default: 8L)
 
-  - `target_r2`: R² target for calibration convergence (default: 0.90)
+  - `target_r2_ess`: ESS regression R² target for calibration
+    convergence (default: 0.90)
 
 - sampling:
 
@@ -134,8 +135,6 @@ mosaic_control_defaults(
 - predictions:
 
   List of prediction generation settings. Default is:
-
-  - `best_model_n_sims`: Stochastic runs for best model (default: 10L)
 
   - `ensemble_n_param_sets`: Number of parameter sets in ensemble
     (default: 50L)

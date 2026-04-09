@@ -1,24 +1,22 @@
-# Run Stochastic Ensemble Simulations for Best Model
-
-Runs `n_simulations` stochastic LASER simulations of a single model
-configuration (typically `config_best`) with different random seeds and
-aggregates the results into mean predictions and uncertainty envelopes.
-
-Separating computation from plotting allows ensemble results to be used
-for R², bias ratios, windowed fit metrics, and summary statistics
-without necessarily generating plots, and avoids running simulations
-twice when both metrics and plots are needed.
+# Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 
 ## Usage
 
 ``` r
 calc_model_ensemble(
   config,
-  n_simulations = 100L,
-  envelope_quantiles = c(0.025, 0.975),
+  parameter_seeds = NULL,
+  configs = NULL,
+  parameter_weights = NULL,
+  n_simulations_per_config = 10L,
+  envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+  PATHS = NULL,
+  priors = NULL,
+  sampling_args = list(),
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
+  precomputed_results = NULL,
   verbose = TRUE
 )
 ```
@@ -27,108 +25,135 @@ calc_model_ensemble(
 
 - config:
 
-  Named list. Model configuration as returned by
-  [`sample_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
-  (typically `config_best`).
+  Base configuration object (provides observed data and template).
 
-- n_simulations:
+- parameter_seeds:
 
-  Integer. Number of stochastic LASER simulations to run. Default
-  `100L`.
+  Numeric vector of seeds for
+  [`sample_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md).
+  Each seed generates a different parameter set.
+
+- configs:
+
+  List of pre-sampled configuration objects (direct mode). Mutually
+  exclusive with `parameter_seeds`.
+
+- parameter_weights:
+
+  Numeric vector of importance weights, same length as `parameter_seeds`
+  or `configs`. Normalized internally to sum to 1. If `NULL`, all
+  parameter sets are weighted equally.
+
+- n_simulations_per_config:
+
+  Integer. Stochastic LASER reruns per parameter set. Default `10L`.
 
 - envelope_quantiles:
 
-  Numeric vector of length 2. Lower and upper quantiles for uncertainty
-  envelopes. Stored in return object for use by
-  [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md).
-  Default `c(0.025, 0.975)`.
+  Numeric vector of quantiles for confidence intervals. Must be even
+  length to form lower/upper pairs. Default
+  `c(0.025, 0.25, 0.75, 0.975)` for 50\\
 
-- parallel:
+  PATHSList of paths from
+  [`get_paths`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md).
+  Required for sampling mode.
 
-  Logical. Use R parallel cluster for simulations. Default `FALSE`.
+  priorsPriors object for parameter sampling. Required for sampling
+  mode.
 
-- n_cores:
+  sampling_argsNamed list of additional arguments for
+  [`sample_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md).
 
-  Integer or `NULL`. Number of cores when `parallel = TRUE`. `NULL` uses
-  `detectCores() - 1`.
+  parallelLogical. Use parallel cluster for simulations. Default
+  `FALSE`.
 
-- root_dir:
+  n_coresInteger or `NULL`. Number of cores when `parallel = TRUE`.
 
-  Character. MOSAIC root directory. Required when `parallel = TRUE` so
-  workers can call
-  [`set_root_directory()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.md).
+  root_dirCharacter. MOSAIC root directory. Required when
+  `parallel = TRUE`.
 
-- verbose:
+  precomputed_resultsOptional list of pre-gathered LASER results (e.g.
+  from Dask). Each element must have `$param_idx`, `$stoch_idx`,
+  `$reported_cases`, `$disease_deaths`, and `$success`.
 
-  Logical. Print progress messages. Default `TRUE`.
+  verboseLogical. Print progress messages. Default `TRUE`.
 
-## Value
+S3 object of class `"mosaic_ensemble"` containing:
 
-A named list (S3 class `"mosaic_ensemble"`) containing:
+- cases_mean:
 
-- cases_stats:
+  Matrix (n_locations x n_time_points) of weighted mean cases.
 
-  List with `mean`, `median`, `lower`, `upper` matrices (n_locations ×
-  n_time_points).
+- cases_median:
 
-- deaths_stats:
+  Matrix of weighted median cases.
 
-  Same structure as `cases_stats` for deaths.
+- deaths_mean:
 
-- cases_array:
+  Matrix of weighted mean deaths.
 
-  3-D array (n_locations × n_time_points × n_successful) of raw
-  per-simulation case counts.
+- deaths_median:
 
-- deaths_array:
+  Matrix of weighted median deaths.
 
-  Same for deaths.
+- ci_bounds:
+
+  List of CI pairs, each with `$lower` and `$upper` matrices.
 
 - obs_cases:
 
-  Observed cases matrix from `config$reported_cases`.
+  Observed cases matrix from config.
 
 - obs_deaths:
 
-  Observed deaths matrix from `config$reported_deaths`.
+  Observed deaths matrix from config.
 
-- n_simulations:
+- cases_array:
 
-  Requested number of simulations.
+  4-D array (n_locations x n_time_points x n_param_sets x n_stoch).
+
+- deaths_array:
+
+  4-D array matching cases_array dimensions.
+
+- parameter_weights:
+
+  Normalized weight vector.
+
+- n_param_sets:
+
+  Number of parameter sets.
+
+- n_simulations_per_config:
+
+  Stochastic runs per parameter set.
 
 - n_successful:
 
-  Number that completed without error.
-
-- seeds:
-
-  Integer vector of seeds used.
+  Number of successful simulations.
 
 - location_names:
 
   Character vector of location names.
 
-- n_locations:
-
-  Number of locations.
-
-- n_time_points:
-
-  Number of time steps.
-
-- envelope_quantiles:
-
-  The quantile pair passed in (for plotting).
-
 - date_start:
 
-  Character. Simulation start date from config.
+  Simulation start date.
 
 - date_stop:
 
-  Character. Simulation end date from config.
+  Simulation end date.
 
-## See also
+- envelope_quantiles:
 
+  Quantiles used for CI envelopes.
+
+Runs LASER simulations for multiple parameter sets (with stochastic
+reruns per set) and aggregates results using importance weights. Returns
+a `mosaic_ensemble` object containing weighted mean, median, and
+quantile envelopes for cases and deaths.This is the computation half of
+the ensemble workflow. Use
+[`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+to render plots from the returned object.
 [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
 to render plots from this object.

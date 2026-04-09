@@ -33,7 +33,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -107,7 +107,7 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>batch_size</code>: Simulations per batch in calibration phase (default: 500L)</p></li>
 <li><p><code>min_batches</code>: Minimum calibration batches (default: 5L)</p></li>
 <li><p><code>max_batches</code>: Maximum calibration batches (default: 8L)</p></li>
-<li><p><code>target_r2</code>: R² target for calibration convergence (default: 0.90)</p></li>
+<li><p><code>target_r2_ess</code>: ESS regression R² target for calibration convergence (default: 0.90)</p></li>
 </ul></dd>
 
 
@@ -149,8 +149,7 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 
 <dt id="arg-predictions">predictions<a class="anchor" aria-label="anchor" href="#arg-predictions"></a></dt>
-<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>best_model_n_sims</code>: Stochastic runs for best model (default: 10L)</p></li>
-<li><p><code>ensemble_n_param_sets</code>: Number of parameter sets in ensemble (default: 50L)</p></li>
+<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>ensemble_n_param_sets</code>: Number of parameter sets in ensemble (default: 50L)</p></li>
 <li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 10L)</p></li>
 </ul><p>Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)</p></dd>
 

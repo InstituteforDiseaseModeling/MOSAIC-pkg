@@ -1,11 +1,10 @@
-# Plot Stochastic Ensemble Predictions
+# Plot Ensemble Predictions from a mosaic_ensemble Object
 
-Renders timeseries plots from a `mosaic_ensemble` object produced by
+Renders time-series plots from a `mosaic_ensemble` object produced by
 [`calc_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md).
-Optionally saves per-location prediction CSVs for downstream use.
-
-Accepting a pre-computed ensemble object means simulations are never run
-twice when both metrics and plots are needed.
+Shows the weighted median prediction line with confidence interval
+ribbons and observed data points. Optionally saves per-location
+prediction CSVs for downstream use.
 
 ## Usage
 
@@ -32,8 +31,7 @@ plot_model_ensemble(
 
 - save_predictions:
 
-  Logical. Save per-location prediction CSVs
-  (`predictions_stochastic_<location>.csv`). Default `FALSE`.
+  Logical. Save per-location prediction CSVs. Default `FALSE`.
 
 - verbose:
 

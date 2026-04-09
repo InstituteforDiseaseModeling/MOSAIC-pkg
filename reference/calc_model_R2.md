@@ -67,5 +67,4 @@ Scalar \\R^2\\. May be negative for `method="sse"` unless
 
 ## See also
 
-[`calc_model_mse()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_mse.md),
 [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)

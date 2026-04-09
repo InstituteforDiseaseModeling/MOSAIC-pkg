@@ -1,9 +1,8 @@
-# Calculate Parameter-Specific ESS using Kernel Density Estimation
+# Calculate Parameter-Specific ESS
 
 Computes the effective sample size (ESS) for individual parameters using
-kernel density estimation to approximate marginal posteriors. This
-method integrates out other parameters to provide a true measure of
-information content for each parameter individually.
+one of three methods: KDE-based marginal posterior estimation, Owen's
+integrand-specific ESS, or binned marginal Kish ESS.
 
 ## Usage
 
@@ -14,6 +13,7 @@ calc_model_ess_parameter(
   likelihood_col = "likelihood",
   n_grid = 100,
   method = c("kish", "perplexity"),
+  marginal_method = c("kde", "owen", "binned"),
   verbose = FALSE
 )
 ```
@@ -35,12 +35,20 @@ calc_model_ess_parameter(
 
 - n_grid:
 
-  Integer number of grid points for KDE evaluation (default: 100)
+  Integer number of grid points for KDE evaluation (default: 100, used
+  only by "kde" method)
 
 - method:
 
-  Character string specifying ESS calculation method: "kish" (default)
-  or "perplexity"
+  Character string specifying ESS formula: "kish" or "perplexity"
+
+- marginal_method:
+
+  Character string specifying how marginal weights are constructed:
+  "kde" (default, backward-compatible KDE-based), "owen" (Owen's
+  integrand-specific ESS), or "binned" (binned marginal Kish ESS).
+  Owen's and binned methods are more sensitive to importance weight
+  changes.
 
 - verbose:
 
