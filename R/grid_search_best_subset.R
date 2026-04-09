@@ -147,17 +147,12 @@ grid_search_best_subset <- function(
     # 4. Calculate Gibbs weights
     weights_n <- calc_model_weights_gibbs(
       x = delta_subset,
-      temperature = gibbs_temperature,
+      eta = gibbs_temperature,
       verbose = FALSE
     )
 
     # 5. Calculate metrics using Gibbs weights
-    # ESS (using normalized weights)
-    if (ess_method == "kish") {
-      ESS <- 1 / sum(weights_n^2)
-    } else {  # perplexity
-      ESS <- exp(-sum(weights_n * log(weights_n + 1e-300)))
-    }
+    ESS <- calc_model_ess(weights_n, method = ess_method)
 
     # Agreement Index (A) - using unnormalized weights
     w_unnorm <- weights_n * n
@@ -212,16 +207,12 @@ grid_search_best_subset <- function(
 
   weights_max <- calc_model_weights_gibbs(
     x = delta_max,
-    temperature = gibbs_temperature_max,
+    eta = gibbs_temperature_max,
     verbose = FALSE
   )
 
   # Calculate metrics
-  if (ess_method == "kish") {
-    ESS_max <- 1 / sum(weights_max^2)
-  } else {
-    ESS_max <- exp(-sum(weights_max * log(weights_max + 1e-300)))
-  }
+  ESS_max <- calc_model_ess(weights_max, method = ess_method)
 
   w_max_unnorm <- weights_max * max_size
   ag_max <- calc_model_agreement_index(w_max_unnorm)

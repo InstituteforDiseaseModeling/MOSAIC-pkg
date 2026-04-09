@@ -96,7 +96,7 @@ plot_model_parameter_sensitivity <- function(results_file,
   .compute_ess <- function(w) {
     w <- w[is.finite(w) & w > 0]
     if (length(w) == 0) return(0)
-    sum(w)^2 / sum(w^2)
+    calc_model_ess(w, method = "kish")
   }
 
   has_best_subset <- "is_best_subset" %in% names(results) &&
