@@ -13,7 +13,7 @@ and \(A = H(\tilde{\mathbf w}) / \log|\mathcal B|\), with the convention
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,7 +41,7 @@ and \(A = H(\tilde{\mathbf w}) / \log|\mathcal B|\), with the convention
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Agreement index A based on entropy of weights</h1>
-      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/R/calc_model_convergence.R" class="external-link"><code>R/calc_model_convergence.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/R/calc_model_weight_diagnostics.R" class="external-link"><code>R/calc_model_weight_diagnostics.R</code></a></small>
       <div class="d-none name"><code>calc_model_agreement_index.Rd</code></div>
     </div>
 
@@ -68,41 +68,17 @@ Internally normalized within \(\mathcal B\); larger \(A\) is better.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list with <code>A</code> (agreement index in \[0,1\]), <code>H</code> (entropy), and <code>B_size</code> (retained set size).</p>
+    <p>A list with <code>A</code> (agreement index in [0,1]), <code>H</code> (entropy), and <code>B_size</code> (retained set size).</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="calc_model_convergence.html">calc_model_convergence()</a></code></p>
+    <div class="dont-index"><p><code><a href="calc_model_cvw.html">calc_model_cvw()</a></code></p>
 <p>Other calibration-metrics:
 <code><a href="calc_convergence_diagnostics.html">calc_convergence_diagnostics()</a></code>,
-<code><a href="calc_model_aic_delta.html">calc_model_aic_delta()</a></code>,
-<code><a href="calc_model_akaike_weights.html">calc_model_akaike_weights()</a></code>,
-<code><a href="calc_model_convergence.html">calc_model_convergence()</a></code>,
 <code><a href="calc_model_cvw.html">calc_model_cvw()</a></code>,
-<code><a href="calc_model_ess.html">calc_model_ess()</a></code>,
-<code><a href="calc_model_max_weight.html">calc_model_max_weight()</a></code>,
-<code><a href="plot_model_convergence.html">plot_model_convergence()</a></code></p></div>
+<code><a href="calc_model_ess.html">calc_model_ess()</a></code></p></div>
     </div>
 
-    <div class="section level2">
-    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">ll</span> <span class="op">&lt;-</span> <span class="fl">1000</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">200</span>, sd <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">d</span>  <span class="op">&lt;-</span> <span class="fu"><a href="calc_model_aic_delta.html">calc_model_aic_delta</a></span><span class="op">(</span><span class="va">ll</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">aw</span> <span class="op">&lt;-</span> <span class="fu"><a href="calc_model_akaike_weights.html">calc_model_akaike_weights</a></span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu">calc_model_agreement_index</span><span class="op">(</span><span class="va">aw</span><span class="op">$</span><span class="va">w</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $A</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.8504612</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $H</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2.458149</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $B_size</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 18</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-in"><span></span></span>
-</code></pre></div>
-    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

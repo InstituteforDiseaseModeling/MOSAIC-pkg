@@ -224,8 +224,12 @@ Calculation functions
 - [`calc_model_R2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_R2.md)
   : Coefficient of Determination (R-squared) Between Observed and
   Estimated Series
+- [`calc_model_agreement_index()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
+  : Agreement index A based on entropy of weights
 - [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
+- [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
+  : Coefficient of variation of (retained) weights
 - [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
   : Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 - [`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md)
@@ -629,8 +633,12 @@ Other exported functions and internal helpers
 - [`calc_model_R2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_R2.md)
   : Coefficient of Determination (R-squared) Between Observed and
   Estimated Series
+- [`calc_model_agreement_index()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
+  : Agreement index A based on entropy of weights
 - [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
+- [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
+  : Coefficient of variation of (retained) weights
 - [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
   : Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 - [`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md)

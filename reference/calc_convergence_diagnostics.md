@@ -194,7 +194,7 @@ metric statuses:
 
 [`plot_model_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_convergence_status.md),
 [`calc_model_ess`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md),
-`calc_model_agreement_index`
+[`calc_model_agreement_index`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
 
 Other calibration-metrics:
 [`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md)
