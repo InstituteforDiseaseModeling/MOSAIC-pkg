@@ -9,7 +9,6 @@
   mosaic_worker,
   config_best,
   param_configs = NULL,
-  n_ensemble = 100L,
   n_stochastic_per = 10L,
   log_msg = message
 )
@@ -24,14 +23,12 @@
 \item{param_configs}{List of config lists for posterior parameter sets (for stochastic sims).
 NULL to skip stochastic dispatch.}
 
-\item{n_ensemble}{Integer. Number of ensemble sims (different seeds, same config_best).}
-
 \item{n_stochastic_per}{Integer. Number of stochastic sims per param config.}
 
 \item{log_msg}{Function. Logging function.}
 }
 \value{
-Named list with $ensemble_results and $stochastic_results (or NULL for each).
+Named list with $stochastic_results (or NULL if skipped).
 }
 \description{
 Uses a reconnected Dask client to dispatch ensemble and/or stochastic

@@ -973,7 +973,7 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # DETERMINE RUN MODE: AUTO vs FIXED (with safe state loading)
+  # DETERMINE RUN MODE: AUTO vs FIXED
   # ===========================================================================
 
   nspec <- .mosaic_normalize_n_sims(n_simulations)
@@ -1079,9 +1079,9 @@ run_MOSAIC <- function(config,
   } else {
 
     log_msg("Phase 1: Adaptive Calibration")
-    log_msg("  - Run %d-%d batches × %d sims (R² target: %.2f)",
+    log_msg("  - Run %d-%d batches × %d sims (ESS regression R² target: %.2f)",
             control$calibration$min_batches, control$calibration$max_batches,
-            control$calibration$batch_size, control$calibration$target_r2)
+            control$calibration$batch_size, control$calibration$target_r2_ess)
     log_msg("Phase 2: Single Predictive Batch")
     log_msg("Phase 3: Adaptive Fine-tuning (5-tier)")
     log_msg("Target ESS: %d per parameter | Max simulations: %d",
@@ -1449,7 +1449,7 @@ run_MOSAIC <- function(config,
       gibbs_temperature_final <- 0.5  # Standard for Akaike weights
       weights_final <- calc_model_weights_gibbs(
         x = delta_aic_truncated,
-        temperature = gibbs_temperature_final,
+        eta = gibbs_temperature_final,
         verbose = FALSE
       )
 
@@ -1520,7 +1520,7 @@ run_MOSAIC <- function(config,
 
     retained_weights <- calc_model_weights_gibbs(
       x = delta_aic_retained_trunc,
-      temperature = 0.5,
+      eta = 0.5,
       verbose = control$logging$verbose
     )
     results$weight_retained[results$is_retained] <- retained_weights
@@ -1538,7 +1538,7 @@ run_MOSAIC <- function(config,
 
     best_weights <- calc_model_weights_gibbs(
       x = delta_aic_best_trunc,
-      temperature = 0.5,
+      eta = 0.5,
       verbose = control$logging$verbose
     )
     results$weight_best[results$is_best_subset] <- best_weights
@@ -1807,7 +1807,7 @@ run_MOSAIC <- function(config,
   # RECONNECT DASK FOR POST-CAL SIMS (if applicable)
   # ===========================================================================
   # The client was disconnected before R-heavy post-processing. Now reconnect
-  # to the same (still-alive) cluster to dispatch ensemble + stochastic sims.
+  # to the same (still-alive) cluster to dispatch stochastic param sims.
 
   postca_dask     <- NULL
 
@@ -2184,7 +2184,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{batch_size}: Simulations per batch in calibration phase (default: 500L)
 #'     \item \code{min_batches}: Minimum calibration batches (default: 5L)
 #'     \item \code{max_batches}: Maximum calibration batches (default: 8L)
-#'     \item \code{target_r2}: R² target for calibration convergence (default: 0.90)
+#'     \item \code{target_r2_ess}: ESS regression R² target for calibration convergence (default: 0.90)
 #'   }
 #'
 #' @param sampling List of parameter sampling flags (what to sample). Default is:
@@ -2226,7 +2226,6 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
-#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 10L)
 #'     \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
 #'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
 #'   }
@@ -2344,7 +2343,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     max_predictive_batch = 10000L, # Cap on single predictive batch (prevents multi-hour unchecked runs)
     min_batches = 5L,
     max_batches = 8L,
-    target_r2 = 0.90
+    target_r2_ess = 0.90
   )
 
   # Default sampling settings

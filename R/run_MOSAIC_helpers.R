@@ -34,6 +34,14 @@
     }
   }
 
+  # BACKWARD COMPATIBILITY: target_r2 → target_r2_ess (renamed in v0.22.7)
+  if (!is.null(def$calibration$target_r2) && is.null(def$calibration$target_r2_ess)) {
+    warning("calibration$target_r2 is deprecated; use calibration$target_r2_ess instead.",
+            call. = FALSE)
+    def$calibration$target_r2_ess <- def$calibration$target_r2
+    def$calibration$target_r2 <- NULL
+  }
+
   # TYPE VALIDATION
   stopifnot(
     "parallel$enable must be logical" =
@@ -50,9 +58,9 @@
       is.numeric(def$calibration$min_batches) && def$calibration$min_batches > 0,
     "calibration$max_batches must be positive integer" =
       is.numeric(def$calibration$max_batches) && def$calibration$max_batches > 0,
-    "calibration$target_r2 must be in [0, 1]" =
-      is.numeric(def$calibration$target_r2) &&
-      def$calibration$target_r2 >= 0 && def$calibration$target_r2 <= 1,
+    "calibration$target_r2_ess must be in [0, 1]" =
+      is.numeric(def$calibration$target_r2_ess) &&
+      def$calibration$target_r2_ess >= 0 && def$calibration$target_r2_ess <= 1,
     "targets$ESS_param must be positive" =
       is.numeric(def$targets$ESS_param) && def$targets$ESS_param > 0,
     "targets$ESS_param_prop must be in [0, 1]" =
@@ -458,7 +466,7 @@
     batch_sizes_used = integer(),
     phase = if (identical(nspec$mode, "fixed")) "fixed" else "calibration",
     calib_batches = 0L,
-    calib_r2 = NA_real_,
+    r2_ess = NA_real_,
     calibration_done = FALSE,
     ess_history = list(),
     ess_tracking = list(),
@@ -479,12 +487,12 @@
 #'
 #' Writes a lightweight JSON representation of the workflow state.
 #' The persisted state is a slim subset of the full in-memory state,
-#' containing only what is needed for monitoring and future resume.
+#' containing only what is needed for external monitoring.
 #' Uses atomic write via tempfile + rename.
 #'
 #' @noRd
 .mosaic_save_state <- function(state, path) {
-  # Extract only the fields needed for monitoring / resume
+  # Extract only the fields needed for monitoring
   persisted <- list(
     schema_version = 1L,
     status = "running",
@@ -496,7 +504,7 @@
     sims_completed = state$total_sims_successful,
     sims_target = if (identical(state$mode, "fixed")) state$fixed_target else NULL,
     converged = isTRUE(state$converged),
-    r_squared = if (!is.na(state$calib_r2)) round(state$calib_r2, 4) else NULL,
+    ess_regression_r2 = if (!is.na(state$r2_ess)) round(state$r2_ess, 4) else NULL,
     ess_min = if (length(state$ess_tracking) > 0) {
       round(tail(vapply(state$ess_tracking, `[[`, numeric(1), "min_ess"), 1), 1)
     } else NULL
@@ -533,7 +541,7 @@
         target_ess = control$targets$ESS_param,
         reserved_sims = 250L,
         max_total_sims = control$calibration$max_simulations,
-        target_r_squared = control$calibration$target_r2
+        target_r_squared = control$calibration$target_r2_ess
       )
     }, error = function(e) NULL)
 
@@ -719,7 +727,7 @@
     slope <- coef[2]
 
     state$calib_batches <- state$calib_batches + 1L
-    state$calib_r2 <- r2
+    state$r2_ess <- r2
 
     # Calculate estimated simulations to reach target ESS
     # Model: ESS = intercept + slope × sqrt(n)
@@ -739,11 +747,11 @@
     r2_print    <- if (is.finite(r2))    r2    else 0
     log_msg("Calibration convergence check (batch %d):", state$batch_number)
     if (!is.na(est_sims)) {
-      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: %.0f",
-              intercept, slope_print, r2_print, control$calibration$target_r2, round(est_sims))
+      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  ESS regression R² = %.4f (target %.2f) | Est. Sims: %.0f",
+              intercept, slope_print, r2_print, control$calibration$target_r2_ess, round(est_sims))
     } else {
-      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  R² = %.4f (target %.2f) | Est. Sims: N/A%s",
-              intercept, slope_print, r2_print, control$calibration$target_r2,
+      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  ESS regression R² = %.4f (target %.2f) | Est. Sims: N/A%s",
+              intercept, slope_print, r2_print, control$calibration$target_r2_ess,
               if (!is.finite(slope)) " [ESS plateau — slope undefined]" else "")
     }
     log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
@@ -755,12 +763,12 @@
     # has only 1 residual df, making R² trivially near 1 for any monotone ESS
     # trajectory. The max_batches hard limit is always honoured regardless.
     min_r2_points <- 5L
-    r2_converged <- r2 >= control$calibration$target_r2 && nrow(ess_df) >= min_r2_points
+    r2_converged <- r2 >= control$calibration$target_r2_ess && nrow(ess_df) >= min_r2_points
     if (r2_converged) {
-      log_msg("  R² criterion met with %d data points (min required: %d)",
+      log_msg("  ESS regression R² criterion met with %d data points (min required: %d)",
               nrow(ess_df), min_r2_points)
-    } else if (r2 >= control$calibration$target_r2 && nrow(ess_df) < min_r2_points) {
-      log_msg("  R² = %.4f >= target, but only %d data point(s) — need >= %d for reliable R²",
+    } else if (r2 >= control$calibration$target_r2_ess && nrow(ess_df) < min_r2_points) {
+      log_msg("  ESS regression R² = %.4f >= target, but only %d data point(s) — need >= %d for reliable fit",
               r2, nrow(ess_df), min_r2_points)
     }
 
@@ -779,9 +787,9 @@
       if (state$batch_number >= control$calibration$max_batches) {
         # Hit max batches limit - always exit regardless of R² or gap
         state$calibration_done <- TRUE
-        if (r2 < control$calibration$target_r2) {
-          log_msg("  → Calibration complete: reached max_batches (%d) before R² converged (%.4f < %.2f)",
-                  control$calibration$max_batches, r2, control$calibration$target_r2)
+        if (r2 < control$calibration$target_r2_ess) {
+          log_msg("  → Calibration complete: reached max_batches (%d) before ESS regression R² converged (%.4f < %.2f)",
+                  control$calibration$max_batches, r2, control$calibration$target_r2_ess)
         } else {
           log_msg("  → Calibration complete: reached max_batches (%d)",
                   control$calibration$max_batches)
@@ -1031,7 +1039,7 @@
   # (invalid models receive weight 0 and are silently dropped by calc_model_ess).
   weights_valid <- calc_model_weights_gibbs(
     x = delta_aic[valid_idx],
-    temperature = eta,
+    eta = eta,
     verbose = FALSE
   )
   weights <- numeric(n_total)
@@ -1509,14 +1517,13 @@
 #' @param config_best Config list for the best-fit model (for ensemble sims).
 #' @param param_configs List of config lists for posterior parameter sets (for stochastic sims).
 #'   NULL to skip stochastic dispatch.
-#' @param n_ensemble Integer. Number of ensemble sims (different seeds, same config_best).
 #' @param n_stochastic_per Integer. Number of stochastic sims per param config.
 #' @param log_msg Function. Logging function.
-#' @return Named list with $ensemble_results and $stochastic_results (or NULL for each).
+#' @return Named list with $stochastic_results (or NULL if skipped).
 #' @keywords internal
 .mosaic_postca_dask <- function(client, mosaic_worker,
                                 config_best, param_configs = NULL,
-                                n_ensemble = 100L, n_stochastic_per = 10L,
+                                n_stochastic_per = 10L,
                                 log_msg = message) {
 
   # Helper: serialize config to JSON + extract large matrix fields
@@ -1536,45 +1543,7 @@
          matrices = reticulate::r_to_py(matrices))
   }
 
-  ensemble_results    <- NULL
   stochastic_results  <- NULL
-
-  # --- Ensemble sims (one config_best, many seeds) ---
-  if (n_ensemble > 0L && !is.null(config_best)) {
-    log_msg("Dispatching %d ensemble sims to Dask...", n_ensemble)
-    prep <- .config_to_json_and_matrices(config_best)
-    extra_future <- client$scatter(prep$matrices, broadcast = TRUE)
-
-    futures <- vector("list", n_ensemble)
-    for (i in seq_len(n_ensemble)) {
-      futures[[i]] <- client$submit(
-        mosaic_worker$run_laser_postca,
-        as.integer(i),          # task_id
-        as.integer(i),          # seed = 1..n_ensemble
-        prep$json,
-        extra_future
-      )
-    }
-
-    raw <- client$gather(futures)
-    log_msg("Gathered %d ensemble results", length(raw))
-
-    # Convert to format expected by calc_model_ensemble
-    ensemble_results <- lapply(raw, function(r) {
-      if (isTRUE(r$success)) {
-        list(
-          reported_cases = matrix(unlist(r$reported_cases),
-                                  nrow = length(r$reported_cases), byrow = TRUE),
-          disease_deaths = matrix(unlist(r$disease_deaths),
-                                  nrow = length(r$disease_deaths), byrow = TRUE),
-          success = TRUE,
-          seed = r$seed
-        )
-      } else {
-        list(success = FALSE, seed = r$seed, error = r$error %||% "unknown")
-      }
-    })
-  }
 
   # --- Stochastic param sims (many configs × many seeds) ---
   if (!is.null(param_configs) && length(param_configs) > 0 && n_stochastic_per > 0L) {
@@ -1632,7 +1601,6 @@
   }
 
   list(
-    ensemble_results   = ensemble_results,
     stochastic_results = stochastic_results
   )
 }

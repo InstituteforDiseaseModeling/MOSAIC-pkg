@@ -27,7 +27,7 @@ mosaic_control_defaults(
 \item \code{batch_size}: Simulations per batch in calibration phase (default: 500L)
 \item \code{min_batches}: Minimum calibration batches (default: 5L)
 \item \code{max_batches}: Maximum calibration batches (default: 8L)
-\item \code{target_r2}: R² target for calibration convergence (default: 0.90)
+\item \code{target_r2_ess}: ESS regression R² target for calibration convergence (default: 0.90)
 }}
 
 \item{sampling}{List of parameter sampling flags (what to sample). Default is:
@@ -69,7 +69,6 @@ mosaic_control_defaults(
 
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
-\item \code{best_model_n_sims}: Stochastic runs for best model (default: 10L)
 \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
 \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
 }
