@@ -11,15 +11,8 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = TRUE,
-  cache = TRUE,
-  cache.path = "cache/"
+  eval = FALSE
 )
-
-# Create figures directory if it doesn't exist
-if (!dir.exists("figures")) {
-  dir.create("figures", recursive = TRUE)
-}
 ```
 
 ## Overview
@@ -47,7 +40,7 @@ config <- MOSAIC::config_simulation_endemic
 model_endemic <- run_LASER(config = config, seed = 123, quiet = FALSE)
 ```
 
-```{r epidemic-example, eval=TRUE, echo=TRUE}
+```{r epidemic-example, echo=TRUE}
 library(MOSAIC)
 
 # Run epidemic scenario
@@ -96,7 +89,7 @@ dev.off()
 cat("Saved: figures/running_mosaic_epidemic.png\n")
 ```
 
-```{r epidemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
+```{r epidemic-plot, echo = FALSE, out.width = "90%", fig.align = "center"}
 knitr::include_graphics("figures/running_mosaic_epidemic.png")
 ```
 
@@ -104,7 +97,7 @@ knitr::include_graphics("figures/running_mosaic_epidemic.png")
 
 The endemic configuration simulates stable, persistent transmission patterns with seasonal fluctuations.
 
-```{r endemic-example, eval=TRUE, echo=TRUE}
+```{r endemic-example, echo=TRUE}
 # Run endemic scenario
 config <- MOSAIC::config_simulation_endemic
 
@@ -144,14 +137,14 @@ dev.off()
 cat("Saved: figures/running_mosaic_endemic.png\n")
 ```
 
-```{r endemic-plot, echo = FALSE, eval = TRUE, out.width = "90%", fig.align = "center"}
+```{r endemic-plot, echo = FALSE, out.width = "90%", fig.align = "center"}
 knitr::include_graphics("figures/running_mosaic_endemic.png")
 ```
 
 
 ### Running LASER for multiple locations
 
-```{r multi-location-example, echo=TRUE, eval=TRUE}
+```{r multi-location-example, echo=TRUE}
 library(MOSAIC)
 
 iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data
@@ -185,7 +178,7 @@ dev.off()
 cat("Saved: figures/multi_location_grid.png\n")
 ```
 
-```{r multi-location-grid-plot, echo = FALSE, eval = TRUE, out.width = "100%", fig.align = "center"}
+```{r multi-location-grid-plot, echo = FALSE, out.width = "100%", fig.align = "center"}
 knitr::include_graphics("figures/multi_location_grid.png")
 ```
 

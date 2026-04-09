@@ -230,24 +230,14 @@
             weights_location = likelihood_settings$weights_location,
             nb_k_min_cases = likelihood_settings$nb_k_min_cases,
             nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
-            add_max_terms = likelihood_settings$add_max_terms,
-            add_peak_timing = likelihood_settings$add_peak_timing,
-            add_peak_magnitude = likelihood_settings$add_peak_magnitude,
-            add_cumulative_total = likelihood_settings$add_cumulative_total,
-            add_wis = likelihood_settings$add_wis,
             weight_cases = likelihood_settings$weight_cases,
             weight_deaths = likelihood_settings$weight_deaths,
-            weight_max_terms = likelihood_settings$weight_max_terms,
             weight_peak_timing = likelihood_settings$weight_peak_timing,
             weight_peak_magnitude = likelihood_settings$weight_peak_magnitude,
             weight_cumulative_total = likelihood_settings$weight_cumulative_total,
             weight_wis = likelihood_settings$weight_wis,
             sigma_peak_time = likelihood_settings$sigma_peak_time,
-            sigma_peak_log = likelihood_settings$sigma_peak_log,
-            penalty_unmatched_peak = likelihood_settings$penalty_unmatched_peak,
-            enable_guardrails = likelihood_settings$enable_guardrails,
-            floor_likelihood = likelihood_settings$floor_likelihood,
-            guardrail_verbose = likelihood_settings$guardrail_verbose
+            sigma_peak_log = likelihood_settings$sigma_peak_log
           )
         } else {
           NA_real_
@@ -1233,27 +1223,18 @@ run_MOSAIC <- function(config,
     cl <- NULL
   }
 
-  # Close Dask cluster before R-heavy post-processing to prevent Python event
-  # loop starvation / TLS heartbeat timeouts
+  # Disconnect Dask client before R-heavy post-processing to prevent Python
+  # event loop starvation / TLS heartbeat timeouts. The cluster object stays
+  # alive (holds TLS context) so we can reconnect for post-cal ensemble sims.
   if (use_dask && !is.null(client)) {
-    log_msg("Closing Dask cluster (all results gathered, no longer needed)")
+    log_msg("Disconnecting Dask client (cluster stays alive for post-cal reconnect)")
     tryCatch({
       client$close()
-      log_msg("  Dask client closed")
+      log_msg("  Client disconnected")
     }, error = function(e) {
-      log_msg("  Dask client close failed (may already be disconnected): %s", e$message)
+      log_msg("  Dask client disconnect failed: %s", e$message)
     })
-    if (!is.null(dask_cluster)) {
-      tryCatch({
-        dask_cluster$close()
-        log_msg("  Dask cluster closed")
-      }, error = function(e) {
-        log_msg("  Dask cluster close failed: %s", e$message)
-      })
-    }
-    # Null out so the on.exit handler doesn't double-close
-    client       <- NULL
-    dask_cluster <- NULL
+    client <- NULL
     gc(verbose = FALSE)
   }
 
@@ -1689,6 +1670,7 @@ run_MOSAIC <- function(config,
     results = results,
     probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
     output_dir = dirs$cal_posterior,
+    priors = priors,
     verbose = control$logging$verbose
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posterior_quantiles.csv"))
@@ -1829,14 +1811,88 @@ run_MOSAIC <- function(config,
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
   # ===========================================================================
+  # RECONNECT DASK FOR POST-CAL SIMS (if applicable)
+  # ===========================================================================
+  # The client was disconnected before R-heavy post-processing. Now reconnect
+  # to the same (still-alive) cluster to dispatch ensemble + stochastic sims.
+
+  n_ensemble_r2   <- control$predictions$best_model_n_sims
+  postca_dask     <- NULL
+
+  if (use_dask && !is.null(dask_cluster)) {
+    postca_dask <- tryCatch({
+      log_msg("Reconnecting to Dask cluster for post-cal sims...")
+      client <- dask_cluster$get_client()
+      log_msg("  Reconnected (%d workers)", length(client$scheduler_info()$workers))
+
+      # Re-upload worker module (workers may have restarted during idle)
+      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+      client$upload_file(worker_py_path)
+      mosaic_worker <- reticulate::import("mosaic_dask_worker")
+
+      # Build stochastic param configs
+      stoch_param_configs <- NULL
+      n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
+
+      if (control$paths$plots && sum(results$is_best_subset) > 0) {
+        best_subset_results <- results[results$is_best_subset == TRUE, ]
+        stoch_param_seeds   <- best_subset_results$seed_sim
+        stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+
+        if (length(stoch_param_weights) > 0) {
+          stoch_param_configs <- lapply(stoch_param_seeds[stoch_param_weights > 0], function(seed_i) {
+            tryCatch(
+              sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                                seed = seed_i, sample_args = sampling_args, verbose = FALSE),
+              error = function(e) NULL
+            )
+          })
+          stoch_param_configs <- Filter(Negate(is.null), stoch_param_configs)
+        }
+      }
+
+      # Dispatch all post-cal sims
+      result <- .mosaic_postca_dask(
+        client           = client,
+        mosaic_worker    = mosaic_worker,
+        config_best      = config_best,
+        param_configs    = stoch_param_configs,
+        n_ensemble       = n_ensemble_r2,
+        n_stochastic_per = n_stochastic_per,
+        log_msg          = log_msg
+      )
+
+      # Close for real now
+      log_msg("Closing Dask cluster (post-cal sims complete)")
+      tryCatch(client$close(), error = function(e) NULL)
+      client <- NULL
+      if (!is.null(dask_cluster)) {
+        tryCatch(dask_cluster$close(), error = function(e) NULL)
+        dask_cluster <- NULL
+      }
+
+      result
+    }, error = function(e) {
+      log_msg("WARNING: Post-cal Dask reconnect/dispatch failed: %s", e$message)
+      log_msg("  Falling back to local execution for ensemble/stochastic sims")
+      # Clean up on failure
+      tryCatch({ if (!is.null(client)) client$close() }, error = function(e2) NULL)
+      client <<- NULL
+      if (!is.null(dask_cluster)) {
+        tryCatch(dask_cluster$close(), error = function(e2) NULL)
+        dask_cluster <<- NULL
+      }
+      NULL
+    })
+  }
+
+  # ===========================================================================
   # ENSEMBLE R², WINDOWED METRICS, AND PREDICTIVE PLOTS
   # ===========================================================================
 
   # Run ensemble once via calc_model_ensemble(). The same object is then used
   # for (a) R²/bias ratios, (b) windowed fit metrics, and (c) predictive plots
   # when plots = TRUE. This avoids running simulations twice.
-
-  n_ensemble_r2              <- control$predictions$best_model_n_sims
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
@@ -1847,12 +1903,13 @@ run_MOSAIC <- function(config,
 
     ensemble <- tryCatch(
       calc_model_ensemble(
-        config             = config_best,
-        n_simulations      = n_ensemble_r2,
-        envelope_quantiles = c(0.025, 0.975),
-        parallel           = control$parallel$enable,
-        n_cores            = control$parallel$n_cores,
-        root_dir           = root_dir,
+        config              = config_best,
+        n_simulations       = n_ensemble_r2,
+        envelope_quantiles  = c(0.025, 0.975),
+        parallel            = control$parallel$enable,
+        n_cores             = control$parallel$n_cores,
+        root_dir            = root_dir,
+        precomputed_results = postca_dask$ensemble_results,
         verbose            = FALSE
       ),
       error = function(e) {
@@ -1998,6 +2055,7 @@ run_MOSAIC <- function(config,
       output_dir = dirs$res_fig_pred,
       save_predictions = TRUE,
       parallel = control$parallel$enable,
+      precomputed_results = postca_dask$stochastic_results,
       n_cores = control$parallel$n_cores,
       root_dir = root_dir,
       verbose = control$logging$verbose
@@ -2189,14 +2247,9 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param likelihood List of likelihood calculation settings (how to score model fit). Default is:
 #'   \itemize{
-#'     \item \code{add_max_terms}: Add negative binomial time-series likelihood (default: FALSE)
-#'     \item \code{add_peak_timing}: Add Gaussian peak timing penalty (default: FALSE)
-#'     \item \code{add_peak_magnitude}: Add log-normal peak magnitude penalty (default: FALSE)
-#'     \item \code{add_cumulative_total}: Add cumulative total penalty (default: FALSE)
-#'     \item \code{add_wis}: Add Weighted Interval Score (default: FALSE)
 #'     \item \code{weight_cases}: Weight for cases vs deaths (default: 1.0)
 #'     \item \code{weight_deaths}: Weight for deaths vs cases (default: 1.0)
-#'     \item \code{enable_guardrails}: Enable sanity checks (default: FALSE)
+#'     \item \code{weight_wis}: WIS regularizer weight (default: 0, try 0.10)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list)
 #'   }
 #'
@@ -2289,13 +2342,11 @@ run_mosaic <- run_MOSAIC
 #'   )
 #' )
 #'
-#' # Enable peak timing and magnitude penalties in likelihood
+#' # Enable WIS regularizer and peak timing
 #' ctrl <- mosaic_control_defaults(
 #'   likelihood = list(
-#'     add_peak_timing = TRUE,
-#'     add_peak_magnitude = TRUE,
-#'     weight_peak_timing = 0.5,
-#'     weight_peak_magnitude = 0.5
+#'     weight_wis = 0.10,
+#'     weight_peak_timing = 0.25
 #'   )
 #' )
 #'
@@ -2308,7 +2359,7 @@ run_mosaic <- run_MOSAIC
 #' ctrl <- mosaic_control_defaults(
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
 #'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
-#'   likelihood = list(add_peak_timing = TRUE, weight_cases = 1.0),   # How to score
+#'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
 #'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
@@ -2413,37 +2464,23 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default likelihood calculation settings
   default_likelihood <- list(
-    # === Toggle components ===
-    add_max_terms = FALSE,           # Negative binomial time-series likelihood (baseline always included)
-    add_peak_timing = FALSE,         # Gaussian penalty on peak timing mismatch
-    add_peak_magnitude = FALSE,      # Log-normal penalty on peak magnitude mismatch
-    add_cumulative_total = FALSE,    # Penalty on cumulative case/death mismatch
-    add_wis = FALSE,                 # Weighted Interval Score (probabilistic scoring)
-
-    # === Component weights ===
+    # === Component weights (0 = OFF; set > 0 to enable) ===
     weight_cases = 1.0,              # Weight for cases vs deaths
     weight_deaths = 1.0,             # Weight for deaths vs cases
-    weight_max_terms = 0.5,          # Weight for time-series likelihood
-    weight_peak_timing = 0.5,        # Weight for peak timing penalty
-    weight_peak_magnitude = 0.5,     # Weight for peak magnitude penalty
-    weight_cumulative_total = 0.3,   # Weight for cumulative mismatch
-    weight_wis = 0.8,                # Weight for WIS score
+    weight_peak_timing = 0,          # T-normalized (0.25 = 25% of NB core); default OFF
+    weight_peak_magnitude = 0,       # T-normalized; default OFF
+    weight_cumulative_total = 0,     # T-normalized (/end_idx in helper); default OFF
+    weight_wis = 0,                  # T-normalized; default OFF (try 0.10 for regularization)
 
     # === Peak controls ===
     sigma_peak_time = 1,             # Std dev for peak timing Gaussian (in time steps)
     sigma_peak_log = 0.5,            # Std dev for log peak magnitude
-    penalty_unmatched_peak = -3,     # Penalty when peak not detected
 
     # === Time/location weighting ===
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
     nb_k_min_cases = 3,              # Minimum NB dispersion floor (cases)
-    nb_k_min_deaths = 3,             # Minimum NB dispersion floor (deaths)
-
-    # === Guardrails ===
-    enable_guardrails = FALSE,       # Enable sanity checks on model output
-    floor_likelihood = -999999999,   # Floor value for invalid likelihoods
-    guardrail_verbose = FALSE        # Print guardrail diagnostics
+    nb_k_min_deaths = 3              # Minimum NB dispersion floor (deaths)
   )
 
   # Default parallel settings

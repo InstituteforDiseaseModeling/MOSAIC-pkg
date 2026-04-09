@@ -389,7 +389,10 @@ calc_log_likelihood_negbin <- function(observed,
      }
      if (any(weights < 0)) stop("All weights must be >= 0.")
      if (sum(weights) == 0) stop("All weights are zero, cannot compute likelihood.")
-     if (any(observed < 0 | observed %% 1 != 0)) stop("observed must contain non-negative integer counts.")
+     # Round to nearest integer for cross-language float safety (parquet transport
+     # can produce near-integers like 2.0000000000000004)
+     observed <- round(observed)
+     if (any(observed < 0)) stop("observed must contain non-negative integer counts.")
 
      # Estimate k if not supplied
      if (is.null(k)) {
@@ -428,7 +431,10 @@ calc_log_likelihood_negbin <- function(observed,
                ll_vec[i] <- 0
           } else {
                # Normal NegBin calculation
-               est_safe <- max(estimated[i], .Machine$double.eps)
+               # Unified epsilon floor (1e-10) matching Poisson path.
+               # Python port: branch on k == Inf to use scipy.stats.poisson
+               # instead of scipy.stats.nbinom (which doesn't handle size=Inf).
+               est_safe <- max(estimated[i], 1e-10)
                if (is.infinite(k)) {
                     # Poisson limit
                     ll_vec[i] <- observed[i] * log(est_safe) - est_safe - lgamma(observed[i] + 1)

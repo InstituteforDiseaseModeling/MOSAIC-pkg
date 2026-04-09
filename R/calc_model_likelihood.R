@@ -1,72 +1,51 @@
 ###############################################################################
-## calc_model_likelihood.R  (Balanced design; NB uses weighted k with k_min)
+## calc_model_likelihood.R  (Core NB + optional shape terms; no guardrails)
 ###############################################################################
 
-#' Compute the total model likelihood (Simplified)
+#' Compute the total model likelihood
 #'
-#' A simplified, robust wrapper for scoring model fits in MOSAIC.
-#' The core is a Negative Binomial (NB) time-series log-likelihood per
-#' location and outcome (cases, deaths) with a weighted MoM dispersion
-#' estimate and a small \code{k_min} floor.
+#' Scores model fits against observed data using a Negative Binomial (NB)
+#' time-series log-likelihood per location and outcome (cases, deaths) with
+#' a weighted MoM dispersion estimate and a \code{k_min} floor.
 #'
-#' By default, three "shape" terms are included with modest weights:
-#' (1) multi-peak timing (Normal on time differences for matched peaks),
-#' (2) multi-peak magnitude (log-Normal on ratios with adaptive sigma), and
-#' (3) cumulative progression (NB at a few cumulative fractions).
+#' Optional shape terms are enabled by setting their weight > 0: peak timing
+#' (Normal), peak magnitude (log-Normal with adaptive sigma), cumulative
+#' progression (NB at cumulative fractions), and Weighted Interval Score (WIS).
+#' All weights default to 0 (OFF).
 #'
-#' Minimal inline guardrails floor the score on egregious fits (cumulative
-#' over/under prediction, per-timestep caps, and negative correlation).
-#' Optional max terms and WIS are kept but OFF by default.
+#' Shape terms are internally T-normalized so that weight parameters share
+#' a common scale: \code{weight = 0.25} means the term contributes roughly 25
+#' percent as much as the NB core. Peaks are scaled by \code{T / N_peaks},
+#' cumulative and WIS by \code{T} (both return per-evaluation averages).
 #'
+#' Non-finite per-location LL values are replaced with \code{-Inf} (zero
+#' importance weight). The NB likelihood naturally produces very negative
+#' scores for bad fits without needing artificial guardrails.
 #'
-#' @param obs_cases,est_cases Matrices \code{n_locations x n_time_steps} of observed
-#'   and estimated cases.
-#' @param obs_deaths,est_deaths Matrices \code{n_locations x n_time_steps} of observed
-#'   and estimated deaths.
-#' @param weight_cases,weight_deaths Optional scalar weights for case/death blocks.
-#'   Default 1.
-#' @param weights_location Optional length-\code{n_locations} non-negative weights.
-#' @param weights_time Optional length-\code{n_time_steps} non-negative weights.
-#' @param config Optional LASER configuration list containing location_name, date_start, and date_stop.
-#' @param nb_k_min_cases Numeric; minimum NB dispersion floor for cases. Default \code{3}.
-#' @param nb_k_min_deaths Numeric; minimum NB dispersion floor for deaths. Default \code{3}.
-#' @param zero_buffer Kept for backward compatibility (not used by the NB core).
-#' @param verbose Logical; if \code{TRUE}, prints component summaries per location.
-#'
-#' @param add_max_terms Logical; legacy max Poisson terms. Default \code{FALSE}.
-#' @param add_peak_timing,add_peak_magnitude,add_cumulative_total Logical; default \code{TRUE}.
-#' @param add_wis Logical; default \code{FALSE}.
-#'
-#' @param weight_max_terms Component weight for max terms. Default \code{0.5}.
-#' @param weight_peak_timing,weight_peak_magnitude,weight_cumulative_total
-#'   Component weights. Defaults \code{0.5, 0.5, 0.3}.
-#' @param weight_wis Component weight for optional WIS term.
-#'
+#' @param obs_cases,est_cases Matrices \code{n_locations x n_time_steps}.
+#' @param obs_deaths,est_deaths Matrices \code{n_locations x n_time_steps}.
+#' @param weight_cases,weight_deaths Scalar weights for case/death blocks. Default 1.
+#' @param weights_location Length-\code{n_locations} non-negative weights.
+#' @param weights_time Length-\code{n_time_steps} non-negative weights.
+#' @param config Optional LASER config list (location_name, date_start, date_stop).
+#' @param nb_k_min_cases Minimum NB dispersion floor for cases. Default \code{3}.
+#' @param nb_k_min_deaths Minimum NB dispersion floor for deaths. Default \code{3}.
+#' @param verbose If \code{TRUE}, prints component summaries per location.
+#' @param weight_peak_timing,weight_peak_magnitude Weights for peak terms
+#'   (T-normalized). Default \code{0} (OFF). Set > 0 to enable; 0.25 = 25 percent
+#'   of NB core influence.
+#' @param weight_cumulative_total Weight for cumulative progression (T-normalized).
+#'   Default \code{0} (OFF). Cumulative helper is /end_idx normalized so weights
+#'   are on the same scale as other shape terms.
+#' @param weight_wis Weight for WIS term (T-normalized). Default \code{0} (OFF).
+#'   Ablation tests show 0.10 provides trajectory-shape regularization.
 #' @param sigma_peak_time SD (weeks) for peak timing Normal; default \code{1}.
-#' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}. 
-#'   Automatically scaled by sqrt(100/max(peak_obs,100)) to allow more variance for smaller peaks.
-#' @param penalty_unmatched_peak Log-likelihood penalty for unmatched peaks; default \code{-3}.
-#'
+#' @param sigma_peak_log Base SD on log-scale for peak magnitude; default \code{0.5}.
 #' @param wis_quantiles Quantiles for WIS if enabled.
-#' @param cumulative_timepoints Fractions for cumulative progression; default \code{c(0.25,0.5,0.75,1)}.
+#' @param cumulative_timepoints Fractions for cumulative progression.
 #'
-#' @param enable_guardrails Logical; default \code{TRUE}.
-#' @param floor_likelihood Numeric; hard floor returned on violations. Default \code{-999999999}.
-#' @param guardrail_verbose Logical; print guardrail reasons.
-#' @param cumulative_over_ratio,cumulative_under_ratio Cumulative ratio bounds (default \code{10}, \code{0.1}).
-#' @param min_cumulative_for_check Minimum observed total to apply ratio checks; default \code{100}.
-#' @param max_timestep_ratio Maximum ratio of estimated to observed per timestep (default \code{100}).
-#' @param min_timestep_ratio Minimum ratio of estimated to observed per timestep (default \code{0.01}).
-#' @param min_obs_for_ratio Minimum observed value to apply per-timestep ratio checks
-#'   for cases (default \code{1}).
-#' @param min_obs_for_ratio_deaths Minimum observed value to apply per-timestep ratio
-#'   checks for deaths (default \code{10}). Higher than cases because death data is
-#'   typically sparse, and a single timestep with 1-2 observed deaths should not floor
-#'   the entire likelihood on a slight overprediction.
-#' @param negative_correlation_threshold Correlation floor; default \code{0} (requires positive correlation).
-#'
-#' @return Scalar total log-likelihood (finite) or \code{floor_likelihood} if floored.
-#'   May be \code{NA_real_} if all locations contribute nothing.
+#' @return Scalar total log-likelihood (finite), \code{-Inf} if non-finite,
+#'   or \code{NA_real_} if all locations contribute nothing.
 #' @export
 calc_model_likelihood <- function(obs_cases,
                                   est_cases,
@@ -79,40 +58,19 @@ calc_model_likelihood <- function(obs_cases,
                                   config           = NULL,
                                   nb_k_min_cases   = 3,
                                   nb_k_min_deaths  = 3,
-                                  zero_buffer      = TRUE,   # kept for compatibility
                                   verbose          = FALSE,
-                                  # ---- toggles (Balanced defaults) ----
-                                  add_max_terms         = TRUE,
-                                  add_peak_timing       = TRUE,
-                                  add_peak_magnitude    = TRUE,
-                                  add_cumulative_total  = TRUE,
-                                  add_wis               = TRUE,
-                                  # ---- component weights ----
-                                  weight_max_terms         = 0.5,
-                                  weight_peak_timing       = 0.5,
-                                  weight_peak_magnitude    = 0.5,
-                                  weight_cumulative_total  = 0.3,
-                                  weight_wis               = 0.8,
+                                  # ---- shape term weights (0 = OFF; 0.25 = 25% of NB core) ----
+                                  weight_peak_timing       = 0,
+                                  weight_peak_magnitude    = 0,
+                                  weight_cumulative_total  = 0,
+                                  weight_wis               = 0,
                                   # ---- peak controls ----
-                                  sigma_peak_time  = 1,  
+                                  sigma_peak_time  = 1,
                                   sigma_peak_log   = 0.5,
-                                  penalty_unmatched_peak = -3,
                                   # ---- WIS (optional) ----
                                   wis_quantiles      = c(0.025, 0.25, 0.5, 0.75, 0.975),
                                   # ---- cumulative progression ----
-                                  cumulative_timepoints = c(0.25, 0.5, 0.75, 1.0),
-                                  # ---- inline guardrails ----
-                                  enable_guardrails = TRUE,
-                                  floor_likelihood = -999999999,
-                                  guardrail_verbose = FALSE,
-                                  cumulative_over_ratio = 10,
-                                  cumulative_under_ratio = 0.1,
-                                  min_cumulative_for_check = 100,
-                                  negative_correlation_threshold = 0,
-                                  max_timestep_ratio = 100,
-                                  min_timestep_ratio = 0.01,
-                                  min_obs_for_ratio = 1,
-                                  min_obs_for_ratio_deaths = 10)
+                                  cumulative_timepoints = c(0.25, 0.5, 0.75, 1.0))
 {
      # --- basic checks ---
      if (!is.matrix(obs_cases) || !is.matrix(est_cases) ||
@@ -144,89 +102,24 @@ calc_model_likelihood <- function(obs_cases,
      if (any(weights_location < 0) || any(weights_time < 0)) stop("All weights must be >= 0.")
      if (sum(weights_location) == 0 || sum(weights_time) == 0) stop("weights_location and weights_time must not all be zero.")
 
-     # --- inline guardrails ---
-     if (enable_guardrails) {
-
-          # Vectorized per-timestep ratio checks
-          # Skip timesteps where est=0 (model startup delay); the cumulative check handles dead models.
-          # Check cases
-          ratio_cases <- est_cases / obs_cases
-          valid_cases <- is.finite(ratio_cases) & obs_cases >= min_obs_for_ratio & est_cases > 0
-          bad_cases <- which(valid_cases & (ratio_cases > max_timestep_ratio | ratio_cases < min_timestep_ratio),
-                            arr.ind = TRUE)
-          if (nrow(bad_cases) > 0) {
-               if (guardrail_verbose) {
-                    first <- bad_cases[1,]
-                    message(sprintf("Guardrail: timestep ratio violation at location %d, time %d (cases ratio=%.2f)",
-                                  first[1], first[2], ratio_cases[first[1], first[2]]))
-               }
-               return(floor_likelihood)
-          }
-
-          # Check deaths (higher threshold — sparse death data should not floor on 1-2 obs)
-          ratio_deaths <- est_deaths / obs_deaths
-          valid_deaths <- is.finite(ratio_deaths) & obs_deaths >= min_obs_for_ratio_deaths & est_deaths > 0
-          bad_deaths <- which(valid_deaths & (ratio_deaths > max_timestep_ratio | ratio_deaths < min_timestep_ratio),
-                             arr.ind = TRUE)
-          if (nrow(bad_deaths) > 0) {
-               if (guardrail_verbose) {
-                    first <- bad_deaths[1,]
-                    message(sprintf("Guardrail: timestep ratio violation at location %d, time %d (deaths ratio=%.2f)",
-                                  first[1], first[2], ratio_deaths[first[1], first[2]]))
-               }
-               return(floor_likelihood)
-          }
-
-          obs_cases_tot  <- rowSums(obs_cases,  na.rm = TRUE)
-          est_cases_tot  <- rowSums(est_cases,  na.rm = TRUE)
-          obs_deaths_tot <- rowSums(obs_deaths, na.rm = TRUE)
-          est_deaths_tot <- rowSums(est_deaths, na.rm = TRUE)
-
-          check_ratio <- function(o, e) {
-               ok <- is.finite(o) & is.finite(e) & (o >= min_cumulative_for_check)
-               r  <- rep(1, length(o)); r[ok] <- e[ok] / o[ok]  # Removed unnecessary pmax
-               any(r >= cumulative_over_ratio | r <= cumulative_under_ratio)
-          }
-          if (check_ratio(obs_cases_tot, est_cases_tot) ||
-              check_ratio(obs_deaths_tot, est_deaths_tot)) {
-               if (guardrail_verbose) message("Guardrail: cumulative over/under prediction.")
-               return(floor_likelihood)
-          }
-
-          # correlation screen
-          for (j in seq_len(n_locations)) {
-               fin_c <- is.finite(obs_cases[j, ]) & is.finite(est_cases[j, ])
-               fin_d <- is.finite(obs_deaths[j, ]) & is.finite(est_deaths[j, ])
-               if (sum(fin_c) >= 10) {  # Increased from 4 to 10 for reliable correlation
-                    cc <- suppressWarnings(stats::cor(obs_cases[j, fin_c], est_cases[j, fin_c]))
-                    if (is.finite(cc) && cc < negative_correlation_threshold) {
-                         if (guardrail_verbose) message(sprintf("Guardrail: negative correlation (cases) at location %d: %.3f", j, cc))
-                         return(floor_likelihood)
-                    }
-               }
-               if (sum(fin_d) >= 10) {  # Increased from 4 to 10 for reliable correlation
-                    cd <- suppressWarnings(stats::cor(obs_deaths[j, fin_d], est_deaths[j, fin_d]))
-                    if (is.finite(cd) && cd < negative_correlation_threshold) {
-                         if (guardrail_verbose) message(sprintf("Guardrail: negative correlation (deaths) at location %d: %.3f", j, cd))
-                         return(floor_likelihood)
-                    }
-               }
-          }
-     }
-
      # --- precompute peak indices per location (once, not per call) ---
      peak_indices_by_loc <- NULL
-     if ((add_peak_timing || add_peak_magnitude) && !is.null(config)) {
+     timestep_to_weeks <- 7  # default: daily timesteps, divide by 7 to get weeks
+     if ((weight_peak_timing > 0 || weight_peak_magnitude > 0) && !is.null(config)) {
           location_names <- config$location_name
           date_start_cfg <- config$date_start
           date_stop_cfg <- config$date_stop
 
           if (!is.null(location_names) && !is.null(date_start_cfg) && !is.null(date_stop_cfg)) {
-               # Build date sequence once
+               # Build date sequence once; detect timestep resolution
                date_seq <- seq(as.Date(date_start_cfg), as.Date(date_stop_cfg), by = "day")
                if (length(date_seq) != n_time_steps) {
                     date_seq <- seq(as.Date(date_start_cfg), as.Date(date_stop_cfg), by = "week")
-                    if (length(date_seq) != n_time_steps) date_seq <- NULL
+                    if (length(date_seq) != n_time_steps) {
+                         date_seq <- NULL
+                    } else {
+                         timestep_to_weeks <- 1  # weekly data: 1 timestep = 1 week
+                    }
                }
 
                if (!is.null(date_seq)) {
@@ -293,30 +186,32 @@ calc_model_likelihood <- function(obs_cases,
           ll_peak_time_c <- ll_peak_time_d <- 0
           ll_peak_mag_c <- ll_peak_mag_d <- 0
 
-          if ((add_peak_timing || add_peak_magnitude) && !is.null(peak_indices_by_loc)) {
+          if ((weight_peak_timing > 0 || weight_peak_magnitude > 0) && !is.null(peak_indices_by_loc)) {
                loc_peak_idx <- peak_indices_by_loc[[j]]
                if (length(loc_peak_idx) > 0) {
-                    if (add_peak_timing) {
+                    if (weight_peak_timing > 0) {
                          if (have_cases) {
                               ll_peak_time_c <- .calc_peak_timing_from_indices(
-                                   est_c, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak
+                                   est_c, loc_peak_idx, sigma_peak_time,
+                                   timestep_to_weeks = timestep_to_weeks
                               )
                          }
                          if (have_deaths) {
                               ll_peak_time_d <- .calc_peak_timing_from_indices(
-                                   est_d, loc_peak_idx, sigma_peak_time, penalty_unmatched_peak
+                                   est_d, loc_peak_idx, sigma_peak_time,
+                                   timestep_to_weeks = timestep_to_weeks
                               )
                          }
                     }
-                    if (add_peak_magnitude) {
+                    if (weight_peak_magnitude > 0) {
                          if (have_cases) {
                               ll_peak_mag_c <- .calc_peak_magnitude_from_indices(
-                                   obs_c, est_c, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
+                                   obs_c, est_c, loc_peak_idx, sigma_peak_log
                               )
                          }
                          if (have_deaths) {
                               ll_peak_mag_d <- .calc_peak_magnitude_from_indices(
-                                   obs_d, est_d, loc_peak_idx, sigma_peak_log, penalty_unmatched_peak
+                                   obs_d, est_d, loc_peak_idx, sigma_peak_log
                               )
                          }
                     }
@@ -325,22 +220,15 @@ calc_model_likelihood <- function(obs_cases,
 
           # Cumulative progression (using data-driven k)
           ll_cum_tot_c <- ll_cum_tot_d <- 0
-          if (add_cumulative_total) {
+          if (weight_cumulative_total > 0) {
                if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c, weights_time)
                if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d, weights_time)
           }
 
 
-          # Legacy max terms
-          ll_max_cases <- ll_max_deaths <- 0
-          if (add_max_terms) {
-               if (have_cases)  ll_max_cases  <- max_ll_poisson(obs_c, est_c)
-               if (have_deaths) ll_max_deaths <- max_ll_poisson(obs_d, est_d)
-          }
-
           # WIS (optional) — raw negated WIS; weight_wis applied at assembly (like other components)
           ll_wis_cases <- ll_wis_deaths <- 0
-          if (add_wis) {
+          if (weight_wis > 0) {
                if (have_cases) {
                     wis_c <- compute_wis_parametric_row(obs_c, est_c, weights_time, wis_quantiles, k_use = k_c)
                     if (is.finite(wis_c)) ll_wis_cases <- -wis_c
@@ -352,33 +240,50 @@ calc_model_likelihood <- function(obs_cases,
           }
 
 
-          # Assemble location total
+          # Assembly formula (per location j):
+          #
+          # All shape terms are T-normalized so weights share a common scale
+          # (w = 0.25 means ~25% of NB core influence):
+          #   - NB core: sums T per-timestep NB terms → O(T). No scaling.
+          #   - Peaks: sum of N_peaks terms → O(N_peaks). Scaled by T/N_peaks → O(T).
+          #   - Cumulative: mean of 4 NB-on-cumulative-sums terms → O(log T).
+          #     Scaled by T → O(T).
+          #   - WIS: time-averaged scoring rule → O(1). Scaled by T → O(T).
+          #
+          #   ll_loc = wc * NB_cases + wd * NB_deaths                              [core, O(T)]
+          #     + (T/N_peaks) * w_pt  * (wc * pt_c  + wd * pt_d)                  [peaks]
+          #     + (T/N_peaks) * w_pm  * (wc * pm_c  + wd * pm_d)                  [peaks]
+          #     + T           * w_cum * (wc * cum_c + wd * cum_d)                  [cumulative]
+          #     + T           * w_wis * (wc * wis_c + wd * wis_d)                 [WIS]
+          #
+          #   ll_total = sum(weights_location[j] * ll_loc[j])
+          #
+          # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component.
+          T_obs <- n_time_steps
+
+          # Peak scale: T / N_peaks (number of matched peaks for this location)
+          n_peaks_j <- if (!is.null(peak_indices_by_loc)) length(peak_indices_by_loc[[j]]) else 0L
+          peak_scale <- if (n_peaks_j > 0) T_obs / n_peaks_j else 0
+
           ll_loc_core <-
                weight_cases  * ll_cases +
                weight_deaths * ll_deaths
 
-          ll_loc_max <-
-               weight_max_terms * (weight_cases * ll_max_cases + weight_deaths * ll_max_deaths)
-
           ll_loc_peaks <-
-               weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
-               weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
+               peak_scale * weight_peak_timing    * (weight_cases * ll_peak_time_c + weight_deaths * ll_peak_time_d) +
+               peak_scale * weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
 
           ll_loc_cum <-
-               weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
+               T_obs * weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
           ll_loc_wis <-
-               weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
+               T_obs * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
 
-          ll_loc_total <- ll_loc_core
-          if (add_max_terms)                         ll_loc_total <- ll_loc_total + ll_loc_max
-          if (add_peak_timing || add_peak_magnitude) ll_loc_total <- ll_loc_total + ll_loc_peaks
-          if (add_cumulative_total)                  ll_loc_total <- ll_loc_total + ll_loc_cum
-          if (add_wis)                               ll_loc_total <- ll_loc_total + ll_loc_wis
+          ll_loc_total <- ll_loc_core + ll_loc_peaks + ll_loc_cum + ll_loc_wis
 
+          # Non-finite safety net: -Inf gets zero importance weight
           if (!is.finite(ll_loc_total)) {
-               if (guardrail_verbose) message(sprintf("Non-finite LL at location %d; applying per-location penalty.", j))
-               ll_locations[j] <- weights_location[j] * floor_likelihood
+               ll_locations[j] <- -Inf
                next
           }
 
@@ -386,12 +291,8 @@ calc_model_likelihood <- function(obs_cases,
 
           if (verbose) {
                message(sprintf(
-                    "Location %d: core=%.2f | max=%.2f | peaks=%.2f | cum=%.2f | wis=%.2f -> weighted=%.2f",
-                    j, ll_loc_core,
-                    if (add_max_terms) ll_loc_max else 0,
-                    if ((add_peak_timing || add_peak_magnitude)) ll_loc_peaks else 0,
-                    if (add_cumulative_total) ll_loc_cum else 0,
-                    if (add_wis) ll_loc_wis else 0,
+                    "Location %d: core=%.2f | peaks=%.2f | cum=%.2f | wis=%.2f -> weighted=%.2f",
+                    j, ll_loc_core, ll_loc_peaks, ll_loc_cum, ll_loc_wis,
                     weights_location[j] * ll_loc_total
                ))
           }
@@ -403,7 +304,7 @@ calc_model_likelihood <- function(obs_cases,
      }
 
      ll_total <- sum(ll_locations, na.rm = TRUE)
-     if (!is.finite(ll_total)) ll_total <- floor_likelihood
+     if (!is.finite(ll_total)) ll_total <- -Inf
      if (verbose) message(sprintf("Overall total log-likelihood: %.2f", ll_total))
      ll_total
 }
@@ -426,28 +327,24 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 
 # Peak timing likelihood from precomputed indices
 .calc_peak_timing_from_indices <- function(est_vec, peak_indices, sigma_peak_time = 1,
-                                           penalty_unmatched = -3) {
+                                           timestep_to_weeks = 7) {
      ll_total <- 0
-     n_matched <- 0
      n_ts <- length(est_vec)
      for (peak_idx in peak_indices) {
           window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
           if (length(window) > 2L) {
                est_peak_idx <- window[which.max(est_vec[window])]
-               time_diff <- (est_peak_idx - peak_idx) / 7
+               time_diff <- (est_peak_idx - peak_idx) / timestep_to_weeks
                ll_total <- ll_total + stats::dnorm(time_diff, 0, sigma_peak_time, log = TRUE)
-               n_matched <- n_matched + 1L
           }
      }
-     ll_total + (length(peak_indices) - n_matched) * penalty_unmatched
+     ll_total
 }
 
 # Peak magnitude likelihood from precomputed indices
 .calc_peak_magnitude_from_indices <- function(obs_vec, est_vec, peak_indices,
-                                              sigma_peak_log = 0.5,
-                                              penalty_unmatched = -3) {
+                                              sigma_peak_log = 0.5) {
      ll_total <- 0
-     n_matched <- 0
      n_ts <- length(obs_vec)
      for (peak_idx in peak_indices) {
           window <- max(1L, peak_idx - 14L):min(n_ts, peak_idx + 14L)
@@ -460,11 +357,10 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
                     ll_total <- ll_total + stats::dnorm(
                          log(est_peak_val) - log(obs_peak_val), 0, adaptive_sigma, log = TRUE
                     )
-                    n_matched <- n_matched + 1L
                }
           }
      }
-     ll_total + (length(peak_indices) - n_matched) * penalty_unmatched
+     ll_total
 }
 
 # --- Legacy peak helpers (retained for external/standalone use) ---
@@ -472,8 +368,7 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 # Peak timing likelihood using epidemic_peaks data
 calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                      date_start = NULL, date_stop = NULL,
-                                     sigma_peak_time = 1,
-                                     penalty_unmatched = -3) {
+                                     sigma_peak_time = 1) {
      # Use lazy-loaded package data (cached in namespace after first access)
      epidemic_peaks <- MOSAIC::epidemic_peaks
 
@@ -519,18 +414,13 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
           }
      }
 
-     # Penalize if not all peaks were matched
-     n_unmatched <- length(peak_indices) - n_matched
-     ll_total <- ll_total + n_unmatched * penalty_unmatched
-
      return(ll_total)
 }
 
 # Peak magnitude likelihood using epidemic_peaks data
 calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                         date_start = NULL, date_stop = NULL,
-                                        sigma_peak_log = 0.5,
-                                        penalty_unmatched = -3) {
+                                        sigma_peak_log = 0.5) {
      # Use lazy-loaded package data (cached in namespace after first access)
      epidemic_peaks <- MOSAIC::epidemic_peaks
 
@@ -583,10 +473,6 @@ calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
           }
      }
      
-     # Penalize if not all peaks were matched
-     n_unmatched <- length(peak_indices) - n_matched
-     ll_total <- ll_total + n_unmatched * penalty_unmatched
-     
      return(ll_total)
 }
 
@@ -595,8 +481,7 @@ ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
-                                         weights_time = NULL,
-                                         per_tp_ll_floor = -1e9) {
+                                         weights_time = NULL) {
      n <- length(obs_vec)
 
      # Use weights if provided
@@ -615,8 +500,6 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           # Scale k proportionally to the number of summed timesteps.
           # For independent NB(mu_i, k) variables, the sum's dispersion ≈ k * n_summed
           # (exact for identical means; reasonable upper bound for varying means).
-          # This replaces the previous fixed k_data * 2 which was always wrong
-          # except when end_idx == 2.
           cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
                k_data * end_idx
           } else {
@@ -624,40 +507,38 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           }
 
           # Use plain cumulative sums (NA-safe).
-          # weights_time is for masking non-observed timesteps in the core NB
-          # likelihood, but the cumulative term needs actual totals — using a
-          # weighted mean times end_idx would inflate the sum proportionally to
-          # the fraction of NA timesteps (e.g. 50% NAs → 2× inflation).
           idx_range <- seq_len(end_idx)
           o_cum <- sum(obs_vec[idx_range], na.rm = TRUE)
           e_cum <- sum(est_vec[idx_range], na.rm = TRUE)
 
           if (!is.finite(o_cum) || !is.finite(e_cum)) next
-          if (e_cum <= 0 && o_cum > 0) { n_vals <- n_vals + 1L; vals[n_vals] <- per_tp_ll_floor; next }
-          e_cum <- if (e_cum <= 0) .Machine$double.eps else e_cum
+
+          # Handle zero prediction the same way as the core NB:
+          # proportional penalty for zero est with nonzero obs
+          if (e_cum <= 0 && o_cum > 0) {
+               n_vals <- n_vals + 1L
+               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
+               next
+          }
+          e_cum <- if (e_cum <= 0) 1e-10 else e_cum
+
           ll_tp <- stats::dnbinom(round(o_cum), mu = e_cum, size = cum_k, log = TRUE)
-          if (!is.finite(ll_tp)) ll_tp <- per_tp_ll_floor
+          if (!is.finite(ll_tp)) {
+               # Non-finite NB result: use proportional penalty as fallback
+               n_vals <- n_vals + 1L
+               vals[n_vals] <- (-round(o_cum) * log(1e6)) / end_idx
+               next
+          }
+          # Normalize by end_idx to convert from "LL of sum of end_idx obs"
+          # to "per-observation LL". This makes the helper output O(1),
+          # allowing uniform T-scaling at assembly like other shape terms.
           n_vals <- n_vals + 1L
-          vals[n_vals] <- ll_tp
+          vals[n_vals] <- ll_tp / end_idx
      }
-     if (n_vals == 0L) return(per_tp_ll_floor)
+     if (n_vals == 0L) return(0)  # No valid timepoints: contribute nothing
      mean(vals[seq_len(n_vals)])
 }
 
-
-# Legacy max-term Poisson
-max_ll_poisson <- function(obs_vec, est_vec) {
-     obs_max <- suppressWarnings(max(obs_vec, na.rm = TRUE))
-     est_max <- suppressWarnings(max(est_vec, na.rm = TRUE))
-     if (!is.finite(obs_max) || !is.finite(est_max)) return(0)
-     MOSAIC::calc_log_likelihood(
-          observed  = round(pmax(obs_max, 0)),
-          estimated = pmax(est_max, 1e-10),
-          family    = "poisson",
-          weights   = NULL,
-          verbose   = FALSE
-     )
-}
 
 # WIS helper (uses fixed k from core, or Poisson if Inf)
 compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
@@ -684,12 +565,16 @@ compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
      if (has_med) {
           # Fix: qfun returns a vector, need element-wise operations
           q_med <- qfun(0.5)
-          mae_term <- sum(abs(y - q_med) * w_use, na.rm = TRUE) / sum(w_use)
+          mae_term <- 0.5 * sum(abs(y - q_med) * w_use, na.rm = TRUE) / sum(w_use)
      }
      
      lowers <- probs[probs < 0.5]
      uppers <- probs[probs > 0.5]
-     pairs <- lapply(lowers, function(p) c(p, if ((1 - p) %in% uppers) (1 - p) else uppers[which.min(abs(uppers - (1 - p)))]))
+     pairs <- lapply(lowers, function(p) {
+          complement <- 1 - p
+          match_idx <- which(abs(uppers - complement) < 1e-8)
+          c(p, if (length(match_idx) > 0) uppers[match_idx[1]] else uppers[which.min(abs(uppers - complement))])
+     })
      K <- length(pairs)
      sum_IS <- 0
      

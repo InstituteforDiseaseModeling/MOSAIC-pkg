@@ -96,19 +96,9 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
   .validate_posteriors_structure(posteriors, label = "posteriors")
 
   # ---------------------------------------------------------------------------
-  # Canonical distribution parameter fields (mirrors calc_model_posterior_distributions)
+  # Canonical distribution parameter fields (shared with calc_model_posterior_distributions)
   # ---------------------------------------------------------------------------
-  dist_core_fields <- list(
-    beta       = c("shape1", "shape2"),
-    gamma      = c("shape", "rate"),
-    lognormal  = c("meanlog", "sdlog"),
-    normal     = c("mean", "sd"),
-    truncnorm  = c("mean", "sd", "a", "b"),
-    uniform    = c("min", "max"),
-    gompertz   = c("b", "eta"),
-    fixed      = c("value"),
-    frozen     = c("value")
-  )
+  dist_core_fields <- .mosaic_dist_core_fields()
 
   # ---------------------------------------------------------------------------
   # Start from a deep copy of priors (base of the output)
@@ -170,7 +160,8 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
         next
       }
 
-      # Guard: reject distribution family changes (except when prior is uniform).
+      # Guard: reject distribution family changes (except when prior is uniform
+      # or posterior is "fixed" — zero-variance posteriors replace any prior).
       # A posterior fitted as e.g. gompertz replacing a lognormal prior can
       # produce pathological parameter values after further processing
       # (inflate_priors, staged estimation). Only uniform priors are allowed to
@@ -178,6 +169,7 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
       # continuous distribution is an improvement.
       prior_dist <- updated$parameters_global[[param_name]]$distribution
       if (!is.null(prior_dist) &&
+          !identical(tolower(dist_type), "fixed") &&
           !identical(tolower(prior_dist), "uniform") &&
           !identical(tolower(dist_type), tolower(prior_dist))) {
         if (verbose) message("  [KEEP PRIOR] ", param_name,
@@ -257,9 +249,11 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
           next
         }
 
-        # Guard: reject distribution family changes (except when prior is uniform)
+        # Guard: reject distribution family changes (except when prior is uniform
+        # or posterior is "fixed")
         prior_dist_loc <- updated$parameters_location[[param_base]]$location[[iso]]$distribution
         if (!is.null(prior_dist_loc) &&
+            !identical(tolower(dist_type), "fixed") &&
             !identical(tolower(prior_dist_loc), "uniform") &&
             !identical(tolower(dist_type), tolower(prior_dist_loc))) {
           if (verbose) message("  [KEEP PRIOR] ", param_base, "_", iso,
