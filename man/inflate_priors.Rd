@@ -75,6 +75,5 @@ variance inflated, distribution refit via MLE.}
 }
 
 \seealso{
-\code{\link{update_priors_from_posteriors}},
-\code{\link{mosaic_adaptive_s3_weights}}
+\code{\link{update_priors_from_posteriors}}
 }

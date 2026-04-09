@@ -87,8 +87,6 @@ calc_model_ensemble <- function(config,
 
   } else if (!is.null(parameter_seeds)) {
     # Sampling mode: generate configs from seeds
-    if (is.null(priors)) stop("priors required when using parameter_seeds")
-    if (is.null(PATHS)) stop("PATHS required when using parameter_seeds")
 
     # Filter to non-zero weights if provided
     if (!is.null(parameter_weights)) {
@@ -106,38 +104,54 @@ calc_model_ensemble <- function(config,
       if (length(parameter_seeds) == 0) stop("No parameter sets with non-zero weights")
     }
 
-    if (verbose) {
-      message("Sampling ", length(parameter_seeds), " parameter sets (",
-              length(parameter_seeds) * n_simulations_per_config, " total sims)...")
-    }
+    n_param_sets <- length(parameter_seeds)
 
-    param_configs <- vector("list", length(parameter_seeds))
-    if (verbose) {
-      pb <- utils::txtProgressBar(min = 0, max = length(parameter_seeds), style = 1,
-                                  char = "\u2588")
-    }
-    for (i in seq_along(parameter_seeds)) {
-      if (verbose) utils::setTxtProgressBar(pb, i)
-      param_configs[[i]] <- tryCatch(
-        sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                          seed = parameter_seeds[i], sample_args = sampling_args,
-                          verbose = FALSE),
-        error = function(e) {
-          warning("Failed to sample parameters with seed ", parameter_seeds[i],
-                  ": ", e$message)
-          NULL
-        }
-      )
-    }
-    if (verbose) close(pb)
+    if (!is.null(precomputed_results)) {
+      # Precomputed mode: skip sampling, metadata comes from base config
+      if (verbose) {
+        message("Precomputed results provided -- skipping parameter sampling for ",
+                n_param_sets, " seeds")
+      }
+      param_configs <- list(config)
 
-    param_configs <- Filter(Negate(is.null), param_configs)
-    n_param_sets <- length(param_configs)
-    if (n_param_sets == 0) stop("All parameter sampling attempts failed")
+    } else {
+      # Full sampling mode: generate configs from seeds for simulation
+      if (is.null(priors)) stop("priors required when using parameter_seeds")
+      if (is.null(PATHS)) stop("PATHS required when using parameter_seeds")
 
-    if (n_param_sets < length(parameter_seeds) && verbose) {
-      message("Warning: ", length(parameter_seeds) - n_param_sets,
-              " parameter sets failed to sample")
+      if (verbose) {
+        message("Sampling ", n_param_sets, " parameter sets (",
+                n_param_sets * n_simulations_per_config, " total sims)...")
+      }
+
+      param_configs <- vector("list", n_param_sets)
+      if (verbose) {
+        pb <- utils::txtProgressBar(min = 0, max = n_param_sets, style = 1,
+                                    char = "\u2588")
+      }
+      for (i in seq_along(parameter_seeds)) {
+        if (verbose) utils::setTxtProgressBar(pb, i)
+        param_configs[[i]] <- tryCatch(
+          sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                            seed = parameter_seeds[i], sample_args = sampling_args,
+                            verbose = FALSE),
+          error = function(e) {
+            warning("Failed to sample parameters with seed ", parameter_seeds[i],
+                    ": ", e$message)
+            NULL
+          }
+        )
+      }
+      if (verbose) close(pb)
+
+      param_configs <- Filter(Negate(is.null), param_configs)
+      n_param_sets <- length(param_configs)
+      if (n_param_sets == 0) stop("All parameter sampling attempts failed")
+
+      if (n_param_sets < length(parameter_seeds) && verbose) {
+        message("Warning: ", length(parameter_seeds) - n_param_sets,
+                " parameter sets failed to sample")
+      }
     }
 
   } else {
@@ -334,22 +348,6 @@ calc_model_ensemble <- function(config,
   # Weighted statistics aggregation
   # ===========================================================================
 
-  # Weighted quantile helper
-  weighted_quantile <- function(x, weights, probs) {
-    na_idx <- is.na(x) | is.na(weights)
-    x <- x[!na_idx]; weights <- weights[!na_idx]
-    if (length(x) == 0L || all(weights == 0)) return(rep(NA_real_, length(probs)))
-    ord <- order(x); x <- x[ord]; weights <- weights[ord]
-    weights <- weights / sum(weights)
-    cum_weights <- cumsum(weights)
-    vapply(probs, function(p) {
-      if (p == 0) return(min(x))
-      if (p == 1) return(max(x))
-      idx <- which(cum_weights >= p)[1L]
-      if (is.na(idx)) max(x) else x[idx]
-    }, numeric(1L))
-  }
-
   calculate_overall_stats <- function(data_array) {
     dims <- dim(data_array)
     n_locs <- dims[1L]; n_times <- dims[2L]
@@ -371,9 +369,9 @@ calc_model_ensemble <- function(config,
       for (j in seq_len(n_times)) {
         values <- as.vector(data_array[i, j, , ])
         stats_mean[i, j]   <- sum(values * sim_weights, na.rm = TRUE)
-        stats_median[i, j] <- weighted_quantile(values, sim_weights, 0.5)
+        stats_median[i, j] <- weighted_quantiles(values, sim_weights, 0.5)
 
-        all_q <- weighted_quantile(values, sim_weights, envelope_quantiles)
+        all_q <- weighted_quantiles(values, sim_weights, envelope_quantiles)
         for (ci_idx in seq_len(n_ci_pairs)) {
           lower_idx <- ci_idx
           upper_idx <- length(envelope_quantiles) - ci_idx + 1L

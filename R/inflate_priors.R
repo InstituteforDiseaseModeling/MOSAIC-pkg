@@ -54,8 +54,7 @@
 #'
 #' @return A priors list with inflated distribution parameters. Metadata updated.
 #'
-#' @seealso \code{\link{update_priors_from_posteriors}},
-#'   \code{\link{mosaic_adaptive_s3_weights}}
+#' @seealso \code{\link{update_priors_from_posteriors}}
 #'
 #' @export
 inflate_priors <- function(priors,

@@ -287,8 +287,10 @@
 
     if (any(valid_ll)) {
       collapsed_ll <- calc_log_mean_exp(likelihoods[valid_ll])
-      collapsed_params <- colMeans(result_matrix[valid_ll, param_names_all, drop = FALSE], na.rm = TRUE)
-      collapsed_row <- c(sim_id, 1, sim_id, result_matrix[1, "seed_iter"], collapsed_ll, collapsed_params)
+      # Parameters are identical across iterations (sampled once per sim), so take row 1 instead of averaging
+      collapsed_params <- result_matrix[1, param_names_all]
+      # seed_iter is NA for collapsed rows since they represent all iterations, not just iteration 1
+      collapsed_row <- c(sim_id, 1, sim_id, NA_real_, collapsed_ll, collapsed_params)
       result_matrix <- matrix(collapsed_row, nrow = 1)
       colnames(result_matrix) <- c('sim', 'iter', 'seed_sim', 'seed_iter', 'likelihood', param_names_all)
     } else {
@@ -1630,8 +1632,9 @@ run_MOSAIC <- function(config,
       rep(NA_real_, nrow(results))
     },
     # w_tilde: normalized importance weights (sum to 1 over best subset)
-    # w: unnormalized weights scaled to n (w = w_tilde * n, for ESS calcs)
     w_tilde = results$weight_best,
+    # w: unnormalized weights = w_tilde * N_total (not N_best_subset).
+    # The Kish ESS formula is invariant to this constant multiplier.
     w = results$weight_best * nrow(results),
     retained = results$is_best_subset,
     # Additional columns for two-tier structure
@@ -1650,11 +1653,6 @@ run_MOSAIC <- function(config,
 
   if (control$paths$plots) {
     log_msg("Generating convergence diagnostic plots...")
-    plot_model_convergence(
-      results_dir = dirs$cal_diag,
-      plots_dir = dirs$res_fig_diag,
-      verbose = control$logging$verbose
-    )
     plot_model_convergence_status(
       results_dir = dirs$cal_diag,
       plots_dir = dirs$res_fig_diag,
@@ -1811,7 +1809,6 @@ run_MOSAIC <- function(config,
   # The client was disconnected before R-heavy post-processing. Now reconnect
   # to the same (still-alive) cluster to dispatch ensemble + stochastic sims.
 
-  n_ensemble_r2   <- control$predictions$best_model_n_sims
   postca_dask     <- NULL
 
   if (use_dask && !is.null(dask_cluster)) {
@@ -1831,11 +1828,12 @@ run_MOSAIC <- function(config,
 
       if (sum(results$is_best_subset) > 0) {
         best_subset_results <- results[results$is_best_subset == TRUE, ]
-        stoch_param_seeds   <- best_subset_results$seed_sim
-        stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+        nonzero <- best_subset_results$weight_best > 0
+        stoch_param_seeds   <- best_subset_results$seed_sim[nonzero]
+        stoch_param_weights <- best_subset_results$weight_best[nonzero]
 
         if (length(stoch_param_weights) > 0) {
-          stoch_param_configs <- lapply(stoch_param_seeds[stoch_param_weights > 0], function(seed_i) {
+          stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
             tryCatch(
               sample_parameters(PATHS = PATHS, priors = priors, config = config,
                                 seed = seed_i, sample_args = sampling_args, verbose = FALSE),
@@ -1852,7 +1850,6 @@ run_MOSAIC <- function(config,
         mosaic_worker    = mosaic_worker,
         config_best      = config_best,
         param_configs    = stoch_param_configs,
-        n_ensemble       = n_ensemble_r2,
         n_stochastic_per = n_stochastic_per,
         log_msg          = log_msg
       )
@@ -1899,8 +1896,9 @@ run_MOSAIC <- function(config,
 
   if (sum(results$is_best_subset) > 0) {
     best_subset_results <- results[results$is_best_subset == TRUE, ]
-    param_seeds   <- best_subset_results$seed_sim
-    param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+    nonzero <- best_subset_results$weight_best > 0
+    param_seeds   <- best_subset_results$seed_sim[nonzero]
+    param_weights <- best_subset_results$weight_best[nonzero]
 
     if (length(param_weights) > 0) {
       param_weights <- param_weights / sum(param_weights)
@@ -2486,7 +2484,6 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default prediction settings
   default_predictions <- list(
-    best_model_n_sims = 10L,            # Stochastic runs for best model
     ensemble_n_param_sets = 50L,        # Number of parameter sets in ensemble
     ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
   )
