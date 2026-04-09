@@ -287,8 +287,10 @@
 
     if (any(valid_ll)) {
       collapsed_ll <- calc_log_mean_exp(likelihoods[valid_ll])
-      collapsed_params <- colMeans(result_matrix[valid_ll, param_names_all, drop = FALSE], na.rm = TRUE)
-      collapsed_row <- c(sim_id, 1, sim_id, result_matrix[1, "seed_iter"], collapsed_ll, collapsed_params)
+      # Parameters are identical across iterations (sampled once per sim), so take row 1 instead of averaging
+      collapsed_params <- result_matrix[1, param_names_all]
+      # seed_iter is NA for collapsed rows since they represent all iterations, not just iteration 1
+      collapsed_row <- c(sim_id, 1, sim_id, NA_real_, collapsed_ll, collapsed_params)
       result_matrix <- matrix(collapsed_row, nrow = 1)
       colnames(result_matrix) <- c('sim', 'iter', 'seed_sim', 'seed_iter', 'likelihood', param_names_all)
     } else {
@@ -1629,8 +1631,9 @@ run_MOSAIC <- function(config,
       rep(NA_real_, nrow(results))
     },
     # w_tilde: normalized importance weights (sum to 1 over best subset)
-    # w: unnormalized weights scaled to n (w = w_tilde * n, for ESS calcs)
     w_tilde = results$weight_best,
+    # w: unnormalized weights = w_tilde * N_total (not N_best_subset).
+    # The Kish ESS formula is invariant to this constant multiplier.
     w = results$weight_best * nrow(results),
     retained = results$is_best_subset,
     # Additional columns for two-tier structure
@@ -1836,11 +1839,12 @@ run_MOSAIC <- function(config,
 
       if (control$paths$plots && sum(results$is_best_subset) > 0) {
         best_subset_results <- results[results$is_best_subset == TRUE, ]
-        stoch_param_seeds   <- best_subset_results$seed_sim
-        stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+        nonzero <- best_subset_results$weight_best > 0
+        stoch_param_seeds   <- best_subset_results$seed_sim[nonzero]
+        stoch_param_weights <- best_subset_results$weight_best[nonzero]
 
         if (length(stoch_param_weights) > 0) {
-          stoch_param_configs <- lapply(stoch_param_seeds[stoch_param_weights > 0], function(seed_i) {
+          stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
             tryCatch(
               sample_parameters(PATHS = PATHS, priors = priors, config = config,
                                 seed = seed_i, sample_args = sampling_args, verbose = FALSE),
@@ -2034,8 +2038,9 @@ run_MOSAIC <- function(config,
   if (control$paths$plots && sum(results$is_best_subset) > 0) {
     log_msg("Generating parameter uncertainty ensemble (posterior parameter configs × stochastic LASER)...")
     best_subset_results <- results[results$is_best_subset == TRUE, ]
-    param_seeds <- best_subset_results$seed_sim
-    param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+    nonzero <- best_subset_results$weight_best > 0
+    param_seeds <- best_subset_results$seed_sim[nonzero]
+    param_weights <- best_subset_results$weight_best[nonzero]
 
     if (length(param_weights) > 0) {
       param_weights <- param_weights / sum(param_weights)
