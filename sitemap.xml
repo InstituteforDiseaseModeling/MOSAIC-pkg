@@ -86,8 +86,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_R.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_R_location.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_S.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2_location.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.html</loc></url>
@@ -217,7 +215,6 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccination_maps.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccine_effectiveness.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vibrio_decay_rate.html</loc></url>
-<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_initial_conditions.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_initial_conditions_S.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_priors.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.html</loc></url>

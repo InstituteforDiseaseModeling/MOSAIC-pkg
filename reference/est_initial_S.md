@@ -126,8 +126,6 @@ The function implements a constrained residual approach:
 
 ## See also
 
-[`est_initial_V1_V2`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
-for vaccination compartment estimation
 [`est_initial_E_I`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_E_I.md)
 for infection compartment estimation
 [`est_initial_R`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_R.md)
@@ -139,7 +137,7 @@ for Beta distribution fitting with CI constraints
 
 ``` r
 if (FALSE) { # \dontrun{
-# After running est_initial_V1_V2, est_initial_E_I, est_initial_R
+# After running est_initial_E_I, est_initial_R
 PATHS <- get_paths()
 priors_updated <- priors_default  # With updated V1,V2,E,I,R compartments
 

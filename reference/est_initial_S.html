@@ -13,7 +13,7 @@ ensuring mathematical consistency while propagating uncertainty from all compart
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.10</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.11</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -134,8 +134,7 @@ Values &gt; 1 increase uncertainty while preserving the mean. For example, 2 dou
 </ul></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="est_initial_V1_V2.html">est_initial_V1_V2</a></code> for vaccination compartment estimation
-<code><a href="est_initial_E_I.html">est_initial_E_I</a></code> for infection compartment estimation
+    <div class="dont-index"><p><code><a href="est_initial_E_I.html">est_initial_E_I</a></code> for infection compartment estimation
 <code><a href="est_initial_R.html">est_initial_R</a></code> for recovered compartment estimation
 <code><a href="fit_beta_from_ci.html">fit_beta_from_ci</a></code> for Beta distribution fitting with CI constraints</p></div>
     </div>
@@ -143,7 +142,7 @@ Values &gt; 1 increase uncertainty while preserving the mean. For example, 2 dou
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># After running est_initial_V1_V2, est_initial_E_I, est_initial_R</span></span></span>
+<span class="r-in"><span><span class="co"># After running est_initial_E_I, est_initial_R</span></span></span>
 <span class="r-in"><span><span class="va">PATHS</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_paths.html">get_paths</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">priors_updated</span> <span class="op">&lt;-</span> <span class="va">priors_default</span>  <span class="co"># With updated V1,V2,E,I,R compartments</span></span></span>
 <span class="r-in"><span></span></span>

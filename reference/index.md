@@ -83,10 +83,6 @@ Estimation and fitting functions
   : Estimate Initial R Compartment for Single Location
 - [`est_initial_S()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_S.md)
   : Estimate Initial S Compartment from Other Compartment Priors
-- [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
-  : Estimate Initial V1 and V2 Compartments for All Locations
-- [`est_initial_V1_V2_location()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2_location.md)
-  : Estimate Initial V1 and V2 Compartments for a Location
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
@@ -683,10 +679,6 @@ Other exported functions and internal helpers
   : Estimate Initial R Compartment for Single Location
 - [`est_initial_S()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_S.md)
   : Estimate Initial S Compartment from Other Compartment Priors
-- [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
-  : Estimate Initial V1 and V2 Compartments for All Locations
-- [`est_initial_V1_V2_location()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2_location.md)
-  : Estimate Initial V1 and V2 Compartments for a Location
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
@@ -955,8 +947,6 @@ Other exported functions and internal helpers
   : Plot Vaccine Effectiveness Decay and Prior Distributions
 - [`plot_vibrio_decay_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vibrio_decay_rate.md)
   : Plot Vibrio Decay Rate as a Function of Environmental Suitability
-- [`print(`*`<mosaic_initial_conditions>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_initial_conditions.md)
-  : Print method for mosaic_initial_conditions
 - [`print(`*`<mosaic_initial_conditions_S>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_initial_conditions_S.md)
   : Print method for S compartment initial conditions
 - [`print(`*`<mosaic_priors>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_priors.md)
