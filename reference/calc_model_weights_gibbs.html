@@ -60,7 +60,7 @@ where \(x_m\) is the loss (or information criterion) for model \(m\) and
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="va">x</span>, <span class="va">temperature</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="va">x</span>, <span class="va">eta</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -71,7 +71,7 @@ where \(x_m\) is the loss (or information criterion) for model \(m\) and
 <dd><p>Numeric vector of model scores (treated as loss-like; lower is better).</p></dd>
 
 
-<dt id="arg-temperature">temperature<a class="anchor" aria-label="anchor" href="#arg-temperature"></a></dt>
+<dt id="arg-eta">eta<a class="anchor" aria-label="anchor" href="#arg-eta"></a></dt>
 <dd><p>Non-negative scalar inverse temperature \(\eta\). Higher
 values concentrate weight on the best models; lower values flatten weights.
 Typical choices: <code>0.5</code> for \(\Delta\)AIC (Akaike weights),
@@ -82,6 +82,11 @@ Typical choices: <code>0.5</code> for \(\Delta\)AIC (Akaike weights),
 <dd><p>Logical; if <code>TRUE</code>, prints brief diagnostics (range of
 <code>x</code>, applied shift, entropy, and effective number of models).</p></dd>
 
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Reserved for backward compatibility. The deprecated argument
+<code>temperature</code> is accepted here and mapped to <code>eta</code> with a warning.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -91,17 +96,17 @@ Names are preserved when present.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>This function is agnostic to the specific form of \(x\); smaller values are
-assumed to indicate better models. Common choices include:</p><ul><li><p>\(x = \Delta \mathrm{AIC}\) \; (use <code>temperature = 1/2</code> to
+assumed to indicate better models. Common choices include:</p><ul><li><p>\(x = \Delta \mathrm{AIC}\) \; (use <code>eta = 1/2</code> to
 recover Akaike weights),</p></li>
-<li><p>\(x = -\log L\) \; (use <code>temperature = 1</code> for normalized likelihood weights),</p></li>
+<li><p>\(x = -\log L\) \; (use <code>eta = 1</code> for normalized likelihood weights),</p></li>
 <li><p>Cross-validated losses (e.g., RMSE, MSLE), or any proper scoring rule.</p></li>
 </ul><p>If you start from a higher-is-better score (e.g., log-likelihood), pass
 <code>x = -score</code> so that lower-is-better holds.</p>
 <p>Numerical stability: the implementation subtracts \(\min(x)\) prior to
 exponentiation; this shift leaves the normalized weights unchanged but helps
 avoid underflow/overflow.</p>
-<p>Special cases:</p><ul><li><p><code>temperature = 0</code>: uniform weights.</p></li>
-<li><p><code>temperature = Inf</code>: hard selection (ties share weight equally).</p></li>
+<p>Special cases:</p><ul><li><p><code>eta = 0</code>: uniform weights.</p></li>
+<li><p><code>eta = Inf</code>: hard selection (ties share weight equally).</p></li>
 <li><p>All <code>x</code> equal: uniform weights.</p></li>
 </ul></div>
     <div class="section level2">
@@ -114,29 +119,29 @@ A general framework for updating belief distributions.
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Three models with Delta AIC = (0, 2, 6): Akaike weights via temperature = 0.5</span></span></span>
-<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">2</span>, <span class="fl">6</span><span class="op">)</span>, temperature <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Three models with Delta AIC = (0, 2, 6): Akaike weights via eta = 0.5</span></span></span>
+<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">2</span>, <span class="fl">6</span><span class="op">)</span>, eta <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.70538451 0.25949646 0.03511903</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># From negative log-likelihoods: normalized likelihood weights with temperature = 1</span></span></span>
-<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">120.3</span>, <span class="fl">121.1</span>, <span class="fl">124.8</span><span class="op">)</span>, temperature <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># From negative log-likelihoods: normalized likelihood weights with eta = 1</span></span></span>
+<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">120.3</span>, <span class="fl">121.1</span>, <span class="fl">124.8</span><span class="op">)</span>, eta <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.68472611 0.30766727 0.00760662</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Using a CV loss (lower is better) with moderate sharpness</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">losses</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>A <span class="op">=</span> <span class="fl">0.83</span>, B <span class="op">=</span> <span class="fl">0.81</span>, C <span class="op">=</span> <span class="fl">0.92</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="va">losses</span>, temperature <span class="op">=</span> <span class="fl">3</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Gibbs weights with temperature = 3</span>
+<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="va">losses</span>, eta <span class="op">=</span> <span class="fl">3</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Gibbs weights with eta = 3</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Input range: min = 0.81, max = 0.92, spread = 0.11</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Stabilization: subtract min(x) = 0.81 before exponentiation.</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Entropy = 1.0890; effective number of models = 2.971</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>         A         B         C </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 0.3539552 0.3758426 0.2702022 </span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Temperature extremes</span></span></span>
-<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>, temperature <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>      <span class="co"># uniform</span></span></span>
+<span class="r-in"><span><span class="co"># Eta extremes</span></span></span>
+<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>, eta <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>      <span class="co"># uniform</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.3333333 0.3333333 0.3333333</span>
-<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>, temperature <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span>    <span class="co"># hard selection</span></span></span>
+<span class="r-in"><span><span class="fu">calc_model_weights_gibbs</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">5</span><span class="op">)</span>, eta <span class="op">=</span> <span class="cn">Inf</span><span class="op">)</span>    <span class="co"># hard selection</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1 0 0</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

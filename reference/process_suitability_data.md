@@ -97,7 +97,7 @@ The function performs the following key steps:
 - Loads and merges climate data (temperature, precipitation, etc.) from
   multiple countries
 
-- Loads ENSO and DMI climate index data
+- Loads ENSO and IOD climate index data
 
 - Loads combined weekly cholera case surveillance data from WHO, JHU,
   and supplemental sources

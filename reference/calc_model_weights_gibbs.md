@@ -10,7 +10,7 @@ the inverse temperature (sharpness) parameter.
 ## Usage
 
 ``` r
-calc_model_weights_gibbs(x, temperature, verbose = FALSE)
+calc_model_weights_gibbs(x, eta, verbose = FALSE, ...)
 ```
 
 ## Arguments
@@ -20,7 +20,7 @@ calc_model_weights_gibbs(x, temperature, verbose = FALSE)
   Numeric vector of model scores (treated as loss-like; lower is
   better).
 
-- temperature:
+- eta:
 
   Non-negative scalar inverse temperature \\\eta\\. Higher values
   concentrate weight on the best models; lower values flatten weights.
@@ -32,6 +32,11 @@ calc_model_weights_gibbs(x, temperature, verbose = FALSE)
   Logical; if `TRUE`, prints brief diagnostics (range of `x`, applied
   shift, entropy, and effective number of models).
 
+- ...:
+
+  Reserved for backward compatibility. The deprecated argument
+  `temperature` is accepted here and mapped to `eta` with a warning.
+
 ## Value
 
 A numeric vector of length `length(x)` containing weights that sum to 1.
@@ -42,11 +47,10 @@ Names are preserved when present.
 This function is agnostic to the specific form of \\x\\; smaller values
 are assumed to indicate better models. Common choices include:
 
-- \\x = \Delta \mathrm{AIC}\\ \\ (use `temperature = 1/2` to recover
-  Akaike weights),
-
-- \\x = -\log L\\ \\ (use `temperature = 1` for normalized likelihood
+- \\x = \Delta \mathrm{AIC}\\ \\ (use `eta = 1/2` to recover Akaike
   weights),
+
+- \\x = -\log L\\ \\ (use `eta = 1` for normalized likelihood weights),
 
 - Cross-validated losses (e.g., RMSE, MSLE), or any proper scoring rule.
 
@@ -59,9 +63,9 @@ helps avoid underflow/overflow.
 
 Special cases:
 
-- `temperature = 0`: uniform weights.
+- `eta = 0`: uniform weights.
 
-- `temperature = Inf`: hard selection (ties share weight equally).
+- `eta = Inf`: hard selection (ties share weight equally).
 
 - All `x` equal: uniform weights.
 
@@ -75,28 +79,28 @@ Statistical Society: Series B*, 78(5), 1103–1130.
 ## Examples
 
 ``` r
-# Three models with Delta AIC = (0, 2, 6): Akaike weights via temperature = 0.5
-calc_model_weights_gibbs(x = c(0, 2, 6), temperature = 0.5)
+# Three models with Delta AIC = (0, 2, 6): Akaike weights via eta = 0.5
+calc_model_weights_gibbs(x = c(0, 2, 6), eta = 0.5)
 #> [1] 0.70538451 0.25949646 0.03511903
 
-# From negative log-likelihoods: normalized likelihood weights with temperature = 1
-calc_model_weights_gibbs(x = c(120.3, 121.1, 124.8), temperature = 1)
+# From negative log-likelihoods: normalized likelihood weights with eta = 1
+calc_model_weights_gibbs(x = c(120.3, 121.1, 124.8), eta = 1)
 #> [1] 0.68472611 0.30766727 0.00760662
 
 # Using a CV loss (lower is better) with moderate sharpness
 set.seed(1)
 losses <- c(A = 0.83, B = 0.81, C = 0.92)
-calc_model_weights_gibbs(losses, temperature = 3, verbose = TRUE)
-#> Gibbs weights with temperature = 3
+calc_model_weights_gibbs(losses, eta = 3, verbose = TRUE)
+#> Gibbs weights with eta = 3
 #> Input range: min = 0.81, max = 0.92, spread = 0.11
 #> Stabilization: subtract min(x) = 0.81 before exponentiation.
 #> Entropy = 1.0890; effective number of models = 2.971
 #>         A         B         C 
 #> 0.3539552 0.3758426 0.2702022 
 
-# Temperature extremes
-calc_model_weights_gibbs(c(1, 2, 5), temperature = 0)      # uniform
+# Eta extremes
+calc_model_weights_gibbs(c(1, 2, 5), eta = 0)      # uniform
 #> [1] 0.3333333 0.3333333 0.3333333
-calc_model_weights_gibbs(c(1, 2, 5), temperature = Inf)    # hard selection
+calc_model_weights_gibbs(c(1, 2, 5), eta = Inf)    # hard selection
 #> [1] 1 0 0
 ```

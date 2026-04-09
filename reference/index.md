@@ -265,7 +265,7 @@ Plotting functions
 - [`plot_CFR_hierarchical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_hierarchical.md)
   : Plot Hierarchical CFR Model Results
 - [`plot_ENSO_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_ENSO_data.md)
-  : Plot ENSO and DMI Data
+  : Plot ENSO and IOD Data
 - [`plot_africa_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.md)
   : Plot Africa Map with Cholera Outbreak Countries
 - [`plot_cases_binary()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_cases_binary.md)
@@ -880,7 +880,7 @@ Other exported functions and internal helpers
 - [`plot_CFR_hierarchical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_hierarchical.md)
   : Plot Hierarchical CFR Model Results
 - [`plot_ENSO_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_ENSO_data.md)
-  : Plot ENSO and DMI Data
+  : Plot ENSO and IOD Data
 - [`plot_africa_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_africa_map.md)
   : Plot Africa Map with Cholera Outbreak Countries
 - [`plot_cases_binary()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_cases_binary.md)
