@@ -1,5 +1,14 @@
 # Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 
+Runs LASER simulations for multiple parameter sets (with stochastic
+reruns per set) and aggregates results using importance weights. Returns
+a `mosaic_ensemble` object containing weighted mean, median, and
+quantile envelopes for cases and deaths.
+
+This is the computation half of the ensemble workflow. Use
+[`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+to render plots from the returned object.
+
 ## Usage
 
 ``` r
@@ -52,31 +61,46 @@ calc_model_ensemble(
 
   Numeric vector of quantiles for confidence intervals. Must be even
   length to form lower/upper pairs. Default
-  `c(0.025, 0.25, 0.75, 0.975)` for 50\\
+  `c(0.025, 0.25, 0.75, 0.975)` for 50 and 95 percent CIs.
 
-  PATHSList of paths from
+- PATHS:
+
+  List of paths from
   [`get_paths`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md).
   Required for sampling mode.
 
-  priorsPriors object for parameter sampling. Required for sampling
-  mode.
+- priors:
 
-  sampling_argsNamed list of additional arguments for
+  Priors object for parameter sampling. Required for sampling mode.
+
+- sampling_args:
+
+  Named list of additional arguments for
   [`sample_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md).
 
-  parallelLogical. Use parallel cluster for simulations. Default
-  `FALSE`.
+- parallel:
 
-  n_coresInteger or `NULL`. Number of cores when `parallel = TRUE`.
+  Logical. Use parallel cluster for simulations. Default `FALSE`.
 
-  root_dirCharacter. MOSAIC root directory. Required when
-  `parallel = TRUE`.
+- n_cores:
 
-  precomputed_resultsOptional list of pre-gathered LASER results (e.g.
-  from Dask). Each element must have `$param_idx`, `$stoch_idx`,
-  `$reported_cases`, `$disease_deaths`, and `$success`.
+  Integer or `NULL`. Number of cores when `parallel = TRUE`.
 
-  verboseLogical. Print progress messages. Default `TRUE`.
+- root_dir:
+
+  Character. MOSAIC root directory. Required when `parallel = TRUE`.
+
+- precomputed_results:
+
+  Optional list of pre-gathered LASER results (e.g. from Dask). Each
+  element must have `$param_idx`, `$stoch_idx`, `$reported_cases`,
+  `$disease_deaths`, and `$success`.
+
+- verbose:
+
+  Logical. Print progress messages. Default `TRUE`.
+
+## Value
 
 S3 object of class `"mosaic_ensemble"` containing:
 
@@ -148,12 +172,7 @@ S3 object of class `"mosaic_ensemble"` containing:
 
   Quantiles used for CI envelopes.
 
-Runs LASER simulations for multiple parameter sets (with stochastic
-reruns per set) and aggregates results using importance weights. Returns
-a `mosaic_ensemble` object containing weighted mean, median, and
-quantile envelopes for cases and deaths.This is the computation half of
-the ensemble workflow. Use
-[`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
-to render plots from the returned object.
+## See also
+
 [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
 to render plots from this object.
