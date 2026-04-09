@@ -1030,7 +1030,7 @@
   # (invalid models receive weight 0 and are silently dropped by calc_model_ess).
   weights_valid <- calc_model_weights_gibbs(
     x = delta_aic[valid_idx],
-    temperature = eta,
+    eta = eta,
     verbose = FALSE
   )
   weights <- numeric(n_total)

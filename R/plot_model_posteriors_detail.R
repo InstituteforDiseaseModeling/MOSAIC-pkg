@@ -335,27 +335,21 @@ plot_model_posteriors_detail <- function(quantiles_file,
       stop("weight_best column is not numeric. Check the results data.")
     }
 
-    # Calculate ESS using Kish formula (1/sum(w^2)) directly from weights
+    # Calculate ESS from weights
     n_retained <- length(retained_samples)
     n_best <- length(best_samples)
 
-    # Calculate ESS for retained samples using Kish formula
+    # Calculate ESS for retained samples
     if (!is.null(retained_weights)) {
-      # Normalize weights (they should already be normalized, but ensure)
-      w_norm_retained <- retained_weights / sum(retained_weights)
-      ess_retained <- 1 / sum(w_norm_retained^2)
+      ess_retained <- calc_model_ess(retained_weights, method = "kish")
     } else {
-      # Fall back to sample size if no weights
       ess_retained <- n_retained
     }
 
-    # Calculate ESS for best subset using Kish formula
+    # Calculate ESS for best subset
     if (!is.null(posterior_weights) && length(posterior_weights) > 0) {
-      # Normalize weights (they should already be normalized, but ensure)
-      w_norm_best <- posterior_weights / sum(posterior_weights)
-      ess_best <- 1 / sum(w_norm_best^2)
+      ess_best <- calc_model_ess(posterior_weights, method = "kish")
     } else {
-      # Fall back to sample size if no weights
       ess_best <- n_best
     }
 

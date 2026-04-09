@@ -1446,7 +1446,7 @@ run_MOSAIC <- function(config,
       gibbs_temperature_final <- 0.5  # Standard for Akaike weights
       weights_final <- calc_model_weights_gibbs(
         x = delta_aic_truncated,
-        temperature = gibbs_temperature_final,
+        eta = gibbs_temperature_final,
         verbose = FALSE
       )
 
@@ -1517,7 +1517,7 @@ run_MOSAIC <- function(config,
 
     retained_weights <- calc_model_weights_gibbs(
       x = delta_aic_retained_trunc,
-      temperature = 0.5,
+      eta = 0.5,
       verbose = control$logging$verbose
     )
     results$weight_retained[results$is_retained] <- retained_weights
@@ -1535,7 +1535,7 @@ run_MOSAIC <- function(config,
 
     best_weights <- calc_model_weights_gibbs(
       x = delta_aic_best_trunc,
-      temperature = 0.5,
+      eta = 0.5,
       verbose = control$logging$verbose
     )
     results$weight_best[results$is_best_subset] <- best_weights
