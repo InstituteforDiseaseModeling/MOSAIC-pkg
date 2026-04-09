@@ -20,116 +20,55 @@ plot_model_fit_stochastic_param(
   n_cores = NULL,
   root_dir = NULL,
   verbose = TRUE,
-  plot_decomposed = FALSE
+  plot_decomposed = FALSE,
+  precomputed_results = NULL
 )
 }
 \arguments{
-\item{configs}{List of pre-sampled configuration objects. If provided, these
-configurations will be used directly. Must be a list of valid config objects.}
+\item{configs}{List of pre-sampled configuration objects.}
 
-\item{config}{Base configuration object for internal parameter sampling. Required
-if configs is NULL and parameter_seeds is provided.}
+\item{config}{Base configuration object.}
 
-\item{parameter_seeds}{Numeric vector of seeds for parameter sampling. Each seed
-will generate a different parameter set using sample_parameters(). Required
-if configs is NULL.}
+\item{parameter_seeds}{Numeric vector of seeds for parameter sampling.}
 
-\item{parameter_weights}{Numeric vector of weights for each parameter set, same length
-as configs or parameter_seeds. Weights are used when calculating median and quantiles
-across parameter sets. If NULL, all parameter sets are weighted equally. Weights are
-automatically normalized to sum to 1.}
+\item{parameter_weights}{Numeric vector of weights for each parameter set.}
 
-\item{n_simulations_per_config}{Integer specifying number of stochastic simulations
-to run for each parameter configuration. Default is 30.}
+\item{n_simulations_per_config}{Integer. Stochastic sims per param set.}
 
-\item{PATHS}{List of paths as returned by get_paths(). Required if using
-parameter_seeds for internal sampling.}
+\item{PATHS}{List of paths from \code{get_paths()}.}
 
-\item{priors}{Priors object for parameter sampling. Required if using
-parameter_seeds for internal sampling.}
+\item{priors}{Priors object.}
 
-\item{sampling_args}{Named list of additional arguments to pass to sample_parameters().
-For example: list(sample_tau_i = FALSE, sample_mobility_gamma = FALSE).
-Default is empty list.}
+\item{sampling_args}{Named list of additional arguments for \code{sample_parameters()}.}
 
-\item{output_dir}{Character string specifying the directory where plots should
-be saved. Directory will be created if it doesn't exist.}
+\item{output_dir}{Character. Directory for output plots and CSVs.}
 
-\item{envelope_quantiles}{Numeric vector specifying the quantiles for confidence
-intervals. Default is c(0.025, 0.25, 0.75, 0.975) for 50\% and 95\% CIs.
-Must have an even number of elements to form pairs of (lower, upper) bounds.}
+\item{envelope_quantiles}{Numeric vector of quantiles for CIs.}
 
-\item{save_predictions}{Logical indicating whether to save prediction data to CSV files.
-Default is FALSE. If TRUE, saves predictions_ensemble_{location}.csv for each location.}
+\item{save_predictions}{Logical. Save prediction CSVs.}
 
-\item{parallel}{Logical indicating whether to use parallel computation. Default is FALSE.
-When TRUE, simulations are run in parallel across multiple cores.}
+\item{parallel}{Logical. Use parallel computation.}
 
-\item{n_cores}{Integer specifying number of cores to use for parallel computation.
-Default is NULL (uses detectCores() - 1). Only used when parallel = TRUE.}
+\item{n_cores}{Integer. Number of cores for parallel.}
 
-\item{root_dir}{Character string specifying the root directory for MOSAIC project.
-Required when parallel = TRUE. Workers need this to initialize PATHS correctly.}
+\item{root_dir}{Character. MOSAIC root directory.}
 
-\item{verbose}{Logical indicating whether to print progress messages. Default is TRUE.}
+\item{verbose}{Logical. Print progress messages.}
 
-\item{plot_decomposed}{Logical indicating whether to create additional plots
-showing decomposed uncertainty. Default is FALSE.}
+\item{plot_decomposed}{Ignored (kept for signature compatibility).}
+
+\item{precomputed_results}{Optional precomputed LASER results.}
 }
 \value{
-Invisibly returns a list containing:
-\itemize{
-\item \code{individual}: Named list of plots for each location
-\item \code{cases_faceted}: Faceted plot of cases by location (if n_locations > 1)
-\item \code{deaths_faceted}: Faceted plot of deaths by location (if n_locations > 1)
-\item \code{simulation_stats}: Detailed statistics from all simulations
-\item \code{param_configs}: List of parameter configurations used
-}
+Invisibly returns the plot list from \code{\link{plot_model_ensemble}}.
 }
 \description{
-Runs multiple simulations with both parameter uncertainty (different parameter sets)
-and stochastic uncertainty (different random seeds) to create timeseries plots
-showing median predictions with comprehensive uncertainty envelopes.
-}
-\details{
-This function handles two types of uncertainty:
-\enumerate{
-\item \strong{Parameter uncertainty}: Different parameter sets from calibration
-\item \strong{Stochastic uncertainty}: Random variation within each parameter set
-}
+\lifecycle{deprecated}
 
-The function can operate in two modes:
-\itemize{
-\item \strong{Direct mode}: Provide pre-sampled configs via the configs parameter
-\item \strong{Sampling mode}: Provide config + parameter_seeds for internal sampling
+This function is deprecated. Use \code{\link{calc_model_ensemble}} followed by
+\code{\link{plot_model_ensemble}} instead. This wrapper calls both internally
+for backward compatibility.
 }
-
-The total number of simulations = length(configs) × n_simulations_per_config
-}
-\examples{
-\dontrun{
-# Mode 1: Using pre-sampled configurations
-configs <- list(config1, config2, config3)
-plots <- plot_model_fit_stochastic_param(
-    configs = configs,
-    n_simulations_per_config = 20,
-    output_dir = "output/plots",
-    save_predictions = TRUE
-)
-
-# Mode 2: Using parameter seeds (typical calibration workflow)
-best_seeds <- c(123, 456, 789)  # Top seeds from calibration
-plots <- plot_model_fit_stochastic_param(
-    config = base_config,
-    parameter_seeds = best_seeds,
-    n_simulations_per_config = 20,
-    PATHS = PATHS,
-    priors = priors,
-    sampling_args = list(sample_tau_i = FALSE),
-    output_dir = "output/plots",
-    save_predictions = TRUE  # Save predictions to CSV
-)
-# Saves: predictions_ensemble_ETH.csv (or other location names)
-}
-
+\seealso{
+\code{\link{calc_model_ensemble}}, \code{\link{plot_model_ensemble}}
 }

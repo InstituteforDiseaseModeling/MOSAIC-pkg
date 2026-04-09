@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_model_ensemble.R
 \name{plot_model_ensemble}
 \alias{plot_model_ensemble}
-\title{Plot Stochastic Ensemble Predictions}
+\title{Plot Ensemble Predictions from a mosaic_ensemble Object}
 \usage{
 plot_model_ensemble(
   ensemble,
@@ -18,8 +18,8 @@ plot_model_ensemble(
 \item{output_dir}{Character. Directory where plots and CSVs are saved.
 Created if it does not exist.}
 
-\item{save_predictions}{Logical. Save per-location prediction CSVs
-(\code{predictions_stochastic_<location>.csv}). Default \code{FALSE}.}
+\item{save_predictions}{Logical. Save per-location prediction CSVs. Default
+\code{FALSE}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }
@@ -33,12 +33,10 @@ Invisibly returns a list with:
 }
 }
 \description{
-Renders timeseries plots from a \code{mosaic_ensemble} object produced by
-\code{\link{calc_model_ensemble}}. Optionally saves per-location prediction
-CSVs for downstream use.
-
-Accepting a pre-computed ensemble object means simulations are never run
-twice when both metrics and plots are needed.
+Renders time-series plots from a \code{mosaic_ensemble} object produced by
+\code{\link{calc_model_ensemble}}. Shows the weighted median prediction line
+with confidence interval ribbons and observed data points. Optionally saves
+per-location prediction CSVs for downstream use.
 }
 \seealso{
 \code{\link{calc_model_ensemble}} to compute the ensemble.

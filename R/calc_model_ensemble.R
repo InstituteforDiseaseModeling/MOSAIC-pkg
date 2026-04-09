@@ -1,279 +1,420 @@
-#' Run Stochastic Ensemble Simulations for Best Model
+#' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description
-#' Runs \code{n_simulations} stochastic LASER simulations of a single model
-#' configuration (typically \code{config_best}) with different random seeds and
-#' aggregates the results into mean predictions and uncertainty envelopes.
+#' Runs LASER simulations for multiple parameter sets (with stochastic reruns
+#' per set) and aggregates results using importance weights. Returns a
+#' \code{mosaic_ensemble} object containing weighted mean, median, and quantile
+#' envelopes for cases and deaths.
 #'
-#' Separating computation from plotting allows ensemble results to be used for
-#' R², bias ratios, windowed fit metrics, and summary statistics without
-#' necessarily generating plots, and avoids running simulations twice when both
-#' metrics and plots are needed.
+#' This is the computation half of the ensemble workflow. Use
+#' \code{\link{plot_model_ensemble}} to render plots from the returned object.
 #'
-#' @param config Named list. Model configuration as returned by
-#'   \code{\link{sample_parameters}} (typically \code{config_best}).
-#' @param n_simulations Integer. Number of stochastic LASER simulations to run.
-#'   Default \code{100L}.
-#' @param envelope_quantiles Numeric vector of length 2. Lower and upper quantiles
-#'   for uncertainty envelopes. Stored in return object for use by
-#'   \code{\link{plot_model_ensemble}}. Default \code{c(0.025, 0.975)}.
-#' @param parallel Logical. Use R parallel cluster for simulations. Default
-#'   \code{FALSE}.
-#' @param n_cores Integer or \code{NULL}. Number of cores when
-#'   \code{parallel = TRUE}. \code{NULL} uses \code{detectCores() - 1}.
-#' @param root_dir Character. MOSAIC root directory. Required when
-#'   \code{parallel = TRUE} so workers can call \code{set_root_directory()}.
-#' @param verbose Logical. Print progress messages. Default \code{TRUE}.
+#' @param config Base configuration object (provides observed data and template).
+#' @param parameter_seeds Numeric vector of seeds for \code{\link{sample_parameters}}.
+#'   Each seed generates a different parameter set.
+#' @param configs List of pre-sampled configuration objects (direct mode).
+#'   Mutually exclusive with \code{parameter_seeds}.
+#' @param parameter_weights Numeric vector of importance weights, same length as
+#'   \code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
+#'   If \code{NULL}, all parameter sets are weighted equally.
+#' @param n_simulations_per_config Integer. Stochastic LASER reruns per parameter
+#'   set. Default \code{10L}.
+#' @param envelope_quantiles Numeric vector of quantiles for confidence intervals.
+#'   Must be even length to form lower/upper pairs. Default
+#'   \code{c(0.025, 0.25, 0.75, 0.975)} for 50\% and 95\% CIs.
+#' @param PATHS List of paths from \code{\link{get_paths}}. Required for sampling mode.
+#' @param priors Priors object for parameter sampling. Required for sampling mode.
+#' @param sampling_args Named list of additional arguments for
+#'   \code{\link{sample_parameters}}.
+#' @param parallel Logical. Use parallel cluster for simulations. Default \code{FALSE}.
+#' @param n_cores Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.
+#' @param root_dir Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
 #' @param precomputed_results Optional list of pre-gathered LASER results (e.g. from Dask).
-#'   Each element must have \code{$reported_cases}, \code{$disease_deaths}, and \code{$success}.
-#'   When provided, local LASER execution is skipped entirely.
+#'   Each element must have \code{$param_idx}, \code{$stoch_idx},
+#'   \code{$reported_cases}, \code{$disease_deaths}, and \code{$success}.
+#' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
-#' @return A named list (S3 class \code{"mosaic_ensemble"}) containing:
+#' @return S3 object of class \code{"mosaic_ensemble"} containing:
 #' \describe{
-#'   \item{cases_stats}{List with \code{mean}, \code{median}, \code{lower},
-#'     \code{upper} matrices (n_locations × n_time_points).}
-#'   \item{deaths_stats}{Same structure as \code{cases_stats} for deaths.}
-#'   \item{cases_array}{3-D array (n_locations × n_time_points × n_successful)
-#'     of raw per-simulation case counts.}
-#'   \item{deaths_array}{Same for deaths.}
-#'   \item{obs_cases}{Observed cases matrix from \code{config$reported_cases}.}
-#'   \item{obs_deaths}{Observed deaths matrix from \code{config$reported_deaths}.}
-#'   \item{n_simulations}{Requested number of simulations.}
-#'   \item{n_successful}{Number that completed without error.}
-#'   \item{seeds}{Integer vector of seeds used.}
+#'   \item{cases_mean}{Matrix (n_locations x n_time_points) of weighted mean cases.}
+#'   \item{cases_median}{Matrix of weighted median cases.}
+#'   \item{deaths_mean}{Matrix of weighted mean deaths.}
+#'   \item{deaths_median}{Matrix of weighted median deaths.}
+#'   \item{ci_bounds}{List of CI pairs, each with \code{$lower} and \code{$upper} matrices.}
+#'   \item{obs_cases}{Observed cases matrix from config.}
+#'   \item{obs_deaths}{Observed deaths matrix from config.}
+#'   \item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x n_stoch).}
+#'   \item{deaths_array}{4-D array matching cases_array dimensions.}
+#'   \item{parameter_weights}{Normalized weight vector.}
+#'   \item{n_param_sets}{Number of parameter sets.}
+#'   \item{n_simulations_per_config}{Stochastic runs per parameter set.}
+#'   \item{n_successful}{Number of successful simulations.}
 #'   \item{location_names}{Character vector of location names.}
-#'   \item{n_locations}{Number of locations.}
-#'   \item{n_time_points}{Number of time steps.}
-#'   \item{envelope_quantiles}{The quantile pair passed in (for plotting).}
-#'   \item{date_start}{Character. Simulation start date from config.}
-#'   \item{date_stop}{Character. Simulation end date from config.}
+#'   \item{date_start}{Simulation start date.}
+#'   \item{date_stop}{Simulation end date.}
+#'   \item{envelope_quantiles}{Quantiles used for CI envelopes.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
 #'
 #' @export
 calc_model_ensemble <- function(config,
-                                n_simulations      = 100L,
-                                envelope_quantiles = c(0.025, 0.975),
-                                parallel           = FALSE,
-                                n_cores            = NULL,
-                                root_dir           = NULL,
-                                verbose            = TRUE,
-                                precomputed_results = NULL) {
+                                parameter_seeds = NULL,
+                                configs = NULL,
+                                parameter_weights = NULL,
+                                n_simulations_per_config = 10L,
+                                envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+                                PATHS = NULL,
+                                priors = NULL,
+                                sampling_args = list(),
+                                parallel = FALSE,
+                                n_cores = NULL,
+                                root_dir = NULL,
+                                precomputed_results = NULL,
+                                verbose = TRUE) {
 
-  # ---------------------------------------------------------------------------
-  # Input validation
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Input validation and mode determination
+  # ===========================================================================
 
   if (missing(config) || is.null(config)) stop("config is required")
 
-  if (!is.numeric(n_simulations) || length(n_simulations) != 1L || n_simulations < 2L)
-    stop("n_simulations must be an integer >= 2")
+  if (!is.null(configs)) {
+    # Direct mode: pre-sampled configs provided
+    if (verbose) message("Using ", length(configs), " provided configurations")
+    param_configs <- configs
+    n_param_sets <- length(configs)
 
-  if (length(envelope_quantiles) != 2L || envelope_quantiles[1L] >= envelope_quantiles[2L])
-    stop("envelope_quantiles must be a length-2 vector with first value < second value")
+  } else if (!is.null(parameter_seeds)) {
+    # Sampling mode: generate configs from seeds
+    if (is.null(priors)) stop("priors required when using parameter_seeds")
+    if (is.null(PATHS)) stop("PATHS required when using parameter_seeds")
+
+    # Filter to non-zero weights if provided
+    if (!is.null(parameter_weights)) {
+      if (length(parameter_weights) != length(parameter_seeds))
+        stop("parameter_weights must have same length as parameter_seeds")
+
+      nonzero_idx <- parameter_weights > 0
+      n_zero <- sum(!nonzero_idx)
+      if (verbose && n_zero > 0) {
+        message("  Filtering: ", sum(nonzero_idx), " non-zero weighted seeds (",
+                n_zero, " zero-weight skipped)")
+      }
+      parameter_seeds <- parameter_seeds[nonzero_idx]
+      parameter_weights <- parameter_weights[nonzero_idx]
+      if (length(parameter_seeds) == 0) stop("No parameter sets with non-zero weights")
+    }
+
+    if (verbose) {
+      message("Sampling ", length(parameter_seeds), " parameter sets (",
+              length(parameter_seeds) * n_simulations_per_config, " total sims)...")
+    }
+
+    param_configs <- vector("list", length(parameter_seeds))
+    if (verbose) {
+      pb <- utils::txtProgressBar(min = 0, max = length(parameter_seeds), style = 1,
+                                  char = "\u2588")
+    }
+    for (i in seq_along(parameter_seeds)) {
+      if (verbose) utils::setTxtProgressBar(pb, i)
+      param_configs[[i]] <- tryCatch(
+        sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                          seed = parameter_seeds[i], sample_args = sampling_args,
+                          verbose = FALSE),
+        error = function(e) {
+          warning("Failed to sample parameters with seed ", parameter_seeds[i],
+                  ": ", e$message)
+          NULL
+        }
+      )
+    }
+    if (verbose) close(pb)
+
+    param_configs <- Filter(Negate(is.null), param_configs)
+    n_param_sets <- length(param_configs)
+    if (n_param_sets == 0) stop("All parameter sampling attempts failed")
+
+    if (n_param_sets < length(parameter_seeds) && verbose) {
+      message("Warning: ", length(parameter_seeds) - n_param_sets,
+              " parameter sets failed to sample")
+    }
+
+  } else {
+    stop("Must provide either 'configs' or 'parameter_seeds' (with config + priors + PATHS)")
+  }
+
+  # Validate and normalize parameter weights
+  if (!is.null(parameter_weights)) {
+    if (length(parameter_weights) != n_param_sets)
+      stop("parameter_weights must have the same length as configs or parameter_seeds")
+    if (any(!is.finite(parameter_weights)) || any(parameter_weights < 0))
+      stop("parameter_weights must be non-negative finite values")
+    parameter_weights <- parameter_weights / sum(parameter_weights)
+  } else {
+    parameter_weights <- rep(1 / n_param_sets, n_param_sets)
+  }
+
+  # Validate envelope quantiles
+  if (length(envelope_quantiles) %% 2 != 0)
+    stop("envelope_quantiles must have an even number of elements to form CI pairs")
+  if (any(!is.finite(envelope_quantiles)) || any(envelope_quantiles < 0) ||
+      any(envelope_quantiles > 1))
+    stop("envelope_quantiles must be finite values between 0 and 1")
+  if (any(diff(envelope_quantiles) <= 0))
+    stop("envelope_quantiles must be in ascending order")
 
   if (parallel && is.null(root_dir))
     stop("root_dir is required when parallel = TRUE")
 
-  # ---------------------------------------------------------------------------
-  # Extract observed data and metadata from config
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Extract metadata from first config
+  # ===========================================================================
 
-  obs_cases    <- config$reported_cases
-  obs_deaths   <- config$reported_deaths
-  location_names <- config$location_name
+  first_config   <- param_configs[[1]]
+  obs_cases      <- first_config$reported_cases
+  obs_deaths     <- first_config$reported_deaths
+  location_names <- first_config$location_name
+  date_start     <- first_config$date_start
+  date_stop      <- first_config$date_stop
 
   if (is.null(obs_cases) || is.null(obs_deaths))
-    stop("config must contain reported_cases and reported_deaths")
+    stop("configs must contain reported_cases and reported_deaths")
 
   if (is.null(location_names)) {
     n_locations    <- if (is.matrix(obs_cases)) nrow(obs_cases) else 1L
     location_names <- if (n_locations == 1L) "Location" else paste0("Location_", seq_len(n_locations))
-    if (verbose) message("Warning: no location names in config. Using defaults.")
   }
 
   n_locations   <- length(location_names)
   n_time_points <- if (is.matrix(obs_cases)) ncol(obs_cases) else length(obs_cases)
-  seeds         <- seq_len(n_simulations)
+  total_sims    <- n_param_sets * n_simulations_per_config
 
   if (verbose) {
-    message(sprintf("calc_model_ensemble: %d sims | %d location(s) | %d time steps",
-                    n_simulations, n_locations, n_time_points))
+    message(sprintf("calc_model_ensemble: %d param sets x %d stochastic = %d total | %d location(s) | %d time steps",
+                    n_param_sets, n_simulations_per_config, total_sims, n_locations, n_time_points))
   }
 
-  # ---------------------------------------------------------------------------
-  # Worker function (self-contained for parallel execution)
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Run simulations (precomputed, parallel, or sequential)
+  # ===========================================================================
 
-  run_single_simulation <- function(seed_i, config_template) {
-    tryCatch({
-      lc       <- reticulate::import("laser.cholera.metapop.model")
-      config_i <- config_template
-      config_i$seed <- seed_i
-      model <- lc$run_model(
-        paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_i),
-        quiet = TRUE
-      )
-      result <- list(
-        reported_cases = model$results$reported_cases,
-        disease_deaths = model$results$disease_deaths,
-        success        = TRUE,
-        seed           = seed_i
-      )
-      gc(verbose = FALSE)
-      reticulate::import("gc")$collect()
-      result
-    }, error = function(e) {
-      list(success = FALSE, seed = seed_i, error = as.character(e))
-    })
-  }
-
-  # ---------------------------------------------------------------------------
-  # Run simulations
-  # ---------------------------------------------------------------------------
+  cases_array  <- array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
+  deaths_array <- array(NA_real_, dim = c(n_locations, n_time_points, n_param_sets, n_simulations_per_config))
 
   if (!is.null(precomputed_results)) {
-    # Use pre-gathered LASER results (e.g. from Dask) instead of running locally.
-    # Expected format: list of lists, each with $reported_cases, $disease_deaths, $success
-    if (verbose) message("Using ", length(precomputed_results), " precomputed LASER results (skipping local execution)")
-    simulation_results <- precomputed_results
-    n_simulations <- length(simulation_results)
-    seeds <- seq_len(n_simulations)
-
+    if (verbose) message("Using ", length(precomputed_results), " precomputed LASER results")
+    for (result in precomputed_results) {
+      if (isTRUE(result$success)) {
+        p <- result$param_idx
+        s <- result$stoch_idx
+        if (is.matrix(result$reported_cases)) {
+          cases_array[, , p, s]  <- result$reported_cases
+          deaths_array[, , p, s] <- result$disease_deaths
+        } else {
+          cases_array[1L, , p, s]  <- result$reported_cases
+          deaths_array[1L, , p, s] <- result$disease_deaths
+        }
+      }
+    }
   } else {
+    # Worker function (self-contained for parallel execution)
+    run_param_stoch_simulation <- function(task_info, param_configs_list) {
+      param_idx <- task_info$param_idx
+      stoch_idx <- task_info$stoch_idx
+      tryCatch({
+        if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
+          lc <- reticulate::import("laser.cholera.metapop.model")
+        } else {
+          lc <- get("lc", envir = .GlobalEnv)
+        }
+        param_config <- param_configs_list[[param_idx]]
+        param_config$seed <- (param_idx * 1000L) + stoch_idx
+        model <- lc$run_model(
+          paramfile = MOSAIC:::.mosaic_prepare_config_for_python(param_config),
+          quiet = TRUE
+        )
+        result <- list(param_idx = param_idx, stoch_idx = stoch_idx,
+                       reported_cases = model$results$reported_cases,
+                       disease_deaths = model$results$disease_deaths,
+                       success = TRUE)
+        gc(verbose = FALSE)
+        reticulate::import("gc")$collect()
+        result
+      }, error = function(e) {
+        list(param_idx = param_idx, stoch_idx = stoch_idx,
+             success = FALSE, error = as.character(e))
+      })
+    }
 
-  if (verbose) message("Running ", n_simulations, " stochastic LASER simulations...")
+    task_list <- expand.grid(param_idx = seq_len(n_param_sets),
+                             stoch_idx = seq_len(n_simulations_per_config))
 
-  pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
-  on.exit(pbapply::pboptions(pbo), add = TRUE)
+    if (parallel) {
+      n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
 
-  if (parallel) {
-
-    n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
-
-    Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
-               OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-               OPENBLAS_NUM_THREADS = "1")
-
-    cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
-    on.exit(parallel::stopCluster(cl), add = TRUE)
-
-    parallel::clusterEvalQ(cl, {
-      .libPaths(c("~/R/library", .libPaths()))
-      library(MOSAIC)
-      library(reticulate)
-      MOSAIC:::.mosaic_set_blas_threads(1L)
       Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
                  OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
                  OPENBLAS_NUM_THREADS = "1")
-    })
 
-    if (!is.null(root_dir)) {
-      parallel::clusterCall(cl, function(rd) {
-        MOSAIC::set_root_directory(rd)
-        MOSAIC::get_paths()
-      }, root_dir)
+      cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
+      on.exit(parallel::stopCluster(cl), add = TRUE)
+
+      parallel::clusterEvalQ(cl, {
+        .libPaths(c("~/R/library", .libPaths()))
+        library(MOSAIC)
+        library(reticulate)
+        MOSAIC:::.mosaic_set_blas_threads(1L)
+        Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
+                   OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+                   OPENBLAS_NUM_THREADS = "1")
+        lc <- reticulate::import("laser.cholera.metapop.model")
+        assign("lc", lc, envir = .GlobalEnv)
+        NULL
+      })
+
+      if (!is.null(root_dir)) {
+        parallel::clusterCall(cl, function(rd) {
+          MOSAIC::set_root_directory(rd)
+          MOSAIC::get_paths()
+        }, root_dir)
+      }
+
+      parallel::clusterExport(cl, c("param_configs"), envir = environment())
+
+      if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
+      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
+      on.exit(pbapply::pboptions(pbo), add = TRUE)
+
+      results_list <- pbapply::pblapply(
+        split(task_list, seq_len(nrow(task_list))),
+        function(row) run_param_stoch_simulation(row, param_configs),
+        cl = cl
+      )
+    } else {
+      if (verbose) message("Running ", total_sims, " simulations sequentially...")
+      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
+      on.exit(pbapply::pboptions(pbo), add = TRUE)
+
+      results_list <- pbapply::pblapply(
+        split(task_list, seq_len(nrow(task_list))),
+        function(row) run_param_stoch_simulation(row, param_configs)
+      )
     }
 
-    parallel::clusterExport(cl, c("config", "run_single_simulation"), envir = environment())
-
-    if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
-    simulation_results <- pbapply::pblapply(
-      seeds, function(s) run_single_simulation(s, config), cl = cl
-    )
-
-  } else {
-
-    simulation_results <- pbapply::pblapply(
-      seeds, function(s) run_single_simulation(s, config)
-    )
+    # Fill arrays from results
+    for (result in results_list) {
+      if (isTRUE(result$success)) {
+        p <- result$param_idx
+        s <- result$stoch_idx
+        if (is.matrix(result$reported_cases)) {
+          cases_array[, , p, s]  <- result$reported_cases
+          deaths_array[, , p, s] <- result$disease_deaths
+        } else {
+          cases_array[1L, , p, s]  <- result$reported_cases
+          deaths_array[1L, , p, s] <- result$disease_deaths
+        }
+      }
+    }
   }
 
-  } # end precomputed_results else
+  # ===========================================================================
+  # Count successful simulations
+  # ===========================================================================
 
-  # ---------------------------------------------------------------------------
-  # Filter successful results
-  # ---------------------------------------------------------------------------
-
-  successful_results <- simulation_results[vapply(simulation_results,
-                                                   function(x) isTRUE(x$success),
-                                                   logical(1L))]
-  n_successful <- length(successful_results)
-
-  if (n_successful == 0L) {
-    failed <- simulation_results[vapply(simulation_results,
-                                        function(x) !is.null(x$error), logical(1L))]
-    sample_errors <- unique(vapply(failed[seq_len(min(3L, length(failed)))],
-                                   function(x) x$error, character(1L)))
-    stop("All ensemble simulations failed.\n  ", paste(sample_errors, collapse = "\n  "))
-  }
+  n_successful <- sum(!is.na(cases_array[1L, 1L, , ]))
+  if (n_successful == 0L) stop("All ensemble simulations failed")
 
   if (verbose) {
     message(sprintf("Ensemble complete: %d/%d successful (%.0f%%)",
-                    n_successful, n_simulations,
-                    100 * n_successful / n_simulations))
+                    n_successful, total_sims, 100 * n_successful / total_sims))
   }
 
-  # ---------------------------------------------------------------------------
-  # Aggregate into arrays
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Weighted statistics aggregation
+  # ===========================================================================
 
-  cases_array  <- array(NA_real_, dim = c(n_locations, n_time_points, n_successful))
-  deaths_array <- array(NA_real_, dim = c(n_locations, n_time_points, n_successful))
+  # Weighted quantile helper
+  weighted_quantile <- function(x, weights, probs) {
+    na_idx <- is.na(x) | is.na(weights)
+    x <- x[!na_idx]; weights <- weights[!na_idx]
+    if (length(x) == 0L || all(weights == 0)) return(rep(NA_real_, length(probs)))
+    ord <- order(x); x <- x[ord]; weights <- weights[ord]
+    weights <- weights / sum(weights)
+    cum_weights <- cumsum(weights)
+    vapply(probs, function(p) {
+      if (p == 0) return(min(x))
+      if (p == 1) return(max(x))
+      idx <- which(cum_weights >= p)[1L]
+      if (is.na(idx)) max(x) else x[idx]
+    }, numeric(1L))
+  }
 
-  for (i in seq_len(n_successful)) {
-    r <- successful_results[[i]]
-    if (is.matrix(r$reported_cases)) {
-      cases_array[, , i]  <- r$reported_cases
-      deaths_array[, , i] <- r$disease_deaths
-    } else {
-      cases_array[1L, , i]  <- r$reported_cases
-      deaths_array[1L, , i] <- r$disease_deaths
+  calculate_overall_stats <- function(data_array) {
+    dims <- dim(data_array)
+    n_locs <- dims[1L]; n_times <- dims[2L]
+    n_params <- dims[3L]; n_stoch <- dims[4L]
+
+    # Each param set's weight is divided equally among its stochastic runs
+    sim_weights <- rep(parameter_weights, each = n_stoch) / n_stoch
+
+    n_ci_pairs   <- length(envelope_quantiles) / 2L
+    stats_mean   <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
+    stats_median <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
+
+    ci_bounds <- lapply(seq_len(n_ci_pairs), function(ci_idx) {
+      list(lower = matrix(NA_real_, nrow = n_locs, ncol = n_times),
+           upper = matrix(NA_real_, nrow = n_locs, ncol = n_times))
+    })
+
+    for (i in seq_len(n_locs)) {
+      for (j in seq_len(n_times)) {
+        values <- as.vector(data_array[i, j, , ])
+        stats_mean[i, j]   <- sum(values * sim_weights, na.rm = TRUE)
+        stats_median[i, j] <- weighted_quantile(values, sim_weights, 0.5)
+
+        all_q <- weighted_quantile(values, sim_weights, envelope_quantiles)
+        for (ci_idx in seq_len(n_ci_pairs)) {
+          lower_idx <- ci_idx
+          upper_idx <- length(envelope_quantiles) - ci_idx + 1L
+          ci_bounds[[ci_idx]]$lower[i, j] <- all_q[lower_idx]
+          ci_bounds[[ci_idx]]$upper[i, j] <- all_q[upper_idx]
+        }
+      }
     }
+
+    list(mean = stats_mean, median = stats_median, ci_bounds = ci_bounds)
   }
 
-  # ---------------------------------------------------------------------------
-  # Compute summary statistics across simulations (3rd dimension)
-  # ---------------------------------------------------------------------------
+  cases_stats  <- calculate_overall_stats(cases_array)
+  deaths_stats <- calculate_overall_stats(deaths_array)
 
-  .calc_stats <- function(arr) {
-    m <- apply(arr, c(1L, 2L), mean,   na.rm = TRUE)
-    d <- apply(arr, c(1L, 2L), median, na.rm = TRUE)
-    lo <- apply(arr, c(1L, 2L), quantile,
-                probs = envelope_quantiles[1L], na.rm = TRUE)
-    hi <- apply(arr, c(1L, 2L), quantile,
-                probs = envelope_quantiles[2L], na.rm = TRUE)
-    # Always return matrices even for single-location configs
-    if (!is.matrix(m)) { m <- matrix(m, nrow = 1L); d <- matrix(d, nrow = 1L)
-                          lo <- matrix(lo, nrow = 1L); hi <- matrix(hi, nrow = 1L) }
-    list(mean = m, median = d, lower = lo, upper = hi)
-  }
-
-  cases_stats  <- .calc_stats(cases_array)
-  deaths_stats <- .calc_stats(deaths_array)
-
-  # ---------------------------------------------------------------------------
-  # Return ensemble object
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Return mosaic_ensemble object
+  # ===========================================================================
 
   structure(
     list(
-      cases_stats        = cases_stats,
-      deaths_stats       = deaths_stats,
-      cases_array        = cases_array,
-      deaths_array       = deaths_array,
-      obs_cases          = obs_cases,
-      obs_deaths         = obs_deaths,
-      n_simulations      = n_simulations,
-      n_successful       = n_successful,
-      seeds              = seeds,
-      location_names     = location_names,
-      n_locations        = n_locations,
-      n_time_points      = n_time_points,
-      envelope_quantiles = envelope_quantiles,
-      date_start         = config$date_start,
-      date_stop          = config$date_stop
+      cases_mean                = cases_stats$mean,
+      cases_median              = cases_stats$median,
+      deaths_mean               = deaths_stats$mean,
+      deaths_median             = deaths_stats$median,
+      ci_bounds                 = list(cases = cases_stats$ci_bounds,
+                                       deaths = deaths_stats$ci_bounds),
+      obs_cases                 = obs_cases,
+      obs_deaths                = obs_deaths,
+      cases_array               = cases_array,
+      deaths_array              = deaths_array,
+      parameter_weights         = parameter_weights,
+      n_param_sets              = n_param_sets,
+      n_simulations_per_config  = as.integer(n_simulations_per_config),
+      n_successful              = n_successful,
+      location_names            = location_names,
+      n_locations               = n_locations,
+      n_time_points             = n_time_points,
+      date_start                = date_start,
+      date_stop                 = date_stop,
+      envelope_quantiles        = envelope_quantiles
     ),
     class = "mosaic_ensemble"
   )

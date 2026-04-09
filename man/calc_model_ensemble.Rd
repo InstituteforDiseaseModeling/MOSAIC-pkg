@@ -2,71 +2,94 @@
 % Please edit documentation in R/calc_model_ensemble.R
 \name{calc_model_ensemble}
 \alias{calc_model_ensemble}
-\title{Run Stochastic Ensemble Simulations for Best Model}
+\title{Compute Weighted Ensemble Predictions from Multiple Parameter Sets}
 \usage{
 calc_model_ensemble(
   config,
-  n_simulations = 100L,
-  envelope_quantiles = c(0.025, 0.975),
+  parameter_seeds = NULL,
+  configs = NULL,
+  parameter_weights = NULL,
+  n_simulations_per_config = 10L,
+  envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
+  PATHS = NULL,
+  priors = NULL,
+  sampling_args = list(),
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
+  precomputed_results = NULL,
   verbose = TRUE
 )
 }
 \arguments{
-\item{config}{Named list. Model configuration as returned by
-\code{\link{sample_parameters}} (typically \code{config_best}).}
+\item{config}{Base configuration object (provides observed data and template).}
 
-\item{n_simulations}{Integer. Number of stochastic LASER simulations to run.
-Default \code{100L}.}
+\item{parameter_seeds}{Numeric vector of seeds for \code{\link{sample_parameters}}.
+Each seed generates a different parameter set.}
 
-\item{envelope_quantiles}{Numeric vector of length 2. Lower and upper quantiles
-for uncertainty envelopes. Stored in return object for use by
-\code{\link{plot_model_ensemble}}. Default \code{c(0.025, 0.975)}.}
+\item{configs}{List of pre-sampled configuration objects (direct mode).
+Mutually exclusive with \code{parameter_seeds}.}
 
-\item{parallel}{Logical. Use R parallel cluster for simulations. Default
-\code{FALSE}.}
+\item{parameter_weights}{Numeric vector of importance weights, same length as
+\code{parameter_seeds} or \code{configs}. Normalized internally to sum to 1.
+If \code{NULL}, all parameter sets are weighted equally.}
 
-\item{n_cores}{Integer or \code{NULL}. Number of cores when
-\code{parallel = TRUE}. \code{NULL} uses \code{detectCores() - 1}.}
+\item{n_simulations_per_config}{Integer. Stochastic LASER reruns per parameter
+set. Default \code{10L}.}
 
-\item{root_dir}{Character. MOSAIC root directory. Required when
-\code{parallel = TRUE} so workers can call \code{set_root_directory()}.}
+\item{envelope_quantiles}{Numeric vector of quantiles for confidence intervals.
+Must be even length to form lower/upper pairs. Default
+\code{c(0.025, 0.25, 0.75, 0.975)} for 50\\% and 95\\% CIs.}
+
+\item{PATHS}{List of paths from \code{\link{get_paths}}. Required for sampling mode.}
+
+\item{priors}{Priors object for parameter sampling. Required for sampling mode.}
+
+\item{sampling_args}{Named list of additional arguments for
+\code{\link{sample_parameters}}.}
+
+\item{parallel}{Logical. Use parallel cluster for simulations. Default \code{FALSE}.}
+
+\item{n_cores}{Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.}
+
+\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.}
+
+\item{precomputed_results}{Optional list of pre-gathered LASER results (e.g. from Dask).
+Each element must have \code{$param_idx}, \code{$stoch_idx},
+\code{$reported_cases}, \code{$disease_deaths}, and \code{$success}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }
 \value{
-A named list (S3 class \code{"mosaic_ensemble"}) containing:
+S3 object of class \code{"mosaic_ensemble"} containing:
 \describe{
-\item{cases_stats}{List with \code{mean}, \code{median}, \code{lower},
-\code{upper} matrices (n_locations × n_time_points).}
-\item{deaths_stats}{Same structure as \code{cases_stats} for deaths.}
-\item{cases_array}{3-D array (n_locations × n_time_points × n_successful)
-of raw per-simulation case counts.}
-\item{deaths_array}{Same for deaths.}
-\item{obs_cases}{Observed cases matrix from \code{config$reported_cases}.}
-\item{obs_deaths}{Observed deaths matrix from \code{config$reported_deaths}.}
-\item{n_simulations}{Requested number of simulations.}
-\item{n_successful}{Number that completed without error.}
-\item{seeds}{Integer vector of seeds used.}
+\item{cases_mean}{Matrix (n_locations x n_time_points) of weighted mean cases.}
+\item{cases_median}{Matrix of weighted median cases.}
+\item{deaths_mean}{Matrix of weighted mean deaths.}
+\item{deaths_median}{Matrix of weighted median deaths.}
+\item{ci_bounds}{List of CI pairs, each with \code{$lower} and \code{$upper} matrices.}
+\item{obs_cases}{Observed cases matrix from config.}
+\item{obs_deaths}{Observed deaths matrix from config.}
+\item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x n_stoch).}
+\item{deaths_array}{4-D array matching cases_array dimensions.}
+\item{parameter_weights}{Normalized weight vector.}
+\item{n_param_sets}{Number of parameter sets.}
+\item{n_simulations_per_config}{Stochastic runs per parameter set.}
+\item{n_successful}{Number of successful simulations.}
 \item{location_names}{Character vector of location names.}
-\item{n_locations}{Number of locations.}
-\item{n_time_points}{Number of time steps.}
-\item{envelope_quantiles}{The quantile pair passed in (for plotting).}
-\item{date_start}{Character. Simulation start date from config.}
-\item{date_stop}{Character. Simulation end date from config.}
+\item{date_start}{Simulation start date.}
+\item{date_stop}{Simulation end date.}
+\item{envelope_quantiles}{Quantiles used for CI envelopes.}
 }
 }
 \description{
-Runs \code{n_simulations} stochastic LASER simulations of a single model
-configuration (typically \code{config_best}) with different random seeds and
-aggregates the results into mean predictions and uncertainty envelopes.
+Runs LASER simulations for multiple parameter sets (with stochastic reruns
+per set) and aggregates results using importance weights. Returns a
+\code{mosaic_ensemble} object containing weighted mean, median, and quantile
+envelopes for cases and deaths.
 
-Separating computation from plotting allows ensemble results to be used for
-R², bias ratios, windowed fit metrics, and summary statistics without
-necessarily generating plots, and avoids running simulations twice when both
-metrics and plots are needed.
+This is the computation half of the ensemble workflow. Use
+\code{\link{plot_model_ensemble}} to render plots from the returned object.
 }
 \seealso{
 \code{\link{plot_model_ensemble}} to render plots from this object.

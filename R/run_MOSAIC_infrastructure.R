@@ -387,8 +387,10 @@
 #' @param config Base LASER config (for provenance fields)
 #' @param r2_cases R-squared for cases (best model vs observed)
 #' @param r2_deaths R-squared for deaths (best model vs observed)
-#' @param r2_cases_ensemble R-squared for cases (ensemble mean vs observed)
-#' @param r2_deaths_ensemble R-squared for deaths (ensemble mean vs observed)
+#' @param r2_cases_ensemble R-squared for cases (weighted median of posterior ensemble)
+#' @param r2_deaths_ensemble R-squared for deaths (weighted median of posterior ensemble)
+#' @param n_ensemble_params Number of parameter sets in the posterior ensemble
+#' @param n_ensemble_stochastic_per Stochastic reruns per parameter set
 #' @param io I/O settings for JSON writing
 #' @noRd
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
@@ -399,6 +401,8 @@
                                        bias_ratio_deaths = NA_real_,
                                        bias_ratio_cases_ensemble = NA_real_,
                                        bias_ratio_deaths_ensemble = NA_real_,
+                                       n_ensemble_params = NA_integer_,
+                                       n_ensemble_stochastic_per = NA_integer_,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -451,7 +455,8 @@
     n_simulations_successful   = state$total_sims_successful,
     n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
     n_best_subset              = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
-    # Convergence and model fit (best = single best model, ensemble = mean of N stochastic runs)
+    # Convergence and model fit
+    # best = single best parameter set; ensemble = weighted median of posterior ensemble
     converged     = isTRUE(state$converged),
     r2_cases      = if (!is.na(r2_cases)) round(r2_cases, 4) else NA_real_,
     r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
@@ -461,6 +466,8 @@
     bias_ratio_deaths  = if (!is.na(bias_ratio_deaths)) round(bias_ratio_deaths, 4) else NA_real_,
     bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
     bias_ratio_deaths_ensemble = if (!is.na(bias_ratio_deaths_ensemble)) round(bias_ratio_deaths_ensemble, 4) else NA_real_,
+    n_ensemble_params          = if (!is.na(n_ensemble_params)) as.integer(n_ensemble_params) else NA_integer_,
+    n_ensemble_stochastic_per  = if (!is.na(n_ensemble_stochastic_per)) as.integer(n_ensemble_stochastic_per) else NA_integer_,
     # ESS summary
     ess_n_params        = ess_stats$n_params,
     ess_n_above_target  = ess_stats$n_above_target,
@@ -536,16 +543,14 @@
     r2_c <- bias_c <- NA_real_
     if (length(idx_c) > 2) {
       o <- obs_cases[idx_c]; e <- est_cases[idx_c]
-      v <- is.finite(o) & is.finite(e)
-      if (sum(v) > 2) r2_c <- stats::cor(o[v], e[v])^2
+      r2_c <- calc_model_R2(o, e)
       bias_c <- calc_bias_ratio(o, e)
     }
     # Deaths
     r2_d <- bias_d <- NA_real_
     if (length(idx_d) > 2) {
       o <- obs_deaths[idx_d]; e <- est_deaths[idx_d]
-      v <- is.finite(o) & is.finite(e)
-      if (sum(v) > 2) r2_d <- stats::cor(o[v], e[v])^2
+      r2_d <- calc_model_R2(o, e)
       bias_d <- calc_bias_ratio(o, e)
     }
 

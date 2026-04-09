@@ -1784,17 +1784,11 @@ run_MOSAIC <- function(config,
 
   # Compute overall model-fit R² and bias ratio (best model vs observed data)
   r2_cases <- tryCatch({
-    obs <- as.numeric(unlist(config_best$reported_cases))
-    est <- as.numeric(unlist(best_model$results$reported_cases))
-    valid <- is.finite(obs) & is.finite(est)
-    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+    calc_model_R2(config_best$reported_cases, best_model$results$reported_cases)
   }, error = function(e) NA_real_)
 
   r2_deaths <- tryCatch({
-    obs <- as.numeric(unlist(config_best$reported_deaths))
-    est <- as.numeric(unlist(best_model$results$disease_deaths))
-    valid <- is.finite(obs) & is.finite(est)
-    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+    calc_model_R2(config_best$reported_deaths, best_model$results$disease_deaths)
   }, error = function(e) NA_real_)
 
   bias_ratio_cases <- tryCatch({
@@ -1831,11 +1825,11 @@ run_MOSAIC <- function(config,
       client$upload_file(worker_py_path)
       mosaic_worker <- reticulate::import("mosaic_dask_worker")
 
-      # Build stochastic param configs
+      # Build stochastic param configs (always, not just when plots = TRUE)
       stoch_param_configs <- NULL
       n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
 
-      if (control$paths$plots && sum(results$is_best_subset) > 0) {
+      if (sum(results$is_best_subset) > 0) {
         best_subset_results <- results[results$is_best_subset == TRUE, ]
         stoch_param_seeds   <- best_subset_results$seed_sim
         stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
@@ -1888,30 +1882,50 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # ENSEMBLE R², WINDOWED METRICS, AND PREDICTIVE PLOTS
+  # WEIGHTED POSTERIOR ENSEMBLE: R², WINDOWED METRICS, AND PREDICTIVE PLOTS
   # ===========================================================================
 
-  # Run ensemble once via calc_model_ensemble(). The same object is then used
-  # for (a) R²/bias ratios, (b) windowed fit metrics, and (c) predictive plots
-  # when plots = TRUE. This avoids running simulations twice.
+  # Compute the true posterior-weighted ensemble ALWAYS (outside plots flag).
+  # The same mosaic_ensemble object is used for:
+  #   (a) R²/bias ratios (summary.json)
+  #   (b) windowed fit metrics
+  #   (c) predictive plots (when plots = TRUE)
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
+  n_ensemble_params          <- 0L
+  n_ensemble_stochastic_per  <- as.integer(control$predictions$ensemble_n_sims_per_param %||% 10L)
 
-  if (n_ensemble_r2 > 1L) {
-    log_msg("Computing ensemble R\u00b2 (%d stochastic runs)...", n_ensemble_r2)
+  if (sum(results$is_best_subset) > 0) {
+    best_subset_results <- results[results$is_best_subset == TRUE, ]
+    param_seeds   <- best_subset_results$seed_sim
+    param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+
+    if (length(param_weights) > 0) {
+      param_weights <- param_weights / sum(param_weights)
+    } else {
+      param_weights <- NULL
+    }
+
+    log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
+            length(param_seeds), n_ensemble_stochastic_per)
 
     ensemble <- tryCatch(
       calc_model_ensemble(
-        config              = config_best,
-        n_simulations       = n_ensemble_r2,
-        envelope_quantiles  = c(0.025, 0.975),
-        parallel            = control$parallel$enable,
-        n_cores             = control$parallel$n_cores,
-        root_dir            = root_dir,
-        precomputed_results = postca_dask$ensemble_results,
-        verbose            = FALSE
+        config                   = config,
+        parameter_seeds          = param_seeds,
+        parameter_weights        = param_weights,
+        n_simulations_per_config = n_ensemble_stochastic_per,
+        envelope_quantiles       = c(0.025, 0.25, 0.75, 0.975),
+        PATHS                    = PATHS,
+        priors                   = priors,
+        sampling_args            = sampling_args,
+        parallel                 = control$parallel$enable,
+        n_cores                  = control$parallel$n_cores,
+        root_dir                 = root_dir,
+        precomputed_results      = postca_dask$stochastic_results,
+        verbose                  = control$logging$verbose
       ),
       error = function(e) {
         log_msg("Warning: calc_model_ensemble failed: %s", e$message)
@@ -1921,27 +1935,24 @@ run_MOSAIC <- function(config,
 
     if (!is.null(ensemble)) {
 
-      # R² and bias directly from ensemble means — no extra simulations
-      mean_c_flat <- as.numeric(ensemble$cases_stats$mean)
-      mean_d_flat <- as.numeric(ensemble$deaths_stats$mean)
-      obs_c_flat  <- as.numeric(ensemble$obs_cases)
-      obs_d_flat  <- as.numeric(ensemble$obs_deaths)
+      n_ensemble_params <- ensemble$n_param_sets
 
-      valid_c <- is.finite(obs_c_flat) & is.finite(mean_c_flat)
-      valid_d <- is.finite(obs_d_flat) & is.finite(mean_d_flat)
+      # R² and bias from weighted median predictions
+      median_c_flat <- as.numeric(ensemble$cases_median)
+      median_d_flat <- as.numeric(ensemble$deaths_median)
+      obs_c_flat    <- as.numeric(ensemble$obs_cases)
+      obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
-      r2_cases_ensemble  <- if (sum(valid_c) > 2L)
-        stats::cor(obs_c_flat[valid_c], mean_c_flat[valid_c])^2 else NA_real_
-      r2_deaths_ensemble <- if (sum(valid_d) > 2L)
-        stats::cor(obs_d_flat[valid_d], mean_d_flat[valid_d])^2 else NA_real_
+      r2_cases_ensemble  <- calc_model_R2(obs_c_flat, median_c_flat)
+      r2_deaths_ensemble <- calc_model_R2(obs_d_flat, median_d_flat)
 
       bias_ratio_cases_ensemble  <- tryCatch(
-        calc_bias_ratio(obs_c_flat, mean_c_flat), error = function(e) NA_real_)
+        calc_bias_ratio(obs_c_flat, median_c_flat), error = function(e) NA_real_)
       bias_ratio_deaths_ensemble <- tryCatch(
-        calc_bias_ratio(obs_d_flat, mean_d_flat), error = function(e) NA_real_)
+        calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
 
-      log_msg("Ensemble R\u00b2 (%d runs): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-              n_ensemble_r2,
+      log_msg("Ensemble R\u00b2 (%d params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+              n_ensemble_params, n_ensemble_stochastic_per,
               ifelse(is.na(r2_cases_ensemble),          0, r2_cases_ensemble),
               ifelse(is.na(bias_ratio_cases_ensemble),  0, bias_ratio_cases_ensemble),
               ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
@@ -1949,15 +1960,15 @@ run_MOSAIC <- function(config,
 
       # Windowed model fit metrics
       n_ts      <- ensemble$n_time_points
-      dates_vec <- seq.Date(as.Date(config_best$date_start), by = "day", length.out = n_ts)
+      dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
 
       fit_windows <- control$predictions$fit_windows %||% c(365L, 120L, 90L, 60L, 30L)
 
       windowed_metrics <- .mosaic_compute_windowed_metrics(
         obs_cases  = obs_c_flat,
-        est_cases  = mean_c_flat,
+        est_cases  = median_c_flat,
         obs_deaths = obs_d_flat,
-        est_deaths = mean_d_flat,
+        est_deaths = median_d_flat,
         dates      = dates_vec,
         windows    = fit_windows
       )
@@ -1979,7 +1990,7 @@ run_MOSAIC <- function(config,
         wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
         tryCatch({
           .mosaic_plot_windowed_metrics(windowed_metrics, wm_plot_path,
-                                        location = paste(config_best$location_name, collapse = ", "))
+                                        location = paste(config$location_name, collapse = ", "))
           log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
         }, error = function(e) {
           log_msg("Warning: windowed metrics plot failed: %s", e$message)
@@ -1988,7 +1999,7 @@ run_MOSAIC <- function(config,
 
       # Predictive plots — reuse ensemble, no second set of simulations
       if (control$paths$plots) {
-        log_msg("Generating posterior predictive plots (best model)...")
+        log_msg("Generating posterior ensemble plots...")
         plot_model_ensemble(
           ensemble         = ensemble,
           output_dir       = dirs$res_fig_pred,
@@ -1998,69 +2009,11 @@ run_MOSAIC <- function(config,
       }
 
     } else {
-      log_msg("Warning: calc_model_ensemble failed — skipping ensemble R² and predictive plots")
+      log_msg("Warning: calc_model_ensemble failed — skipping ensemble R\u00b2 and predictive plots")
     }
 
-  } else if (control$paths$plots) {
-    # n_ensemble_r2 <= 1: no ensemble metrics wanted, but still generate plots
-    log_msg("Generating posterior predictive plots (best model, n_simulations = 2)...")
-    ensemble_plot <- tryCatch(
-      calc_model_ensemble(
-        config             = config_best,
-        n_simulations      = 2L,
-        envelope_quantiles = c(0.025, 0.975),
-        parallel           = FALSE,
-        root_dir           = root_dir,
-        verbose            = FALSE
-      ),
-      error = function(e) {
-        log_msg("Warning: ensemble for plots failed: %s", e$message)
-        NULL
-      }
-    )
-    if (!is.null(ensemble_plot)) {
-      plot_model_ensemble(
-        ensemble         = ensemble_plot,
-        output_dir       = dirs$res_fig_pred,
-        save_predictions = TRUE,
-        verbose          = control$logging$verbose
-      )
-    }
-  }
-
-  # ===========================================================================
-  # PARAMETER + STOCHASTIC UNCERTAINTY PLOTS
-  # ===========================================================================
-
-  if (control$paths$plots && sum(results$is_best_subset) > 0) {
-    log_msg("Generating parameter uncertainty ensemble (posterior parameter configs × stochastic LASER)...")
-    best_subset_results <- results[results$is_best_subset == TRUE, ]
-    param_seeds <- best_subset_results$seed_sim
-    param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
-
-    if (length(param_weights) > 0) {
-      param_weights <- param_weights / sum(param_weights)
-    } else {
-      param_weights <- NULL
-    }
-
-    plot_model_fit_stochastic_param(
-      config = config,
-      parameter_seeds = param_seeds,
-      parameter_weights = param_weights,
-      n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
-      envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
-      PATHS = PATHS,
-      priors = priors,
-      sampling_args = sampling_args,
-      output_dir = dirs$res_fig_pred,
-      save_predictions = TRUE,
-      parallel = control$parallel$enable,
-      precomputed_results = postca_dask$stochastic_results,
-      n_cores = control$parallel$n_cores,
-      root_dir = root_dir,
-      verbose = control$logging$verbose
-    )
+  } else {
+    log_msg("Warning: no best subset — skipping posterior ensemble")
   }
 
   # ===========================================================================
@@ -2148,6 +2101,8 @@ run_MOSAIC <- function(config,
                                              bias_ratio_deaths = bias_ratio_deaths,
                                              bias_ratio_cases_ensemble = bias_ratio_cases_ensemble,
                                              bias_ratio_deaths_ensemble = bias_ratio_deaths_ensemble,
+                                             n_ensemble_params = n_ensemble_params,
+                                             n_ensemble_stochastic_per = n_ensemble_stochastic_per,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
