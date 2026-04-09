@@ -190,7 +190,7 @@ est_suitability <- function(PATHS,
 
      if (is.null(fit_date_stop)) {
           # Find last date with both cholera cases AND complete ENSO data for fitting
-          enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
+          enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
           complete_cases <- d_all[!is.na(d_all$cases) & d_all$cases >= 0, ]
           enso_complete <- complete_cases[complete.cases(complete_cases[enso_cols]), ]
           if (nrow(enso_complete) > 0) {
@@ -215,7 +215,7 @@ est_suitability <- function(PATHS,
 
      if (is.null(pred_date_stop)) {
           # Extend to full ENSO data availability for prediction
-          enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
+          enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
           enso_complete <- d_all[complete.cases(d_all[enso_cols]), ]
           if (nrow(enso_complete) > 0) {
                pred_date_stop <- max(enso_complete$date_stop, na.rm = TRUE)
@@ -245,7 +245,7 @@ est_suitability <- function(PATHS,
           "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
           "precipitation_sum", "snowfall_sum", "pressure_msl_mean",
           "soil_moisture_0_to_10cm_mean", "et0_fao_evapotranspiration_sum",
-          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation"
+          "IOD", "ENSO3", "ENSO34", "ENSO4", "elevation"
      )
 
      covariates_all <- c(
@@ -270,7 +270,7 @@ est_suitability <- function(PATHS,
           "temp_anom"                       , "vpd_anom"                        , "soil_moisture_anom"          ,
           "precip_extreme_p90_count"        , "heatwave_days"                   , "dry_spell_len"               ,
           "temp_precip_interaction"         , "humidity_temp_interaction"       , "enso_precip_interaction"     ,
-          "dmi_temp_interaction"            , "elevation_temp_interaction"      , "moisture_temp_interaction"   ,
+          "iod_temp_interaction"            , "elevation_temp_interaction"      , "moisture_temp_interaction"   ,
           "wash_precip_extreme_interaction" , "urban_precip_anom_interaction"   , "precip_anom_sq"              ,
           "temp_anom_sq"                    , "log1p_cum_vaccine_doses"         , "vpd"                         ,
           "moisture_deficit"                , "aridity_index"                   , "spei_approx"                 ,
@@ -279,7 +279,7 @@ est_suitability <- function(PATHS,
           "dew_point_2m_mean",               "dew_point_2m_min"   ,             "pressure_msl_mean"  ,
           "relative_humidity_2m_max",        "relative_humidity_2m_min"  ,      "shortwave_radiation_sum" ,
           "wind_speed_10m_max",
-          "DMI", "ENSO3", "ENSO34", "ENSO4", "elevation",
+          "IOD", "ENSO3", "ENSO34", "ENSO4", "elevation",
           colnames(d_all)[grep('_lag', colnames(d_all))]
      )
 

@@ -33,7 +33,7 @@
 #' The function performs the following key steps:
 #' \itemize{
 #'   \item Loads and merges climate data (temperature, precipitation, etc.) from multiple countries
-#'   \item Loads ENSO and DMI climate index data
+#'   \item Loads ENSO and IOD climate index data
 #'   \item Loads combined weekly cholera case surveillance data from WHO, JHU, and supplemental sources
 #'   \item Merges all datasets by country, year, and week
 #'   \item Creates environmental suitability indicator (\code{cases_binary}) using either epidemic peak-based or threshold-based methods
@@ -93,8 +93,8 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      combined_climate_data <- do.call(rbind, climate_data_list)
      rm(climate_data_list)
 
-     # Load ENSO data (compiled ENSO and DMI data)
-     message("Loading ENSO and DMI data...")
+     # Load ENSO data (compiled ENSO and IOD data)
+     message("Loading ENSO and IOD data...")
      enso_file <- file.path(PATHS$DATA_ENSO, "compiled_ENSO_1970_2025_weekly.csv")
      enso_data <- utils::read.csv(enso_file, stringsAsFactors = FALSE)
 
@@ -165,7 +165,7 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      combined_climate_data_wide <- combined_climate_data_wide %>%
           dplyr::select(-date_start, -date_stop)
 
-     # Convert ENSO data to wide format (DMI, ENSO3, ENSO34, ENSO4 as new columns)
+     # Convert ENSO data to wide format (IOD, ENSO3, ENSO34, ENSO4 as new columns)
      enso_data_wide <- tidyr::pivot_wider(
           enso_data,
           names_from = variable,
@@ -450,8 +450,8 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           d$enso_precip_interaction <- d$ENSO34 * d$precipitation_sum
      }
 
-     if (all(c("DMI", "temperature_2m_mean") %in% names(d))) {
-          d$dmi_temp_interaction <- d$DMI * d$temperature_2m_mean
+     if (all(c("IOD", "temperature_2m_mean") %in% names(d))) {
+          d$iod_temp_interaction <- d$IOD * d$temperature_2m_mean
      }
 
      # Add geographic data (elevation, lat/lon, region)
@@ -511,7 +511,7 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      numeric_cols <- setdiff(numeric_cols, exclude_cols)
 
      # Separate time series variables from static variables
-     timeseries_vars <- c("DMI", "ENSO3", "ENSO34", "ENSO4",
+     timeseries_vars <- c("IOD", "ENSO3", "ENSO34", "ENSO4",
                          "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
                          "precipitation_sum", "relative_humidity_2m_mean",
                          "wind_speed_10m_mean", "cloud_cover_mean",
@@ -519,7 +519,7 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                          "vpd", "moisture_deficit", "aridity_index", "spei_approx",
                          "gdd_cholera", "diurnal_temp_range", "heat_index",
                          "temp_precip_interaction", "humidity_temp_interaction",
-                         "enso_precip_interaction", "dmi_temp_interaction",
+                         "enso_precip_interaction", "iod_temp_interaction",
                          "elevation_temp_interaction", "moisture_temp_interaction")
 
      static_vars <- setdiff(numeric_cols, timeseries_vars)
@@ -1097,11 +1097,11 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                     ENSO4_lag40 = dplyr::lag(ENSO4, 40),    # 10 months - near-optimal (0.226)
                     ENSO4_lag44 = dplyr::lag(ENSO4, 44),    # 11 months - peak correlation (0.232)
 
-                    # DMI (Indian Ocean Dipole) - stable across 4-5 months, some immediate effects
-                    DMI_lag0 = DMI,                         # Immediate effects (strong in some countries)
-                    DMI_lag4 = dplyr::lag(DMI, 4),         # 1 month - stable period
-                    DMI_lag16 = dplyr::lag(DMI, 16),       # 4 months - good performance
-                    DMI_lag20 = dplyr::lag(DMI, 20)        # 5 months - optimal period (0.185)
+                    # IOD (Indian Ocean Dipole) - stable across 4-5 months, some immediate effects
+                    IOD_lag0 = IOD,                         # Immediate effects (strong in some countries)
+                    IOD_lag4 = dplyr::lag(IOD, 4),         # 1 month - stable period
+                    IOD_lag16 = dplyr::lag(IOD, 16),       # 4 months - good performance
+                    IOD_lag20 = dplyr::lag(IOD, 20)        # 5 months - optimal period (0.185)
                ) %>%
                dplyr::ungroup()
           
@@ -1150,7 +1150,7 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                    "Unimproved_Sanitation", "Open_Defecation")
      
      # 6. ENSO/Climate indices
-     enso_cols <- c("DMI", "ENSO3", "ENSO34", "ENSO4")
+     enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
      
      # 7. Basic climate variables
      basic_climate_cols <- c("temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
@@ -1188,7 +1188,7 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      
      # 13. Climate interaction terms (original)
      interaction_cols <- c("temp_precip_interaction", "humidity_temp_interaction",
-                          "enso_precip_interaction", "dmi_temp_interaction",
+                          "enso_precip_interaction", "iod_temp_interaction",
                           "elevation_temp_interaction", "moisture_temp_interaction")
      
      # 14. Enhanced interaction terms (WASH × extremes, Urban × climate) 
@@ -1214,7 +1214,7 @@ process_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                        "ENSO3_lag4", "ENSO3_lag16", "ENSO3_lag20", "ENSO3_lag24",
                        "ENSO34_lag6", "ENSO34_lag24", "ENSO34_lag44",
                        "ENSO4_lag40", "ENSO4_lag44",
-                       "DMI_lag0", "DMI_lag4", "DMI_lag16", "DMI_lag20")
+                       "IOD_lag0", "IOD_lag4", "IOD_lag16", "IOD_lag20")
      } else {
           lag_cols <- c()
      }

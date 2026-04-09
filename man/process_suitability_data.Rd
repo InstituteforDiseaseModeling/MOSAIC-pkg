@@ -58,7 +58,7 @@ This function loads climate data, ENSO data, and weekly cholera cases data, proc
 The function performs the following key steps:
 \itemize{
 \item Loads and merges climate data (temperature, precipitation, etc.) from multiple countries
-\item Loads ENSO and DMI climate index data
+\item Loads ENSO and IOD climate index data
 \item Loads combined weekly cholera case surveillance data from WHO, JHU, and supplemental sources
 \item Merges all datasets by country, year, and week
 \item Creates environmental suitability indicator (\code{cases_binary}) using either epidemic peak-based or threshold-based methods
