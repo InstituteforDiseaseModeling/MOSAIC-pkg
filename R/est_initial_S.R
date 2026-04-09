@@ -54,7 +54,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' # After running est_initial_V1_V2, est_initial_E_I, est_initial_R
+#' # After running est_initial_E_I, est_initial_R
 #' PATHS <- get_paths()
 #' priors_updated <- priors_default  # With updated V1,V2,E,I,R compartments
 #'
@@ -72,7 +72,6 @@
 #' }
 #'
 #' @seealso
-#' \code{\link{est_initial_V1_V2}} for vaccination compartment estimation
 #' \code{\link{est_initial_E_I}} for infection compartment estimation
 #' \code{\link{est_initial_R}} for recovered compartment estimation
 #' \code{\link{fit_beta_from_ci}} for Beta distribution fitting with CI constraints
