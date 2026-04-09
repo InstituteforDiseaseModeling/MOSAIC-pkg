@@ -49,7 +49,7 @@ test_that("process_ENSO_data handles overlapping data correctly", {
   mockery::stub(process_ENSO_data, 'get_DMI_historical', mock_historical_dmi)
   mockery::stub(process_ENSO_data, 'get_DMI_forecast', mock_forecast_dmi)  
   mockery::stub(process_ENSO_data, 'get_ENSO_historical', mock_historical_enso)
-  mockery::stub(process_ENSO_data, 'get_ENSO_forecast', mock_forecast_enso)
+  mockery::stub(process_ENSO_data, '.read_enso_forecast_json', mock_forecast_enso)
   
   # Test overlap handling - should prefer historical data
   expect_message(
@@ -132,7 +132,7 @@ test_that("process_ENSO_data works without overlaps", {
   mockery::stub(process_ENSO_data, 'get_DMI_historical', mock_historical_dmi)
   mockery::stub(process_ENSO_data, 'get_DMI_forecast', mock_forecast_dmi)
   mockery::stub(process_ENSO_data, 'get_ENSO_historical', mock_historical_enso)
-  mockery::stub(process_ENSO_data, 'get_ENSO_forecast', mock_forecast_enso)
+  mockery::stub(process_ENSO_data, '.read_enso_forecast_json', mock_forecast_enso)
   
   # Should run without overlap messages
   expect_no_message(

@@ -53,7 +53,6 @@ reference:
       - process_climate_data
       - get_DMI_forecast
       - get_DMI_historical
-      - get_ENSO_forecast
       - get_ENSO_historical
       - process_ENSO_data
       - get_climate_historical
@@ -96,7 +95,6 @@ reference:
       - est_vaccine_effectiveness
       - est_immune_decay
       - est_symptomatic_prop
-      - est_transmission_spatial_structure
 
   - title: "Model configuration examples"
     contents:
@@ -163,7 +161,6 @@ reference:
   - title: "Shiny Apps"
     contents:
       - run_WHO_annual_data_app
-      - run_spatial_transmission_shiny_app
 
   - title: "Plotting Functions"
     contents:

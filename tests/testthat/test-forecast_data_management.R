@@ -1,40 +1,29 @@
 test_that("forecast data management functions work", {
-  
+
   # Test freshness checking
   expect_no_error(freshness <- check_forecast_freshness())
   expect_true(is.list(freshness))
   expect_true(all(c("overall_status", "enso", "dmi") %in% names(freshness)))
-  
-  # Test JSON loading functions
-  expect_no_error(enso_json <- get_ENSO_forecast_from_json())
+
+  # Test DMI JSON loading function
   expect_no_error(dmi_json <- get_DMI_forecast_from_json())
-  
+
   # Check structure of JSON-loaded data
-  expect_true(is.data.frame(enso_json))
   expect_true(is.data.frame(dmi_json))
-  expect_true(all(c("year", "month", "month_name", "variable", "value") %in% names(enso_json)))
   expect_true(all(c("year", "month", "month_name", "variable", "value") %in% names(dmi_json)))
-  
+
   # Check variable names
-  expect_true(all(enso_json$variable %in% c("ENSO3", "ENSO34", "ENSO4")))
   expect_true(all(dmi_json$variable == "DMI"))
 })
 
-test_that("enhanced forecast functions work with JSON fallback", {
-  
-  # Test ENSO forecast with JSON enabled (default)
-  expect_no_error(enso_data <- get_ENSO_forecast())
-  expect_true(is.data.frame(enso_data))
-  expect_true(nrow(enso_data) > 0)
-  
-  # Test DMI forecast with JSON enabled (default) 
+test_that("DMI forecast function works", {
+
+  # Test DMI forecast with JSON enabled (default)
   expect_no_error(dmi_data <- get_DMI_forecast())
   expect_true(is.data.frame(dmi_data))
   expect_true(nrow(dmi_data) > 0)
-  
-  # The use_json parameter was removed; functions now always use JSON fallback.
+
   # Verify the returned data has expected structure.
-  expect_true(all(c("year", "month", "value") %in% names(enso_data)))
   expect_true(all(c("year", "month", "value") %in% names(dmi_data)))
 })
 
@@ -83,19 +72,15 @@ test_that("freshness status calculation works correctly", {
   expect_false(status_fresh$needs_update)
 })
 
-test_that("data consistency between forecast functions", {
+test_that("DMI forecast data consistency", {
 
-  # Get data from both forecast functions
+  # Get DMI forecast data
   suppressMessages({
-    enso_data <- get_ENSO_forecast()
     dmi_data <- get_DMI_forecast()
   })
 
-  # Both should have consistent column structure
-  expect_true(all(c("year", "month", "value") %in% names(enso_data)))
+  # Should have consistent column structure
   expect_true(all(c("year", "month", "value") %in% names(dmi_data)))
-  expect_true(is.numeric(enso_data$year))
-  expect_true(is.numeric(enso_data$value))
   expect_true(is.numeric(dmi_data$year))
   expect_true(is.numeric(dmi_data$value))
 })
