@@ -1322,6 +1322,7 @@ run_MOSAIC <- function(config,
     likelihood_col = "likelihood",
     n_grid = 100,
     method = control$targets$ESS_method,
+    marginal_method = control$targets$ESS_marginal_method %||% "kde",
     verbose = control$logging$verbose
   )
 
@@ -2524,7 +2525,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     max_best_subset = 1000,      # Maximum subset size (~1.5% of typical retained)
 
     # ESS calculation method
-    ESS_method = "perplexity"    # "kish" or "perplexity"
+    ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
+    ESS_marginal_method = "kde"  # "kde", "owen", or "binned" (per-parameter marginal method)
   )
 
   # Default prediction settings

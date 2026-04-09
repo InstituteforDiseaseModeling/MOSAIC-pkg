@@ -639,7 +639,7 @@
   }
 
   # Skip ESS calculation if insufficient samples
-  # calc_model_ess_parameter requires at least 50 samples for KDE
+  # calc_model_ess_parameter requires at least 50 samples
   if (nrow(ess_check_results) < 50) {
     log_msg("  Skipping ESS check: %d simulations (need at least 50)", nrow(ess_check_results))
     return(state)
@@ -652,6 +652,7 @@
       param_names = param_names_est,
       likelihood_col = "likelihood",
       method = control$targets$ESS_method,
+      marginal_method = control$targets$ESS_marginal_method %||% "kde",
       verbose = FALSE
     )
   }, error = function(e) {
