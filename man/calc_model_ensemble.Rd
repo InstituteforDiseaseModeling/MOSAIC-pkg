@@ -39,7 +39,7 @@ set. Default \code{10L}.}
 
 \item{envelope_quantiles}{Numeric vector of quantiles for confidence intervals.
 Must be even length to form lower/upper pairs. Default
-\code{c(0.025, 0.25, 0.75, 0.975)} for 50\\% and 95\\% CIs.}
+\code{c(0.025, 0.25, 0.75, 0.975)} for 50 and 95 percent CIs.}
 
 \item{PATHS}{List of paths from \code{\link{get_paths}}. Required for sampling mode.}
 
