@@ -1501,7 +1501,7 @@
 #'
 #' Uses a reconnected Dask client to dispatch ensemble and/or stochastic
 #' parameter uncertainty simulations. Returns pre-computed results that can be
-#' passed to calc_model_ensemble() and plot_model_fit_stochastic_param() via
+#' passed to calc_model_ensemble() and plot_model_ensemble() via
 #' their precomputed_results argument.
 #'
 #' @param client dask.distributed.Client (already connected).
@@ -1610,7 +1610,7 @@
     raw <- client$gather(futures)
     log_msg("Gathered %d stochastic results", length(raw))
 
-    # Convert to format expected by plot_model_fit_stochastic_param
+    # Convert to format expected by calc_model_ensemble
     stochastic_results <- lapply(seq_along(raw), function(i) {
       r <- raw[[i]]
       meta <- task_meta[[i]]
