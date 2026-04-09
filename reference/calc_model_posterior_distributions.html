@@ -9,7 +9,7 @@ file that mirrors the structure of the priors.json file with updated parameter v
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -20,9 +20,10 @@ file that mirrors the structure of the priors.json file with updated parameter v
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -51,6 +52,7 @@ file that mirrors the structure of the priors.json file with updated parameter v
 <span>  quantiles_file <span class="op">=</span> <span class="st">"./results/posterior_quantiles.csv"</span>,</span>
 <span>  <span class="va">priors_file</span>,</span>
 <span>  output_dir <span class="op">=</span> <span class="st">"./results"</span>,</span>
+<span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -69,6 +71,13 @@ file that mirrors the structure of the priors.json file with updated parameter v
 
 <dt id="arg-output-dir">output_dir<a class="anchor" aria-label="anchor" href="#arg-output-dir"></a></dt>
 <dd><p>Directory to save posteriors.json (default: "./results")</p></dd>
+
+
+<dt id="arg-control">control<a class="anchor" aria-label="anchor" href="#arg-control"></a></dt>
+<dd><p>Optional control list (or path to control.json). When provided,
+sampling flags are used to distinguish frozen parameters (sampling flag FALSE,
+tagged <code>"frozen"</code>) from genuinely converged parameters (sampling flag TRUE,
+tagged <code>"fixed"</code>).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -93,7 +102,7 @@ file that mirrors the structure of the priors.json file with updated parameter v
 </dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function:</p><ol><li><p>Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles or est_npe_posterior</p></li>
+    <p>The function:</p><ol><li><p>Reads the posterior_quantiles.csv file produced by calc_model_posterior_quantiles</p></li>
 <li><p>Processes all quantile rows in the file (user controls what to include)</p></li>
 <li><p>Loads the priors.json as a template structure</p></li>
 <li><p>For each posterior parameter in the quantiles table:</p><ul><li><p>Extracts the 2.5%, 50%, and 97.5% quantiles</p></li>

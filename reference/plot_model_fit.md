@@ -19,7 +19,7 @@ plot_model_fit(
 - model:
 
   A laser-cholera Model object (class
-  'laser_cholera.metapop.model.Model') output from
+  'laser.cholera.metapop.model.Model') output from
   lc\$run_model(paramfile = config). Must contain:
 
   - results\$expected_cases - predicted cases

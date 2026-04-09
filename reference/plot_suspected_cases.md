@@ -1,9 +1,10 @@
-# Plot Proportion of Suspected Cholera Cases
+# Plot Chi PPV Prior Distributions
 
-This function loads the parameter data frame for the proportion of
-suspected cholera cases (rho) from the `param_rho_suspected_cases.csv`
-file and generates a plot showing the probability distributions for both
-low and high estimates, with custom annotations and formatting.
+This function loads the parameter data frame for the positive predictive
+value (PPV) of the cholera clinical case definition from the
+`param_chi_suspected_cases.csv` file and generates a plot showing the
+Beta prior distributions for chi_endemic (low/all-settings estimate) and
+chi_epidemic (high/outbreak estimate).
 
 ## Usage
 

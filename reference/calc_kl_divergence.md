@@ -16,6 +16,15 @@ calc_kl_divergence(
   n_points = 1000,
   eps = 1e-10
 )
+
+calculate_kl_divergence(
+  samples1,
+  weights1 = NULL,
+  samples2,
+  weights2 = NULL,
+  n_points = 1000,
+  eps = 1e-10
+)
 ```
 
 ## Arguments

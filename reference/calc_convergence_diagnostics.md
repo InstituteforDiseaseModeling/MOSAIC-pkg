@@ -13,7 +13,6 @@ calc_convergence_diagnostics(
   n_successful,
   n_retained,
   n_best_subset,
-  ess_retained,
   ess_best,
   A_best,
   cvw_best,
@@ -23,10 +22,10 @@ calc_convergence_diagnostics(
   target_ess_best = 300,
   target_A_best = 0.95,
   target_cvw_best = 0.5,
-  target_B_min = 100,
-  target_percentile_max = 5,
+  target_max_best_subset = 1000,
   target_ess_param = 300,
   target_ess_param_prop = 0.95,
+  ess_method = c("kish", "perplexity"),
   temperature = 1,
   verbose = TRUE
 )
@@ -50,10 +49,6 @@ calc_convergence_diagnostics(
 - n_best_subset:
 
   Integer number of simulations in the optimized best subset
-
-- ess_retained:
-
-  Numeric effective sample size across all retained simulations
 
 - ess_best:
 
@@ -85,7 +80,8 @@ calc_convergence_diagnostics(
 
 - target_ess_best:
 
-  Numeric target ESS for the best subset (default 300)
+  Numeric target for both subset size and ESS (default 300). Both B_size
+  and ESS_B must be \>= target_ess_best.
 
 - target_A_best:
 
@@ -95,14 +91,10 @@ calc_convergence_diagnostics(
 
   Numeric target coefficient of variation (default 0.5)
 
-- target_B_min:
+- target_max_best_subset:
 
-  Integer minimum acceptable size for best subset (default 100)
-
-- target_percentile_max:
-
-  Numeric maximum percentile for subset selection (default 5.0, meaning
-  top 5%)
+  Numeric maximum best subset size in absolute count (default 1000).
+  Replaced target_percentile_max for absolute count-based control.
 
 - target_ess_param:
 
@@ -112,6 +104,12 @@ calc_convergence_diagnostics(
 
   Numeric target proportion of parameters that must meet ESS threshold
   (default 0.95, meaning 95%)
+
+- ess_method:
+
+  Character string specifying ESS calculation method: "kish" (default)
+  or "perplexity". This should match the method used for all ESS
+  calculations in the workflow.
 
 - temperature:
 
@@ -218,7 +216,6 @@ diagnostics <- calc_convergence_diagnostics(
     n_successful = 9500,
     n_retained = 8500,
     n_best_subset = 500,
-    ess_retained = 450,
     ess_best = 280,
     A_best = 0.92,
     cvw_best = 0.55,
@@ -228,8 +225,8 @@ diagnostics <- calc_convergence_diagnostics(
     target_ess_best = 300,
     target_A_best = 0.95,
     target_cvw_best = 0.5,
-    target_B_min = 100,
-    target_percentile_max = 5.0
+    target_max_best_subset = 1000,
+    ess_method = "kish"
 )
 
 # Save to JSON

@@ -11,6 +11,7 @@ calc_model_posterior_distributions(
   quantiles_file = "./results/posterior_quantiles.csv",
   priors_file,
   output_dir = "./results",
+  control = NULL,
   verbose = TRUE
 )
 ```
@@ -29,6 +30,13 @@ calc_model_posterior_distributions(
 - output_dir:
 
   Directory to save posteriors.json (default: "./results")
+
+- control:
+
+  Optional control list (or path to control.json). When provided,
+  sampling flags are used to distinguish frozen parameters (sampling
+  flag FALSE, tagged `"frozen"`) from genuinely converged parameters
+  (sampling flag TRUE, tagged `"fixed"`).
 
 - verbose:
 
@@ -59,7 +67,7 @@ List containing:
 The function:
 
 1.  Reads the posterior_quantiles.csv file produced by
-    calc_model_posterior_quantiles or est_npe_posterior
+    calc_model_posterior_quantiles
 
 2.  Processes all quantile rows in the file (user controls what to
     include)

@@ -8,7 +8,7 @@ precipitation, or disease cases.
 ## Usage
 
 ``` r
-fourier_series_double(t, beta0, a1, b1, a2, b2, p)
+fourier_series_double(t, beta0, a_1, b_1, a_2, b_2, p)
 ```
 
 ## Arguments
@@ -23,22 +23,22 @@ fourier_series_double(t, beta0, a1, b1, a2, b2, p)
   A numeric value representing the intercept term (fixed at 0 by
   default).
 
-- a1:
+- a_1:
 
   A numeric value representing the amplitude of the first cosine term
   (first harmonic).
 
-- b1:
+- b_1:
 
   A numeric value representing the amplitude of the first sine term
   (first harmonic).
 
-- a2:
+- a_2:
 
   A numeric value representing the amplitude of the second cosine term
   (second harmonic).
 
-- b2:
+- b_2:
 
   A numeric value representing the amplitude of the second sine term
   (second harmonic).
@@ -59,8 +59,8 @@ The model is defined as follows: \$\$\beta_t = \beta_0 + a_1
 t}{p}\right) + a_2 \cos\left(\frac{4 \pi t}{p}\right) + b_2
 \sin\left(\frac{4 \pi t}{p}\right)\$\$ The model includes an intercept
 term `beta0` (set to 0 by default) and two harmonics with coefficients
-`a1`, `b1`, `a2`, and `b2`. The period `p` controls the periodicity of
-the series.
+`a_1`, `b_1`, `a_2`, and `b_2`. The period `p` controls the periodicity
+of the series.
 
 This function is based on the sine-cosine form of the Fourier series.
 For more details, see the Wikipedia page on [Fourier
@@ -77,13 +77,13 @@ if (FALSE) { # \dontrun{
 # Example usage with weekly data (p = 52 weeks in a year)
 time_points <- 1:52
 beta0 <- 0
-a1 <- 1.5
-b1 <- -0.5
-a2 <- 0.8
-b2 <- 0.3
+a_1 <- 1.5
+b_1 <- -0.5
+a_2 <- 0.8
+b_2 <- 0.3
 p <- 52
 
-predictions <- fourier_series_double(time_points, beta0, a1, b1, a2, b2, p)
+predictions <- fourier_series_double(time_points, beta0, a_1, b_1, a_2, b_2, p)
 print(predictions)
 } # }
 ```

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -18,9 +18,10 @@
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -55,17 +56,10 @@
 
         <dt>
 
-          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
+          <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
 
         </dt>
-        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
-
-        <dt>
-
-          <code><a href="run_mosaic.html">run_MOSAIC()</a></code> <code><a href="run_mosaic.html">run_mosaic()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
+        <dd>Run MOSAIC Calibration Workflow</dd>
 
         <dt>
 
@@ -150,31 +144,17 @@
 
         <dt>
 
+          <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration Workflow</dd>
+
+        <dt>
+
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code>
 
         </dt>
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
-
-        <dt>
-
-          <code><a href="run_mosaic.html">run_MOSAIC()</a></code> <code><a href="run_mosaic.html">run_mosaic()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
-
-        <dt>
-
-          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
-
-        <dt>
-
-          <code><a href="run_npe_diagnostics.html">run_npe_diagnostics()</a></code>
-
-        </dt>
-        <dd>Run NPE Diagnostics</dd>
 
         <dt>
 
@@ -192,17 +172,17 @@
 
         <dt>
 
+          <code><a href="make_mosaic_cluster.html">make_mosaic_cluster()</a></code>
+
+        </dt>
+        <dd>Create a Reusable MOSAIC Parallel Cluster</dd>
+
+        <dt>
+
           <code><a href="make_param_df.html">make_param_df()</a></code>
 
         </dt>
         <dd>Get Template for Parameter Values</dd>
-
-        <dt>
-
-          <code><a href="create_config_npe.html">create_config_npe()</a></code>
-
-        </dt>
-        <dd>Create NPE Configuration</dd>
 
         <dt>
 
@@ -418,13 +398,6 @@
 
         <dt>
 
-          <code><a href="fit_posterior_distributions.html">fit_posterior_distributions()</a></code>
-
-        </dt>
-        <dd>Fit Posterior Distributions</dd>
-
-        <dt>
-
           <code><a href="fit_truncnorm_from_ci.html">fit_truncnorm_from_ci()</a></code>
 
         </dt>
@@ -476,6 +449,13 @@
 
         <dt>
 
+          <code><a href="calc_bias_ratio.html">calc_bias_ratio()</a></code>
+
+        </dt>
+        <dd>Bias Ratio Between Estimated and Observed Series</dd>
+
+        <dt>
+
           <code><a href="calc_bookend_batch_size.html">calc_bookend_batch_size()</a></code>
 
         </dt>
@@ -518,7 +498,7 @@
 
         <dt>
 
-          <code><a href="calc_kl_divergence.html">calc_kl_divergence()</a></code>
+          <code><a href="calc_kl_divergence.html">calc_kl_divergence()</a></code> <code><a href="calc_kl_divergence.html">calculate_kl_divergence()</a></code>
 
         </dt>
         <dd>Calculate Kullback-Leibler Divergence Between Two Distributions</dd>
@@ -630,6 +610,13 @@
 
         <dt>
 
+          <code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code>
+
+        </dt>
+        <dd>Run Stochastic Ensemble Simulations for Best Model</dd>
+
+        <dt>
+
           <code><a href="calc_model_ess.html">calc_model_ess()</a></code>
 
         </dt>
@@ -647,7 +634,7 @@
           <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code>
 
         </dt>
-        <dd>Compute the total model likelihood (Simplified)</dd>
+        <dd>Compute the total model likelihood</dd>
 
         <dt>
 
@@ -690,27 +677,6 @@
 
         </dt>
         <dd>Gibbs-Posterior Model Weights</dd>
-
-        <dt>
-
-          <code><a href="calc_npe_architecture.html">calc_npe_architecture()</a></code>
-
-        </dt>
-        <dd>Calculate NPE Architecture Specification</dd>
-
-        <dt>
-
-          <code><a href="calc_npe_diagnostics.html">calc_npe_diagnostics()</a></code>
-
-        </dt>
-        <dd>Calculate NPE Model Diagnostics with Simulation-Based Calibration (SBC)</dd>
-
-        <dt>
-
-          <code><a href="calc_npe_weights.html">calc_npe_weights()</a></code>
-
-        </dt>
-        <dd>Calculate NPE Importance Weights (Deprecated)</dd>
 
         <dt>
 
@@ -1047,17 +1013,17 @@
 
         <dt>
 
+          <code><a href="plot_model_ensemble.html">plot_model_ensemble()</a></code>
+
+        </dt>
+        <dd>Plot Stochastic Ensemble Predictions</dd>
+
+        <dt>
+
           <code><a href="plot_model_fit.html">plot_model_fit()</a></code>
 
         </dt>
         <dd>Plot Model Fit: Timeseries of Predicted vs Observed</dd>
-
-        <dt>
-
-          <code><a href="plot_model_fit_stochastic.html">plot_model_fit_stochastic()</a></code>
-
-        </dt>
-        <dd>Plot Stochastic Model Fit: Timeseries with Uncertainty Envelopes</dd>
 
         <dt>
 
@@ -1072,6 +1038,20 @@
 
         </dt>
         <dd>Plot Model Likelihood Curve</dd>
+
+        <dt>
+
+          <code><a href="plot_model_parameter_correlation.html">plot_model_parameter_correlation()</a></code>
+
+        </dt>
+        <dd>Plot Posterior Parameter Correlation Heatmap</dd>
+
+        <dt>
+
+          <code><a href="plot_model_parameter_sensitivity.html">plot_model_parameter_sensitivity()</a></code>
+
+        </dt>
+        <dd>Plot Parameter Sensitivity Ranking (HSIC)</dd>
 
         <dt>
 
@@ -1099,7 +1079,7 @@
           <code><a href="plot_model_ppc.html">plot_model_ppc()</a></code>
 
         </dt>
-        <dd>Plot Posterior Predictive Checks for LASER Model</dd>
+        <dd>Plot Posterior Predictive Checks from Ensemble Predictions</dd>
 
         <dt>
 
@@ -1110,38 +1090,10 @@
 
         <dt>
 
-          <code><a href="plot_npe_convergence_status.html">plot_npe_convergence_status()</a></code>
+          <code><a href="plot_mosaic_palette.html">plot_mosaic_palette()</a></code>
 
         </dt>
-        <dd>Plot NPE convergence status table</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_diagnostics_coverage.html">plot_npe_diagnostics_coverage()</a></code>
-
-        </dt>
-        <dd>Plot NPE Coverage Diagnostics</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_diagnostics_coverage_bars.html">plot_npe_diagnostics_coverage_bars()</a></code>
-
-        </dt>
-        <dd>Plot NPE Coverage Diagnostic Bars</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_diagnostics_sbc.html">plot_npe_diagnostics_sbc()</a></code>
-
-        </dt>
-        <dd>Plot NPE diagnostic status table</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_training_loss.html">plot_npe_training_loss()</a></code>
-
-        </dt>
-        <dd>Plot NPE Training Loss Curves</dd>
+        <dd>Display a Color Palette as Swatches</dd>
 
         <dt>
 
@@ -1149,6 +1101,13 @@
 
         </dt>
         <dd>Plot recovery durations and rates for symptomatic and asymptomatic infections</dd>
+
+        <dt>
+
+          <code><a href="plot_rho_care_seeking_params.html">plot_rho_care_seeking_params()</a></code>
+
+        </dt>
+        <dd>Plot Rho (Care-Seeking Rate) Prior Estimation</dd>
 
         <dt>
 
@@ -1211,7 +1170,7 @@
           <code><a href="plot_suspected_cases.html">plot_suspected_cases()</a></code>
 
         </dt>
-        <dd>Plot Proportion of Suspected Cholera Cases</dd>
+        <dd>Plot Chi PPV Prior Distributions</dd>
 
         <dt>
 
@@ -1462,27 +1421,6 @@
 
         <dt>
 
-          <code><a href="get_npe_observed_data.html">get_npe_observed_data()</a></code>
-
-        </dt>
-        <dd>Get NPE Observed Data</dd>
-
-        <dt>
-
-          <code><a href="get_npe_parameter_bounds.html">get_npe_parameter_bounds()</a></code>
-
-        </dt>
-        <dd>Get NPE Parameter Bounds</dd>
-
-        <dt>
-
-          <code><a href="get_npe_weights.html">get_npe_weights()</a></code>
-
-        </dt>
-        <dd>Get NPE Importance Weights</dd>
-
-        <dt>
-
           <code><a href="get_param_names.html">get_param_names()</a></code>
 
         </dt>
@@ -1504,10 +1442,17 @@
 
         <dt>
 
+          <code><a href="get_rho_care_seeking_params.html">get_rho_care_seeking_params()</a></code>
+
+        </dt>
+        <dd>Estimate Beta Prior for Rho (Care-Seeking Rate) and Save Parameter Data Frame</dd>
+
+        <dt>
+
           <code><a href="get_suspected_cases.html">get_suspected_cases()</a></code>
 
         </dt>
-        <dd>Get Proportion of Suspected Cholera Cases and Save Parameter Data Frame</dd>
+        <dd>Get Chi PPV Parameters and Save Parameter Data Frame</dd>
 
         <dt>
 
@@ -1550,13 +1495,6 @@
 
         </dt>
         <dd>Check Forecast Data Freshness</dd>
-
-        <dt>
-
-          <code><a href="check_likelihood_guardrails.html">check_likelihood_guardrails()</a></code>
-
-        </dt>
-        <dd>Check likelihood guardrails to identify unrealistic predictions</dd>
 
         <dt>
 
@@ -1888,6 +1826,13 @@
 
       <dl><dt>
 
+          <code><a href="adjust_ENSO_baseline.html">adjust_ENSO_baseline()</a></code>
+
+        </dt>
+        <dd>Simple Bias Correction for ENSO Data with Different Climatological Baselines</dd>
+
+        <dt>
+
           <code><a href="attach_mosaic_env.html">attach_mosaic_env()</a></code>
 
         </dt>
@@ -1920,6 +1865,13 @@
 
         </dt>
         <dd>Calculate BFRS Posterior via Importance Sampling</dd>
+
+        <dt>
+
+          <code><a href="calc_bias_ratio.html">calc_bias_ratio()</a></code>
+
+        </dt>
+        <dd>Bias Ratio Between Estimated and Observed Series</dd>
 
         <dt>
 
@@ -1965,7 +1917,7 @@
 
         <dt>
 
-          <code><a href="calc_kl_divergence.html">calc_kl_divergence()</a></code>
+          <code><a href="calc_kl_divergence.html">calc_kl_divergence()</a></code> <code><a href="calc_kl_divergence.html">calculate_kl_divergence()</a></code>
 
         </dt>
         <dd>Calculate Kullback-Leibler Divergence Between Two Distributions</dd>
@@ -2077,6 +2029,13 @@
 
         <dt>
 
+          <code><a href="calc_model_ensemble.html">calc_model_ensemble()</a></code>
+
+        </dt>
+        <dd>Run Stochastic Ensemble Simulations for Best Model</dd>
+
+        <dt>
+
           <code><a href="calc_model_ess.html">calc_model_ess()</a></code>
 
         </dt>
@@ -2094,7 +2053,7 @@
           <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code>
 
         </dt>
-        <dd>Compute the total model likelihood (Simplified)</dd>
+        <dd>Compute the total model likelihood</dd>
 
         <dt>
 
@@ -2137,27 +2096,6 @@
 
         </dt>
         <dd>Gibbs-Posterior Model Weights</dd>
-
-        <dt>
-
-          <code><a href="calc_npe_architecture.html">calc_npe_architecture()</a></code>
-
-        </dt>
-        <dd>Calculate NPE Architecture Specification</dd>
-
-        <dt>
-
-          <code><a href="calc_npe_diagnostics.html">calc_npe_diagnostics()</a></code>
-
-        </dt>
-        <dd>Calculate NPE Model Diagnostics with Simulation-Based Calibration (SBC)</dd>
-
-        <dt>
-
-          <code><a href="calc_npe_weights.html">calc_npe_weights()</a></code>
-
-        </dt>
-        <dd>Calculate NPE Importance Weights (Deprecated)</dd>
 
         <dt>
 
@@ -2228,13 +2166,6 @@
 
         </dt>
         <dd>Check Forecast Data Freshness</dd>
-
-        <dt>
-
-          <code><a href="check_likelihood_guardrails.html">check_likelihood_guardrails()</a></code>
-
-        </dt>
-        <dd>Check likelihood guardrails to identify unrealistic predictions</dd>
 
         <dt>
 
@@ -2333,13 +2264,6 @@
 
         </dt>
         <dd>Convert Matrix Row to Config Object</dd>
-
-        <dt>
-
-          <code><a href="create_config_npe.html">create_config_npe()</a></code>
-
-        </dt>
-        <dd>Create NPE Configuration</dd>
 
         <dt>
 
@@ -2574,24 +2498,10 @@
 
         <dt>
 
-          <code><a href="estimate_npe_posterior.html">estimate_npe_posterior()</a></code>
-
-        </dt>
-        <dd>Estimate NPE Posterior</dd>
-
-        <dt>
-
           <code><a href="estimated_parameters.html">estimated_parameters</a></code>
 
         </dt>
         <dd>Estimated Parameters Inventory</dd>
-
-        <dt>
-
-          <code><a href="evaluate_prior_densities.html">evaluate_prior_densities()</a></code>
-
-        </dt>
-        <dd>Evaluate Prior Densities for SMC</dd>
 
         <dt>
 
@@ -2648,13 +2558,6 @@
 
         </dt>
         <dd>Fit Normal Distribution from Mode and 95% Confidence Intervals</dd>
-
-        <dt>
-
-          <code><a href="fit_posterior_distributions.html">fit_posterior_distributions()</a></code>
-
-        </dt>
-        <dd>Fit Posterior Distributions</dd>
 
         <dt>
 
@@ -2910,27 +2813,6 @@
 
         <dt>
 
-          <code><a href="get_npe_observed_data.html">get_npe_observed_data()</a></code>
-
-        </dt>
-        <dd>Get NPE Observed Data</dd>
-
-        <dt>
-
-          <code><a href="get_npe_parameter_bounds.html">get_npe_parameter_bounds()</a></code>
-
-        </dt>
-        <dd>Get NPE Parameter Bounds</dd>
-
-        <dt>
-
-          <code><a href="get_npe_weights.html">get_npe_weights()</a></code>
-
-        </dt>
-        <dd>Get NPE Importance Weights</dd>
-
-        <dt>
-
           <code><a href="get_param_names.html">get_param_names()</a></code>
 
         </dt>
@@ -2952,10 +2834,17 @@
 
         <dt>
 
+          <code><a href="get_rho_care_seeking_params.html">get_rho_care_seeking_params()</a></code>
+
+        </dt>
+        <dd>Estimate Beta Prior for Rho (Care-Seeking Rate) and Save Parameter Data Frame</dd>
+
+        <dt>
+
           <code><a href="get_suspected_cases.html">get_suspected_cases()</a></code>
 
         </dt>
-        <dd>Get Proportion of Suspected Cholera Cases and Save Parameter Data Frame</dd>
+        <dd>Get Chi PPV Parameters and Save Parameter Data Frame</dd>
 
         <dt>
 
@@ -2980,10 +2869,17 @@
 
         <dt>
 
-          <code><a href="identify_best_subset.html">identify_best_subset()</a></code>
+          <code><a href="grid_search_best_subset.html">grid_search_best_subset()</a></code>
 
         </dt>
-        <dd>Identify Best Subset of Simulations for NPE Prior Definition</dd>
+        <dd>Grid Search for Best Subset with Early Stopping</dd>
+
+        <dt>
+
+          <code><a href="inflate_priors.html">inflate_priors()</a></code>
+
+        </dt>
+        <dd>Inflate Prior or Posterior Distributions by a Variance Factor</dd>
 
         <dt>
 
@@ -3078,13 +2974,6 @@
 
         <dt>
 
-          <code><a href="load_npe_model.html">load_npe_model()</a></code>
-
-        </dt>
-        <dd>Load NPE Model</dd>
-
-        <dt>
-
           <code><a href="load_or_install_packages.html">load_or_install_packages()</a></code>
 
         </dt>
@@ -3127,10 +3016,38 @@
 
         <dt>
 
+          <code><a href="make_mosaic_cluster.html">make_mosaic_cluster()</a></code>
+
+        </dt>
+        <dd>Create a Reusable MOSAIC Parallel Cluster</dd>
+
+        <dt>
+
           <code><a href="make_param_df.html">make_param_df()</a></code>
 
         </dt>
         <dd>Get Template for Parameter Values</dd>
+
+        <dt>
+
+          <code><a href="mosaic_adaptive_s3_weights.html">mosaic_adaptive_s3_weights()</a></code>
+
+        </dt>
+        <dd>Compute Adaptive Likelihood Weights for Joint Calibration Stage</dd>
+
+        <dt>
+
+          <code><a href="mosaic_color_variant.html">mosaic_color_variant()</a></code>
+
+        </dt>
+        <dd>Create Lighter, Darker, or Muted Variants of a Color</dd>
+
+        <dt>
+
+          <code><a href="mosaic_colors.html">mosaic_colors()</a></code>
+
+        </dt>
+        <dd>Get MOSAIC Semantic Colors</dd>
 
         <dt>
 
@@ -3145,6 +3062,55 @@
 
         </dt>
         <dd>Get Pre-configured I/O Settings</dd>
+
+        <dt>
+
+          <code><a href="mosaic_pal_countries.html">mosaic_pal_countries()</a></code>
+
+        </dt>
+        <dd>Generate Colors for MOSAIC SSA Countries</dd>
+
+        <dt>
+
+          <code><a href="mosaic_pal_discrete.html">mosaic_pal_discrete()</a></code>
+
+        </dt>
+        <dd>Generate a Qualitative MOSAIC Palette</dd>
+
+        <dt>
+
+          <code><a href="mosaic_pal_diverging.html">mosaic_pal_diverging()</a></code>
+
+        </dt>
+        <dd>Generate a Diverging MOSAIC Palette</dd>
+
+        <dt>
+
+          <code><a href="mosaic_pal_scenarios.html">mosaic_pal_scenarios()</a></code>
+
+        </dt>
+        <dd>Generate a Scenario Comparison Palette</dd>
+
+        <dt>
+
+          <code><a href="mosaic_pal_sequential.html">mosaic_pal_sequential()</a></code>
+
+        </dt>
+        <dd>Generate a Sequential MOSAIC Palette</dd>
+
+        <dt>
+
+          <code><a href="mosaic_pal_uncertainty.html">mosaic_pal_uncertainty()</a></code>
+
+        </dt>
+        <dd>Generate Graduated Uncertainty Colors from a Base Color</dd>
+
+        <dt>
+
+          <code><a href="mosaic_palette.html">mosaic_palette()</a></code>
+
+        </dt>
+        <dd>Generate a MOSAIC Color Palette</dd>
 
         <dt>
 
@@ -3260,17 +3226,17 @@
 
         <dt>
 
+          <code><a href="plot_model_ensemble.html">plot_model_ensemble()</a></code>
+
+        </dt>
+        <dd>Plot Stochastic Ensemble Predictions</dd>
+
+        <dt>
+
           <code><a href="plot_model_fit.html">plot_model_fit()</a></code>
 
         </dt>
         <dd>Plot Model Fit: Timeseries of Predicted vs Observed</dd>
-
-        <dt>
-
-          <code><a href="plot_model_fit_stochastic.html">plot_model_fit_stochastic()</a></code>
-
-        </dt>
-        <dd>Plot Stochastic Model Fit: Timeseries with Uncertainty Envelopes</dd>
 
         <dt>
 
@@ -3285,6 +3251,20 @@
 
         </dt>
         <dd>Plot Model Likelihood Curve</dd>
+
+        <dt>
+
+          <code><a href="plot_model_parameter_correlation.html">plot_model_parameter_correlation()</a></code>
+
+        </dt>
+        <dd>Plot Posterior Parameter Correlation Heatmap</dd>
+
+        <dt>
+
+          <code><a href="plot_model_parameter_sensitivity.html">plot_model_parameter_sensitivity()</a></code>
+
+        </dt>
+        <dd>Plot Parameter Sensitivity Ranking (HSIC)</dd>
 
         <dt>
 
@@ -3312,7 +3292,7 @@
           <code><a href="plot_model_ppc.html">plot_model_ppc()</a></code>
 
         </dt>
-        <dd>Plot Posterior Predictive Checks for LASER Model</dd>
+        <dd>Plot Posterior Predictive Checks from Ensemble Predictions</dd>
 
         <dt>
 
@@ -3323,38 +3303,10 @@
 
         <dt>
 
-          <code><a href="plot_npe_convergence_status.html">plot_npe_convergence_status()</a></code>
+          <code><a href="plot_mosaic_palette.html">plot_mosaic_palette()</a></code>
 
         </dt>
-        <dd>Plot NPE convergence status table</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_diagnostics_coverage.html">plot_npe_diagnostics_coverage()</a></code>
-
-        </dt>
-        <dd>Plot NPE Coverage Diagnostics</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_diagnostics_coverage_bars.html">plot_npe_diagnostics_coverage_bars()</a></code>
-
-        </dt>
-        <dd>Plot NPE Coverage Diagnostic Bars</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_diagnostics_sbc.html">plot_npe_diagnostics_sbc()</a></code>
-
-        </dt>
-        <dd>Plot NPE diagnostic status table</dd>
-
-        <dt>
-
-          <code><a href="plot_npe_training_loss.html">plot_npe_training_loss()</a></code>
-
-        </dt>
-        <dd>Plot NPE Training Loss Curves</dd>
+        <dd>Display a Color Palette as Swatches</dd>
 
         <dt>
 
@@ -3362,6 +3314,13 @@
 
         </dt>
         <dd>Plot recovery durations and rates for symptomatic and asymptomatic infections</dd>
+
+        <dt>
+
+          <code><a href="plot_rho_care_seeking_params.html">plot_rho_care_seeking_params()</a></code>
+
+        </dt>
+        <dd>Plot Rho (Care-Seeking Rate) Prior Estimation</dd>
 
         <dt>
 
@@ -3424,7 +3383,7 @@
           <code><a href="plot_suspected_cases.html">plot_suspected_cases()</a></code>
 
         </dt>
-        <dd>Plot Proportion of Suspected Cholera Cases</dd>
+        <dd>Plot Chi PPV Prior Distributions</dd>
 
         <dt>
 
@@ -3453,13 +3412,6 @@
 
         </dt>
         <dd>Plot Vibrio Decay Rate as a Function of Environmental Suitability</dd>
-
-        <dt>
-
-          <code><a href="prepare_npe_data.html">prepare_npe_data()</a></code>
-
-        </dt>
-        <dd>Prepare NPE Training Data from BFRS Results</dd>
 
         <dt>
 
@@ -3687,31 +3639,17 @@
 
         <dt>
 
+          <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> <code><a href="run_MOSAIC.html">run_mosaic()</a></code>
+
+        </dt>
+        <dd>Run MOSAIC Calibration Workflow</dd>
+
+        <dt>
+
           <code><a href="run_WHO_annual_data_app.html">run_WHO_annual_data_app()</a></code>
 
         </dt>
         <dd>Run Shiny Application for Visualizing WHO Annual Cholera Data in AFRO Countries</dd>
-
-        <dt>
-
-          <code><a href="run_mosaic.html">run_MOSAIC()</a></code> <code><a href="run_mosaic.html">run_mosaic()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration Workflow (Advanced Interface)</dd>
-
-        <dt>
-
-          <code><a href="run_mosaic_iso.html">run_mosaic_iso()</a></code> <code><a href="run_mosaic_iso.html">run_MOSAIC_iso()</a></code>
-
-        </dt>
-        <dd>Run MOSAIC Calibration by ISO Code (Simple Interface)</dd>
-
-        <dt>
-
-          <code><a href="run_npe_diagnostics.html">run_npe_diagnostics()</a></code>
-
-        </dt>
-        <dd>Run NPE Diagnostics</dd>
 
         <dt>
 
@@ -3726,6 +3664,34 @@
 
         </dt>
         <dd>Sample Parameters from Prior Distributions</dd>
+
+        <dt>
+
+          <code><a href="scale_color_mosaic_c.html">scale_color_mosaic_c()</a></code> <code><a href="scale_color_mosaic_c.html">scale_colour_mosaic_c()</a></code> <code><a href="scale_color_mosaic_c.html">scale_fill_mosaic_c()</a></code>
+
+        </dt>
+        <dd>MOSAIC Sequential Color/Fill Scales for ggplot2</dd>
+
+        <dt>
+
+          <code><a href="scale_color_mosaic_d.html">scale_color_mosaic_d()</a></code> <code><a href="scale_color_mosaic_d.html">scale_colour_mosaic_d()</a></code> <code><a href="scale_color_mosaic_d.html">scale_fill_mosaic_d()</a></code>
+
+        </dt>
+        <dd>MOSAIC Discrete Color/Fill Scales for ggplot2</dd>
+
+        <dt>
+
+          <code><a href="scale_color_mosaic_div.html">scale_color_mosaic_div()</a></code> <code><a href="scale_color_mosaic_div.html">scale_colour_mosaic_div()</a></code> <code><a href="scale_color_mosaic_div.html">scale_fill_mosaic_div()</a></code>
+
+        </dt>
+        <dd>MOSAIC Diverging Color/Fill Scales for ggplot2</dd>
+
+        <dt>
+
+          <code><a href="scale_color_mosaic_scenario.html">scale_color_mosaic_scenario()</a></code> <code><a href="scale_color_mosaic_scenario.html">scale_colour_mosaic_scenario()</a></code> <code><a href="scale_color_mosaic_scenario.html">scale_fill_mosaic_scenario()</a></code>
+
+        </dt>
+        <dd>MOSAIC Scenario Color/Fill Scales for ggplot2</dd>
 
         <dt>
 
@@ -3750,10 +3716,10 @@
 
         <dt>
 
-          <code><a href="train_npe.html">train_npe()</a></code>
+          <code><a href="theme_mosaic.html">theme_mosaic()</a></code>
 
         </dt>
-        <dd>Train NPE Model</dd>
+        <dd>MOSAIC ggplot2 Theme</dd>
 
         <dt>
 
@@ -3761,6 +3727,13 @@
 
         </dt>
         <dd>Update Forecast JSON Files</dd>
+
+        <dt>
+
+          <code><a href="update_priors_from_posteriors.html">update_priors_from_posteriors()</a></code>
+
+        </dt>
+        <dd>Update Priors from Posteriors for Staged Estimation</dd>
 
         <dt>
 

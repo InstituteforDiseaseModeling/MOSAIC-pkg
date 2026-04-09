@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,9 +38,10 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+<li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -65,7 +66,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>Running MOSAIC</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/vignettes/articles/Running-MOSAIC.Rmd" class="external-link"><code>vignettes/articles/Running-MOSAIC.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/vignettes/Running-MOSAIC.Rmd" class="external-link"><code>vignettes/Running-MOSAIC.Rmd</code></a></small>
       <div class="d-none name"><code>Running-MOSAIC.Rmd</code></div>
     </div>
 
@@ -74,448 +75,191 @@
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>MOSAIC (Metapopulation Outbreak Simulation with Agent-based
-Implementation for Cholera) simulates cholera transmission dynamics
-using the LASER (Light-agent Spatial model for ERadication) engine. This
-guide shows how to run models using the core <code><a href="../reference/run_LASER.html">run_LASER()</a></code>
-function.</p>
+<p>This guide shows how to run MOSAIC simulations with <strong>parameter
+stochasticity</strong> using the <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> function.
+This workflow samples parameters from prior distributions and runs
+multiple simulations to quantify uncertainty.</p>
+<p>For running single deterministic simulations, see the <strong>Running
+LASER</strong> vignette.</p>
 <p><strong>Before you begin</strong>: Complete the Installation vignette
 to set up MOSAIC and its dependencies.</p>
 <hr>
 </div>
 <div class="section level2">
-<h2 id="quick-start">Quick Start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+<h2 id="run-a-fixed-number-of-simulations-for-one-location">Run a fixed number of simulations for one location<a class="anchor" aria-label="anchor" href="#run-a-fixed-number-of-simulations-for-one-location"></a>
 </h2>
-<p>Load MOSAIC and run a single simulation using a pre-configured
-model:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Load required packages</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run one simulation with default parameters</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/attach_mosaic_env.html">attach_mosaic_env</a></span><span class="op">(</span>silent <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># View model outputs</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">model</span>, max.level <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Access results</span></span>
-<span><span class="va">cases</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span></span>
-<span><span class="va">deaths</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span></span></code></pre></div>
-<hr>
+<span><span class="co"># Create output directory and set up logging</span></span>
+<span><span class="va">dir_output</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/path.expand.html" class="external-link">path.expand</a></span><span class="op">(</span><span class="st">"~/MOSAIC/output/ETH_fixed"</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">dir_output</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">dir_output</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
+<span></span>
+<span></span>
+<span><span class="va">priors_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span><span class="va">config_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.9</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span> <span class="co"># Travel probability</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Gravity model exponent</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_omega</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Mobility rate</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_cases</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_deaths</span> <span class="op">&lt;-</span> <span class="fl">0.05</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">best_model_n_sims</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">ensemble_n_sims_per_param</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">paths</span><span class="op">$</span><span class="va">clean_output</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">io</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"fast"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">result_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
+<span>     dir_output <span class="op">=</span> <span class="va">dir_output</span>,</span>
+<span>     config <span class="op">=</span> <span class="va">config_ETH</span>,</span>
+<span>     priors <span class="op">=</span> <span class="va">priors_ETH</span>,</span>
+<span>     control <span class="op">=</span> <span class="va">control_ETH</span>,</span>
+<span>     resume <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="pre-configured-models">Pre-configured Models<a class="anchor" aria-label="anchor" href="#pre-configured-models"></a>
+<h2 id="run-the-adaptive-simulation-algorithm-for-one-location">Run the adaptive simulation algorithm for one location<a class="anchor" aria-label="anchor" href="#run-the-adaptive-simulation-algorithm-for-one-location"></a>
 </h2>
-<p>MOSAIC includes three pre-configured parameter sets:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 1. Default configuration (40 African countries)</span></span>
-<span><span class="va">model_default</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
-<span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Load required packages</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 2. Endemic scenario (stable transmission)</span></span>
-<span><span class="va">model_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
-<span><span class="op">)</span></span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/attach_mosaic_env.html">attach_mosaic_env</a></span><span class="op">(</span>silent <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 3. Epidemic scenario (outbreak dynamics)</span></span>
-<span><span class="va">model_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_simulation_epidemic</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">789</span></span>
+<span></span>
+<span><span class="co"># Create output directory and set up logging</span></span>
+<span><span class="va">dir_output</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/path.expand.html" class="external-link">path.expand</a></span><span class="op">(</span><span class="st">"~/MOSAIC/output/ETH_auto"</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">dir_output</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">dir_output</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
+<span></span>
+<span></span>
+<span><span class="va">priors_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span><span class="va">config_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso<span class="op">=</span><span class="st">"ETH"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="st">'auto'</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.9</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Gravity model exponent</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_omega</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Mobility rate</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_cases</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_deaths</span> <span class="op">&lt;-</span> <span class="fl">0.05</span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">best_model_n_sims</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">ensemble_n_sims_per_param</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span></span>
+<span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">paths</span><span class="op">$</span><span class="va">clean_output</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">io</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"fast"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">result_ETH</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
+<span>     dir_output <span class="op">=</span> <span class="va">dir_output</span>,</span>
+<span>     config <span class="op">=</span> <span class="va">config_ETH</span>,</span>
+<span>     priors <span class="op">=</span> <span class="va">priors_ETH</span>,</span>
+<span>     control <span class="op">=</span> <span class="va">control_ETH</span>,</span>
+<span>     resume <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><strong>View configuration details:</strong></p>
+</div>
+<div class="section level2">
+<h2 id="run-the-adaptive-simulation-algorithm-for-multiple-locations">Run the adaptive simulation algorithm for multiple locations<a class="anchor" aria-label="anchor" href="#run-the-adaptive-simulation-algorithm-for-multiple-locations"></a>
+</h2>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Examine a configuration</span></span>
-<span><span class="va">config_default</span><span class="op">$</span><span class="va">date_start</span>      <span class="co"># "2023-02-01"</span></span>
-<span><span class="va">config_default</span><span class="op">$</span><span class="va">date_stop</span>       <span class="co"># "2026-03-31"</span></span>
-<span><span class="va">config_default</span><span class="op">$</span><span class="va">location_name</span>   <span class="co"># Vector of 40 ISO codes</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">config_default</span><span class="op">)</span>         <span class="co"># 71 parameters</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="running-multiple-simulations">Running Multiple Simulations<a class="anchor" aria-label="anchor" href="#running-multiple-simulations"></a>
-</h2>
-<p><code><a href="../reference/run_LASER.html">run_LASER()</a></code> executes <strong>one simulation per
-call</strong>. For multiple simulations, use loops:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Run 10 simulations with different seeds</span></span>
-<span><span class="va">results_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>    paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>    seed <span class="op">=</span> <span class="va">i</span></span>
-<span>  <span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Load required packages</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Extract total cases from each simulation</span></span>
-<span><span class="va">total_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results_list</span>, <span class="kw">function</span><span class="op">(</span><span class="va">model</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
+<span><span class="fu">MOSAIC</span><span class="fu">::</span><span class="fu"><a href="../reference/attach_mosaic_env.html">attach_mosaic_env</a></span><span class="op">(</span>silent <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Summary statistics across simulations</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">total_cases</span><span class="op">)</span></span></code></pre></div>
-<div class="section level3">
-<h3 id="parallel-execution">Parallel Execution<a class="anchor" aria-label="anchor" href="#parallel-execution"></a>
-</h3>
-<p>For faster execution of multiple simulations:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">parallel</span><span class="op">)</span></span>
+<span><span class="co"># Create output directory and set up logging</span></span>
+<span><span class="va">dir_output</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/path.expand.html" class="external-link">path.expand</a></span><span class="op">(</span><span class="st">"~/MOSAIC/output/ETH_KEN"</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">dir_output</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">dir_output</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Detect available cores</span></span>
-<span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span></span>
+<span><span class="fu"><a href="../reference/set_root_directory.html">set_root_directory</a></span><span class="op">(</span><span class="st">"~/MOSAIC"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run simulations in parallel</span></span>
-<span><span class="va">cl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">makeCluster</a></span><span class="op">(</span><span class="va">n_cores</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/parallel/clusterApply.html" class="external-link">clusterEvalQ</a></span><span class="op">(</span><span class="va">cl</span>, <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/">MOSAIC</a></span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">iso_codes</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ETH"</span>, <span class="st">"KEN"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">results_parallel</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/parallel/clusterApply.html" class="external-link">parLapply</a></span><span class="op">(</span><span class="va">cl</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">100</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>    paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>    seed <span class="op">=</span> <span class="va">i</span></span>
-<span>  <span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
+<span><span class="va">priors</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_priors.html">get_location_priors</a></span><span class="op">(</span>iso<span class="op">=</span><span class="va">iso_codes</span><span class="op">)</span></span>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_location_config.html">get_location_config</a></span><span class="op">(</span>iso<span class="op">=</span><span class="va">iso_codes</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/parallel/makeCluster.html" class="external-link">stopCluster</a></span><span class="op">(</span><span class="va">cl</span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="understanding-model-outputs">Understanding Model Outputs<a class="anchor" aria-label="anchor" href="#understanding-model-outputs"></a>
-</h2>
-<p>The <code><a href="../reference/run_LASER.html">run_LASER()</a></code> function returns a Python object with
-results and metadata:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Run model</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
+<span><span class="va">control</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_control_defaults.html">mosaic_control_defaults</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Output structure</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">model</span><span class="op">)</span></span>
-<span><span class="co"># $results   - Simulation outputs</span></span>
-<span><span class="co"># $params    - Parameters used</span></span>
-<span><span class="co"># $metadata  - Run information</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="st">'auto'</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">3</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
 <span></span>
-<span><span class="co"># Access time series data</span></span>
-<span><span class="va">expected_cases</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span></span>
-<span><span class="va">disease_deaths</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
 <span></span>
-<span><span class="co"># Dimensions: [n_locations x n_timesteps]</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">expected_cases</span><span class="op">)</span>    <span class="co"># e.g., [40 x 1155]</span></span></code></pre></div>
-<div class="section level3">
-<h3 id="extracting-results">Extracting Results<a class="anchor" aria-label="anchor" href="#extracting-results"></a>
-</h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Total cases by location</span></span>
-<span><span class="va">total_cases_by_location</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
 <span></span>
-<span><span class="co"># Total cases across all locations</span></span>
-<span><span class="va">total_cases_all</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span> <span class="co"># Travel probability</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>  <span class="co"># Gravity model exponent</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_omega</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>  <span class="co"># Mobility rate</span></span>
 <span></span>
-<span><span class="co"># Peak cases by location</span></span>
-<span><span class="va">peak_cases_by_location</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">expected_cases</span>, <span class="fl">1</span>, <span class="va">max</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_cases</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">likelihood</span><span class="op">$</span><span class="va">weight_deaths</span> <span class="op">&lt;-</span> <span class="fl">0.05</span></span>
 <span></span>
-<span><span class="co"># Peak timing by location</span></span>
-<span><span class="va">peak_time_by_location</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">expected_cases</span>, <span class="fl">1</span>, <span class="va">which.max</span><span class="op">)</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">best_model_n_sims</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">predictions</span><span class="op">$</span><span class="va">ensemble_n_sims_per_param</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
 <span></span>
-<span><span class="co"># Location names</span></span>
-<span><span class="va">locations</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">$</span><span class="va">location_name</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">total_cases_by_location</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">locations</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="creating-custom-configurations">Creating Custom Configurations<a class="anchor" aria-label="anchor" href="#creating-custom-configurations"></a>
-</h2>
-<p>Use <code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code> to create custom parameter
-sets:</p>
-<div class="section level3">
-<h3 id="example-1-single-location">Example 1: Single Location<a class="anchor" aria-label="anchor" href="#example-1-single-location"></a>
-</h3>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Create configuration for Democratic Republic of Congo</span></span>
-<span><span class="va">config_cod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
-<span>  date_start <span class="op">=</span> <span class="st">"2024-01-01"</span>,</span>
-<span>  date_stop <span class="op">=</span> <span class="st">"2024-12-31"</span>,</span>
-<span>  location_name <span class="op">=</span> <span class="st">"COD"</span>,</span>
-<span>  N_j_initial <span class="op">=</span> <span class="fl">100000000</span>,</span>
-<span>  S_j_initial <span class="op">=</span> <span class="fl">50000000</span>,</span>
-<span>  I_j_initial <span class="op">=</span> <span class="fl">100</span>,</span>
-<span>  R_j_initial <span class="op">=</span> <span class="fl">49999900</span></span>
-<span><span class="op">)</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">paths</span><span class="op">$</span><span class="va">clean_output</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">io</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"fast"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Run simulation</span></span>
-<span><span class="va">model_cod</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_cod</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">logging</span><span class="op">$</span><span class="va">verbose</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
+<span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_MOSAIC.html">run_MOSAIC</a></span><span class="op">(</span></span>
+<span>     dir_output <span class="op">=</span> <span class="va">dir_output</span>,</span>
+<span>     config <span class="op">=</span> <span class="va">config</span>,</span>
+<span>     priors <span class="op">=</span> <span class="va">priors</span>,</span>
+<span>     control <span class="op">=</span> <span class="va">control</span>,</span>
+<span>     resume <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="example-2-multiple-locations">Example 2: Multiple Locations<a class="anchor" aria-label="anchor" href="#example-2-multiple-locations"></a>
-</h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Three-country configuration</span></span>
-<span><span class="va">config_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/make_LASER_config.html">make_LASER_config</a></span><span class="op">(</span></span>
-<span>  date_start <span class="op">=</span> <span class="st">"2023-01-01"</span>,</span>
-<span>  date_stop <span class="op">=</span> <span class="st">"2025-12-31"</span>,</span>
-<span>  location_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"COD"</span>, <span class="st">"AGO"</span>, <span class="st">"TZA"</span><span class="op">)</span>,</span>
-<span>  <span class="co"># Additional required parameters depend on model setup</span></span>
-<span>  <span class="co"># See ?make_LASER_config for all options</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">model_multi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_multi</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">456</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p><strong>Note</strong>: <code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code> has 71+
-parameters. Use <code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code> for complete
-documentation.</p>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="modifying-existing-configurations">Modifying Existing Configurations<a class="anchor" aria-label="anchor" href="#modifying-existing-configurations"></a>
-</h2>
-<p>Start with a pre-configured model and modify specific parameters:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Start with endemic configuration</span></span>
-<span><span class="va">config_modified</span> <span class="op">&lt;-</span> <span class="va">config_simulation_endemic</span></span>
-<span></span>
-<span><span class="co"># Modify specific parameters</span></span>
-<span><span class="va">config_modified</span><span class="op">$</span><span class="va">date_start</span> <span class="op">&lt;-</span> <span class="st">"2025-01-01"</span></span>
-<span><span class="va">config_modified</span><span class="op">$</span><span class="va">date_stop</span> <span class="op">&lt;-</span> <span class="st">"2026-12-31"</span></span>
-<span><span class="va">config_modified</span><span class="op">$</span><span class="va">seed</span> <span class="op">&lt;-</span> <span class="fl">999</span></span>
-<span></span>
-<span><span class="co"># Run with modifications</span></span>
-<span><span class="va">model_modified</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_modified</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">999</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="controlling-randomness">Controlling Randomness<a class="anchor" aria-label="anchor" href="#controlling-randomness"></a>
-</h2>
-<p>Use the <code>seed</code> parameter for reproducibility:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Same seed = identical results</span></span>
-<span><span class="va">run1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span><span class="va">run2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, <span class="va">run2</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span>  <span class="co"># TRUE</span></span>
-<span></span>
-<span><span class="co"># Different seeds = different stochastic outcomes</span></span>
-<span><span class="va">run3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">456</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">run1</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, <span class="va">run3</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span>  <span class="co"># FALSE</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="working-with-specific-locations">Working with Specific Locations<a class="anchor" aria-label="anchor" href="#working-with-specific-locations"></a>
-</h2>
-<p>To run models for specific countries, you can filter or create
-configurations:</p>
-<div class="section level3">
-<h3 id="option-1-use-existing-multi-country-config">Option 1: Use Existing Multi-Country Config<a class="anchor" aria-label="anchor" href="#option-1-use-existing-multi-country-config"></a>
-</h3>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># config_default includes 40 countries</span></span>
-<span><span class="co"># To analyze one country, extract from results after running</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config_default</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Find index for DRC (COD)</span></span>
-<span><span class="va">cod_index</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">params</span><span class="op">$</span><span class="va">location_name</span> <span class="op">==</span> <span class="st">"COD"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Extract DRC results</span></span>
-<span><span class="va">cod_cases</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">[</span><span class="va">cod_index</span>, <span class="op">]</span></span>
-<span><span class="va">cod_deaths</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span><span class="op">[</span><span class="va">cod_index</span>, <span class="op">]</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="option-2-create-single-country-config">Option 2: Create Single-Country Config<a class="anchor" aria-label="anchor" href="#option-2-create-single-country-config"></a>
-</h3>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Use make_LASER_config() to create country-specific configuration</span></span>
-<span><span class="co"># (See "Creating Custom Configurations" section above)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="common-workflows">Common Workflows<a class="anchor" aria-label="anchor" href="#common-workflows"></a>
-</h2>
-<div class="section level3">
-<h3 id="scenario-comparison">Scenario Comparison<a class="anchor" aria-label="anchor" href="#scenario-comparison"></a>
-</h3>
-<p>Compare baseline vs. intervention scenarios:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Baseline scenario</span></span>
-<span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_simulation_endemic</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">100</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Intervention scenario (modify parameters)</span></span>
-<span><span class="va">config_intervention</span> <span class="op">&lt;-</span> <span class="va">config_simulation_endemic</span></span>
-<span><span class="co"># Modify intervention-related parameters here</span></span>
-<span><span class="co"># (e.g., vaccination rates, treatment coverage)</span></span>
-<span></span>
-<span><span class="va">intervention</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_intervention</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">100</span>  <span class="co"># Same seed for direct comparison</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Compare outcomes</span></span>
-<span><span class="va">baseline_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="va">intervention_cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">intervention</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">cases_averted</span> <span class="op">&lt;-</span> <span class="va">baseline_cases</span> <span class="op">-</span> <span class="va">intervention_cases</span></span>
-<span><span class="va">percent_reduction</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">cases_averted</span> <span class="op">/</span> <span class="va">baseline_cases</span><span class="op">)</span> <span class="op">*</span> <span class="fl">100</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Cases averted:"</span>, <span class="va">cases_averted</span>, <span class="st">"\n"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Percent reduction:"</span>, <span class="va">percent_reduction</span>, <span class="st">"%\n"</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="sensitivity-analysis">Sensitivity Analysis<a class="anchor" aria-label="anchor" href="#sensitivity-analysis"></a>
-</h3>
-<p>Test model sensitivity to parameter values:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Test different transmission rates</span></span>
-<span><span class="va">beta_values</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.00001</span>, <span class="fl">0.0001</span>, length.out <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">sensitivity_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">beta_values</span>, <span class="kw">function</span><span class="op">(</span><span class="va">beta</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">config</span> <span class="op">&lt;-</span> <span class="va">config_default</span></span>
-<span>  <span class="va">config</span><span class="op">$</span><span class="va">beta_j0_hum</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">beta</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">config</span><span class="op">$</span><span class="va">location_name</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>paramfile <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Extract total cases for each beta</span></span>
-<span><span class="va">total_cases_by_beta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">sensitivity_results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">model</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Plot relationship</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">beta_values</span>, <span class="va">total_cases_by_beta</span>,</span>
-<span>     type <span class="op">=</span> <span class="st">"b"</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"Human transmission rate (beta)"</span>,</span>
-<span>     ylab <span class="op">=</span> <span class="st">"Total cases"</span>,</span>
-<span>     main <span class="op">=</span> <span class="st">"Sensitivity to transmission parameter"</span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="direct-python-interface-advanced">Direct Python Interface (Advanced)<a class="anchor" aria-label="anchor" href="#direct-python-interface-advanced"></a>
-</h2>
-<p>For advanced users who need direct access to the Python LASER
-module:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Import laser-cholera Python module</span></span>
-<span><span class="va">lc</span> <span class="op">&lt;-</span> <span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/import.html" class="external-link">import</a></span><span class="op">(</span><span class="st">"laser_cholera.metapop.model"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Run model directly</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="va">lc</span><span class="op">$</span><span class="fu">run_model</span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
-<span>  quiet <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Access Python objects</span></span>
-<span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span></span>
-<span><span class="va">model</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span></span>
-<span><span class="va">model</span><span class="op">$</span><span class="va">params</span></span>
-<span><span class="va">model</span><span class="op">$</span><span class="va">metadata</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="output-options">Output Options<a class="anchor" aria-label="anchor" href="#output-options"></a>
-</h2>
-<p>Control where outputs are saved:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Save outputs to specific directory</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
-<span>  outdir <span class="op">=</span> <span class="st">"/path/to/output"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Generate visualizations</span></span>
-<span><span class="va">model_viz</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span></span>
-<span>  paramfile <span class="op">=</span> <span class="va">config_default</span>,</span>
-<span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
-<span>  visualize <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  pdf <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  outdir <span class="op">=</span> <span class="st">"/path/to/figures"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
-</h2>
-<div class="section level3">
-<h3 id="check-dependencies">Check Dependencies<a class="anchor" aria-label="anchor" href="#check-dependencies"></a>
-</h3>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Verify laser-cholera is installed</span></span>
-<span><span class="fu"><a href="../reference/check_dependencies.html">check_dependencies</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># View Python configuration</span></span>
-<span><span class="fu">reticulate</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/reticulate/reference/py_config.html" class="external-link">py_config</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Reinstall if needed</span></span>
-<span><span class="co"># install_dependencies()</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="common-issues">Common Issues<a class="anchor" aria-label="anchor" href="#common-issues"></a>
-</h3>
-<p><strong>Issue</strong>:
-<code>Error: Python module laser_cholera not found</code>
-<strong>Solution</strong>: Run <code><a href="../reference/install_dependencies.html">install_dependencies()</a></code></p>
-<p><strong>Issue</strong>: Results not reproducible
-<strong>Solution</strong>: Set a fixed seed:
-<code>run_LASER(paramfile = ..., seed = 123)</code></p>
-<p><strong>Issue</strong>: Slow execution <strong>Solution</strong>: Use
-parallel execution (see “Running Multiple Simulations” section)</p>
-<hr>
-</div>
-</div>
-<div class="section level2">
-<h2 id="next-steps">Next Steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
-</h2>
-<ul>
-<li>
-<strong>Installation</strong>: Set up MOSAIC on your system
-(Installation vignette)</li>
-<li>
-<strong>Deployment</strong>: Deploy on VMs or clusters (Deployment
-vignette)</li>
-<li>
-<strong>Calibration</strong>: For Bayesian calibration workflows,
-see calibration documentation</li>
-<li>
-<strong>Parameter Estimation</strong>: Explore <code>est_*</code>
-functions for data-driven parameters</li>
-</ul>
-<hr>
-</div>
-<div class="section level2">
-<h2 id="getting-help">Getting Help<a class="anchor" aria-label="anchor" href="#getting-help"></a>
-</h2>
-<ul>
-<li>
-<strong>Package documentation</strong>:
-<code><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference">help(package = "MOSAIC")</a></code>
-</li>
-<li>
-<strong>Function help</strong>: <code><a href="../reference/run_LASER.html">?run_LASER</a></code>,
-<code><a href="../reference/make_LASER_config.html">?make_LASER_config</a></code>
-</li>
-<li>
-<strong>Report issues</strong>: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues" class="external-link uri">https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues</a>
-</li>
-<li>
-<strong>Examples</strong>: See <code>MOSAIC-pkg/model/</code>
-directory for complete workflows</li>
-</ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

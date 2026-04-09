@@ -3,12 +3,12 @@
 Computes \\R^2\\ between an observed series and model estimates.
 Supports two definitions:
 
-- `method = "sse"` (default): \\R^2 = 1 - \mathrm{SSE}/\mathrm{SST}\\
-  with optional weights. This can be *negative* when the model
-  underperforms the intercept-only baseline.
+- `method = "corr"` (default): \\R^2 = \mathrm{cor}(y,\hat y)^2\\
+  (Pearson), always in \\\[0,1\]\\.
 
-- `method = "corr"`: \\R^2 = \mathrm{cor}(y,\hat y)^2\\ (Pearson),
-  always in \\\[0,1\]\\.
+- `method = "sse"`: \\R^2 = 1 - \mathrm{SSE}/\mathrm{SST}\\ with
+  optional weights. This can be *negative* when the model underperforms
+  the intercept-only baseline.
 
 ## Usage
 
@@ -16,7 +16,7 @@ Supports two definitions:
 calc_model_R2(
   observed,
   estimated,
-  method = c("sse", "corr"),
+  method = c("corr", "sse"),
   bounded = FALSE,
   na_rm = TRUE,
   finite_only = TRUE,
@@ -37,7 +37,7 @@ calc_model_R2(
 
 - method:
 
-  One of `"sse"` (default) or `"corr"`.
+  One of `"corr"` (default) or `"sse"`.
 
 - bounded:
 

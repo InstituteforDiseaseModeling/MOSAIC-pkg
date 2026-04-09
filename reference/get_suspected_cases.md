@@ -1,7 +1,9 @@
-# Get Proportion of Suspected Cholera Cases and Save Parameter Data Frame
+# Get Chi PPV Parameters and Save Parameter Data Frame
 
-This function generates the parameters for the proportion of suspected
-cholera cases (rho) and saves it as a parameter data frame.
+This function generates the Beta distribution parameters for the
+positive predictive value (PPV) of the cholera clinical case definition
+under endemic and epidemic conditions (chi_endemic and chi_epidemic) and
+saves them as a parameter data frame.
 
 ## Usage
 
@@ -23,5 +25,11 @@ get_suspected_cases(PATHS)
 
 ## Value
 
-A data frame containing the parameter values for the proportion of
-suspected cholera cases (rho).
+A data frame containing the Beta distribution parameters for chi_endemic
+(low/all-settings estimate) and chi_epidemic (high/outbreak estimate).
+
+## Details
+
+Estimates are manually extracted from Weins et al. 2023 (PLOS Medicine,
+doi:10.1371/journal.pmed.1004286), which characterises the cholera
+surveillance pyramid across sub-Saharan African settings.

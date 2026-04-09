@@ -26,8 +26,9 @@ its name ends with .gz), the file is decompressed on the fly using a
 connection opened with
 [`gzfile()`](https://rdrr.io/r/base/connections.html). The YAML content
 is then parsed using
-[`yaml::read_yaml()`](https://rdrr.io/pkg/yaml/man/read_yaml.html) or
-[`yaml::yaml.load()`](https://rdrr.io/pkg/yaml/man/yaml.load.html).
+[`yaml::read_yaml()`](https://yaml.r-lib.org/reference/read_yaml.html)
+or
+[`yaml::yaml.load()`](https://yaml.r-lib.org/reference/yaml.load.html).
 
 ## Examples
 

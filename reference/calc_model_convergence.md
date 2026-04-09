@@ -32,8 +32,8 @@ calc_model_convergence(
 
 - results:
 
-  Data frame with columns: sim, seed, likelihood (and optionally
-  others).
+  Data frame with required columns: sim, likelihood. Optional: seed_sim
+  (used as reproducibility seed in output; falls back to sim if absent).
 
 - output_dir:
 

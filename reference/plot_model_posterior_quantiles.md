@@ -1,9 +1,8 @@
 # Plot Model Posterior Quantiles
 
 Creates visualizations of posterior parameter quantiles from calibration
-or NPE results. Generates both global parameter plots and
-location-specific parameter plots. Supports comparison of multiple
-posterior sources.
+results. Generates both global parameter plots and location-specific
+parameter plots. Supports comparison of multiple posterior sources.
 
 ## Usage
 
@@ -21,8 +20,7 @@ plot_model_posterior_quantiles(
 - csv_files:
 
   Character vector of paths to posterior_quantiles.csv files from
-  calc_model_posterior_quantiles(), estimate_parameters_npe(), or
-  estimate_parameters_lampe()
+  calc_model_posterior_quantiles()
 
 - output_dir:
 
@@ -56,10 +54,6 @@ The function creates:
 
   - Calibration posterior (blue)
 
-  - NPE estimates (red/orange)
-
-  - Lampe estimates (bright red)
-
   - Other types (automatically assigned from color palette)
 
 - Supports comparison of any number of estimation types
@@ -79,7 +73,7 @@ plot_model_posterior_quantiles("posterior_quantiles.csv")
 
 # Compare multiple sources
 plot_model_posterior_quantiles(
-  csv_files = c("bfrs_quantiles.csv", "npe_quantiles.csv"),
+  csv_files = c("bfrs_quantiles.csv", "other_quantiles.csv"),
   output_dir = "./comparison_plots"
 )
 } # }

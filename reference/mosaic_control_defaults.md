@@ -1,9 +1,7 @@
 # Build Complete MOSAIC Control Structure
 
 Creates a complete control structure for
-[`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-and
-[`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md).
+[`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md).
 This is the primary interface for configuring MOSAIC execution settings,
 consolidating calibration strategy, parameter sampling, parallelization,
 and output options.
@@ -14,11 +12,12 @@ and output options.
 
 2.  `sampling`: What to sample (which parameters to vary)
 
-3.  `targets`: When to stop (ESS convergence thresholds)
+3.  `likelihood`: How to score model fit (likelihood components and
+    weights)
 
-4.  `fine_tuning`: Advanced calibration (adaptive batch sizing)
+4.  `targets`: When to stop (ESS convergence thresholds)
 
-5.  `npe`: Post-calibration stage (neural posterior estimation)
+5.  `fine_tuning`: Advanced calibration (adaptive batch sizing)
 
 6.  `parallel`: Infrastructure (cores, cluster type)
 
@@ -32,13 +31,15 @@ and output options.
 mosaic_control_defaults(
   calibration = NULL,
   sampling = NULL,
+  likelihood = NULL,
   targets = NULL,
   fine_tuning = NULL,
-  npe = NULL,
   predictions = NULL,
+  weights = NULL,
   parallel = NULL,
   io = NULL,
-  paths = NULL
+  paths = NULL,
+  logging = NULL
 )
 ```
 
@@ -81,7 +82,23 @@ mosaic_control_defaults(
 
   - `sample_gamma_2`: Sample second dose efficacy (default: TRUE)
 
-  - `sample_alpha_1`: Sample first dose efficacy (default: FALSE)
+  - `sample_alpha_1`: Sample first dose efficacy (default: TRUE)
+
+  - ... (see `mosaic_control_defaults()` for complete list of 38
+    parameters)
+
+- likelihood:
+
+  List of likelihood calculation settings (how to score model fit).
+  Default is:
+
+  - `weight_cases`: Weight for cases vs deaths (default: 1.0)
+
+  - `weight_deaths`: Weight for deaths vs cases (default: 1.0)
+
+  - `weight_wis`: WIS regularizer weight (default: 0, try 0.10)
+
+  - ... (see `mosaic_control_defaults()` for complete list)
 
 - targets:
 
@@ -92,15 +109,20 @@ mosaic_control_defaults(
   - `ESS_param_prop`: Proportion of parameters meeting ESS (default:
     0.95)
 
-  - `ESS_best`: Target ESS for best subset (default: 100)
+  - `ESS_best`: Target for both subset size and ESS (default: 100). Both
+    B_size and ESS_B must be \>= ESS_best.
 
   - `A_best`: Target agreement index (default: 0.95)
 
   - `CVw_best`: Target CV of weights (default: 0.5)
 
-  - `B_min`: Minimum best subset size (default: 30)
+  - `percentile_min`: Minimum percentile for best subset search
+    (default: 0.001)
 
   - `percentile_max`: Maximum percentile for best subset (default: 5.0)
+
+  - `ESS_method`: ESS calculation method, "kish" or "perplexity"
+    (default: "kish")
 
 - fine_tuning:
 
@@ -109,19 +131,11 @@ mosaic_control_defaults(
   - `batch_sizes`: Named list with massive, large, standard, precision,
     final
 
-- npe:
-
-  List of NPE settings (post-calibration stage). Default is:
-
-  - `enable`: Enable NPE training (default: FALSE)
-
-  - `weight_strategy`: NPE weight strategy (default: "continuous_all")
-
 - predictions:
 
   List of prediction generation settings. Default is:
 
-  - `best_model_n_sims`: Stochastic runs for best model (default: 100L)
+  - `best_model_n_sims`: Stochastic runs for best model (default: 10L)
 
   - `ensemble_n_param_sets`: Number of parameter sets in ensemble
     (default: 50L)
@@ -165,9 +179,7 @@ mosaic_control_defaults(
 ## Value
 
 A complete control list suitable for passing to
-[`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-or
-[`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md).
+[`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md).
 
 ## Examples
 
@@ -212,15 +224,28 @@ ctrl <- mosaic_control_defaults(
   )
 )
 
+# Enable WIS regularizer and peak timing
+ctrl <- mosaic_control_defaults(
+  likelihood = list(
+    weight_wis = 0.10,
+    weight_peak_timing = 0.25
+  )
+)
+
+# Use perplexity method for ESS calculations
+ctrl <- mosaic_control_defaults(
+  targets = list(ESS_method = "perplexity")
+)
+
 # Full workflow configuration (demonstrates logical order)
 ctrl <- mosaic_control_defaults(
-  calibration = list(n_simulations = NULL, n_iterations = 3),  # How to run
-  sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),    # What to sample
-  targets = list(ESS_param = 500, ESS_param_prop = 0.95),      # When to stop
-  fine_tuning = list(batch_sizes = list(final = 200)),         # Advanced calibration
-  npe = list(enable = TRUE, weight_strategy = "best_subset"),  # Post-calibration
-  parallel = list(enable = TRUE, n_cores = 16),                # Infrastructure
-  io = mosaic_io_presets("default"),                           # Output format
-  paths = list(clean_output = FALSE, plots = TRUE)             # File management
+  calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
+  sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
+  likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
+  targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
+  fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
+  parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
+  io = mosaic_io_presets("default"),                               # Output format
+  paths = list(clean_output = FALSE, plots = TRUE)                 # File management
 )
 ```

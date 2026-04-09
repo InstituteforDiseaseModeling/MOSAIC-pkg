@@ -88,10 +88,10 @@ A list with 3 main components:
   - `tau_i`: Country-level travel probabilities (beta distribution with
     uncertainty adjustment)
 
-  - `a1`, `a2`: Seasonality Fourier coefficients for cases (normal
+  - `a_1`, `a_2`: Seasonality Fourier coefficients for cases (normal
     distribution)
 
-  - `b1`, `b2`: Seasonality Fourier coefficients for deaths (normal
+  - `b_1`, `b_2`: Seasonality Fourier coefficients for deaths (normal
     distribution)
 
 ## Details

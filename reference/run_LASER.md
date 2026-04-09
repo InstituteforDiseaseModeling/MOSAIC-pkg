@@ -9,8 +9,9 @@ and exposed compartments are both zero.
 
 ``` r
 run_LASER(
-  paramfile,
-  seed = 123L,
+  config,
+  seed = NULL,
+  quiet = FALSE,
   visualize = FALSE,
   pdf = FALSE,
   outdir = tempdir(),
@@ -18,8 +19,9 @@ run_LASER(
 )
 
 run_laser(
-  paramfile,
-  seed = 123L,
+  config,
+  seed = NULL,
+  quiet = FALSE,
   visualize = FALSE,
   pdf = FALSE,
   outdir = tempdir(),
@@ -29,14 +31,20 @@ run_laser(
 
 ## Arguments
 
-- paramfile:
+- config:
 
-  Character. Path to the LASER parameter file (e.g., YAML or JSON) used
-  to configure the simulation.
+  Character or list. Either a path to a LASER configuration file
+  (YAML/JSON) or a configuration list object.
 
 - seed:
 
-  Integer. Random seed for reproducibility. Defaults to 123L.
+  Integer or NULL. Random seed for reproducibility. If NULL (default),
+  uses `config$seed` when present, otherwise defaults to 123L.
+
+- quiet:
+
+  Logical. If TRUE, suppress the progress bar during model execution.
+  Defaults to FALSE.
 
 - visualize:
 
@@ -55,7 +63,8 @@ run_laser(
 - py_module:
 
   Python module. An optional pre-loaded reticulate LASER module. If
-  NULL, the module is imported via reticulate::import("laser").
+  NULL, the module is imported via
+  reticulate::import("laser.cholera.metapop.model").
 
 ## Value
 
@@ -66,13 +75,20 @@ results.
 
 ``` r
 if (FALSE) { # \dontrun{
-# Run with default settings:
+# Run with config file path:
 result <- run_LASER(
-  paramfile = "path/to/laser_params.yml",
+  config    = "path/to/laser_params.yml",
   seed      = 20250418L,
+  quiet     = FALSE,
   visualize = FALSE,
   pdf       = FALSE,
   outdir    = "./laser_output"
+)
+
+# Run with config object (uses config$seed if present, else 123L):
+result <- run_LASER(
+  config = config_default,
+  quiet  = TRUE
 )
 
 # Inspect results:

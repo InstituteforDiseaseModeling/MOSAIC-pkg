@@ -8,20 +8,20 @@ include the requested location(s).
 ## Usage
 
 ``` r
-get_location_priors(priors = NULL, iso)
+get_location_priors(iso, priors = NULL)
 ```
 
 ## Arguments
-
-- priors:
-
-  A priors list object in the format of MOSAIC::priors_default. If NULL,
-  will use MOSAIC::priors_default.
 
 - iso:
 
   Character vector of ISO3 country codes to extract (e.g., "ETH" or
   c("ETH", "KEN")).
+
+- priors:
+
+  A priors list object in the format of MOSAIC::priors_default. If NULL,
+  will use MOSAIC::priors_default.
 
 ## Value
 

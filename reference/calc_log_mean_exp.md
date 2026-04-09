@@ -36,11 +36,6 @@ This is numerically stable because:
 
 - Equivalent to `log(mean(exp(x)))` but without numerical issues
 
-## See also
-
-calc_model_collapse_iterations which uses this for likelihood
-aggregation
-
 ## Examples
 
 ``` r

@@ -1,9 +1,8 @@
-# Compute the total model likelihood (Simplified)
+# Compute the total model likelihood
 
-A simplified, robust wrapper for scoring model fits in MOSAIC. The core
-is a Negative Binomial (NB) time-series log-likelihood per location and
-outcome (cases, deaths) with a weighted MoM dispersion estimate and a
-small `k_min` floor.
+Scores model fits against observed data using a Negative Binomial (NB)
+time-series log-likelihood per location and outcome (cases, deaths) with
+a weighted MoM dispersion estimate and a `k_min` floor.
 
 ## Usage
 
@@ -18,34 +17,17 @@ calc_model_likelihood(
   weights_location = NULL,
   weights_time = NULL,
   config = NULL,
-  nb_k_min = 3,
-  zero_buffer = TRUE,
+  nb_k_min_cases = 3,
+  nb_k_min_deaths = 3,
   verbose = FALSE,
-  add_max_terms = TRUE,
-  add_peak_timing = TRUE,
-  add_peak_magnitude = TRUE,
-  add_cumulative_total = TRUE,
-  add_wis = TRUE,
-  weight_max_terms = 0.5,
-  weight_peak_timing = 0.5,
-  weight_peak_magnitude = 0.5,
-  weight_cumulative_total = 0.3,
-  weight_wis = 0.8,
+  weight_peak_timing = 0,
+  weight_peak_magnitude = 0,
+  weight_cumulative_total = 0,
+  weight_wis = 0,
   sigma_peak_time = 1,
   sigma_peak_log = 0.5,
-  penalty_unmatched_peak = -3,
   wis_quantiles = c(0.025, 0.25, 0.5, 0.75, 0.975),
-  cumulative_timepoints = c(0.25, 0.5, 0.75, 1),
-  enable_guardrails = TRUE,
-  floor_likelihood = -999999999,
-  guardrail_verbose = FALSE,
-  cumulative_over_ratio = 10,
-  cumulative_under_ratio = 0.1,
-  min_cumulative_for_check = 100,
-  negative_correlation_threshold = 0,
-  max_timestep_ratio = 100,
-  min_timestep_ratio = 0.01,
-  min_obs_for_ratio = 1
+  cumulative_timepoints = c(0.25, 0.5, 0.75, 1)
 )
 ```
 
@@ -53,66 +35,55 @@ calc_model_likelihood(
 
 - obs_cases, est_cases:
 
-  Matrices `n_locations x n_time_steps` of observed and estimated cases.
+  Matrices `n_locations x n_time_steps`.
 
 - obs_deaths, est_deaths:
 
-  Matrices `n_locations x n_time_steps` of observed and estimated
-  deaths.
+  Matrices `n_locations x n_time_steps`.
 
 - weight_cases, weight_deaths:
 
-  Optional scalar weights for case/death blocks. Default 1.
+  Scalar weights for case/death blocks. Default 1.
 
 - weights_location:
 
-  Optional length-`n_locations` non-negative weights.
+  Length-`n_locations` non-negative weights.
 
 - weights_time:
 
-  Optional length-`n_time_steps` non-negative weights.
+  Length-`n_time_steps` non-negative weights.
 
 - config:
 
-  Optional LASER configuration list containing location_name,
-  date_start, and date_stop.
+  Optional LASER config list (location_name, date_start, date_stop).
 
-- nb_k_min:
+- nb_k_min_cases:
 
-  Numeric; minimum NB dispersion floor used for the core NB likelihood
-  and WIS quantiles. Default `3`.
+  Minimum NB dispersion floor for cases. Default `3`.
 
-- zero_buffer:
+- nb_k_min_deaths:
 
-  Kept for backward compatibility (not used by the NB core).
+  Minimum NB dispersion floor for deaths. Default `3`.
 
 - verbose:
 
-  Logical; if `TRUE`, prints component summaries per location.
+  If `TRUE`, prints component summaries per location.
 
-- add_max_terms:
+- weight_peak_timing, weight_peak_magnitude:
 
-  Logical; legacy max Poisson terms. Default `FALSE`.
+  Weights for peak terms (T-normalized). Default `0` (OFF). Set \> 0 to
+  enable; 0.25 = 25 percent of NB core influence.
 
-- add_peak_timing, add_peak_magnitude, add_cumulative_total:
+- weight_cumulative_total:
 
-  Logical; default `TRUE`.
-
-- add_wis:
-
-  Logical; default `FALSE`.
-
-- weight_max_terms:
-
-  Component weight for max terms. Default `0.5`.
-
-- weight_peak_timing, weight_peak_magnitude, weight_cumulative_total:
-
-  Component weights. Defaults `0.5, 0.5, 0.3`.
+  Weight for cumulative progression (T-normalized). Default `0` (OFF).
+  Cumulative helper is /end_idx normalized so weights are on the same
+  scale as other shape terms.
 
 - weight_wis:
 
-  Component weight for optional WIS term.
+  Weight for WIS term (T-normalized). Default `0` (OFF). Ablation tests
+  show 0.10 provides trajectory-shape regularization.
 
 - sigma_peak_time:
 
@@ -120,13 +91,7 @@ calc_model_likelihood(
 
 - sigma_peak_log:
 
-  Base SD on log-scale for peak magnitude; default `0.5`. Automatically
-  scaled by sqrt(100/max(peak_obs,100)) to allow more variance for
-  smaller peaks.
-
-- penalty_unmatched_peak:
-
-  Log-likelihood penalty for unmatched peaks; default `-3`.
+  Base SD on log-scale for peak magnitude; default `0.5`.
 
 - wis_quantiles:
 
@@ -134,56 +99,25 @@ calc_model_likelihood(
 
 - cumulative_timepoints:
 
-  Fractions for cumulative progression; default `c(0.25,0.5,0.75,1)`.
-
-- enable_guardrails:
-
-  Logical; default `TRUE`.
-
-- floor_likelihood:
-
-  Numeric; hard floor returned on violations. Default `-999999999`.
-
-- guardrail_verbose:
-
-  Logical; print guardrail reasons.
-
-- cumulative_over_ratio, cumulative_under_ratio:
-
-  Cumulative ratio bounds (default `10`, `0.1`).
-
-- min_cumulative_for_check:
-
-  Minimum observed total to apply ratio checks; default `100`.
-
-- negative_correlation_threshold:
-
-  Correlation floor; default `0` (requires positive correlation).
-
-- max_timestep_ratio:
-
-  Maximum ratio of estimated to observed per timestep (default `100`).
-
-- min_timestep_ratio:
-
-  Minimum ratio of estimated to observed per timestep (default `0.01`).
-
-- min_obs_for_ratio:
-
-  Minimum observed value to apply ratio checks (default `1`).
+  Fractions for cumulative progression.
 
 ## Value
 
-Scalar total log-likelihood (finite) or `floor_likelihood` if floored.
-May be `NA_real_` if all locations contribute nothing.
+Scalar total log-likelihood (finite), `-Inf` if non-finite, or
+`NA_real_` if all locations contribute nothing.
 
 ## Details
 
-By default, three "shape" terms are included with modest weights: (1)
-multi-peak timing (Normal on time differences for matched peaks), (2)
-multi-peak magnitude (log-Normal on ratios with adaptive sigma), and (3)
-cumulative progression (NB at a few cumulative fractions).
+Optional shape terms are enabled by setting their weight \> 0: peak
+timing (Normal), peak magnitude (log-Normal with adaptive sigma),
+cumulative progression (NB at cumulative fractions), and Weighted
+Interval Score (WIS). All weights default to 0 (OFF).
 
-Minimal inline guardrails floor the score on egregious fits (cumulative
-over/under prediction, per-timestep caps, and negative correlation).
-Optional max terms and WIS are kept but OFF by default.
+Shape terms are internally T-normalized so that weight parameters share
+a common scale: `weight = 0.25` means the term contributes roughly 25
+percent as much as the NB core. Peaks are scaled by `T / N_peaks`,
+cumulative and WIS by `T` (both return per-evaluation averages).
+
+Non-finite per-location LL values are replaced with `-Inf` (zero
+importance weight). The NB likelihood naturally produces very negative
+scores for bad fits without needing artificial guardrails.

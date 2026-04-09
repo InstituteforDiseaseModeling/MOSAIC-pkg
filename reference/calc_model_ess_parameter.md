@@ -13,6 +13,7 @@ calc_model_ess_parameter(
   param_names,
   likelihood_col = "likelihood",
   n_grid = 100,
+  method = c("kish", "perplexity"),
   verbose = FALSE
 )
 ```
@@ -35,6 +36,11 @@ calc_model_ess_parameter(
 - n_grid:
 
   Integer number of grid points for KDE evaluation (default: 100)
+
+- method:
+
+  Character string specifying ESS calculation method: "kish" (default)
+  or "perplexity"
 
 - verbose:
 

@@ -154,19 +154,22 @@ data(estimated_parameters)
 
 # View parameter structure
 str(estimated_parameters)
-#> 'data.frame':    43 obs. of  11 variables:
-#>  $ parameter_name : chr  "alpha_1" "alpha_2" "decay_days_short" "decay_days_long" ...
-#>  $ display_name   : chr  "Population Mixing" "Frequency-Driven Transmission" "Minimum V. cholerae Survival" "Maximum V. cholerae Survival" ...
-#>  $ description    : chr  "Population mixing within metapops (0-1, 1 = well-mixed)" "Degree of frequency driven transmission (0-1)" "Minimum V. cholerae survival time in environment" "Maximum V. cholerae survival time in environment" ...
-#>  $ units          : chr  "proportion" "proportion" "days" "days" ...
-#>  $ distribution   : chr  "beta" "beta" "uniform" "uniform" ...
-#>  $ scale          : chr  "global" "global" "global" "global" ...
-#>  $ category       : chr  "transmission" "transmission" "environmental" "environmental" ...
-#>  $ order          : int  1 2 3 4 5 6 7 8 9 10 ...
-#>  $ order_scale    : chr  "01" "01" "01" "01" ...
-#>  $ order_category : chr  "01" "01" "02" "02" ...
-#>  $ order_parameter: chr  "01" "02" "01" "02" ...
-#>  - attr(*, "creation_date")= Date[1:1], format: "2025-10-08"
+#> 'data.frame':    47 obs. of  14 variables:
+#>  $ parameter_name        : chr  "alpha_1" "alpha_2" "decay_days_short" "decay_days_long" ...
+#>  $ display_name          : chr  "Population Mixing" "Frequency-Driven Transmission" "Minimum V. cholerae Survival" "Maximum V. cholerae Survival" ...
+#>  $ description           : chr  "Population mixing within metapops (0-1, 1 = well-mixed)" "Degree of frequency driven transmission (0-1)" "Minimum V. cholerae survival time in environment" "Maximum V. cholerae survival time in environment" ...
+#>  $ units                 : chr  "proportion" "proportion" "days" "days" ...
+#>  $ distribution          : chr  "beta" "beta" "truncnorm" "uniform" ...
+#>  $ scale                 : chr  "global" "global" "global" "global" ...
+#>  $ category              : chr  "transmission" "transmission" "environmental" "environmental" ...
+#>  $ order                 : int  1 2 3 4 5 6 7 8 9 10 ...
+#>  $ order_scale           : chr  "01" "01" "01" "01" ...
+#>  $ order_category        : chr  "01" "01" "02" "02" ...
+#>  $ order_parameter       : chr  "01" "02" "01" "02" ...
+#>  $ posterior_distribution: chr  "beta" "beta" "truncnorm" "lognormal" ...
+#>  $ posterior_lower       : num  NA NA NA NA NA NA NA NA NA NA ...
+#>  $ posterior_upper       : num  NA NA NA NA NA NA NA NA NA NA ...
+#>  - attr(*, "creation_date")= Date[1:1], format: "2026-04-07"
 #>  - attr(*, "version")= chr "1.1.0"
 #>  - attr(*, "description")= chr "Comprehensive parameter inventory for MOSAIC cholera transmission model. Includes metadata, categorization, and"| __truncated__
 
@@ -174,77 +177,76 @@ str(estimated_parameters)
 table(estimated_parameters$scale)
 #> 
 #>   global location 
-#>       22       21 
+#>       25       22 
 
 # Parameters by biological category
 table(estimated_parameters$category)
 #> 
 #>            disease      environmental           immunity initial_conditions 
-#>                  5                 11                  5                  6 
+#>                  8                 11                  5                  6 
 #>           mobility        seasonality            spatial       surveillance 
-#>                  3                  4                  1                  2 
+#>                  3                  4                  1                  5 
 #>       transmission 
-#>                  6 
+#>                  4 
 
 # Parameters by distribution type
 table(estimated_parameters$distribution)
 #> 
-#>      beta   derived     gamma  gompertz lognormal    normal truncnorm   uniform 
-#>        16         2         5         1         6         5         1         7 
+#>      beta     gamma lognormal    normal truncnorm   uniform 
+#>        18         6         9         6         5         3 
 
 # Transmission parameters
 subset(estimated_parameters, category == "transmission")
 #>    parameter_name                  display_name
 #> 1         alpha_1             Population Mixing
 #> 2         alpha_2 Frequency-Driven Transmission
-#> 29    beta_j0_tot  Total Base Transmission Rate
-#> 30         p_beta     Human-to-Human Proportion
-#> 31    beta_j0_hum   Human-to-Human Transmission
-#> 32    beta_j0_env    Environmental Transmission
-#>                                                                        description
-#> 1                          Population mixing within metapops (0-1, 1 = well-mixed)
-#> 2                                    Degree of frequency driven transmission (0-1)
-#> 29                            Total base transmission rate (human + environmental)
-#> 30                         Proportion of total transmission that is human-to-human
-#> 31    Human-to-human component of transmission (derived from beta_j0_tot * p_beta)
-#> 32 Environmental component of transmission (derived from beta_j0_tot * (1-p_beta))
-#>         units distribution    scale     category order order_scale
-#> 1  proportion         beta   global transmission     1          01
-#> 2  proportion         beta   global transmission     2          01
-#> 29    per day     gompertz location transmission    29          02
-#> 30 proportion         beta location transmission    30          02
-#> 31    per day      derived location transmission    31          02
-#> 32    per day      derived location transmission    32          02
-#>    order_category order_parameter
-#> 1              01              01
-#> 2              01              02
-#> 29             02              01
-#> 30             02              02
-#> 31             02              03
-#> 32             02              04
+#> 32    beta_j0_tot  Total Base Transmission Rate
+#> 33         p_beta     Human-to-Human Proportion
+#>                                                description      units
+#> 1  Population mixing within metapops (0-1, 1 = well-mixed) proportion
+#> 2            Degree of frequency driven transmission (0-1) proportion
+#> 32    Total base transmission rate (human + environmental)    per day
+#> 33 Proportion of total transmission that is human-to-human proportion
+#>    distribution    scale     category order order_scale order_category
+#> 1          beta   global transmission     1          01             01
+#> 2          beta   global transmission     2          01             01
+#> 32    lognormal location transmission    32          02             02
+#> 33         beta location transmission    33          02             02
+#>    order_parameter posterior_distribution posterior_lower posterior_upper
+#> 1               01                   beta              NA              NA
+#> 2               02                   beta              NA              NA
+#> 32              01              lognormal              NA              NA
+#> 33              02                   beta              NA              NA
 
 # Location-specific initial conditions
 subset(estimated_parameters,
        scale == "location" & category == "initial_conditions")
 #>     parameter_name                           display_name
-#> 23  prop_S_initial         Initial Susceptible Proportion
-#> 24  prop_E_initial             Initial Exposed Proportion
-#> 25  prop_I_initial            Initial Infected Proportion
-#> 26  prop_R_initial           Initial Recovered Proportion
-#> 27 prop_V1_initial Initial One-Dose Vaccinated Proportion
-#> 28 prop_V2_initial Initial Two-Dose Vaccinated Proportion
+#> 26  prop_S_initial         Initial Susceptible Proportion
+#> 27  prop_E_initial             Initial Exposed Proportion
+#> 28  prop_I_initial            Initial Infected Proportion
+#> 29  prop_R_initial           Initial Recovered Proportion
+#> 30 prop_V1_initial Initial One-Dose Vaccinated Proportion
+#> 31 prop_V2_initial Initial Two-Dose Vaccinated Proportion
 #>                                           description      units distribution
-#> 23      Proportion of population susceptible at start proportion         beta
-#> 24          Proportion of population exposed at start proportion         beta
-#> 25         Proportion of population infected at start proportion         beta
-#> 26 Proportion of population recovered/immune at start proportion         beta
-#> 27          Proportion with one vaccine dose at start proportion         beta
-#> 28         Proportion with two vaccine doses at start proportion         beta
+#> 26      Proportion of population susceptible at start proportion         beta
+#> 27          Proportion of population exposed at start proportion         beta
+#> 28         Proportion of population infected at start proportion         beta
+#> 29 Proportion of population recovered/immune at start proportion         beta
+#> 30          Proportion with one vaccine dose at start proportion         beta
+#> 31         Proportion with two vaccine doses at start proportion         beta
 #>       scale           category order order_scale order_category order_parameter
-#> 23 location initial_conditions    23          02             01              01
-#> 24 location initial_conditions    24          02             01              02
-#> 25 location initial_conditions    25          02             01              03
-#> 26 location initial_conditions    26          02             01              04
-#> 27 location initial_conditions    27          02             01              05
-#> 28 location initial_conditions    28          02             01              06
+#> 26 location initial_conditions    26          02             01              01
+#> 27 location initial_conditions    27          02             01              02
+#> 28 location initial_conditions    28          02             01              03
+#> 29 location initial_conditions    29          02             01              04
+#> 30 location initial_conditions    30          02             01              05
+#> 31 location initial_conditions    31          02             01              06
+#>    posterior_distribution posterior_lower posterior_upper
+#> 26                   beta              NA              NA
+#> 27                   beta              NA              NA
+#> 28                   beta              NA              NA
+#> 29                   beta              NA              NA
+#> 30                   beta              NA              NA
+#> 31                   beta              NA              NA
 ```

@@ -13,14 +13,14 @@
 Source:
 [`DESCRIPTION`](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/DESCRIPTION)
 
-Giles J, Lorton C (2025). *MOSAIC: Metapopulation Outbreak Simulation
-And Interventions for Cholera (MOSAIC)*. R package version 0.6.1,
+Giles J, Lorton C (2026). *MOSAIC: Metapopulation Outbreak Simulation
+And Interventions for Cholera (MOSAIC)*. R package version 0.22.2,
 <https://institutefordiseasemodeling.github.io/MOSAIC-pkg/>.
 
     @Manual{,
       title = {MOSAIC: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)},
       author = {John R Giles and Christopher W Lorton},
-      year = {2025},
-      note = {R package version 0.6.1},
+      year = {2026},
+      note = {R package version 0.22.2},
       url = {https://institutefordiseasemodeling.github.io/MOSAIC-pkg/},
     }

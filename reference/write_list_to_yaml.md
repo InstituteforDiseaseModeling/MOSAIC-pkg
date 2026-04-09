@@ -32,8 +32,8 @@ that the file was successfully written.
 ## Details
 
 The function converts the R list to YAML text using
-[`yaml::as.yaml()`](https://rdrr.io/pkg/yaml/man/as.yaml.html) and then
-writes it out either to a plain text file or to a gzipped file if
+[`yaml::as.yaml()`](https://yaml.r-lib.org/reference/as.yaml.html) and
+then writes it out either to a plain text file or to a gzipped file if
 `compress = TRUE`. The gzipped file is created using a connection opened
 with [`gzfile()`](https://rdrr.io/r/base/connections.html).
 

@@ -35,7 +35,7 @@ directory does not exist, it will be created automatically.
 
 This is particularly useful for:
 
-- Model calibration workflows (logs entire BFRS → NPE sequence)
+- Model calibration workflows (logs BFRS calibration sequence)
 
 - Long-running simulations
 

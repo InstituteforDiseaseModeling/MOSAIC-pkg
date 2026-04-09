@@ -2,7 +2,7 @@
 
 Explicitly attaches the r-mosaic Python environment to the current R
 session. This function initializes Python with the r-mosaic environment,
-making all MOSAIC Python dependencies (laser_cholera, torch, zuko, etc.)
+making all MOSAIC Python dependencies (laser.cholera, torch, zuko, etc.)
 available.
 
 The function:

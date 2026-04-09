@@ -15,6 +15,7 @@ sample_parameters(
   seed,
   sample_args = NULL,
   verbose = TRUE,
+  validate = TRUE,
   ...
 )
 ```
@@ -63,25 +64,34 @@ sample_parameters(
 
   - sample_gamma_2: Recovery rate (default TRUE)
 
-  - sample_iota: Importation rate (default TRUE)
+  - sample_iota: Incubation rate (default TRUE)
 
-  - sample_kappa: Spatial correlation (default TRUE)
+  - sample_kappa: V. cholerae 50 percent infectious dose concentration
+    (default TRUE)
 
-  - sample_mobility_gamma: Mobility parameter (default TRUE)
+  - sample_mobility_gamma: Mobility distance decay parameter (default
+    TRUE)
 
-  - sample_mobility_omega: Mobility parameter (default TRUE)
+  - sample_mobility_omega: Mobility population scaling parameter
+    (default TRUE)
 
-  - sample_omega_1: Infection (default TRUE)
+  - sample_omega_1: Vaccine waning rate one dose (default TRUE)
 
-  - sample_omega_2: Infection (default TRUE)
+  - sample_omega_2: Vaccine waning rate two doses (default TRUE)
 
-  - sample_phi_1: Incubation (default TRUE)
+  - sample_phi_1: Initial vaccine effectiveness one dose (default TRUE)
 
-  - sample_phi_2: Incubation (default TRUE)
+  - sample_phi_2: Initial vaccine effectiveness two doses (default TRUE)
 
-  - sample_rho: Immunity waning (default TRUE)
+  - sample_chi_endemic: PPV among suspected cases during endemic periods
+    (default TRUE)
 
-  - sample_sigma: Immunity (default TRUE)
+  - sample_chi_epidemic: PPV among suspected cases during epidemic
+    periods (default TRUE)
+
+  - sample_rho: Care-seeking rate (default TRUE)
+
+  - sample_sigma: Symptomatic fraction (default TRUE)
 
   - sample_zeta_1: Spatial (default TRUE)
 
@@ -96,15 +106,30 @@ sample_parameters(
 
   - sample_theta_j: WASH coverage (default TRUE)
 
-  - sample_a1: Seasonality (default TRUE)
+  - sample_a_1_j: Seasonality (default TRUE)
 
-  - sample_a2: Seasonality (default TRUE)
+  - sample_a_2_j: Seasonality (default TRUE)
 
-  - sample_b1: Seasonality (default TRUE)
+  - sample_b_1_j: Seasonality (default TRUE)
 
-  - sample_b2: Seasonality (default TRUE)
+  - sample_b_2_j: Seasonality (default TRUE)
 
-  - sample_mu_j: Location-specific case fatality ratio (default TRUE)
+  - sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
+
+  - sample_mu_j_slope: Location-specific temporal IFR trend (default
+    TRUE)
+
+  - sample_mu_j_epidemic_factor: Location-specific epidemic IFR
+    multiplier (default TRUE)
+
+  - sample_epidemic_threshold: Location-specific epidemic activation
+    threshold (default TRUE)
+
+  - sample_delta_reporting_cases: Infection-to-case reporting delay in
+    days (default TRUE)
+
+  - sample_delta_reporting_deaths: Infection-to-death reporting delay in
+    days (default TRUE)
 
   - sample_psi_star_a: Suitability calibration shape/gain (default TRUE)
 
@@ -119,11 +144,20 @@ sample_parameters(
   - sample_initial_conditions: Initial condition proportions (default
     TRUE)
 
+  - ic_moment_match: Derive E/I from observed week-1 cases and the
+    sampled reporting chain (sigma, rho, chi_endemic, iota). Only active
+    when sample_initial_conditions is TRUE. (default FALSE)
+
   If NULL, all parameters are sampled (default behavior).
 
 - verbose:
 
   Logical indicating whether to print progress messages. Default TRUE.
+
+- validate:
+
+  Logical indicating whether to run post-sampling validation. Default
+  TRUE.
 
 - ...:
 

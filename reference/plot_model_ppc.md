@@ -1,24 +1,50 @@
-# Plot Posterior Predictive Checks for LASER Model
+# Plot Posterior Predictive Checks from Ensemble Predictions
 
 Creates professional posterior predictive check (PPC) plots to assess
-model fit. Generates three separate PDF files with density overlays, Q-Q
-plots, and residual analysis.
+model fit using CSV files from stochastic/ensemble predictions.
+Generates diagnostic plots across six pages: density overlays, credible
+interval coverage, calibration scatter plots, Q-Q plots, residuals vs
+observed, and temporal residual patterns.
 
 ## Usage
 
 ``` r
-plot_model_ppc(model, output_dir, verbose = TRUE)
+plot_model_ppc(
+  predictions_dir = NULL,
+  predictions_files = NULL,
+  locations = NULL,
+  model = NULL,
+  output_dir,
+  verbose = TRUE
+)
 ```
 
 ## Arguments
 
+- predictions_dir:
+
+  Character string specifying directory containing prediction CSV files.
+  Function will auto-discover predictions_ensemble\_*.csv or
+  predictions_stochastic\_*.csv files.
+
+- predictions_files:
+
+  Character vector of specific CSV file paths to use. Overrides
+  predictions_dir if provided.
+
+- locations:
+
+  Character vector of specific locations to plot. NULL (default) uses
+  all locations.
+
 - model:
 
-  A laser-cholera Model object containing results and parameters
+  Legacy: A laser-cholera Model object (for backward compatibility). Not
+  recommended - use CSV-based inputs instead.
 
 - output_dir:
 
-  Directory where PPC plots will be saved
+  Directory where PPC plots will be saved. Creates "ppc" subdirectory.
 
 - verbose:
 
@@ -30,12 +56,42 @@ NULL (invisibly). Creates PDF files as side effects.
 
 ## Details
 
-This function creates three professional-quality PPC plots:
+Creates a 6-page multi-page PDF per output file:
 
-- ppc_density.pdf - Density overlays and observed vs predicted scatter
-  plots
+1.  Density overlays of observed vs predicted median distributions
 
-- ppc_qqplots.pdf - Q-Q plots comparing observed and predicted
-  distributions
+2.  Credible interval coverage analysis (50\\
 
-- ppc_residuals.pdf - Residual analysis including temporal patterns
+3.  Observed vs predicted calibration scatter plots
+
+4.  Quantile-quantile plots
+
+5.  Residuals vs observed
+
+6.  Temporal residual patterns
+
+Output files:
+
+- ppc.pdf - Aggregate diagnostics (all locations combined)
+
+- ppc_ISO.pdf - Per-location diagnostics (e.g., ppc_ETH.pdf,
+  ppc_KEN.pdf)
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+# From predictions directory (auto-discovers CSV files)
+plot_model_ppc(
+  predictions_dir = "output/3_results/figures/predictions",
+  output_dir = "output/3_results/figures/predictions"
+)
+
+# Specific locations only
+plot_model_ppc(
+  predictions_dir = "output/plots/predictions",
+  output_dir = "output/plots",
+  locations = c("ETH", "KEN")
+)
+} # }
+```

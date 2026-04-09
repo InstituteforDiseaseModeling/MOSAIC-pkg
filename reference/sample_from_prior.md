@@ -60,6 +60,11 @@ Supported distributions:
 
 - **gompertz**: parameters\$b, parameters\$eta
 
+- **fixed**: parameters\$value (genuinely converged, returns constant)
+
+- **frozen**: parameters\$value (frozen in previous stage, returns
+  constant)
+
 ## Examples
 
 ``` r
@@ -69,8 +74,8 @@ prior_beta <- list(
   parameters = list(shape1 = 2, shape2 = 5)
 )
 sample_from_prior(n = 10, prior = prior_beta)
-#>  [1] 0.12744617 0.27809463 0.10940744 0.32936690 0.07684005 0.21119152
-#>  [7] 0.32513663 0.44467714 0.48580487 0.37734983
+#>  [1] 0.58842776 0.47125524 0.41759665 0.10247331 0.37815582 0.10637791
+#>  [7] 0.49731949 0.07843191 0.38134901 0.21904204
 
 # Sample from a truncated normal distribution
 prior_truncnorm <- list(
@@ -78,6 +83,6 @@ prior_truncnorm <- list(
   parameters = list(mean = 0, sd = 1, a = -2, b = 2)
 )
 sample_from_prior(n = 10, prior = prior_truncnorm)
-#>  [1] -1.2894640  1.6883161  0.8298259 -0.3973745  0.3027850 -0.7890177
-#>  [7]  0.6191767  0.2162437  1.2112046  0.4851827
+#>  [1]  0.361730175 -0.660147606  0.165218882 -1.683158923 -0.366686670
+#>  [6]  1.770533918  0.459259631 -0.288203653  1.322119592 -0.003683303
 ```

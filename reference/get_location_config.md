@@ -7,20 +7,20 @@ the requested location(s).
 ## Usage
 
 ``` r
-get_location_config(config = NULL, iso)
+get_location_config(iso, config = NULL)
 ```
 
 ## Arguments
-
-- config:
-
-  A configuration list object in the format of MOSAIC::config_default.
-  If NULL, will use MOSAIC::config_default.
 
 - iso:
 
   Character vector of ISO3 country codes to extract (e.g., "ETH" or
   c("ETH", "KEN")).
+
+- config:
+
+  A configuration list object in the format of MOSAIC::config_default.
+  If NULL, will use MOSAIC::config_default.
 
 ## Value
 

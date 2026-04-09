@@ -7,12 +7,9 @@ Main functions for running MOSAIC simulations
 - [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   : Run LASER Model Simulation
-- [`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
-  [`run_MOSAIC_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
-  : Run MOSAIC Calibration by ISO Code (Simple Interface)
-- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  : Run MOSAIC Calibration Workflow (Advanced Interface)
+- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  : Run MOSAIC Calibration Workflow
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
@@ -42,25 +39,20 @@ Functions starting with run\_, make\_, or create\_
 - [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   : Run LASER Model Simulation
+- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  : Run MOSAIC Calibration Workflow
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
-- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  : Run MOSAIC Calibration Workflow (Advanced Interface)
-- [`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
-  [`run_MOSAIC_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
-  : Run MOSAIC Calibration by ISO Code (Simple Interface)
-- [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
-  : Run NPE Diagnostics
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
   : Create Lagged Versions of Data
+- [`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
+  : Create a Reusable MOSAIC Parallel Cluster
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values
-- [`create_config_npe()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_config_npe.md)
-  : Create NPE Configuration
 - [`create_results_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_results_matrix.md)
   : Create Results Matrix Using Schema
 - [`create_results_schema()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_results_schema.md)
@@ -129,8 +121,6 @@ Estimation and fitting functions
   : Fit Lognormal Distribution from Mode and 95% Confidence Intervals
 - [`fit_normal_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_normal_from_ci.md)
   : Fit Normal Distribution from Mode and 95% Confidence Intervals
-- [`fit_posterior_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_posterior_distributions.md)
-  : Fit Posterior Distributions
 - [`fit_truncnorm_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_truncnorm_from_ci.md)
   : Fit Truncated Normal Distribution from Mode and 95% Confidence
   Intervals
@@ -150,6 +140,8 @@ Calculation functions
   Scaling)
 - [`calc_bfrs_posterior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bfrs_posterior.md)
   : Calculate BFRS Posterior via Importance Sampling
+- [`calc_bias_ratio()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bias_ratio.md)
+  : Bias Ratio Between Estimated and Observed Series
 - [`calc_bookend_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.md)
   : Calculate Batch Size for Bookend Strategy
 - [`calc_cases_from_infections()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_cases_from_infections.md)
@@ -165,6 +157,7 @@ Calculation functions
 - [`calc_ess_accumulation_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_ess_accumulation_rate.md)
   : Calculate ESS Accumulation Rate
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
+  [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   : Calculate Kullback-Leibler Divergence Between Two Distributions
 - [`calc_log_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood.md)
   : Dispatcher for multiple distribution log-likelihood functions
@@ -198,12 +191,14 @@ Calculation functions
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
 - [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
   : Coefficient of variation of (retained) weights
+- [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+  : Run Stochastic Ensemble Simulations for Best Model
 - [`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md)
   : Calculate Effective Sample Size (ESS)
 - [`calc_model_ess_parameter()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess_parameter.md)
   : Calculate Parameter-Specific ESS using Kernel Density Estimation
 - [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
-  : Compute the total model likelihood (Simplified)
+  : Compute the total model likelihood
 - [`calc_model_loss()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_loss.md)
   : Calculate the Composite Loss of a Model
 - [`calc_model_max_weight()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_max_weight.md)
@@ -216,13 +211,6 @@ Calculation functions
   : Calculate Prior and Posterior Quantiles with KL Divergence
 - [`calc_model_weights_gibbs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_weights_gibbs.md)
   : Gibbs-Posterior Model Weights
-- [`calc_npe_architecture()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_npe_architecture.md)
-  : Calculate NPE Architecture Specification
-- [`calc_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_npe_diagnostics.md)
-  : Calculate NPE Model Diagnostics with Simulation-Based Calibration
-  (SBC)
-- [`calc_npe_weights()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_npe_weights.md)
-  : Calculate NPE Importance Weights (Deprecated)
 - [`calc_optimal_batch_schedule()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_optimal_batch_schedule.md)
   : Calculate Optimal Batch Schedule
 - [`calc_predictive_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_predictive_batch_size.md)
@@ -330,14 +318,18 @@ Plotting functions
   : Plot model convergence status table
 - [`plot_model_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_distributions.md)
   : Plot Multi-Method Parameter Distributions
+- [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+  : Plot Stochastic Ensemble Predictions
 - [`plot_model_fit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit.md)
   : Plot Model Fit: Timeseries of Predicted vs Observed
-- [`plot_model_fit_stochastic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit_stochastic.md)
-  : Plot Stochastic Model Fit: Timeseries with Uncertainty Envelopes
 - [`plot_model_fit_stochastic_param()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit_stochastic_param.md)
   : Plot Stochastic Model Fit with Parameter and Stochastic Uncertainty
 - [`plot_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_likelihood.md)
   : Plot Model Likelihood Curve
+- [`plot_model_parameter_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_correlation.md)
+  : Plot Posterior Parameter Correlation Heatmap
+- [`plot_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_sensitivity.md)
+  : Plot Parameter Sensitivity Ranking (HSIC)
 - [`plot_model_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameters.md)
   : Plot Model Parameters vs Likelihood
 - [`plot_model_posterior_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posterior_quantiles.md)
@@ -345,22 +337,16 @@ Plotting functions
 - [`plot_model_posteriors_detail()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posteriors_detail.md)
   : Plot Detailed Prior to Posterior Distributions
 - [`plot_model_ppc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ppc.md)
-  : Plot Posterior Predictive Checks for LASER Model
+  : Plot Posterior Predictive Checks from Ensemble Predictions
 - [`plot_mosaic_country_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_country_map.md)
   : Plot MOSAIC Country Map
-- [`plot_npe_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_convergence_status.md)
-  : Plot NPE convergence status table
-- [`plot_npe_diagnostics_coverage()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_diagnostics_coverage.md)
-  : Plot NPE Coverage Diagnostics
-- [`plot_npe_diagnostics_coverage_bars()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_diagnostics_coverage_bars.md)
-  : Plot NPE Coverage Diagnostic Bars
-- [`plot_npe_diagnostics_sbc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_diagnostics_sbc.md)
-  : Plot NPE diagnostic status table
-- [`plot_npe_training_loss()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_training_loss.md)
-  : Plot NPE Training Loss Curves
+- [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
+  : Display a Color Palette as Swatches
 - [`plot_recovery_duration()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.md)
   : Plot recovery durations and rates for symptomatic and asymptomatic
   infections
+- [`plot_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rho_care_seeking_params.md)
+  : Plot Rho (Care-Seeking Rate) Prior Estimation
 - [`plot_seasonal_clustering()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.md)
   : Plot Clustering of Countries Based on Seasonal Dynamics
 - [`plot_seasonal_transmission()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.md)
@@ -379,7 +365,7 @@ Plotting functions
 - [`plot_suitability_by_country()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suitability_by_country.md)
   : Plot Predicted Suitability for All Countries
 - [`plot_suspected_cases()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suspected_cases.md)
-  : Plot Proportion of Suspected Cholera Cases
+  : Plot Chi PPV Prior Distributions
 - [`plot_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccination_data.md)
   : Plot Vaccination Data
 - [`plot_vaccination_maps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccination_maps.md)
@@ -457,21 +443,17 @@ Helper and utility functions
   Models
 - [`get_lstm_sequence_splits()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_lstm_sequence_splits.md)
   : Create Train/Validation Splits for LSTM Sequences
-- [`get_npe_observed_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_npe_observed_data.md)
-  : Get NPE Observed Data
-- [`get_npe_parameter_bounds()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_npe_parameter_bounds.md)
-  : Get NPE Parameter Bounds
-- [`get_npe_weights()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_npe_weights.md)
-  : Get NPE Importance Weights
 - [`get_param_names()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_param_names.md)
   : Get Parameter Names from MOSAIC Objects
 - [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)
   : Generate Directory Paths for the MOSAIC Project
 - [`get_python_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_python_paths.md)
   : Get Python Environment Paths
+- [`get_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_rho_care_seeking_params.md)
+  : Estimate Beta Prior for Rho (Care-Seeking Rate) and Save Parameter
+  Data Frame
 - [`get_suspected_cases()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_suspected_cases.md)
-  : Get Proportion of Suspected Cholera Cases and Save Parameter Data
-  Frame
+  : Get Chi PPV Parameters and Save Parameter Data Frame
 - [`get_symptomatic_prop_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_symptomatic_prop_data.md)
   : Get Symptomatic Proportion Data
 - [`get_vaccine_effectiveness_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_vaccine_effectiveness_data.md)
@@ -484,8 +466,6 @@ Helper and utility functions
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_forecast_freshness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_forecast_freshness.md)
   : Check Forecast Data Freshness
-- [`check_likelihood_guardrails()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_likelihood_guardrails.md)
-  : Check likelihood guardrails to identify unrealistic predictions
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
   : Check for overdispersion in a count time series
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
@@ -587,6 +567,9 @@ Built-in datasets
 
 Other exported functions and internal helpers
 
+- [`adjust_ENSO_baseline()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/adjust_ENSO_baseline.md)
+  : Simple Bias Correction for ENSO Data with Different Climatological
+  Baselines
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
   : Attach MOSAIC Python Environment
 - [`batch_clean_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/batch_clean_json.md)
@@ -598,6 +581,8 @@ Other exported functions and internal helpers
   Scaling)
 - [`calc_bfrs_posterior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bfrs_posterior.md)
   : Calculate BFRS Posterior via Importance Sampling
+- [`calc_bias_ratio()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bias_ratio.md)
+  : Bias Ratio Between Estimated and Observed Series
 - [`calc_bookend_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bookend_batch_size.md)
   : Calculate Batch Size for Bookend Strategy
 - [`calc_cases_from_infections()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_cases_from_infections.md)
@@ -613,6 +598,7 @@ Other exported functions and internal helpers
 - [`calc_ess_accumulation_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_ess_accumulation_rate.md)
   : Calculate ESS Accumulation Rate
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
+  [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   : Calculate Kullback-Leibler Divergence Between Two Distributions
 - [`calc_log_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_likelihood.md)
   : Dispatcher for multiple distribution log-likelihood functions
@@ -646,12 +632,14 @@ Other exported functions and internal helpers
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
 - [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
   : Coefficient of variation of (retained) weights
+- [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+  : Run Stochastic Ensemble Simulations for Best Model
 - [`calc_model_ess()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess.md)
   : Calculate Effective Sample Size (ESS)
 - [`calc_model_ess_parameter()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ess_parameter.md)
   : Calculate Parameter-Specific ESS using Kernel Density Estimation
 - [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
-  : Compute the total model likelihood (Simplified)
+  : Compute the total model likelihood
 - [`calc_model_loss()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_loss.md)
   : Calculate the Composite Loss of a Model
 - [`calc_model_max_weight()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_max_weight.md)
@@ -664,13 +652,6 @@ Other exported functions and internal helpers
   : Calculate Prior and Posterior Quantiles with KL Divergence
 - [`calc_model_weights_gibbs()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_weights_gibbs.md)
   : Gibbs-Posterior Model Weights
-- [`calc_npe_architecture()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_npe_architecture.md)
-  : Calculate NPE Architecture Specification
-- [`calc_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_npe_diagnostics.md)
-  : Calculate NPE Model Diagnostics with Simulation-Based Calibration
-  (SBC)
-- [`calc_npe_weights()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_npe_weights.md)
-  : Calculate NPE Importance Weights (Deprecated)
 - [`calc_optimal_batch_schedule()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_optimal_batch_schedule.md)
   : Calculate Optimal Batch Schedule
 - [`calc_predictive_batch_size()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_predictive_batch_size.md)
@@ -692,8 +673,6 @@ Other exported functions and internal helpers
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_forecast_freshness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_forecast_freshness.md)
   : Check Forecast Data Freshness
-- [`check_likelihood_guardrails()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_likelihood_guardrails.md)
-  : Check likelihood guardrails to identify unrealistic predictions
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
   : Check for overdispersion in a count time series
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
@@ -722,8 +701,6 @@ Other exported functions and internal helpers
   : Convert ISO2 or ISO3 Country Codes to Country Names
 - [`convert_matrix_to_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/convert_matrix_to_config.md)
   : Convert Matrix Row to Config Object
-- [`create_config_npe()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_config_npe.md)
-  : Create NPE Configuration
 - [`create_results_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_results_matrix.md)
   : Create Results Matrix Using Schema
 - [`create_results_schema()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/create_results_schema.md)
@@ -795,12 +772,8 @@ Other exported functions and internal helpers
   : Estimate OCV Vaccination Rates
 - [`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
   : Estimate Vaccine Effectiveness Decay Parameters
-- [`estimate_npe_posterior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/estimate_npe_posterior.md)
-  : Estimate NPE Posterior
 - [`estimated_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/estimated_parameters.md)
   : Estimated Parameters Inventory
-- [`evaluate_prior_densities()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_prior_densities.md)
-  : Evaluate Prior Densities for SMC
 - [`extract_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/extract_sampling_metadata.md)
   : Extract Sampling Metadata from Config
 - [`fit_beta_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_from_ci.md)
@@ -818,8 +791,6 @@ Other exported functions and internal helpers
   : Fit Lognormal Distribution from Mode and 95% Confidence Intervals
 - [`fit_normal_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_normal_from_ci.md)
   : Fit Normal Distribution from Mode and 95% Confidence Intervals
-- [`fit_posterior_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_posterior_distributions.md)
-  : Fit Posterior Distributions
 - [`fit_truncnorm_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_truncnorm_from_ci.md)
   : Fit Truncated Normal Distribution from Mode and 95% Confidence
   Intervals
@@ -899,29 +870,27 @@ Other exported functions and internal helpers
   Models
 - [`get_lstm_sequence_splits()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_lstm_sequence_splits.md)
   : Create Train/Validation Splits for LSTM Sequences
-- [`get_npe_observed_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_npe_observed_data.md)
-  : Get NPE Observed Data
-- [`get_npe_parameter_bounds()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_npe_parameter_bounds.md)
-  : Get NPE Parameter Bounds
-- [`get_npe_weights()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_npe_weights.md)
-  : Get NPE Importance Weights
 - [`get_param_names()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_param_names.md)
   : Get Parameter Names from MOSAIC Objects
 - [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)
   : Generate Directory Paths for the MOSAIC Project
 - [`get_python_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_python_paths.md)
   : Get Python Environment Paths
+- [`get_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_rho_care_seeking_params.md)
+  : Estimate Beta Prior for Rho (Care-Seeking Rate) and Save Parameter
+  Data Frame
 - [`get_suspected_cases()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_suspected_cases.md)
-  : Get Proportion of Suspected Cholera Cases and Save Parameter Data
-  Frame
+  : Get Chi PPV Parameters and Save Parameter Data Frame
 - [`get_symptomatic_prop_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_symptomatic_prop_data.md)
   : Get Symptomatic Proportion Data
 - [`get_vaccine_effectiveness_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_vaccine_effectiveness_data.md)
   : Get Vaccine Effectiveness Data
 - [`get_who_region()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_who_region.md)
   : Get WHO Region for ISO Country Codes
-- [`identify_best_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/identify_best_subset.md)
-  : Identify Best Subset of Simulations for NPE Prior Definition
+- [`grid_search_best_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/grid_search_best_subset.md)
+  : Grid Search for Best Subset with Early Stopping
+- [`inflate_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/inflate_priors.md)
+  : Inflate Prior or Posterior Distributions by a Variance Factor
 - [`insert_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/insert_metadata.md)
   : Insert Metadata into Results Row
 - [`insert_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/insert_parameters.md)
@@ -948,8 +917,6 @@ Other exported functions and internal helpers
   : ISO3 Country Codes for Sub-Saharan African Countries
 - [`iso_codes_who_afro`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/iso_codes_who_afro.md)
   : ISO3 Country Codes for WHO AFRO Region Countries
-- [`load_npe_model()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/load_npe_model.md)
-  : Load NPE Model
 - [`load_or_install_packages()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/load_or_install_packages.md)
   : Load or Install Required Packages (with GitHub handling for
   mobility, propvacc, and MOSAIC)
@@ -963,12 +930,34 @@ Other exported functions and internal helpers
   : Create a Configuration File for LASER
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
   : Create Lagged Versions of Data
+- [`make_mosaic_cluster()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
+  : Create a Reusable MOSAIC Parallel Cluster
 - [`make_param_df()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_param_df.md)
   : Get Template for Parameter Values
+- [`mosaic_adaptive_s3_weights()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_adaptive_s3_weights.md)
+  : Compute Adaptive Likelihood Weights for Joint Calibration Stage
+- [`mosaic_color_variant()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_color_variant.md)
+  : Create Lighter, Darker, or Muted Variants of a Color
+- [`mosaic_colors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_colors.md)
+  : Get MOSAIC Semantic Colors
 - [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
   : Build Complete MOSAIC Control Structure
 - [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_io_presets.md)
   : Get Pre-configured I/O Settings
+- [`mosaic_pal_countries()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_countries.md)
+  : Generate Colors for MOSAIC SSA Countries
+- [`mosaic_pal_discrete()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_discrete.md)
+  : Generate a Qualitative MOSAIC Palette
+- [`mosaic_pal_diverging()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_diverging.md)
+  : Generate a Diverging MOSAIC Palette
+- [`mosaic_pal_scenarios()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_scenarios.md)
+  : Generate a Scenario Comparison Palette
+- [`mosaic_pal_sequential()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_sequential.md)
+  : Generate a Sequential MOSAIC Palette
+- [`mosaic_pal_uncertainty()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_uncertainty.md)
+  : Generate Graduated Uncertainty Colors from a Base Color
+- [`mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_palette.md)
+  : Generate a MOSAIC Color Palette
 - [`pgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/pgompertz.md)
   : Gompertz Distribution Cumulative Distribution Function
 - [`plan_batch_strategy()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plan_batch_strategy.md)
@@ -1002,14 +991,18 @@ Other exported functions and internal helpers
   : Plot model convergence status table
 - [`plot_model_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_distributions.md)
   : Plot Multi-Method Parameter Distributions
+- [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+  : Plot Stochastic Ensemble Predictions
 - [`plot_model_fit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit.md)
   : Plot Model Fit: Timeseries of Predicted vs Observed
-- [`plot_model_fit_stochastic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit_stochastic.md)
-  : Plot Stochastic Model Fit: Timeseries with Uncertainty Envelopes
 - [`plot_model_fit_stochastic_param()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit_stochastic_param.md)
   : Plot Stochastic Model Fit with Parameter and Stochastic Uncertainty
 - [`plot_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_likelihood.md)
   : Plot Model Likelihood Curve
+- [`plot_model_parameter_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_correlation.md)
+  : Plot Posterior Parameter Correlation Heatmap
+- [`plot_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_sensitivity.md)
+  : Plot Parameter Sensitivity Ranking (HSIC)
 - [`plot_model_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameters.md)
   : Plot Model Parameters vs Likelihood
 - [`plot_model_posterior_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posterior_quantiles.md)
@@ -1017,22 +1010,16 @@ Other exported functions and internal helpers
 - [`plot_model_posteriors_detail()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posteriors_detail.md)
   : Plot Detailed Prior to Posterior Distributions
 - [`plot_model_ppc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ppc.md)
-  : Plot Posterior Predictive Checks for LASER Model
+  : Plot Posterior Predictive Checks from Ensemble Predictions
 - [`plot_mosaic_country_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_country_map.md)
   : Plot MOSAIC Country Map
-- [`plot_npe_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_convergence_status.md)
-  : Plot NPE convergence status table
-- [`plot_npe_diagnostics_coverage()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_diagnostics_coverage.md)
-  : Plot NPE Coverage Diagnostics
-- [`plot_npe_diagnostics_coverage_bars()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_diagnostics_coverage_bars.md)
-  : Plot NPE Coverage Diagnostic Bars
-- [`plot_npe_diagnostics_sbc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_diagnostics_sbc.md)
-  : Plot NPE diagnostic status table
-- [`plot_npe_training_loss()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_npe_training_loss.md)
-  : Plot NPE Training Loss Curves
+- [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
+  : Display a Color Palette as Swatches
 - [`plot_recovery_duration()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.md)
   : Plot recovery durations and rates for symptomatic and asymptomatic
   infections
+- [`plot_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rho_care_seeking_params.md)
+  : Plot Rho (Care-Seeking Rate) Prior Estimation
 - [`plot_seasonal_clustering()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.md)
   : Plot Clustering of Countries Based on Seasonal Dynamics
 - [`plot_seasonal_transmission()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.md)
@@ -1051,7 +1038,7 @@ Other exported functions and internal helpers
 - [`plot_suitability_by_country()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suitability_by_country.md)
   : Plot Predicted Suitability for All Countries
 - [`plot_suspected_cases()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_suspected_cases.md)
-  : Plot Proportion of Suspected Cholera Cases
+  : Plot Chi PPV Prior Distributions
 - [`plot_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccination_data.md)
   : Plot Vaccination Data
 - [`plot_vaccination_maps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vaccination_maps.md)
@@ -1060,8 +1047,6 @@ Other exported functions and internal helpers
   : Plot Vaccine Effectiveness Decay and Prior Distributions
 - [`plot_vibrio_decay_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vibrio_decay_rate.md)
   : Plot Vibrio Decay Rate as a Function of Environmental Suitability
-- [`prepare_npe_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prepare_npe_data.md)
-  : Prepare NPE Training Data from BFRS Results
 - [`print(`*`<calibration_results_schema>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.calibration_results_schema.md)
   : Print Method for Results Schema
 - [`print(`*`<mosaic_initial_conditions>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_initial_conditions.md)
@@ -1131,31 +1116,44 @@ Other exported functions and internal helpers
 - [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   [`run_laser()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
   : Run LASER Model Simulation
+- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  : Run MOSAIC Calibration Workflow
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
-- [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic.md)
-  : Run MOSAIC Calibration Workflow (Advanced Interface)
-- [`run_mosaic_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
-  [`run_MOSAIC_iso()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_mosaic_iso.md)
-  : Run MOSAIC Calibration by ISO Code (Simple Interface)
-- [`run_npe_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_npe_diagnostics.md)
-  : Run NPE Diagnostics
 - [`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md)
   : Sample from Prior Distribution (Simplified)
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
   : Sample Parameters from Prior Distributions
+- [`scale_color_mosaic_c()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_c.md)
+  [`scale_colour_mosaic_c()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_c.md)
+  [`scale_fill_mosaic_c()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_c.md)
+  : MOSAIC Sequential Color/Fill Scales for ggplot2
+- [`scale_color_mosaic_d()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_d.md)
+  [`scale_colour_mosaic_d()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_d.md)
+  [`scale_fill_mosaic_d()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_d.md)
+  : MOSAIC Discrete Color/Fill Scales for ggplot2
+- [`scale_color_mosaic_div()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_div.md)
+  [`scale_colour_mosaic_div()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_div.md)
+  [`scale_fill_mosaic_div()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_div.md)
+  : MOSAIC Diverging Color/Fill Scales for ggplot2
+- [`scale_color_mosaic_scenario()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_scenario.md)
+  [`scale_colour_mosaic_scenario()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_scenario.md)
+  [`scale_fill_mosaic_scenario()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_scenario.md)
+  : MOSAIC Scenario Color/Fill Scales for ggplot2
 - [`set_openmeteo_api_key()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_openmeteo_api_key.md)
   : Set OpenMeteo API Key
 - [`set_root_directory()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.md)
   : Set Root Directory
 - [`store_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/store_sampling_metadata.md)
   : Store Sampling Metadata in Config
-- [`train_npe()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/train_npe.md)
-  : Train NPE Model
+- [`theme_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/theme_mosaic.md)
+  : MOSAIC ggplot2 Theme
 - [`update_forecast_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_forecast_json.md)
   : Update Forecast JSON Files
+- [`update_priors_from_posteriors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/update_priors_from_posteriors.md)
+  : Update Priors from Posteriors for Staged Estimation
 - [`use_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/use_mosaic_env.md)
   : Use MOSAIC Python Environment
 - [`validate_priors_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/validate_priors_json.md)

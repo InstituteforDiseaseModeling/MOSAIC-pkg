@@ -27,7 +27,7 @@ plot_model_posteriors_detail(
 
 - results_file:
 
-  Path to simulations.parquet file containing all simulation results
+  Path to samples.parquet file containing all simulation results
 
 - priors_file:
 
@@ -59,7 +59,7 @@ List of plot filenames created (invisible)
 if (FALSE) { # \dontrun{
 plot_model_posteriors(
   quantiles_file = "./results/posterior_quantiles.csv",
-  results_file = "./results/simulations.parquet",
+  results_file = "./results/samples.parquet",
   priors_file = "./priors.json",
   posteriors_file = "./results/posteriors.json",
   output_dir = "./results/plots"

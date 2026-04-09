@@ -11,7 +11,7 @@ explicit control over which parameters to sample."><meta property="og:image" con
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -22,9 +22,10 @@ explicit control over which parameters to sample."><meta property="og:image" con
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
-    <li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/Installation.html">Installation</a></li>
+    <li><a class="dropdown-item" href="../articles/Running-LASER.html">Running LASER</a></li>
     <li><a class="dropdown-item" href="../articles/Running-MOSAIC.html">Running MOSAIC</a></li>
+    <li><a class="dropdown-item" href="../articles/Deployment.html">Deployment</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -57,6 +58,7 @@ explicit control over which parameters to sample.</p>
 <span>  <span class="va">seed</span>,</span>
 <span>  sample_args <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  validate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -93,37 +95,51 @@ Available options include:</p><ul><li><p>sample_alpha_1: Population mixing withi
 <li><p>sample_epsilon: Immunity (default TRUE)</p></li>
 <li><p>sample_gamma_1: Recovery rate (default TRUE)</p></li>
 <li><p>sample_gamma_2: Recovery rate (default TRUE)</p></li>
-<li><p>sample_iota: Importation rate (default TRUE)</p></li>
-<li><p>sample_kappa: Spatial correlation (default TRUE)</p></li>
-<li><p>sample_mobility_gamma: Mobility parameter (default TRUE)</p></li>
-<li><p>sample_mobility_omega: Mobility parameter (default TRUE)</p></li>
-<li><p>sample_omega_1: Infection (default TRUE)</p></li>
-<li><p>sample_omega_2: Infection (default TRUE)</p></li>
-<li><p>sample_phi_1: Incubation (default TRUE)</p></li>
-<li><p>sample_phi_2: Incubation (default TRUE)</p></li>
-<li><p>sample_rho: Immunity waning (default TRUE)</p></li>
-<li><p>sample_sigma: Immunity (default TRUE)</p></li>
+<li><p>sample_iota: Incubation rate (default TRUE)</p></li>
+<li><p>sample_kappa: V. cholerae 50 percent infectious dose concentration (default TRUE)</p></li>
+<li><p>sample_mobility_gamma: Mobility distance decay parameter (default TRUE)</p></li>
+<li><p>sample_mobility_omega: Mobility population scaling parameter (default TRUE)</p></li>
+<li><p>sample_omega_1: Vaccine waning rate one dose (default TRUE)</p></li>
+<li><p>sample_omega_2: Vaccine waning rate two doses (default TRUE)</p></li>
+<li><p>sample_phi_1: Initial vaccine effectiveness one dose (default TRUE)</p></li>
+<li><p>sample_phi_2: Initial vaccine effectiveness two doses (default TRUE)</p></li>
+<li><p>sample_chi_endemic: PPV among suspected cases during endemic periods (default TRUE)</p></li>
+<li><p>sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)</p></li>
+<li><p>sample_rho: Care-seeking rate (default TRUE)</p></li>
+<li><p>sample_sigma: Symptomatic fraction (default TRUE)</p></li>
 <li><p>sample_zeta_1: Spatial (default TRUE)</p></li>
 <li><p>sample_zeta_2: Spatial (default TRUE)</p></li>
 <li><p>sample_beta_j0_tot: Total transmission rate (default TRUE)</p></li>
 <li><p>sample_p_beta: Proportion of human-to-human transmission (default TRUE)</p></li>
 <li><p>sample_tau_i: Diffusion (default TRUE)</p></li>
 <li><p>sample_theta_j: WASH coverage (default TRUE)</p></li>
-<li><p>sample_a1: Seasonality (default TRUE)</p></li>
-<li><p>sample_a2: Seasonality (default TRUE)</p></li>
-<li><p>sample_b1: Seasonality (default TRUE)</p></li>
-<li><p>sample_b2: Seasonality (default TRUE)</p></li>
-<li><p>sample_mu_j: Location-specific case fatality ratio (default TRUE)</p></li>
+<li><p>sample_a_1_j: Seasonality (default TRUE)</p></li>
+<li><p>sample_a_2_j: Seasonality (default TRUE)</p></li>
+<li><p>sample_b_1_j: Seasonality (default TRUE)</p></li>
+<li><p>sample_b_2_j: Seasonality (default TRUE)</p></li>
+<li><p>sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)</p></li>
+<li><p>sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)</p></li>
+<li><p>sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)</p></li>
+<li><p>sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)</p></li>
+<li><p>sample_delta_reporting_cases: Infection-to-case reporting delay in days (default TRUE)</p></li>
+<li><p>sample_delta_reporting_deaths: Infection-to-death reporting delay in days (default TRUE)</p></li>
 <li><p>sample_psi_star_a: Suitability calibration shape/gain (default TRUE)</p></li>
 <li><p>sample_psi_star_b: Suitability calibration scale/offset (default TRUE)</p></li>
 <li><p>sample_psi_star_z: Suitability calibration smoothing (default TRUE)</p></li>
 <li><p>sample_psi_star_k: Suitability calibration time offset (default TRUE)</p></li>
 <li><p>sample_initial_conditions: Initial condition proportions (default TRUE)</p></li>
+<li><p>ic_moment_match: Derive E/I from observed week-1 cases and the sampled
+reporting chain (sigma, rho, chi_endemic, iota). Only active when
+sample_initial_conditions is TRUE. (default FALSE)</p></li>
 </ul><p>If NULL, all parameters are sampled (default behavior).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical indicating whether to print progress messages. Default TRUE.</p></dd>
+
+
+<dt id="arg-validate">validate<a class="anchor" aria-label="anchor" href="#arg-validate"></a></dt>
+<dd><p>Logical indicating whether to run post-sampling validation. Default TRUE.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

@@ -12,7 +12,7 @@ The function:
 
 - Initializes Python with the r-mosaic environment
 
-- Imports laser_cholera to ensure it's available
+- Imports laser.cholera to ensure it's available
 
 - Fails loudly if any step fails
 

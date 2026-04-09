@@ -308,9 +308,9 @@ make_LASER_config(
 
 - epidemic_threshold:
 
-  Incidence threshold (infections per capita) for epidemic definition.
-  Used for both case reporting and IFR threshold models. Numeric in \[0,
-  1\].
+  Isym/N point prevalence threshold for epidemic regime activation. Used
+  for both case reporting and IFR threshold models. Numeric scalar or
+  length-n vector in \[0, 1\].
 
 - delta_reporting_cases:
 
