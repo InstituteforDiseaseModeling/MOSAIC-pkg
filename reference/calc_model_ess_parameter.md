@@ -11,6 +11,7 @@ calc_model_ess_parameter(
   results,
   param_names,
   likelihood_col = "likelihood",
+  n_bins = 100,
   n_grid = 100,
   method = c("kish", "perplexity"),
   marginal_method = c("binned", "kde"),
@@ -32,6 +33,13 @@ calc_model_ess_parameter(
 
   Character name of the column containing log-likelihood values
   (default: "likelihood")
+
+- n_bins:
+
+  Integer number of bins for the binned method, or NULL for adaptive
+  sqrt(n) scaling. Fixed bin count (e.g. 100) removes sample-size
+  dependence from ESS estimates. Default: 100. Only used by "binned"
+  method.
 
 - n_grid:
 

@@ -11,7 +11,7 @@ marginal posterior estimation."><meta property="og:image" content="https://insti
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.14</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,6 +55,7 @@ marginal posterior estimation.</p>
 <span>  <span class="va">results</span>,</span>
 <span>  <span class="va">param_names</span>,</span>
 <span>  likelihood_col <span class="op">=</span> <span class="st">"likelihood"</span>,</span>
+<span>  n_bins <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  n_grid <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"kish"</span>, <span class="st">"perplexity"</span><span class="op">)</span>,</span>
 <span>  marginal_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"binned"</span>, <span class="st">"kde"</span><span class="op">)</span>,</span>
@@ -76,6 +77,12 @@ marginal posterior estimation.</p>
 
 <dt id="arg-likelihood-col">likelihood_col<a class="anchor" aria-label="anchor" href="#arg-likelihood-col"></a></dt>
 <dd><p>Character name of the column containing log-likelihood values (default: "likelihood")</p></dd>
+
+
+<dt id="arg-n-bins">n_bins<a class="anchor" aria-label="anchor" href="#arg-n-bins"></a></dt>
+<dd><p>Integer number of bins for the binned method, or NULL for adaptive
+sqrt(n) scaling. Fixed bin count (e.g. 100) removes sample-size dependence
+from ESS estimates. Default: 100. Only used by "binned" method.</p></dd>
 
 
 <dt id="arg-n-grid">n_grid<a class="anchor" aria-label="anchor" href="#arg-n-grid"></a></dt>
