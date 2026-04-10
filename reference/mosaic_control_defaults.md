@@ -117,8 +117,8 @@ mosaic_control_defaults(
   - `ESS_param_prop`: Proportion of parameters meeting ESS (default:
     0.95)
 
-  - `ESS_best`: Target for both subset size and ESS (default: 100). Both
-    B_size and ESS_B must be \>= ESS_best.
+  - `ESS_best`: Target for both subset size and ESS within subset
+    (default: 100).
 
   - `A_best`: Target agreement index (default: 0.95)
 
