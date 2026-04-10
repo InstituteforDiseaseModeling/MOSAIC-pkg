@@ -140,7 +140,7 @@ mosaic_control_defaults(
     (default: 50L)
 
   - `ensemble_n_sims_per_param`: Stochastic runs per parameter set
-    (default: 10L)
+    (default: 5L)
 
   Total ensemble simulations = ensemble_n_param_sets ×
   ensemble_n_sims_per_param (e.g., 50 × 10 = 500)

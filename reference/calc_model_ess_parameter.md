@@ -1,8 +1,8 @@
 # Calculate Parameter-Specific ESS
 
 Computes the effective sample size (ESS) for individual parameters using
-one of three methods: KDE-based marginal posterior estimation, Owen's
-integrand-specific ESS, or binned marginal Kish ESS.
+one of two methods: binned marginal Kish ESS (default) or KDE-based
+marginal posterior estimation.
 
 ## Usage
 
@@ -13,7 +13,7 @@ calc_model_ess_parameter(
   likelihood_col = "likelihood",
   n_grid = 100,
   method = c("kish", "perplexity"),
-  marginal_method = c("kde", "owen", "binned"),
+  marginal_method = c("binned", "kde"),
   verbose = FALSE
 )
 ```
@@ -45,10 +45,8 @@ calc_model_ess_parameter(
 - marginal_method:
 
   Character string specifying how marginal weights are constructed:
-  "kde" (default, backward-compatible KDE-based), "owen" (Owen's
-  integrand-specific ESS), or "binned" (binned marginal Kish ESS).
-  Owen's and binned methods are more sensitive to importance weight
-  changes.
+  "binned" (default, directly sensitive to importance weight
+  distribution) or "kde" (KDE-based marginal posterior estimation).
 
 - verbose:
 
