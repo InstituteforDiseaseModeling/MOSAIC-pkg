@@ -259,7 +259,9 @@ calc_model_likelihood <- function(obs_cases,
           #   ll_total = sum(weights_location[j] * ll_loc[j])
           #
           # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component.
-          T_obs <- n_time_steps
+          # N_obs: count of timesteps with at least one finite observation (cases or deaths).
+          # This matches the NB core which only sums over non-NA timesteps.
+          T_obs <- sum(is.finite(obs_c) | is.finite(obs_d))
 
           # Peak scale: T / N_peaks (number of matched peaks for this location)
           n_peaks_j <- if (!is.null(peak_indices_by_loc)) length(peak_indices_by_loc[[j]]) else 0L
