@@ -1,8 +1,8 @@
 #' Calculate Parameter-Specific ESS
 #'
 #' Computes the effective sample size (ESS) for individual parameters using
-#' one of three methods: KDE-based marginal posterior estimation, Owen's
-#' integrand-specific ESS, or binned marginal Kish ESS.
+#' one of two methods: binned marginal Kish ESS (default) or KDE-based
+#' marginal posterior estimation.
 #'
 #' @param results Data frame containing simulation results
 #' @param param_names Character vector of parameter names to analyze (required)
@@ -10,9 +10,8 @@
 #' @param n_grid Integer number of grid points for KDE evaluation (default: 100, used only by "kde" method)
 #' @param method Character string specifying ESS formula: "kish" or "perplexity"
 #' @param marginal_method Character string specifying how marginal weights are
-#'   constructed: "kde" (default, backward-compatible KDE-based), "owen" (Owen's
-#'   integrand-specific ESS), or "binned" (binned marginal Kish ESS). Owen's and
-#'   binned methods are more sensitive to importance weight changes.
+#'   constructed: "binned" (default, directly sensitive to importance weight
+#'   distribution) or "kde" (KDE-based marginal posterior estimation).
 #' @param verbose Logical whether to print progress messages (default: FALSE)
 #'
 #' @return Data frame with columns:
@@ -45,7 +44,7 @@ calc_model_ess_parameter <- function(
     likelihood_col = "likelihood",
     n_grid = 100,
     method = c("kish", "perplexity"),
-    marginal_method = c("kde", "owen", "binned"),
+    marginal_method = c("binned", "kde"),
     verbose = FALSE
 ) {
 
@@ -284,24 +283,7 @@ calc_model_ess_parameter <- function(
 
         n_clean <- length(param_vals_clean)
 
-        if (marginal_method == "owen") {
-            # -------------------------------------------------------------------
-            # Owen's integrand-specific ESS (Art Owen, Monte Carlo Theory)
-            # Measures how effective the weighted sample is for estimating
-            # the posterior mean of this parameter.
-            # -------------------------------------------------------------------
-            h_i <- param_vals_clean - weighted.mean(param_vals_clean, weights_clean)
-            wh_i <- weights_clean * abs(h_i)
-            if (sum(wh_i) < .Machine$double.eps * 100) {
-                # All weight on a single value — effectively constant under weights
-                ess_marginal <- n_clean
-            } else {
-                wh_i <- wh_i / sum(wh_i)
-                ess_marginal <- calc_model_ess(wh_i, method = method)
-                ess_marginal <- min(ess_marginal, n_clean)
-            }
-
-        } else if (marginal_method == "binned") {
+        if (marginal_method == "binned") {
             # -------------------------------------------------------------------
             # Binned marginal Kish ESS
             # Bins parameter values and computes Kish ESS on bin weights.

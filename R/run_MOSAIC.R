@@ -837,7 +837,7 @@ run_MOSAIC <- function(config,
       client <- dask_dist$Client(dask_spec$address)
     }
 
-    log_msg("Dask dashboard: %s", client$dashboard_link)
+    cli::cli_alert_info("Dask dashboard: {.url {client$dashboard_link}}")
 
     # Register cleanup (runs on normal exit OR error).
     # client/dask_cluster are set to NULL after graceful close before post-processing,
@@ -1324,7 +1324,7 @@ run_MOSAIC <- function(config,
     likelihood_col = "likelihood",
     n_grid = 100,
     method = control$targets$ESS_method,
-    marginal_method = control$targets$ESS_marginal_method %||% "kde",
+    marginal_method = control$targets$ESS_marginal_method %||% "binned",
     verbose = control$logging$verbose
   )
 
@@ -2227,7 +2227,7 @@ run_mosaic <- run_MOSAIC
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
 #'     \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
-#'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
+#'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
 #'   }
 #'   Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)
 #'
@@ -2478,13 +2478,13 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # ESS calculation method
     ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
-    ESS_marginal_method = "kde"  # "kde", "owen", or "binned" (per-parameter marginal method)
+    ESS_marginal_method = "binned"  # "binned" (default) or "kde" (per-parameter marginal method)
   )
 
   # Default prediction settings
   default_predictions <- list(
     ensemble_n_param_sets = 50L,        # Number of parameter sets in ensemble
-    ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
+    ensemble_n_sims_per_param = 5L      # Stochastic runs per parameter set
   )
 
   # Default weight calculation settings

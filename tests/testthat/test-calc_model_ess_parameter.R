@@ -26,7 +26,7 @@ test_that("all three methods return same output format", {
   df <- make_mock_results()
   params <- get_valid_params()
 
-  for (mm in c("kde", "owen", "binned")) {
+  for (mm in c("binned", "kde")) {
     result <- MOSAIC::calc_model_ess_parameter(
       df, params, marginal_method = mm, verbose = FALSE)
     expect_true(is.data.frame(result))
@@ -34,14 +34,6 @@ test_that("all three methods return same output format", {
     expect_equal(nrow(result), length(params))
     expect_true(all(is.finite(result$ess_marginal)))
   }
-})
-
-test_that("owen method returns finite ESS", {
-  df <- make_mock_results()
-  result <- MOSAIC::calc_model_ess_parameter(
-    df, get_valid_params(), marginal_method = "owen", verbose = FALSE)
-  expect_true(all(result$ess_marginal > 0))
-  expect_true(all(result$ess_marginal <= nrow(df)))
 })
 
 test_that("binned method returns finite ESS", {
@@ -74,38 +66,11 @@ test_that("binned method is sensitive to weight concentration", {
   expect_true(mean(ess_conc$ess_marginal) < mean(ess_uniform$ess_marginal))
 })
 
-test_that("owen method differentiates well-resolved vs poorly-resolved params", {
-  set.seed(42)
-  n <- 500
-  df <- data.frame(
-    sim = 1:n,
-    # Likelihood correlated with gamma_1 but not psi_star_a
-    likelihood = -100 + 50 * rnorm(n)
-  )
-  # gamma_1: posterior narrow (high correlation with LL)
-  df$gamma_1 <- 0.1 + 0.01 * (df$likelihood + 100) / 50 + rnorm(n, 0, 0.001)
-  # psi_star_a: posterior broad (no correlation with LL)
-  df$psi_star_a_MOZ <- rnorm(n, 1.0, 0.3)
-  df$beta_j0_tot_MOZ <- rnorm(n, 0.001, 0.0005)
-
-  params <- c("gamma_1", "psi_star_a_MOZ")
-  result <- MOSAIC::calc_model_ess_parameter(
-    df, params, marginal_method = "owen", verbose = FALSE)
-
-  # The well-resolved param (gamma_1, correlated with LL) should have
-  # different ESS than the poorly-resolved one (psi_star_a, uncorrelated)
-  ess_gamma <- result$ess_marginal[result$parameter == "gamma_1"]
-  ess_psi <- result$ess_marginal[result$parameter == "psi_star_a_MOZ"]
-  expect_true(ess_gamma != ess_psi,
-    info = sprintf("Owen should differentiate: gamma_1=%.1f, psi_star_a=%.1f",
-                   ess_gamma, ess_psi))
-})
-
 test_that("method='kish' and method='perplexity' both work with all marginal methods", {
   df <- make_mock_results()
   params <- get_valid_params()
 
-  for (mm in c("kde", "owen", "binned")) {
+  for (mm in c("binned", "kde")) {
     for (m in c("kish", "perplexity")) {
       result <- MOSAIC::calc_model_ess_parameter(
         df, params, method = m, marginal_method = mm, verbose = FALSE)
@@ -115,15 +80,15 @@ test_that("method='kish' and method='perplexity' both work with all marginal met
   }
 })
 
-test_that("default marginal_method is kde (backward compatible)", {
+test_that("default marginal_method is binned", {
   df <- make_mock_results()
   params <- get_valid_params()
 
   # Without specifying marginal_method
   result_default <- MOSAIC::calc_model_ess_parameter(df, params, verbose = FALSE)
-  # Explicitly kde
-  result_kde <- MOSAIC::calc_model_ess_parameter(
-    df, params, marginal_method = "kde", verbose = FALSE)
+  # Explicitly binned
+  result_binned <- MOSAIC::calc_model_ess_parameter(
+    df, params, marginal_method = "binned", verbose = FALSE)
 
-  expect_equal(result_default$ess_marginal, result_kde$ess_marginal)
+  expect_equal(result_default$ess_marginal, result_binned$ess_marginal)
 })

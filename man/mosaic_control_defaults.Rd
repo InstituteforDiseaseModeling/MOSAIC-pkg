@@ -70,7 +70,7 @@ mosaic_control_defaults(
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
 \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
-\item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
+\item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
 }
 Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)}
 
