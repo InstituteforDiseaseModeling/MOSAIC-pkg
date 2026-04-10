@@ -7,6 +7,9 @@
 #' @param results Data frame containing simulation results
 #' @param param_names Character vector of parameter names to analyze (required)
 #' @param likelihood_col Character name of the column containing log-likelihood values (default: "likelihood")
+#' @param n_bins Integer number of bins for the binned method, or NULL for adaptive
+#'   sqrt(n) scaling. Fixed bin count (e.g. 100) removes sample-size dependence
+#'   from ESS estimates. Default: 100. Only used by "binned" method.
 #' @param n_grid Integer number of grid points for KDE evaluation (default: 100, used only by "kde" method)
 #' @param method Character string specifying ESS formula: "kish" or "perplexity"
 #' @param marginal_method Character string specifying how marginal weights are
@@ -42,6 +45,7 @@ calc_model_ess_parameter <- function(
     results,
     param_names,
     likelihood_col = "likelihood",
+    n_bins = 100,
     n_grid = 100,
     method = c("kish", "perplexity"),
     marginal_method = c("binned", "kde"),
@@ -79,6 +83,10 @@ calc_model_ess_parameter <- function(
 
     if (length(param_names) == 0) {
         stop("param_names cannot be empty")
+    }
+
+    if (marginal_method == "binned" && !is.null(n_bins) && (!is.numeric(n_bins) || n_bins < 10)) {
+        stop("n_bins must be NULL (adaptive sqrt(n)) or a numeric value >= 10")
     }
 
     if (marginal_method == "kde" && (!is.numeric(n_grid) || n_grid < 10)) {
@@ -289,10 +297,12 @@ calc_model_ess_parameter <- function(
             # Bins parameter values and computes Kish ESS on bin weights.
             # Directly sensitive to how importance weight is distributed
             # across the parameter's range.
+            # Fixed bin count (default 100) removes sample-size dependence.
+            # NULL uses adaptive sqrt(n) scaling (legacy behavior).
             # -------------------------------------------------------------------
-            n_bins <- floor(sqrt(n_clean))
-            n_bins <- max(n_bins, 5)  # minimum 5 bins
-            breaks <- seq(param_range[1], param_range[2], length.out = n_bins + 1)
+            n_bins_use <- if (is.null(n_bins)) floor(sqrt(n_clean)) else as.integer(n_bins)
+            n_bins_use <- max(n_bins_use, 5)  # minimum 5 bins
+            breaks <- seq(param_range[1], param_range[2], length.out = n_bins_use + 1)
             bin_idx <- findInterval(param_vals_clean, breaks, all.inside = TRUE)
             W_b <- tapply(weights_clean, bin_idx, sum)
             W_b <- W_b / sum(W_b)
