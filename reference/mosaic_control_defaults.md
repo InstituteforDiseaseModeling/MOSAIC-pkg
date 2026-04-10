@@ -120,8 +120,6 @@ mosaic_control_defaults(
   - `percentile_min`: Minimum percentile for best subset search
     (default: 0.001)
 
-  - `percentile_max`: Maximum percentile for best subset (default: 5.0)
-
   - `ESS_method`: ESS calculation method, "kish" or "perplexity"
     (default: "kish")
 
@@ -136,14 +134,11 @@ mosaic_control_defaults(
 
   List of prediction generation settings. Default is:
 
-  - `ensemble_n_param_sets`: Number of parameter sets in ensemble
-    (default: 50L)
-
   - `ensemble_n_sims_per_param`: Stochastic runs per parameter set
     (default: 5L)
 
-  Total ensemble simulations = ensemble_n_param_sets ×
-  ensemble_n_sims_per_param (e.g., 50 × 10 = 500)
+  The number of parameter sets in the ensemble is determined by the best
+  subset (all sims with non-zero importance weights).
 
 - parallel:
 

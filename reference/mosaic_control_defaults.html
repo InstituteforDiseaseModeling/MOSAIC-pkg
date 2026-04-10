@@ -138,7 +138,6 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>A_best</code>: Target agreement index (default: 0.95)</p></li>
 <li><p><code>CVw_best</code>: Target CV of weights (default: 0.5)</p></li>
 <li><p><code>percentile_min</code>: Minimum percentile for best subset search (default: 0.001)</p></li>
-<li><p><code>percentile_max</code>: Maximum percentile for best subset (default: 5.0)</p></li>
 <li><p><code>ESS_method</code>: ESS calculation method, "kish" or "perplexity" (default: "kish")</p></li>
 </ul></dd>
 
@@ -149,9 +148,9 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 
 <dt id="arg-predictions">predictions<a class="anchor" aria-label="anchor" href="#arg-predictions"></a></dt>
-<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>ensemble_n_param_sets</code>: Number of parameter sets in ensemble (default: 50L)</p></li>
-<li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 5L)</p></li>
-</ul><p>Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)</p></dd>
+<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 5L)</p></li>
+</ul><p>The number of parameter sets in the ensemble is determined by the best subset
+(all sims with non-zero importance weights).</p></dd>
 
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
