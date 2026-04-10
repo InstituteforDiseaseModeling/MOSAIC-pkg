@@ -58,7 +58,6 @@ mosaic_control_defaults(
 \item \code{A_best}: Target agreement index (default: 0.95)
 \item \code{CVw_best}: Target CV of weights (default: 0.5)
 \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
-\item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
 \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 }}
 
@@ -69,10 +68,10 @@ mosaic_control_defaults(
 
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
-\item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
 \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
 }
-Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)}
+The number of parameter sets in the ensemble is determined by the best subset
+(all sims with non-zero importance weights).}
 
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
