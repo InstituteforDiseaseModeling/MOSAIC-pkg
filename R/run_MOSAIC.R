@@ -1314,7 +1314,7 @@ run_MOSAIC <- function(config,
     likelihood_col = "likelihood",
     n_grid = 100,
     method = control$targets$ESS_method,
-    marginal_method = control$targets$ESS_marginal_method %||% "binned",
+    marginal_method = control$targets$ESS_marginal_method %||% "kde",
     verbose = control$logging$verbose
   )
 
@@ -2225,7 +2225,7 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param targets List of convergence targets (when to stop). Default is:
 #'   \itemize{
-#'     \item \code{ESS_param}: Target ESS per parameter (default: 500)
+#'     \item \code{ESS_param}: Target ESS per parameter (default: 100)
 #'     \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
 #'     \item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
 #'     \item \code{A_best}: Target agreement index (default: 0.95)
@@ -2329,7 +2329,7 @@ run_mosaic <- run_MOSAIC
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
 #'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
 #'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
-#'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
+#'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
 #'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
 #'   io = mosaic_io_presets("default"),                               # Output format
@@ -2481,7 +2481,7 @@ mosaic_control_defaults <- function(calibration = NULL,
   # Default target settings
   default_targets <- list(
     # Parameter-level targets
-    ESS_param = 500,
+    ESS_param = 100,
     ESS_param_prop = 0.95,
 
     # Best subset targets
@@ -2495,7 +2495,7 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # ESS calculation method
     ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
-    ESS_marginal_method = "binned"  # "binned" (default) or "kde" (per-parameter marginal method)
+    ESS_marginal_method = "kde"  # "kde" (default) or "binned" (more conservative, higher sim cost)
   )
 
   # Default prediction settings

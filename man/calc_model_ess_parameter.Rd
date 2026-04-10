@@ -11,7 +11,7 @@ calc_model_ess_parameter(
   n_bins = 100,
   n_grid = 100,
   method = c("kish", "perplexity"),
-  marginal_method = c("binned", "kde"),
+  marginal_method = c("kde", "binned"),
   verbose = FALSE
 )
 }
@@ -31,8 +31,9 @@ from ESS estimates. Default: 100. Only used by "binned" method.}
 \item{method}{Character string specifying ESS formula: "kish" or "perplexity"}
 
 \item{marginal_method}{Character string specifying how marginal weights are
-constructed: "binned" (default, directly sensitive to importance weight
-distribution) or "kde" (KDE-based marginal posterior estimation).}
+constructed: "kde" (default, KDE-based marginal posterior estimation) or
+"binned" (more conservative, directly sensitive to importance weight
+distribution — recommended for final production runs).}
 
 \item{verbose}{Logical whether to print progress messages (default: FALSE)}
 }

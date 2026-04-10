@@ -80,15 +80,15 @@ test_that("method='kish' and method='perplexity' both work with all marginal met
   }
 })
 
-test_that("default marginal_method is binned", {
+test_that("default marginal_method is kde", {
   df <- make_mock_results()
   params <- get_valid_params()
 
   # Without specifying marginal_method
   result_default <- MOSAIC::calc_model_ess_parameter(df, params, verbose = FALSE)
-  # Explicitly binned
-  result_binned <- MOSAIC::calc_model_ess_parameter(
-    df, params, marginal_method = "binned", verbose = FALSE)
+  # Explicitly kde
+  result_kde <- MOSAIC::calc_model_ess_parameter(
+    df, params, marginal_method = "kde", verbose = FALSE)
 
-  expect_equal(result_default$ess_marginal, result_binned$ess_marginal)
+  expect_equal(result_default$ess_marginal, result_kde$ess_marginal)
 })
