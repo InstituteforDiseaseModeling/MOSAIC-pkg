@@ -1648,6 +1648,16 @@ run_MOSAIC <- function(config,
       plots_dir = dirs$res_fig_diag,
       verbose = control$logging$verbose
     )
+
+    tryCatch({
+      plot_model_likelihood(
+        results    = results,
+        output_dir = dirs$res_fig_diag,
+        verbose    = control$logging$verbose
+      )
+    }, error = function(e) {
+      log_msg("Warning: likelihood curve plot failed: %s", e$message)
+    })
   }
 
   # ===========================================================================
