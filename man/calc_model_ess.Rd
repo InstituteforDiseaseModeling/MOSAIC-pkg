@@ -57,6 +57,8 @@ Kish, L. (1965). \emph{Survey Sampling}. Wiley.
 }
 \seealso{
 Other calibration-metrics: 
-\code{\link{calc_convergence_diagnostics}()}
+\code{\link{calc_convergence_diagnostics}()},
+\code{\link{calc_model_agreement_index}()},
+\code{\link{calc_model_cvw}()}
 }
 \concept{calibration-metrics}

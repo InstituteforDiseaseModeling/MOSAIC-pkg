@@ -172,6 +172,8 @@ print(diagnostics$summary$convergence_status)
 \code{\link{calc_model_agreement_index}}
 
 Other calibration-metrics: 
+\code{\link{calc_model_agreement_index}()},
+\code{\link{calc_model_cvw}()},
 \code{\link{calc_model_ess}()}
 }
 \concept{calibration-metrics}

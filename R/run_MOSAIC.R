@@ -366,7 +366,7 @@
 #'   \itemize{
 #'     \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
 #'     \item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
-#'     \item \code{calibration$max_simulations}: Maximum total simulations (default: 100000)
+#'     \item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
@@ -398,7 +398,7 @@
 #' @section Control Structure:
 #' See [mosaic_control_defaults()] for complete documentation. The control structure contains:
 #' \describe{
-#'   \item{calibration}{n_simulations, n_iterations, max_simulations, batch_size, etc.}
+#'   \item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
 #'   \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
 #'   \item{parallel}{enable, n_cores, type, progress}
 #'   \item{paths}{clean_output, plots}
@@ -1080,15 +1080,16 @@ run_MOSAIC <- function(config,
 
     log_msg("Phase 1: Adaptive Calibration")
     log_msg("  - Run %d-%d batches × %d sims (ESS regression R² target: %.2f)",
-            control$calibration$min_batches, control$calibration$max_batches,
-            control$calibration$batch_size, control$calibration$target_r2_ess)
+            control$calibration$min_batches_adaptive, control$calibration$max_batches_adaptive,
+            control$calibration$batch_size_adaptive, control$calibration$target_r2_adaptive)
     log_msg("Phase 2: Single Predictive Batch")
-    log_msg("Phase 3: Adaptive Fine-tuning (5-tier)")
+    log_msg("Phase 3: Adaptive Fine-tuning (5-tier, max %d batches)",
+            control$calibration$max_batches_fine_tuning)
     log_msg("Target ESS: %d per parameter | Max simulations: %d",
-            control$targets$ESS_param, control$calibration$max_simulations)
+            control$targets$ESS_param, control$calibration$max_simulations_total)
 
     repeat {
-      if (state$converged || state$total_sims_run >= control$calibration$max_simulations) break
+      if (state$converged || state$total_sims_run >= control$calibration$max_simulations_total) break
 
       # Decide next batch
       decision <- .mosaic_decide_next_batch(state, control, state$ess_tracking)
@@ -1118,19 +1119,8 @@ run_MOSAIC <- function(config,
       batch_start <- state$total_sims_run + 1L
       batch_end <- state$total_sims_run + current_batch_size
 
-      # BUG FIX #4: Enforce reserved simulations for fine-tuning phase
-      if (identical(current_phase, "predictive")) {
-        # Leave 250 simulations reserved for fine-tuning
-        reserved_sims <- 250L
-        max_for_predictive <- control$calibration$max_simulations - reserved_sims
-        if (batch_end > max_for_predictive) {
-          batch_end <- max_for_predictive
-          log_msg("Capping predictive batch to leave %d reserved for fine-tuning", reserved_sims)
-        }
-      }
-
-      # Final cap at max_simulations
-      batch_end <- min(batch_end, control$calibration$max_simulations)
+      # Final cap at max_simulations_total
+      batch_end <- min(batch_end, control$calibration$max_simulations_total)
       sim_ids <- batch_start:batch_end
 
       log_msg(paste(rep("-", 60), collapse = ""))
@@ -1211,9 +1201,9 @@ run_MOSAIC <- function(config,
       state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
       .mosaic_save_state(state, state_file)
 
-      if (state$total_sims_run >= control$calibration$max_simulations && !state$converged) {
+      if (state$total_sims_run >= control$calibration$max_simulations_total && !state$converged) {
         log_msg("WARNING: Reached maximum simulations (%d) without convergence",
-                control$calibration$max_simulations)
+                control$calibration$max_simulations_total)
         break
       }
     }
@@ -2194,11 +2184,13 @@ run_mosaic <- run_MOSAIC
 #'   \itemize{
 #'     \item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
 #'     \item \code{n_iterations}: Number of LASER iterations per simulation (default: 3L)
-#'     \item \code{max_simulations}: Maximum total simulations in auto mode (default: 100000L)
-#'     \item \code{batch_size}: Simulations per batch in calibration phase (default: 500L)
-#'     \item \code{min_batches}: Minimum calibration batches (default: 5L)
-#'     \item \code{max_batches}: Maximum calibration batches (default: 8L)
-#'     \item \code{target_r2_ess}: ESS regression R² target for calibration convergence (default: 0.90)
+#'     \item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
+#'     \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
+#'     \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
+#'     \item \code{max_batches_adaptive}: Maximum Phase 1 batches (default: 8L)
+#'     \item \code{max_batch_predictive}: Cap on single Phase 2 predictive batch (default: 10000L)
+#'     \item \code{max_batches_fine_tuning}: Maximum Phase 3 fine-tuning batches (default: 20L)
+#'     \item \code{target_r2_adaptive}: ESS regression R-squared target for Phase 1 convergence (default: 0.90)
 #'   }
 #'
 #' @param sampling List of parameter sampling flags (what to sample). Default is:
@@ -2290,8 +2282,8 @@ run_mosaic <- run_MOSAIC
 #'   calibration = list(
 #'     n_simulations = NULL,  # NULL = auto mode
 #'     n_iterations = 3,
-#'     max_simulations = 50000,
-#'     batch_size = 1000
+#'     max_simulations_total = 50000,
+#'     batch_size_adaptive = 1000
 #'   ),
 #'   parallel = list(enable = TRUE, n_cores = 16)
 #' )
@@ -2352,12 +2344,13 @@ mosaic_control_defaults <- function(calibration = NULL,
   default_calibration <- list(
     n_simulations = NULL,      # NULL = auto mode, integer = fixed mode
     n_iterations = 3L,          # iterations per simulation
-    max_simulations = 100000L,  # max total simulations in auto mode
-    batch_size = 500L,
-    max_predictive_batch = 10000L, # Cap on single predictive batch (prevents multi-hour unchecked runs)
-    min_batches = 5L,
-    max_batches = 8L,
-    target_r2_ess = 0.90
+    max_simulations_total = 100000L,  # max total simulations in auto mode
+    batch_size_adaptive = 500L,
+    max_batch_predictive = 10000L, # Cap on single predictive batch (prevents multi-hour unchecked runs)
+    min_batches_adaptive = 5L,
+    max_batches_adaptive = 8L,
+    max_batches_fine_tuning = 20L,
+    target_r2_adaptive = 0.90
   )
 
   # Default sampling settings

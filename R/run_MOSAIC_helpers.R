@@ -34,12 +34,66 @@
     }
   }
 
-  # BACKWARD COMPATIBILITY: target_r2 → target_r2_ess (renamed in v0.22.7)
-  if (!is.null(def$calibration$target_r2) && is.null(def$calibration$target_r2_ess)) {
-    warning("calibration$target_r2 is deprecated; use calibration$target_r2_ess instead.",
-            call. = FALSE)
-    def$calibration$target_r2_ess <- def$calibration$target_r2
+  # BACKWARD COMPATIBILITY: Renamed parameters (v0.22.16)
+  # batch_size → batch_size_adaptive
+  if (!is.null(def$calibration$batch_size) && is.null(def$calibration$batch_size_adaptive)) {
+    warning("calibration$batch_size is deprecated; use calibration$batch_size_adaptive instead.", call. = FALSE)
+    def$calibration$batch_size_adaptive <- def$calibration$batch_size
+    def$calibration$batch_size <- NULL
+  } else if (!is.null(def$calibration$batch_size)) {
+    def$calibration$batch_size <- NULL
+  }
+
+  # min_batches → min_batches_adaptive
+  if (!is.null(def$calibration$min_batches) && is.null(def$calibration$min_batches_adaptive)) {
+    warning("calibration$min_batches is deprecated; use calibration$min_batches_adaptive instead.", call. = FALSE)
+    def$calibration$min_batches_adaptive <- def$calibration$min_batches
+    def$calibration$min_batches <- NULL
+  } else if (!is.null(def$calibration$min_batches)) {
+    def$calibration$min_batches <- NULL
+  }
+
+  # max_batches → max_batches_adaptive
+  if (!is.null(def$calibration$max_batches) && is.null(def$calibration$max_batches_adaptive)) {
+    warning("calibration$max_batches is deprecated; use calibration$max_batches_adaptive instead.", call. = FALSE)
+    def$calibration$max_batches_adaptive <- def$calibration$max_batches
+    def$calibration$max_batches <- NULL
+  } else if (!is.null(def$calibration$max_batches)) {
+    def$calibration$max_batches <- NULL
+  }
+
+  # target_r2 → target_r2_ess → target_r2_adaptive (two-step deprecation chain)
+  if (!is.null(def$calibration$target_r2) && is.null(def$calibration$target_r2_adaptive)) {
+    warning("calibration$target_r2 is deprecated; use calibration$target_r2_adaptive instead.", call. = FALSE)
+    def$calibration$target_r2_adaptive <- def$calibration$target_r2
     def$calibration$target_r2 <- NULL
+  } else if (!is.null(def$calibration$target_r2)) {
+    def$calibration$target_r2 <- NULL
+  }
+  if (!is.null(def$calibration$target_r2_ess) && is.null(def$calibration$target_r2_adaptive)) {
+    warning("calibration$target_r2_ess is deprecated; use calibration$target_r2_adaptive instead.", call. = FALSE)
+    def$calibration$target_r2_adaptive <- def$calibration$target_r2_ess
+    def$calibration$target_r2_ess <- NULL
+  } else if (!is.null(def$calibration$target_r2_ess)) {
+    def$calibration$target_r2_ess <- NULL
+  }
+
+  # max_predictive_batch → max_batch_predictive
+  if (!is.null(def$calibration$max_predictive_batch) && is.null(def$calibration$max_batch_predictive)) {
+    warning("calibration$max_predictive_batch is deprecated; use calibration$max_batch_predictive instead.", call. = FALSE)
+    def$calibration$max_batch_predictive <- def$calibration$max_predictive_batch
+    def$calibration$max_predictive_batch <- NULL
+  } else if (!is.null(def$calibration$max_predictive_batch)) {
+    def$calibration$max_predictive_batch <- NULL
+  }
+
+  # max_simulations → max_simulations_total
+  if (!is.null(def$calibration$max_simulations) && is.null(def$calibration$max_simulations_total)) {
+    warning("calibration$max_simulations is deprecated; use calibration$max_simulations_total instead.", call. = FALSE)
+    def$calibration$max_simulations_total <- def$calibration$max_simulations
+    def$calibration$max_simulations <- NULL
+  } else if (!is.null(def$calibration$max_simulations)) {
+    def$calibration$max_simulations <- NULL
   }
 
   # TYPE VALIDATION
@@ -50,17 +104,19 @@
       is.numeric(def$parallel$n_cores) && def$parallel$n_cores > 0,
     "parallel$type must be 'PSOCK' or 'FORK'" =
       def$parallel$type %in% c("PSOCK", "FORK"),
-    "calibration$max_simulations must be positive integer" =
-      is.numeric(def$calibration$max_simulations) && def$calibration$max_simulations > 0,
-    "calibration$batch_size must be positive integer" =
-      is.numeric(def$calibration$batch_size) && def$calibration$batch_size > 0,
-    "calibration$min_batches must be positive integer" =
-      is.numeric(def$calibration$min_batches) && def$calibration$min_batches > 0,
-    "calibration$max_batches must be positive integer" =
-      is.numeric(def$calibration$max_batches) && def$calibration$max_batches > 0,
-    "calibration$target_r2_ess must be in [0, 1]" =
-      is.numeric(def$calibration$target_r2_ess) &&
-      def$calibration$target_r2_ess >= 0 && def$calibration$target_r2_ess <= 1,
+    "calibration$max_simulations_total must be positive integer" =
+      is.numeric(def$calibration$max_simulations_total) && def$calibration$max_simulations_total > 0,
+    "calibration$batch_size_adaptive must be positive integer" =
+      is.numeric(def$calibration$batch_size_adaptive) && def$calibration$batch_size_adaptive > 0,
+    "calibration$min_batches_adaptive must be positive integer" =
+      is.numeric(def$calibration$min_batches_adaptive) && def$calibration$min_batches_adaptive > 0,
+    "calibration$max_batches_adaptive must be positive integer" =
+      is.numeric(def$calibration$max_batches_adaptive) && def$calibration$max_batches_adaptive > 0,
+    "calibration$max_batches_fine_tuning must be positive integer" =
+      is.numeric(def$calibration$max_batches_fine_tuning) && def$calibration$max_batches_fine_tuning > 0,
+    "calibration$target_r2_adaptive must be in [0, 1]" =
+      is.numeric(def$calibration$target_r2_adaptive) &&
+      def$calibration$target_r2_adaptive >= 0 && def$calibration$target_r2_adaptive <= 1,
     "targets$ESS_param must be positive" =
       is.numeric(def$targets$ESS_param) && def$targets$ESS_param > 0,
     "targets$ESS_param_prop must be in [0, 1]" =
@@ -90,33 +146,33 @@
     }
   }
 
-  # Check batch_size is reasonable
-  if (def$calibration$batch_size < .MOSAIC_MIN_BATCH_SIZE ||
-      def$calibration$batch_size > .MOSAIC_MAX_BATCH_SIZE) {
-    stop("calibration$batch_size (", def$calibration$batch_size,
+  # Check batch_size_adaptive is reasonable
+  if (def$calibration$batch_size_adaptive < .MOSAIC_MIN_BATCH_SIZE ||
+      def$calibration$batch_size_adaptive > .MOSAIC_MAX_BATCH_SIZE) {
+    stop("calibration$batch_size_adaptive (", def$calibration$batch_size_adaptive,
          ") must be between ", .MOSAIC_MIN_BATCH_SIZE, " and ",
          .MOSAIC_MAX_BATCH_SIZE, call. = FALSE)
   }
 
-  # Check max_simulations is reasonable
-  if (def$calibration$max_simulations < .MOSAIC_MIN_SIMULATIONS ||
-      def$calibration$max_simulations > .MOSAIC_MAX_SIMULATIONS) {
-    stop("calibration$max_simulations (", def$calibration$max_simulations,
+  # Check max_simulations_total is reasonable
+  if (def$calibration$max_simulations_total < .MOSAIC_MIN_SIMULATIONS ||
+      def$calibration$max_simulations_total > .MOSAIC_MAX_SIMULATIONS) {
+    stop("calibration$max_simulations_total (", def$calibration$max_simulations_total,
          ") must be between ", .MOSAIC_MIN_SIMULATIONS, " and ",
          .MOSAIC_MAX_SIMULATIONS, call. = FALSE)
   }
 
-  # Check batch_size < max_simulations
-  if (def$calibration$batch_size >= def$calibration$max_simulations) {
-    stop("calibration$batch_size (", def$calibration$batch_size,
-         ") must be less than calibration$max_simulations (",
-         def$calibration$max_simulations, ")", call. = FALSE)
+  # Check batch_size_adaptive < max_simulations_total
+  if (def$calibration$batch_size_adaptive >= def$calibration$max_simulations_total) {
+    stop("calibration$batch_size_adaptive (", def$calibration$batch_size_adaptive,
+         ") must be less than calibration$max_simulations_total (",
+         def$calibration$max_simulations_total, ")", call. = FALSE)
   }
 
   # LOGICAL CONSISTENCY
-  if (def$calibration$min_batches > def$calibration$max_batches) {
-    stop("calibration$min_batches (", def$calibration$min_batches,
-         ") must be <= calibration$max_batches (", def$calibration$max_batches, ")",
+  if (def$calibration$min_batches_adaptive > def$calibration$max_batches_adaptive) {
+    stop("calibration$min_batches_adaptive (", def$calibration$min_batches_adaptive,
+         ") must be <= calibration$max_batches_adaptive (", def$calibration$max_batches_adaptive, ")",
          call. = FALSE)
   }
 
@@ -528,7 +584,7 @@
   if (identical(state$phase, "calibration") && !isTRUE(state$calibration_done)) {
     return(list(
       phase = "calibration",
-      batch_size = control$calibration$batch_size
+      batch_size = control$calibration$batch_size_adaptive
     ))
   }
 
@@ -539,9 +595,8 @@
       calc_bookend_batch_size(
         ess_history = ess_tracking,
         target_ess = control$targets$ESS_param,
-        reserved_sims = 250L,
-        max_total_sims = control$calibration$max_simulations,
-        target_r_squared = control$calibration$target_r2_ess
+        max_total_sims = control$calibration$max_simulations_total,
+        target_r_squared = control$calibration$target_r2_adaptive
       )
     }, error = function(e) NULL)
 
@@ -568,9 +623,9 @@
     # If the predicted size exceeds the cap, run cap-sized batches with ESS
     # re-evaluation between each (the main loop handles this naturally since
     # predictive_done isn't set until .mosaic_ess_check_update_state marks it).
-    max_pred <- control$calibration$max_predictive_batch
+    max_pred <- control$calibration$max_batch_predictive
     if (!is.null(max_pred) && size > max_pred) {
-      log_msg("  Capping predictive batch: %d → %d (max_predictive_batch)", size, max_pred)
+      log_msg("  Capping predictive batch: %d → %d (max_batch_predictive)", size, max_pred)
       size <- as.integer(max_pred)
     }
 
@@ -594,6 +649,17 @@
       phase = "fine_tuning",
       batch_size = 0L,
       message = "Target ESS achieved or exceeded"
+    ))
+  }
+
+  # Cap fine-tuning batches to prevent runaway
+  if (!is.null(state$phase_batch_count) &&
+      state$phase_batch_count >= control$calibration$max_batches_fine_tuning) {
+    log_msg("Fine-tuning batch limit reached (%d batches)", control$calibration$max_batches_fine_tuning)
+    return(list(
+      phase = "fine_tuning",
+      batch_size = 0L,
+      message = sprintf("Reached max_batches_fine_tuning (%d)", control$calibration$max_batches_fine_tuning)
     ))
   }
 
@@ -709,8 +775,8 @@
   # This ensures the model uses data from ALL batches (1, 2, 3, ..., N)
   if (identical(state$phase, "calibration") &&
       !isTRUE(state$calibration_done) &&
-      state$batch_number >= control$calibration$min_batches &&
-      length(state$ess_tracking) >= control$calibration$min_batches) {
+      state$batch_number >= control$calibration$min_batches_adaptive &&
+      length(state$ess_tracking) >= control$calibration$min_batches_adaptive) {
 
     ess_df <- data.frame(
       sims = vapply(state$ess_tracking, `[[`, numeric(1), "total_sims"),
@@ -748,10 +814,10 @@
     log_msg("Calibration convergence check (batch %d):", state$batch_number)
     if (!is.na(est_sims)) {
       log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  ESS regression R² = %.4f (target %.2f) | Est. Sims: %.0f",
-              intercept, slope_print, r2_print, control$calibration$target_r2_ess, round(est_sims))
+              intercept, slope_print, r2_print, control$calibration$target_r2_adaptive, round(est_sims))
     } else {
       log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  ESS regression R² = %.4f (target %.2f) | Est. Sims: N/A%s",
-              intercept, slope_print, r2_print, control$calibration$target_r2_ess,
+              intercept, slope_print, r2_print, control$calibration$target_r2_adaptive,
               if (!is.finite(slope)) " [ESS plateau — slope undefined]" else "")
     }
     log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
@@ -763,16 +829,16 @@
     # has only 1 residual df, making R² trivially near 1 for any monotone ESS
     # trajectory. The max_batches hard limit is always honoured regardless.
     min_r2_points <- 5L
-    r2_converged <- r2 >= control$calibration$target_r2_ess && nrow(ess_df) >= min_r2_points
+    r2_converged <- r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) >= min_r2_points
     if (r2_converged) {
       log_msg("  ESS regression R² criterion met with %d data points (min required: %d)",
               nrow(ess_df), min_r2_points)
-    } else if (r2 >= control$calibration$target_r2_ess && nrow(ess_df) < min_r2_points) {
+    } else if (r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) < min_r2_points) {
       log_msg("  ESS regression R² = %.4f >= target, but only %d data point(s) — need >= %d for reliable fit",
               r2, nrow(ess_df), min_r2_points)
     }
 
-    if (r2_converged || state$batch_number >= control$calibration$max_batches) {
+    if (r2_converged || state$batch_number >= control$calibration$max_batches_adaptive) {
 
       # Calculate remaining gap
       current_n <- nrow(ess_check_results)
@@ -784,15 +850,15 @@
 
       # Decide whether to end calibration or continue
       # Check max_batches FIRST to ensure hard limit is enforced
-      if (state$batch_number >= control$calibration$max_batches) {
+      if (state$batch_number >= control$calibration$max_batches_adaptive) {
         # Hit max batches limit - always exit regardless of R² or gap
         state$calibration_done <- TRUE
-        if (r2 < control$calibration$target_r2_ess) {
+        if (r2 < control$calibration$target_r2_adaptive) {
           log_msg("  → Calibration complete: reached max_batches (%d) before ESS regression R² converged (%.4f < %.2f)",
-                  control$calibration$max_batches, r2, control$calibration$target_r2_ess)
+                  control$calibration$max_batches_adaptive, r2, control$calibration$target_r2_adaptive)
         } else {
           log_msg("  → Calibration complete: reached max_batches (%d)",
-                  control$calibration$max_batches)
+                  control$calibration$max_batches_adaptive)
         }
         if (remaining_sims > 0) {
           log_msg("    Estimated gap: %.0f sims → proceeding to predictive phase", ceiling(remaining_sims))
@@ -803,12 +869,12 @@
         # Don't log here - convergence check will announce it
         state$calibration_done <- TRUE
 
-      } else if (remaining_sims > 0 && remaining_sims < control$calibration$batch_size) {
+      } else if (remaining_sims > 0 && remaining_sims < control$calibration$batch_size_adaptive) {
         # Small gap remaining - continue calibration instead of transitioning
         log_msg("  → Calibration R² achieved, but gap is small")
         log_msg("    Current: %d sims | Estimated need: %.0f sims | Gap: %.0f sims",
                 current_n, round(est_sims), ceiling(remaining_sims))
-        log_msg("    Continuing calibration (gap < batch_size)")
+        log_msg("    Continuing calibration (gap < batch_size_adaptive)")
         # Don't set calibration_done, continue with one more batch
 
       } else {
@@ -841,7 +907,7 @@
   if (prop_converged >= control$targets$ESS_param_prop) {
     # Only declare convergence after min_batches to ensure sufficient exploration.
     # Early batches can spuriously meet ESS targets with small samples.
-    if (state$batch_number >= control$calibration$min_batches) {
+    if (state$batch_number >= control$calibration$min_batches_adaptive) {
       state$converged <- TRUE
       log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (computed on %d/%d params)",
               prop_converged * 100, control$targets$ESS_param,
@@ -849,7 +915,7 @@
     } else {
       log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d — continuing",
               prop_converged * 100, control$targets$ESS_param,
-              state$batch_number, control$calibration$min_batches)
+              state$batch_number, control$calibration$min_batches_adaptive)
     }
   }
 

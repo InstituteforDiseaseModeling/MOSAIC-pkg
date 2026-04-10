@@ -40,7 +40,7 @@ Key settings:
 \itemize{
 \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
 \item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
-\item \code{calibration$max_simulations}: Maximum total simulations (default: 100000)
+\item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
 }}
@@ -96,7 +96,7 @@ Executes the full MOSAIC calibration workflow:
 
 See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for complete documentation. The control structure contains:
 \describe{
-\item{calibration}{n_simulations, n_iterations, max_simulations, batch_size, etc.}
+\item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
 \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
 \item{parallel}{enable, n_cores, type, progress}
 \item{paths}{clean_output, plots}

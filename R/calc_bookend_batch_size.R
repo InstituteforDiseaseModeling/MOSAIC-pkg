@@ -7,14 +7,12 @@
 #'
 #' @param ess_history ESS measurements from calibration phase
 #' @param target_ess Target ESS value
-#' @param reserved_sims Number of simulations reserved for fine-tuning
 #' @param max_total_sims Maximum total simulations allowed
 #' @param target_r_squared Target R-squared for ESS regression (default: 0.95)
 #' @return List with batch size recommendation
 #' @export
 calc_bookend_batch_size <- function(ess_history,
                                    target_ess,
-                                   reserved_sims,
                                    max_total_sims,
                                    target_r_squared = 0.95) {
 
@@ -119,8 +117,8 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Calculate predictive batch size
-    # Total = current + predictive_batch + reserved_fine_tuning
-    predictive_batch_size <- total_needed - current_n - reserved_sims
+    # Predictive batch uses full remaining budget (fine-tuning handles any leftover ESS gap)
+    predictive_batch_size <- total_needed - current_n
 
     # Apply safety margins based on R² confidence
     # Adjusted for better prediction accuracy with high-confidence models
@@ -154,8 +152,8 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Check against maximum
-    if (current_n + predictive_batch_size + reserved_sims > max_total_sims) {
-        predictive_batch_size <- max_total_sims - current_n - reserved_sims
+    if (current_n + predictive_batch_size > max_total_sims) {
+        predictive_batch_size <- max_total_sims - current_n
     }
 
     # Predict ESS after the batch
@@ -173,7 +171,7 @@ calc_bookend_batch_size <- function(ess_history,
         current_ess = current_ess,
         target_ess = target_ess,
         predicted_ess = as.numeric(predicted_ess),
-        total_predicted = current_n + predictive_batch_size + reserved_sims,
+        total_predicted = current_n + predictive_batch_size,
         message = sprintf("Predictive batch: %.0f sims (model=%s, R²=%.3f)",
                          predictive_batch_size, best_model, best_r2)
     ))

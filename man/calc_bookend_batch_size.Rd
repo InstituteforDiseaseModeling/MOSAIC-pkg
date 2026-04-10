@@ -7,7 +7,6 @@
 calc_bookend_batch_size(
   ess_history,
   target_ess,
-  reserved_sims,
   max_total_sims,
   target_r_squared = 0.95
 )
@@ -16,8 +15,6 @@ calc_bookend_batch_size(
 \item{ess_history}{ESS measurements from calibration phase}
 
 \item{target_ess}{Target ESS value}
-
-\item{reserved_sims}{Number of simulations reserved for fine-tuning}
 
 \item{max_total_sims}{Maximum total simulations allowed}
 

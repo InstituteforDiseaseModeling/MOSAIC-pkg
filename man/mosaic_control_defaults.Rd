@@ -23,11 +23,13 @@ mosaic_control_defaults(
 \itemize{
 \item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
 \item \code{n_iterations}: Number of LASER iterations per simulation (default: 3L)
-\item \code{max_simulations}: Maximum total simulations in auto mode (default: 100000L)
-\item \code{batch_size}: Simulations per batch in calibration phase (default: 500L)
-\item \code{min_batches}: Minimum calibration batches (default: 5L)
-\item \code{max_batches}: Maximum calibration batches (default: 8L)
-\item \code{target_r2_ess}: ESS regression R² target for calibration convergence (default: 0.90)
+\item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
+\item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
+\item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
+\item \code{max_batches_adaptive}: Maximum Phase 1 batches (default: 8L)
+\item \code{max_batch_predictive}: Cap on single Phase 2 predictive batch (default: 10000L)
+\item \code{max_batches_fine_tuning}: Maximum Phase 3 fine-tuning batches (default: 20L)
+\item \code{target_r2_adaptive}: ESS regression R-squared target for Phase 1 convergence (default: 0.90)
 }}
 
 \item{sampling}{List of parameter sampling flags (what to sample). Default is:
@@ -136,8 +138,8 @@ ctrl <- mosaic_control_defaults(
   calibration = list(
     n_simulations = NULL,  # NULL = auto mode
     n_iterations = 3,
-    max_simulations = 50000,
-    batch_size = 1000
+    max_simulations_total = 50000,
+    batch_size_adaptive = 1000
   ),
   parallel = list(enable = TRUE, n_cores = 16)
 )
