@@ -33,7 +33,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.16</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,11 +103,13 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <dl><dt id="arg-calibration">calibration<a class="anchor" aria-label="anchor" href="#arg-calibration"></a></dt>
 <dd><p>List of calibration settings. Default is:</p><ul><li><p><code>n_simulations</code>: NULL for auto mode, or integer for fixed mode</p></li>
 <li><p><code>n_iterations</code>: Number of LASER iterations per simulation (default: 3L)</p></li>
-<li><p><code>max_simulations</code>: Maximum total simulations in auto mode (default: 100000L)</p></li>
-<li><p><code>batch_size</code>: Simulations per batch in calibration phase (default: 500L)</p></li>
-<li><p><code>min_batches</code>: Minimum calibration batches (default: 5L)</p></li>
-<li><p><code>max_batches</code>: Maximum calibration batches (default: 8L)</p></li>
-<li><p><code>target_r2_ess</code>: ESS regression R² target for calibration convergence (default: 0.90)</p></li>
+<li><p><code>max_simulations_total</code>: Maximum total simulations across all phases (default: 100000L)</p></li>
+<li><p><code>batch_size_adaptive</code>: Simulations per batch in Phase 1 adaptive calibration (default: 500L)</p></li>
+<li><p><code>min_batches_adaptive</code>: Minimum Phase 1 batches before convergence check (default: 5L)</p></li>
+<li><p><code>max_batches_adaptive</code>: Maximum Phase 1 batches (default: 8L)</p></li>
+<li><p><code>max_batch_predictive</code>: Cap on single Phase 2 predictive batch (default: 10000L)</p></li>
+<li><p><code>max_batches_fine_tuning</code>: Maximum Phase 3 fine-tuning batches (default: 20L)</p></li>
+<li><p><code>target_r2_adaptive</code>: ESS regression R-squared target for Phase 1 convergence (default: 0.90)</p></li>
 </ul></dd>
 
 
@@ -202,8 +204,8 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <span class="r-in"><span>  calibration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>    n_simulations <span class="op">=</span> <span class="cn">NULL</span>,  <span class="co"># NULL = auto mode</span></span></span>
 <span class="r-in"><span>    n_iterations <span class="op">=</span> <span class="fl">3</span>,</span></span>
-<span class="r-in"><span>    max_simulations <span class="op">=</span> <span class="fl">50000</span>,</span></span>
-<span class="r-in"><span>    batch_size <span class="op">=</span> <span class="fl">1000</span></span></span>
+<span class="r-in"><span>    max_simulations_total <span class="op">=</span> <span class="fl">50000</span>,</span></span>
+<span class="r-in"><span>    batch_size_adaptive <span class="op">=</span> <span class="fl">1000</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span>,</span></span>
 <span class="r-in"><span>  parallel <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>enable <span class="op">=</span> <span class="cn">TRUE</span>, n_cores <span class="op">=</span> <span class="fl">16</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>

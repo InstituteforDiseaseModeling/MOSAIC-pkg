@@ -37,7 +37,7 @@ Posterior predictive checks and uncertainty quantification
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.16</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -128,7 +128,7 @@ All results will be saved here. Must be unique per run.</p></dd>
 Controls calibration strategy, parameter sampling, parallelization, and output settings.
 Key settings:</p><ul><li><p><code>calibration$n_simulations</code>: NULL for auto mode, integer for fixed mode</p></li>
 <li><p><code>calibration$n_iterations</code>: LASER iterations per simulation (default: 3)</p></li>
-<li><p><code>calibration$max_simulations</code>: Maximum total simulations (default: 100000)</p></li>
+<li><p><code>calibration$max_simulations_total</code>: Maximum total simulations (default: 100000)</p></li>
 <li><p><code>sampling</code>: Which parameters to sample vs hold fixed</p></li>
 <li><p><code>parallel</code>: Cluster settings for parallel execution</p></li>
 </ul></dd>
@@ -175,7 +175,7 @@ When <code>NULL</code> (default) the local R parallel backend is used.</p></dd>
 
 
 <p>See <code><a href="mosaic_control_defaults.html">mosaic_control_defaults()</a></code> for complete documentation. The control structure contains:</p><dl><dt>calibration</dt>
-<dd><p>n_simulations, n_iterations, max_simulations, batch_size, etc.</p></dd>
+<dd><p>n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.</p></dd>
 
 <dt>sampling</dt>
 <dd><p>sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.</p></dd>

@@ -81,8 +81,8 @@ run_mosaic(
   - `calibration$n_iterations`: LASER iterations per simulation
     (default: 3)
 
-  - `calibration$max_simulations`: Maximum total simulations (default:
-    100000)
+  - `calibration$max_simulations_total`: Maximum total simulations
+    (default: 100000)
 
   - `sampling`: Which parameters to sample vs hold fixed
 
@@ -136,7 +136,8 @@ for complete documentation. The control structure contains:
 
 - calibration:
 
-  n_simulations, n_iterations, max_simulations, batch_size, etc.
+  n_simulations, n_iterations, max_simulations_total,
+  batch_size_adaptive, etc.
 
 - sampling:
 

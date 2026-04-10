@@ -14,7 +14,6 @@ Implements a three-phase strategy:
 calc_bookend_batch_size(
   ess_history,
   target_ess,
-  reserved_sims,
   max_total_sims,
   target_r_squared = 0.95
 )
@@ -29,10 +28,6 @@ calc_bookend_batch_size(
 - target_ess:
 
   Target ESS value
-
-- reserved_sims:
-
-  Number of simulations reserved for fine-tuning
 
 - max_total_sims:
 

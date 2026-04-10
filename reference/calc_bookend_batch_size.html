@@ -17,7 +17,7 @@ Final fine-tuning (adaptive batch sizing based on gap)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.16</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,6 @@ Final fine-tuning (adaptive batch sizing based on gap)
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">calc_bookend_batch_size</span><span class="op">(</span></span>
 <span>  <span class="va">ess_history</span>,</span>
 <span>  <span class="va">target_ess</span>,</span>
-<span>  <span class="va">reserved_sims</span>,</span>
 <span>  <span class="va">max_total_sims</span>,</span>
 <span>  target_r_squared <span class="op">=</span> <span class="fl">0.95</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -76,10 +75,6 @@ Final fine-tuning (adaptive batch sizing based on gap)
 
 <dt id="arg-target-ess">target_ess<a class="anchor" aria-label="anchor" href="#arg-target-ess"></a></dt>
 <dd><p>Target ESS value</p></dd>
-
-
-<dt id="arg-reserved-sims">reserved_sims<a class="anchor" aria-label="anchor" href="#arg-reserved-sims"></a></dt>
-<dd><p>Number of simulations reserved for fine-tuning</p></dd>
 
 
 <dt id="arg-max-total-sims">max_total_sims<a class="anchor" aria-label="anchor" href="#arg-max-total-sims"></a></dt>
