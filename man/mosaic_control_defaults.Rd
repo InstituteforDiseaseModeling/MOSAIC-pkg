@@ -56,7 +56,7 @@ mosaic_control_defaults(
 \itemize{
 \item \code{ESS_param}: Target ESS per parameter (default: 100)
 \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-\item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
+\item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
 \item \code{A_best}: Target agreement index (default: 0.95)
 \item \code{CVw_best}: Target CV of weights (default: 0.5)
 \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)

@@ -2227,7 +2227,7 @@ run_mosaic <- run_MOSAIC
 #'   \itemize{
 #'     \item \code{ESS_param}: Target ESS per parameter (default: 100)
 #'     \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-#'     \item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
+#'     \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
 #'     \item \code{A_best}: Target agreement index (default: 0.95)
 #'     \item \code{CVw_best}: Target CV of weights (default: 0.5)
 #'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
@@ -2485,7 +2485,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     ESS_param_prop = 0.95,
 
     # Best subset targets
-    ESS_best = 500,              # Updated from 100 for better statistical power
+    ESS_best = 100,              # Target for subset size and ESS within subset
     A_best = 0.95,
     CVw_best = 0.7,              # Updated from 0.5 for realistic subset quality
 
