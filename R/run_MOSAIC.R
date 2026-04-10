@@ -1803,6 +1803,20 @@ run_MOSAIC <- function(config,
           ifelse(is.na(r2_deaths), 0, r2_deaths),
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
+  # Best model prediction plot
+  if (control$paths$plots) {
+    tryCatch({
+      log_msg("Generating best model prediction plot...")
+      plot_model_fit(
+        model      = best_model,
+        output_dir = dirs$res_fig_pred,
+        verbose    = FALSE
+      )
+    }, error = function(e) {
+      log_msg("Warning: best model plot failed: %s", e$message)
+    })
+  }
+
   # ===========================================================================
   # RECONNECT DASK FOR POST-CAL SIMS (if applicable)
   # ===========================================================================
