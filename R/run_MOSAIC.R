@@ -1258,7 +1258,7 @@ run_MOSAIC <- function(config,
   # Add index columns
   log_msg("Adding index columns to results matrix...")
   results$is_finite <- is.finite(results$likelihood) & !is.na(results$likelihood)
-  results$is_valid <- results$is_finite & results$likelihood != -999999999
+  results$is_valid <- results$is_finite
   results$is_outlier <- FALSE
 
   if (sum(results$is_valid) > 0) {
@@ -1273,7 +1273,7 @@ run_MOSAIC <- function(config,
     # poor fits) but are bounded above near 0. Applying an upper fence via
     # Q3 + k*IQR would incorrectly discard the highest-likelihood simulations
     # — exactly the models we want to keep for the posterior. The lower fence
-    # removes pathologically bad simulations that survived the guardrails.
+    # removes pathologically bad simulations via Tukey lower fence.
     results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
 
     log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f):", iqr_mult)
