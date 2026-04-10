@@ -112,7 +112,7 @@ mosaic_control_defaults(
 
   List of convergence targets (when to stop). Default is:
 
-  - `ESS_param`: Target ESS per parameter (default: 500)
+  - `ESS_param`: Target ESS per parameter (default: 100)
 
   - `ESS_param_prop`: Proportion of parameters meeting ESS (default:
     0.95)
@@ -243,7 +243,7 @@ ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
-  targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
+  targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format
