@@ -57,8 +57,8 @@ mosaic_control_defaults(
 \item \code{ESS_param}: Target ESS per parameter (default: 100)
 \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
 \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
-\item \code{A_best}: Target agreement index (default: 0.95)
-\item \code{CVw_best}: Target CV of weights (default: 0.5)
+\item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
+\item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
 \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
 \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 }}

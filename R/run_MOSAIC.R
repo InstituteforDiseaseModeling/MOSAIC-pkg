@@ -2228,8 +2228,8 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{ESS_param}: Target ESS per parameter (default: 100)
 #'     \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
 #'     \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
-#'     \item \code{A_best}: Target agreement index (default: 0.95)
-#'     \item \code{CVw_best}: Target CV of weights (default: 0.5)
+#'     \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
+#'     \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
 #'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
 
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
@@ -2486,8 +2486,8 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # Best subset targets
     ESS_best = 100,              # Target for subset size and ESS within subset
-    A_best = 0.95,
-    CVw_best = 0.7,              # Updated from 0.5 for realistic subset quality
+    A_best = 0.70,               # Allows top sims to dominate subset (lower = more focused)
+    CVw_best = 1.0,              # Permits weight variation within subset (higher = sharper discrimination)
 
     # Subset search bounds (absolute counts, replacing percentile-based)
     min_best_subset = 30,        # Minimum subset size for stable metrics
