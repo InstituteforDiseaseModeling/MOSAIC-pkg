@@ -137,8 +137,8 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <dd><p>List of convergence targets (when to stop). Default is:</p><ul><li><p><code>ESS_param</code>: Target ESS per parameter (default: 100)</p></li>
 <li><p><code>ESS_param_prop</code>: Proportion of parameters meeting ESS (default: 0.95)</p></li>
 <li><p><code>ESS_best</code>: Target for both subset size and ESS within subset (default: 100).</p></li>
-<li><p><code>A_best</code>: Target agreement index (default: 0.95)</p></li>
-<li><p><code>CVw_best</code>: Target CV of weights (default: 0.5)</p></li>
+<li><p><code>A_best</code>: Target agreement index (default: 0.70). Lower values allow top sims to dominate.</p></li>
+<li><p><code>CVw_best</code>: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.</p></li>
 <li><p><code>percentile_min</code>: Minimum percentile for best subset search (default: 0.001)</p></li>
 <li><p><code>ESS_method</code>: ESS calculation method, "kish" or "perplexity" (default: "kish")</p></li>
 </ul></dd>

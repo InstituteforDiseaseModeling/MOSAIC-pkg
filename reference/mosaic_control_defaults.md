@@ -120,9 +120,11 @@ mosaic_control_defaults(
   - `ESS_best`: Target for both subset size and ESS within subset
     (default: 100).
 
-  - `A_best`: Target agreement index (default: 0.95)
+  - `A_best`: Target agreement index (default: 0.70). Lower values allow
+    top sims to dominate.
 
-  - `CVw_best`: Target CV of weights (default: 0.5)
+  - `CVw_best`: Target CV of weights (default: 1.0). Higher values
+    permit sharper discrimination.
 
   - `percentile_min`: Minimum percentile for best subset search
     (default: 0.001)
