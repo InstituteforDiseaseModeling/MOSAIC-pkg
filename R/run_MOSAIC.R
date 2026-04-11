@@ -345,9 +345,8 @@
 #'
 #' Executes the full MOSAIC calibration workflow:
 #' \enumerate{
-#'   \item Adaptive calibration with R² convergence detection
-#'   \item Single predictive batch (calculated from calibration phase)
-#'   \item Adaptive fine-tuning with 5-tier batch sizing
+#'   \item Adaptive calibration with R-squared convergence detection
+#'   \item Predictive batches with model-based sizing and ESS re-evaluation
 #'   \item Post-hoc subset optimization
 #'   \item Posterior quantile and distribution estimation
 #'   \item Posterior predictive checks and uncertainty quantification
@@ -1082,9 +1081,10 @@ run_MOSAIC <- function(config,
     log_msg("  - Run %d-%d batches × %d sims (ESS regression R² target: %.2f)",
             control$calibration$min_batches_adaptive, control$calibration$max_batches_adaptive,
             control$calibration$batch_size_adaptive, control$calibration$target_r2_adaptive)
-    log_msg("Phase 2: Single Predictive Batch")
-    log_msg("Phase 3: Adaptive Fine-tuning (5-tier, max %d batches)",
-            control$calibration$max_batches_fine_tuning)
+    log_msg("Phase 2: Predictive Batches (max %d \u00d7 %d sims, floor %d)",
+            control$calibration$max_batches_predictive,
+            control$calibration$max_batch_predictive,
+            control$calibration$batch_size_adaptive)
     log_msg("Target ESS: %d per parameter | Max simulations: %d",
             control$targets$ESS_param, control$calibration$max_simulations_total)
 
@@ -1308,11 +1308,16 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   log_msg("Calculating parameter ESS")
+  # Adaptive n_grid: scales with ESS target so higher targets demand finer
+  # posterior resolution. At ESS_param=100 → 100; at 500 → 161; at 1000 → 230.
+  ess_target_val <- control$targets$ESS_param %||% 100
+  n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
+
   ess_results <- calc_model_ess_parameter(
     results = results,
     param_names = param_names_sampled,
     likelihood_col = "likelihood",
-    n_grid = 100,
+    n_grid = n_grid_adaptive,
     method = control$targets$ESS_method,
     marginal_method = control$targets$ESS_marginal_method %||% "kde",
     verbose = control$logging$verbose
@@ -2184,7 +2189,6 @@ run_mosaic <- run_MOSAIC
 #'   \item \code{sampling}: What to sample (which parameters to vary)
 #'   \item \code{likelihood}: How to score model fit (likelihood components and weights)
 #'   \item \code{targets}: When to stop (ESS convergence thresholds)
-#'   \item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
 #'   \item \code{parallel}: Infrastructure (cores, cluster type)
 #'   \item \code{io}: Output format (file format, compression)
 #'   \item \code{paths}: File management (output directories, plots)
@@ -2198,8 +2202,8 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
 #'     \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
 #'     \item \code{max_batches_adaptive}: Maximum Phase 1 batches (default: 8L)
-#'     \item \code{max_batch_predictive}: Cap on single Phase 2 predictive batch (default: 10000L)
-#'     \item \code{max_batches_fine_tuning}: Maximum Phase 3 fine-tuning batches (default: 20L)
+#'     \item \code{max_batch_predictive}: Cap on each Phase 2 predictive batch (default: 10000L)
+#'     \item \code{max_batches_predictive}: Maximum Phase 2 predictive batches (default: 10L)
 #'     \item \code{target_r2_adaptive}: ESS regression R-squared target for Phase 1 convergence (default: 0.90)
 #'   }
 #'
@@ -2235,11 +2239,6 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 #'   }
 #'
-#' @param fine_tuning List of fine-tuning batch sizes (advanced calibration). Default is:
-#'   \itemize{
-#'     \item \code{batch_sizes}: Named list with massive, large, standard, precision, final
-#'   }
-#'
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
 #'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
@@ -2250,7 +2249,8 @@ run_mosaic <- run_MOSAIC
 #' @param parallel List of parallelization settings (infrastructure). Default is:
 #'   \itemize{
 #'     \item \code{enable}: Enable parallel execution (default: FALSE)
-#'     \item \code{n_cores}: Number of cores to use (default: 1L)
+#'     \item \code{n_cores}: Number of cores to use (default: 1L). In Dask mode, also
+#'       controls local parallel likelihood computation after simulations return.
 #'     \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 #'     \item \code{progress}: Show progress bar (default: TRUE)
 #'   }
@@ -2330,7 +2330,6 @@ run_mosaic <- run_MOSAIC
 #'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
 #'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
-#'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
 #'   io = mosaic_io_presets("default"),                               # Output format
 #'   paths = list(clean_output = FALSE, plots = TRUE)                 # File management
@@ -2342,7 +2341,6 @@ mosaic_control_defaults <- function(calibration = NULL,
                            sampling = NULL,
                            likelihood = NULL,
                            targets = NULL,
-                           fine_tuning = NULL,
                            predictions = NULL,
                            weights = NULL,
                            parallel = NULL,
@@ -2356,10 +2354,10 @@ mosaic_control_defaults <- function(calibration = NULL,
     n_iterations = 3L,          # iterations per simulation
     max_simulations_total = 100000L,  # max total simulations in auto mode
     batch_size_adaptive = 500L,
-    max_batch_predictive = 10000L, # Cap on single predictive batch (prevents multi-hour unchecked runs)
+    max_batch_predictive = 10000L, # Cap on each predictive batch (prevents multi-hour unchecked runs)
+    max_batches_predictive = 10L,  # Safety cap on Phase 2 predictive batches
     min_batches_adaptive = 5L,
     max_batches_adaptive = 8L,
-    max_batches_fine_tuning = 20L,
     target_r2_adaptive = 0.90
   )
 
@@ -2467,17 +2465,6 @@ mosaic_control_defaults <- function(calibration = NULL,
     plots = TRUE
   )
 
-  # Default fine-tuning settings
-  default_fine_tuning <- list(
-    batch_sizes = list(
-      massive = 1000L,
-      large = 750L,
-      standard = 500L,
-      precision = 350L,
-      final = 250L
-    )
-  )
-
   # Default target settings
   default_targets <- list(
     # Parameter-level targets
@@ -2526,13 +2513,12 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → predictions → weights → parallel → io → paths → logging
+  # Order follows workflow: calibration → sampling → likelihood → targets → predictions → weights → parallel → io → paths → logging
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
     likelihood = if (is.null(likelihood)) default_likelihood else modifyList(default_likelihood, likelihood),
     targets = if (is.null(targets)) default_targets else modifyList(default_targets, targets),
-    fine_tuning = if (is.null(fine_tuning)) default_fine_tuning else modifyList(default_fine_tuning, fine_tuning),
     predictions = if (is.null(predictions)) default_predictions else modifyList(default_predictions, predictions),
     weights = if (is.null(weights)) default_weights else modifyList(default_weights, weights),
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),

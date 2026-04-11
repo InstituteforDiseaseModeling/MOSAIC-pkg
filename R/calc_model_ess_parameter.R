@@ -319,7 +319,7 @@ calc_model_ess_parameter <- function(
             # posterior/prior ratio on a grid, and applies Kish ESS.
             # -------------------------------------------------------------------
             h <- select_bandwidth(param_vals_clean)
-            h <- max(h, diff(param_range) / 100)
+            h <- max(h, diff(param_range) / n_grid)
             param_grid <- seq(param_range[1], param_range[2], length.out = n_grid)
 
             # Weighted KDE of the marginal posterior
