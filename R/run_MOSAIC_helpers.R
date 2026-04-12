@@ -1256,15 +1256,14 @@
   # ---------------------------------------------------------------------------
   dask_chunk_size <- 500L
   n_chunks <- ceiling(n_sims / dask_chunk_size)
-  log_msg("  Sampling + submitting %d simulations in %d chunks of %d...",
-          n_sims, n_chunks, dask_chunk_size)
+  log_msg("  Sampling + submitting %d simulations (%d chunks)...",
+          n_sims, n_chunks)
   params_list <- vector("list", n_sims)
   futures     <- vector("list", n_sims)
   submit_start <- Sys.time()
 
-  # Progress bar (stderr) for interactive feedback
-  pb <- utils::txtProgressBar(min = 0, max = n_sims, style = 3)
-  on.exit(try(close(pb), silent = TRUE), add = TRUE)
+  # Log at ~10% intervals (minimum every chunk for small runs)
+  log_interval <- max(1L, floor(n_chunks / 10))
 
   for (chunk_i in seq_len(n_chunks)) {
 
@@ -1336,13 +1335,14 @@
       }
     }
 
-    utils::setTxtProgressBar(pb, idx_end)
+    # Compact progress: log at ~10% intervals and at the end
+    if (chunk_i %% log_interval == 0L || chunk_i == n_chunks) {
+      elapsed <- as.numeric(difftime(Sys.time(), submit_start, units = "secs"))
+      pct <- round(100 * idx_end / n_sims)
+      log_msg("    %d/%d submitted (%d%%) | %.0fs | %.0f sims/s",
+              idx_end, n_sims, pct, elapsed, idx_end / max(elapsed, 0.1))
+    }
   }
-
-  close(pb)
-  submit_elapsed <- as.numeric(difftime(Sys.time(), submit_start, units = "secs"))
-  log_msg("  Sampled + submitted %d sims in %.1fs (%.0f sims/s)",
-          n_sims, submit_elapsed, n_sims / max(submit_elapsed, 0.1))
 
   valid_futures <- Filter(Negate(is.null), futures)
 
