@@ -775,6 +775,12 @@ run_MOSAIC <- function(config,
 
     dask_dist <- reticulate::import("dask.distributed")
 
+    # Raise the large-graph warning threshold: chunked client$map() batches
+    # ~500 per-sim JSON param strings per call (~29 MiB), which is expected
+    # and unavoidable since per-sim params must be sent to workers.
+    dask_mod <- reticulate::import("dask")
+    dask_mod$config$set(list("distributed.admin.large-graph-warning-threshold" = "100 MiB"))
+
     if (dask_spec$type == "coiled") {
       coiled_mod <- reticulate::import("coiled")
       n_workers_req <- dask_spec$n_workers %||% control$parallel$n_cores
