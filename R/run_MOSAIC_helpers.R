@@ -1258,6 +1258,10 @@
   futures     <- vector("list", n_sims)
   submit_start <- Sys.time()
 
+  # Progress bar (stderr) for interactive feedback
+  pb <- utils::txtProgressBar(min = 0, max = n_sims, style = 3)
+  on.exit(try(close(pb), silent = TRUE), add = TRUE)
+
   for (idx in seq_len(n_sims)) {
     sim_id <- sim_ids[idx]
 
@@ -1280,7 +1284,10 @@
     )
 
     # Skip serialize + submit if sampling failed
-    if (is.null(params_list[[idx]])) next
+    if (is.null(params_list[[idx]])) {
+      utils::setTxtProgressBar(pb, idx)
+      next
+    }
 
     # --- Guardrails: clamp transmission parameters ---
     p <- params_list[[idx]]
@@ -1306,13 +1313,13 @@
       base_config_future
     )
 
-    # Periodic progress
-    if (idx %% 5000L == 0L || idx == n_sims) {
-      elapsed <- as.numeric(difftime(Sys.time(), submit_start, units = "secs"))
-      log_msg("    Sampled + submitted %d/%d (%.0fs elapsed, %.0f sims/s)",
-              idx, n_sims, elapsed, idx / max(elapsed, 0.1))
-    }
+    utils::setTxtProgressBar(pb, idx)
   }
+
+  close(pb)
+  submit_elapsed <- as.numeric(difftime(Sys.time(), submit_start, units = "secs"))
+  log_msg("  Sampled + submitted %d sims in %.1fs (%.0f sims/s)",
+          n_sims, submit_elapsed, n_sims / max(submit_elapsed, 0.1))
 
   valid_futures <- Filter(Negate(is.null), futures)
 
