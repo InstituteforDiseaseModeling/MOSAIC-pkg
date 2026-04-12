@@ -17,13 +17,11 @@ and output options.
 
 4.  `targets`: When to stop (ESS convergence thresholds)
 
-5.  `fine_tuning`: Advanced calibration (adaptive batch sizing)
+5.  `parallel`: Infrastructure (cores, cluster type)
 
-6.  `parallel`: Infrastructure (cores, cluster type)
+6.  `io`: Output format (file format, compression)
 
-7.  `io`: Output format (file format, compression)
-
-8.  `paths`: File management (output directories, plots)
+7.  `paths`: File management (output directories, plots)
 
 ## Usage
 
@@ -33,7 +31,6 @@ mosaic_control_defaults(
   sampling = NULL,
   likelihood = NULL,
   targets = NULL,
-  fine_tuning = NULL,
   predictions = NULL,
   weights = NULL,
   parallel = NULL,
@@ -65,11 +62,11 @@ mosaic_control_defaults(
 
   - `max_batches_adaptive`: Maximum Phase 1 batches (default: 8L)
 
-  - `max_batch_predictive`: Cap on single Phase 2 predictive batch
+  - `max_batch_predictive`: Cap on each Phase 2 predictive batch
     (default: 10000L)
 
-  - `max_batches_fine_tuning`: Maximum Phase 3 fine-tuning batches
-    (default: 20L)
+  - `max_batches_predictive`: Maximum Phase 2 predictive batches
+    (default: 10L)
 
   - `target_r2_adaptive`: ESS regression R-squared target for Phase 1
     convergence (default: 0.90)
@@ -132,13 +129,6 @@ mosaic_control_defaults(
   - `ESS_method`: ESS calculation method, "kish" or "perplexity"
     (default: "kish")
 
-- fine_tuning:
-
-  List of fine-tuning batch sizes (advanced calibration). Default is:
-
-  - `batch_sizes`: Named list with massive, large, standard, precision,
-    final
-
 - predictions:
 
   List of prediction generation settings. Default is:
@@ -155,7 +145,9 @@ mosaic_control_defaults(
 
   - `enable`: Enable parallel execution (default: FALSE)
 
-  - `n_cores`: Number of cores to use (default: 1L)
+  - `n_cores`: Number of cores to use (default: 1L). In Dask mode, also
+    controls local parallel likelihood computation after simulations
+    return.
 
   - `type`: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 
@@ -246,7 +238,6 @@ ctrl <- mosaic_control_defaults(
   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
-  fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format
   paths = list(clean_output = FALSE, plots = TRUE)                 # File management

@@ -14,17 +14,15 @@ allowing:
 
 Executes the full MOSAIC calibration workflow:
 
-1.  Adaptive calibration with R² convergence detection
+1.  Adaptive calibration with R-squared convergence detection
 
-2.  Single predictive batch (calculated from calibration phase)
+2.  Predictive batches with model-based sizing and ESS re-evaluation
 
-3.  Adaptive fine-tuning with 5-tier batch sizing
+3.  Post-hoc subset optimization
 
-4.  Post-hoc subset optimization
+4.  Posterior quantile and distribution estimation
 
-5.  Posterior quantile and distribution estimation
-
-6.  Posterior predictive checks and uncertainty quantification
+5.  Posterior predictive checks and uncertainty quantification
 
 ## Usage
 

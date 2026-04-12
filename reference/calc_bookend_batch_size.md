@@ -1,12 +1,8 @@
 # Calculate Batch Size for Bookend Strategy
 
-Implements a three-phase strategy:
-
-1.  Initial calibration (n_batches × batch_size)
-
-2.  One large predictive batch (calculated from ESS rate)
-
-3.  Final fine-tuning (adaptive batch sizing based on gap)
+Predicts the number of simulations needed to reach a target ESS based on
+the observed ESS trajectory. Fits sqrt, linear, and log models to the
+cumulative (n_sims, threshold_ESS) data and returns a batch size.
 
 ## Usage
 

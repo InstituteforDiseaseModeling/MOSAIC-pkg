@@ -7,7 +7,6 @@ calibration: How to run (simulations, iterations, batch sizes)
 sampling: What to sample (which parameters to vary)
 likelihood: How to score model fit (likelihood components and weights)
 targets: When to stop (ESS convergence thresholds)
-fine_tuning: Advanced calibration (adaptive batch sizing)
 parallel: Infrastructure (cores, cluster type)
 io: Output format (file format, compression)
 paths: File management (output directories, plots)
@@ -20,7 +19,6 @@ calibration: How to run (simulations, iterations, batch sizes)
 sampling: What to sample (which parameters to vary)
 likelihood: How to score model fit (likelihood components and weights)
 targets: When to stop (ESS convergence thresholds)
-fine_tuning: Advanced calibration (adaptive batch sizing)
 parallel: Infrastructure (cores, cluster type)
 io: Output format (file format, compression)
 paths: File management (output directories, plots)
@@ -33,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.22</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.26</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,7 +71,6 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>sampling</code>: What to sample (which parameters to vary)</p></li>
 <li><p><code>likelihood</code>: How to score model fit (likelihood components and weights)</p></li>
 <li><p><code>targets</code>: When to stop (ESS convergence thresholds)</p></li>
-<li><p><code>fine_tuning</code>: Advanced calibration (adaptive batch sizing)</p></li>
 <li><p><code>parallel</code>: Infrastructure (cores, cluster type)</p></li>
 <li><p><code>io</code>: Output format (file format, compression)</p></li>
 <li><p><code>paths</code>: File management (output directories, plots)</p></li>
@@ -86,7 +83,6 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <span>  sampling <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  likelihood <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  targets <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  fine_tuning <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  predictions <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  weights <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -107,8 +103,8 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>batch_size_adaptive</code>: Simulations per batch in Phase 1 adaptive calibration (default: 500L)</p></li>
 <li><p><code>min_batches_adaptive</code>: Minimum Phase 1 batches before convergence check (default: 5L)</p></li>
 <li><p><code>max_batches_adaptive</code>: Maximum Phase 1 batches (default: 8L)</p></li>
-<li><p><code>max_batch_predictive</code>: Cap on single Phase 2 predictive batch (default: 10000L)</p></li>
-<li><p><code>max_batches_fine_tuning</code>: Maximum Phase 3 fine-tuning batches (default: 20L)</p></li>
+<li><p><code>max_batch_predictive</code>: Cap on each Phase 2 predictive batch (default: 10000L)</p></li>
+<li><p><code>max_batches_predictive</code>: Maximum Phase 2 predictive batches (default: 10L)</p></li>
 <li><p><code>target_r2_adaptive</code>: ESS regression R-squared target for Phase 1 convergence (default: 0.90)</p></li>
 </ul></dd>
 
@@ -144,11 +140,6 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 </ul></dd>
 
 
-<dt id="arg-fine-tuning">fine_tuning<a class="anchor" aria-label="anchor" href="#arg-fine-tuning"></a></dt>
-<dd><p>List of fine-tuning batch sizes (advanced calibration). Default is:</p><ul><li><p><code>batch_sizes</code>: Named list with massive, large, standard, precision, final</p></li>
-</ul></dd>
-
-
 <dt id="arg-predictions">predictions<a class="anchor" aria-label="anchor" href="#arg-predictions"></a></dt>
 <dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 5L)</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset
@@ -157,7 +148,8 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
 <dd><p>List of parallelization settings (infrastructure). Default is:</p><ul><li><p><code>enable</code>: Enable parallel execution (default: FALSE)</p></li>
-<li><p><code>n_cores</code>: Number of cores to use (default: 1L)</p></li>
+<li><p><code>n_cores</code>: Number of cores to use (default: 1L). In Dask mode, also
+controls local parallel likelihood computation after simulations return.</p></li>
 <li><p><code>type</code>: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")</p></li>
 <li><p><code>progress</code>: Show progress bar (default: TRUE)</p></li>
 </ul></dd>
@@ -242,7 +234,6 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <span class="r-in"><span>  sampling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>, sample_mu_j <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,        <span class="co"># What to sample</span></span></span>
 <span class="r-in"><span>  likelihood <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>weight_wis <span class="op">=</span> <span class="fl">0.10</span>, weight_cases <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span>,        <span class="co"># How to score</span></span></span>
 <span class="r-in"><span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>ESS_param <span class="op">=</span> <span class="fl">100</span>, ESS_param_prop <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span>,          <span class="co"># When to stop</span></span></span>
-<span class="r-in"><span>  fine_tuning <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>batch_sizes <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>final <span class="op">=</span> <span class="fl">200</span><span class="op">)</span><span class="op">)</span>,             <span class="co"># Advanced calibration</span></span></span>
 <span class="r-in"><span>  parallel <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>enable <span class="op">=</span> <span class="cn">TRUE</span>, n_cores <span class="op">=</span> <span class="fl">16</span><span class="op">)</span>,                    <span class="co"># Infrastructure</span></span></span>
 <span class="r-in"><span>  io <span class="op">=</span> <span class="fu"><a href="mosaic_io_presets.html">mosaic_io_presets</a></span><span class="op">(</span><span class="st">"default"</span><span class="op">)</span>,                               <span class="co"># Output format</span></span></span>
 <span class="r-in"><span>  paths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>clean_output <span class="op">=</span> <span class="cn">FALSE</span>, plots <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>                 <span class="co"># File management</span></span></span>

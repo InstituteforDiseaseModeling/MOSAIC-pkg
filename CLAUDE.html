@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.22</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.26</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -100,7 +100,7 @@
 <h2 id="the-run_mosaic-workflow">The run_MOSAIC Workflow<a class="anchor" aria-label="anchor" href="#the-run_mosaic-workflow"></a></h2>
 <p>The <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> workflow is the <strong>centerpiece</strong> of the package — it orchestrates the complete Bayesian calibration pipeline.</p>
 <p><strong>Key files:</strong> - <code>R/run_MOSAIC.R</code> — main workflow and simulation worker - <code>R/run_MOSAIC_helpers.R</code> — convergence detection, weight calculation - <code>R/run_MOSAIC_infrastructure.R</code> — directory setup, I/O, summary generation</p>
-<p><strong>BFRS calibration (3 phases):</strong> 1. <strong>Adaptive calibration</strong> — batches of LASER sims until convergence (R² target, ESS thresholds) 2. <strong>Predictive batch</strong> — generates samples for posterior inference 3. <strong>Fine-tuning</strong> — 5-tier batch sizing (20K/10K/5K/2.5K/1K) to refine posterior</p>
+<p><strong>BFRS calibration (2 phases):</strong> 1. <strong>Adaptive calibration</strong> — batches of LASER sims until convergence (R² target, ESS thresholds) 2. <strong>Predictive batches</strong> — model-based batch sizing with ESS re-evaluation until convergence</p>
 <p><strong>Post-calibration:</strong> - Best model identified, config saved to <code>config_best.json</code> - <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> computes posterior-weighted predictions (weighted median/mean across parameter sets × stochastic reruns) - R² and bias ratio computed from weighted median vs observed data - <code><a href="reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> generates prediction plots (only when <code>plots=TRUE</code>)</p>
 <p><strong>Output structure:</strong></p>
 <pre><code>dir_output/
@@ -214,6 +214,10 @@
 <li>~1,500 lines of orphaned code found across 8+ utility systems that were created but never wired into <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code>: convergence (#72), results schema (#73), batch planning (#75), BFRS posterior (#76), model loss (#77), adaptive weights (#78)</li>
 <li>
 <code>get_ENSO_forecast_from_json()</code> fallback created but only wired in for DMI, not ENSO — asymmetric implementation of the same pattern (#80)</li>
+<li>Agent deleted <code>calc_model_convergence.R</code> (6 functions) as “orphaned” but 2 of the 6 (<code>calc_model_agreement_index</code>, <code>calc_model_cvw</code>) had active callers in <code>run_MOSAIC.R</code> — agent grep’d for the file’s main function but not all functions inside it (v0.22.12 fix)</li>
+<li>Rewriting <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> and <code><a href="reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> silently dropped the best-model prediction plot — the old workflow generated it via the old ensemble function, and the rewrite replaced that with the posterior ensemble plot without preserving the single-best-model plot (v0.22.15 fix)</li>
+<li>
+<code><a href="reference/plot_model_likelihood.html">plot_model_likelihood()</a></code> call was silently removed from <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> during a refactor — the function still existed but the call site was dropped, so the likelihood curve diagnostic plot stopped being generated without any error or warning (v0.22.17 fix)</li>
 </ol></div>
 </div>
 </div>
