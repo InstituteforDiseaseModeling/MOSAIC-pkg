@@ -98,10 +98,9 @@ The `run_MOSAIC()` workflow is the **centerpiece** of the package — it orchest
 - `R/run_MOSAIC_helpers.R` — convergence detection, weight calculation
 - `R/run_MOSAIC_infrastructure.R` — directory setup, I/O, summary generation
 
-**BFRS calibration (3 phases):**
+**BFRS calibration (2 phases):**
 1. **Adaptive calibration** — batches of LASER sims until convergence (R² target, ESS thresholds)
-2. **Predictive batch** — generates samples for posterior inference
-3. **Fine-tuning** — 5-tier batch sizing (20K/10K/5K/2.5K/1K) to refine posterior
+2. **Predictive batches** — model-based batch sizing with ESS re-evaluation until convergence
 
 **Post-calibration:**
 - Best model identified, config saved to `config_best.json`
@@ -259,3 +258,6 @@ Record of specific errors introduced by AI coding assistants. Read these before 
 5. Cumulative likelihood had a per-timepoint floor of -1e9 that, after T-normalization, produced -115 billion LL — a reasonable-looking constant became catastrophic after a scaling change (v0.21.x fix)
 6. ~1,500 lines of orphaned code found across 8+ utility systems that were created but never wired into `run_MOSAIC()`: convergence (#72), results schema (#73), batch planning (#75), BFRS posterior (#76), model loss (#77), adaptive weights (#78)
 7. `get_ENSO_forecast_from_json()` fallback created but only wired in for DMI, not ENSO — asymmetric implementation of the same pattern (#80)
+8. Agent deleted `calc_model_convergence.R` (6 functions) as "orphaned" but 2 of the 6 (`calc_model_agreement_index`, `calc_model_cvw`) had active callers in `run_MOSAIC.R` — agent grep'd for the file's main function but not all functions inside it (v0.22.12 fix)
+9. Rewriting `calc_model_ensemble()` and `plot_model_ensemble()` silently dropped the best-model prediction plot — the old workflow generated it via the old ensemble function, and the rewrite replaced that with the posterior ensemble plot without preserving the single-best-model plot (v0.22.15 fix)
+10. `plot_model_likelihood()` call was silently removed from `run_MOSAIC()` during a refactor — the function still existed but the call site was dropped, so the likelihood curve diagnostic plot stopped being generated without any error or warning (v0.22.17 fix)

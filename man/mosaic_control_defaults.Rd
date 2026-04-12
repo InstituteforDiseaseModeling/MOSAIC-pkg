@@ -9,7 +9,6 @@ mosaic_control_defaults(
   sampling = NULL,
   likelihood = NULL,
   targets = NULL,
-  fine_tuning = NULL,
   predictions = NULL,
   weights = NULL,
   parallel = NULL,
@@ -27,8 +26,8 @@ mosaic_control_defaults(
 \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
 \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
 \item \code{max_batches_adaptive}: Maximum Phase 1 batches (default: 8L)
-\item \code{max_batch_predictive}: Cap on single Phase 2 predictive batch (default: 10000L)
-\item \code{max_batches_fine_tuning}: Maximum Phase 3 fine-tuning batches (default: 20L)
+\item \code{max_batch_predictive}: Cap on each Phase 2 predictive batch (default: 10000L)
+\item \code{max_batches_predictive}: Maximum Phase 2 predictive batches (default: 10L)
 \item \code{target_r2_adaptive}: ESS regression R-squared target for Phase 1 convergence (default: 0.90)
 }}
 
@@ -63,11 +62,6 @@ mosaic_control_defaults(
 \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
 }}
 
-\item{fine_tuning}{List of fine-tuning batch sizes (advanced calibration). Default is:
-\itemize{
-\item \code{batch_sizes}: Named list with massive, large, standard, precision, final
-}}
-
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
 \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
@@ -78,7 +72,8 @@ The number of parameter sets in the ensemble is determined by the best subset
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
 \item \code{enable}: Enable parallel execution (default: FALSE)
-\item \code{n_cores}: Number of cores to use (default: 1L)
+\item \code{n_cores}: Number of cores to use (default: 1L). In Dask mode, also
+controls local parallel likelihood computation after simulations return.
 \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 \item \code{progress}: Show progress bar (default: TRUE)
 }}
@@ -110,7 +105,6 @@ calibration strategy, parameter sampling, parallelization, and output options.
 \item \code{sampling}: What to sample (which parameters to vary)
 \item \code{likelihood}: How to score model fit (likelihood components and weights)
 \item \code{targets}: When to stop (ESS convergence thresholds)
-\item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
 \item \code{parallel}: Infrastructure (cores, cluster type)
 \item \code{io}: Output format (file format, compression)
 \item \code{paths}: File management (output directories, plots)
@@ -176,7 +170,6 @@ ctrl <- mosaic_control_defaults(
   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
-  fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
   io = mosaic_io_presets("default"),                               # Output format
   paths = list(clean_output = FALSE, plots = TRUE)                 # File management

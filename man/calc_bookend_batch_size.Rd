@@ -24,10 +24,7 @@ calc_bookend_batch_size(
 List with batch size recommendation
 }
 \description{
-Implements a three-phase strategy:
-\enumerate{
-\item Initial calibration (n_batches × batch_size)
-\item One large predictive batch (calculated from ESS rate)
-\item Final fine-tuning (adaptive batch sizing based on gap)
-}
+Predicts the number of simulations needed to reach a target ESS based on
+the observed ESS trajectory. Fits sqrt, linear, and log models to the
+cumulative (n_sims, threshold_ESS) data and returns a batch size.
 }

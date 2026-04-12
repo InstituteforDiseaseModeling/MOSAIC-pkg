@@ -112,8 +112,6 @@
       is.numeric(def$calibration$min_batches_adaptive) && def$calibration$min_batches_adaptive > 0,
     "calibration$max_batches_adaptive must be positive integer" =
       is.numeric(def$calibration$max_batches_adaptive) && def$calibration$max_batches_adaptive > 0,
-    "calibration$max_batches_fine_tuning must be positive integer" =
-      is.numeric(def$calibration$max_batches_fine_tuning) && def$calibration$max_batches_fine_tuning > 0,
     "calibration$target_r2_adaptive must be in [0, 1]" =
       is.numeric(def$calibration$target_r2_adaptive) &&
       def$calibration$target_r2_adaptive >= 0 && def$calibration$target_r2_adaptive <= 1,
@@ -174,14 +172,6 @@
     stop("calibration$min_batches_adaptive (", def$calibration$min_batches_adaptive,
          ") must be <= calibration$max_batches_adaptive (", def$calibration$max_batches_adaptive, ")",
          call. = FALSE)
-  }
-
-  # Validate fine-tuning batch sizes
-  required_tiers <- c("massive", "large", "standard", "precision", "final")
-  missing_tiers <- setdiff(required_tiers, names(def$fine_tuning$batch_sizes))
-  if (length(missing_tiers) > 0) {
-    stop("fine_tuning$batch_sizes missing tiers: ",
-         paste(missing_tiers, collapse = ", "), call. = FALSE)
   }
 
   # IO VALIDATION
@@ -531,7 +521,7 @@
     predictive_done = FALSE,
     mode = nspec$mode,
     fixed_target = nspec$fixed_target,
-    # BUG FIX #1: Track phase iterations to prevent premature phase transitions
+    # Track batches within each phase (used for predictive batch limits)
     phase_batch_count = 0L,
     phase_last = NULL,
     # Internal timestamp for state file provenance
@@ -589,7 +579,7 @@
   }
 
   # Predictive batch
-  # BUG FIX #3: Require calibration_done to be TRUE before running predictive
+  # Require calibration_done before running predictive
   if (isTRUE(state$calibration_done) && !isTRUE(state$predictive_done)) {
     res <- tryCatch({
       calc_bookend_batch_size(
@@ -610,22 +600,35 @@
       log_msg("  Expected total after batch: %.0f sims", res$total_predicted)
     }
 
-    size <- if (is.null(res) || res$batch_size <= 0) {
-      if (!is.null(res) && !is.null(res$message)) {
-        log_msg("Predictive batch: %s", res$message)
-      }
-      500L
+    # Determine batch size: use model prediction if available, else fall back
+    # to the adaptive batch size (ensures we never run trivially small batches
+    # or stall when the model can't predict).
+    floor_size <- control$calibration$batch_size_adaptive
+
+    if (!is.null(res) && res$batch_size > 0) {
+      size <- as.integer(res$batch_size)
     } else {
-      as.integer(res$batch_size)
+      # Model returned 0 or failed — use floor as fallback
+      if (!is.null(res) && !is.null(res$message)) {
+        log_msg("Predictive model: %s \u2014 using batch_size_adaptive as fallback", res$message)
+      } else if (is.null(res)) {
+        log_msg("Predictive batch calculation failed \u2014 using batch_size_adaptive as fallback")
+      }
+      size <- as.integer(floor_size)
     }
 
-    # Cap predictive batch to avoid multi-hour single batches with no checkpointing.
-    # If the predicted size exceeds the cap, run cap-sized batches with ESS
-    # re-evaluation between each (the main loop handles this naturally since
-    # predictive_done isn't set until .mosaic_ess_check_update_state marks it).
+    # Apply floor: never run a predictive batch smaller than batch_size_adaptive
+    if (size < floor_size) {
+      size <- as.integer(floor_size)
+    }
+
+    # Cap predictive batch to avoid multi-hour single batches with no
+    # checkpointing. Capped batches run with ESS re-evaluation between each;
+    # predictive_done is set by .mosaic_ess_check_update_state() when the
+    # ESS gap closes or max_batches_predictive is reached.
     max_pred <- control$calibration$max_batch_predictive
     if (!is.null(max_pred) && size > max_pred) {
-      log_msg("  Capping predictive batch: %d → %d (max_batch_predictive)", size, max_pred)
+      log_msg("  Capping predictive batch: %d \u2192 %d (max_batch_predictive)", size, max_pred)
       size <- as.integer(max_pred)
     }
 
@@ -635,52 +638,14 @@
     ))
   }
 
-  # Fine-tuning phase (5-tier adaptive)
-  # BUG FIX #3: Use threshold_ess (percentile-based) instead of min_ess for consistency
-  gap <- NA_real_
-  if (length(ess_tracking)) {
-    cur_threshold <- tail(vapply(ess_tracking, `[[`, numeric(1), "threshold_ess"), 1)
-    gap <- control$targets$ESS_param - cur_threshold
-  }
-
-  # BUG FIX #5: If gap is negative or zero, we're done (or very close)
-  if (!is.na(gap) && gap <= 0) {
-    return(list(
-      phase = "fine_tuning",
-      batch_size = 0L,
-      message = "Target ESS achieved or exceeded"
-    ))
-  }
-
-  # Cap fine-tuning batches to prevent runaway
-  if (!is.null(state$phase_batch_count) &&
-      state$phase_batch_count >= control$calibration$max_batches_fine_tuning) {
-    log_msg("Fine-tuning batch limit reached (%d batches)", control$calibration$max_batches_fine_tuning)
-    return(list(
-      phase = "fine_tuning",
-      batch_size = 0L,
-      message = sprintf("Reached max_batches_fine_tuning (%d)", control$calibration$max_batches_fine_tuning)
-    ))
-  }
-
-  bs <- control$fine_tuning$batch_sizes
-  size <- if (is.na(gap)) {
-    bs$standard
-  } else if (gap > 400) {
-    bs$massive
-  } else if (gap > 200) {
-    bs$large
-  } else if (gap > 100) {
-    bs$standard
-  } else if (gap > 50) {
-    bs$precision
-  } else {
-    bs$final
-  }
-
+  # If we reach here, calibration_done and predictive_done are both TRUE
+  # but convergence hasn't been declared. This shouldn't happen in normal
+  # operation — the predictive phase should run until convergence or its
+  # batch limit. Return batch_size=0 to signal the loop to stop.
   list(
-    phase = "fine_tuning",
-    batch_size = as.integer(size)
+    phase = "predictive",
+    batch_size = 0L,
+    message = "Predictive phase exhausted without convergence"
   )
 }
 
@@ -887,12 +852,35 @@
       }
     }
 
-  # BUG FIX #1: Only mark predictive as done after at least one batch has run
+  # Predictive phase: continue running capped batches until ESS gap closes
+  # or safety batch limit is reached. Each iteration re-evaluates via
+  # calc_bookend_batch_size() in .mosaic_decide_next_batch().
   } else if (identical(state$phase, "predictive") &&
              !is.null(state$phase_batch_count) &&
              state$phase_batch_count >= 1) {
-    state$predictive_done <- TRUE
-    log_msg("  → Predictive batch complete, proceeding to fine-tuning")
+
+    pred_gap <- NA_real_
+    if (length(state$ess_tracking)) {
+      cur_thresh <- tail(vapply(state$ess_tracking, `[[`, numeric(1), "threshold_ess"), 1)
+      pred_gap <- control$targets$ESS_param - cur_thresh
+    }
+
+    max_pred_batches <- control$calibration$max_batches_predictive %||% 10L
+
+    if (!is.na(pred_gap) && pred_gap <= 0) {
+      state$predictive_done <- TRUE
+      log_msg("  \u2192 Predictive phase complete: ESS gap closed (gap = %.1f)", pred_gap)
+
+    } else if (state$phase_batch_count >= max_pred_batches) {
+      state$predictive_done <- TRUE
+      log_msg("  \u2192 Predictive batch limit reached (%d/%d)",
+              state$phase_batch_count, max_pred_batches)
+
+    } else {
+      pred_gap_str <- if (is.na(pred_gap)) "N/A" else sprintf("%.1f", pred_gap)
+      log_msg("  \u2192 Predictive batch %d/%d complete, ESS gap = %s \u2014 continuing predictive phase",
+              state$phase_batch_count, max_pred_batches, pred_gap_str)
+    }
   }
 
   # Check convergence.
@@ -1261,12 +1249,19 @@
   obs_deaths <- config$reported_deaths
 
   # ---------------------------------------------------------------------------
-  # 1. Pre-sample ALL parameters in R (serial; fast compared to LASER)
+  # 1-3. Sample parameters, serialize, and submit futures (interleaved)
+  #      Workers start receiving tasks within seconds instead of waiting for
+  #      all N samples to complete before any submission.
   # ---------------------------------------------------------------------------
-  log_msg("  Sampling %d parameter sets in R...", n_sims)
+  log_msg("  Sampling + submitting %d simulations to Dask cluster...", n_sims)
   params_list <- vector("list", n_sims)
+  futures     <- vector("list", n_sims)
+  submit_start <- Sys.time()
+
   for (idx in seq_len(n_sims)) {
     sim_id <- sim_ids[idx]
+
+    # --- Sample parameters ---
     params_list[[idx]] <- tryCatch(
       sample_parameters(
         PATHS      = PATHS,
@@ -1284,45 +1279,39 @@
       }
     )
 
-    # Guardrails: clamp transmission parameters to prevent laser-cholera ValueError
-    if (!is.null(params_list[[idx]])) {
-      p <- params_list[[idx]]
-      if (!is.null(p$beta_j0_tot)) p$beta_j0_tot <- pmax(p$beta_j0_tot, 1e-10)
-      if (!is.null(p$beta_j0_hum)) p$beta_j0_hum <- pmax(p$beta_j0_hum, 0)
-      if (!is.null(p$beta_j0_env)) p$beta_j0_env <- pmax(p$beta_j0_env, 0)
-      if (!is.null(p$p_beta))      p$p_beta      <- pmin(pmax(p$p_beta, 1e-6), 1 - 1e-6)
-      if (!is.null(p$tau_i))       p$tau_i       <- pmin(pmax(p$tau_i, 0), 1)
-      params_list[[idx]] <- p
-    }
-  }
+    # Skip serialize + submit if sampling failed
+    if (is.null(params_list[[idx]])) next
 
-  # ---------------------------------------------------------------------------
-  # 2. Serialize per-sim scalar/vector params to JSON
-  # ---------------------------------------------------------------------------
-  sampled_jsons <- lapply(params_list, function(p) {
-    if (is.null(p)) return(NULL)
-    jsonlite::toJSON(.extract_sampled_params(p),
-                     auto_unbox = TRUE,
-                     digits     = NA)  # full floating-point precision
-  })
+    # --- Guardrails: clamp transmission parameters ---
+    p <- params_list[[idx]]
+    if (!is.null(p$beta_j0_tot)) p$beta_j0_tot <- pmax(p$beta_j0_tot, 1e-10)
+    if (!is.null(p$beta_j0_hum)) p$beta_j0_hum <- pmax(p$beta_j0_hum, 0)
+    if (!is.null(p$beta_j0_env)) p$beta_j0_env <- pmax(p$beta_j0_env, 0)
+    if (!is.null(p$p_beta))      p$p_beta      <- pmin(pmax(p$p_beta, 1e-6), 1 - 1e-6)
+    if (!is.null(p$tau_i))       p$tau_i       <- pmin(pmax(p$tau_i, 0), 1)
+    params_list[[idx]] <- p
 
-  # ---------------------------------------------------------------------------
-  # 3. Submit futures to Dask (skip NULL params)
-  # ---------------------------------------------------------------------------
-  log_msg("  Submitting %d futures to Dask cluster...", n_sims)
-  futures <- vector("list", n_sims)
-  for (idx in seq_len(n_sims)) {
-    if (is.null(sampled_jsons[[idx]])) {
-      futures[[idx]] <- NULL
-      next
-    }
+    # --- Serialize per-sim params to JSON and submit immediately ---
+    sampled_json <- jsonlite::toJSON(
+      .extract_sampled_params(p),
+      auto_unbox = TRUE,
+      digits     = NA
+    )
+
     futures[[idx]] <- client$submit(
       mosaic_worker$run_laser_sim,
-      as.integer(sim_ids[[idx]]),
+      as.integer(sim_id),
       as.integer(n_iterations),
-      as.character(sampled_jsons[[idx]]),
+      as.character(sampled_json),
       base_config_future
     )
+
+    # Periodic progress
+    if (idx %% 5000L == 0L || idx == n_sims) {
+      elapsed <- as.numeric(difftime(Sys.time(), submit_start, units = "secs"))
+      log_msg("    Sampled + submitted %d/%d (%.0fs elapsed, %.0f sims/s)",
+              idx, n_sims, elapsed, idx / max(elapsed, 0.1))
+    }
   }
 
   valid_futures <- Filter(Negate(is.null), futures)
@@ -1396,171 +1385,427 @@
   rm(gathered); gc(verbose = FALSE)
 
   # ---------------------------------------------------------------------------
-  # 5. For each sim: compute likelihood in R, write parquet
+  # 5. Compute likelihood + write parquet (parallel or sequential)
   # ---------------------------------------------------------------------------
-  log_msg("  Computing likelihoods + writing parquet for %d sims...", n_sims)
+
+  # Use n_cores for local parallel LL (Dask mode: LASER runs remotely,
+  # so local cores are available for LL computation)
+  n_cores_ll <- max(1L, as.integer(control$parallel$n_cores %||% 1L))
+  use_parallel_ll <- n_cores_ll > 1L && n_sims >= 50L
+
   likelihood_start <- Sys.time()
   success_indicators <- logical(n_sims)
 
-  for (idx in seq_len(n_sims)) {
-    # Periodic progress + Dask client health check
-    if (idx %% 500L == 0L) {
-      elapsed <- as.numeric(difftime(Sys.time(), likelihood_start, units = "secs"))
-      log_msg("    Likelihood progress: %d/%d (%.0fs elapsed)", idx, n_sims, elapsed)
-      # Ping scheduler to keep connection alive and detect disconnection early
-      tryCatch({
-        client$scheduler_info()
-      }, error = function(e) {
-        log_msg("    WARNING: Dask scheduler ping failed at sim %d: %s", idx, e$message)
-      })
-    }
-    sim_id <- sim_ids[[idx]]
-    key    <- as.character(sim_id)
+  if (use_parallel_ll) {
 
-    # Skip if param sampling or future submission failed
-    if (is.null(params_list[[idx]]) || is.null(futures[[idx]])) {
-      success_indicators[idx] <- FALSE
-      next
-    }
+    # =======================================================================
+    # PARALLEL PATH: pre-materialize → parallel LL → sequential parquet I/O
+    # =======================================================================
 
-    res <- result_lookup[[key]]
+    log_msg("  Computing likelihoods (parallel, %d cores) + writing parquet for %d sims...",
+            n_cores_ll, n_sims)
 
-    if (is.null(res) || !isTRUE(res$success)) {
-      err_msg <- if (!is.null(res$error)) res$error else "unknown error"
-      warning("sim ", sim_id, " failed on worker: ", err_msg,
-              call. = FALSE, immediate. = FALSE)
-      success_indicators[idx] <- FALSE
-      next
-    }
+    # --- 5a. Pre-materialize: convert gathered results to R matrices -------
+    premat_start <- Sys.time()
+    sim_data <- vector("list", n_sims)
 
-    # ------------------------------------------------------------------
-    # Compute per-iteration likelihoods in R, then collapse
-    # (mirrors .mosaic_run_simulation_worker behavior in run_MOSAIC.R)
-    # ------------------------------------------------------------------
-    iter_list   <- res$iterations
-    n_iter_got  <- length(iter_list)
-    lls         <- numeric(n_iter_got)
+    for (idx in seq_len(n_sims)) {
+      sim_id <- sim_ids[[idx]]
+      key    <- as.character(sim_id)
 
-    for (ji in seq_len(n_iter_got)) {
-      iter_res   <- iter_list[[ji]]
-      est_cases  <- matrix(unlist(iter_res$reported_cases),
-                           nrow = n_locs, byrow = FALSE)
-      est_deaths <- matrix(unlist(iter_res$disease_deaths),
-                           nrow = n_locs, byrow = FALSE)
+      # Skip if param sampling or future submission failed
+      if (is.null(params_list[[idx]]) || is.null(futures[[idx]])) next
 
-      lls[ji] <- tryCatch(
-        calc_model_likelihood(
-          config       = config,
-          obs_cases    = obs_cases,
-          est_cases    = est_cases,
-          obs_deaths   = obs_deaths,
-          est_deaths   = est_deaths,
-          weights_time          = likelihood_settings$.weights_time_resolved,
-          weights_location      = likelihood_settings$weights_location,
-          nb_k_min_cases        = likelihood_settings$nb_k_min_cases,
-          nb_k_min_deaths       = likelihood_settings$nb_k_min_deaths,
-          weight_cases          = likelihood_settings$weight_cases,
-          weight_deaths         = likelihood_settings$weight_deaths,
-          weight_peak_timing    = likelihood_settings$weight_peak_timing,
-          weight_peak_magnitude = likelihood_settings$weight_peak_magnitude,
-          weight_cumulative_total = likelihood_settings$weight_cumulative_total,
-          weight_wis            = likelihood_settings$weight_wis,
-          sigma_peak_time       = likelihood_settings$sigma_peak_time,
-          sigma_peak_log        = likelihood_settings$sigma_peak_log
-        ),
-        error = function(e) {
-          warning("Likelihood failed sim ", sim_id, " iter ", ji, ": ",
-                  e$message, call. = FALSE, immediate. = FALSE)
-          NA_real_
+      res <- result_lookup[[key]]
+      if (is.null(res) || !isTRUE(res$success)) {
+        if (!is.null(res) && !isTRUE(res$success)) {
+          err_msg <- if (!is.null(res$error)) res$error else "unknown error"
+          warning("sim ", sim_id, " failed on worker: ", err_msg,
+                  call. = FALSE, immediate. = FALSE)
         }
+        next
+      }
+
+      # Extract params (uses package functions, must run on main thread)
+      raw_params <- tryCatch({
+        pv <- convert_config_to_matrix(params_list[[idx]])
+        if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+        pv[param_names_all]
+      }, error = function(e) NULL)
+      if (is.null(raw_params)) next
+
+      # Materialize iteration matrices from R list-of-lists to contiguous matrices
+      iter_list <- res$iterations
+      n_iter    <- length(iter_list)
+      iter_mats <- vector("list", n_iter)
+      for (ji in seq_len(n_iter)) {
+        iter_mats[[ji]] <- list(
+          est_cases  = matrix(unlist(iter_list[[ji]]$reported_cases),
+                              nrow = n_locs, byrow = FALSE),
+          est_deaths = matrix(unlist(iter_list[[ji]]$disease_deaths),
+                              nrow = n_locs, byrow = FALSE)
+        )
+      }
+
+      sim_data[[idx]] <- list(
+        sim_id      = sim_id,
+        iter_mats   = iter_mats,
+        raw_params  = raw_params,
+        seed_iter_1 = as.integer((sim_id - 1L) * n_iterations + 1L),
+        psi_jt      = params_list[[idx]]$psi_jt
       )
+
+      # Free raw data as we go — the R matrices in sim_data are compact;
+      # the original list-of-lists in result_lookup uses more memory.
+      result_lookup[key] <- list(NULL)
+      params_list[idx]   <- list(NULL)
     }
 
-    # Collapse iterations exactly as .mosaic_run_simulation_worker does
-    if (n_iter_got > 1L) {
-      valid_lls <- lls[is.finite(lls)]
-      collapsed_ll <- if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
-    } else {
-      collapsed_ll <- lls[1L]
-    }
+    # Free remaining raw data structures
+    rm(result_lookup, params_list, futures)
+    gc(verbose = FALSE)
 
-    # Extract flat param vector for parquet row
-    raw_params <- tryCatch({
-      pv <- convert_config_to_matrix(params_list[[idx]])
-      if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
-      pv[param_names_all]
-    }, error = function(e) NULL)
+    n_valid <- sum(!vapply(sim_data, is.null, logical(1)))
+    premat_elapsed <- as.numeric(difftime(Sys.time(), premat_start, units = "secs"))
+    log_msg("    Pre-materialized %d/%d valid sims in %.1fs", n_valid, n_sims, premat_elapsed)
 
-    if (is.null(raw_params)) {
-      success_indicators[idx] <- FALSE
-      next
-    }
+    # --- 5b. Build shared data + create lightweight PSOCK cluster ----------
 
-    # Seed used for the first iteration (mirrors run_MOSAIC.R line 224)
-    seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
-
-    row_df <- data.frame(
-      sim      = as.integer(sim_id),
-      iter     = 1L,
-      seed_sim = as.integer(sim_id),
-      seed_iter = as.integer(seed_iter_1),
-      likelihood = collapsed_ll
+    # Shared data for LL workers (strip config to only LL-relevant fields
+    # to minimize serialization — full config has large matrices we don't need).
+    # Created BEFORE the cluster guard so the sequential fallback can use it.
+    .ll_shared <- list(
+      obs_cases  = obs_cases,
+      obs_deaths = obs_deaths,
+      config_ll  = config[c("location_name", "date_start", "date_stop")],
+      ls         = likelihood_settings
     )
-    for (pname in param_names_all) {
-      row_df[[pname]] <- as.numeric(raw_params[pname])
+
+    ll_cl <- NULL
+    tryCatch({
+      ll_cl <- parallel::makeCluster(n_cores_ll, type = "PSOCK")
+    }, error = function(e) {
+      log_msg("    WARNING: Failed to create LL cluster (%s), falling back to sequential", e$message)
+    })
+    if (!is.null(ll_cl)) {
+      on.exit({
+        if (!is.null(ll_cl)) try(parallel::stopCluster(ll_cl), silent = TRUE)
+      }, add = TRUE)
+      parallel::clusterEvalQ(ll_cl, library(MOSAIC))
+      parallel::clusterExport(ll_cl, ".ll_shared", envir = environment())
     }
 
-    out_file <- file.path(dirs$cal_samples,
-                          sprintf("sim_%07d.parquet", sim_id))
-    .mosaic_write_parquet(row_df, out_file, control$io)
-    success_indicators[idx] <- file.exists(out_file)
+    # --- 5c. Compute likelihoods (parallel or sequential fallback) ---------
+    valid_indices <- which(!vapply(sim_data, is.null, logical(1)))
+    valid_items   <- sim_data[valid_indices]
 
-    # Write raw per-(iter, j, t) simresults for validation (mirrors run_MOSAIC.R)
-    if (!is.null(dirs$cal_simresults)) {
-      simresults_iters <- vector("list", n_iter_got)
+    ll_start <- Sys.time()
+
+    # Worker function: compute LL for one pre-materialized sim.
+    # References .ll_shared from the worker's global env (via clusterExport)
+    # or from the enclosing env (sequential fallback).
+    .ll_worker <- function(item) {
+      n_iter <- length(item$iter_mats)
+      lls    <- numeric(n_iter)
+      for (ji in seq_len(n_iter)) {
+        lls[ji] <- tryCatch(
+          calc_model_likelihood(
+            config       = .ll_shared$config_ll,
+            obs_cases    = .ll_shared$obs_cases,
+            est_cases    = item$iter_mats[[ji]]$est_cases,
+            obs_deaths   = .ll_shared$obs_deaths,
+            est_deaths   = item$iter_mats[[ji]]$est_deaths,
+            weights_time            = .ll_shared$ls$.weights_time_resolved,
+            weights_location        = .ll_shared$ls$weights_location,
+            nb_k_min_cases          = .ll_shared$ls$nb_k_min_cases,
+            nb_k_min_deaths         = .ll_shared$ls$nb_k_min_deaths,
+            weight_cases            = .ll_shared$ls$weight_cases,
+            weight_deaths           = .ll_shared$ls$weight_deaths,
+            weight_peak_timing      = .ll_shared$ls$weight_peak_timing,
+            weight_peak_magnitude   = .ll_shared$ls$weight_peak_magnitude,
+            weight_cumulative_total = .ll_shared$ls$weight_cumulative_total,
+            weight_wis              = .ll_shared$ls$weight_wis,
+            sigma_peak_time         = .ll_shared$ls$sigma_peak_time,
+            sigma_peak_log          = .ll_shared$ls$sigma_peak_log
+          ),
+          error = function(e) NA_real_
+        )
+      }
+      if (n_iter > 1L) {
+        valid_lls <- lls[is.finite(lls)]
+        if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
+      } else {
+        lls[1L]
+      }
+    }
+
+    if (!is.null(ll_cl) && length(valid_items) > 0L) {
+      log_msg("    Dispatching %d LL computations to %d workers...",
+              length(valid_items), n_cores_ll)
+      computed_lls <- parallel::parLapply(ll_cl, valid_items, .ll_worker)
+    } else if (length(valid_items) > 0L) {
+      # Sequential fallback (cluster creation failed)
+      log_msg("    Computing %d likelihoods sequentially (cluster unavailable)...",
+              length(valid_items))
+      computed_lls <- lapply(valid_items, .ll_worker)
+    } else {
+      computed_lls <- list()
+    }
+
+    ll_elapsed <- as.numeric(difftime(Sys.time(), ll_start, units = "secs"))
+    n_ll_na <- sum(vapply(computed_lls, function(x) !is.finite(x), logical(1)))
+    log_msg("    LL computation done: %d sims in %.1fs (%.1f sims/s, %d non-finite)",
+            length(computed_lls), ll_elapsed,
+            length(computed_lls) / max(ll_elapsed, 0.1), n_ll_na)
+
+    # Stop LL cluster (done with parallel computation)
+    if (!is.null(ll_cl)) {
+      parallel::stopCluster(ll_cl)
+      ll_cl <- NULL  # prevent on.exit double-stop
+    }
+
+    # Ping Dask scheduler to keep connection alive during long LL phases
+    tryCatch(client$scheduler_info(), error = function(e) {
+      log_msg("    WARNING: Dask scheduler ping failed after LL: %s", e$message)
+    })
+
+    # Map computed LLs back to sim_data
+    for (i in seq_along(valid_indices)) {
+      sim_data[[valid_indices[i]]]$collapsed_ll <- computed_lls[[i]]
+    }
+    rm(computed_lls, valid_items, valid_indices)
+
+    # --- 5d. Write parquet files (sequential I/O) --------------------------
+    write_start <- Sys.time()
+
+    for (idx in seq_len(n_sims)) {
+      item <- sim_data[[idx]]
+      if (is.null(item)) {
+        success_indicators[idx] <- FALSE
+        next
+      }
+
+      # Build parquet row
+      row_df <- data.frame(
+        sim       = as.integer(item$sim_id),
+        iter      = 1L,
+        seed_sim  = as.integer(item$sim_id),
+        seed_iter = item$seed_iter_1,
+        likelihood = item$collapsed_ll
+      )
+      for (pname in param_names_all) {
+        row_df[[pname]] <- as.numeric(item$raw_params[pname])
+      }
+
+      out_file <- file.path(dirs$cal_samples,
+                            sprintf("sim_%07d.parquet", item$sim_id))
+      .mosaic_write_parquet(row_df, out_file, control$io)
+      success_indicators[idx] <- file.exists(out_file)
+
+      # Write raw per-(iter, j, t) simresults for validation
+      if (!is.null(dirs$cal_simresults)) {
+        n_iter <- length(item$iter_mats)
+        simresults_iters <- vector("list", n_iter)
+        for (ji in seq_len(n_iter)) {
+          ec <- item$iter_mats[[ji]]$est_cases
+          ed <- item$iter_mats[[ji]]$est_deaths
+          n_j_raw <- nrow(ec)
+          n_t_raw <- ncol(ec)
+          sr_df <- data.frame(
+            sim    = item$sim_id,
+            iter   = as.integer(ji),
+            j      = rep(seq_len(n_j_raw), times = n_t_raw),
+            t      = rep(seq_len(n_t_raw), each  = n_j_raw),
+            cases  = as.numeric(ec),
+            deaths = as.numeric(ed)
+          )
+          if (!is.null(item$psi_jt)) {
+            pjt <- item$psi_jt
+            if (!is.matrix(pjt)) pjt <- matrix(pjt, nrow = 1)
+            sr_df$psi_jt <- pjt[cbind(sr_df$j, sr_df$t)]
+          }
+          simresults_iters[[ji]] <- sr_df
+        }
+        raw_df <- do.call(rbind, simresults_iters)
+        for (pname in param_names_all) {
+          raw_df[[pname]] <- as.numeric(item$raw_params[pname])
+        }
+        sr_file <- file.path(dirs$cal_simresults,
+                             sprintf("simresults_%07d.parquet", item$sim_id))
+        .mosaic_write_parquet(raw_df, sr_file, control$io)
+      }
+
+      # Free this sim's data after writing
+      sim_data[idx] <- list(NULL)
+    }
+
+    write_elapsed <- as.numeric(difftime(Sys.time(), write_start, units = "secs"))
+    log_msg("    Parquet writing done in %.1fs", write_elapsed)
+
+    rm(sim_data)
+
+  } else {
+
+    # =======================================================================
+    # SEQUENTIAL PATH (original behavior, used when n_cores_ll = 1)
+    # =======================================================================
+
+    log_msg("  Computing likelihoods + writing parquet for %d sims...", n_sims)
+
+    for (idx in seq_len(n_sims)) {
+      # Periodic progress + Dask client health check
+      if (idx %% 500L == 0L) {
+        elapsed <- as.numeric(difftime(Sys.time(), likelihood_start, units = "secs"))
+        log_msg("    Likelihood progress: %d/%d (%.0fs elapsed)", idx, n_sims, elapsed)
+        tryCatch({
+          client$scheduler_info()
+        }, error = function(e) {
+          log_msg("    WARNING: Dask scheduler ping failed at sim %d: %s", idx, e$message)
+        })
+      }
+      sim_id <- sim_ids[[idx]]
+      key    <- as.character(sim_id)
+
+      # Skip if param sampling or future submission failed
+      if (is.null(params_list[[idx]]) || is.null(futures[[idx]])) {
+        success_indicators[idx] <- FALSE
+        next
+      }
+
+      res <- result_lookup[[key]]
+
+      if (is.null(res) || !isTRUE(res$success)) {
+        err_msg <- if (!is.null(res$error)) res$error else "unknown error"
+        warning("sim ", sim_id, " failed on worker: ", err_msg,
+                call. = FALSE, immediate. = FALSE)
+        success_indicators[idx] <- FALSE
+        next
+      }
+
+      # Compute per-iteration likelihoods in R, then collapse
+      iter_list   <- res$iterations
+      n_iter_got  <- length(iter_list)
+      lls         <- numeric(n_iter_got)
+
       for (ji in seq_len(n_iter_got)) {
-        iter_res   <- res$iterations[[ji]]
+        iter_res   <- iter_list[[ji]]
         est_cases  <- matrix(unlist(iter_res$reported_cases),
                              nrow = n_locs, byrow = FALSE)
         est_deaths <- matrix(unlist(iter_res$disease_deaths),
                              nrow = n_locs, byrow = FALSE)
-        n_j_raw <- nrow(est_cases)
-        n_t_raw <- ncol(est_cases)
-        sr_df <- data.frame(
-          sim    = sim_id,
-          iter   = as.integer(ji),
-          j      = rep(seq_len(n_j_raw), times = n_t_raw),
-          t      = rep(seq_len(n_t_raw), each  = n_j_raw),
-          cases  = as.numeric(est_cases),
-          deaths = as.numeric(est_deaths)
+
+        lls[ji] <- tryCatch(
+          calc_model_likelihood(
+            config       = config,
+            obs_cases    = obs_cases,
+            est_cases    = est_cases,
+            obs_deaths   = obs_deaths,
+            est_deaths   = est_deaths,
+            weights_time          = likelihood_settings$.weights_time_resolved,
+            weights_location      = likelihood_settings$weights_location,
+            nb_k_min_cases        = likelihood_settings$nb_k_min_cases,
+            nb_k_min_deaths       = likelihood_settings$nb_k_min_deaths,
+            weight_cases          = likelihood_settings$weight_cases,
+            weight_deaths         = likelihood_settings$weight_deaths,
+            weight_peak_timing    = likelihood_settings$weight_peak_timing,
+            weight_peak_magnitude = likelihood_settings$weight_peak_magnitude,
+            weight_cumulative_total = likelihood_settings$weight_cumulative_total,
+            weight_wis            = likelihood_settings$weight_wis,
+            sigma_peak_time       = likelihood_settings$sigma_peak_time,
+            sigma_peak_log        = likelihood_settings$sigma_peak_log
+          ),
+          error = function(e) {
+            warning("Likelihood failed sim ", sim_id, " iter ", ji, ": ",
+                    e$message, call. = FALSE, immediate. = FALSE)
+            NA_real_
+          }
         )
-        psi_jt <- params_list[[idx]]$psi_jt
-        if (!is.null(psi_jt)) {
-          if (!is.matrix(psi_jt)) psi_jt <- matrix(psi_jt, nrow = 1)
-          sr_df$psi_jt <- psi_jt[cbind(sr_df$j, sr_df$t)]
-        }
-        simresults_iters[[ji]] <- sr_df
       }
-      raw_df <- do.call(rbind, simresults_iters)
+
+      # Collapse iterations
+      if (n_iter_got > 1L) {
+        valid_lls <- lls[is.finite(lls)]
+        collapsed_ll <- if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
+      } else {
+        collapsed_ll <- lls[1L]
+      }
+
+      # Extract flat param vector for parquet row
+      raw_params <- tryCatch({
+        pv <- convert_config_to_matrix(params_list[[idx]])
+        if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+        pv[param_names_all]
+      }, error = function(e) NULL)
+
+      if (is.null(raw_params)) {
+        success_indicators[idx] <- FALSE
+        next
+      }
+
+      seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
+
+      row_df <- data.frame(
+        sim      = as.integer(sim_id),
+        iter     = 1L,
+        seed_sim = as.integer(sim_id),
+        seed_iter = as.integer(seed_iter_1),
+        likelihood = collapsed_ll
+      )
       for (pname in param_names_all) {
-        raw_df[[pname]] <- as.numeric(raw_params[pname])
+        row_df[[pname]] <- as.numeric(raw_params[pname])
       }
-      sr_file <- file.path(dirs$cal_simresults,
-                           sprintf("simresults_%07d.parquet", sim_id))
-      .mosaic_write_parquet(raw_df, sr_file, control$io)
+
+      out_file <- file.path(dirs$cal_samples,
+                            sprintf("sim_%07d.parquet", sim_id))
+      .mosaic_write_parquet(row_df, out_file, control$io)
+      success_indicators[idx] <- file.exists(out_file)
+
+      # Write raw per-(iter, j, t) simresults for validation
+      if (!is.null(dirs$cal_simresults)) {
+        simresults_iters <- vector("list", n_iter_got)
+        for (ji in seq_len(n_iter_got)) {
+          iter_res   <- res$iterations[[ji]]
+          est_cases  <- matrix(unlist(iter_res$reported_cases),
+                               nrow = n_locs, byrow = FALSE)
+          est_deaths <- matrix(unlist(iter_res$disease_deaths),
+                               nrow = n_locs, byrow = FALSE)
+          n_j_raw <- nrow(est_cases)
+          n_t_raw <- ncol(est_cases)
+          sr_df <- data.frame(
+            sim    = sim_id,
+            iter   = as.integer(ji),
+            j      = rep(seq_len(n_j_raw), times = n_t_raw),
+            t      = rep(seq_len(n_t_raw), each  = n_j_raw),
+            cases  = as.numeric(est_cases),
+            deaths = as.numeric(est_deaths)
+          )
+          psi_jt <- params_list[[idx]]$psi_jt
+          if (!is.null(psi_jt)) {
+            if (!is.matrix(psi_jt)) psi_jt <- matrix(psi_jt, nrow = 1)
+            sr_df$psi_jt <- psi_jt[cbind(sr_df$j, sr_df$t)]
+          }
+          simresults_iters[[ji]] <- sr_df
+        }
+        raw_df <- do.call(rbind, simresults_iters)
+        for (pname in param_names_all) {
+          raw_df[[pname]] <- as.numeric(raw_params[pname])
+        }
+        sr_file <- file.path(dirs$cal_simresults,
+                             sprintf("simresults_%07d.parquet", sim_id))
+        .mosaic_write_parquet(raw_df, sr_file, control$io)
+      }
+
+      # Free this sim's data immediately
+      result_lookup[key] <- list(NULL)
+      params_list[idx]   <- list(NULL)
     }
 
-    # Free this sim's data immediately — each result holds large case/death
-    # arrays from Python. Without this, 20K results peak at several GB.
-    result_lookup[key] <- list(NULL)
-    params_list[idx]   <- list(NULL)
+    rm(result_lookup, params_list, futures)
   }
 
   likelihood_elapsed <- as.numeric(difftime(Sys.time(), likelihood_start, units = "secs"))
   log_msg("  Likelihood + parquet writing done: %d sims in %.1fs (%.1f sims/s)",
           n_sims, likelihood_elapsed, n_sims / max(likelihood_elapsed, 0.1))
-
-  rm(result_lookup, params_list, sampled_jsons, futures)
   gc(verbose = FALSE)
 
   success_indicators

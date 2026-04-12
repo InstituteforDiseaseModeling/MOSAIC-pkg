@@ -1,9 +1,8 @@
 #' Calculate Batch Size for Bookend Strategy
 #'
-#' Implements a three-phase strategy:
-#' 1. Initial calibration (n_batches × batch_size)
-#' 2. One large predictive batch (calculated from ESS rate)
-#' 3. Final fine-tuning (adaptive batch sizing based on gap)
+#' Predicts the number of simulations needed to reach a target ESS based on
+#' the observed ESS trajectory. Fits sqrt, linear, and log models to the
+#' cumulative (n_sims, threshold_ESS) data and returns a batch size.
 #'
 #' @param ess_history ESS measurements from calibration phase
 #' @param target_ess Target ESS value
@@ -104,7 +103,7 @@ calc_bookend_batch_size <- function(ess_history,
 
     total_needed <- ceiling(total_needed)
 
-    # BUG FIX #5: Check if we're already past the predicted requirement
+    # Check if we're already past the predicted requirement
     if (total_needed <= current_n) {
         return(list(
             phase = "complete",
@@ -117,7 +116,7 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Calculate predictive batch size
-    # Predictive batch uses full remaining budget (fine-tuning handles any leftover ESS gap)
+    # Predictive batch uses full remaining budget
     predictive_batch_size <- total_needed - current_n
 
     # Apply safety margins based on R² confidence
@@ -139,7 +138,7 @@ calc_bookend_batch_size <- function(ess_history,
     # Apply bounds
     predictive_batch_size <- max(0, predictive_batch_size)
 
-    # BUG FIX #5: Additional safety check for negative/zero batch size
+    # Additional safety check for negative/zero batch size
     if (predictive_batch_size <= 0) {
         return(list(
             phase = "complete",
@@ -157,7 +156,7 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Predict ESS after the batch
-    # BUG FIX #2: Models expect raw n_sims, not pre-transformed values
+    # Models expect raw n_sims — the formula already applies the transformation
     # The model formula already applies the transformation (sqrt or log)
     predicted_ess <- predict(best_fit,
         newdata = data.frame(n_sims = current_n + predictive_batch_size))

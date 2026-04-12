@@ -76,8 +76,6 @@ control$targets$min_best_subset <- 30
 control$targets$max_best_subset <- 1500
 control$targets$ess_method <- 'perplexity'
 
-control$fine_tuning$batch_sizes <- lapply(control$fine_tuning$batch_sizes, function(x) x*5)
-
 control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability
 control$sampling$sample_mobility_gamma <- length(iso_codes) > 1  # Gravity model exponent
 control$sampling$sample_mobility_omega <- length(iso_codes) > 1  # Mobility rate

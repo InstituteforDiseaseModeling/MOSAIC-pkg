@@ -84,9 +84,8 @@ This function accepts pre-configured config and priors objects, allowing:
 
 Executes the full MOSAIC calibration workflow:
 \enumerate{
-\item Adaptive calibration with R² convergence detection
-\item Single predictive batch (calculated from calibration phase)
-\item Adaptive fine-tuning with 5-tier batch sizing
+\item Adaptive calibration with R-squared convergence detection
+\item Predictive batches with model-based sizing and ESS re-evaluation
 \item Post-hoc subset optimization
 \item Posterior quantile and distribution estimation
 \item Posterior predictive checks and uncertainty quantification
