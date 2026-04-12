@@ -1249,11 +1249,15 @@
   obs_deaths <- config$reported_deaths
 
   # ---------------------------------------------------------------------------
-  # 1-3. Sample parameters, serialize, and submit futures (interleaved)
-  #      Workers start receiving tasks within seconds instead of waiting for
-  #      all N samples to complete before any submission.
+  # 1-3. Sample parameters, serialize, and submit futures (chunked)
+  #      Workers start receiving tasks after the first chunk (~seconds) instead
+  #      of waiting for all N samples. Chunked client$map() avoids overwhelming
+  #      the Dask scheduler with rapid-fire individual submit() calls.
   # ---------------------------------------------------------------------------
-  log_msg("  Sampling + submitting %d simulations to Dask cluster...", n_sims)
+  dask_chunk_size <- 500L
+  n_chunks <- ceiling(n_sims / dask_chunk_size)
+  log_msg("  Sampling + submitting %d simulations in %d chunks of %d...",
+          n_sims, n_chunks, dask_chunk_size)
   params_list <- vector("list", n_sims)
   futures     <- vector("list", n_sims)
   submit_start <- Sys.time()
@@ -1262,58 +1266,77 @@
   pb <- utils::txtProgressBar(min = 0, max = n_sims, style = 3)
   on.exit(try(close(pb), silent = TRUE), add = TRUE)
 
-  for (idx in seq_len(n_sims)) {
-    sim_id <- sim_ids[idx]
+  for (chunk_i in seq_len(n_chunks)) {
 
-    # --- Sample parameters ---
-    params_list[[idx]] <- tryCatch(
-      sample_parameters(
-        PATHS      = PATHS,
-        priors     = priors,
-        config     = config,
-        seed       = sim_id,
-        sample_args = sampling_args,
-        verbose    = FALSE,
-        validate   = FALSE
-      ),
-      error = function(e) {
-        warning("Param sampling failed for sim ", sim_id, ": ", e$message,
-                call. = FALSE, immediate. = FALSE)
-        NULL
-      }
-    )
+    # Determine indices for this chunk
+    idx_start <- (chunk_i - 1L) * dask_chunk_size + 1L
+    idx_end   <- min(chunk_i * dask_chunk_size, n_sims)
+    chunk_indices <- idx_start:idx_end
 
-    # Skip serialize + submit if sampling failed
-    if (is.null(params_list[[idx]])) {
-      utils::setTxtProgressBar(pb, idx)
-      next
+    # Accumulators for this chunk's client$map() call
+    map_indices  <- integer(0)    # positions in params_list/futures
+    map_sim_ids  <- integer(0)
+    map_jsons    <- character(0)
+
+    for (idx in chunk_indices) {
+      sim_id <- sim_ids[idx]
+
+      # --- Sample parameters ---
+      params_list[[idx]] <- tryCatch(
+        sample_parameters(
+          PATHS      = PATHS,
+          priors     = priors,
+          config     = config,
+          seed       = sim_id,
+          sample_args = sampling_args,
+          verbose    = FALSE,
+          validate   = FALSE
+        ),
+        error = function(e) {
+          warning("Param sampling failed for sim ", sim_id, ": ", e$message,
+                  call. = FALSE, immediate. = FALSE)
+          NULL
+        }
+      )
+
+      if (is.null(params_list[[idx]])) next
+
+      # --- Guardrails: clamp transmission parameters ---
+      p <- params_list[[idx]]
+      if (!is.null(p$beta_j0_tot)) p$beta_j0_tot <- pmax(p$beta_j0_tot, 1e-10)
+      if (!is.null(p$beta_j0_hum)) p$beta_j0_hum <- pmax(p$beta_j0_hum, 0)
+      if (!is.null(p$beta_j0_env)) p$beta_j0_env <- pmax(p$beta_j0_env, 0)
+      if (!is.null(p$p_beta))      p$p_beta      <- pmin(pmax(p$p_beta, 1e-6), 1 - 1e-6)
+      if (!is.null(p$tau_i))       p$tau_i       <- pmin(pmax(p$tau_i, 0), 1)
+      params_list[[idx]] <- p
+
+      # --- Serialize per-sim params to JSON ---
+      sampled_json <- jsonlite::toJSON(
+        .extract_sampled_params(p),
+        auto_unbox = TRUE,
+        digits     = NA
+      )
+
+      map_indices <- c(map_indices, idx)
+      map_sim_ids <- c(map_sim_ids, as.integer(sim_id))
+      map_jsons   <- c(map_jsons, as.character(sampled_json))
     }
 
-    # --- Guardrails: clamp transmission parameters ---
-    p <- params_list[[idx]]
-    if (!is.null(p$beta_j0_tot)) p$beta_j0_tot <- pmax(p$beta_j0_tot, 1e-10)
-    if (!is.null(p$beta_j0_hum)) p$beta_j0_hum <- pmax(p$beta_j0_hum, 0)
-    if (!is.null(p$beta_j0_env)) p$beta_j0_env <- pmax(p$beta_j0_env, 0)
-    if (!is.null(p$p_beta))      p$p_beta      <- pmin(pmax(p$p_beta, 1e-6), 1 - 1e-6)
-    if (!is.null(p$tau_i))       p$tau_i       <- pmin(pmax(p$tau_i, 0), 1)
-    params_list[[idx]] <- p
+    # --- Submit entire chunk via client$map() (single scheduler round-trip) ---
+    if (length(map_sim_ids) > 0L) {
+      chunk_futures <- client$map(
+        mosaic_worker$run_laser_sim,
+        as.list(map_sim_ids),
+        as.list(rep(as.integer(n_iterations), length(map_sim_ids))),
+        as.list(map_jsons),
+        as.list(rep(list(base_config_future), length(map_sim_ids)))
+      )
+      for (fi in seq_along(map_indices)) {
+        futures[[ map_indices[fi] ]] <- chunk_futures[[fi]]
+      }
+    }
 
-    # --- Serialize per-sim params to JSON and submit immediately ---
-    sampled_json <- jsonlite::toJSON(
-      .extract_sampled_params(p),
-      auto_unbox = TRUE,
-      digits     = NA
-    )
-
-    futures[[idx]] <- client$submit(
-      mosaic_worker$run_laser_sim,
-      as.integer(sim_id),
-      as.integer(n_iterations),
-      as.character(sampled_json),
-      base_config_future
-    )
-
-    utils::setTxtProgressBar(pb, idx)
+    utils::setTxtProgressBar(pb, idx_end)
   }
 
   close(pb)
