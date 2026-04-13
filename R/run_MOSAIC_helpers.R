@@ -1254,7 +1254,7 @@
   #      of waiting for all N samples. Chunked client$map() avoids overwhelming
   #      the Dask scheduler with rapid-fire individual submit() calls.
   # ---------------------------------------------------------------------------
-  dask_chunk_size <- 500L
+  dask_chunk_size <- 1000L
   n_chunks <- ceiling(n_sims / dask_chunk_size)
   log_msg("  Sampling + submitting %d simulations (%d chunks)...",
           n_sims, n_chunks)
