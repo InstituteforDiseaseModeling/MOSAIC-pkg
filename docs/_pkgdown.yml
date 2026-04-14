@@ -49,16 +49,8 @@ reference:
 
   - title: "Downloading and Processing Data: Climate and Environment"
     contents:
-      - download_climate_data
-      - process_climate_data
-      - get_DMI_forecast
-      - get_DMI_historical
-      - get_ENSO_forecast
-      - get_ENSO_historical
-      - process_ENSO_data
-      - get_climate_historical
-      - get_climate_forecast
-      - get_climate_future
+      - process_enso_data
+      - process_open_meteo_data
       - download_country_DEM
       - get_elevation
 
@@ -71,7 +63,7 @@ reference:
       - process_WHO_weekly_data
       - get_WHO_vaccination_data
       - process_WHO_vaccination_data
-      - process_suitability_data
+      - compile_suitability_data
       - process_UN_demographics_data
       - process_country_similarity_data
       - process_OAG_data
@@ -151,7 +143,6 @@ reference:
       - get_ggplot_legend
       - starts_with("make_")
       - set_root_directory
-      - set_openmeteo_api_key
       - get_greek_unicode
       - logit
       - inv_logit

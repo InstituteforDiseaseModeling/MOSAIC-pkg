@@ -283,7 +283,7 @@ est_suitability <- function(PATHS,
           colnames(d_all)[grep('_lag', colnames(d_all))]
      )
 
-     # Note: Previously problematic lag variables have been fixed in process_suitability_data()
+     # Note: Previously problematic lag variables have been fixed in compile_suitability_data()
      # by using proper conditional logic that only creates lags when base variables exist
 
      # Filter to only covariates that actually exist in the data

@@ -33,7 +33,7 @@ indicating environmentally suitable periods
 }
 
 The shaded regions represent periods identified as environmentally suitable by the
-\code{process_suitability_data()} pipeline, including both outbreak periods and
+\code{compile_suitability_data()} pipeline, including both outbreak periods and
 lead-up weeks when conditions become favorable.
 }
 \examples{
@@ -44,6 +44,6 @@ plot_cases_binary(PATHS)
 
 }
 \seealso{
-\code{\link{process_suitability_data}} for the main pipeline that creates the processed data with \code{cases_binary}.
+\code{\link{compile_suitability_data}} for the main pipeline that creates the processed data with \code{cases_binary}.
 \code{\link{get_cases_binary}} for details on how the environmental suitability indicator is created.
 }

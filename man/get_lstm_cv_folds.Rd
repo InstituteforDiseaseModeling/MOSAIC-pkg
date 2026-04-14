@@ -138,5 +138,5 @@ val_sequences <- create_lstm_sequences(split_random$val_data, ...)
 }
 \seealso{
 \code{\link{est_suitability}} for the main LSTM training function that uses these splits.
-\code{\link{process_suitability_data}} for data preprocessing before split generation.
+\code{\link{compile_suitability_data}} for data preprocessing before split generation.
 }

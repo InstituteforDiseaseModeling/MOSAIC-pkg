@@ -39,7 +39,7 @@ plot_ENSO_data <- function(PATHS, frequency) {
           stop("Invalid frequency. Choose 'daily', 'weekly', or 'monthly'.")
      }
      # Define the path to the compiled ENSO and IOD data
-     enso_data_file <- file.path(PATHS$DATA_ENSO, glue::glue("compiled_ENSO_1970_2025_{frequency}.csv"))
+     enso_data_file <- file.path(PATHS$DATA_ENSO, glue::glue("enso_{frequency}.csv"))
 
      # Check if the ENSO data file exists
      if (!file.exists(enso_data_file)) {

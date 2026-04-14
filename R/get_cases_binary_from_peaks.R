@@ -44,7 +44,7 @@
 #'
 #' @seealso
 #' \code{\link{est_epidemic_peaks}} for epidemic peak detection
-#' \code{\link{process_suitability_data}} for the main data processing pipeline
+#' \code{\link{compile_suitability_data}} for the main data processing pipeline
 #'
 #' @export
 get_cases_binary_from_peaks <- function(PATHS) {
