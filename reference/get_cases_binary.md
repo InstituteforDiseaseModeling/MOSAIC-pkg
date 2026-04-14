@@ -72,7 +72,7 @@ date_start.
 
 ## See also
 
-[`process_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.md)
+[`compile_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
 for the main data processing pipeline where this function is used.
 
 ## Examples

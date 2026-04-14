@@ -142,7 +142,7 @@ comprehensive evaluation.
 
 [`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
 for the main LSTM training function that uses these splits.
-[`process_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.md)
+[`compile_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
 for data preprocessing before split generation.
 
 ## Examples

@@ -263,8 +263,8 @@ Processing and downloading data
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
-- [`process_ENSO_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
-  : Compile ENSO and DMI Data (Historical and Forecast)
+- [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
+  : Process ENSO Data from enso-data Repository
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
@@ -296,19 +296,14 @@ Processing and downloading data
 - [`process_cholera_surveillance_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.md)
   : Process Combined Weekly and Daily Cholera Surveillance Data with
   Truly Square Data Structure
-- [`process_climate_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_climate_data.md)
-  : Process and Aggregate Climate Data for Each Country
 - [`process_country_similarity_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_country_similarity_data.md)
   : Process Country Similarity Data for African Countries
-- [`process_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.md)
-  : Process Environmental Suitability Data for Cholera Transmission
+- [`process_open_meteo_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_open_meteo_data.md)
+  : Process Open-Meteo Climate Data from open-meteo-pipeline Repository
 - [`download_africa_shapefile()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_africa_shapefile.md)
   : Download and Save Africa Shapefile
 - [`download_all_country_shapefiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_all_country_shapefiles.md)
   : Download and Save Shapefiles for All African Countries
-- [`download_climate_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_climate_data.md)
-  : Download and Save Climate Data for Multiple Countries (Parquet
-  Format, Multiple Models and Variables)
 - [`download_country_DEM()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_country_DEM.md)
   : Download 1km DEM Raster for Multiple Countries and Save to Files
 - [`combine_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/combine_vaccination_data.md)
@@ -404,14 +399,6 @@ Plotting functions
 
 Helper and utility functions
 
-- [`get_DMI_forecast()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast.md)
-  : Get DMI (Dipole Mode Index) Forecast Data
-- [`get_DMI_forecast_from_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast_from_json.md)
-  : Get DMI Forecast from JSON Configuration
-- [`get_DMI_historical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_historical.md)
-  : Download and Process Historical DMI Data
-- [`get_ENSO_historical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_ENSO_historical.md)
-  : Download and Process Historical ENSO Data (Niño3, Niño3.4, Niño4)
 - [`get_WASH_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_WASH_data.md)
   : Download, Process, and Save WASH Coverage Data
 - [`get_WHO_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_WHO_vaccination_data.md)
@@ -423,13 +410,6 @@ Helper and utility functions
   Peaks
 - [`get_centroid()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_centroid.md)
   : Calculate the Centroid of a Country from its Shapefile
-- [`get_climate_forecast()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_climate_forecast.md)
-  : Get Climate Forecast Data (Daily)
-- [`get_climate_future()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_climate_future.md)
-  : Download Future Climate Data for Multiple Locations (One Model at a
-  Time)
-- [`get_climate_historical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_climate_historical.md)
-  : Get Historical Climate Data
 - [`get_country_shp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_country_shp.md)
   : Get a country shapefile from GeoBoundaries API
 - [`get_default_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_LASER_config.md)
@@ -483,8 +463,6 @@ Helper and utility functions
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
   : Check Installed R and Python Dependencies for MOSAIC
-- [`check_forecast_freshness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_forecast_freshness.md)
-  : Check Forecast Data Freshness
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
   : Check for overdispersion in a count time series
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
@@ -586,9 +564,6 @@ Built-in datasets
 
 Other exported functions and internal helpers
 
-- [`adjust_ENSO_baseline()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/adjust_ENSO_baseline.md)
-  : Simple Bias Correction for ENSO Data with Different Climatological
-  Baselines
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
   : Attach MOSAIC Python Environment
 - [`batch_clean_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/batch_clean_json.md)
@@ -668,8 +643,6 @@ Other exported functions and internal helpers
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
   : Check Installed R and Python Dependencies for MOSAIC
-- [`check_forecast_freshness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_forecast_freshness.md)
-  : Check Forecast Data Freshness
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
   : Check for overdispersion in a count time series
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
@@ -680,6 +653,8 @@ Other exported functions and internal helpers
   : Convert array-wrapped JSON to clean format
 - [`combine_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/combine_vaccination_data.md)
   : Combine WHO and GTFCC Vaccination Data
+- [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+  : Compile Environmental Suitability Data for Cholera Transmission
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
   : Default LASER Configuration
 - [`config_simulation_endemic`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_endemic.md)
@@ -712,9 +687,6 @@ Other exported functions and internal helpers
   : Download and Save Africa Shapefile
 - [`download_all_country_shapefiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_all_country_shapefiles.md)
   : Download and Save Shapefiles for All African Countries
-- [`download_climate_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_climate_data.md)
-  : Download and Save Climate Data for Multiple Countries (Parquet
-  Format, Multiple Models and Variables)
 - [`download_country_DEM()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_country_DEM.md)
   : Download 1km DEM Raster for Multiple Countries and Save to Files
 - [`downscale_weekly_cholera_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/downscale_weekly_cholera_data.md)
@@ -791,14 +763,6 @@ Other exported functions and internal helpers
 - [`generate_country_grid_n()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/generate_country_grid_n.md)
   : Generate a Grid of Points Within a Country's Shapefile Based on
   Number of Points
-- [`get_DMI_forecast()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast.md)
-  : Get DMI (Dipole Mode Index) Forecast Data
-- [`get_DMI_forecast_from_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_forecast_from_json.md)
-  : Get DMI Forecast from JSON Configuration
-- [`get_DMI_historical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_DMI_historical.md)
-  : Download and Process Historical DMI Data
-- [`get_ENSO_historical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_ENSO_historical.md)
-  : Download and Process Historical ENSO Data (Niño3, Niño3.4, Niño4)
 - [`get_WASH_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_WASH_data.md)
   : Download, Process, and Save WASH Coverage Data
 - [`get_WHO_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_WHO_vaccination_data.md)
@@ -810,13 +774,6 @@ Other exported functions and internal helpers
   Peaks
 - [`get_centroid()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_centroid.md)
   : Calculate the Centroid of a Country from its Shapefile
-- [`get_climate_forecast()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_climate_forecast.md)
-  : Get Climate Forecast Data (Daily)
-- [`get_climate_future()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_climate_future.md)
-  : Download Future Climate Data for Multiple Locations (One Model at a
-  Time)
-- [`get_climate_historical()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_climate_historical.md)
-  : Get Historical Climate Data
 - [`get_country_shp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_country_shp.md)
   : Get a country shapefile from GeoBoundaries API
 - [`get_default_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_default_LASER_config.md)
@@ -1023,8 +980,8 @@ Other exported functions and internal helpers
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
-- [`process_ENSO_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
-  : Compile ENSO and DMI Data (Historical and Forecast)
+- [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
+  : Process ENSO Data from enso-data Repository
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
@@ -1056,12 +1013,10 @@ Other exported functions and internal helpers
 - [`process_cholera_surveillance_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.md)
   : Process Combined Weekly and Daily Cholera Surveillance Data with
   Truly Square Data Structure
-- [`process_climate_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_climate_data.md)
-  : Process and Aggregate Climate Data for Each Country
 - [`process_country_similarity_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_country_similarity_data.md)
   : Process Country Similarity Data for African Countries
-- [`process_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.md)
-  : Process Environmental Suitability Data for Cholera Transmission
+- [`process_open_meteo_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_open_meteo_data.md)
+  : Process Open-Meteo Climate Data from open-meteo-pipeline Repository
 - [`qgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/qgompertz.md)
   : Gompertz Distribution Quantile Function
 - [`read_hdf5_to_list()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/read_hdf5_to_list.md)
@@ -1105,8 +1060,6 @@ Other exported functions and internal helpers
   [`scale_colour_mosaic_scenario()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_scenario.md)
   [`scale_fill_mosaic_scenario()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/scale_color_mosaic_scenario.md)
   : MOSAIC Scenario Color/Fill Scales for ggplot2
-- [`set_openmeteo_api_key()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_openmeteo_api_key.md)
-  : Set OpenMeteo API Key
 - [`set_root_directory()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.md)
   : Set Root Directory
 - [`store_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/store_sampling_metadata.md)

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.22.31</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -640,10 +640,10 @@
 
         <dt>
 
-          <code><a href="process_ENSO_data.html">process_ENSO_data()</a></code>
+          <code><a href="process_ENSO_data.html">process_enso_data()</a></code>
 
         </dt>
-        <dd>Compile ENSO and DMI Data (Historical and Forecast)</dd>
+        <dd>Process ENSO Data from enso-data Repository</dd>
 
         <dt>
 
@@ -745,13 +745,6 @@
 
         <dt>
 
-          <code><a href="process_climate_data.html">process_climate_data()</a></code>
-
-        </dt>
-        <dd>Process and Aggregate Climate Data for Each Country</dd>
-
-        <dt>
-
           <code><a href="process_country_similarity_data.html">process_country_similarity_data()</a></code>
 
         </dt>
@@ -759,10 +752,10 @@
 
         <dt>
 
-          <code><a href="process_suitability_data.html">process_suitability_data()</a></code>
+          <code><a href="process_open_meteo_data.html">process_open_meteo_data()</a></code>
 
         </dt>
-        <dd>Process Environmental Suitability Data for Cholera Transmission</dd>
+        <dd>Process Open-Meteo Climate Data from open-meteo-pipeline Repository</dd>
 
         <dt>
 
@@ -777,13 +770,6 @@
 
         </dt>
         <dd>Download and Save Shapefiles for All African Countries</dd>
-
-        <dt>
-
-          <code><a href="download_climate_data.html">download_climate_data()</a></code>
-
-        </dt>
-        <dd>Download and Save Climate Data for Multiple Countries (Parquet Format, Multiple Models and Variables)</dd>
 
         <dt>
 
@@ -1092,34 +1078,6 @@
 
       <dl><dt>
 
-          <code><a href="get_DMI_forecast.html">get_DMI_forecast()</a></code>
-
-        </dt>
-        <dd>Get DMI (Dipole Mode Index) Forecast Data</dd>
-
-        <dt>
-
-          <code><a href="get_DMI_forecast_from_json.html">get_DMI_forecast_from_json()</a></code>
-
-        </dt>
-        <dd>Get DMI Forecast from JSON Configuration</dd>
-
-        <dt>
-
-          <code><a href="get_DMI_historical.html">get_DMI_historical()</a></code>
-
-        </dt>
-        <dd>Download and Process Historical DMI Data</dd>
-
-        <dt>
-
-          <code><a href="get_ENSO_historical.html">get_ENSO_historical()</a></code>
-
-        </dt>
-        <dd>Download and Process Historical ENSO Data (Niño3, Niño3.4, Niño4)</dd>
-
-        <dt>
-
           <code><a href="get_WASH_data.html">get_WASH_data()</a></code>
 
         </dt>
@@ -1152,27 +1110,6 @@
 
         </dt>
         <dd>Calculate the Centroid of a Country from its Shapefile</dd>
-
-        <dt>
-
-          <code><a href="get_climate_forecast.html">get_climate_forecast()</a></code>
-
-        </dt>
-        <dd>Get Climate Forecast Data (Daily)</dd>
-
-        <dt>
-
-          <code><a href="get_climate_future.html">get_climate_future()</a></code>
-
-        </dt>
-        <dd>Download Future Climate Data for Multiple Locations (One Model at a Time)</dd>
-
-        <dt>
-
-          <code><a href="get_climate_historical.html">get_climate_historical()</a></code>
-
-        </dt>
-        <dd>Get Historical Climate Data</dd>
 
         <dt>
 
@@ -1348,13 +1285,6 @@
 
         </dt>
         <dd>Check Installed R and Python Dependencies for MOSAIC</dd>
-
-        <dt>
-
-          <code><a href="check_forecast_freshness.html">check_forecast_freshness()</a></code>
-
-        </dt>
-        <dd>Check Forecast Data Freshness</dd>
 
         <dt>
 
@@ -1686,13 +1616,6 @@
 
       <dl><dt>
 
-          <code><a href="adjust_ENSO_baseline.html">adjust_ENSO_baseline()</a></code>
-
-        </dt>
-        <dd>Simple Bias Correction for ENSO Data with Different Climatological Baselines</dd>
-
-        <dt>
-
           <code><a href="attach_mosaic_env.html">attach_mosaic_env()</a></code>
 
         </dt>
@@ -1945,13 +1868,6 @@
 
         <dt>
 
-          <code><a href="check_forecast_freshness.html">check_forecast_freshness()</a></code>
-
-        </dt>
-        <dd>Check Forecast Data Freshness</dd>
-
-        <dt>
-
           <code><a href="check_overdispersion.html">check_overdispersion()</a></code>
 
         </dt>
@@ -1984,6 +1900,13 @@
 
         </dt>
         <dd>Combine WHO and GTFCC Vaccination Data</dd>
+
+        <dt>
+
+          <code><a href="compile_suitability_data.html">compile_suitability_data()</a></code>
+
+        </dt>
+        <dd>Compile Environmental Suitability Data for Cholera Transmission</dd>
 
         <dt>
 
@@ -2096,13 +2019,6 @@
 
         </dt>
         <dd>Download and Save Shapefiles for All African Countries</dd>
-
-        <dt>
-
-          <code><a href="download_climate_data.html">download_climate_data()</a></code>
-
-        </dt>
-        <dd>Download and Save Climate Data for Multiple Countries (Parquet Format, Multiple Models and Variables)</dd>
 
         <dt>
 
@@ -2344,34 +2260,6 @@
 
         <dt>
 
-          <code><a href="get_DMI_forecast.html">get_DMI_forecast()</a></code>
-
-        </dt>
-        <dd>Get DMI (Dipole Mode Index) Forecast Data</dd>
-
-        <dt>
-
-          <code><a href="get_DMI_forecast_from_json.html">get_DMI_forecast_from_json()</a></code>
-
-        </dt>
-        <dd>Get DMI Forecast from JSON Configuration</dd>
-
-        <dt>
-
-          <code><a href="get_DMI_historical.html">get_DMI_historical()</a></code>
-
-        </dt>
-        <dd>Download and Process Historical DMI Data</dd>
-
-        <dt>
-
-          <code><a href="get_ENSO_historical.html">get_ENSO_historical()</a></code>
-
-        </dt>
-        <dd>Download and Process Historical ENSO Data (Niño3, Niño3.4, Niño4)</dd>
-
-        <dt>
-
           <code><a href="get_WASH_data.html">get_WASH_data()</a></code>
 
         </dt>
@@ -2404,27 +2292,6 @@
 
         </dt>
         <dd>Calculate the Centroid of a Country from its Shapefile</dd>
-
-        <dt>
-
-          <code><a href="get_climate_forecast.html">get_climate_forecast()</a></code>
-
-        </dt>
-        <dd>Get Climate Forecast Data (Daily)</dd>
-
-        <dt>
-
-          <code><a href="get_climate_future.html">get_climate_future()</a></code>
-
-        </dt>
-        <dd>Download Future Climate Data for Multiple Locations (One Model at a Time)</dd>
-
-        <dt>
-
-          <code><a href="get_climate_historical.html">get_climate_historical()</a></code>
-
-        </dt>
-        <dd>Get Historical Climate Data</dd>
 
         <dt>
 
@@ -3121,10 +2988,10 @@
 
         <dt>
 
-          <code><a href="process_ENSO_data.html">process_ENSO_data()</a></code>
+          <code><a href="process_ENSO_data.html">process_enso_data()</a></code>
 
         </dt>
-        <dd>Compile ENSO and DMI Data (Historical and Forecast)</dd>
+        <dd>Process ENSO Data from enso-data Repository</dd>
 
         <dt>
 
@@ -3226,13 +3093,6 @@
 
         <dt>
 
-          <code><a href="process_climate_data.html">process_climate_data()</a></code>
-
-        </dt>
-        <dd>Process and Aggregate Climate Data for Each Country</dd>
-
-        <dt>
-
           <code><a href="process_country_similarity_data.html">process_country_similarity_data()</a></code>
 
         </dt>
@@ -3240,10 +3100,10 @@
 
         <dt>
 
-          <code><a href="process_suitability_data.html">process_suitability_data()</a></code>
+          <code><a href="process_open_meteo_data.html">process_open_meteo_data()</a></code>
 
         </dt>
-        <dd>Process Environmental Suitability Data for Cholera Transmission</dd>
+        <dd>Process Open-Meteo Climate Data from open-meteo-pipeline Repository</dd>
 
         <dt>
 
@@ -3356,13 +3216,6 @@
 
         </dt>
         <dd>MOSAIC Scenario Color/Fill Scales for ggplot2</dd>
-
-        <dt>
-
-          <code><a href="set_openmeteo_api_key.html">set_openmeteo_api_key()</a></code>
-
-        </dt>
-        <dd>Set OpenMeteo API Key</dd>
 
         <dt>
 

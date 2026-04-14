@@ -45,13 +45,13 @@ The function performs the following steps:
 
 The shaded regions represent periods identified as environmentally
 suitable by the
-[`process_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.md)
+[`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
 pipeline, including both outbreak periods and lead-up weeks when
 conditions become favorable.
 
 ## See also
 
-[`process_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_suitability_data.md)
+[`compile_suitability_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
 for the main pipeline that creates the processed data with
 `cases_binary`.
 [`get_cases_binary`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_cases_binary.md)
