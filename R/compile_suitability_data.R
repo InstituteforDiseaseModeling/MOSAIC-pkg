@@ -82,7 +82,7 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      message("Loading climate data...")
 
      # List all weekly climate data files
-     climate_files <- list.files(PATHS$DATA_CLIMATE, pattern = "weekly\\.parquet$", full.names = TRUE)
+     climate_files <- list.files(PATHS$DATA_CLIMATE, pattern = "\\.parquet$", full.names = TRUE)
 
      # Initialize an empty list to store climate data for each ISO code
      climate_data_list <- list()
@@ -168,6 +168,11 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
 
      combined_climate_data_wide <- combined_climate_data_wide %>%
           dplyr::select(-date_start, -date_stop)
+
+     # Drop data_source before pivoting — different variables transition between
+     # historical/observed/forecast at different weeks, which creates duplicate rows
+     # in pivot_wider and silently loses IOD data after the ENSO34 filter at line 210
+     enso_data$data_source <- NULL
 
      # Convert ENSO data to wide format (IOD, ENSO3, ENSO34, ENSO4 as new columns)
      enso_data_wide <- tidyr::pivot_wider(

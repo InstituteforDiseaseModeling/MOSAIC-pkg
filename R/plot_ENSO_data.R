@@ -50,6 +50,11 @@ plot_ENSO_data <- function(PATHS, frequency) {
      message(glue::glue("Loading ENSO and IOD data from {enso_data_file}..."))
      compiled_data <- arrow::read_csv_arrow(enso_data_file)
 
+     # Daily CSV uses 'date' column; weekly/monthly use 'date_start'
+     if (!"date_start" %in% names(compiled_data) && "date" %in% names(compiled_data)) {
+          compiled_data$date_start <- as.Date(compiled_data$date)
+     }
+
      # Get the current date for the vertical line
      date_plot_start <- as.Date("2015-01-01")  # Start date for the plot
      date_plot_stop <- max(compiled_data$date_start, na.rm = TRUE)  # End date for the plot
