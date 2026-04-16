@@ -7,7 +7,6 @@
 calc_bookend_batch_size(
   ess_history,
   target_ess,
-  reserved_sims,
   max_total_sims,
   target_r_squared = 0.95
 )
@@ -17,8 +16,6 @@ calc_bookend_batch_size(
 
 \item{target_ess}{Target ESS value}
 
-\item{reserved_sims}{Number of simulations reserved for fine-tuning}
-
 \item{max_total_sims}{Maximum total simulations allowed}
 
 \item{target_r_squared}{Target R-squared for ESS regression (default: 0.95)}
@@ -27,10 +24,7 @@ calc_bookend_batch_size(
 List with batch size recommendation
 }
 \description{
-Implements a three-phase strategy:
-\enumerate{
-\item Initial calibration (n_batches × batch_size)
-\item One large predictive batch (calculated from ESS rate)
-\item Final fine-tuning (adaptive batch sizing based on gap)
-}
+Predicts the number of simulations needed to reach a target ESS based on
+the observed ESS trajectory. Fits sqrt, linear, and log models to the
+cumulative (n_sims, threshold_ESS) data and returns a batch size.
 }

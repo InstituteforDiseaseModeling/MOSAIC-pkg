@@ -1,15 +1,21 @@
-#' Calculate Parameter-Specific ESS using Kernel Density Estimation
+#' Calculate Parameter-Specific ESS
 #'
 #' Computes the effective sample size (ESS) for individual parameters using
-#' kernel density estimation to approximate marginal posteriors. This method
-#' integrates out other parameters to provide a true measure of information
-#' content for each parameter individually.
+#' one of two methods: binned marginal Kish ESS (default) or KDE-based
+#' marginal posterior estimation.
 #'
 #' @param results Data frame containing simulation results
 #' @param param_names Character vector of parameter names to analyze (required)
 #' @param likelihood_col Character name of the column containing log-likelihood values (default: "likelihood")
-#' @param n_grid Integer number of grid points for KDE evaluation (default: 100)
-#' @param method Character string specifying ESS calculation method: "kish" (default) or "perplexity"
+#' @param n_bins Integer number of bins for the binned method, or NULL for adaptive
+#'   sqrt(n) scaling. Fixed bin count (e.g. 100) removes sample-size dependence
+#'   from ESS estimates. Default: 100. Only used by "binned" method.
+#' @param n_grid Integer number of grid points for KDE evaluation (default: 100, used only by "kde" method)
+#' @param method Character string specifying ESS formula: "kish" or "perplexity"
+#' @param marginal_method Character string specifying how marginal weights are
+#'   constructed: "kde" (default, KDE-based marginal posterior estimation) or
+#'   "binned" (more conservative, directly sensitive to importance weight
+#'   distribution — recommended for final production runs).
 #' @param verbose Logical whether to print progress messages (default: FALSE)
 #'
 #' @return Data frame with columns:
@@ -40,13 +46,16 @@ calc_model_ess_parameter <- function(
     results,
     param_names,
     likelihood_col = "likelihood",
+    n_bins = 100,
     n_grid = 100,
     method = c("kish", "perplexity"),
+    marginal_method = c("kde", "binned"),
     verbose = FALSE
 ) {
 
-    # Validate method parameter
+    # Validate method parameters
     method <- match.arg(method)
+    marginal_method <- match.arg(marginal_method)
     
     # ==========================================================================
     # Input validation
@@ -77,7 +86,11 @@ calc_model_ess_parameter <- function(
         stop("param_names cannot be empty")
     }
 
-    if (!is.numeric(n_grid) || n_grid < 10) {
+    if (marginal_method == "binned" && !is.null(n_bins) && (!is.numeric(n_bins) || n_bins < 10)) {
+        stop("n_bins must be NULL (adaptive sqrt(n)) or a numeric value >= 10")
+    }
+
+    if (marginal_method == "kde" && (!is.numeric(n_grid) || n_grid < 10)) {
         stop("n_grid must be a numeric value >= 10")
     }
 
@@ -89,7 +102,7 @@ calc_model_ess_parameter <- function(
     valid_rows <- !is.na(results[[likelihood_col]]) & is.finite(results[[likelihood_col]])
     n_valid <- sum(valid_rows)
 
-    # Require minimum of 50 samples for reasonable KDE
+    # Require minimum of 50 samples for ESS calculation
     if (n_valid < 50) {
         stop(sprintf("Insufficient valid samples: %d (need at least 50 for ESS calculation)",
                      n_valid))
@@ -241,7 +254,7 @@ calc_model_ess_parameter <- function(
         
         # Remove any NA or infinite values
         valid_param <- is.finite(param_vals)
-        min_param_samples <- max(50, n_grid)  # Need at least as many samples as grid points
+        min_param_samples <- if (marginal_method == "kde") max(50, n_grid) else 50
 
         if (sum(valid_param) < min_param_samples) {
             warning(sprintf("Parameter '%s' has only %d valid samples (need >= %d). Returning NA.",
@@ -273,91 +286,67 @@ calc_model_ess_parameter <- function(
             ))
         }
 
-        # Select bandwidth
-        h <- select_bandwidth(param_vals_clean)
-
-        # Avoid too small bandwidth
-        h <- max(h, diff(param_range) / 100)
-
-        # Create evaluation grid
-        param_grid <- seq(param_range[1], param_range[2], length.out = n_grid)
-        
         # =======================================================================
-        # Compute conditional likelihood at each grid point
-        # =======================================================================
-        
-        cond_log_lik <- sapply(param_grid, function(x) {
-            # Gaussian kernel weights
-            kern_weights <- dnorm((param_vals_clean - x) / h)
-
-            # Check for NA or all zeros
-            if (any(is.na(kern_weights)) || sum(kern_weights) < .Machine$double.eps) {
-                return(-Inf)
-            }
-            
-            # Normalize kernel weights
-            kern_weights <- kern_weights / sum(kern_weights)
-            
-            # Weighted log-likelihood using log-sum-exp for stability
-            log_weights <- log(kern_weights + .Machine$double.xmin)
-            return(log_sum_exp(log_lik_clean + log_weights))
-        })
-        
-        # =======================================================================
-        # Approximate marginal posterior via weighted KDE
-        # =======================================================================
-        
-        # Use R's density function with likelihood weights
-        posterior_kde <- tryCatch({
-            density(
-                x = param_vals_clean,
-                weights = weights_clean,
-                from = param_range[1],
-                to = param_range[2],
-                n = n_grid,
-                bw = h
-            )
-        }, error = function(e) {
-            # Fallback to unweighted KDE if weighted fails
-            density(
-                x = param_vals_clean,
-                from = param_range[1],
-                to = param_range[2],
-                n = n_grid,
-                bw = h
-            )
-        })
-        
-        # =======================================================================
-        # Calculate prior density on grid (uniform)
+        # Compute marginal ESS using selected method
         # =======================================================================
 
-        prior_density <- rep(1 / (max(param_grid) - min(param_grid)), length(param_grid))
-        
-        # =======================================================================
-        # Compute importance weights and marginal ESS
-        # =======================================================================
-        
-        # Marginal importance weights
-        posterior_density <- posterior_kde$y
-        min_density <- .Machine$double.eps * 100  # Small but stable minimum
-        posterior_density[posterior_density < min_density] <- min_density
+        n_clean <- length(param_vals_clean)
 
-        # Weight ratio
-        weight_ratio <- posterior_density / (prior_density + min_density)
-        
-        # Normalize
-        w_marginal <- weight_ratio / sum(weight_ratio)
+        if (marginal_method == "binned") {
+            # -------------------------------------------------------------------
+            # Binned marginal Kish ESS
+            # Bins parameter values and computes Kish ESS on bin weights.
+            # Directly sensitive to how importance weight is distributed
+            # across the parameter's range.
+            # Fixed bin count (default 100) removes sample-size dependence.
+            # NULL uses adaptive sqrt(n) scaling (legacy behavior).
+            # -------------------------------------------------------------------
+            n_bins_use <- if (is.null(n_bins)) floor(sqrt(n_clean)) else as.integer(n_bins)
+            n_bins_use <- max(n_bins_use, 5)  # minimum 5 bins
+            breaks <- seq(param_range[1], param_range[2], length.out = n_bins_use + 1)
+            bin_idx <- findInterval(param_vals_clean, breaks, all.inside = TRUE)
+            W_b <- tapply(weights_clean, bin_idx, sum)
+            W_b <- W_b / sum(W_b)
+            n_occupied <- length(W_b)
+            ess_bins <- calc_model_ess(W_b, method = method)
+            ess_marginal <- ess_bins * (n_clean / n_occupied)
+            ess_marginal <- min(ess_marginal, n_clean)
 
-        # Calculate marginal ESS using specified method
-        ess_marginal_raw <- calc_model_ess(w_marginal, method = method)
+        } else {
+            # -------------------------------------------------------------------
+            # KDE-based marginal ESS (original method)
+            # Estimates the marginal posterior via weighted KDE, computes
+            # posterior/prior ratio on a grid, and applies Kish ESS.
+            # -------------------------------------------------------------------
+            h <- select_bandwidth(param_vals_clean)
+            h <- max(h, diff(param_range) / n_grid)
+            param_grid <- seq(param_range[1], param_range[2], length.out = n_grid)
 
-        # Scale back to sample size
-        # The grid-based ESS needs to be scaled by the ratio of samples to grid points
-        ess_marginal <- ess_marginal_raw * (length(param_vals_clean) / n_grid)
-        
-        # Ensure ESS doesn't exceed number of samples
-        ess_marginal <- min(ess_marginal, length(param_vals_clean))
+            # Weighted KDE of the marginal posterior
+            posterior_kde <- tryCatch({
+                density(x = param_vals_clean, weights = weights_clean,
+                        from = param_range[1], to = param_range[2],
+                        n = n_grid, bw = h)
+            }, error = function(e) {
+                density(x = param_vals_clean,
+                        from = param_range[1], to = param_range[2],
+                        n = n_grid, bw = h)
+            })
+
+            # Uniform prior on grid
+            prior_density <- rep(1 / diff(param_range), length(param_grid))
+
+            # Posterior/prior ratio -> marginal weights
+            posterior_density <- posterior_kde$y
+            min_density <- .Machine$double.eps * 100
+            posterior_density[posterior_density < min_density] <- min_density
+            weight_ratio <- posterior_density / (prior_density + min_density)
+            w_marginal <- weight_ratio / sum(weight_ratio)
+
+            ess_marginal_raw <- calc_model_ess(w_marginal, method = method)
+            ess_marginal <- ess_marginal_raw * (n_clean / n_grid)
+            ess_marginal <- min(ess_marginal, n_clean)
+        }
         
         return(data.frame(
             parameter = param_name,
@@ -400,6 +389,7 @@ calc_model_ess_parameter <- function(
         log_msg(paste(rep("=", 60), collapse = ""))
         log_msg("PARAMETER-SPECIFIC ESS SUMMARY")
         log_msg(paste(rep("=", 60), collapse = ""))
+        log_msg("Marginal method: %s", marginal_method)
         log_msg("Parameters analyzed: %d", nrow(ess_results))
         log_msg("Mean marginal ESS: %.1f", mean_ess)
         log_msg("Median marginal ESS: %.1f", median_ess)

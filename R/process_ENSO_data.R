@@ -69,7 +69,8 @@ process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method =
 
      # Get historical and forecast ENSO data
      enso_historical <- get_ENSO_historical()
-     enso_forecast <- get_ENSO_forecast()
+
+     enso_forecast <- .read_enso_forecast_json()
 
      # Add source labels to track data origin
      dmi_historical$data_source <- "historical"
@@ -219,4 +220,28 @@ process_ENSO_data <- function(year_start = NULL, frequency = "monthly", method =
           # Reorder the data and return it
           return(monthly_data[base::order(monthly_data$date_start), ])
      }
+}
+
+#' Read ENSO Forecast from JSON Configuration
+#' @return Data frame with year, month, month_name, variable, value columns
+#' @keywords internal
+.read_enso_forecast_json <- function() {
+     enso_file <- system.file("extdata", "enso_forecast_current.json", package = "MOSAIC")
+     if (!file.exists(enso_file)) stop("ENSO forecast JSON not found: ", enso_file)
+     enso_config <- jsonlite::fromJSON(enso_file)
+     result_list <- list()
+     for (vname in names(enso_config$forecasts)) {
+          fc <- enso_config$forecasts[[vname]]
+          dates <- as.Date(paste0(names(fc), "-01"))
+          result_list[[vname]] <- data.frame(
+               year = as.integer(format(dates, "%Y")),
+               month = as.integer(format(dates, "%m")),
+               month_name = month.abb[as.integer(format(dates, "%m"))],
+               variable = vname,
+               value = as.numeric(fc),
+               stringsAsFactors = FALSE
+          )
+     }
+     combined <- do.call(rbind, result_list)
+     combined[order(combined$year, combined$month, combined$variable), ]
 }

@@ -59,11 +59,6 @@ Kish, L. (1965). \emph{Survey Sampling}. Wiley.
 Other calibration-metrics: 
 \code{\link{calc_convergence_diagnostics}()},
 \code{\link{calc_model_agreement_index}()},
-\code{\link{calc_model_aic_delta}()},
-\code{\link{calc_model_akaike_weights}()},
-\code{\link{calc_model_convergence}()},
-\code{\link{calc_model_cvw}()},
-\code{\link{calc_model_max_weight}()},
-\code{\link{plot_model_convergence}()}
+\code{\link{calc_model_cvw}()}
 }
 \concept{calibration-metrics}

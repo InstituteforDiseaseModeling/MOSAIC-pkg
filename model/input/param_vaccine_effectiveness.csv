@@ -1,7 +1,7 @@
 "variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
-"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"low",0.001107077507982
+"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"low",0.000470567608445188
 "omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"mean",0.000704553428201577
-"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"high",0.000470567608445188
+"omega_1","Vaccine waning rate (one dose)","point",NA,NA,NA,"high",0.001107077507982
 "omega_1","Vaccine waning rate (one dose)","gamma",NA,NA,NA,"shape",28.2292938497691
 "omega_1","Vaccine waning rate (one dose)","gamma",NA,NA,NA,"rate",38647.5925882212
 "phi_1","Initial vaccine effectiveness (one dose)","point",NA,NA,NA,"low",0.752825658586156
@@ -9,9 +9,9 @@
 "phi_1","Initial vaccine effectiveness (one dose)","point",NA,NA,NA,"high",0.82244431410759
 "phi_1","Initial vaccine effectiveness (one dose)","beta",NA,NA,NA,"shape1",433.549391466723
 "phi_1","Initial vaccine effectiveness (one dose)","beta",NA,NA,NA,"shape2",117.6255423093
-"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"low",0.000991955550432413
+"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"low",9.83796924023721e-05
 "omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"mean",0.000337310944771655
-"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"high",9.83796924023721e-05
+"omega_2","Vaccine waning rate (two dose)","point",NA,NA,NA,"high",0.000991955550432413
 "omega_2","Vaccine waning rate (two dose)","gamma",NA,NA,NA,"shape",3.28307260444933
 "omega_2","Vaccine waning rate (two dose)","gamma",NA,NA,NA,"rate",6768.45100888994
 "phi_2","Initial vaccine effectiveness (two dose)","point",NA,NA,NA,"low",0.739385849814447

@@ -56,7 +56,7 @@
 #' be ordered by iso_code and date_start.
 #'
 #' @seealso
-#' \code{\link{process_suitability_data}} for the main data processing pipeline where this function is used.
+#' \code{\link{compile_suitability_data}} for the main data processing pipeline where this function is used.
 #'
 #' @export
 get_cases_binary <- function(data, cutoff = 1) {

@@ -118,7 +118,7 @@
 #'
 #' @seealso
 #' \code{\link{est_suitability}} for the main LSTM training function that uses these splits.
-#' \code{\link{process_suitability_data}} for data preprocessing before split generation.
+#' \code{\link{compile_suitability_data}} for data preprocessing before split generation.
 #'
 #' @export
 get_lstm_cv_folds <- function(data,

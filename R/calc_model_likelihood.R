@@ -242,28 +242,39 @@ calc_model_likelihood <- function(obs_cases,
 
           # Assembly formula (per location j):
           #
-          # All shape terms are T-normalized so weights share a common scale
-          # (w = 0.25 means ~25% of NB core influence):
-          #   - NB core: sums T per-timestep NB terms → O(T). No scaling.
-          #   - Peaks: sum of N_peaks terms → O(N_peaks). Scaled by T/N_peaks → O(T).
-          #   - Cumulative: mean of 4 NB-on-cumulative-sums terms → O(log T).
-          #     Scaled by T → O(T).
-          #   - WIS: time-averaged scoring rule → O(1). Scaled by T → O(T).
+          # Shape term scaling: N_obs / N_component_observations
           #
-          #   ll_loc = wc * NB_cases + wd * NB_deaths                              [core, O(T)]
-          #     + (T/N_peaks) * w_pt  * (wc * pt_c  + wd * pt_d)                  [peaks]
-          #     + (T/N_peaks) * w_pm  * (wc * pm_c  + wd * pm_d)                  [peaks]
-          #     + T           * w_cum * (wc * cum_c + wd * cum_d)                  [cumulative]
-          #     + T           * w_wis * (wc * wis_c + wd * wis_d)                 [WIS]
+          # Each shape term helper returns O(1) (per-observation scale). The scale
+          # factor inflates it to O(N_obs) to match the NB core. The denominator
+          # is the number of independent observations for that component:
           #
-          #   ll_total = sum(weights_location[j] * ll_loc[j])
+          #   NB core:     N_obs observations → no scaling (reference)
+          #   Peaks:       N_peaks observations → scale by N_obs / N_peaks
+          #   WIS:         N_quantiles evaluations → scale by N_obs / N_quantiles
+          #   Cumulative:  N_eval_points evaluations → scale by N_obs / N_eval_points
+          #
+          # This makes w=0.05 mean "~5% of NB core influence" for ALL shape terms.
+          #
+          #   ll_loc = wc * NB_cases + wd * NB_deaths
+          #     + (N_obs/N_peaks)      * w_pt  * (wc * pt_c  + wd * pt_d)
+          #     + (N_obs/N_peaks)      * w_pm  * (wc * pm_c  + wd * pm_d)
+          #     + (N_obs/N_eval_pts)   * w_cum * (wc * cum_c + wd * cum_d)
+          #     + (N_obs/N_quantiles)  * w_wis * (wc * wis_c + wd * wis_d)
           #
           # NOTE: weight_cases/weight_deaths apply multiplicatively to EVERY component.
-          T_obs <- n_time_steps
 
-          # Peak scale: T / N_peaks (number of matched peaks for this location)
-          n_peaks_j <- if (!is.null(peak_indices_by_loc)) length(peak_indices_by_loc[[j]]) else 0L
-          peak_scale <- if (n_peaks_j > 0) T_obs / n_peaks_j else 0
+          # N_obs: count of timesteps with at least one finite observation
+          N_obs <- sum(is.finite(obs_c) | is.finite(obs_d))
+
+          # Component observation counts
+          n_peaks_j     <- if (!is.null(peak_indices_by_loc)) length(peak_indices_by_loc[[j]]) else 0L
+          n_wis_quant   <- length(wis_quantiles)
+          n_cum_points  <- length(cumulative_timepoints)
+
+          # Scale factors: N_obs / N_component_obs
+          peak_scale <- if (n_peaks_j > 0) N_obs / n_peaks_j else 0
+          wis_scale  <- if (n_wis_quant > 0) N_obs / n_wis_quant else 0
+          cum_scale  <- if (n_cum_points > 0) N_obs / n_cum_points else 0
 
           ll_loc_core <-
                weight_cases  * ll_cases +
@@ -274,10 +285,10 @@ calc_model_likelihood <- function(obs_cases,
                peak_scale * weight_peak_magnitude * (weight_cases * ll_peak_mag_c  + weight_deaths * ll_peak_mag_d)
 
           ll_loc_cum <-
-               T_obs * weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
+               cum_scale * weight_cumulative_total * (weight_cases * ll_cum_tot_c + weight_deaths * ll_cum_tot_d)
 
           ll_loc_wis <-
-               T_obs * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
+               wis_scale * weight_wis * (weight_cases * ll_wis_cases + weight_deaths * ll_wis_deaths)
 
           ll_loc_total <- ll_loc_core + ll_loc_peaks + ll_loc_cum + ll_loc_wis
 

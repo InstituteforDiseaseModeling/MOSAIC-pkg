@@ -173,12 +173,7 @@ print(diagnostics$summary$convergence_status)
 
 Other calibration-metrics: 
 \code{\link{calc_model_agreement_index}()},
-\code{\link{calc_model_aic_delta}()},
-\code{\link{calc_model_akaike_weights}()},
-\code{\link{calc_model_convergence}()},
 \code{\link{calc_model_cvw}()},
-\code{\link{calc_model_ess}()},
-\code{\link{calc_model_max_weight}()},
-\code{\link{plot_model_convergence}()}
+\code{\link{calc_model_ess}()}
 }
 \concept{calibration-metrics}

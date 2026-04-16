@@ -343,11 +343,11 @@ plot_model_fit <- function(model,
 
             # Calculate R² (correlation-based) and bias ratio
             r2_cases <- tryCatch({
-                round(cor(obs_cases_i, pred_cases_i, use = "complete.obs")^2, 3)
+                round(calc_model_R2(obs_cases_i, pred_cases_i), 3)
             }, error = function(e) NA)
 
             r2_deaths <- tryCatch({
-                round(cor(obs_deaths_i, pred_deaths_i, use = "complete.obs")^2, 3)
+                round(calc_model_R2(obs_deaths_i, pred_deaths_i), 3)
             }, error = function(e) NA)
 
             bias_cases <- tryCatch(round(calc_bias_ratio(obs_cases_i, pred_cases_i), 2), error = function(e) NA)
@@ -447,11 +447,7 @@ plot_model_fit <- function(model,
         
         # Calculate overall R² and bias ratio for cases
         r2_cases_overall <- tryCatch({
-            if (is.matrix(obs_cases)) {
-                round(cor(as.vector(obs_cases), as.vector(pred_cases), use = "complete.obs")^2, 3)
-            } else {
-                round(cor(obs_cases, pred_cases, use = "complete.obs")^2, 3)
-            }
+            round(calc_model_R2(obs_cases, pred_cases), 3)
         }, error = function(e) NA)
         bias_cases_overall <- tryCatch(round(calc_bias_ratio(obs_cases, pred_cases), 2), error = function(e) NA)
 
@@ -557,11 +553,7 @@ plot_model_fit <- function(model,
         
         # Calculate overall R² and bias ratio for deaths
         r2_deaths_overall <- tryCatch({
-            if (is.matrix(obs_deaths)) {
-                round(cor(as.vector(obs_deaths), as.vector(pred_deaths), use = "complete.obs")^2, 3)
-            } else {
-                round(cor(obs_deaths, pred_deaths, use = "complete.obs")^2, 3)
-            }
+            round(calc_model_R2(obs_deaths, pred_deaths), 3)
         }, error = function(e) NA)
         bias_deaths_overall <- tryCatch(round(calc_bias_ratio(obs_deaths, pred_deaths), 2), error = function(e) NA)
 

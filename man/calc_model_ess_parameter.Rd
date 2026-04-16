@@ -2,14 +2,16 @@
 % Please edit documentation in R/calc_model_ess_parameter.R
 \name{calc_model_ess_parameter}
 \alias{calc_model_ess_parameter}
-\title{Calculate Parameter-Specific ESS using Kernel Density Estimation}
+\title{Calculate Parameter-Specific ESS}
 \usage{
 calc_model_ess_parameter(
   results,
   param_names,
   likelihood_col = "likelihood",
+  n_bins = 100,
   n_grid = 100,
   method = c("kish", "perplexity"),
+  marginal_method = c("kde", "binned"),
   verbose = FALSE
 )
 }
@@ -20,9 +22,18 @@ calc_model_ess_parameter(
 
 \item{likelihood_col}{Character name of the column containing log-likelihood values (default: "likelihood")}
 
-\item{n_grid}{Integer number of grid points for KDE evaluation (default: 100)}
+\item{n_bins}{Integer number of bins for the binned method, or NULL for adaptive
+sqrt(n) scaling. Fixed bin count (e.g. 100) removes sample-size dependence
+from ESS estimates. Default: 100. Only used by "binned" method.}
 
-\item{method}{Character string specifying ESS calculation method: "kish" (default) or "perplexity"}
+\item{n_grid}{Integer number of grid points for KDE evaluation (default: 100, used only by "kde" method)}
+
+\item{method}{Character string specifying ESS formula: "kish" or "perplexity"}
+
+\item{marginal_method}{Character string specifying how marginal weights are
+constructed: "kde" (default, KDE-based marginal posterior estimation) or
+"binned" (more conservative, directly sensitive to importance weight
+distribution — recommended for final production runs).}
 
 \item{verbose}{Logical whether to print progress messages (default: FALSE)}
 }
@@ -37,9 +48,8 @@ Data frame with columns:
 }
 \description{
 Computes the effective sample size (ESS) for individual parameters using
-kernel density estimation to approximate marginal posteriors. This method
-integrates out other parameters to provide a true measure of information
-content for each parameter individually.
+one of two methods: binned marginal Kish ESS (default) or KDE-based
+marginal posterior estimation.
 }
 \examples{
 \dontrun{

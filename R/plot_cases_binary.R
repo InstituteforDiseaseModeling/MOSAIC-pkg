@@ -24,7 +24,7 @@
 #' }
 #'
 #' The shaded regions represent periods identified as environmentally suitable by the
-#' \code{process_suitability_data()} pipeline, including both outbreak periods and
+#' \code{compile_suitability_data()} pipeline, including both outbreak periods and
 #' lead-up weeks when conditions become favorable.
 #'
 #' @examples
@@ -34,7 +34,7 @@
 #' }
 #'
 #' @seealso
-#' \code{\link{process_suitability_data}} for the main pipeline that creates the processed data with \code{cases_binary}.
+#' \code{\link{compile_suitability_data}} for the main pipeline that creates the processed data with \code{cases_binary}.
 #' \code{\link{get_cases_binary}} for details on how the environmental suitability indicator is created.
 #'
 #' @export
@@ -48,7 +48,7 @@ plot_cases_binary <- function(PATHS) {
 
      # Verify that cases_binary column exists
      if (!"cases_binary" %in% names(case_data)) {
-          stop("cases_binary column not found in processed suitability data. Please run process_suitability_data() first.")
+          stop("cases_binary column not found in processed suitability data. Please run compile_suitability_data() first.")
      }
 
      # Report data summary

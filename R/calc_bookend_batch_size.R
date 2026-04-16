@@ -1,20 +1,17 @@
 #' Calculate Batch Size for Bookend Strategy
 #'
-#' Implements a three-phase strategy:
-#' 1. Initial calibration (n_batches × batch_size)
-#' 2. One large predictive batch (calculated from ESS rate)
-#' 3. Final fine-tuning (adaptive batch sizing based on gap)
+#' Predicts the number of simulations needed to reach a target ESS based on
+#' the observed ESS trajectory. Fits sqrt, linear, and log models to the
+#' cumulative (n_sims, threshold_ESS) data and returns a batch size.
 #'
 #' @param ess_history ESS measurements from calibration phase
 #' @param target_ess Target ESS value
-#' @param reserved_sims Number of simulations reserved for fine-tuning
 #' @param max_total_sims Maximum total simulations allowed
 #' @param target_r_squared Target R-squared for ESS regression (default: 0.95)
 #' @return List with batch size recommendation
 #' @export
 calc_bookend_batch_size <- function(ess_history,
                                    target_ess,
-                                   reserved_sims,
                                    max_total_sims,
                                    target_r_squared = 0.95) {
 
@@ -106,7 +103,7 @@ calc_bookend_batch_size <- function(ess_history,
 
     total_needed <- ceiling(total_needed)
 
-    # BUG FIX #5: Check if we're already past the predicted requirement
+    # Check if we're already past the predicted requirement
     if (total_needed <= current_n) {
         return(list(
             phase = "complete",
@@ -119,8 +116,8 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Calculate predictive batch size
-    # Total = current + predictive_batch + reserved_fine_tuning
-    predictive_batch_size <- total_needed - current_n - reserved_sims
+    # Predictive batch uses full remaining budget
+    predictive_batch_size <- total_needed - current_n
 
     # Apply safety margins based on R² confidence
     # Adjusted for better prediction accuracy with high-confidence models
@@ -141,7 +138,7 @@ calc_bookend_batch_size <- function(ess_history,
     # Apply bounds
     predictive_batch_size <- max(0, predictive_batch_size)
 
-    # BUG FIX #5: Additional safety check for negative/zero batch size
+    # Additional safety check for negative/zero batch size
     if (predictive_batch_size <= 0) {
         return(list(
             phase = "complete",
@@ -154,12 +151,12 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Check against maximum
-    if (current_n + predictive_batch_size + reserved_sims > max_total_sims) {
-        predictive_batch_size <- max_total_sims - current_n - reserved_sims
+    if (current_n + predictive_batch_size > max_total_sims) {
+        predictive_batch_size <- max_total_sims - current_n
     }
 
     # Predict ESS after the batch
-    # BUG FIX #2: Models expect raw n_sims, not pre-transformed values
+    # Models expect raw n_sims — the formula already applies the transformation
     # The model formula already applies the transformation (sqrt or log)
     predicted_ess <- predict(best_fit,
         newdata = data.frame(n_sims = current_n + predictive_batch_size))
@@ -173,7 +170,7 @@ calc_bookend_batch_size <- function(ess_history,
         current_ess = current_ess,
         target_ess = target_ess,
         predicted_ess = as.numeric(predicted_ess),
-        total_predicted = current_n + predictive_batch_size + reserved_sims,
+        total_predicted = current_n + predictive_batch_size,
         message = sprintf("Predictive batch: %.0f sims (model=%s, R²=%.3f)",
                          predictive_batch_size, best_model, best_r2)
     ))

@@ -100,9 +100,6 @@ CONTROL_SETTINGS <- list(
   max_best_subset = 1500,       # Maximum best subset size
   ess_method = 'perplexity',    # ESS calculation method
 
-  # Fine-tuning multiplier
-  fine_tuning_multiplier = 5,   # Multiply default batch sizes by this
-
   # Likelihood weights
   weight_cases = 1.0,           # Weight for case data
   weight_deaths = 0.05,         # Weight for death data
@@ -312,12 +309,6 @@ for (i in seq_along(COUNTRIES)) {
     control$targets$min_best_subset <- CONTROL_SETTINGS$min_best_subset
     control$targets$max_best_subset <- CONTROL_SETTINGS$max_best_subset
     control$targets$ess_method <- CONTROL_SETTINGS$ess_method
-
-    # Fine-tuning
-    control$fine_tuning$batch_sizes <- lapply(
-      control$fine_tuning$batch_sizes,
-      function(x) x * CONTROL_SETTINGS$fine_tuning_multiplier
-    )
 
     # CRITICAL: Disable multi-location parameters for single-location runs
     control$sampling$sample_tau_i <- FALSE           # Travel probability

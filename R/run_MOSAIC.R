@@ -287,8 +287,10 @@
 
     if (any(valid_ll)) {
       collapsed_ll <- calc_log_mean_exp(likelihoods[valid_ll])
-      collapsed_params <- colMeans(result_matrix[valid_ll, param_names_all, drop = FALSE], na.rm = TRUE)
-      collapsed_row <- c(sim_id, 1, sim_id, result_matrix[1, "seed_iter"], collapsed_ll, collapsed_params)
+      # Parameters are identical across iterations (sampled once per sim), so take row 1 instead of averaging
+      collapsed_params <- result_matrix[1, param_names_all]
+      # seed_iter is NA for collapsed rows since they represent all iterations, not just iteration 1
+      collapsed_row <- c(sim_id, 1, sim_id, NA_real_, collapsed_ll, collapsed_params)
       result_matrix <- matrix(collapsed_row, nrow = 1)
       colnames(result_matrix) <- c('sim', 'iter', 'seed_sim', 'seed_iter', 'likelihood', param_names_all)
     } else {
@@ -343,9 +345,8 @@
 #'
 #' Executes the full MOSAIC calibration workflow:
 #' \enumerate{
-#'   \item Adaptive calibration with R² convergence detection
-#'   \item Single predictive batch (calculated from calibration phase)
-#'   \item Adaptive fine-tuning with 5-tier batch sizing
+#'   \item Adaptive calibration with R-squared convergence detection
+#'   \item Predictive batches with model-based sizing and ESS re-evaluation
 #'   \item Post-hoc subset optimization
 #'   \item Posterior quantile and distribution estimation
 #'   \item Posterior predictive checks and uncertainty quantification
@@ -364,7 +365,7 @@
 #'   \itemize{
 #'     \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
 #'     \item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
-#'     \item \code{calibration$max_simulations}: Maximum total simulations (default: 100000)
+#'     \item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
@@ -396,7 +397,7 @@
 #' @section Control Structure:
 #' See [mosaic_control_defaults()] for complete documentation. The control structure contains:
 #' \describe{
-#'   \item{calibration}{n_simulations, n_iterations, max_simulations, batch_size, etc.}
+#'   \item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
 #'   \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
 #'   \item{parallel}{enable, n_cores, type, progress}
 #'   \item{paths}{clean_output, plots}
@@ -774,6 +775,12 @@ run_MOSAIC <- function(config,
 
     dask_dist <- reticulate::import("dask.distributed")
 
+    # Raise the large-graph warning threshold: chunked client$map() batches
+    # ~500 per-sim JSON param strings per call (~29 MiB), which is expected
+    # and unavoidable since per-sim params must be sent to workers.
+    dask_mod <- reticulate::import("dask")
+    dask_mod$config$set(list("distributed.admin.large-graph-warning-threshold" = "100 MiB"))
+
     if (dask_spec$type == "coiled") {
       coiled_mod <- reticulate::import("coiled")
       n_workers_req <- dask_spec$n_workers %||% control$parallel$n_cores
@@ -835,7 +842,7 @@ run_MOSAIC <- function(config,
       client <- dask_dist$Client(dask_spec$address)
     }
 
-    log_msg("Dask dashboard: %s", client$dashboard_link)
+    cli::cli_alert_info("Dask dashboard: {.url {client$dashboard_link}}")
 
     # Register cleanup (runs on normal exit OR error).
     # client/dask_cluster are set to NULL after graceful close before post-processing,
@@ -971,7 +978,7 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # DETERMINE RUN MODE: AUTO vs FIXED (with safe state loading)
+  # DETERMINE RUN MODE: AUTO vs FIXED
   # ===========================================================================
 
   nspec <- .mosaic_normalize_n_sims(n_simulations)
@@ -1077,16 +1084,18 @@ run_MOSAIC <- function(config,
   } else {
 
     log_msg("Phase 1: Adaptive Calibration")
-    log_msg("  - Run %d-%d batches × %d sims (R² target: %.2f)",
-            control$calibration$min_batches, control$calibration$max_batches,
-            control$calibration$batch_size, control$calibration$target_r2)
-    log_msg("Phase 2: Single Predictive Batch")
-    log_msg("Phase 3: Adaptive Fine-tuning (5-tier)")
+    log_msg("  - Run %d-%d batches × %d sims (ESS regression R² target: %.2f)",
+            control$calibration$min_batches_adaptive, control$calibration$max_batches_adaptive,
+            control$calibration$batch_size_adaptive, control$calibration$target_r2_adaptive)
+    log_msg("Phase 2: Predictive Batches (max %d \u00d7 %d sims, floor %d)",
+            control$calibration$max_batches_predictive,
+            control$calibration$max_batch_predictive,
+            control$calibration$batch_size_adaptive)
     log_msg("Target ESS: %d per parameter | Max simulations: %d",
-            control$targets$ESS_param, control$calibration$max_simulations)
+            control$targets$ESS_param, control$calibration$max_simulations_total)
 
     repeat {
-      if (state$converged || state$total_sims_run >= control$calibration$max_simulations) break
+      if (state$converged || state$total_sims_run >= control$calibration$max_simulations_total) break
 
       # Decide next batch
       decision <- .mosaic_decide_next_batch(state, control, state$ess_tracking)
@@ -1116,19 +1125,8 @@ run_MOSAIC <- function(config,
       batch_start <- state$total_sims_run + 1L
       batch_end <- state$total_sims_run + current_batch_size
 
-      # BUG FIX #4: Enforce reserved simulations for fine-tuning phase
-      if (identical(current_phase, "predictive")) {
-        # Leave 250 simulations reserved for fine-tuning
-        reserved_sims <- 250L
-        max_for_predictive <- control$calibration$max_simulations - reserved_sims
-        if (batch_end > max_for_predictive) {
-          batch_end <- max_for_predictive
-          log_msg("Capping predictive batch to leave %d reserved for fine-tuning", reserved_sims)
-        }
-      }
-
-      # Final cap at max_simulations
-      batch_end <- min(batch_end, control$calibration$max_simulations)
+      # Final cap at max_simulations_total
+      batch_end <- min(batch_end, control$calibration$max_simulations_total)
       sim_ids <- batch_start:batch_end
 
       log_msg(paste(rep("-", 60), collapse = ""))
@@ -1209,9 +1207,9 @@ run_MOSAIC <- function(config,
       state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
       .mosaic_save_state(state, state_file)
 
-      if (state$total_sims_run >= control$calibration$max_simulations && !state$converged) {
+      if (state$total_sims_run >= control$calibration$max_simulations_total && !state$converged) {
         log_msg("WARNING: Reached maximum simulations (%d) without convergence",
-                control$calibration$max_simulations)
+                control$calibration$max_simulations_total)
         break
       }
     }
@@ -1266,7 +1264,7 @@ run_MOSAIC <- function(config,
   # Add index columns
   log_msg("Adding index columns to results matrix...")
   results$is_finite <- is.finite(results$likelihood) & !is.na(results$likelihood)
-  results$is_valid <- results$is_finite & results$likelihood != -999999999
+  results$is_valid <- results$is_finite
   results$is_outlier <- FALSE
 
   if (sum(results$is_valid) > 0) {
@@ -1281,7 +1279,7 @@ run_MOSAIC <- function(config,
     # poor fits) but are bounded above near 0. Applying an upper fence via
     # Q3 + k*IQR would incorrectly discard the highest-likelihood simulations
     # — exactly the models we want to keep for the posterior. The lower fence
-    # removes pathologically bad simulations that survived the guardrails.
+    # removes pathologically bad simulations via Tukey lower fence.
     results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
 
     log_msg("  Outlier detection (Tukey lower fence only, multiplier = %.1f):", iqr_mult)
@@ -1316,12 +1314,18 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   log_msg("Calculating parameter ESS")
+  # Adaptive n_grid: scales with ESS target so higher targets demand finer
+  # posterior resolution. At ESS_param=100 → 100; at 500 → 161; at 1000 → 230.
+  ess_target_val <- control$targets$ESS_param %||% 100
+  n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
+
   ess_results <- calc_model_ess_parameter(
     results = results,
     param_names = param_names_sampled,
     likelihood_col = "likelihood",
-    n_grid = 100,
+    n_grid = n_grid_adaptive,
     method = control$targets$ESS_method,
+    marginal_method = control$targets$ESS_marginal_method %||% "kde",
     verbose = control$logging$verbose
   )
 
@@ -1446,7 +1450,7 @@ run_MOSAIC <- function(config,
       gibbs_temperature_final <- 0.5  # Standard for Akaike weights
       weights_final <- calc_model_weights_gibbs(
         x = delta_aic_truncated,
-        temperature = gibbs_temperature_final,
+        eta = gibbs_temperature_final,
         verbose = FALSE
       )
 
@@ -1517,7 +1521,7 @@ run_MOSAIC <- function(config,
 
     retained_weights <- calc_model_weights_gibbs(
       x = delta_aic_retained_trunc,
-      temperature = 0.5,
+      eta = 0.5,
       verbose = control$logging$verbose
     )
     results$weight_retained[results$is_retained] <- retained_weights
@@ -1535,7 +1539,7 @@ run_MOSAIC <- function(config,
 
     best_weights <- calc_model_weights_gibbs(
       x = delta_aic_best_trunc,
-      temperature = 0.5,
+      eta = 0.5,
       verbose = control$logging$verbose
     )
     results$weight_best[results$is_best_subset] <- best_weights
@@ -1629,8 +1633,9 @@ run_MOSAIC <- function(config,
       rep(NA_real_, nrow(results))
     },
     # w_tilde: normalized importance weights (sum to 1 over best subset)
-    # w: unnormalized weights scaled to n (w = w_tilde * n, for ESS calcs)
     w_tilde = results$weight_best,
+    # w: unnormalized weights = w_tilde * N_total (not N_best_subset).
+    # The Kish ESS formula is invariant to this constant multiplier.
     w = results$weight_best * nrow(results),
     retained = results$is_best_subset,
     # Additional columns for two-tier structure
@@ -1649,16 +1654,21 @@ run_MOSAIC <- function(config,
 
   if (control$paths$plots) {
     log_msg("Generating convergence diagnostic plots...")
-    plot_model_convergence(
-      results_dir = dirs$cal_diag,
-      plots_dir = dirs$res_fig_diag,
-      verbose = control$logging$verbose
-    )
     plot_model_convergence_status(
       results_dir = dirs$cal_diag,
       plots_dir = dirs$res_fig_diag,
       verbose = control$logging$verbose
     )
+
+    tryCatch({
+      plot_model_likelihood(
+        results    = results,
+        output_dir = dirs$res_fig_diag,
+        verbose    = control$logging$verbose
+      )
+    }, error = function(e) {
+      log_msg("Warning: likelihood curve plot failed: %s", e$message)
+    })
   }
 
   # ===========================================================================
@@ -1783,17 +1793,11 @@ run_MOSAIC <- function(config,
 
   # Compute overall model-fit R² and bias ratio (best model vs observed data)
   r2_cases <- tryCatch({
-    obs <- as.numeric(unlist(config_best$reported_cases))
-    est <- as.numeric(unlist(best_model$results$reported_cases))
-    valid <- is.finite(obs) & is.finite(est)
-    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+    calc_model_R2(config_best$reported_cases, best_model$results$reported_cases)
   }, error = function(e) NA_real_)
 
   r2_deaths <- tryCatch({
-    obs <- as.numeric(unlist(config_best$reported_deaths))
-    est <- as.numeric(unlist(best_model$results$disease_deaths))
-    valid <- is.finite(obs) & is.finite(est)
-    if (sum(valid) > 2) stats::cor(obs[valid], est[valid])^2 else NA_real_
+    calc_model_R2(config_best$reported_deaths, best_model$results$disease_deaths)
   }, error = function(e) NA_real_)
 
   bias_ratio_cases <- tryCatch({
@@ -1810,13 +1814,26 @@ run_MOSAIC <- function(config,
           ifelse(is.na(r2_deaths), 0, r2_deaths),
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
+  # Best model prediction plot
+  if (control$paths$plots) {
+    tryCatch({
+      log_msg("Generating best model prediction plot...")
+      plot_model_fit(
+        model      = best_model,
+        output_dir = dirs$res_fig_pred,
+        verbose    = FALSE
+      )
+    }, error = function(e) {
+      log_msg("Warning: best model plot failed: %s", e$message)
+    })
+  }
+
   # ===========================================================================
   # RECONNECT DASK FOR POST-CAL SIMS (if applicable)
   # ===========================================================================
   # The client was disconnected before R-heavy post-processing. Now reconnect
-  # to the same (still-alive) cluster to dispatch ensemble + stochastic sims.
+  # to the same (still-alive) cluster to dispatch stochastic param sims.
 
-  n_ensemble_r2   <- control$predictions$best_model_n_sims
   postca_dask     <- NULL
 
   if (use_dask && !is.null(dask_cluster)) {
@@ -1830,17 +1847,18 @@ run_MOSAIC <- function(config,
       client$upload_file(worker_py_path)
       mosaic_worker <- reticulate::import("mosaic_dask_worker")
 
-      # Build stochastic param configs
+      # Build stochastic param configs (always, not just when plots = TRUE)
       stoch_param_configs <- NULL
       n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
 
-      if (control$paths$plots && sum(results$is_best_subset) > 0) {
+      if (sum(results$is_best_subset) > 0) {
         best_subset_results <- results[results$is_best_subset == TRUE, ]
-        stoch_param_seeds   <- best_subset_results$seed_sim
-        stoch_param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
+        nonzero <- best_subset_results$weight_best > 0
+        stoch_param_seeds   <- best_subset_results$seed_sim[nonzero]
+        stoch_param_weights <- best_subset_results$weight_best[nonzero]
 
         if (length(stoch_param_weights) > 0) {
-          stoch_param_configs <- lapply(stoch_param_seeds[stoch_param_weights > 0], function(seed_i) {
+          stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
             tryCatch(
               sample_parameters(PATHS = PATHS, priors = priors, config = config,
                                 seed = seed_i, sample_args = sampling_args, verbose = FALSE),
@@ -1857,7 +1875,6 @@ run_MOSAIC <- function(config,
         mosaic_worker    = mosaic_worker,
         config_best      = config_best,
         param_configs    = stoch_param_configs,
-        n_ensemble       = n_ensemble_r2,
         n_stochastic_per = n_stochastic_per,
         log_msg          = log_msg
       )
@@ -1887,30 +1904,51 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # ENSEMBLE R², WINDOWED METRICS, AND PREDICTIVE PLOTS
+  # WEIGHTED POSTERIOR ENSEMBLE: R², WINDOWED METRICS, AND PREDICTIVE PLOTS
   # ===========================================================================
 
-  # Run ensemble once via calc_model_ensemble(). The same object is then used
-  # for (a) R²/bias ratios, (b) windowed fit metrics, and (c) predictive plots
-  # when plots = TRUE. This avoids running simulations twice.
+  # Compute the true posterior-weighted ensemble ALWAYS (outside plots flag).
+  # The same mosaic_ensemble object is used for:
+  #   (a) R²/bias ratios (summary.json)
+  #   (b) windowed fit metrics
+  #   (c) predictive plots (when plots = TRUE)
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
+  n_ensemble_params          <- 0L
+  n_ensemble_stochastic_per  <- as.integer(control$predictions$ensemble_n_sims_per_param %||% 10L)
 
-  if (n_ensemble_r2 > 1L) {
-    log_msg("Computing ensemble R\u00b2 (%d stochastic runs)...", n_ensemble_r2)
+  if (sum(results$is_best_subset) > 0) {
+    best_subset_results <- results[results$is_best_subset == TRUE, ]
+    nonzero <- best_subset_results$weight_best > 0
+    param_seeds   <- best_subset_results$seed_sim[nonzero]
+    param_weights <- best_subset_results$weight_best[nonzero]
+
+    if (length(param_weights) > 0) {
+      param_weights <- param_weights / sum(param_weights)
+    } else {
+      param_weights <- NULL
+    }
+
+    log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
+            length(param_seeds), n_ensemble_stochastic_per)
 
     ensemble <- tryCatch(
       calc_model_ensemble(
-        config              = config_best,
-        n_simulations       = n_ensemble_r2,
-        envelope_quantiles  = c(0.025, 0.975),
-        parallel            = control$parallel$enable,
-        n_cores             = control$parallel$n_cores,
-        root_dir            = root_dir,
-        precomputed_results = postca_dask$ensemble_results,
-        verbose            = FALSE
+        config                   = config,
+        parameter_seeds          = param_seeds,
+        parameter_weights        = param_weights,
+        n_simulations_per_config = n_ensemble_stochastic_per,
+        envelope_quantiles       = c(0.025, 0.25, 0.75, 0.975),
+        PATHS                    = PATHS,
+        priors                   = priors,
+        sampling_args            = sampling_args,
+        parallel                 = control$parallel$enable,
+        n_cores                  = control$parallel$n_cores,
+        root_dir                 = root_dir,
+        precomputed_results      = postca_dask$stochastic_results,
+        verbose                  = control$logging$verbose
       ),
       error = function(e) {
         log_msg("Warning: calc_model_ensemble failed: %s", e$message)
@@ -1920,27 +1958,24 @@ run_MOSAIC <- function(config,
 
     if (!is.null(ensemble)) {
 
-      # R² and bias directly from ensemble means — no extra simulations
-      mean_c_flat <- as.numeric(ensemble$cases_stats$mean)
-      mean_d_flat <- as.numeric(ensemble$deaths_stats$mean)
-      obs_c_flat  <- as.numeric(ensemble$obs_cases)
-      obs_d_flat  <- as.numeric(ensemble$obs_deaths)
+      n_ensemble_params <- ensemble$n_param_sets
 
-      valid_c <- is.finite(obs_c_flat) & is.finite(mean_c_flat)
-      valid_d <- is.finite(obs_d_flat) & is.finite(mean_d_flat)
+      # R² and bias from weighted median predictions
+      median_c_flat <- as.numeric(ensemble$cases_median)
+      median_d_flat <- as.numeric(ensemble$deaths_median)
+      obs_c_flat    <- as.numeric(ensemble$obs_cases)
+      obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
-      r2_cases_ensemble  <- if (sum(valid_c) > 2L)
-        stats::cor(obs_c_flat[valid_c], mean_c_flat[valid_c])^2 else NA_real_
-      r2_deaths_ensemble <- if (sum(valid_d) > 2L)
-        stats::cor(obs_d_flat[valid_d], mean_d_flat[valid_d])^2 else NA_real_
+      r2_cases_ensemble  <- calc_model_R2(obs_c_flat, median_c_flat)
+      r2_deaths_ensemble <- calc_model_R2(obs_d_flat, median_d_flat)
 
       bias_ratio_cases_ensemble  <- tryCatch(
-        calc_bias_ratio(obs_c_flat, mean_c_flat), error = function(e) NA_real_)
+        calc_bias_ratio(obs_c_flat, median_c_flat), error = function(e) NA_real_)
       bias_ratio_deaths_ensemble <- tryCatch(
-        calc_bias_ratio(obs_d_flat, mean_d_flat), error = function(e) NA_real_)
+        calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
 
-      log_msg("Ensemble R\u00b2 (%d runs): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-              n_ensemble_r2,
+      log_msg("Ensemble R\u00b2 (%d params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+              n_ensemble_params, n_ensemble_stochastic_per,
               ifelse(is.na(r2_cases_ensemble),          0, r2_cases_ensemble),
               ifelse(is.na(bias_ratio_cases_ensemble),  0, bias_ratio_cases_ensemble),
               ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
@@ -1948,15 +1983,15 @@ run_MOSAIC <- function(config,
 
       # Windowed model fit metrics
       n_ts      <- ensemble$n_time_points
-      dates_vec <- seq.Date(as.Date(config_best$date_start), by = "day", length.out = n_ts)
+      dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
 
       fit_windows <- control$predictions$fit_windows %||% c(365L, 120L, 90L, 60L, 30L)
 
       windowed_metrics <- .mosaic_compute_windowed_metrics(
         obs_cases  = obs_c_flat,
-        est_cases  = mean_c_flat,
+        est_cases  = median_c_flat,
         obs_deaths = obs_d_flat,
-        est_deaths = mean_d_flat,
+        est_deaths = median_d_flat,
         dates      = dates_vec,
         windows    = fit_windows
       )
@@ -1978,7 +2013,7 @@ run_MOSAIC <- function(config,
         wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
         tryCatch({
           .mosaic_plot_windowed_metrics(windowed_metrics, wm_plot_path,
-                                        location = paste(config_best$location_name, collapse = ", "))
+                                        location = paste(config$location_name, collapse = ", "))
           log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
         }, error = function(e) {
           log_msg("Warning: windowed metrics plot failed: %s", e$message)
@@ -1987,7 +2022,7 @@ run_MOSAIC <- function(config,
 
       # Predictive plots — reuse ensemble, no second set of simulations
       if (control$paths$plots) {
-        log_msg("Generating posterior predictive plots (best model)...")
+        log_msg("Generating posterior ensemble plots...")
         plot_model_ensemble(
           ensemble         = ensemble,
           output_dir       = dirs$res_fig_pred,
@@ -1997,69 +2032,11 @@ run_MOSAIC <- function(config,
       }
 
     } else {
-      log_msg("Warning: calc_model_ensemble failed — skipping ensemble R² and predictive plots")
+      log_msg("Warning: calc_model_ensemble failed — skipping ensemble R\u00b2 and predictive plots")
     }
 
-  } else if (control$paths$plots) {
-    # n_ensemble_r2 <= 1: no ensemble metrics wanted, but still generate plots
-    log_msg("Generating posterior predictive plots (best model, n_simulations = 2)...")
-    ensemble_plot <- tryCatch(
-      calc_model_ensemble(
-        config             = config_best,
-        n_simulations      = 2L,
-        envelope_quantiles = c(0.025, 0.975),
-        parallel           = FALSE,
-        root_dir           = root_dir,
-        verbose            = FALSE
-      ),
-      error = function(e) {
-        log_msg("Warning: ensemble for plots failed: %s", e$message)
-        NULL
-      }
-    )
-    if (!is.null(ensemble_plot)) {
-      plot_model_ensemble(
-        ensemble         = ensemble_plot,
-        output_dir       = dirs$res_fig_pred,
-        save_predictions = TRUE,
-        verbose          = control$logging$verbose
-      )
-    }
-  }
-
-  # ===========================================================================
-  # PARAMETER + STOCHASTIC UNCERTAINTY PLOTS
-  # ===========================================================================
-
-  if (control$paths$plots && sum(results$is_best_subset) > 0) {
-    log_msg("Generating parameter uncertainty ensemble (posterior parameter configs × stochastic LASER)...")
-    best_subset_results <- results[results$is_best_subset == TRUE, ]
-    param_seeds <- best_subset_results$seed_sim
-    param_weights <- best_subset_results$weight_best[best_subset_results$weight_best > 0]
-
-    if (length(param_weights) > 0) {
-      param_weights <- param_weights / sum(param_weights)
-    } else {
-      param_weights <- NULL
-    }
-
-    plot_model_fit_stochastic_param(
-      config = config,
-      parameter_seeds = param_seeds,
-      parameter_weights = param_weights,
-      n_simulations_per_config = control$predictions$ensemble_n_sims_per_param,
-      envelope_quantiles = c(0.025, 0.25, 0.75, 0.975),
-      PATHS = PATHS,
-      priors = priors,
-      sampling_args = sampling_args,
-      output_dir = dirs$res_fig_pred,
-      save_predictions = TRUE,
-      parallel = control$parallel$enable,
-      precomputed_results = postca_dask$stochastic_results,
-      n_cores = control$parallel$n_cores,
-      root_dir = root_dir,
-      verbose = control$logging$verbose
-    )
+  } else {
+    log_msg("Warning: no best subset — skipping posterior ensemble")
   }
 
   # ===========================================================================
@@ -2147,6 +2124,8 @@ run_MOSAIC <- function(config,
                                              bias_ratio_deaths = bias_ratio_deaths,
                                              bias_ratio_cases_ensemble = bias_ratio_cases_ensemble,
                                              bias_ratio_deaths_ensemble = bias_ratio_deaths_ensemble,
+                                             n_ensemble_params = n_ensemble_params,
+                                             n_ensemble_stochastic_per = n_ensemble_stochastic_per,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
@@ -2216,7 +2195,6 @@ run_mosaic <- run_MOSAIC
 #'   \item \code{sampling}: What to sample (which parameters to vary)
 #'   \item \code{likelihood}: How to score model fit (likelihood components and weights)
 #'   \item \code{targets}: When to stop (ESS convergence thresholds)
-#'   \item \code{fine_tuning}: Advanced calibration (adaptive batch sizing)
 #'   \item \code{parallel}: Infrastructure (cores, cluster type)
 #'   \item \code{io}: Output format (file format, compression)
 #'   \item \code{paths}: File management (output directories, plots)
@@ -2226,11 +2204,13 @@ run_mosaic <- run_MOSAIC
 #'   \itemize{
 #'     \item \code{n_simulations}: NULL for auto mode, or integer for fixed mode
 #'     \item \code{n_iterations}: Number of LASER iterations per simulation (default: 3L)
-#'     \item \code{max_simulations}: Maximum total simulations in auto mode (default: 100000L)
-#'     \item \code{batch_size}: Simulations per batch in calibration phase (default: 500L)
-#'     \item \code{min_batches}: Minimum calibration batches (default: 5L)
-#'     \item \code{max_batches}: Maximum calibration batches (default: 8L)
-#'     \item \code{target_r2}: R² target for calibration convergence (default: 0.90)
+#'     \item \code{max_simulations_total}: Maximum total simulations across all phases (default: 100000L)
+#'     \item \code{batch_size_adaptive}: Simulations per batch in Phase 1 adaptive calibration (default: 500L)
+#'     \item \code{min_batches_adaptive}: Minimum Phase 1 batches before convergence check (default: 5L)
+#'     \item \code{max_batches_adaptive}: Maximum Phase 1 batches (default: 8L)
+#'     \item \code{max_batch_predictive}: Cap on each Phase 2 predictive batch (default: 10000L)
+#'     \item \code{max_batches_predictive}: Maximum Phase 2 predictive batches (default: 10L)
+#'     \item \code{target_r2_adaptive}: ESS regression R-squared target for Phase 1 convergence (default: 0.90)
 #'   }
 #'
 #' @param sampling List of parameter sampling flags (what to sample). Default is:
@@ -2255,33 +2235,28 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param targets List of convergence targets (when to stop). Default is:
 #'   \itemize{
-#'     \item \code{ESS_param}: Target ESS per parameter (default: 500)
+#'     \item \code{ESS_param}: Target ESS per parameter (default: 100)
 #'     \item \code{ESS_param_prop}: Proportion of parameters meeting ESS (default: 0.95)
-#'     \item \code{ESS_best}: Target for both subset size and ESS (default: 100). Both B_size and ESS_B must be >= ESS_best.
-#'     \item \code{A_best}: Target agreement index (default: 0.95)
-#'     \item \code{CVw_best}: Target CV of weights (default: 0.5)
+#'     \item \code{ESS_best}: Target for both subset size and ESS within subset (default: 100).
+#'     \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
+#'     \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
 #'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
-#'     \item \code{percentile_max}: Maximum percentile for best subset (default: 5.0)
+
 #'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
-#'   }
-#'
-#' @param fine_tuning List of fine-tuning batch sizes (advanced calibration). Default is:
-#'   \itemize{
-#'     \item \code{batch_sizes}: Named list with massive, large, standard, precision, final
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
-#'     \item \code{best_model_n_sims}: Stochastic runs for best model (default: 10L)
-#'     \item \code{ensemble_n_param_sets}: Number of parameter sets in ensemble (default: 50L)
-#'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 10L)
+#'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
 #'   }
-#'   Total ensemble simulations = ensemble_n_param_sets × ensemble_n_sims_per_param (e.g., 50 × 10 = 500)
+#'   The number of parameter sets in the ensemble is determined by the best subset
+#'   (all sims with non-zero importance weights).
 #'
 #' @param parallel List of parallelization settings (infrastructure). Default is:
 #'   \itemize{
 #'     \item \code{enable}: Enable parallel execution (default: FALSE)
-#'     \item \code{n_cores}: Number of cores to use (default: 1L)
+#'     \item \code{n_cores}: Number of cores to use (default: 1L). In Dask mode, also
+#'       controls local parallel likelihood computation after simulations return.
 #'     \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 #'     \item \code{progress}: Show progress bar (default: TRUE)
 #'   }
@@ -2323,8 +2298,8 @@ run_mosaic <- run_MOSAIC
 #'   calibration = list(
 #'     n_simulations = NULL,  # NULL = auto mode
 #'     n_iterations = 3,
-#'     max_simulations = 50000,
-#'     batch_size = 1000
+#'     max_simulations_total = 50000,
+#'     batch_size_adaptive = 1000
 #'   ),
 #'   parallel = list(enable = TRUE, n_cores = 16)
 #' )
@@ -2360,8 +2335,7 @@ run_mosaic <- run_MOSAIC
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
 #'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
 #'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
-#'   targets = list(ESS_param = 500, ESS_param_prop = 0.95),          # When to stop
-#'   fine_tuning = list(batch_sizes = list(final = 200)),             # Advanced calibration
+#'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure
 #'   io = mosaic_io_presets("default"),                               # Output format
 #'   paths = list(clean_output = FALSE, plots = TRUE)                 # File management
@@ -2373,7 +2347,6 @@ mosaic_control_defaults <- function(calibration = NULL,
                            sampling = NULL,
                            likelihood = NULL,
                            targets = NULL,
-                           fine_tuning = NULL,
                            predictions = NULL,
                            weights = NULL,
                            parallel = NULL,
@@ -2385,12 +2358,13 @@ mosaic_control_defaults <- function(calibration = NULL,
   default_calibration <- list(
     n_simulations = NULL,      # NULL = auto mode, integer = fixed mode
     n_iterations = 3L,          # iterations per simulation
-    max_simulations = 100000L,  # max total simulations in auto mode
-    batch_size = 500L,
-    max_predictive_batch = 10000L, # Cap on single predictive batch (prevents multi-hour unchecked runs)
-    min_batches = 5L,
-    max_batches = 8L,
-    target_r2 = 0.90
+    max_simulations_total = 100000L,  # max total simulations in auto mode
+    batch_size_adaptive = 500L,
+    max_batch_predictive = 10000L, # Cap on each predictive batch (prevents multi-hour unchecked runs)
+    max_batches_predictive = 10L,  # Safety cap on Phase 2 predictive batches
+    min_batches_adaptive = 5L,
+    max_batches_adaptive = 8L,
+    target_r2_adaptive = 0.90
   )
 
   # Default sampling settings
@@ -2497,41 +2471,29 @@ mosaic_control_defaults <- function(calibration = NULL,
     plots = TRUE
   )
 
-  # Default fine-tuning settings
-  default_fine_tuning <- list(
-    batch_sizes = list(
-      massive = 1000L,
-      large = 750L,
-      standard = 500L,
-      precision = 350L,
-      final = 250L
-    )
-  )
-
   # Default target settings
   default_targets <- list(
     # Parameter-level targets
-    ESS_param = 500,
+    ESS_param = 100,
     ESS_param_prop = 0.95,
 
     # Best subset targets
-    ESS_best = 500,              # Updated from 100 for better statistical power
-    A_best = 0.95,
-    CVw_best = 0.7,              # Updated from 0.5 for realistic subset quality
+    ESS_best = 100,              # Target for subset size and ESS within subset
+    A_best = 0.70,               # Allows top sims to dominate subset (lower = more focused)
+    CVw_best = 1.0,              # Permits weight variation within subset (higher = sharper discrimination)
 
     # Subset search bounds (absolute counts, replacing percentile-based)
     min_best_subset = 30,        # Minimum subset size for stable metrics
     max_best_subset = 1000,      # Maximum subset size (~1.5% of typical retained)
 
     # ESS calculation method
-    ESS_method = "perplexity"    # "kish" or "perplexity"
+    ESS_method = "perplexity",   # "kish" or "perplexity" (ESS formula)
+    ESS_marginal_method = "kde"  # "kde" (default) or "binned" (more conservative, higher sim cost)
   )
 
   # Default prediction settings
   default_predictions <- list(
-    best_model_n_sims = 10L,            # Stochastic runs for best model
-    ensemble_n_param_sets = 50L,        # Number of parameter sets in ensemble
-    ensemble_n_sims_per_param = 10L     # Stochastic runs per parameter set
+    ensemble_n_sims_per_param = 5L      # Stochastic runs per parameter set
   )
 
   # Default weight calculation settings
@@ -2557,13 +2519,12 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → likelihood → targets → fine_tuning → predictions → weights → parallel → io → paths → logging
+  # Order follows workflow: calibration → sampling → likelihood → targets → predictions → weights → parallel → io → paths → logging
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),
     likelihood = if (is.null(likelihood)) default_likelihood else modifyList(default_likelihood, likelihood),
     targets = if (is.null(targets)) default_targets else modifyList(default_targets, targets),
-    fine_tuning = if (is.null(fine_tuning)) default_fine_tuning else modifyList(default_fine_tuning, fine_tuning),
     predictions = if (is.null(predictions)) default_predictions else modifyList(default_predictions, predictions),
     weights = if (is.null(weights)) default_weights else modifyList(default_weights, weights),
     parallel = if (is.null(parallel)) default_parallel else modifyList(default_parallel, parallel),

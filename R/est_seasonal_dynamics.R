@@ -88,16 +88,17 @@ est_seasonal_dynamics <- function(PATHS,
 
           message(glue::glue("Processing {iso}"))
           country_name <- MOSAIC::convert_iso_to_country(iso)
-          precip_file <- file.path(PATHS$DATA_RAW, "climate",
-                                   glue::glue("climate_data_MRI_AGCM3_2_S_precipitation_sum_1970-01-01_2030-12-31_{iso}.parquet"))
+          precip_file <- file.path(PATHS$DATA_CLIMATE_DAILY, glue::glue("{iso}.parquet"))
 
           if (!file.exists(precip_file)) {
-               warning(glue::glue("Missing precipitation data for {iso}"))
+               warning(glue::glue("Missing climate data for {iso}"))
                next
           }
 
-          # Read and aggregate weekly precipitation data.
+          # Read daily climate data and filter to precipitation
           precip_data <- arrow::read_parquet(precip_file)
+          precip_data <- precip_data[precip_data$variable_name == "precipitation_sum", ]
+          precip_data$date <- as.Date(precip_data$date)
           precip_data <- precip_data[precip_data$date >= date_start & precip_data$date < date_stop, ]
           precip_data <- precip_data %>%
                mutate(week = lubridate::week(date), year = lubridate::year(date)) %>%

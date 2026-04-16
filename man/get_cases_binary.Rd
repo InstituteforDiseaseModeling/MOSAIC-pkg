@@ -67,5 +67,5 @@ data_with_binary <- get_cases_binary(data, cutoff = 10)
 
 }
 \seealso{
-\code{\link{process_suitability_data}} for the main data processing pipeline where this function is used.
+\code{\link{compile_suitability_data}} for the main data processing pipeline where this function is used.
 }

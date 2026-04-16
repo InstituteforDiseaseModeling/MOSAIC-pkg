@@ -480,7 +480,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
 
                 # Correlation and bias — only meaningful when both variables have variance
                 if (sd(lx_pred) > 0 && sd(lx_obs) > 0) {
-                    r2_val <- round(cor(lx_pred, lx_obs)^2, 3)
+                    r2_val <- round(calc_model_R2(lx_obs, lx_pred), 3)
                     bias_val <- round(calc_bias_ratio(lx_obs, lx_pred), 2)
                     annotation <- paste0("R\u00b2 = ", r2_val,
                                          if (!is.na(bias_val)) paste0(" | Bias = ", bias_val) else "")

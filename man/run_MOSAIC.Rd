@@ -40,7 +40,7 @@ Key settings:
 \itemize{
 \item \code{calibration$n_simulations}: NULL for auto mode, integer for fixed mode
 \item \code{calibration$n_iterations}: LASER iterations per simulation (default: 3)
-\item \code{calibration$max_simulations}: Maximum total simulations (default: 100000)
+\item \code{calibration$max_simulations_total}: Maximum total simulations (default: 100000)
 \item \code{sampling}: Which parameters to sample vs hold fixed
 \item \code{parallel}: Cluster settings for parallel execution
 }}
@@ -84,9 +84,8 @@ This function accepts pre-configured config and priors objects, allowing:
 
 Executes the full MOSAIC calibration workflow:
 \enumerate{
-\item Adaptive calibration with R² convergence detection
-\item Single predictive batch (calculated from calibration phase)
-\item Adaptive fine-tuning with 5-tier batch sizing
+\item Adaptive calibration with R-squared convergence detection
+\item Predictive batches with model-based sizing and ESS re-evaluation
 \item Post-hoc subset optimization
 \item Posterior quantile and distribution estimation
 \item Posterior predictive checks and uncertainty quantification
@@ -96,7 +95,7 @@ Executes the full MOSAIC calibration workflow:
 
 See \code{\link[=mosaic_control_defaults]{mosaic_control_defaults()}} for complete documentation. The control structure contains:
 \describe{
-\item{calibration}{n_simulations, n_iterations, max_simulations, batch_size, etc.}
+\item{calibration}{n_simulations, n_iterations, max_simulations_total, batch_size_adaptive, etc.}
 \item{sampling}{sample_tau_i, sample_mobility_gamma, sample_mu_j, etc.}
 \item{parallel}{enable, n_cores, type, progress}
 \item{paths}{clean_output, plots}
