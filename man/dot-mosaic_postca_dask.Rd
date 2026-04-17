@@ -7,7 +7,6 @@
 .mosaic_postca_dask(
   client,
   mosaic_worker,
-  config_best,
   param_configs = NULL,
   n_stochastic_per = 10L,
   log_msg = message
@@ -17,8 +16,6 @@
 \item{client}{dask.distributed.Client (already connected).}
 
 \item{mosaic_worker}{Python module (mosaic_dask_worker, already imported).}
-
-\item{config_best}{Config list for the best-fit model (for ensemble sims).}
 
 \item{param_configs}{List of config lists for posterior parameter sets (for stochastic sims).
 NULL to skip stochastic dispatch.}

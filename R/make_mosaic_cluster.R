@@ -101,6 +101,7 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
 
     # Import laser-cholera once per worker
     lc <- reticulate::import("laser.cholera.metapop.model")
+    MOSAIC:::.mosaic_strip_laser_file_handler()
     assign("lc", lc, envir = .GlobalEnv)
 
     # Suppress NumPy warnings

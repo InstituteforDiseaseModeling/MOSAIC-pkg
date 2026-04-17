@@ -174,6 +174,7 @@
   # Sequential mode: import here
   if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
     lc <- reticulate::import("laser.cholera.metapop.model")
+    .mosaic_strip_laser_file_handler()
   } else {
     lc <- get("lc", envir = .GlobalEnv)
   }
@@ -1672,6 +1673,284 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
+  # BUILD POSTERIOR ENSEMBLE (must run BEFORE posterior quantile construction
+  # so that subset optimization, when enabled, can drive the canonical posterior)
+  # ===========================================================================
+
+  # The client was disconnected before R-heavy post-processing. Now reconnect
+  # to the same (still-alive) cluster to dispatch stochastic param sims.
+
+  postca_dask <- NULL
+
+  if (use_dask && !is.null(dask_cluster)) {
+    postca_dask <- tryCatch({
+      log_msg("Reconnecting to Dask cluster for post-cal sims...")
+      client <- dask_cluster$get_client()
+      log_msg("  Reconnected (%d workers)", length(client$scheduler_info()$workers))
+
+      # Re-upload worker module (workers may have restarted during idle)
+      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+      client$upload_file(worker_py_path)
+      mosaic_worker <- reticulate::import("mosaic_dask_worker")
+
+      # Build stochastic param configs (always, not just when plots = TRUE)
+      stoch_param_configs <- NULL
+      n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
+
+      if (sum(results$is_best_subset) > 0) {
+        best_subset_results <- results[results$is_best_subset == TRUE, ]
+        nonzero <- best_subset_results$weight_best > 0
+        stoch_param_seeds   <- best_subset_results$seed_sim[nonzero]
+        stoch_param_weights <- best_subset_results$weight_best[nonzero]
+
+        if (length(stoch_param_weights) > 0) {
+          stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
+            tryCatch(
+              sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                                seed = seed_i, sample_args = sampling_args, verbose = FALSE),
+              error = function(e) NULL
+            )
+          })
+          stoch_param_configs <- Filter(Negate(is.null), stoch_param_configs)
+        }
+      }
+
+      # Dispatch all post-cal sims
+      result <- .mosaic_postca_dask(
+        client           = client,
+        mosaic_worker    = mosaic_worker,
+        param_configs    = stoch_param_configs,
+        n_stochastic_per = n_stochastic_per,
+        log_msg          = log_msg
+      )
+
+      # Close for real now
+      log_msg("Closing Dask cluster (post-cal sims complete)")
+      tryCatch(client$close(), error = function(e) NULL)
+      client <- NULL
+      if (!is.null(dask_cluster)) {
+        tryCatch(dask_cluster$close(), error = function(e) NULL)
+        dask_cluster <- NULL
+      }
+
+      result
+    }, error = function(e) {
+      log_msg("WARNING: Post-cal Dask reconnect/dispatch failed: %s", e$message)
+      log_msg("  Falling back to local execution for ensemble/stochastic sims")
+      tryCatch({ if (!is.null(client)) client$close() }, error = function(e2) NULL)
+      client <<- NULL
+      if (!is.null(dask_cluster)) {
+        tryCatch(dask_cluster$close(), error = function(e2) NULL)
+        dask_cluster <<- NULL
+      }
+      NULL
+    })
+  }
+
+  # Initialize metric variables (populated after ensemble is built/resolved)
+  r2_cases_ensemble          <- NA_real_
+  r2_deaths_ensemble         <- NA_real_
+  bias_ratio_cases_ensemble  <- NA_real_
+  bias_ratio_deaths_ensemble <- NA_real_
+  n_ensemble_params          <- 0L
+  n_ensemble_stochastic_per  <- as.integer(control$predictions$ensemble_n_sims_per_param %||% 10L)
+
+  # Tier-subset ensemble metrics — populated only when optimize_subset = TRUE
+  # (preserved for comparison against the canonical optimized-ensemble metrics).
+  r2_cases_ensemble_tier          <- NA_real_
+  r2_deaths_ensemble_tier         <- NA_real_
+  bias_ratio_cases_ensemble_tier  <- NA_real_
+  bias_ratio_deaths_ensemble_tier <- NA_real_
+  n_ensemble_params_tier          <- NA_integer_
+
+  ensemble     <- NULL
+  fit_windows  <- control$predictions$fit_windows %||% c(365L, 120L, 90L, 60L, 30L)
+
+  if (sum(results$is_best_subset) > 0) {
+    best_subset_results <- results[results$is_best_subset == TRUE, ]
+    nonzero <- best_subset_results$weight_best > 0
+    param_seeds   <- best_subset_results$seed_sim[nonzero]
+    param_weights <- best_subset_results$weight_best[nonzero]
+
+    if (length(param_weights) > 0) {
+      param_weights <- param_weights / sum(param_weights)
+    } else {
+      param_weights <- NULL
+    }
+
+    log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
+            length(param_seeds), n_ensemble_stochastic_per)
+
+    ensemble <- tryCatch(
+      calc_model_ensemble(
+        config                   = config,
+        parameter_seeds          = param_seeds,
+        parameter_weights        = param_weights,
+        n_simulations_per_config = n_ensemble_stochastic_per,
+        envelope_quantiles       = c(0.025, 0.25, 0.75, 0.975),
+        PATHS                    = PATHS,
+        priors                   = priors,
+        sampling_args            = sampling_args,
+        parallel                 = control$parallel$enable,
+        n_cores                  = control$parallel$n_cores,
+        root_dir                 = root_dir,
+        precomputed_results      = postca_dask$stochastic_results,
+        verbose                  = control$logging$verbose
+      ),
+      error = function(e) {
+        log_msg("Warning: calc_model_ensemble failed: %s", e$message)
+        NULL
+      }
+    )
+
+    if (!is.null(ensemble)) {
+      ensemble_rds <- file.path(dirs$calibration, "ensemble_candidate.rds")
+      saveRDS(ensemble, ensemble_rds)
+      log_msg("Saved 2_calibration/ensemble_candidate.rds")
+    }
+  } else {
+    log_msg("Warning: no best subset — skipping posterior ensemble")
+  }
+
+  # ===========================================================================
+  # OPTIMIZE SUBSET — refine best subset using ensemble prediction quality
+  # ===========================================================================
+  # When control$predictions$optimize_subset = TRUE, rescore the ensemble against
+  # observed cases/deaths and write the optimizer-selected subset to new _opt
+  # columns on the results frame. Downstream posterior construction is then
+  # driven by the optimized subset via .mosaic_active_subset_cols().
+
+  if (!is.null(ensemble) && isTRUE(control$predictions$optimize_subset)) {
+
+    log_msg("Running post-ensemble subset optimization...")
+
+    # Recompute locally to make the opt block's dependencies explicit and
+    # robust to future refactors (don't rely on variables from the sibling
+    # ensemble-build block's loose R scoping).
+    .opt_bs   <- results[results$is_best_subset == TRUE, ]
+    .opt_nz   <- .opt_bs$weight_best > 0
+    cand_seeds       <- .opt_bs$seed_sim[.opt_nz]
+    cand_likelihoods <- .opt_bs$likelihood[.opt_nz]
+
+    subset_opt <- tryCatch(
+      optimize_ensemble_subset(
+        ensemble    = ensemble,
+        likelihoods = cand_likelihoods,
+        seeds       = cand_seeds,
+        min_n       = as.integer(control$predictions$optimize_min_n %||% 30L),
+        objective   = control$predictions$optimize_objective %||% "mae",
+        verbose     = control$logging$verbose
+      ),
+      error = function(e) {
+        log_msg("Warning: optimize_ensemble_subset failed: %s", e$message)
+        NULL
+      }
+    )
+
+    if (!is.null(subset_opt) && !is.null(subset_opt$optimal_seeds) &&
+        length(subset_opt$optimal_seeds) > 0) {
+
+      # Sanity-check assumptions that the weight-mapping below depends on.
+      # seed_sim is expected to be unique per sim; if duplicates appear, the
+      # setNames() mapping would silently drop all but the last, producing
+      # incorrect weight_best_opt values.
+      if (anyDuplicated(subset_opt$optimal_seeds) > 0L) {
+        stop("optimize_ensemble_subset returned duplicate optimal_seeds; ",
+             "refusing to write ambiguous weight_best_opt.", call. = FALSE)
+      }
+      if (anyDuplicated(results$seed_sim[results$is_best_subset]) > 0L) {
+        stop("results$seed_sim is not unique within is_best_subset; ",
+             "cannot map optimal_seeds -> weight_best_opt unambiguously.",
+             call. = FALSE)
+      }
+
+      results$is_best_subset_opt <- results$seed_sim %in% subset_opt$optimal_seeds
+      results$weight_best_opt    <- 0
+
+      seed_to_weight <- setNames(subset_opt$optimal_weights,
+                                 as.character(subset_opt$optimal_seeds))
+      opt_idx <- which(results$is_best_subset_opt)
+      if (length(opt_idx) > 0) {
+        results$weight_best_opt[opt_idx] <-
+          seed_to_weight[as.character(results$seed_sim[opt_idx])]
+        if (any(is.na(results$weight_best_opt[opt_idx]))) {
+          stop("NA weight_best_opt values after seed->weight mapping; ",
+               "seed_to_weight lookup failed for at least one row.",
+               call. = FALSE)
+        }
+      }
+
+      .mosaic_write_parquet(results, simulations_file, control$io)
+      log_msg("Subset optimization (%s): tier %d -> optimized %d (score %.4f -> %.4f)%s",
+              subset_opt$objective,
+              subset_opt$diagnostics_n, subset_opt$optimal_n,
+              subset_opt$diagnostics_score, subset_opt$optimal_score,
+              if (subset_opt$stability_flag) " [flat profile]" else "")
+      log_msg("  _opt columns written to samples.parquet (%d sims selected)",
+              sum(results$is_best_subset_opt))
+
+      if (subset_opt$optimal_n < 30L) {
+        log_msg("  WARNING: optimal_n = %d < 30; KDE-based posterior densities may be degenerate",
+                subset_opt$optimal_n)
+      }
+
+      # Save the optimized ensemble. The tier ensemble is already on disk as
+      # ensemble_candidate.rds from the earlier ensemble-build block.
+      saveRDS(subset_opt$ensemble_optimized,
+              file.path(dirs$calibration, "ensemble_optimized.rds"))
+      log_msg("Saved 2_calibration/ensemble_optimized.rds")
+
+      # Record TIER ensemble metrics for comparison in summary.json, then
+      # replace `ensemble` with the optimized one so all downstream work uses it.
+      # The canonical r2_cases_ensemble field will be recomputed later from the
+      # (now optimized) `ensemble`; these *_tier fields hold the pre-opt metrics.
+      median_c_tier_flat <- as.numeric(ensemble$cases_median)
+      median_d_tier_flat <- as.numeric(ensemble$deaths_median)
+      obs_c_flat_tier    <- as.numeric(ensemble$obs_cases)
+      obs_d_flat_tier    <- as.numeric(ensemble$obs_deaths)
+
+      n_ensemble_params_tier <- ensemble$n_param_sets
+      r2_cases_ensemble_tier  <- calc_model_R2(obs_c_flat_tier, median_c_tier_flat)
+      r2_deaths_ensemble_tier <- calc_model_R2(obs_d_flat_tier, median_d_tier_flat)
+      bias_ratio_cases_ensemble_tier  <- tryCatch(
+        calc_bias_ratio(obs_c_flat_tier, median_c_tier_flat), error = function(e) NA_real_)
+      bias_ratio_deaths_ensemble_tier <- tryCatch(
+        calc_bias_ratio(obs_d_flat_tier, median_d_tier_flat), error = function(e) NA_real_)
+
+      ensemble <- subset_opt$ensemble_optimized
+
+      # Persist evaluation table for post-hoc inspection
+      diag_path <- file.path(dirs$res_fig_diag, "optimization_diagnostics.csv")
+      utils::write.csv(subset_opt$evaluation_table, diag_path, row.names = FALSE)
+      log_msg("Saved 3_results/figures/diagnostics/optimization_diagnostics.csv")
+
+      # Patch convergence_diagnostics.json with the optimizer-selected subset size
+      conv_diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
+      if (file.exists(conv_diag_file)) {
+        conv_diag <- tryCatch(jsonlite::read_json(conv_diag_file),
+                              error = function(e) NULL)
+        if (!is.null(conv_diag)) {
+          conv_diag$metrics$B_size_optimized <- list(
+            value = as.integer(subset_opt$optimal_n),
+            description = "Number of simulations in optimizer-refined subset (drives canonical posterior when optimize_subset = TRUE)"
+          )
+          conv_diag$summary$n_best_subset_optimized <- as.integer(subset_opt$optimal_n)
+          jsonlite::write_json(conv_diag, conv_diag_file, pretty = TRUE,
+                               auto_unbox = TRUE, digits = NA)
+        }
+      }
+    }
+  }
+
+  # ===========================================================================
+  # RESOLVE ACTIVE SUBSET COLUMNS FOR POSTERIOR CONSTRUCTION
+  # ===========================================================================
+
+  active_cols <- .mosaic_active_subset_cols(results, control)
+  log_msg("Active subset source: %s (%s / %s)",
+          active_cols$source, active_cols$subset_col, active_cols$weight_col)
+
+  # ===========================================================================
   # POSTERIOR QUANTILES AND DISTRIBUTIONS
   # ===========================================================================
 
@@ -1681,6 +1960,8 @@ run_MOSAIC <- function(config,
     probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
     output_dir = dirs$cal_posterior,
     priors = priors,
+    subset_col = active_cols$subset_col,
+    weight_col = active_cols$weight_col,
     verbose = control$logging$verbose
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posterior_quantiles.csv"))
@@ -1717,6 +1998,8 @@ run_MOSAIC <- function(config,
       priors_file = file.path(dirs$inputs, "priors.json"),
       posteriors_file = file.path(dirs$cal_posterior, "posteriors.json"),
       output_dir = dirs$res_fig_post_detail,
+      subset_col = active_cols$subset_col,
+      weight_col = active_cols$weight_col,
       verbose = control$logging$verbose
     )
   }
@@ -1733,6 +2016,7 @@ run_MOSAIC <- function(config,
         results_file = file.path(dirs$calibration, "samples.parquet"),
         priors_file = file.path(dirs$inputs, "priors.json"),
         output_dir = dirs$res_fig_diag,
+        subset_col = active_cols$subset_col,
         verbose = control$logging$verbose
       ),
       error = function(e) log_msg("Warning: parameter sensitivity plot failed: %s", e$message)
@@ -1743,6 +2027,7 @@ run_MOSAIC <- function(config,
         results_file = file.path(dirs$calibration, "samples.parquet"),
         priors_file = file.path(dirs$inputs, "priors.json"),
         output_dir = dirs$res_fig_diag,
+        subset_col = active_cols$subset_col,
         verbose = control$logging$verbose
       ),
       error = function(e) log_msg("Warning: parameter correlation plot failed: %s", e$message)
@@ -1750,7 +2035,7 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # POSTERIOR PREDICTIVE CHECKS
+  # POSTERIOR PREDICTIVE CHECKS (best single model)
   # ===========================================================================
 
   log_msg("Running posterior predictive checks")
@@ -1768,7 +2053,7 @@ run_MOSAIC <- function(config,
     ),
     error = function(e) {
       log_msg("ERROR: sample_parameters failed for best seed %d: %s", best_seed_sim, e$message)
-      log_msg("  Post-processing (PPC, ensemble, summary) will be skipped.")
+      log_msg("  Post-processing (PPC, summary) will be skipped.")
       NULL
     }
   )
@@ -1789,6 +2074,7 @@ run_MOSAIC <- function(config,
   log_msg("Saved %s", config_best_file)
 
   lc <- reticulate::import("laser.cholera.metapop.model")
+  .mosaic_strip_laser_file_handler()
   best_model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best), quiet = TRUE)
 
   # Compute overall model-fit R² and bias ratio (best model vs observed data)
@@ -1829,214 +2115,84 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # RECONNECT DASK FOR POST-CAL SIMS (if applicable)
+  # ENSEMBLE METRICS, WINDOWED FIT, AND PREDICTIVE PLOTS
   # ===========================================================================
-  # The client was disconnected before R-heavy post-processing. Now reconnect
-  # to the same (still-alive) cluster to dispatch stochastic param sims.
+  # The `ensemble` variable is the canonical object — the optimized ensemble
+  # when optimize_subset = TRUE and the optimizer succeeded, otherwise the
+  # tier ensemble.
 
-  postca_dask     <- NULL
+  if (!is.null(ensemble)) {
 
-  if (use_dask && !is.null(dask_cluster)) {
-    postca_dask <- tryCatch({
-      log_msg("Reconnecting to Dask cluster for post-cal sims...")
-      client <- dask_cluster$get_client()
-      log_msg("  Reconnected (%d workers)", length(client$scheduler_info()$workers))
+    n_ensemble_params <- ensemble$n_param_sets
 
-      # Re-upload worker module (workers may have restarted during idle)
-      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
-      client$upload_file(worker_py_path)
-      mosaic_worker <- reticulate::import("mosaic_dask_worker")
+    median_c_flat <- as.numeric(ensemble$cases_median)
+    median_d_flat <- as.numeric(ensemble$deaths_median)
+    obs_c_flat    <- as.numeric(ensemble$obs_cases)
+    obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
-      # Build stochastic param configs (always, not just when plots = TRUE)
-      stoch_param_configs <- NULL
-      n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
+    r2_cases_ensemble  <- calc_model_R2(obs_c_flat, median_c_flat)
+    r2_deaths_ensemble <- calc_model_R2(obs_d_flat, median_d_flat)
+    bias_ratio_cases_ensemble  <- tryCatch(
+      calc_bias_ratio(obs_c_flat, median_c_flat), error = function(e) NA_real_)
+    bias_ratio_deaths_ensemble <- tryCatch(
+      calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
 
-      if (sum(results$is_best_subset) > 0) {
-        best_subset_results <- results[results$is_best_subset == TRUE, ]
-        nonzero <- best_subset_results$weight_best > 0
-        stoch_param_seeds   <- best_subset_results$seed_sim[nonzero]
-        stoch_param_weights <- best_subset_results$weight_best[nonzero]
+    log_msg("Ensemble R\u00b2 (%d params x %d stoch, source=%s): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+            n_ensemble_params, n_ensemble_stochastic_per, active_cols$source,
+            ifelse(is.na(r2_cases_ensemble),          0, r2_cases_ensemble),
+            ifelse(is.na(bias_ratio_cases_ensemble),  0, bias_ratio_cases_ensemble),
+            ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
+            ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
 
-        if (length(stoch_param_weights) > 0) {
-          stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
-            tryCatch(
-              sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                                seed = seed_i, sample_args = sampling_args, verbose = FALSE),
-              error = function(e) NULL
-            )
-          })
-          stoch_param_configs <- Filter(Negate(is.null), stoch_param_configs)
-        }
-      }
+    # Windowed model fit metrics on the canonical ensemble
+    n_ts      <- ensemble$n_time_points
+    dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
 
-      # Dispatch all post-cal sims
-      result <- .mosaic_postca_dask(
-        client           = client,
-        mosaic_worker    = mosaic_worker,
-        config_best      = config_best,
-        param_configs    = stoch_param_configs,
-        n_stochastic_per = n_stochastic_per,
-        log_msg          = log_msg
-      )
-
-      # Close for real now
-      log_msg("Closing Dask cluster (post-cal sims complete)")
-      tryCatch(client$close(), error = function(e) NULL)
-      client <- NULL
-      if (!is.null(dask_cluster)) {
-        tryCatch(dask_cluster$close(), error = function(e) NULL)
-        dask_cluster <- NULL
-      }
-
-      result
-    }, error = function(e) {
-      log_msg("WARNING: Post-cal Dask reconnect/dispatch failed: %s", e$message)
-      log_msg("  Falling back to local execution for ensemble/stochastic sims")
-      # Clean up on failure
-      tryCatch({ if (!is.null(client)) client$close() }, error = function(e2) NULL)
-      client <<- NULL
-      if (!is.null(dask_cluster)) {
-        tryCatch(dask_cluster$close(), error = function(e2) NULL)
-        dask_cluster <<- NULL
-      }
-      NULL
-    })
-  }
-
-  # ===========================================================================
-  # WEIGHTED POSTERIOR ENSEMBLE: R², WINDOWED METRICS, AND PREDICTIVE PLOTS
-  # ===========================================================================
-
-  # Compute the true posterior-weighted ensemble ALWAYS (outside plots flag).
-  # The same mosaic_ensemble object is used for:
-  #   (a) R²/bias ratios (summary.json)
-  #   (b) windowed fit metrics
-  #   (c) predictive plots (when plots = TRUE)
-  r2_cases_ensemble          <- NA_real_
-  r2_deaths_ensemble         <- NA_real_
-  bias_ratio_cases_ensemble  <- NA_real_
-  bias_ratio_deaths_ensemble <- NA_real_
-  n_ensemble_params          <- 0L
-  n_ensemble_stochastic_per  <- as.integer(control$predictions$ensemble_n_sims_per_param %||% 10L)
-
-  if (sum(results$is_best_subset) > 0) {
-    best_subset_results <- results[results$is_best_subset == TRUE, ]
-    nonzero <- best_subset_results$weight_best > 0
-    param_seeds   <- best_subset_results$seed_sim[nonzero]
-    param_weights <- best_subset_results$weight_best[nonzero]
-
-    if (length(param_weights) > 0) {
-      param_weights <- param_weights / sum(param_weights)
-    } else {
-      param_weights <- NULL
-    }
-
-    log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
-            length(param_seeds), n_ensemble_stochastic_per)
-
-    ensemble <- tryCatch(
-      calc_model_ensemble(
-        config                   = config,
-        parameter_seeds          = param_seeds,
-        parameter_weights        = param_weights,
-        n_simulations_per_config = n_ensemble_stochastic_per,
-        envelope_quantiles       = c(0.025, 0.25, 0.75, 0.975),
-        PATHS                    = PATHS,
-        priors                   = priors,
-        sampling_args            = sampling_args,
-        parallel                 = control$parallel$enable,
-        n_cores                  = control$parallel$n_cores,
-        root_dir                 = root_dir,
-        precomputed_results      = postca_dask$stochastic_results,
-        verbose                  = control$logging$verbose
-      ),
-      error = function(e) {
-        log_msg("Warning: calc_model_ensemble failed: %s", e$message)
-        NULL
-      }
+    windowed_metrics <- .mosaic_compute_windowed_metrics(
+      obs_cases  = obs_c_flat,
+      est_cases  = median_c_flat,
+      obs_deaths = obs_d_flat,
+      est_deaths = median_d_flat,
+      dates      = dates_vec,
+      windows    = fit_windows
     )
 
-    if (!is.null(ensemble)) {
+    wm_path <- file.path(dirs$res_fig_diag, "model_fit_windows.csv")
+    utils::write.csv(windowed_metrics, wm_path, row.names = FALSE)
+    log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.csv")
 
-      n_ensemble_params <- ensemble$n_param_sets
+    full_row      <- windowed_metrics[windowed_metrics$window == "full", ]
+    short_windows <- windowed_metrics[windowed_metrics$window != "full", ]
+    if (nrow(short_windows) > 0L) {
+      last_row <- short_windows[nrow(short_windows), ]
+      log_msg("Windowed fit: R2_cases [full=%.3f, %s=%.3f] | Bias [full=%.2f, %s=%.2f]",
+              full_row$r2_cases, last_row$window, last_row$r2_cases,
+              full_row$bias_cases, last_row$window, last_row$bias_cases)
+    }
 
-      # R² and bias from weighted median predictions
-      median_c_flat <- as.numeric(ensemble$cases_median)
-      median_d_flat <- as.numeric(ensemble$deaths_median)
-      obs_c_flat    <- as.numeric(ensemble$obs_cases)
-      obs_d_flat    <- as.numeric(ensemble$obs_deaths)
+    if (control$paths$plots) {
+      wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
+      tryCatch({
+        .mosaic_plot_windowed_metrics(windowed_metrics, wm_plot_path,
+                                      location = paste(config$location_name, collapse = ", "))
+        log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
+      }, error = function(e) {
+        log_msg("Warning: windowed metrics plot failed: %s", e$message)
+      })
+    }
 
-      r2_cases_ensemble  <- calc_model_R2(obs_c_flat, median_c_flat)
-      r2_deaths_ensemble <- calc_model_R2(obs_d_flat, median_d_flat)
-
-      bias_ratio_cases_ensemble  <- tryCatch(
-        calc_bias_ratio(obs_c_flat, median_c_flat), error = function(e) NA_real_)
-      bias_ratio_deaths_ensemble <- tryCatch(
-        calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
-
-      log_msg("Ensemble R\u00b2 (%d params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-              n_ensemble_params, n_ensemble_stochastic_per,
-              ifelse(is.na(r2_cases_ensemble),          0, r2_cases_ensemble),
-              ifelse(is.na(bias_ratio_cases_ensemble),  0, bias_ratio_cases_ensemble),
-              ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
-              ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
-
-      # Windowed model fit metrics
-      n_ts      <- ensemble$n_time_points
-      dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
-
-      fit_windows <- control$predictions$fit_windows %||% c(365L, 120L, 90L, 60L, 30L)
-
-      windowed_metrics <- .mosaic_compute_windowed_metrics(
-        obs_cases  = obs_c_flat,
-        est_cases  = median_c_flat,
-        obs_deaths = obs_d_flat,
-        est_deaths = median_d_flat,
-        dates      = dates_vec,
-        windows    = fit_windows
+    if (control$paths$plots) {
+      log_msg("Generating posterior ensemble plots (source=%s)...", active_cols$source)
+      plot_model_ensemble(
+        ensemble         = ensemble,
+        output_dir       = dirs$res_fig_pred,
+        save_predictions = TRUE,
+        verbose          = control$logging$verbose
       )
-
-      wm_path <- file.path(dirs$res_fig_diag, "model_fit_windows.csv")
-      utils::write.csv(windowed_metrics, wm_path, row.names = FALSE)
-      log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.csv")
-
-      full_row      <- windowed_metrics[windowed_metrics$window == "full", ]
-      short_windows <- windowed_metrics[windowed_metrics$window != "full", ]
-      if (nrow(short_windows) > 0L) {
-        last_row <- short_windows[nrow(short_windows), ]
-        log_msg("Windowed fit: R2_cases [full=%.3f, %s=%.3f] | Bias [full=%.2f, %s=%.2f]",
-                full_row$r2_cases, last_row$window, last_row$r2_cases,
-                full_row$bias_cases, last_row$window, last_row$bias_cases)
-      }
-
-      if (control$paths$plots) {
-        wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
-        tryCatch({
-          .mosaic_plot_windowed_metrics(windowed_metrics, wm_plot_path,
-                                        location = paste(config$location_name, collapse = ", "))
-          log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
-        }, error = function(e) {
-          log_msg("Warning: windowed metrics plot failed: %s", e$message)
-        })
-      }
-
-      # Predictive plots — reuse ensemble, no second set of simulations
-      if (control$paths$plots) {
-        log_msg("Generating posterior ensemble plots...")
-        plot_model_ensemble(
-          ensemble         = ensemble,
-          output_dir       = dirs$res_fig_pred,
-          save_predictions = TRUE,
-          verbose          = control$logging$verbose
-        )
-      }
-
-    } else {
-      log_msg("Warning: calc_model_ensemble failed — skipping ensemble R\u00b2 and predictive plots")
     }
 
   } else {
-    log_msg("Warning: no best subset — skipping posterior ensemble")
+    log_msg("Warning: ensemble is NULL — skipping ensemble R\u00b2 and predictive plots")
   }
 
   # ===========================================================================
@@ -2070,16 +2226,13 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # POSTERIOR PREDICTIVE CHECKS (PPC)
+  # POSTERIOR PREDICTIVE CHECKS (PPC plots)
   # ===========================================================================
 
   if (control$paths$plots) {
     # Robust call handling both old and new plot_model_ppc signatures
-    # Old signature: plot_model_ppc(model, output_dir, verbose)
-    # New signature: plot_model_ppc(predictions_dir, predictions_files, locations, model, output_dir, verbose)
     ppc_result <- tryCatch(
       {
-        # Try new signature first (always creates both aggregate and per-location plots)
         plot_model_ppc(
           predictions_dir = dirs$res_fig_pred,
           output_dir = dirs$res_figures,
@@ -2087,14 +2240,10 @@ run_MOSAIC <- function(config,
         )
       },
       error = function(e) {
-        # If new signature fails, check if it's an argument mismatch
         if (grepl("unused argument", e$message)) {
           log_msg("Warning: plot_model_ppc using legacy signature (package may need reinstallation)")
-          # Fall back to reading predictions and calling with model object
-          # This is a compatibility shim for clusters with old package versions
-          NULL  # Skip PPC plots with old signature
+          NULL
         } else {
-          # Re-throw other errors
           stop(e)
         }
       }
@@ -2126,6 +2275,11 @@ run_MOSAIC <- function(config,
                                              bias_ratio_deaths_ensemble = bias_ratio_deaths_ensemble,
                                              n_ensemble_params = n_ensemble_params,
                                              n_ensemble_stochastic_per = n_ensemble_stochastic_per,
+                                             r2_cases_ensemble_tier = r2_cases_ensemble_tier,
+                                             r2_deaths_ensemble_tier = r2_deaths_ensemble_tier,
+                                             bias_ratio_cases_ensemble_tier = bias_ratio_cases_ensemble_tier,
+                                             bias_ratio_deaths_ensemble_tier = bias_ratio_deaths_ensemble_tier,
+                                             n_ensemble_params_tier = n_ensemble_params_tier,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
@@ -2248,6 +2402,23 @@ run_mosaic <- run_MOSAIC
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
 #'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
+#'     \item \code{optimize_subset}: Logical; when \code{TRUE}, the post-ensemble
+#'       optimizer (MAE / WIS / R²+bias) refines the best subset used for
+#'       \code{posteriors.json}, \code{posterior_quantiles.csv}, and the ensemble
+#'       object driving all downstream plots and metrics. The tier-selected subset
+#'       is preserved in the \code{is_best_subset} / \code{weight_best} columns of
+#'       \code{samples.parquet} for provenance; the optimized selection is written
+#'       to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. When
+#'       \code{FALSE} (default), the tier-selected subset is canonical and no
+#'       \code{_opt} columns are written. \strong{Statistical note:} enabling this
+#'       flag yields a posterior conditioned on ensemble predictive performance
+#'       (MAE / WIS / R²+bias on the training data) rather than a pure
+#'       likelihood-weighted posterior.
+#'     \item \code{optimize_min_n}: Minimum subset size the optimizer may select
+#'       (default \code{30L}, raised from \code{4L} to guard against KDE
+#'       degeneracy in \code{posteriors.json}).
+#'     \item \code{optimize_objective}: Objective function, \code{"mae"} (default),
+#'       \code{"r2_bias"}, or \code{"wis"}.
 #'   }
 #'   The number of parameter sets in the ensemble is determined by the best subset
 #'   (all sims with non-zero importance weights).
@@ -2493,7 +2664,12 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default prediction settings
   default_predictions <- list(
-    ensemble_n_sims_per_param = 5L      # Stochastic runs per parameter set
+    ensemble_n_sims_per_param = 5L,     # Stochastic runs per parameter set
+    optimize_subset    = FALSE,          # Post-ensemble subset optimization
+    optimize_min_n     = 30L,            # Minimum subset size — raised from 4L (Fox et al. 2024)
+                                          # to guard against KDE degeneracy when the
+                                          # optimized subset drives posterior densities.
+    optimize_objective = "mae"           # Objective: "mae", "r2_bias", or "wis"
   )
 
   # Default weight calculation settings

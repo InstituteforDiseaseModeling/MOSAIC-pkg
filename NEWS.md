@@ -1,3 +1,26 @@
+# MOSAIC 0.24.0
+
+## Behavior change (not API)
+
+* **`control$predictions$optimize_subset = TRUE` now drives the canonical posterior artifacts.** Previously the optimized subset was a parallel reporting track: it produced an `ensemble_optimized.rds` and `*_optimized` metrics in `summary.json`, but `posteriors.json`, `posterior_quantiles.csv`, ensemble plots, and chained downstream priors were all computed from the tier-selected subset. After this release, when the flag is on the optimized subset is written to new `is_best_subset_opt` / `weight_best_opt` columns in `samples.parquet` and every posterior-consuming function reads from those columns. The tier-selected subset remains in `is_best_subset` / `weight_best` for provenance.
+* **`summary.json` field rename.** The previous `r2_cases_ensemble_optimized` / `r2_deaths_ensemble_optimized` / `bias_ratio_*_ensemble_optimized` / `n_ensemble_params_optimized` fields are renamed to `*_ensemble_tier` / `n_ensemble_params_tier`. The canonical `r2_cases_ensemble` (etc.) now holds the optimized metrics when `optimize_subset = TRUE` and the tier metrics when the flag is off; the new `*_tier` fields preserve the tier-subset metrics for side-by-side comparison (NA when the flag is off). Downstream consumers reading the old `_optimized` field names must be updated.
+* **Ensemble construction moved earlier in `run_MOSAIC()`.** The Dask reconnect + stochastic sims + `calc_model_ensemble` block now runs **before** posterior quantile/distribution/sensitivity construction so that the optimizer (when enabled) can refine the posterior. Best-model PPC and ensemble metrics/plots remain after posterior construction.
+* Users relying on the old behavior (tier subset drives posteriors regardless of flag) should set `control$predictions$optimize_subset = FALSE`.
+
+## New arguments
+
+* `calc_model_posterior_quantiles()`, `plot_model_parameter_correlation()`, `plot_model_parameter_sensitivity()`, and `plot_model_posteriors_detail()` gained `subset_col` and `weight_col` arguments defaulting to `"is_best_subset"` / `"weight_best"`. Existing callers see no change.
+* `optimize_ensemble_subset()` gained an optional `seeds` argument and returns `optimal_seeds` so callers can map the optimized subset back to `samples.parquet` without duplicating the internal sort logic.
+* `calc_convergence_diagnostics()` gained an optional `n_best_subset_optimized` argument; when supplied, the JSON output includes a new `metrics$B_size_optimized` entry and `summary$n_best_subset_optimized` field.
+
+## Defaults
+
+* `control$predictions$optimize_min_n` raised from `4L` to `30L`. Four was the statistical minimum per Fox et al. (2024), but posterior density estimation on the optimized subset needs more samples; a warning is logged when the optimizer selects `< 30`.
+
+## Internal
+
+* Added `.mosaic_active_subset_cols(results, control)` helper that returns the canonical subset/weight column names plus a `"tier"` / `"optimized"` source tag. Used by `run_MOSAIC()` to thread the correct columns through all posterior-consuming calls.
+
 # MOSAIC 0.13.21
 
 ## Bug Fixes

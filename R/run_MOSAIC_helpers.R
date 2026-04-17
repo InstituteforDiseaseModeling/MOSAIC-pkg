@@ -316,6 +316,37 @@
   .mosaic_atomic_write(df, path, write_func)
 }
 
+#' Resolve Active Subset/Weight Columns for Posterior Construction
+#'
+#' When \code{control$predictions$optimize_subset = TRUE} and the run produced
+#' \code{is_best_subset_opt} / \code{weight_best_opt} columns, those are the
+#' canonical subset for posterior work. Otherwise the tier-selected columns
+#' (\code{is_best_subset} / \code{weight_best}) are canonical.
+#'
+#' The \code{any(results$is_best_subset_opt)} guard handles the edge case where
+#' \code{optimize_subset = TRUE} but the optimizer silently failed (e.g.,
+#' \code{stability_flag} + \code{optimal_n == 0}) — in which case we fall back
+#' to the tier subset.
+#'
+#' @param results data.frame with at least \code{is_best_subset} and
+#'   \code{weight_best} columns, optionally \code{is_best_subset_opt} and
+#'   \code{weight_best_opt}.
+#' @param control MOSAIC control list.
+#' @return Named list with \code{subset_col}, \code{weight_col}, and
+#'   \code{source} ("tier" or "optimized").
+#' @noRd
+.mosaic_active_subset_cols <- function(results, control) {
+  use_opt <- isTRUE(control$predictions$optimize_subset) &&
+             "is_best_subset_opt" %in% names(results) &&
+             "weight_best_opt"    %in% names(results) &&
+             isTRUE(any(as.logical(results$is_best_subset_opt), na.rm = TRUE))
+  list(
+    subset_col = if (use_opt) "is_best_subset_opt" else "is_best_subset",
+    weight_col = if (use_opt) "weight_best_opt"    else "weight_best",
+    source     = if (use_opt) "optimized"          else "tier"
+  )
+}
+
 #' Write JSON with Atomic Rename (NFS-Safe)
 #' @noRd
 .mosaic_write_json <- function(obj, path, io) {
@@ -684,12 +715,20 @@
     return(state)
   }
 
-  # Calculate ESS using specified method from control
+  # Calculate ESS using specified method from control.
+  # Use the same adaptive n_grid as the final post-hoc ESS calculation in
+  # run_MOSAIC (n_grid = 100 * (1 + log(ESS_param/100))). A coarser grid
+  # over-estimates ESS for tight posteriors, which caused the loop to declare
+  # convergence before the finer-grid post-hoc calculation could confirm it.
+  ess_target_val <- control$targets$ESS_param %||% 100
+  n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
+
   ess_current <- tryCatch({
     calc_model_ess_parameter(
       results = ess_check_results,
       param_names = param_names_est,
       likelihood_col = "likelihood",
+      n_grid = n_grid_adaptive,
       method = control$targets$ESS_method,
       marginal_method = control$targets$ESS_marginal_method %||% "kde",
       verbose = FALSE
@@ -884,22 +923,24 @@
   }
 
   # Check convergence.
-  # Use only parameters that produced a valid ESS estimate as the denominator.
-  # Parameters whose KDE failed return NA in ess_marginal; dividing by
-  # length(param_names_est) would count them as "not converged" and make
-  # the target proportion artificially harder to reach.
+  # Denominator is the total number of sampled parameters (not just those with
+  # a valid ESS estimate). Parameters whose KDE returned NA are counted as
+  # "not converged" — otherwise silent KDE failures would shrink the
+  # denominator and falsely inflate prop_converged, causing the loop to exit
+  # before the post-hoc ESS calculation can confirm the 0.975 target.
+  n_total        <- length(param_names_est)
   n_converged    <- sum(ess_current$ess_marginal >= control$targets$ESS_param, na.rm = TRUE)
   n_ess_computed <- sum(!is.na(ess_current$ess_marginal))
-  prop_converged <- if (n_ess_computed > 0L) n_converged / n_ess_computed else 0
+  prop_converged <- if (n_total > 0L) n_converged / n_total else 0
 
   if (prop_converged >= control$targets$ESS_param_prop) {
     # Only declare convergence after min_batches to ensure sufficient exploration.
     # Early batches can spuriously meet ESS targets with small samples.
     if (state$batch_number >= control$calibration$min_batches_adaptive) {
       state$converged <- TRUE
-      log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (computed on %d/%d params)",
+      log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (%d/%d; %d ESS computed)",
               prop_converged * 100, control$targets$ESS_param,
-              n_ess_computed, length(param_names_est))
+              n_converged, n_total, n_ess_computed)
     } else {
       log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d — continuing",
               prop_converged * 100, control$targets$ESS_param,
@@ -1471,9 +1512,9 @@
       for (ji in seq_len(n_iter)) {
         iter_mats[[ji]] <- list(
           est_cases  = matrix(unlist(iter_list[[ji]]$reported_cases),
-                              nrow = n_locs, byrow = FALSE),
+                              nrow = n_locs, byrow = TRUE),
           est_deaths = matrix(unlist(iter_list[[ji]]$disease_deaths),
-                              nrow = n_locs, byrow = FALSE)
+                              nrow = n_locs, byrow = TRUE)
         )
       }
 
@@ -1720,9 +1761,9 @@
       for (ji in seq_len(n_iter_got)) {
         iter_res   <- iter_list[[ji]]
         est_cases  <- matrix(unlist(iter_res$reported_cases),
-                             nrow = n_locs, byrow = FALSE)
+                             nrow = n_locs, byrow = TRUE)
         est_deaths <- matrix(unlist(iter_res$disease_deaths),
-                             nrow = n_locs, byrow = FALSE)
+                             nrow = n_locs, byrow = TRUE)
 
         lls[ji] <- tryCatch(
           calc_model_likelihood(
@@ -1796,9 +1837,9 @@
         for (ji in seq_len(n_iter_got)) {
           iter_res   <- res$iterations[[ji]]
           est_cases  <- matrix(unlist(iter_res$reported_cases),
-                               nrow = n_locs, byrow = FALSE)
+                               nrow = n_locs, byrow = TRUE)
           est_deaths <- matrix(unlist(iter_res$disease_deaths),
-                               nrow = n_locs, byrow = FALSE)
+                               nrow = n_locs, byrow = TRUE)
           n_j_raw <- nrow(est_cases)
           n_t_raw <- ncol(est_cases)
           sr_df <- data.frame(
@@ -1855,7 +1896,6 @@
 #'
 #' @param client dask.distributed.Client (already connected).
 #' @param mosaic_worker Python module (mosaic_dask_worker, already imported).
-#' @param config_best Config list for the best-fit model (for ensemble sims).
 #' @param param_configs List of config lists for posterior parameter sets (for stochastic sims).
 #'   NULL to skip stochastic dispatch.
 #' @param n_stochastic_per Integer. Number of stochastic sims per param config.
@@ -1863,7 +1903,7 @@
 #' @return Named list with $stochastic_results (or NULL if skipped).
 #' @keywords internal
 .mosaic_postca_dask <- function(client, mosaic_worker,
-                                config_best, param_configs = NULL,
+                                param_configs = NULL,
                                 n_stochastic_per = 10L,
                                 log_msg = message) {
 

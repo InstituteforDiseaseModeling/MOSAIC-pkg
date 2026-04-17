@@ -223,88 +223,84 @@ est_immune_decay_vaccine <- function(PATHS) {
 
      # Plot 1: One-dose OCV effectiveness over time
      p1 <-
-          ggplot() +
-          geom_ribbon(data = prediction_one_dose,
-                     aes(x = day, ymin = predicted_lo, ymax = predicted_hi),
+          ggplot2::ggplot() +
+          ggplot2::geom_ribbon(data = prediction_one_dose,
+                     ggplot2::aes(x = day, ymin = predicted_lo, ymax = predicted_hi),
                      fill = green_fill, alpha = 0.4) +
-          geom_line(data = prediction_one_dose,
-                   aes(x = day, y = predicted),
+          ggplot2::geom_line(data = prediction_one_dose,
+                   ggplot2::aes(x = day, y = predicted),
                    color = green_line, linewidth = 1.5) +
-          geom_line(data = prediction_one_dose,
-                   aes(x = day, y = predicted_lo),
+          ggplot2::geom_line(data = prediction_one_dose,
+                   ggplot2::aes(x = day, y = predicted_lo),
                    color = green_line, linewidth = 0.75, linetype='dashed', alpha = 0.7) +
-          geom_line(data = prediction_one_dose,
-                   aes(x = day, y = predicted_hi),
+          ggplot2::geom_line(data = prediction_one_dose,
+                   ggplot2::aes(x = day, y = predicted_hi),
                    color = green_line, linewidth = 0.75, linetype='dashed', alpha = 0.7) +
-          # Data points with error bars in black
-          geom_errorbar(data = one_dose_data,
-                       aes(x = days, ymin = effectiveness_lo, ymax = effectiveness_hi),
+          ggplot2::geom_errorbar(data = one_dose_data,
+                       ggplot2::aes(x = days, ymin = effectiveness_lo, ymax = effectiveness_hi),
                        width = 0, color = "black", alpha = 0.8) +
-          geom_point(data = one_dose_data,
-                    aes(x = days, y = effectiveness),
+          ggplot2::geom_point(data = one_dose_data,
+                    ggplot2::aes(x = days, y = effectiveness),
                     color = "black", size = 3) +
-          # Annotations
-          annotate("text", x = 365 * 4, y = 0.15,
+          ggplot2::annotate("text", x = 365 * 4, y = 0.15,
                   label = sprintf("One-dose OCV\nphi = %.3f\nomega = %.5f\nHalf-life = %.0f days",
                                   fit_one_dose$mean[1], fit_one_dose$mean[2],
                                   log(2)/fit_one_dose$mean[2]),
                   color = green_line, size = 4.5, hjust = 0, fontface = "bold") +
-          labs(x = "Years after vaccination",
+          ggplot2::labs(x = "Years after vaccination",
                y = "Vaccine effectiveness",
                title = "One-dose OCV") +
-          theme_classic(base_size = 16) +
-          theme(panel.grid.minor = element_blank(),
-                panel.grid.major.y = element_line(color = "gray90", linetype = "dotted"),
-                axis.title.x = element_text(margin = margin(t = 10)),
-                axis.title.y = element_text(margin = margin(r = 10)),
-                plot.title = element_text(size = 18, face = "bold", hjust = 0.5)) +
-          scale_y_continuous(limits = c(0, 1), expand = c(0, 0),
+          ggplot2::theme_classic(base_size = 16) +
+          ggplot2::theme(panel.grid.minor = ggplot2::element_blank(),
+                panel.grid.major.y = ggplot2::element_line(color = "gray90", linetype = "dotted"),
+                axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 10)),
+                axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = 10)),
+                plot.title = ggplot2::element_text(size = 18, face = "bold", hjust = 0.5)) +
+          ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0, 0),
                            breaks = seq(0, 1, 0.2)) +
-          scale_x_continuous(limits = c(0, 365*5),
+          ggplot2::scale_x_continuous(limits = c(0, 365*5),
                            labels = 0:5,
                            breaks = 365 * (0:5),
                            expand = c(0, 0))
 
      # Plot 2: Two-dose OCV effectiveness over time
      p2 <-
-          ggplot() +
-          geom_ribbon(data = prediction_two_dose,
-                     aes(x = day, ymin = predicted_lo, ymax = predicted_hi),
+          ggplot2::ggplot() +
+          ggplot2::geom_ribbon(data = prediction_two_dose,
+                     ggplot2::aes(x = day, ymin = predicted_lo, ymax = predicted_hi),
                      fill = blue_fill, alpha = 0.4) +
-          geom_line(data = prediction_two_dose,
-                   aes(x = day, y = predicted),
+          ggplot2::geom_line(data = prediction_two_dose,
+                   ggplot2::aes(x = day, y = predicted),
                    color = blue_line, linewidth = 1.5) +
-          geom_line(data = prediction_two_dose,
-                   aes(x = day, y = predicted_lo),
+          ggplot2::geom_line(data = prediction_two_dose,
+                   ggplot2::aes(x = day, y = predicted_lo),
                    color = blue_line, linewidth = 0.75, linetype='dashed', alpha = 0.7) +
-          geom_line(data = prediction_two_dose,
-                   aes(x = day, y = predicted_hi),
+          ggplot2::geom_line(data = prediction_two_dose,
+                   ggplot2::aes(x = day, y = predicted_hi),
                    color = blue_line, linewidth = 0.75, linetype='dashed', alpha = 0.7) +
-          # Data points with error bars in black
-          geom_errorbar(data = two_dose_data,
-                       aes(x = days, ymin = effectiveness_lo, ymax = effectiveness_hi),
+          ggplot2::geom_errorbar(data = two_dose_data,
+                       ggplot2::aes(x = days, ymin = effectiveness_lo, ymax = effectiveness_hi),
                        width = 0, color = "black", alpha = 0.8) +
-          geom_point(data = two_dose_data,
-                    aes(x = days, y = effectiveness),
+          ggplot2::geom_point(data = two_dose_data,
+                    ggplot2::aes(x = days, y = effectiveness),
                     color = "black", size = 3) +
-          # Annotations
-          annotate("text", x = 365 * 4, y = 0.15,
+          ggplot2::annotate("text", x = 365 * 4, y = 0.15,
                   label = sprintf("Two-dose OCV\nphi = %.3f\nomega = %.5f\nHalf-life = %.0f days",
                                   fit_two_dose$mean[1], fit_two_dose$mean[2],
                                   log(2)/fit_two_dose$mean[2]),
                   color = blue_line, size = 4.5, hjust = 0, fontface = "bold") +
-          labs(x = "Years after vaccination",
+          ggplot2::labs(x = "Years after vaccination",
                y = "Vaccine effectiveness",
                title = "Two-dose OCV") +
-          theme_classic(base_size = 16) +
-          theme(panel.grid.minor = element_blank(),
-                panel.grid.major.y = element_line(color = "gray90", linetype = "dotted"),
-                axis.title.x = element_text(margin = margin(t = 10)),
-                axis.title.y = element_text(margin = margin(r = 10)),
-                plot.title = element_text(size = 18, face = "bold", hjust = 0.5)) +
-          scale_y_continuous(limits = c(0, 1), expand = c(0, 0),
+          ggplot2::theme_classic(base_size = 16) +
+          ggplot2::theme(panel.grid.minor = ggplot2::element_blank(),
+                panel.grid.major.y = ggplot2::element_line(color = "gray90", linetype = "dotted"),
+                axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 10)),
+                axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = 10)),
+                plot.title = ggplot2::element_text(size = 18, face = "bold", hjust = 0.5)) +
+          ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0, 0),
                            breaks = seq(0, 1, 0.2)) +
-          scale_x_continuous(limits = c(0, 365*5),
+          ggplot2::scale_x_continuous(limits = c(0, 365*5),
                            labels = 0:5,
                            breaks = 365 * (0:5),
                            expand = c(0, 0))

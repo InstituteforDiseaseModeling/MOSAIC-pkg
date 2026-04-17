@@ -35,6 +35,12 @@
 #'   uses the actual prior family, which is critical for staged estimation with
 #'   country-specific priors. When NULL (default), falls back to the static lookup
 #'   for backward compatibility.
+#' @param subset_col Character name of the boolean subset-membership column to
+#'   use when computing posterior quantiles. Defaults to \code{"is_best_subset"}
+#'   (tier-selected subset). Pass \code{"is_best_subset_opt"} to drive the
+#'   posterior from the optimizer-refined subset.
+#' @param weight_col Character name of the per-row weight column paired with
+#'   \code{subset_col}. Defaults to \code{"weight_best"}.
 #' @param verbose Logical; print progress messages (default: TRUE)
 #'
 #' @return Data frame with both prior and posterior quantiles plus KL divergence
@@ -53,6 +59,8 @@ calc_model_posterior_quantiles <- function(results,
                                          probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
                                          output_dir = "./results",
                                          priors = NULL,
+                                         subset_col = "is_best_subset",
+                                         weight_col = "weight_best",
                                          verbose = TRUE) {
 
     if (verbose) message("Calculating prior and posterior parameter quantiles...")
@@ -62,7 +70,7 @@ calc_model_posterior_quantiles <- function(results,
         stop("Results must be a non-empty data frame")
     }
 
-    required_cols <- c("is_finite", "is_retained", "is_best_subset", "weight_best")
+    required_cols <- c("is_finite", "is_retained", subset_col, weight_col)
     missing_cols <- setdiff(required_cols, names(results))
     if (length(missing_cols) > 0) {
         stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -223,8 +231,9 @@ calc_model_posterior_quantiles <- function(results,
 
     # Get parameter columns from results, excluding metadata columns
     exclude_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood", "aic", "delta_aic",
-                     "weight_retained", "weight_best", "is_finite", "is_valid", "is_outlier", "is_retained",
-                     "is_best_subset", "is_best_model", "best_subset_B")
+                     "weight_retained", "weight_best", "weight_best_opt",
+                     "is_finite", "is_valid", "is_outlier", "is_retained",
+                     "is_best_subset", "is_best_subset_opt", "is_best_model", "best_subset_B")
 
     # Also exclude columns that are not estimated parameters
     all_cols <- names(results)
@@ -457,8 +466,8 @@ calc_model_posterior_quantiles <- function(results,
 
     # Get indices for different subsets
     all_finite_idx <- results$is_finite
-    best_subset_idx <- results$is_best_subset
-    best_subset_weights <- results$weight_best[best_subset_idx]
+    best_subset_idx <- as.logical(results[[subset_col]])
+    best_subset_weights <- results[[weight_col]][best_subset_idx]
 
     if (verbose) {
         message("Computing prior and posterior quantiles for ", nrow(param_inventory), " parameters...")

@@ -198,8 +198,8 @@ est_WASH_coverage <- function(PATHS) {
 
 
      wash_data_long <- wash_data_long %>%
-          group_by(WASH_Variable) %>%
-          mutate(correlation_label = paste0("r = ", round(correlations_weighted[WASH_Variable], 2)))
+          dplyr::group_by(WASH_Variable) %>%
+          dplyr::mutate(correlation_label = paste0("r = ", round(correlations_weighted[WASH_Variable], 2)))
 
 
 
@@ -211,25 +211,25 @@ est_WASH_coverage <- function(PATHS) {
                                  levels=c("Piped Water", "Septic or Sewer Sanitation", "Other Improved Water", "Other Improved Sanitation"))
 
      p1 <-
-          ggplot(tmp, aes(x = Value, y = Incidence_per_1000)) +
-          geom_point(color = "black", size = 2, alpha=0.6) +
-          geom_smooth(color = "#2ecc71", method = "lm", se = FALSE, linewidth = 1) +
-          facet_wrap(~ WASH_Variable, scales = "free_x") +
-          geom_text(aes(label = correlation_label), x = Inf, y = Inf, hjust = 1.75, vjust = 2, size = 3.5, color = "black") +
-          labs(title = "A",
+          ggplot2::ggplot(tmp, ggplot2::aes(x = Value, y = Incidence_per_1000)) +
+          ggplot2::geom_point(color = "black", size = 2, alpha=0.6) +
+          ggplot2::geom_smooth(color = "#2ecc71", method = "lm", se = FALSE, linewidth = 1) +
+          ggplot2::facet_wrap(~ WASH_Variable, scales = "free_x") +
+          ggplot2::geom_text(ggplot2::aes(label = correlation_label), x = Inf, y = Inf, hjust = 1.75, vjust = 2, size = 3.5, color = "black") +
+          ggplot2::labs(title = "A",
                subtitle = "Protective WASH variables",
                x = NULL,
                y = "Incidence per 1,000") +
-          scale_x_continuous(limits = c(0,1)) +
-          theme_minimal() +
-          theme(plot.title = element_text(size = 13, face = "bold"),
-                plot.subtitle = element_text(size = 13, face='bold', hjust = 0.5),
-                axis.title.x = element_text(size = 12, margin = margin(t = 20)),
-                axis.title.y = element_text(size = 12, margin = margin(r = 20)),
-                axis.text = element_text(size = 10),
-                strip.text = element_text(size = 12),
+          ggplot2::scale_x_continuous(limits = c(0,1)) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(plot.title = ggplot2::element_text(size = 13, face = "bold"),
+                plot.subtitle = ggplot2::element_text(size = 13, face='bold', hjust = 0.5),
+                axis.title.x = ggplot2::element_text(size = 12, margin = ggplot2::margin(t = 20)),
+                axis.title.y = ggplot2::element_text(size = 12, margin = ggplot2::margin(r = 20)),
+                axis.text = ggplot2::element_text(size = 10),
+                strip.text = ggplot2::element_text(size = 12),
                 legend.position = "none",
-                panel.grid.minor = element_blank())
+                panel.grid.minor = ggplot2::element_blank())
 
 
 
@@ -241,25 +241,25 @@ est_WASH_coverage <- function(PATHS) {
 
 
      p2 <-
-          ggplot(tmp, aes(x = Value, y = Incidence_per_1000)) +
-          geom_point(color = "black", size = 2, alpha=0.6) +
-          geom_smooth(color = "#e67e22", method = "lm", se = FALSE, size = 1) +
-          facet_wrap(~ WASH_Variable, scales = "free_x") +
-          geom_text(aes(label = correlation_label), x = Inf, y = Inf, hjust = 1.75, vjust = 2, size = 3.5, color = "black") +
-          labs(title = "B",
+          ggplot2::ggplot(tmp, ggplot2::aes(x = Value, y = Incidence_per_1000)) +
+          ggplot2::geom_point(color = "black", size = 2, alpha=0.6) +
+          ggplot2::geom_smooth(color = "#e67e22", method = "lm", se = FALSE, linewidth = 1) +
+          ggplot2::facet_wrap(~ WASH_Variable, scales = "free_x") +
+          ggplot2::geom_text(ggplot2::aes(label = correlation_label), x = Inf, y = Inf, hjust = 1.75, vjust = 2, size = 3.5, color = "black") +
+          ggplot2::labs(title = "B",
                subtitle = "Risk WASH variables (1-value)",
                x = NULL,
                y = "Incidence per 1,000") +
-          scale_x_continuous(limits = c(0,1)) +
-          theme_minimal() +
-          theme(plot.title = element_text(size = 13, face = "bold"),
-                plot.subtitle = element_text(size = 13, face='bold', hjust = 0.5),
-                axis.title.x = element_text(size = 12, margin = margin(t = 20)),
-                axis.title.y = element_text(size = 12, margin = margin(r = 20)),
-                axis.text = element_text(size = 10),
-                strip.text = element_text(size = 12),
+          ggplot2::scale_x_continuous(limits = c(0,1)) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(plot.title = ggplot2::element_text(size = 13, face = "bold"),
+                plot.subtitle = ggplot2::element_text(size = 13, face='bold', hjust = 0.5),
+                axis.title.x = ggplot2::element_text(size = 12, margin = ggplot2::margin(t = 20)),
+                axis.title.y = ggplot2::element_text(size = 12, margin = ggplot2::margin(r = 20)),
+                axis.text = ggplot2::element_text(size = 10),
+                strip.text = ggplot2::element_text(size = 12),
                 legend.position = "none",
-                panel.grid.minor = element_blank())
+                panel.grid.minor = ggplot2::element_blank())
 
 
 
@@ -269,25 +269,25 @@ est_WASH_coverage <- function(PATHS) {
                                  levels=c("Weighted Mean WASH", "Mean WASH"))
 
      p3 <-
-          ggplot(tmp, aes(x = Value, y = Incidence_per_1000)) +
-          geom_point(color = "black", size = 2, alpha=0.6) +
-          geom_smooth(color = "#9b59b6", method = "lm", se = FALSE, size = 1) +
-          facet_wrap(~ WASH_Variable, scales = "free_x") +
-          geom_text(aes(label = correlation_label), x = Inf, y = Inf, hjust = 1.75, vjust = 2, size = 3.5, color = "black") +
-          labs(title = "C",
+          ggplot2::ggplot(tmp, ggplot2::aes(x = Value, y = Incidence_per_1000)) +
+          ggplot2::geom_point(color = "black", size = 2, alpha=0.6) +
+          ggplot2::geom_smooth(color = "#9b59b6", method = "lm", se = FALSE, linewidth = 1) +
+          ggplot2::facet_wrap(~ WASH_Variable, scales = "free_x") +
+          ggplot2::geom_text(ggplot2::aes(label = correlation_label), x = Inf, y = Inf, hjust = 1.75, vjust = 2, size = 3.5, color = "black") +
+          ggplot2::labs(title = "C",
                subtitle = "Mean WASH variables",
                x = "WASH variable value",
                y = "Incidence per 1,000") +
-          scale_x_continuous(limits = c(0,1)) +
-          theme_minimal() +
-          theme(plot.title = element_text(size = 13, face='bold'),
-                plot.subtitle = element_text(size = 13, face='bold', hjust = 0.5),
-                axis.title.x = element_text(size = 12, margin = margin(t = 20)),
-                axis.title.y = element_text(size = 12, margin = margin(r = 20)),
-                axis.text = element_text(size = 10),
-                strip.text = element_text(size = 12),
+          ggplot2::scale_x_continuous(limits = c(0,1)) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(plot.title = ggplot2::element_text(size = 13, face='bold'),
+                plot.subtitle = ggplot2::element_text(size = 13, face='bold', hjust = 0.5),
+                axis.title.x = ggplot2::element_text(size = 12, margin = ggplot2::margin(t = 20)),
+                axis.title.y = ggplot2::element_text(size = 12, margin = ggplot2::margin(r = 20)),
+                axis.text = ggplot2::element_text(size = 10),
+                strip.text = ggplot2::element_text(size = 12),
                 legend.position = "none",
-                panel.grid.minor = element_blank())
+                panel.grid.minor = ggplot2::element_blank())
 
 
      combo <- cowplot::plot_grid(p1, p2, p3, ncol=1, rel_heights = c(1,1,0.7), align = "vh", axis='tb')
@@ -312,24 +312,23 @@ est_WASH_coverage <- function(PATHS) {
      wash_data$Country <- factor(wash_data$Country, levels=wash_data$Country)
 
      p4 <-
-          ggplot(wash_data, aes(x = Country, y = Weighted_Mean_WASH)) +
-          geom_bar(stat = "identity", fill = "steelblue") +
-          geom_hline(yintercept = 0) +
-          # Add asterisks above imputed bars
-          geom_text(data = wash_data[wash_data$imputed == 1, ],
-                    aes(label = "*", x = reorder(Country, Weighted_Mean_WASH), y = Weighted_Mean_WASH + 0.01),
+          ggplot2::ggplot(wash_data, ggplot2::aes(x = Country, y = Weighted_Mean_WASH)) +
+          ggplot2::geom_bar(stat = "identity", fill = "steelblue") +
+          ggplot2::geom_hline(yintercept = 0) +
+          ggplot2::geom_text(data = wash_data[wash_data$imputed == 1, ],
+                    ggplot2::aes(label = "*", x = reorder(Country, Weighted_Mean_WASH), y = Weighted_Mean_WASH + 0.01),
                     color = "#FF7F50", size = 5.5, vjust = 0) +
-          labs(x = NULL, y = "Optimized Weighted Mean\nof WASH Variables (θ)") +  # Wrap the y-axis title and add (θ)
-          scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
-          theme_minimal() +
-          theme(
-               plot.title = element_text(size = 16, face = "bold"),
-               axis.ticks.x = element_line(linewidth = 0.5),
-               axis.ticks.y = element_line(linewidth = 0.5),
-               axis.title.y = element_text(size = 14, margin = margin(r = 20), lineheight = 1.2),  # Lineheight for wrapping
-               panel.grid.minor = element_blank(),
-               panel.grid.major.x = element_blank(),
-               axis.text.x = element_text(angle = 60, hjust = 1, size = 11.5, color = ifelse(wash_data$imputed == 1, "#FF7F50", "black"))
+          ggplot2::labs(x = NULL, y = "Optimized Weighted Mean\nof WASH Variables (\u03b8)") +
+          ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(
+               plot.title = ggplot2::element_text(size = 16, face = "bold"),
+               axis.ticks.x = ggplot2::element_line(linewidth = 0.5),
+               axis.ticks.y = ggplot2::element_line(linewidth = 0.5),
+               axis.title.y = ggplot2::element_text(size = 14, margin = ggplot2::margin(r = 20), lineheight = 1.2),
+               panel.grid.minor = ggplot2::element_blank(),
+               panel.grid.major.x = ggplot2::element_blank(),
+               axis.text.x = ggplot2::element_text(angle = 60, hjust = 1, size = 11.5, color = ifelse(wash_data$imputed == 1, "#FF7F50", "black"))
           )
 
 

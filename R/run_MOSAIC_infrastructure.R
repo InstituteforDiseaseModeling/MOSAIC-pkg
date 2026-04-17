@@ -166,6 +166,31 @@
   invisible(success)
 }
 
+#' Remove laser-cholera's root-logger FileHandler
+#'
+#' laser-cholera/src/laser/cholera/metapop/logsetup.py adds a FileHandler to the
+#' Python root logger at import time, creating a timestamped .log file in cwd.
+#' This pollutes the working directory with empty or Coiled-only log files.
+#' Call once after the first `import("laser.cholera.metapop.model")`.
+#' @noRd
+.mosaic_strip_laser_file_handler <- function() {
+  tryCatch({
+    reticulate::py_run_string("
+import logging as _logging, os as _os
+_root = _logging.getLogger()
+for _h in list(_root.handlers):
+    if isinstance(_h, _logging.FileHandler):
+        _fn = getattr(_h, 'baseFilename', None)
+        _h.close()
+        _root.removeHandler(_h)
+        # Remove the empty log file if it was created
+        if _fn and _os.path.isfile(_fn) and _os.path.getsize(_fn) == 0:
+            _os.remove(_fn)
+", local = FALSE, convert = FALSE)
+  }, error = function(e) NULL)
+  invisible(NULL)
+}
+
 #' Capture Full Environment Snapshot
 #'
 #' Records all version, system, and runtime information needed to reproduce
@@ -387,10 +412,20 @@
 #' @param config Base LASER config (for provenance fields)
 #' @param r2_cases R-squared for cases (best model vs observed)
 #' @param r2_deaths R-squared for deaths (best model vs observed)
-#' @param r2_cases_ensemble R-squared for cases (weighted median of posterior ensemble)
-#' @param r2_deaths_ensemble R-squared for deaths (weighted median of posterior ensemble)
-#' @param n_ensemble_params Number of parameter sets in the posterior ensemble
+#' @param r2_cases_ensemble R-squared for cases (weighted median of the canonical
+#'   posterior ensemble — tier-selected when optimize_subset = FALSE, optimizer-
+#'   refined when optimize_subset = TRUE)
+#' @param r2_deaths_ensemble R-squared for deaths (canonical ensemble, see above)
+#' @param n_ensemble_params Number of parameter sets in the canonical ensemble
 #' @param n_ensemble_stochastic_per Stochastic reruns per parameter set
+#' @param r2_cases_ensemble_tier Tier-subset R-squared for cases, preserved for
+#'   comparison when optimize_subset = TRUE. NA when the flag is FALSE (in which
+#'   case r2_cases_ensemble already holds the tier metric).
+#' @param r2_deaths_ensemble_tier Tier-subset R-squared for deaths (see above).
+#' @param bias_ratio_cases_ensemble_tier Tier-subset bias ratio for cases.
+#' @param bias_ratio_deaths_ensemble_tier Tier-subset bias ratio for deaths.
+#' @param n_ensemble_params_tier Tier-subset param count (= n_ensemble_params when
+#'   optimize_subset = FALSE; typically larger than n_ensemble_params when TRUE).
 #' @param io I/O settings for JSON writing
 #' @noRd
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
@@ -403,6 +438,11 @@
                                        bias_ratio_deaths_ensemble = NA_real_,
                                        n_ensemble_params = NA_integer_,
                                        n_ensemble_stochastic_per = NA_integer_,
+                                       r2_cases_ensemble_tier = NA_real_,
+                                       r2_deaths_ensemble_tier = NA_real_,
+                                       bias_ratio_cases_ensemble_tier = NA_real_,
+                                       bias_ratio_deaths_ensemble_tier = NA_real_,
+                                       n_ensemble_params_tier = NA_integer_,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -468,6 +508,14 @@
     bias_ratio_deaths_ensemble = if (!is.na(bias_ratio_deaths_ensemble)) round(bias_ratio_deaths_ensemble, 4) else NA_real_,
     n_ensemble_params          = if (!is.na(n_ensemble_params)) as.integer(n_ensemble_params) else NA_integer_,
     n_ensemble_stochastic_per  = if (!is.na(n_ensemble_stochastic_per)) as.integer(n_ensemble_stochastic_per) else NA_integer_,
+    # Tier-subset ensemble metrics — populated ONLY when optimize_subset = TRUE,
+    # preserved for comparison. When the flag is off, the canonical
+    # r2_cases_ensemble fields above ARE the tier metrics and these fields are NA.
+    r2_cases_ensemble_tier  = if (!is.na(r2_cases_ensemble_tier)) round(r2_cases_ensemble_tier, 4) else NA_real_,
+    r2_deaths_ensemble_tier = if (!is.na(r2_deaths_ensemble_tier)) round(r2_deaths_ensemble_tier, 4) else NA_real_,
+    bias_ratio_cases_ensemble_tier  = if (!is.na(bias_ratio_cases_ensemble_tier)) round(bias_ratio_cases_ensemble_tier, 4) else NA_real_,
+    bias_ratio_deaths_ensemble_tier = if (!is.na(bias_ratio_deaths_ensemble_tier)) round(bias_ratio_deaths_ensemble_tier, 4) else NA_real_,
+    n_ensemble_params_tier = if (!is.na(n_ensemble_params_tier)) as.integer(n_ensemble_params_tier) else NA_integer_,
     # ESS summary
     ess_n_params        = ess_stats$n_params,
     ess_n_above_target  = ess_stats$n_above_target,

@@ -12,6 +12,9 @@
 #'   Default 0.3.
 #' @param max_params Maximum number of parameters to display. The top
 #'   \code{max_params} most-correlated parameters are selected. Default 25.
+#' @param subset_col Character name of the boolean subset-membership column.
+#'   Defaults to \code{"is_best_subset"}. Pass \code{"is_best_subset_opt"} to
+#'   read the optimizer-refined subset.
 #' @param verbose Print progress messages
 #'
 #' @return Invisible NULL. Writes a PNG file to \code{output_dir}.
@@ -22,6 +25,7 @@ plot_model_parameter_correlation <- function(results_file,
                                              output_dir = ".",
                                              cor_threshold = 0.3,
                                              max_params = 25,
+                                             subset_col = "is_best_subset",
                                              verbose = TRUE) {
 
   if (!file.exists(results_file)) {
@@ -34,17 +38,17 @@ plot_model_parameter_correlation <- function(results_file,
   # Identify parameter columns (exclude metadata, status, weight columns)
   meta_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood",
                  "is_finite", "is_valid", "is_outlier", "is_retained",
-                 "is_best_subset", "is_best_model",
-                 "weight_all", "weight_retained", "weight_best",
+                 "is_best_subset", "is_best_subset_opt", "is_best_model",
+                 "weight_all", "weight_retained", "weight_best", "weight_best_opt",
                  "N_j_initial")
 
   param_cols <- setdiff(names(results), meta_cols)
 
-  # Use best subset if available, otherwise retained
+  # Use requested subset if available, otherwise retained
 
-  if ("is_best_subset" %in% names(results) && any(results$is_best_subset)) {
-    sims <- results[results$is_best_subset == TRUE, param_cols, drop = FALSE]
-    subset_label <- "best subset"
+  if (subset_col %in% names(results) && any(as.logical(results[[subset_col]]))) {
+    sims <- results[as.logical(results[[subset_col]]), param_cols, drop = FALSE]
+    subset_label <- if (identical(subset_col, "is_best_subset_opt")) "optimized best subset" else "best subset"
   } else if ("is_retained" %in% names(results) && any(results$is_retained)) {
     sims <- results[results$is_retained == TRUE, param_cols, drop = FALSE]
     subset_label <- "retained"

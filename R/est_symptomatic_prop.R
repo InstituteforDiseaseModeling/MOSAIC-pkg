@@ -17,12 +17,15 @@
 #' est_symptomatic_prop(PATHS)
 #' }
 #'
-#' @importFrom ggplot2 ggplot geom_histogram stat_function geom_vline geom_text scale_x_continuous scale_y_continuous theme_minimal labs annotate geom_line
+#' @importFrom ggplot2 ggplot aes after_stat geom_histogram geom_line geom_vline geom_hline geom_rect geom_text labs annotate scale_x_continuous scale_y_continuous scale_fill_manual scale_color_manual theme_minimal theme element_blank element_line element_text margin coord_flip
 #' @importFrom utils read.csv write.csv
 #' @importFrom stats rbeta quantile dbeta
 #' @export
 
 est_symptomatic_prop <- function(PATHS) {
+
+     requireNamespace("ggplot2")
+     requireNamespace("cowplot")
 
      # Read the symptomatic proportion data
      df <- utils::read.csv(file.path(PATHS$DATA_SYMPTOMATIC, "summary_symptomatic_cases.csv"))
@@ -51,71 +54,67 @@ est_symptomatic_prop <- function(PATHS) {
      df_beta <- data.frame(x = x_vals, y = y_vals)
 
      p1 <-
-          ggplot(df_samples, aes(x = x)) +
-          geom_histogram(aes(y = ..density..), bins = 35, fill = "#1B4F72", color='white', alpha = 0.5) +
-          #stat_function(fun = dbeta, args = list(shape1 = prm$shape1, shape2 = prm$shape2), color = "black", size = 1) +
-          geom_line(data = df_beta, aes(x = x, y = y), color = "black", linewidth = 1) +  # Plot Beta distribution
-          geom_vline(xintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", linewidth = 0.25) +
-          geom_vline(xintercept = ci[2], linetype = "dashed", color = "grey20", linewidth = 0.25) +
-          labs(title = "A", x = "", y = "") +
-          scale_x_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
-          scale_y_continuous(expand=c(0.005, 0.005)) +
-          theme_minimal(base_size = 14) +
-          theme(
+          ggplot2::ggplot(df_samples, ggplot2::aes(x = x)) +
+          ggplot2::geom_histogram(ggplot2::aes(y = ggplot2::after_stat(density)), bins = 35, fill = "#1B4F72", color='white', alpha = 0.5) +
+          ggplot2::geom_line(data = df_beta, ggplot2::aes(x = x, y = y), color = "black", linewidth = 1) +
+          ggplot2::geom_vline(xintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          ggplot2::geom_vline(xintercept = ci[2], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          ggplot2::labs(title = "A", x = "", y = "") +
+          ggplot2::scale_x_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
+          ggplot2::scale_y_continuous(expand=c(0.005, 0.005)) +
+          ggplot2::theme_minimal(base_size = 14) +
+          ggplot2::theme(
                legend.position = "none",
-               panel.grid.major.y = element_blank(),
-               panel.grid.major.x = element_line(color='grey80', linewidth=0.25),
-               panel.grid.minor = element_blank(),
-               axis.title.x = element_text(margin = margin(t = 30), hjust=0.3),
-               plot.margin = unit(c(0.25, 0.25, 0, 0), "inches")
+               panel.grid.major.y = ggplot2::element_blank(),
+               panel.grid.major.x = ggplot2::element_line(color='grey80', linewidth=0.25),
+               panel.grid.minor = ggplot2::element_blank(),
+               axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 30), hjust=0.3),
+               plot.margin = grid::unit(c(0.25, 0.25, 0, 0), "inches")
           )
 
 
 
      # How does this compare with previous studies?
 
-
-
-     #pal <- c("#1B4F72", "#239B56", "#884EA0", "#D35400", "#7D3C98", "#566573", "#CD6155", "#5D6D7E", "#AF601A")
      pal <- c("#274001", "#828a00", "#D35400", "#7D3C98", "#1B4F72", "#a62f03", "#400d01", "#4d8584")
 
      p2 <-
-          ggplot(df, aes(x = source, y = mean, color = source)) +
-          geom_hline(yintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", size = 0.25) +
-          geom_hline(yintercept = ci[2], linetype = "dashed", color = "grey20", size = 0.25) +
-          geom_rect(aes(xmin = as.numeric(factor(source)) - 0.2,
+          ggplot2::ggplot(df, ggplot2::aes(x = source, y = mean, color = source)) +
+          ggplot2::geom_hline(yintercept = ci[c(1,3)], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          ggplot2::geom_hline(yintercept = ci[2], linetype = "dashed", color = "grey20", linewidth = 0.25) +
+          ggplot2::geom_rect(ggplot2::aes(xmin = as.numeric(factor(source)) - 0.2,
                         xmax = as.numeric(factor(source)) + 0.2,
                         ymin = ci_lo, ymax = ci_hi,
                         fill = source),
                     alpha = 0.3, color=NA) +
-          geom_rect(aes(xmin = as.numeric(factor(source)) - 0.2,
+          ggplot2::geom_rect(ggplot2::aes(xmin = as.numeric(factor(source)) - 0.2,
                         xmax = as.numeric(factor(source)) + 0.2,
                         ymin = mean-0.0025, ymax = mean+0.0025, fill = source)) +
-          geom_text(aes(label = note2), vjust = -1, hjust = 1.25, size=3) +
-          annotate("text", x = 1, y = 1.02, hjust = 0, vjust = 0.5,  label = "Pakistan", color = pal[1], alpha=0.7, size = 3.5) +
-          annotate("text", x = 2, y = 1.02, hjust = 0, vjust = 0.5, label = "Haiti", color = pal[2], alpha=0.7, size = 3.5) +
-          annotate("text", x = 3, y = 1.02, hjust = 0, vjust = 0.5, label = "Bangladesh", color = pal[3], alpha=0.7, size = 3.5) +
-          annotate("text", x = 4, y = 1.02, hjust = 0, vjust = 0.5, label = "Endemic regions", color = pal[4], alpha=0.7, size = 3.5) +
-          annotate("text", x = 5, y = 1.02, hjust = 0, vjust = 0.5, label = "Bangladesh", color = pal[5], alpha=0.7, size = 3.5) +
-          annotate("text", x = 6, y = 1.02, hjust = 0, vjust = 0.5, label = "Haiti", color = pal[6], alpha=0.7, size = 3.5) +
-          labs(title = "B", x = "", y = "Proportion of infections that are symptomatic") +
-          scale_fill_manual(values = pal) +
-          scale_color_manual(values = pal) +
-          scale_y_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
-          theme_minimal(base_size = 14) +
-          theme(
+          ggplot2::geom_text(ggplot2::aes(label = note2), vjust = -1, hjust = 1.25, size=3) +
+          ggplot2::annotate("text", x = 1, y = 1.02, hjust = 0, vjust = 0.5,  label = "Pakistan", color = pal[1], alpha=0.7, size = 3.5) +
+          ggplot2::annotate("text", x = 2, y = 1.02, hjust = 0, vjust = 0.5, label = "Haiti", color = pal[2], alpha=0.7, size = 3.5) +
+          ggplot2::annotate("text", x = 3, y = 1.02, hjust = 0, vjust = 0.5, label = "Bangladesh", color = pal[3], alpha=0.7, size = 3.5) +
+          ggplot2::annotate("text", x = 4, y = 1.02, hjust = 0, vjust = 0.5, label = "Endemic regions", color = pal[4], alpha=0.7, size = 3.5) +
+          ggplot2::annotate("text", x = 5, y = 1.02, hjust = 0, vjust = 0.5, label = "Bangladesh", color = pal[5], alpha=0.7, size = 3.5) +
+          ggplot2::annotate("text", x = 6, y = 1.02, hjust = 0, vjust = 0.5, label = "Haiti", color = pal[6], alpha=0.7, size = 3.5) +
+          ggplot2::labs(title = "B", x = "", y = "Proportion of infections that are symptomatic") +
+          ggplot2::scale_fill_manual(values = pal) +
+          ggplot2::scale_color_manual(values = pal) +
+          ggplot2::scale_y_continuous(limits = c(-0.02, 1.25), breaks=seq(0, 1, 0.25), expand=c(0,0)) +
+          ggplot2::theme_minimal(base_size = 14) +
+          ggplot2::theme(
                legend.position = "none",
-               panel.grid.major.y = element_blank(),
-               panel.grid.major.x = element_line(color='grey80', linewidth=0.25),
-               panel.grid.minor = element_blank(),
-               axis.title.x = element_text(margin = margin(t = 30), hjust=0.3),
-               axis.title.y = element_text(margin = margin(r = 15)),
-               plot.margin = unit(c(0, 0.25, 0.25, 0), "inches")
+               panel.grid.major.y = ggplot2::element_blank(),
+               panel.grid.major.x = ggplot2::element_line(color='grey80', linewidth=0.25),
+               panel.grid.minor = ggplot2::element_blank(),
+               axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 30), hjust=0.3),
+               axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = 15)),
+               plot.margin = grid::unit(c(0, 0.25, 0.25, 0), "inches")
           ) +
-          coord_flip()
+          ggplot2::coord_flip()
 
 
-     combo <- plot_grid(p1, p2, ncol = 1, rel_heights = c(1, 1.5), align='vh')
+     combo <- cowplot::plot_grid(p1, p2, ncol = 1, rel_heights = c(1, 1.5), align='vh')
      print(combo)
 
 
@@ -140,7 +139,5 @@ est_symptomatic_prop <- function(PATHS) {
      path <- file.path(PATHS$MODEL_INPUT, "param_sigma_prop_symptomatic.csv")
      write.csv(param_df, path, row.names = FALSE)
      message(paste("Parameter data frame for symptomatic proportion (theta) saved to:", path))
-
-
 
 }

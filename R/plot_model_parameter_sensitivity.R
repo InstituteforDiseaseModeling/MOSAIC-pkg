@@ -24,6 +24,10 @@
 #'   \code{"laplace"}, or \code{"dcov"}.
 #' @param test_method Significance test method. \code{"Asymptotic"} (default, fast,
 #'   requires n >= 100) or \code{"Permutation"} (exact, slower).
+#' @param subset_col Character name of the boolean subset-membership column used
+#'   as the fallback when importance-weight ESS is degenerate. Defaults to
+#'   \code{"is_best_subset"}. Pass \code{"is_best_subset_opt"} to read the
+#'   optimizer-refined subset.
 #' @param verbose Print progress messages.
 #'
 #' @return A data.frame with columns \code{parameter}, \code{hsic_r2},
@@ -47,6 +51,7 @@ plot_model_parameter_sensitivity <- function(results_file,
                                              n_samples = 2000,
                                              kernel = "rbf",
                                              test_method = "Asymptotic",
+                                             subset_col = "is_best_subset",
                                              verbose = TRUE) {
 
   if (!file.exists(results_file)) {
@@ -61,8 +66,8 @@ plot_model_parameter_sensitivity <- function(results_file,
   # -----------------------------------------------------------------------
   meta_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood",
                  "is_finite", "is_valid", "is_outlier", "is_retained",
-                 "is_best_subset", "is_best_model",
-                 "weight_all", "weight_retained", "weight_best",
+                 "is_best_subset", "is_best_subset_opt", "is_best_model",
+                 "weight_all", "weight_retained", "weight_best", "weight_best_opt",
                  "N_j_initial")
 
   param_cols <- setdiff(names(results), meta_cols)
@@ -99,8 +104,8 @@ plot_model_parameter_sensitivity <- function(results_file,
     calc_model_ess(w, method = "kish")
   }
 
-  has_best_subset <- "is_best_subset" %in% names(results) &&
-                     any(results$is_best_subset == TRUE, na.rm = TRUE)
+  has_best_subset <- subset_col %in% names(results) &&
+                     any(as.logical(results[[subset_col]]), na.rm = TRUE)
 
   w_retained <- if ("weight_retained" %in% names(sims)) sims$weight_retained else NULL
   ess_retained <- if (!is.null(w_retained)) .compute_ess(w_retained) else 0
@@ -108,10 +113,11 @@ plot_model_parameter_sensitivity <- function(results_file,
 
   if (ess_retained < ess_threshold && has_best_subset) {
     # Degenerate weights: fall back to best_subset samples
-    sims_sub <- results[results$is_best_subset == TRUE, ]
+    sims_sub <- results[as.logical(results[[subset_col]]), ]
     n_use <- nrow(sims_sub)
-    subset_label <- sprintf("best_subset (ESS of retained = %.0f < threshold %.0f)",
-                            ess_retained, ess_threshold)
+    label_name <- if (identical(subset_col, "is_best_subset_opt")) "best_subset_opt" else "best_subset"
+    subset_label <- sprintf("%s (ESS of retained = %.0f < threshold %.0f)",
+                            label_name, ess_retained, ess_threshold)
     # Use U-statistic at small n: V-stat positive bias is non-trivial when n < 200
     estimator_type <- if (n_use < 200) "U-stat" else "V-stat"
     if (verbose) {

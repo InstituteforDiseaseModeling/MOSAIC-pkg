@@ -54,8 +54,8 @@ download_all_country_shapefiles <- function(PATHS) {
           shp_name <- paste(i, "ADM0.shp", sep = "_")
           shp_path <- file.path(path_out, shp_name)
 
-          # Save the shapefile using sf::st_write
-          sf::st_write(shp, shp_path)
+          # Save the shapefile using sf::st_write (overwrite if exists)
+          sf::st_write(shp, shp_path, delete_layer = TRUE)
           message(paste0("Shapefile saved here: ", shp_path))
      }
 

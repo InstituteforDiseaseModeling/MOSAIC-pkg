@@ -101,11 +101,11 @@ est_seasonal_dynamics <- function(PATHS,
           precip_data$date <- as.Date(precip_data$date)
           precip_data <- precip_data[precip_data$date >= date_start & precip_data$date < date_stop, ]
           precip_data <- precip_data %>%
-               mutate(week = lubridate::week(date), year = lubridate::year(date)) %>%
-               group_by(year, week) %>%
-               summarize(weekly_precipitation_sum = sum(value, na.rm = TRUE),
-                         .groups = "drop") %>%
-               mutate(iso_code = iso)
+               dplyr::mutate(week = lubridate::week(date), year = lubridate::year(date)) %>%
+               dplyr::group_by(year, week) %>%
+               dplyr::summarize(weekly_precipitation_sum = sum(value, na.rm = TRUE),
+                                .groups = "drop") %>%
+               dplyr::mutate(iso_code = iso)
 
           cholera_sub <- cholera_data[cholera_data$iso_code == iso, ]
           merged <- merge(precip_data, cholera_sub, by = c("year", "week", "iso_code"), all.x = TRUE)

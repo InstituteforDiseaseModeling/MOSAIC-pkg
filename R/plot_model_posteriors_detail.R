@@ -9,6 +9,12 @@
 #' @param posteriors_file Path to posteriors.json file (optional, for theoretical distributions)
 #' @param diagnostics_file Path to convergence_diagnostics.json file (optional, for ESS values)
 #' @param output_dir Directory to save plots (default: "./results/plots")
+#' @param subset_col Character name of the boolean subset-membership column used
+#'   to select the "best subset" panel of the detailed posterior plot. Defaults
+#'   to \code{"is_best_subset"}. Pass \code{"is_best_subset_opt"} to plot the
+#'   optimizer-refined subset.
+#' @param weight_col Character name of the per-row weight column paired with
+#'   \code{subset_col}. Defaults to \code{"weight_best"}.
 #' @param verbose Logical; print progress messages (default: TRUE)
 #'
 #' @return List of plot filenames created (invisible)
@@ -31,6 +37,8 @@ plot_model_posteriors_detail <- function(quantiles_file,
                                  posteriors_file = NULL,
                                  diagnostics_file = NULL,
                                  output_dir = "./results/plots",
+                                 subset_col = "is_best_subset",
+                                 weight_col = "weight_best",
                                  verbose = TRUE) {
 
   # All required packages loaded via NAMESPACE
@@ -60,9 +68,15 @@ plot_model_posteriors_detail <- function(quantiles_file,
   results_full <- arrow::read_parquet(results_file)
 
   # Access different subsets
+  if (!subset_col %in% names(results_full)) {
+    stop(sprintf("subset_col '%s' not found in results.", subset_col))
+  }
+  if (!weight_col %in% names(results_full)) {
+    stop(sprintf("weight_col '%s' not found in results.", weight_col))
+  }
   results_all <- results_full  # All simulations
   results_retained <- results_full[results_full$is_retained, ]  # Non-outlier models
-  results_best <- results_full[results_full$is_best_subset, ]  # Best subset
+  results_best <- results_full[as.logical(results_full[[subset_col]]), ]  # Best subset
 
   # Load priors
   if (!file.exists(priors_file)) {
@@ -316,13 +330,13 @@ plot_model_posteriors_detail <- function(quantiles_file,
     retained_samples <- results_retained[[param_name]]
     best_samples <- results_best[[param_name]]
 
-    # Use the weight_best column from results (should already be calculated)
-    # For best subset, we use weight_best; for retained, we'd use weight_retained
-    if (!"weight_best" %in% names(results_best)) {
-      stop("weight_best column not found in results. Check that convergence analysis was run.")
+    # Use the weight column from results (resolved via weight_col argument)
+    if (!weight_col %in% names(results_best)) {
+      stop(sprintf("'%s' column not found in results. Check that convergence analysis was run.",
+                   weight_col))
     }
 
-    posterior_weights <- results_best$weight_best
+    posterior_weights <- results_best[[weight_col]]
 
     # Check if retained weights exist
     retained_weights <- NULL
@@ -332,7 +346,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
 
     # Basic validation only - weights should already be proper
     if (!is.numeric(posterior_weights)) {
-      stop("weight_best column is not numeric. Check the results data.")
+      stop(sprintf("'%s' column is not numeric. Check the results data.", weight_col))
     }
 
     # Calculate ESS from weights

@@ -10,6 +10,7 @@ plot_model_parameter_correlation(
   output_dir = ".",
   cor_threshold = 0.3,
   max_params = 25,
+  subset_col = "is_best_subset",
   verbose = TRUE
 )
 }
@@ -25,6 +26,10 @@ Default 0.3.}
 
 \item{max_params}{Maximum number of parameters to display. The top
 \code{max_params} most-correlated parameters are selected. Default 25.}
+
+\item{subset_col}{Character name of the boolean subset-membership column.
+Defaults to \code{"is_best_subset"}. Pass \code{"is_best_subset_opt"} to
+read the optimizer-refined subset.}
 
 \item{verbose}{Print progress messages}
 }

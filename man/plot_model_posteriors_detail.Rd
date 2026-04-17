@@ -11,6 +11,8 @@ plot_model_posteriors_detail(
   posteriors_file = NULL,
   diagnostics_file = NULL,
   output_dir = "./results/plots",
+  subset_col = "is_best_subset",
+  weight_col = "weight_best",
   verbose = TRUE
 )
 }
@@ -26,6 +28,14 @@ plot_model_posteriors_detail(
 \item{diagnostics_file}{Path to convergence_diagnostics.json file (optional, for ESS values)}
 
 \item{output_dir}{Directory to save plots (default: "./results/plots")}
+
+\item{subset_col}{Character name of the boolean subset-membership column used
+to select the "best subset" panel of the detailed posterior plot. Defaults
+to \code{"is_best_subset"}. Pass \code{"is_best_subset_opt"} to plot the
+optimizer-refined subset.}
+
+\item{weight_col}{Character name of the per-row weight column paired with
+\code{subset_col}. Defaults to \code{"weight_best"}.}
 
 \item{verbose}{Logical; print progress messages (default: TRUE)}
 }

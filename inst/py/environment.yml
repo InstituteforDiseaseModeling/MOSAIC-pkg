@@ -13,7 +13,7 @@ dependencies:
   - packaging=24.0         # Python dependency management
   - pip:
       - "numpy<2"          # Prevent pip deps from upgrading to numpy 2.x
-      - tensorflow>=2.16.0 # Via pip to avoid conda libabseil conflict with pyarrow; 2.16+ required by keras3 R package
+      - tensorflow>=2.16.0,<2.21 # 2.16+ required by keras3 R; <2.21 avoids protobuf segfault on macOS Tahoe
       - laser-core==1.0.1
       - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.12.1/laser_cholera-0.12.1-py3-none-any.whl
       # Dask distributed computing and Coiled cloud orchestration (required by run_MOSAIC_dask())
