@@ -1,5 +1,28 @@
 # Changelog
 
+## MOSAIC 0.24.1
+
+### Bug fixes
+
+- [`process_open_meteo_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_open_meteo_data.md)
+  now renames `soil_moisture_0_to_7cm_mean` to
+  `soil_moisture_0_to_10cm_mean` on raw ERA5 historical parquets before
+  splicing with climate-model projections. Upstream open-meteo-pipeline
+  [issue](https://github.com/InstituteforDiseaseModeling/open-meteo-pipeline/issues/5)
+  [\#5](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/5)
+  switched ERA5 requests to the 0-7 cm band (the ERA5 Historical API
+  silently returned all-null for the 0-10 cm band), so without this
+  rename the [`rbind()`](https://rdrr.io/r/base/cbind.html) of
+  historical + climate frames produced mismatched columns and every
+  downstream soil-moisture feature in
+  [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+  /
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  became NA. Users who have cached outputs from before the upstream fix
+  should run `process_open_meteo_data(PATHS, force = TRUE)` once to
+  force regeneration; the cache check compares source vs. output mtimes
+  and will not otherwise pick up the upstream schema change.
+
 ## MOSAIC 0.24.0
 
 ### Behavior change (not API)
