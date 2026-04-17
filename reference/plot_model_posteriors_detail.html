@@ -9,7 +9,7 @@ to posterior distributions through retained and best subsets, with ESS and KL me
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,6 +55,8 @@ to posterior distributions through retained and best subsets, with ESS and KL me
 <span>  posteriors_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  diagnostics_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  output_dir <span class="op">=</span> <span class="st">"./results/plots"</span>,</span>
+<span>  subset_col <span class="op">=</span> <span class="st">"is_best_subset"</span>,</span>
+<span>  weight_col <span class="op">=</span> <span class="st">"weight_best"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -85,6 +87,18 @@ to posterior distributions through retained and best subsets, with ESS and KL me
 
 <dt id="arg-output-dir">output_dir<a class="anchor" aria-label="anchor" href="#arg-output-dir"></a></dt>
 <dd><p>Directory to save plots (default: "./results/plots")</p></dd>
+
+
+<dt id="arg-subset-col">subset_col<a class="anchor" aria-label="anchor" href="#arg-subset-col"></a></dt>
+<dd><p>Character name of the boolean subset-membership column used
+to select the "best subset" panel of the detailed posterior plot. Defaults
+to <code>"is_best_subset"</code>. Pass <code>"is_best_subset_opt"</code> to plot the
+optimizer-refined subset.</p></dd>
+
+
+<dt id="arg-weight-col">weight_col<a class="anchor" aria-label="anchor" href="#arg-weight-col"></a></dt>
+<dd><p>Character name of the per-row weight column paired with
+<code>subset_col</code>. Defaults to <code>"weight_best"</code>.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

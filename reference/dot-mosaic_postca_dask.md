@@ -11,7 +11,6 @@ precomputed_results argument.
 .mosaic_postca_dask(
   client,
   mosaic_worker,
-  config_best,
   param_configs = NULL,
   n_stochastic_per = 10L,
   log_msg = message
@@ -27,10 +26,6 @@ precomputed_results argument.
 - mosaic_worker:
 
   Python module (mosaic_dask_worker, already imported).
-
-- config_best:
-
-  Config list for the best-fit model (for ensemble sims).
 
 - param_configs:
 

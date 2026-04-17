@@ -49,7 +49,5 @@ plot will also be saved as a PNG in that directory as
 
 ``` r
 plot_recovery_duration()
-#> Error in geom_rect(aes(xmin = min_days, xmax = max_days, ymin = ymin,     ymax = ymax, fill = type), alpha = 0.4, color = NA): could not find function "geom_rect"
 plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12))
-#> Error in geom_rect(aes(xmin = min_days, xmax = max_days, ymin = ymin,     ymax = ymax, fill = type), alpha = 0.4, color = NA): could not find function "geom_rect"
 ```

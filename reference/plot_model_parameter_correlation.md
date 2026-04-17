@@ -14,6 +14,7 @@ plot_model_parameter_correlation(
   output_dir = ".",
   cor_threshold = 0.3,
   max_params = 25,
+  subset_col = "is_best_subset",
   verbose = TRUE
 )
 ```
@@ -40,6 +41,12 @@ plot_model_parameter_correlation(
 
   Maximum number of parameters to display. The top `max_params`
   most-correlated parameters are selected. Default 25.
+
+- subset_col:
+
+  Character name of the boolean subset-membership column. Defaults to
+  `"is_best_subset"`. Pass `"is_best_subset_opt"` to read the
+  optimizer-refined subset.
 
 - verbose:
 

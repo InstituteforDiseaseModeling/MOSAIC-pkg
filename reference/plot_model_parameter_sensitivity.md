@@ -18,6 +18,7 @@ plot_model_parameter_sensitivity(
   n_samples = 2000,
   kernel = "rbf",
   test_method = "Asymptotic",
+  subset_col = "is_best_subset",
   verbose = TRUE
 )
 ```
@@ -55,6 +56,13 @@ plot_model_parameter_sensitivity(
 
   Significance test method. `"Asymptotic"` (default, fast, requires n
   \>= 100) or `"Permutation"` (exact, slower).
+
+- subset_col:
+
+  Character name of the boolean subset-membership column used as the
+  fallback when importance-weight ESS is degenerate. Defaults to
+  `"is_best_subset"`. Pass `"is_best_subset_opt"` to read the
+  optimizer-refined subset.
 
 - verbose:
 

@@ -15,7 +15,7 @@ samples where parameters are correlated (Da Veiga 2015)."><meta property="og:ima
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,6 +65,7 @@ samples where parameters are correlated (Da Veiga 2015).</p>
 <span>  n_samples <span class="op">=</span> <span class="fl">2000</span>,</span>
 <span>  kernel <span class="op">=</span> <span class="st">"rbf"</span>,</span>
 <span>  test_method <span class="op">=</span> <span class="st">"Asymptotic"</span>,</span>
+<span>  subset_col <span class="op">=</span> <span class="st">"is_best_subset"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -103,6 +104,13 @@ replacement using importance weights. Default 2000.</p></dd>
 <dt id="arg-test-method">test_method<a class="anchor" aria-label="anchor" href="#arg-test-method"></a></dt>
 <dd><p>Significance test method. <code>"Asymptotic"</code> (default, fast,
 requires n &gt;= 100) or <code>"Permutation"</code> (exact, slower).</p></dd>
+
+
+<dt id="arg-subset-col">subset_col<a class="anchor" aria-label="anchor" href="#arg-subset-col"></a></dt>
+<dd><p>Character name of the boolean subset-membership column used
+as the fallback when importance-weight ESS is degenerate. Defaults to
+<code>"is_best_subset"</code>. Pass <code>"is_best_subset_opt"</code> to read the
+optimizer-refined subset.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

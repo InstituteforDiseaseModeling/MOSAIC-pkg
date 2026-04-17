@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,37 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.24.0" id="mosaic-0240">MOSAIC 0.24.0<a class="anchor" aria-label="anchor" href="#mosaic-0240"></a></h2>
+<div class="section level3">
+<h3 id="behavior-change-not-api-0-24-0">Behavior change (not API)<a class="anchor" aria-label="anchor" href="#behavior-change-not-api-0-24-0"></a></h3>
+<ul><li>
+<strong><code>control$predictions$optimize_subset = TRUE</code> now drives the canonical posterior artifacts.</strong> Previously the optimized subset was a parallel reporting track: it produced an <code>ensemble_optimized.rds</code> and <code>*_optimized</code> metrics in <code>summary.json</code>, but <code>posteriors.json</code>, <code>posterior_quantiles.csv</code>, ensemble plots, and chained downstream priors were all computed from the tier-selected subset. After this release, when the flag is on the optimized subset is written to new <code>is_best_subset_opt</code> / <code>weight_best_opt</code> columns in <code>samples.parquet</code> and every posterior-consuming function reads from those columns. The tier-selected subset remains in <code>is_best_subset</code> / <code>weight_best</code> for provenance.</li>
+<li>
+<strong><code>summary.json</code> field rename.</strong> The previous <code>r2_cases_ensemble_optimized</code> / <code>r2_deaths_ensemble_optimized</code> / <code>bias_ratio_*_ensemble_optimized</code> / <code>n_ensemble_params_optimized</code> fields are renamed to <code>*_ensemble_tier</code> / <code>n_ensemble_params_tier</code>. The canonical <code>r2_cases_ensemble</code> (etc.) now holds the optimized metrics when <code>optimize_subset = TRUE</code> and the tier metrics when the flag is off; the new <code>*_tier</code> fields preserve the tier-subset metrics for side-by-side comparison (NA when the flag is off). Downstream consumers reading the old <code>_optimized</code> field names must be updated.</li>
+<li>
+<strong>Ensemble construction moved earlier in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>.</strong> The Dask reconnect + stochastic sims + <code>calc_model_ensemble</code> block now runs <strong>before</strong> posterior quantile/distribution/sensitivity construction so that the optimizer (when enabled) can refine the posterior. Best-model PPC and ensemble metrics/plots remain after posterior construction.</li>
+<li>Users relying on the old behavior (tier subset drives posteriors regardless of flag) should set <code>control$predictions$optimize_subset = FALSE</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-arguments-0-24-0">New arguments<a class="anchor" aria-label="anchor" href="#new-arguments-0-24-0"></a></h3>
+<ul><li>
+<code><a href="../reference/calc_model_posterior_quantiles.html">calc_model_posterior_quantiles()</a></code>, <code><a href="../reference/plot_model_parameter_correlation.html">plot_model_parameter_correlation()</a></code>, <code><a href="../reference/plot_model_parameter_sensitivity.html">plot_model_parameter_sensitivity()</a></code>, and <code><a href="../reference/plot_model_posteriors_detail.html">plot_model_posteriors_detail()</a></code> gained <code>subset_col</code> and <code>weight_col</code> arguments defaulting to <code>"is_best_subset"</code> / <code>"weight_best"</code>. Existing callers see no change.</li>
+<li>
+<code><a href="../reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> gained an optional <code>seeds</code> argument and returns <code>optimal_seeds</code> so callers can map the optimized subset back to <code>samples.parquet</code> without duplicating the internal sort logic.</li>
+<li>
+<code><a href="../reference/calc_convergence_diagnostics.html">calc_convergence_diagnostics()</a></code> gained an optional <code>n_best_subset_optimized</code> argument; when supplied, the JSON output includes a new <code>metrics$B_size_optimized</code> entry and <code>summary$n_best_subset_optimized</code> field.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="defaults-0-24-0">Defaults<a class="anchor" aria-label="anchor" href="#defaults-0-24-0"></a></h3>
+<ul><li>
+<code>control$predictions$optimize_min_n</code> raised from <code>4L</code> to <code>30L</code>. Four was the statistical minimum per Fox et al. (2024), but posterior density estimation on the optimized subset needs more samples; a warning is logged when the optimizer selects <code>&lt; 30</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-0-24-0">Internal<a class="anchor" aria-label="anchor" href="#internal-0-24-0"></a></h3>
+<ul><li>Added <code>.mosaic_active_subset_cols(results, control)</code> helper that returns the canonical subset/weight column names plus a <code>"tier"</code> / <code>"optimized"</code> source tag. Used by <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> to thread the correct columns through all posterior-consuming calls.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.13.21" id="mosaic-01321">MOSAIC 0.13.21<a class="anchor" aria-label="anchor" href="#mosaic-01321"></a></h2>
 <div class="section level3">

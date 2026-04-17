@@ -829,6 +829,8 @@ Other exported functions and internal helpers
   : Generate Graduated Uncertainty Colors from a Base Color
 - [`mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_palette.md)
   : Generate a MOSAIC Color Palette
+- [`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)
+  : Optimize Ensemble Subset Size
 - [`pgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/pgompertz.md)
   : Gompertz Distribution Cumulative Distribution Function
 - [`plot_CFR_by_country()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_CFR_by_country.md)

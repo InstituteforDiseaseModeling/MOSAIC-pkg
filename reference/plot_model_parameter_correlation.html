@@ -13,7 +13,7 @@ labeled."><meta property="og:image" content="https://institutefordiseasemodeling
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,6 +60,7 @@ labeled.</p>
 <span>  output_dir <span class="op">=</span> <span class="st">"."</span>,</span>
 <span>  cor_threshold <span class="op">=</span> <span class="fl">0.3</span>,</span>
 <span>  max_params <span class="op">=</span> <span class="fl">25</span>,</span>
+<span>  subset_col <span class="op">=</span> <span class="st">"is_best_subset"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -88,6 +89,12 @@ Default 0.3.</p></dd>
 <dt id="arg-max-params">max_params<a class="anchor" aria-label="anchor" href="#arg-max-params"></a></dt>
 <dd><p>Maximum number of parameters to display. The top
 <code>max_params</code> most-correlated parameters are selected. Default 25.</p></dd>
+
+
+<dt id="arg-subset-col">subset_col<a class="anchor" aria-label="anchor" href="#arg-subset-col"></a></dt>
+<dd><p>Character name of the boolean subset-membership column.
+Defaults to <code>"is_best_subset"</code>. Pass <code>"is_best_subset_opt"</code> to
+read the optimizer-refined subset.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

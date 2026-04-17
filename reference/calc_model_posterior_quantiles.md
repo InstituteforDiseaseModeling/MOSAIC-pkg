@@ -12,6 +12,8 @@ calc_model_posterior_quantiles(
   probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
   output_dir = "./results",
   priors = NULL,
+  subset_col = "is_best_subset",
+  weight_col = "weight_best",
   verbose = TRUE
 )
 ```
@@ -40,6 +42,18 @@ calc_model_posterior_quantiles(
   posterior fitting uses the actual prior family, which is critical for
   staged estimation with country-specific priors. When NULL (default),
   falls back to the static lookup for backward compatibility.
+
+- subset_col:
+
+  Character name of the boolean subset-membership column to use when
+  computing posterior quantiles. Defaults to `"is_best_subset"`
+  (tier-selected subset). Pass `"is_best_subset_opt"` to drive the
+  posterior from the optimizer-refined subset.
+
+- weight_col:
+
+  Character name of the per-row weight column paired with `subset_col`.
+  Defaults to `"weight_best"`.
 
 - verbose:
 

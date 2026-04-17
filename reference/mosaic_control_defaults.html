@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -142,6 +142,23 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 <dt id="arg-predictions">predictions<a class="anchor" aria-label="anchor" href="#arg-predictions"></a></dt>
 <dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 5L)</p></li>
+<li><p><code>optimize_subset</code>: Logical; when <code>TRUE</code>, the post-ensemble
+optimizer (MAE / WIS / R²+bias) refines the best subset used for
+<code>posteriors.json</code>, <code>posterior_quantiles.csv</code>, and the ensemble
+object driving all downstream plots and metrics. The tier-selected subset
+is preserved in the <code>is_best_subset</code> / <code>weight_best</code> columns of
+<code>samples.parquet</code> for provenance; the optimized selection is written
+to new <code>is_best_subset_opt</code> / <code>weight_best_opt</code> columns. When
+<code>FALSE</code> (default), the tier-selected subset is canonical and no
+<code>_opt</code> columns are written. <strong>Statistical note:</strong> enabling this
+flag yields a posterior conditioned on ensemble predictive performance
+(MAE / WIS / R²+bias on the training data) rather than a pure
+likelihood-weighted posterior.</p></li>
+<li><p><code>optimize_min_n</code>: Minimum subset size the optimizer may select
+(default <code>30L</code>, raised from <code>4L</code> to guard against KDE
+degeneracy in <code>posteriors.json</code>).</p></li>
+<li><p><code>optimize_objective</code>: Objective function, <code>"mae"</code> (default),
+<code>"r2_bias"</code>, or <code>"wis"</code>.</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset
 (all sims with non-zero importance weights).</p></dd>
 

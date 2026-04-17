@@ -13,7 +13,7 @@ their precomputed_results argument."><meta property="og:image" content="https://
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.23.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.24.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,6 @@ their precomputed_results argument.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">.mosaic_postca_dask</span><span class="op">(</span></span>
 <span>  <span class="va">client</span>,</span>
 <span>  <span class="va">mosaic_worker</span>,</span>
-<span>  <span class="va">config_best</span>,</span>
 <span>  param_configs <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  n_stochastic_per <span class="op">=</span> <span class="fl">10L</span>,</span>
 <span>  log_msg <span class="op">=</span> <span class="va">message</span></span>
@@ -74,10 +73,6 @@ their precomputed_results argument.</p>
 
 <dt id="arg-mosaic-worker">mosaic_worker<a class="anchor" aria-label="anchor" href="#arg-mosaic-worker"></a></dt>
 <dd><p>Python module (mosaic_dask_worker, already imported).</p></dd>
-
-
-<dt id="arg-config-best">config_best<a class="anchor" aria-label="anchor" href="#arg-config-best"></a></dt>
-<dd><p>Config list for the best-fit model (for ensemble sims).</p></dd>
 
 
 <dt id="arg-param-configs">param_configs<a class="anchor" aria-label="anchor" href="#arg-param-configs"></a></dt>

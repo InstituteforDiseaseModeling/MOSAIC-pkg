@@ -14,6 +14,8 @@ plot_model_posteriors_detail(
   posteriors_file = NULL,
   diagnostics_file = NULL,
   output_dir = "./results/plots",
+  subset_col = "is_best_subset",
+  weight_col = "weight_best",
   verbose = TRUE
 )
 ```
@@ -44,6 +46,18 @@ plot_model_posteriors_detail(
 - output_dir:
 
   Directory to save plots (default: "./results/plots")
+
+- subset_col:
+
+  Character name of the boolean subset-membership column used to select
+  the "best subset" panel of the detailed posterior plot. Defaults to
+  `"is_best_subset"`. Pass `"is_best_subset_opt"` to plot the
+  optimizer-refined subset.
+
+- weight_col:
+
+  Character name of the per-row weight column paired with `subset_col`.
+  Defaults to `"weight_best"`.
 
 - verbose:
 
