@@ -732,8 +732,13 @@ if (nrow(merged_surv) >= 10) {
 priors_default_MOZ$parameters_location$epidemic_threshold <- list(
      description = "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation",
      location = list(
-          MOZ = list(distribution = "lognormal",
-                     parameters = list(meanlog = log(prior_mean), sdlog = 0.5))
+          MOZ = list(distribution = "truncnorm",
+                     parameters = list(
+                          mean = prior_mean,
+                          sd   = prior_mean * 0.65,
+                          a    = max(1e-6, prior_mean / 10),
+                          b    = min(0.01, prior_mean * 10)
+                     ))
      )
 )
 

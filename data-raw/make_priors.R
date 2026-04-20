@@ -1748,7 +1748,15 @@ country_threshold_data$prior_mean <- ifelse(
      )
 )
 
-EPIDEMIC_THRESHOLD_SDLOG <- 0.5   # captures ~factor-of-2 uncertainty around Zheng conversion
+# v0.28.0: Switched from Lognormal to Truncnorm to eliminate stage-2+ posterior
+# drift past 1% daily symptomatic prevalence (biologically unreachable epidemic
+# regime). Lognormal was unbounded above; update_priors_from_posteriors.R's
+# family-match guard now preserves the [a, b] support across all stages.
+# Natural-scale CV = 0.65 approximately matches the old lognormal sdlog=0.5
+# spread (CV ≈ 0.53) with a small inflation buffer.
+EPIDEMIC_THRESHOLD_SD_REL    <- 0.65   # natural-scale CV
+EPIDEMIC_THRESHOLD_LOWER_ABS <- 1e-6   # global floor: near-silent endemic
+EPIDEMIC_THRESHOLD_UPPER_ABS <- 0.01   # global cap: 1% daily symp prevalence = severe epidemic
 
 priors_default$parameters_location$epidemic_threshold <- list(
      description = paste0(
@@ -1756,18 +1764,22 @@ priors_default$parameters_location$epidemic_threshold <- list(
           "Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. ",
           "Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) ",
           "converted via Zheng formula using config rho, chi_endemic, and gamma_1. ",
-          "Lognormal(meanlog = log(prior_mean), sdlog = 0.5)."
+          "Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, ",
+          "a = max(1e-6, prior_mean/10), b = min(0.01, prior_mean*10))."
      ),
      location = list()
 )
 
 for (iso in j) {
      idx <- which(country_threshold_data$iso_code == iso)
+     pm  <- country_threshold_data$prior_mean[idx]
      priors_default$parameters_location$epidemic_threshold$location[[iso]] <- list(
-          distribution = "lognormal",
+          distribution = "truncnorm",
           parameters   = list(
-               meanlog = log(country_threshold_data$prior_mean[idx]),
-               sdlog   = EPIDEMIC_THRESHOLD_SDLOG
+               mean = pm,
+               sd   = pm * EPIDEMIC_THRESHOLD_SD_REL,
+               a    = max(EPIDEMIC_THRESHOLD_LOWER_ABS, pm / 10),
+               b    = min(EPIDEMIC_THRESHOLD_UPPER_ABS, pm * 10)
           )
      )
 }
@@ -1775,8 +1787,8 @@ for (iso in j) {
 # Verification summary
 n_data_prior <- sum(!country_threshold_data$use_fallback)
 n_fallback   <- sum(country_threshold_data$use_fallback)
-all_ml <- sapply(j, function(iso)
-     priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$meanlog)
+all_mean <- sapply(j, function(iso)
+     priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$mean)
 
 cat(sprintf(
      "\n[epidemic_threshold priors] Data-derived: %d | Fallback: %d | Total: %d\n",
@@ -1784,14 +1796,13 @@ cat(sprintf(
 ))
 cat(sprintf(
      "[epidemic_threshold priors] prior_mean range: [%.2e, %.2e]\n",
-     exp(min(all_ml)), exp(max(all_ml))
+     min(all_mean), max(all_mean)
 ))
 for (iso in c("ETH", "COD", "SLE", "BWA")) {
-     pm <- priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$meanlog
-     ps <- priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters$sdlog
+     p  <- priors_default$parameters_location$epidemic_threshold$location[[iso]]$parameters
      fb <- if (country_threshold_data$use_fallback[country_threshold_data$iso_code == iso]) " [fallback]" else ""
-     cat(sprintf("  %s%s: median=%.2e  95%% CI=[%.2e, %.2e]\n",
-                 iso, fb, exp(pm), exp(pm - 1.96 * ps), exp(pm + 1.96 * ps)))
+     cat(sprintf("  %s%s: mean=%.2e  sd=%.2e  bounds=[%.2e, %.2e]\n",
+                 iso, fb, p$mean, p$sd, p$a, p$b))
 }
 
 #----------------------------------------

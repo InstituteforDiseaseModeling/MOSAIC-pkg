@@ -5065,286 +5065,366 @@
       }
     },
     "epidemic_threshold": {
-      "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) converted via Zheng formula using config rho, chi_endemic, and gamma_1. Lognormal(meanlog = log(prior_mean), sdlog = 0.5).",
+      "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) converted via Zheng formula using config rho, chi_endemic, and gamma_1. Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, a = max(1e-6, prior_mean/10), b = min(0.01, prior_mean*10)).",
       "location": {
         "AGO": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.6039,
-            "sdlog": 0.5
+            "mean": 3.3588e-06,
+            "sd": 2.1832e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "BDI": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.8602,
-            "sdlog": 0.5
+            "mean": 2.5995e-06,
+            "sd": 1.6897e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "BEN": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -14.126,
-            "sdlog": 0.5
+            "mean": 7.3311e-07,
+            "sd": 4.7652e-07,
+            "a": 1e-06,
+            "b": 7.3311e-06
           }
         },
         "BFA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "BWA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "CAF": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.023,
-            "sdlog": 0.5
+            "mean": 6.0042e-06,
+            "sd": 3.9027e-06,
+            "a": 1e-06,
+            "b": 0.0001
           }
         },
         "CIV": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -16.0816,
-            "sdlog": 0.5
+            "mean": 1.0371e-07,
+            "sd": 6.7413e-08,
+            "a": 1e-06,
+            "b": 1.0371e-06
           }
         },
         "CMR": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.2146,
-            "sdlog": 0.5
+            "mean": 4.9575e-06,
+            "sd": 3.2224e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "COD": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.0171,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.6419e-06,
+            "b": 0.0002
           }
         },
         "COG": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.427,
-            "sdlog": 0.5
+            "mean": 1.4748e-06,
+            "sd": 9.5859e-07,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "ERI": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "ETH": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.7193,
-            "sdlog": 0.5
+            "mean": 8.1354e-06,
+            "sd": 5.288e-06,
+            "a": 1e-06,
+            "b": 0.0001
           }
         },
         "GAB": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "GHA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.6149,
-            "sdlog": 0.5
+            "mean": 9.0304e-06,
+            "sd": 5.8698e-06,
+            "a": 1e-06,
+            "b": 0.0001
           }
         },
         "GIN": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.8825,
-            "sdlog": 0.5
+            "mean": 6.9103e-06,
+            "sd": 4.4917e-06,
+            "a": 1e-06,
+            "b": 0.0001
           }
         },
         "GMB": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "GNB": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "GNQ": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "KEN": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.638,
-            "sdlog": 0.5
+            "mean": 3.2462e-06,
+            "sd": 2.11e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "LBR": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.3642,
-            "sdlog": 0.5
+            "mean": 1.5703e-06,
+            "sd": 1.0207e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "MLI": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "MOZ": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.4186,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 7.1428e-06,
+            "a": 1.0989e-06,
+            "b": 0.0001
           }
         },
         "MRT": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "MWI": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.5355,
-            "sdlog": 0.5
+            "mean": 1.3232e-06,
+            "sd": 8.6006e-07,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "NAM": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "NER": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.1037,
-            "sdlog": 0.5
+            "mean": 2.0376e-06,
+            "sd": 1.3244e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "NGA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.732,
-            "sdlog": 0.5
+            "mean": 1.0871e-06,
+            "sd": 7.0662e-07,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "RWA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.5353,
-            "sdlog": 0.5
+            "mean": 1.3235e-06,
+            "sd": 8.6025e-07,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "SEN": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "SLE": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -9.8833,
-            "sdlog": 0.5
+            "mean": 0.0001,
+            "sd": 0,
+            "a": 5.1019e-06,
+            "b": 0.0005
           }
         },
         "SOM": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.345,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 3.2154e-06,
+            "b": 0.0003
           }
         },
         "SSD": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.2558,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 3.5155e-06,
+            "b": 0.0004
           }
         },
         "SWZ": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "TCD": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.3872,
-            "sdlog": 0.5
+            "mean": 1.5347e-06,
+            "sd": 9.9754e-07,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "TGO": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.7304,
-            "sdlog": 0.5
+            "mean": 2.9598e-06,
+            "sd": 1.9239e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "TZA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.3882,
-            "sdlog": 0.5
+            "mean": 4.1674e-06,
+            "sd": 2.7088e-06,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "UGA": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -13.5555,
-            "sdlog": 0.5
+            "mean": 1.2969e-06,
+            "sd": 8.4301e-07,
+            "a": 1e-06,
+            "b": 0
           }
         },
         "ZAF": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -10.878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 0,
+            "a": 1.8868e-06,
+            "b": 0.0002
           }
         },
         "ZMB": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -12.0923,
-            "sdlog": 0.5
+            "mean": 5.6023e-06,
+            "sd": 3.6415e-06,
+            "a": 1e-06,
+            "b": 0.0001
           }
         },
         "ZWE": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.0878,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 9.9433e-06,
+            "a": 1.5297e-06,
+            "b": 0.0002
           }
         }
       }

@@ -43,6 +43,6 @@
 "mu_j_baseline","Baseline IFR","Baseline location-specific infection fatality ratio","proportion","gamma","location","disease",42,"02","05","01","gamma",NA,NA
 "mu_j_slope","Temporal IFR Trend","Temporal trend in IFR (change per year)","per year","normal","location","disease",43,"02","05","02","normal",NA,NA
 "mu_j_epidemic_factor","Epidemic IFR Multiplier","Multiplier applied to IFR during epidemic periods","dimensionless","gamma","location","disease",44,"02","05","03","gamma",NA,NA
-"epidemic_threshold","Epidemic Threshold","Case incidence threshold for epidemic period classification","cases/100k/week","lognormal","location","disease",45,"02","05","04","lognormal",NA,NA
+"epidemic_threshold","Epidemic Threshold","Case incidence threshold for epidemic period classification","cases/100k/week","truncnorm","location","disease",45,"02","05","04","truncnorm",NA,NA
 "tau_i","Travel Probability","Country-level travel/mobility probability","probability","beta","location","mobility",46,"02","05","05","beta",NA,NA
 "theta_j","WASH Coverage","WASH coverage index (proportion with adequate water, sanitation, hygiene)","proportion","beta","location","spatial",47,"02","05","06","beta",NA,NA

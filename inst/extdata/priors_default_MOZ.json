@@ -427,10 +427,12 @@
       "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation",
       "location": {
         "MOZ": {
-          "distribution": "lognormal",
+          "distribution": "truncnorm",
           "parameters": {
-            "meanlog": -11.4186,
-            "sdlog": 0.5
+            "mean": 0,
+            "sd": 7.1428e-06,
+            "a": 1.0989e-06,
+            "b": 0.0001
           }
         }
       }
