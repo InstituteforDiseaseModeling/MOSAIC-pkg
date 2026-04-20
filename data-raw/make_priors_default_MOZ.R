@@ -60,22 +60,21 @@ priors_default_MOZ$parameters_global$alpha_2 <- list(
      parameters = list(shape1 = beta_fit_alpha_2$shape1, shape2 = beta_fit_alpha_2$shape2)
 )
 
-# decay_days_long - Constrained to max 1 year (biological realism).
-# MOZ 7 best model: 133 days. With U(30,1095), 66-80% of top sims used >365 days,
-# creating degenerate environmental reservoirs. The tight prior forces proper
-# seasonal forcing via suitability and immunity dynamics.
-priors_default_MOZ$parameters_global$decay_days_long <- list(
-     description = "Maximum V. cholerae survival time (days)",
-     distribution = "uniform",
-     parameters = list(min = 30, max = 365)
+# decay_days_spread - Replaces decay_days_long (v0.27.0). decay_days_long is
+# now derived as decay_days_short + decay_days_spread, algebraically guaranteeing
+# ordering and preserving the 365-day biological ceiling through staged posteriors.
+priors_default_MOZ$parameters_global$decay_days_spread <- list(
+     description = "Spread between min and max V. cholerae survival time (days)",
+     distribution = "truncnorm",
+     parameters = list(mean = 180, sd = 95, a = 1, b = 365)
 )
 
-# decay_days_short - Tighter, biologically realistic. MOZ 7 best: 19.8 days.
-# Field literature supports minimum Vibrio survival on the order of days to low weeks.
+# decay_days_short - MOZ 7 best: 19.8 days. Upper bound relaxed from 29 to 60
+# in v0.27.0 (no longer needed as ordering guard; that's handled by decay_days_spread).
 priors_default_MOZ$parameters_global$decay_days_short <- list(
      description = "Minimum V. cholerae survival time (days)",
      distribution = "truncnorm",
-     parameters = list(mean = 16, sd = 7, a = 0.01, b = 29)
+     parameters = list(mean = 16, sd = 7, a = 0.01, b = 60)
 )
 
 # decay_shape_1

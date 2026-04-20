@@ -222,37 +222,43 @@ test_that("round-trip: truncnorm prior recovers truncnorm posterior", {
 
 
 # ---------------------------------------------------------------------------
-# 7. Uniform → lognormal (domain inference for positive)
+# 7. Truncnorm round-trip for decay_days_spread (v0.27.0: was uniform decay_days_long)
 # ---------------------------------------------------------------------------
-test_that("round-trip: uniform positive prior fits lognormal posterior", {
-  prior <- list(distribution = "uniform", parameters = list(min = 30, max = 365))
-  fitted <- run_roundtrip("decay_days_long", prior)
+test_that("round-trip: decay_days_spread truncnorm prior fits truncnorm posterior", {
+  prior <- list(distribution = "truncnorm",
+                parameters = list(mean = 180, sd = 95, a = 1, b = 365))
+  fitted <- run_roundtrip("decay_days_spread", prior)
 
-  # Uniform with min >= 0 should infer lognormal
-  expect_equal(fitted$distribution, "lognormal")
-  expect_true(is.finite(fitted$parameters$meanlog))
-  expect_true(fitted$parameters$sdlog > 0)
+  # Truncnorm prior should fit truncnorm posterior with bounds preserved
+  expect_equal(fitted$distribution, "truncnorm")
+  expect_true(is.finite(fitted$parameters$mean))
+  expect_true(fitted$parameters$sd > 0)
+  expect_equal(as.numeric(fitted$parameters$a), 1)
+  expect_equal(as.numeric(fitted$parameters$b), 365)
 
   post_samples <- sample_from_prior(n = 1000, prior = fitted)
   expect_true(all(is.finite(post_samples)))
-  expect_true(all(post_samples > 0))
+  expect_true(all(post_samples >= 1 & post_samples <= 365))
 })
 
 
 # ---------------------------------------------------------------------------
-# 8. Uniform → gamma (decay_shape via domain inference)
+# 8. Truncnorm round-trip for decay_shape_1 (v0.26.0: was uniform)
 # ---------------------------------------------------------------------------
-test_that("round-trip: uniform shape prior fits lognormal posterior", {
-  prior <- list(distribution = "uniform", parameters = list(min = 0.1, max = 10))
+test_that("round-trip: decay_shape_1 truncnorm prior fits truncnorm posterior", {
+  prior <- list(distribution = "truncnorm",
+                parameters = list(mean = 3, sd = 5, a = 0.1, b = 10))
   fitted <- run_roundtrip("decay_shape_1", prior)
 
-  # Uniform with min >= 0 should infer lognormal via domain inference
-  expect_equal(fitted$distribution, "lognormal")
-  expect_true(fitted$parameters$sdlog > 0)
+  # Truncnorm prior should fit truncnorm posterior with bounds preserved
+  expect_equal(fitted$distribution, "truncnorm")
+  expect_true(fitted$parameters$sd > 0)
+  expect_equal(as.numeric(fitted$parameters$a), 0.1)
+  expect_equal(as.numeric(fitted$parameters$b), 10)
 
   post_samples <- sample_from_prior(n = 1000, prior = fitted)
   expect_true(all(is.finite(post_samples)))
-  expect_true(all(post_samples > 0))
+  expect_true(all(post_samples >= 0.1 & post_samples <= 10))
 })
 
 

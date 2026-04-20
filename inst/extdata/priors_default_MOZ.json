@@ -21,14 +21,6 @@
         "shape2": 7.5
       }
     },
-    "decay_days_long": {
-      "description": "Maximum V. cholerae survival time (days)",
-      "distribution": "uniform",
-      "parameters": {
-        "min": 30,
-        "max": 365
-      }
-    },
     "decay_days_short": {
       "description": "Minimum V. cholerae survival time (days)",
       "distribution": "truncnorm",
@@ -36,7 +28,7 @@
         "mean": 16,
         "sd": 7,
         "a": 0.01,
-        "b": 29
+        "b": 60
       }
     },
     "decay_shape_1": {
@@ -213,6 +205,16 @@
         "sd": 3,
         "a": 1,
         "b": 14
+      }
+    },
+    "decay_days_spread": {
+      "description": "Spread between min and max V. cholerae survival time (days)",
+      "distribution": "truncnorm",
+      "parameters": {
+        "mean": 180,
+        "sd": 95,
+        "a": 1,
+        "b": 365
       }
     }
   },

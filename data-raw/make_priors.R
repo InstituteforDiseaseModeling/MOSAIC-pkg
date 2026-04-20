@@ -59,31 +59,36 @@ priors_default$parameters_global$alpha_2 <- list(
      parameters = list(shape1 = beta_fit_alpha_2$shape1, shape2 = beta_fit_alpha_2$shape2)
 )
 
-# decay_days_long - Maximum V. cholerae survival time
-# Old posterior 97.5th=147.4 was within 2.6 of upper bound=150 -- clear upper truncation.
-# Extended to 365 days. Lower bound is 30; decay_days_short upper bound is 29,
-# ensuring at least 1-day gap to prevent boundary equality violations.
-priors_default$parameters_global$decay_days_long <- list(
-     description = "Maximum V. cholerae survival time (days)",
-     distribution = "uniform",
-     parameters = list(min = 30, max = 365)
+# decay_days_spread - Spread between min and max V. cholerae survival time (days).
+# Replaces the direct decay_days_long prior (v0.27.0). decay_days_long is now a DERIVED
+# quantity in sample_parameters.R: decay_days_long = decay_days_short + decay_days_spread.
+# This algebraically guarantees decay_days_short < decay_days_long (required by
+# make_LASER_config()) without the post-hoc swap that previously corrupted the
+# joint distribution, and preserves the biological upper bound across staged posteriors
+# (the old Uniform(30, 365) prior was fit as unbounded Lognormal at stage 2+).
+# Truncnorm(mean=180, sd=95, a=1, b=365) matches the prior-predictive of the old
+# Uniform(30, 365) minus TruncNorm(16, 7) (implied mean ≈ 182, sd ≈ 96) and the
+# historical posterior shape from MOZ_v43 / calibration_test_46-48 runs (posterior
+# implied spread mean ≈ 185, sd ≈ 94, q0.975 ≈ 340 — hugging the 365 ceiling).
+priors_default$parameters_global$decay_days_spread <- list(
+     description = "Spread between min and max V. cholerae survival time (days)",
+     distribution = "truncnorm",
+     parameters = list(mean = 180, sd = 95, a = 1, b = 365)
 )
 
 # decay_days_short - Minimum V. cholerae survival time
-# Upper bound set to 29 (not 30) to guarantee a minimum 1-day gap from
-# decay_days_long's lower bound of 30, preventing boundary equality violations
-# in make_LASER_config(). The swap constraint in sample_parameters.R also
-# protects against accidental crossings.
-# Changed from Uniform(0.01, 29) to TruncNorm(mean=16, sd=7, a=0.01, b=29):
-# MOZ calibration_test_19 posterior concentrated tightly at ~19.5 days from a
-# Uniform prior, indicating the data strongly favours 3-week minimum environmental
-# persistence. The Uniform prior wasted substantial mass below 5 days. TruncNorm
-# centred at 16 days (median ≈ 16) with sd=7 covers the plausible range while
-# concentrating mass in the evidence-supported region (68% CI ≈ 9–23 days).
+# Upper bound relaxed from 29 to 60 in v0.27.0: the 29 cap was only there to
+# guarantee a 1-day gap below decay_days_long's lower bound of 30. That ordering
+# is now enforced algebraically via decay_days_spread, so the short bound can
+# reflect only the biological upper limit on minimum V. cholerae survival.
+# TruncNorm(mean=16, sd=7, a=0.01, b=60): MOZ calibration_test_19 / MOZ_v43
+# posteriors concentrated tightly at ~16-17 days with sd ~6, indicating strong
+# data support for 2-3 week minimum environmental persistence. The prior wastes
+# little mass below 5 days while leaving meaningful support out to ~30 days.
 priors_default$parameters_global$decay_days_short <- list(
      description = "Minimum V. cholerae survival time (days)",
      distribution = "truncnorm",
-     parameters = list(mean = 16, sd = 7, a = 0.01, b = 29)
+     parameters = list(mean = 16, sd = 7, a = 0.01, b = 60)
 )
 
 # decay_shape_1 - First shape parameter of Beta distribution for V. cholerae decay rate transformation

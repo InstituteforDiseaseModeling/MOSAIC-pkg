@@ -2,7 +2,7 @@
 "alpha_1","Population Mixing","Population mixing within metapops (0-1, 1 = well-mixed)","proportion","beta","global","transmission",1,"01","01","01","beta",NA,NA
 "alpha_2","Frequency-Driven Transmission","Degree of frequency driven transmission (0-1)","proportion","beta","global","transmission",2,"01","01","02","beta",NA,NA
 "decay_days_short","Minimum V. cholerae Survival","Minimum V. cholerae survival time in environment","days","truncnorm","global","environmental",3,"01","02","01","truncnorm",NA,NA
-"decay_days_long","Maximum V. cholerae Survival","Maximum V. cholerae survival time in environment","days","uniform","global","environmental",4,"01","02","02","lognormal",NA,NA
+"decay_days_spread","V. cholerae Survival Spread","Spread between min and max V. cholerae survival time (decay_days_long - decay_days_short)","days","truncnorm","global","environmental",4,"01","02","02","truncnorm",NA,NA
 "decay_shape_1","Decay Shape Parameter 1","First shape parameter of Beta distribution for V. cholerae decay","dimensionless","truncnorm","global","environmental",5,"01","02","03","truncnorm",NA,NA
 "decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","truncnorm","global","environmental",6,"01","02","04","truncnorm",NA,NA
 "zeta_1","Symptomatic Shedding Rate","Shedding rate for symptomatic infections","bacteria/day (rate)","lognormal","global","environmental",7,"01","02","05","lognormal",NA,NA

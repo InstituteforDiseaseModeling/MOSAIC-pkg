@@ -84,10 +84,16 @@ test_that("calc_model_posterior_quantiles uses actual prior family when provided
 
 test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", {
 
+  # Exercises the uniform -> lognormal domain inference path. After v0.27.0
+  # no default prior in the package is uniform, so we inject one on
+  # decay_days_spread (an inventory parameter) via the priors argument. The
+  # actual_family branch at calc_model_posterior_quantiles.R:336-355 reads the
+  # passed priors, not the inventory default, so domain inference kicks in.
+
   set.seed(42)
   n <- 200
   results <- data.frame(
-    decay_days_long = runif(n, 30, 365),
+    decay_days_spread = runif(n, 30, 365),
     is_finite = TRUE,
     is_retained = TRUE,
     is_best_subset = c(rep(TRUE, 50), rep(FALSE, n - 50)),
@@ -99,7 +105,7 @@ test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", 
   priors <- list(
     metadata = list(version = "test"),
     parameters_global = list(
-      decay_days_long = list(distribution = "uniform", parameters = list(min = 30, max = 365))
+      decay_days_spread = list(distribution = "uniform", parameters = list(min = 30, max = 365))
     ),
     parameters_location = list()
   )
@@ -115,14 +121,14 @@ test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", 
     verbose = FALSE
   )
 
-  ddl <- result[result$parameter == "decay_days_long", ]
-  expect_true(nrow(ddl) > 0)
+  dds <- result[result$parameter == "decay_days_spread", ]
+  expect_true(nrow(dds) > 0)
 
   # Prior distribution should be "uniform" (the actual prior)
-  expect_equal(unique(ddl$prior_distribution), "uniform")
+  expect_equal(unique(dds$prior_distribution), "uniform")
 
   # Posterior distribution should be lognormal (domain inference: min >= 0)
-  expect_equal(unique(ddl$posterior_distribution), "lognormal",
+  expect_equal(unique(dds$posterior_distribution), "lognormal",
                info = "Uniform priors on (0, inf) should infer lognormal posterior")
 })
 

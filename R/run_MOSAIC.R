@@ -2569,9 +2569,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_delta_reporting_cases = TRUE,  # Infection-to-case reporting delay
     sample_delta_reporting_deaths = TRUE, # Infection-to-death reporting delay
 
-    # Environmental decay
-    sample_decay_days_long = TRUE,   # Long-term environmental decay
+    # Environmental decay (v0.27.0: decay_days_long is derived = short + spread)
     sample_decay_days_short = TRUE,  # Short-term environmental decay
+    sample_decay_days_spread = TRUE, # Spread (long - short); long derived
     sample_decay_shape_1 = TRUE,     # Decay shape parameter 1
     sample_decay_shape_2 = TRUE,     # Decay shape parameter 2
 

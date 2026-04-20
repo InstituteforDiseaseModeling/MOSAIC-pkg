@@ -53,8 +53,10 @@ global_params <- data.frame(
     "alpha_1",
     "alpha_2",
     # Environmental (7 params) - reordered
+    # decay_days_long is DERIVED (= decay_days_short + decay_days_spread) and excluded
+    # from the inventory, same convention as zeta_2 (derived from zeta_1 / zeta_ratio).
     "decay_days_short",
-    "decay_days_long",
+    "decay_days_spread",
     "decay_shape_1",
     "decay_shape_2",
     "zeta_1",
@@ -87,7 +89,7 @@ global_params <- data.frame(
     "Frequency-Driven Transmission",
     # Environmental - reordered
     "Minimum V. cholerae Survival",
-    "Maximum V. cholerae Survival",
+    "V. cholerae Survival Spread",
     "Decay Shape Parameter 1",
     "Decay Shape Parameter 2",
     "Symptomatic Shedding Rate",
@@ -120,7 +122,7 @@ global_params <- data.frame(
     "Degree of frequency driven transmission (0-1)",
     # Environmental - reordered
     "Minimum V. cholerae survival time in environment",
-    "Maximum V. cholerae survival time in environment",
+    "Spread between min and max V. cholerae survival time (decay_days_long - decay_days_short)",
     "First shape parameter of Beta distribution for V. cholerae decay",
     "Second shape parameter of Beta distribution for V. cholerae decay",
     "Shedding rate for symptomatic infections",
@@ -165,10 +167,11 @@ global_params <- data.frame(
     # Transmission
     "beta", "beta",
     # Environmental - reordered
-    # decay_days_short: TruncNorm; decay_days_long: Uniform (to be reparameterized in later commit)
-    # decay_shape_1, decay_shape_2: TruncNorm (was Uniform; bounds [0.1, 10] now preserved through stages)
-    # zeta_1, zeta_ratio, kappa: lognormal; zeta_2 is derived (zeta_1/zeta_ratio)
-    "truncnorm", "uniform", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
+    # decay_days_short: TruncNorm; decay_days_spread: TruncNorm (replaces decay_days_long
+    #   direct prior in v0.27.0; decay_days_long is now derived = short + spread);
+    # decay_shape_1, decay_shape_2: TruncNorm (was Uniform; bounds [0.1, 10] preserved through stages);
+    # zeta_1, zeta_ratio, kappa: lognormal; zeta_2 is derived (zeta_1/zeta_ratio).
+    "truncnorm", "truncnorm", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
     # Disease - reordered
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
@@ -244,13 +247,15 @@ global_params <- data.frame(
 global_params$posterior_distribution <- c(
   # Transmission: beta prior → beta posterior
   "beta", "beta",
-  # Environmental: non-uniform priors retain family; uniform priors use domain
-  #   inference at runtime (min >= 0 → lognormal):
-  #   decay_days_short: truncnorm → truncnorm; decay_days_long: uniform → lognormal;
-  #   decay_shape_1/2: truncnorm → truncnorm (bounds [0.1, 10] preserved through stages,
-  #     was uniform → lognormal which silently erased the biological upper bound);
+  # Environmental: all non-uniform after v0.27.0 — posterior family matches prior family
+  # via the family-match guard in update_priors_from_posteriors.R.
+  #   decay_days_short: truncnorm → truncnorm
+  #   decay_days_spread: truncnorm → truncnorm (replaces decay_days_long; the old
+  #     Uniform(30, 365) was being fit as unbounded Lognormal at stage 2+ via domain
+  #     inference, silently erasing the 365-day biological ceiling)
+  #   decay_shape_1/2: truncnorm → truncnorm (same reason; bounds [0.1, 10] preserved)
   #   zeta_1, zeta_ratio, kappa: lognormal → lognormal
-  "truncnorm", "lognormal", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
+  "truncnorm", "truncnorm", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
   # Disease: unchanged
   "lognormal", "beta", "lognormal", "lognormal",
   # Immunity: unchanged

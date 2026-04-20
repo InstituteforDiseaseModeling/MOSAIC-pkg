@@ -380,7 +380,8 @@ default_args <- list(
      zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300; zeta_2 is derived
      kappa = 10^6,
      decay_days_short = 16, # Min V. cholerae survival (was 3; prior median 16, posteriors 15-48)
-     decay_days_long = 200, # Max V. cholerae survival (was 120; posteriors 46-322, median ~200)
+     decay_days_spread = 184, # Spread; v0.27.0+ (prior median 180; decay_days_long = short + spread)
+     decay_days_long = 200, # Max V. cholerae survival; DERIVED at sampling time from short + spread
      decay_shape_1 = 5,
      decay_shape_2 = 2.5,
      reported_cases = mat_cases,

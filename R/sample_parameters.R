@@ -15,8 +15,9 @@
 #'   \itemize{
 #'     \item sample_alpha_1: Population mixing within metapops (default TRUE)
 #'     \item sample_alpha_2: Degree of frequency driven transmission (default TRUE)
-#'     \item sample_decay_days_long: Maximum V. cholerae survival (default TRUE)
 #'     \item sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
+#'     \item sample_decay_days_spread: Spread between min and max V. cholerae
+#'       survival; decay_days_long is derived as short + spread (default TRUE)
 #'     \item sample_decay_shape_1: First Beta shape for decay (default TRUE)
 #'     \item sample_decay_shape_2: Second Beta shape for decay (default TRUE)
 #'     \item sample_epsilon: Immunity (default TRUE)
@@ -123,8 +124,8 @@ sample_parameters <- function(
     # Global parameter sampling controls (21 parameters)
     sample_alpha_1 = TRUE,
     sample_alpha_2 = TRUE,
-    sample_decay_days_long = TRUE,
     sample_decay_days_short = TRUE,
+    sample_decay_days_spread = TRUE,
     sample_decay_shape_1 = TRUE,
     sample_decay_shape_2 = TRUE,
     sample_epsilon = TRUE,
@@ -264,16 +265,14 @@ sample_parameters <- function(
   )
 
 
-  # Enforce decay_days_short < decay_days_long: minimum survival must be less
-  # than maximum. make_LASER_config() stops if this is violated. Swap rather
-  # than reject to preserve the marginal distributions.
+  # Derive decay_days_long from decay_days_short + decay_days_spread (v0.27.0).
+  # Algebraically guarantees decay_days_short < decay_days_long as required by
+  # make_LASER_config(), replacing the pre-v0.27 post-hoc swap that corrupted
+  # the joint distribution whenever it triggered.
   if (!is.null(config_sampled$decay_days_short) &&
-      !is.null(config_sampled$decay_days_long)) {
-    if (config_sampled$decay_days_short >= config_sampled$decay_days_long) {
-      tmp <- config_sampled$decay_days_short
-      config_sampled$decay_days_short <- config_sampled$decay_days_long
-      config_sampled$decay_days_long <- tmp
-    }
+      !is.null(config_sampled$decay_days_spread)) {
+    config_sampled$decay_days_long <-
+      config_sampled$decay_days_short + config_sampled$decay_days_spread
   }
 
   # Sample location-specific parameters
@@ -582,7 +581,9 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
   }
 
   # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
-  # zeta_1 > zeta_2 is guaranteed algebraically since zeta_ratio > 0 always.
+  # zeta_2 > 0 is guaranteed (ratio of two positive lognormals). zeta_1 > zeta_2
+  # requires zeta_ratio > 1, which holds with probability ~(1 - 1e-6) given the
+  # zeta_ratio prior LN(log(300), 1.2).
   if ("zeta_1" %in% names(config_sampled) && "zeta_ratio" %in% names(config_sampled)) {
 
     if (verbose) cat("\n  Deriving zeta_2 from zeta_1 and zeta_ratio...\n")
@@ -991,7 +992,8 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
                 "gamma_1", "gamma_2", "epsilon", "chi_endemic", "chi_epidemic",
                 "rho", "sigma", "mobility_omega", "mobility_gamma",
                 "zeta_1", "zeta_ratio", "zeta_2", "kappa", "alpha_1", "alpha_2",
-                "decay_days_long", "decay_days_short", "decay_shape_1", "decay_shape_2",
+                "decay_days_short", "decay_days_spread", "decay_days_long",
+                "decay_shape_1", "decay_shape_2",
                 "delta_reporting_cases", "delta_reporting_deaths"),
       type = "scalar"
     ),
