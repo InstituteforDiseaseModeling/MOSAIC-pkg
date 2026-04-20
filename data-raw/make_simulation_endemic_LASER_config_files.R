@@ -172,7 +172,8 @@ sim_args <- list(
      zeta_1           = 7.5,
      zeta_2           = 2.5,
      kappa            = 1e5,
-     decay_days_short = 1,         # short burst
+     decay_days_short  = 1,          # short burst
+     decay_days_spread = 89,         # v0.27.0+: long is derived = short + spread
      decay_days_long  = 90,       # vibrios can persist ≈ 1 yr in water
      decay_shape_1    = 1,
      decay_shape_2    = 1,         # Linear/concave response to suitability

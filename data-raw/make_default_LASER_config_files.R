@@ -379,8 +379,14 @@ default_args <- list(
      zeta_1 = 7.5,
      zeta_2 = 2.5,
      kappa = 10^6,
-     decay_days_short = 3,
-     decay_days_long = 120,
+     # v0.27.0: decay_days_long is derived at sampling time from short + spread.
+     # Fallback values here match make_config_default.R so reruns of this script
+     # do not silently undo the refactor. (Note: this file is a stale partial
+     # duplicate of make_config_default.R; reconciling the other drifted fields
+     # is out of scope.)
+     decay_days_short = 16,
+     decay_days_spread = 184,
+     decay_days_long = 200,
      decay_shape_1 = 5,
      decay_shape_2 = 2.5,
      reported_cases = mat_cases,

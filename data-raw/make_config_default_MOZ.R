@@ -266,10 +266,11 @@ default_args <- list(
      zeta_1 = 70000,       # Symptomatic shedding; prior median 70k (reparameterized from 665)
      zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300; zeta_2 is derived
      kappa = 10^6,
-     decay_days_short = 18,     # MOZ 7 best: 19.8 days
-     decay_days_long = 365,     # Upper bound matches prior U(30, 365)
-     decay_shape_1 = 6.0,      # MOZ 7 best: 6.85; rapid initial decay
-     decay_shape_2 = 4.5,      # MOZ 7 best: 4.30; right-skewed decay profile
+     decay_days_short = 18,      # MOZ 7 best: 19.8 days
+     decay_days_spread = 347,    # v0.27.0+: long is derived = short + spread. MOZ fallback when sampling off.
+     decay_days_long = 365,      # Upper bound matches old prior U(30, 365); now derived from short+spread
+     decay_shape_1 = 6.0,        # MOZ 7 best: 6.85; rapid initial decay
+     decay_shape_2 = 4.5,        # MOZ 7 best: 4.30; right-skewed decay profile
      reported_cases = mat_cases,
      reported_deaths = mat_deaths
 )
