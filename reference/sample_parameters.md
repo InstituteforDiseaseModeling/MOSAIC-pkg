@@ -93,9 +93,10 @@ sample_parameters(
 
   - sample_sigma: Symptomatic fraction (default TRUE)
 
-  - sample_zeta_1: Spatial (default TRUE)
+  - sample_zeta_1: Symptomatic shedding rate (default TRUE)
 
-  - sample_zeta_2: Spatial (default TRUE)
+  - sample_zeta_ratio: Symptomatic-to-asymptomatic shedding ratio
+    (default TRUE)
 
   - sample_beta_j0_tot: Total transmission rate (default TRUE)
 

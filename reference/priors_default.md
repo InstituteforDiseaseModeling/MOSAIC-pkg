@@ -69,10 +69,10 @@ A list with 3 main components:
     distribution)
 
   - `zeta_1`: Bacterial shedding rate for symptomatic individuals
-    (uniform distribution)
+    (lognormal distribution)
 
-  - `zeta_2`: Bacterial shedding rate for asymptomatic individuals
-    (uniform distribution)
+  - `zeta_ratio`: Ratio of symptomatic to asymptomatic shedding
+    (lognormal distribution)
 
 - parameters_location:
 
