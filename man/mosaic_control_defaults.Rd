@@ -65,6 +65,23 @@ mosaic_control_defaults(
 \item{predictions}{List of prediction generation settings. Default is:
 \itemize{
 \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
+\item \code{optimize_subset}: Logical; when \code{TRUE}, the post-ensemble
+optimizer (MAE / WIS / R²+bias) refines the best subset used for
+\code{posteriors.json}, \code{posterior_quantiles.csv}, and the ensemble
+object driving all downstream plots and metrics. The tier-selected subset
+is preserved in the \code{is_best_subset} / \code{weight_best} columns of
+\code{samples.parquet} for provenance; the optimized selection is written
+to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. When
+\code{FALSE} (default), the tier-selected subset is canonical and no
+\code{_opt} columns are written. \strong{Statistical note:} enabling this
+flag yields a posterior conditioned on ensemble predictive performance
+(MAE / WIS / R²+bias on the training data) rather than a pure
+likelihood-weighted posterior.
+\item \code{optimize_min_n}: Minimum subset size the optimizer may select
+(default \code{30L}, raised from \code{4L} to guard against KDE
+degeneracy in \code{posteriors.json}).
+\item \code{optimize_objective}: Objective function, \code{"mae"} (default),
+\code{"r2_bias"}, or \code{"wis"}.
 }
 The number of parameter sets in the ensemble is determined by the best subset
 (all sims with non-zero importance weights).}

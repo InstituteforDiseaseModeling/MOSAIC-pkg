@@ -128,13 +128,16 @@ plot_mobility <- function(PATHS) {
 
      # Join the melted M data with the centroids to get geographic coordinates.
      # For origins:
-     melt_M <- dplyr::left_join(melt_M, data_centroids, by = c("origin" = "iso3"))
+     melt_M <- dplyr::left_join(melt_M, lonlat, by = c("origin" = "iso3"))
      # Rename the joined lon/lat columns to origin_lon and origin_lat:
      melt_M <- melt_M %>% dplyr::rename(origin_lon = lon, origin_lat = lat)
      # For destinations:
-     melt_M <- dplyr::left_join(melt_M, data_centroids, by = c("destination" = "iso3"))
+     melt_M <- dplyr::left_join(melt_M, lonlat, by = c("destination" = "iso3"))
      # Rename the joined lon/lat columns to destination_lon and destination_lat:
      melt_M <- melt_M %>% dplyr::rename(destination_lon = lon, destination_lat = lat)
+
+     # Load Africa shapefile for base map
+     africa <- sf::st_read(dsn = file.path(PATHS$DATA_SHAPEFILES, "AFRICA_ADM0.shp"), quiet = TRUE)
 
      # Now build the network plot using the M matrix flows
      p2 <- ggplot2::ggplot() +
@@ -184,11 +187,11 @@ plot_mobility <- function(PATHS) {
                                              yend = destination_lat,
                                              linewidth = log(count + 1),
                                              color = log(count + 1))) +
-          ggplot2::geom_point(data = data_centroids,
+          ggplot2::geom_point(data = lonlat,
                               ggplot2::aes(x = lon, y = lat),
                               color = "black", fill = 'white',
                               shape = 21, size = 2.5) +
-          ggrepel::geom_text_repel(data = data_centroids,
+          ggrepel::geom_text_repel(data = lonlat,
                                    ggplot2::aes(x = lon, y = lat, label = iso3),
                                    size = 3.25, vjust = -1) +
           ggplot2::scale_size_continuous(range = c(0.001, 2.5)) +

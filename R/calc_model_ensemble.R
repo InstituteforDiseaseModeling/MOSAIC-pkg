@@ -239,6 +239,7 @@ calc_model_ensemble <- function(config,
       tryCatch({
         if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
           lc <- reticulate::import("laser.cholera.metapop.model")
+          MOSAIC:::.mosaic_strip_laser_file_handler()
         } else {
           lc <- get("lc", envir = .GlobalEnv)
         }
@@ -283,6 +284,7 @@ calc_model_ensemble <- function(config,
                    OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
                    OPENBLAS_NUM_THREADS = "1")
         lc <- reticulate::import("laser.cholera.metapop.model")
+        MOSAIC:::.mosaic_strip_laser_file_handler()
         assign("lc", lc, envir = .GlobalEnv)
         NULL
       })

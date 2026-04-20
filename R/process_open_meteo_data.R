@@ -95,6 +95,14 @@ process_open_meteo_data <- function(PATHS, climate_model = "MRI_AGCM3_2_S", forc
           hist_data <- arrow::open_dataset(hist_files) |> dplyr::collect()
           hist_data$date <- as.Date(hist_data$date)
 
+          # ERA5 Historical API only serves 0-7cm soil moisture; upstream raw
+          # parquets carry the native name. Rename to match the 0-10cm column
+          # used by the climate-model parquets and all downstream consumers.
+          sm_idx <- which(names(hist_data) == "soil_moisture_0_to_7cm_mean")
+          if (length(sm_idx) == 1L) {
+               names(hist_data)[sm_idx] <- "soil_moisture_0_to_10cm_mean"
+          }
+
           # --- Read climate model projections ---
           clim_files <- list.files(file.path(clim_dir, iso), pattern = "\\.parquet$",
                                    full.names = TRUE)

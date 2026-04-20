@@ -62,6 +62,7 @@ run_LASER <- function(
                message("Loading LASER module...")
           }
           py_module <- reticulate::import("laser.cholera.metapop.model", convert = FALSE)
+          .mosaic_strip_laser_file_handler()
      }
 
      # Suppress NumPy divide-by-zero warnings

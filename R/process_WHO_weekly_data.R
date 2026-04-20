@@ -65,6 +65,23 @@ process_WHO_weekly_data <- function(PATHS) {
      colnames(d)[colnames(d) == "cases_by_week"]  <- "cases"
      colnames(d)[colnames(d) == "deaths_by_week"] <- "deaths"
 
+     # Merge week-53 rows into week 52 of the same year.
+     # Some years in the WHO data contain a spurious week 53 that does not exist
+     # in the ISO calendar (e.g. 2025 has only 52 ISO weeks). Redistribute these
+     # cases and deaths into week 52 so no data is lost.
+     if (any(d$week == 53)) {
+          n53 <- sum(d$week == 53)
+          yrs <- unique(d$year[d$week == 53])
+          message(sprintf("Merging %d week-53 rows into week 52 (years: %s)",
+                          n53, paste(yrs, collapse = ", ")))
+          d$week[d$week == 53] <- 52L
+          d <- stats::aggregate(
+               cbind(cases, deaths) ~ iso_code + country + year + week,
+               data = d, FUN = sum, na.rm = TRUE
+          )
+          d <- d[order(d$year, d$week, d$country), ]
+     }
+
      # Compute start and stop dates for each ISO week
      d$iso_week   <- paste0(d$year, "-W", sprintf("%02d", d$week))
      d$date_start <- ISOweek::ISOweek2date(paste0(d$iso_week, "-1"))
@@ -82,11 +99,6 @@ process_WHO_weekly_data <- function(PATHS) {
      # Print the first few rows for verification
      print(head(d))
      message("Latest observation: ", max(d$date_stop, na.rm = TRUE))
-
-     # Check for ISO-week index 53
-     if (53 %in% d$week) {
-          stop("week index is out of bounds")
-     }
 
      # Save the processed data to the processed data directory
      processed_data_path <- file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv")

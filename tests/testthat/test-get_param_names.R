@@ -151,7 +151,7 @@ test_that("get_param_names validates input", {
 
 test_that("get_param_names returns sorted results", {
     test_config <- list(
-        zeta_2 = 0.1,
+        zeta_ratio = 300,
         alpha_1 = 0.2,
         phi_1 = 0.5,
         seed = 123,

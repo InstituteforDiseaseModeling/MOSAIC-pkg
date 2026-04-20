@@ -58,7 +58,7 @@ global_params <- data.frame(
     "decay_shape_1",
     "decay_shape_2",
     "zeta_1",
-    "zeta_2",
+    "zeta_ratio",
     "kappa",
     # Disease (4 params) - reordered
     "iota",
@@ -91,7 +91,7 @@ global_params <- data.frame(
     "Decay Shape Parameter 1",
     "Decay Shape Parameter 2",
     "Symptomatic Shedding Rate",
-    "Asymptomatic Shedding Rate",
+    "Shedding Ratio (Sym/Asym)",
     "50% Infectious Dose",
     # Disease - reordered
     "Incubation Rate",
@@ -124,7 +124,7 @@ global_params <- data.frame(
     "First shape parameter of Beta distribution for V. cholerae decay",
     "Second shape parameter of Beta distribution for V. cholerae decay",
     "Shedding rate for symptomatic infections",
-    "Shedding rate for asymptomatic infections",
+    "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
     "Concentration of V. cholerae for 50% infectious dose",
     # Disease - reordered
     "Rate parameter for incubation period (per day, 1/iota = mean incubation time)",
@@ -151,7 +151,7 @@ global_params <- data.frame(
     # Transmission
     "proportion", "proportion",
     # Environmental - reordered
-    "days", "days", "dimensionless", "dimensionless", "bacteria/day (rate)", "bacteria/day (rate)", "bacteria/mL",
+    "days", "days", "dimensionless", "dimensionless", "bacteria/day (rate)", "dimensionless (ratio)", "bacteria/mL",
     # Disease - reordered
     "per day (rate)", "proportion", "per day (rate)", "per day (rate)",
     # Immunity - reordered
@@ -167,7 +167,7 @@ global_params <- data.frame(
     # Environmental - reordered
     # decay_days_short: TruncNorm (updated from Uniform in make_priors.R)
     # decay_days_long, decay_shape_1, decay_shape_2: Uniform (unchanged)
-    # zeta_1, zeta_2, kappa: updated to Lognormal in make_priors.R (v0.14.30)
+    # zeta_1, zeta_ratio, kappa: lognormal; zeta_2 is derived (zeta_1/zeta_ratio)
     "truncnorm", "uniform", "uniform", "uniform", "lognormal", "lognormal", "lognormal",
     # Disease - reordered
     "lognormal", "beta", "lognormal", "lognormal",
@@ -213,7 +213,7 @@ global_params <- data.frame(
   order_parameter = c(
     # Transmission
     "01", "02",
-    # Environmental (decay_days_short, decay_days_long, decay_shape_1, decay_shape_2, zeta_1, zeta_2, kappa)
+    # Environmental (decay_days_short, decay_days_long, decay_shape_1, decay_shape_2, zeta_1, zeta_ratio, kappa)
     "01", "02", "03", "04", "05", "06", "07",
     # Disease (iota, sigma, gamma_1, gamma_2)
     "01", "02", "03", "04",
@@ -247,7 +247,7 @@ global_params$posterior_distribution <- c(
   # Environmental: non-uniform priors retain family; uniform priors use domain
   #   inference at runtime (min >= 0 → lognormal):
   #   decay_days_short: truncnorm → truncnorm; decay_days_long: uniform → lognormal;
-  #   decay_shape_1/2: uniform → lognormal; zeta_1/2, kappa: lognormal → lognormal
+  #   decay_shape_1/2: uniform → lognormal; zeta_1, zeta_ratio, kappa: lognormal → lognormal
   "truncnorm", "lognormal", "lognormal", "lognormal", "lognormal", "lognormal", "lognormal",
   # Disease: unchanged
   "lognormal", "beta", "lognormal", "lognormal",

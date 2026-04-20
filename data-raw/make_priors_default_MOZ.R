@@ -298,17 +298,21 @@ priors_default_MOZ$parameters_global$sigma <- list(
 )
 
 # zeta_1 - Symptomatic shedding rate
+# Anchored on MOZ production best-fit models (86k best single, 27k best ensemble config)
+# and single-stage BFRS posteriors (4.6k-14.3k). Q2.5=12.5k, median=70k, Q97.5=392k.
 priors_default_MOZ$parameters_global$zeta_1 <- list(
      description = "Symptomatic shedding rate (total bacteria per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(665), sdlog = 2.0)
+     parameters = list(meanlog = log(70000), sdlog = 0.8)
 )
 
-# zeta_2 - Asymptomatic shedding rate
-priors_default_MOZ$parameters_global$zeta_2 <- list(
-     description = "Asymptomatic shedding rate (total bacteria per infected person per day)",
+# zeta_ratio - Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2).
+# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio. Guaranteed zeta_1 > zeta_2.
+# MOZ single-stage posteriors: ratio 200-580. Prior median 300.
+priors_default_MOZ$parameters_global$zeta_ratio <- list(
+     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(10), sdlog = 3.0)
+     parameters = list(meanlog = log(300), sdlog = 1.2)
 )
 
 # delta_reporting_cases

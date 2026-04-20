@@ -527,25 +527,25 @@ est_suitability <- function(PATHS,
      message("Building 2-layer LSTM model with attention and Huber loss...")
 
      # Use Functional API to support multi-head attention
-     inputs <- layer_input(shape = c(timesteps, n_features), name = "inp")
+     inputs <- keras3::layer_input(shape = c(timesteps, n_features), name = "inp")
 
      # First LSTM layer
-     x <- layer_lstm(inputs, units = 128, return_sequences = TRUE,
-                     kernel_regularizer = regularizer_l2(0.0005),
+     x <- keras3::layer_lstm(inputs, units = 128, return_sequences = TRUE,
+                     kernel_regularizer = keras3::regularizer_l2(0.0005),
                      recurrent_dropout = 0.15, name = "lstm1")
-     x <- layer_dropout(x, rate = 0.3, name = "drop1")
+     x <- keras3::layer_dropout(x, rate = 0.3, name = "drop1")
 
      # Second LSTM layer
-     x <- layer_lstm(x, units = 64, return_sequences = TRUE,
-                     kernel_regularizer = regularizer_l2(0.0005),
+     x <- keras3::layer_lstm(x, units = 64, return_sequences = TRUE,
+                     kernel_regularizer = keras3::regularizer_l2(0.0005),
                      recurrent_dropout = 0.15, name = "lstm2")
-     x <- layer_dropout(x, rate = 0.3, name = "drop2")
+     x <- keras3::layer_dropout(x, rate = 0.3, name = "drop2")
 
      # Third LSTM layer
-     x <- layer_lstm(x, units = 32, return_sequences = FALSE,
-                     kernel_regularizer = regularizer_l2(0.0005),
+     x <- keras3::layer_lstm(x, units = 32, return_sequences = FALSE,
+                     kernel_regularizer = keras3::regularizer_l2(0.0005),
                      recurrent_dropout = 0.15, name = "lstm3")
-     x <- layer_dropout(x, rate = 0.3, name = "drop3")
+     x <- keras3::layer_dropout(x, rate = 0.3, name = "drop3")
 
      # ---- Multi-Head Self-Attention (correct keras3 R syntax) ----
      #attn_out <- layer_multi_head_attention(
@@ -564,18 +564,18 @@ est_suitability <- function(PATHS,
      #x <- layer_global_max_pooling_1d(x, name = "pool")
 
      # Final dense layer with linear activation for logit predictions
-     outputs <- layer_dense(x, units = 1, activation = "linear", name = "logit_head")
+     outputs <- keras3::layer_dense(x, units = 1, activation = "linear", name = "logit_head")
 
      # Create the model
-     model <- keras_model(inputs = inputs, outputs = outputs)
+     model <- keras3::keras_model(inputs = inputs, outputs = outputs)
 
      # Compile with Huber loss for robust training
      message("Compiling model with Huber loss and advanced callbacks...")
 
-     compile(model,
-             optimizer = optimizer_adam(learning_rate = 0.001),
-             loss = 'mse',                            # Mean squared error loss
-             metrics = list("mae", "mse")              # Track both MAE and MSE
+     keras3::compile(model,
+             optimizer = keras3::optimizer_adam(learning_rate = 0.001),
+             loss = 'mse',
+             metrics = list("mae", "mse")
      )
 
      print(model)
@@ -583,14 +583,14 @@ est_suitability <- function(PATHS,
      message("Training LSTM model with adaptive learning rate and model checkpointing...")
 
      # Advanced callback configuration
-     cb_early <- callback_early_stopping(
+     cb_early <- keras3::callback_early_stopping(
           monitor = 'val_loss',
           patience = 10,
           restore_best_weights = TRUE,
           verbose = 1
      )
 
-     cb_rlr <- callback_reduce_lr_on_plateau(
+     cb_rlr <- keras3::callback_reduce_lr_on_plateau(
           monitor = 'val_loss',
           factor = 0.5,
           patience = 5,
@@ -598,7 +598,7 @@ est_suitability <- function(PATHS,
           verbose = 1
      )
 
-     cb_ckpt <- callback_model_checkpoint(
+     cb_ckpt <- keras3::callback_model_checkpoint(
           filepath = file.path(PATHS$MODEL_INPUT, "psi_lstm_best.weights.h5"),
           monitor = 'val_loss',
           save_best_only = TRUE,
@@ -607,9 +607,9 @@ est_suitability <- function(PATHS,
      )
 
      # Learning rate and progress logger
-     cb_logger <- callback_lambda(
+     cb_logger <- keras3::callback_lambda(
           on_epoch_end = function(epoch, logs) {
-               if (epoch %% 5 == 0 || epoch < 10) {  # Log first 10 epochs, then every 5
+               if (epoch %% 5 == 0 || epoch < 10) {
                     current_lr <- as.numeric(model$optimizer$learning_rate)
                     message(sprintf("Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - MAE: %.4f - Val_MAE: %.4f",
                                    epoch + 1, current_lr, logs$loss, logs$val_loss, logs$mae, logs$val_mae))
@@ -619,7 +619,7 @@ est_suitability <- function(PATHS,
 
      # Train the model using the training subset (Split 1)
      message(sprintf("Training model on split 1 of %d...", n_splits))
-     history <- fit(model,
+     history <- keras3::fit(model,
                     X_train_model,
                     y_train_model_array,
                     epochs = 150,
@@ -630,7 +630,7 @@ est_suitability <- function(PATHS,
 
      # Evaluate the model on validation set
      message("Calculating model performance...")
-     score <- evaluate(model, X_val_model, y_val_model_array)
+     score <- keras3::evaluate(model, X_val_model, y_val_model_array)
      message(glue::glue('Validation loss: {round(score$loss, 4)}'))
      message(glue::glue('Validation MAE: {round(score$mae, 4)}'))
 
@@ -666,20 +666,20 @@ est_suitability <- function(PATHS,
                y_val_fine_tune_array <- array(y_val_fine_tune, dim = c(length(y_val_fine_tune), 1))
 
                # Recompile model with adaptive fine-tuning configuration
-               compile(model,
-                       optimizer = optimizer_adam(learning_rate = fine_tune_lr),
+               keras3::compile(model,
+                       optimizer = keras3::optimizer_adam(learning_rate = fine_tune_lr),
                        loss = 'mse',
                        metrics = list('mae'))
 
                # Fine-tuning callbacks (simplified for shorter epochs)
-               fine_tune_early <- callback_early_stopping(
+               fine_tune_early <- keras3::callback_early_stopping(
                     monitor = 'val_loss',
                     patience = 5,
                     restore_best_weights = TRUE,
                     verbose = 0
                )
 
-               fine_tune_ckpt <- callback_model_checkpoint(
+               fine_tune_ckpt <- keras3::callback_model_checkpoint(
                     filepath = file.path(PATHS$MODEL_INPUT, paste0("psi_lstm_split_", split_i, ".weights.h5")),
                     monitor = 'val_loss',
                     save_best_only = TRUE,
@@ -688,9 +688,9 @@ est_suitability <- function(PATHS,
                )
 
                # Fine-tuning logger callback (less frequent logging)
-               fine_tune_logger <- callback_lambda(
+               fine_tune_logger <- keras3::callback_lambda(
                     on_epoch_end = function(epoch, logs) {
-                         if (epoch %% 3 == 0 || epoch < 5) {  # Log first 5 epochs, then every 3
+                         if (epoch %% 3 == 0 || epoch < 5) {
                               current_lr <- as.numeric(model$optimizer$learning_rate)
                               message(sprintf("Split %d - Epoch %d - LR: %.6f - Loss: %.4f - Val_Loss: %.4f - MAE: %.4f - Val_MAE: %.4f",
                                             split_i, epoch + 1, current_lr, logs$loss, logs$val_loss, logs$mae, logs$val_mae))
@@ -699,18 +699,18 @@ est_suitability <- function(PATHS,
                )
 
                # Fine-tune the model on this split
-               fine_tune_history <- fit(model,
+               fine_tune_history <- keras3::fit(model,
                                        X_fine_tune,
                                        y_fine_tune_array,
-                                       epochs = fine_tune_epochs,  # Fewer epochs for fine-tuning
+                                       epochs = fine_tune_epochs,
                                        batch_size = 128,
                                        validation_data = list(X_val_fine_tune, y_val_fine_tune_array),
                                        callbacks = list(fine_tune_early, fine_tune_ckpt, fine_tune_logger),
-                                       verbose = 0  # Less verbose output for fine-tuning
+                                       verbose = 0
                )
 
                # Evaluate fine-tuned model
-               fine_tune_score <- evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
+               fine_tune_score <- keras3::evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
                message(sprintf("Split %d - Fine-tuned validation loss: %.4f, MAE: %.4f",
                               split_i, fine_tune_score$loss, fine_tune_score$mae))
           }
@@ -718,7 +718,7 @@ est_suitability <- function(PATHS,
           message(sprintf("Sequential fine-tuning complete. Model has been trained on %d different random splits.", n_splits))
 
           # Final evaluation on last split's validation set
-          final_score <- evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
+          final_score <- keras3::evaluate(model, X_val_fine_tune, y_val_fine_tune_array, verbose = 0)
           message(sprintf("Final fine-tuned model - Loss: %.4f, MAE: %.4f", final_score$loss, final_score$mae))
 
           # Update score for downstream reporting
@@ -751,32 +751,32 @@ est_suitability <- function(PATHS,
      )
 
      loss_plot <-
-          ggplot(df, aes(x = epoch)) +
-          geom_line(aes(y = loss, color = "Training Loss")) +
-          geom_line(aes(y = val_loss, color = "Validation Loss")) +
-          labs(x = "Epoch", y = "Loss", title = "Training and Validation Loss") +
-          scale_color_manual(name = "",
+          ggplot2::ggplot(df, ggplot2::aes(x = epoch)) +
+          ggplot2::geom_line(ggplot2::aes(y = loss, color = "Training Loss")) +
+          ggplot2::geom_line(ggplot2::aes(y = val_loss, color = "Validation Loss")) +
+          ggplot2::labs(x = "Epoch", y = "Loss", title = "Training and Validation Loss") +
+          ggplot2::scale_color_manual(name = "",
                              values = c("Training Loss" = "blue3",
                                         "Validation Loss" = "red3")) +
-          theme_bw() +  # White background
-          theme(legend.position = "right") +
-          annotate("text", x = max(df$epoch), y = max(df$loss),
+          ggplot2::theme_bw() +
+          ggplot2::theme(legend.position = "right") +
+          ggplot2::annotate("text", x = max(df$epoch), y = max(df$loss),
                    label = paste("Final Test Loss:", round(final_loss, 2)),
                    vjust=5, hjust=1, color = "blue3")
 
      mae_plot <-
-          ggplot(df, aes(x = epoch)) +
-          geom_line(aes(y = mae, color = "Training MAE")) +
-          geom_line(aes(y = val_mae, color = "Validation MAE")) +
-          labs(x = "Epoch", y = "MAE", title = "Training and Validation MAE") +
-          scale_color_manual(name = "",
+          ggplot2::ggplot(df, ggplot2::aes(x = epoch)) +
+          ggplot2::geom_line(ggplot2::aes(y = mae, color = "Training MAE")) +
+          ggplot2::geom_line(ggplot2::aes(y = val_mae, color = "Validation MAE")) +
+          ggplot2::labs(x = "Epoch", y = "MAE", title = "Training and Validation MAE") +
+          ggplot2::scale_color_manual(name = "",
                              values = c("Training MAE" = "green4",
                                         "Validation MAE" = "darkorange")) +
-          theme_bw() +  # White background
-          theme(legend.position = "right") +
-          annotate("text", x = max(df$epoch), y = max(df$mae),
+          ggplot2::theme_bw() +
+          ggplot2::theme(legend.position = "right") +
+          ggplot2::annotate("text", x = max(df$epoch), y = max(df$mae),
                    label = paste("Final Test MAE:", round(final_mae, 4)),
-                   vjust=-1,     hjust=1, color = "green4")
+                   vjust=-1, hjust=1, color = "green4")
 
      combined_plot <- cowplot::plot_grid(mae_plot, loss_plot, labels = "AUTO", nrow = 2, align = "v")
 

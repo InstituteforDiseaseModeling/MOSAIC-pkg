@@ -376,8 +376,8 @@ default_args <- list(
      psi_star_z = setNames(rep(1.0, length(j)), j),    # Default: no smoothing
      psi_star_k = setNames(rep(0.0, length(j)), j),    # Default: no time offset
      psi_jt = psi_jt,
-     zeta_1 = 665,         # Symptomatic shedding (was 7.5; prior median 665, posteriors 3K-1.7e10. Old value in negligible-transmission regime)
-     zeta_2 = 10,          # Asymptomatic shedding (was 2.5; prior median 10)
+     zeta_1 = 70000,       # Symptomatic shedding; prior median 70k (reparameterized from 665)
+     zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300; zeta_2 is derived
      kappa = 10^6,
      decay_days_short = 16, # Min V. cholerae survival (was 3; prior median 16, posteriors 15-48)
      decay_days_long = 200, # Max V. cholerae survival (was 120; posteriors 46-322, median ~200)

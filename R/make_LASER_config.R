@@ -123,7 +123,7 @@
 #' @param psi_star_k Time offset in days for psi_jt calibration (numeric vector of length(location_name)).
 #'        Positive values = forward/delay, negative values = backward/advance. Default 0.0 (no offset).
 #' @param zeta_1 Shedding rate (numeric > 0).
-#' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
+#' @param zeta_2 Asymptomatic shedding rate (numeric > 0). Derived by sample_parameters() as zeta_1 / zeta_ratio.
 #' @param kappa Concentration required for 50% infection (numeric > 0).
 #' @param decay_days_short Time constant (in days) for short-term survival of *V. cholerae* in the environment.
 #'        Must be > 0 and < decay_days_long.
@@ -808,9 +808,7 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(zeta_2) || zeta_2 <= 0) {
           stop("zeta_2 must be a numeric scalar greater than zero.")
      }
-     if (zeta_1 <= zeta_2) {
-          stop("zeta_1 must be greater than zeta_2.")
-     }
+
      if (!is.numeric(kappa) || kappa <= 0) {
           stop("kappa must be a numeric scalar greater than zero.")
      }

@@ -12,6 +12,7 @@ plot_model_parameter_sensitivity(
   n_samples = 2000,
   kernel = "rbf",
   test_method = "Asymptotic",
+  subset_col = "is_best_subset",
   verbose = TRUE
 )
 }
@@ -33,6 +34,11 @@ replacement using importance weights. Default 2000.}
 
 \item{test_method}{Significance test method. \code{"Asymptotic"} (default, fast,
 requires n >= 100) or \code{"Permutation"} (exact, slower).}
+
+\item{subset_col}{Character name of the boolean subset-membership column used
+as the fallback when importance-weight ESS is degenerate. Defaults to
+\code{"is_best_subset"}. Pass \code{"is_best_subset_opt"} to read the
+optimizer-refined subset.}
 
 \item{verbose}{Print progress messages.}
 }

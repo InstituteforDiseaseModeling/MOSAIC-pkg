@@ -49,8 +49,8 @@ plot_cholera_surveillance_data <- function(PATHS, iso) {
      df_d$date <- as.Date(df_d$date)
 
      # Filter for target ISO
-     df_w <- df_w %>% filter(iso_code == iso)
-     df_d <- df_d %>% filter(iso_code == iso)
+     df_w <- df_w[df_w$iso_code == iso, ]
+     df_d <- df_d[df_d$iso_code == iso, ]
      country_name <- MOSAIC::convert_iso_to_country(iso)
 
      # Match source for daily rows
@@ -58,13 +58,12 @@ plot_cholera_surveillance_data <- function(PATHS, iso) {
      df_d$source     <- df_w$source[match(df_d$week_start, df_w$date_start)]
 
      # Common scales
-     common_x <- scale_x_date(date_breaks = "1 month", date_labels = "%b %Y")
-     # Y-axis: 0,1,10,100,1000,10000
+     common_x <- ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b %Y")
      y_vals  <- c(0, 1, 10, 100, 1000, 10000)
      log_brks <- log(y_vals + 1)
+     names(log_brks) <- y_vals
 
-     # Fill scale with SUPP
-     fill_scale <- scale_fill_manual(
+     fill_scale <- ggplot2::scale_fill_manual(
           name   = "Source",
           breaks = c("JHU", "WHO", "SUPP"),
           values = c("JHU"  = "#1f78b4",
@@ -73,44 +72,46 @@ plot_cholera_surveillance_data <- function(PATHS, iso) {
      )
 
      # Cases plot
-     p1 <- ggplot() +
-          geom_col(data = df_d %>% filter(!is.na(cases)),
-                   aes(x = date, y = log(cases + 1), fill = source), color = NA) +
-          geom_point(data = df_w,
-                     aes(x = date_start, y = log(cases + 1)), color = "black", size = 2) +
+     df_d_cases <- df_d[!is.na(df_d$cases), ]
+     p1 <- ggplot2::ggplot() +
+          ggplot2::geom_col(data = df_d_cases,
+                   ggplot2::aes(x = date, y = log(cases + 1), fill = source), color = NA) +
+          ggplot2::geom_point(data = df_w,
+                     ggplot2::aes(x = date_start, y = log(cases + 1)), color = "black", size = 2) +
           fill_scale +
-          scale_y_continuous(breaks = log_brks, labels = y_vals, expand = c(0,0)) +
+          ggplot2::scale_y_continuous(breaks = log_brks, labels = names(log_brks), expand = c(0,0)) +
           common_x +
-          labs(title = paste("Cholera Cases -", country_name), y = "Cases", x = NULL) +
-          theme_minimal() +
-          theme(
-               panel.grid.minor    = element_blank(),
-               panel.grid.major.x  = element_blank(),
-               panel.grid.major.y  = element_line(color = "grey80"),
-               axis.text.x         = element_text(angle = 90, vjust = 0.5, size = 7)
+          ggplot2::labs(title = paste("Cholera Cases -", country_name), y = "Cases", x = NULL) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(
+               panel.grid.minor    = ggplot2::element_blank(),
+               panel.grid.major.x  = ggplot2::element_blank(),
+               panel.grid.major.y  = ggplot2::element_line(color = "grey80"),
+               axis.text.x         = ggplot2::element_text(angle = 90, vjust = 0.5, size = 7)
           )
 
      # Deaths plot
-     p2 <- ggplot() +
-          geom_col(data = df_d %>% filter(!is.na(deaths)),
-                   aes(x = date, y = log(deaths + 1), fill = source), color = NA) +
-          geom_point(data = df_w,
-                     aes(x = date_start, y = log(deaths + 1)), color = "black", size = 2) +
+     df_d_deaths <- df_d[!is.na(df_d$deaths), ]
+     p2 <- ggplot2::ggplot() +
+          ggplot2::geom_col(data = df_d_deaths,
+                   ggplot2::aes(x = date, y = log(deaths + 1), fill = source), color = NA) +
+          ggplot2::geom_point(data = df_w,
+                     ggplot2::aes(x = date_start, y = log(deaths + 1)), color = "black", size = 2) +
           fill_scale +
-          scale_y_continuous(breaks = log_brks, labels = y_vals, expand = c(0,0)) +
+          ggplot2::scale_y_continuous(breaks = log_brks, labels = names(log_brks), expand = c(0,0)) +
           common_x +
-          labs(title = paste("Cholera Deaths -", country_name), y = "Deaths", x = NULL) +
-          theme_minimal() +
-          theme(
-               panel.grid.minor    = element_blank(),
-               panel.grid.major.x  = element_blank(),
-               panel.grid.major.y  = element_line(color = "grey80"),
-               axis.text.x         = element_text(angle = 90, vjust = 0.5, size = 7)
+          ggplot2::labs(title = paste("Cholera Deaths -", country_name), y = "Deaths", x = NULL) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(
+               panel.grid.minor    = ggplot2::element_blank(),
+               panel.grid.major.x  = ggplot2::element_blank(),
+               panel.grid.major.y  = ggplot2::element_line(color = "grey80"),
+               axis.text.x         = ggplot2::element_text(angle = 90, vjust = 0.5, size = 7)
           )
 
      # Combine
      combined <- p1 + p2 + patchwork::plot_layout(ncol = 1, guides = "collect") &
-          theme(legend.position = "bottom")
+          ggplot2::theme(legend.position = "bottom")
 
      print(combined)
      outfile <- file.path(PATHS$DOCS_FIGURES,
