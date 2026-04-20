@@ -26,8 +26,8 @@ A list with 3 main components:
 \item \code{phi_2}: Vaccine effectiveness of two doses OCV (beta distribution)
 \item \code{rho}: Reporting fraction/detection rate of symptomatic cases (beta distribution)
 \item \code{sigma}: Proportion of infections that are symptomatic (beta distribution)
-\item \code{zeta_1}: Bacterial shedding rate for symptomatic individuals (uniform distribution)
-\item \code{zeta_2}: Bacterial shedding rate for asymptomatic individuals (uniform distribution)
+\item \code{zeta_1}: Bacterial shedding rate for symptomatic individuals (lognormal distribution)
+\item \code{zeta_ratio}: Ratio of symptomatic to asymptomatic shedding (lognormal distribution)
 }
 }
 \item{parameters_location}{List of 7 location-specific parameter types for 40 African countries (ISO3 codes):

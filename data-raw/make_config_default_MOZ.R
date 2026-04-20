@@ -263,8 +263,8 @@ default_args <- list(
      psi_star_z = setNames(0.6, j),      # MOZ 7 best: 0.615; moderate smoothing
      psi_star_k = setNames(-10, j),      # MOZ 7 best: -21.1; centered near new prior mean
      psi_jt = psi_jt,
-     zeta_1 = 665,
-     zeta_2 = 10,
+     zeta_1 = 70000,       # Symptomatic shedding; prior median 70k (reparameterized from 665)
+     zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300; zeta_2 is derived
      kappa = 10^6,
      decay_days_short = 18,     # MOZ 7 best: 19.8 days
      decay_days_long = 365,     # Upper bound matches prior U(30, 365)

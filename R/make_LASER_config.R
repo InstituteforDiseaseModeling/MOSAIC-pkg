@@ -808,9 +808,7 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(zeta_2) || zeta_2 <= 0) {
           stop("zeta_2 must be a numeric scalar greater than zero.")
      }
-     if (zeta_1 <= zeta_2) {
-          stop("zeta_1 must be greater than zeta_2.")
-     }
+
      if (!is.numeric(kappa) || kappa <= 0) {
           stop("kappa must be a numeric scalar greater than zero.")
      }

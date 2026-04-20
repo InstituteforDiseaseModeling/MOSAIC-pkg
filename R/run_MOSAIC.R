@@ -2576,8 +2576,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_decay_shape_2 = TRUE,     # Decay shape parameter 2
 
     # Advanced parameters
-    sample_zeta_1 = TRUE,            # Advanced parameter 1
-    sample_zeta_2 = TRUE,            # Advanced parameter 2
+    sample_zeta_1 = TRUE,            # Symptomatic shedding rate
+    sample_zeta_ratio = TRUE,        # Symptomatic-to-asymptomatic shedding ratio
 
     # === LOCATION-SPECIFIC PARAMETERS ===
     # Transmission and seasonality

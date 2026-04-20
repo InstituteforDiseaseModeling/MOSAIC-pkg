@@ -100,6 +100,7 @@ convert_config_to_dataframe <- function(config) {
           "alpha_1",
           "alpha_2",
           "zeta_1",
+          "zeta_ratio",
           "zeta_2",
           "kappa",
           "decay_days_short",

@@ -117,7 +117,7 @@ test_that("get_location_config preserves parameter structure", {
      # Check that global parameters are preserved
      global_params <- c("seed", "phi_1", "phi_2", "omega_1", "omega_2", 
                        "gamma_1", "gamma_2", "epsilon", "rho", "sigma",
-                       "alpha_1", "alpha_2", "zeta_1", "zeta_2", "kappa",
+                       "alpha_1", "alpha_2", "zeta_1", "zeta_ratio", "kappa",
                        "mobility_omega", "mobility_gamma", "iota",
                        "decay_days_short", "decay_days_long", 
                        "decay_shape_1", "decay_shape_2")

@@ -469,32 +469,26 @@ priors_default$parameters_global$sigma <- list(
 )
 
 # zeta_1 - Symptomatic shedding rate (bacteria per infected person per day, LASER total-count units)
-# Equilibrium analysis: W_eq = zeta_1 * Isym * (1-theta) / delta. With kappa fixed at 1e6,
-# delta=1/30, Isym=1000, theta=0.5, the linear-saturation transition occurs at zeta_1* ~ 33.
-# Updated from Lognormal(log(100), sdlog=3.0) to Lognormal(log(665), sdlog=2.0):
-# MOZ calibration_test_19 posterior shifted to median ~2,300 (23x higher than prior median of
-# 100) and was the dominant driver of model fit (PRCC=0.72). The old prior placed ~36% of
-# mass in the sub-transition linear regime (zeta<33) where environmental transmission is
-# negligible — an implausibly low regime. The new prior (median=665) places only ~5% of
-# mass below 33, concentrating mass in the saturation-adjacent regime consistent with the
-# calibration evidence. Tightening sdlog from 3.0 to 2.0 reduces the upper tail while still
-# covering 4+ orders of magnitude (95% CI ≈ [13, 33,400]).
-# Regime mass at new prior: ~5% linear (<33), ~23% transition (33-330),
-# ~63% mild saturation (330-33k), ~9% strong saturation (>33k).
+# Reparameterized from Frame A (zeta_1 ~ 665, kappa=1e6 Frame B) to match kappa=1e6 scale.
+# Production best-fit models: 27k-87k. Single-stage BFRS posteriors: 4k-14k.
+# Half-saturation at zeta_1=70k requires ~400 concurrent infections (kappa=1e6, theta=0.648,
+# population 32M). Q2.5=12.5k, median=70k, Q97.5=392k.
 priors_default$parameters_global$zeta_1 <- list(
      description = "Symptomatic shedding rate (total bacteria per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(665), sdlog = 2.0)
+     parameters = list(meanlog = log(70000), sdlog = 0.8)
 )
 
-# zeta_2 - Asymptomatic shedding rate (bacteria per infected person per day, LASER total-count units)
-# Maintains ~10:1 ratio to zeta_1 (symptomatic individuals shed substantially more).
-# Median=10, sdlog=3.0 matches zeta_1 breadth; 95% CI=[0.03, 3578].
-# LASER default (2.5) at ~32nd percentile.
-priors_default$parameters_global$zeta_2 <- list(
-     description = "Asymptomatic shedding rate (total bacteria per infected person per day)",
+# zeta_ratio - Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2).
+# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio.  Guarantees zeta_1 > zeta_2 algebraically.
+# Prior centered at 300: Chao et al. (2011) implies ratio=10 (lower bound); single-stage
+# MOSAIC posteriors 200-580; Nelson et al. (2009) biology + duration correction 25-250k.
+# Both zeta_1 and zeta_ratio are lognormal, so zeta_2 = zeta_1/zeta_ratio is exactly
+# lognormal: LN(log(70000)-log(300), sqrt(0.8^2+1.2^2)) = LN(log(233), 1.44).
+priors_default$parameters_global$zeta_ratio <- list(
+     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(10), sdlog = 3.0)
+     parameters = list(meanlog = log(300), sdlog = 1.2)
 )
 
 # delta_reporting_cases - Symptom-onset-to-case reporting delay

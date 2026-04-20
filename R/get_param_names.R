@@ -112,6 +112,7 @@ get_param_names <- function(object) {
         "alpha_2",
         "beta_j0_env",
         "zeta_1",
+        "zeta_ratio",
         "zeta_2",
         "kappa",
         "decay_days_short",

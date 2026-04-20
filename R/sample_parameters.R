@@ -34,8 +34,8 @@
 #'     \item sample_chi_epidemic: PPV among suspected cases during epidemic periods (default TRUE)
 #'     \item sample_rho: Care-seeking rate (default TRUE)
 #'     \item sample_sigma: Symptomatic fraction (default TRUE)
-#'     \item sample_zeta_1: Spatial (default TRUE)
-#'     \item sample_zeta_2: Spatial (default TRUE)
+#'     \item sample_zeta_1: Symptomatic shedding rate (default TRUE)
+#'     \item sample_zeta_ratio: Symptomatic-to-asymptomatic shedding ratio (default TRUE)
 #'     \item sample_beta_j0_tot: Total transmission rate (default TRUE)
 #'     \item sample_p_beta: Proportion of human-to-human transmission (default TRUE)
 #'     \item sample_tau_i: Diffusion (default TRUE)
@@ -143,7 +143,7 @@ sample_parameters <- function(
     sample_rho = TRUE,
     sample_sigma = TRUE,
     sample_zeta_1 = TRUE,
-    sample_zeta_2 = TRUE,
+    sample_zeta_ratio = TRUE,
 
     # Location-specific parameter sampling controls
     sample_beta_j0_tot = TRUE,
@@ -263,16 +263,6 @@ sample_parameters <- function(
     verbose
   )
 
-  # Enforce zeta_1 > zeta_2: symptomatic shedding must exceed asymptomatic.
-  # make_LASER_config() stops if this is violated. With both at sdlog=3.0,
-  # ~29% of independent draws violate the constraint — swap rather than reject.
-  if (!is.null(config_sampled$zeta_1) && !is.null(config_sampled$zeta_2)) {
-    if (config_sampled$zeta_1 <= config_sampled$zeta_2) {
-      tmp <- config_sampled$zeta_1
-      config_sampled$zeta_1 <- config_sampled$zeta_2
-      config_sampled$zeta_2 <- tmp
-    }
-  }
 
   # Enforce decay_days_short < decay_days_long: minimum survival must be less
   # than maximum. make_LASER_config() stops if this is violated. Swap rather
@@ -588,6 +578,19 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
     if (verbose) {
       cat("  - Derived beta_j0_hum =", format_verbose_value(config_sampled$beta_j0_hum), "\n")
       cat("  - Derived beta_j0_env =", format_verbose_value(config_sampled$beta_j0_env), "\n")
+    }
+  }
+
+  # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
+  # zeta_1 > zeta_2 is guaranteed algebraically since zeta_ratio > 0 always.
+  if ("zeta_1" %in% names(config_sampled) && "zeta_ratio" %in% names(config_sampled)) {
+
+    if (verbose) cat("\n  Deriving zeta_2 from zeta_1 and zeta_ratio...\n")
+
+    config_sampled$zeta_2 <- config_sampled$zeta_1 / config_sampled$zeta_ratio
+
+    if (verbose) {
+      cat("  - Derived zeta_2 =", format_verbose_value(config_sampled$zeta_2), "\n")
     }
   }
 
@@ -987,7 +990,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       params = c("phi_1", "phi_2", "omega_1", "omega_2", "iota",
                 "gamma_1", "gamma_2", "epsilon", "chi_endemic", "chi_epidemic",
                 "rho", "sigma", "mobility_omega", "mobility_gamma",
-                "zeta_1", "zeta_2", "kappa", "alpha_1", "alpha_2",
+                "zeta_1", "zeta_ratio", "zeta_2", "kappa", "alpha_1", "alpha_2",
                 "decay_days_long", "decay_days_short", "decay_shape_1", "decay_shape_2",
                 "delta_reporting_cases", "delta_reporting_deaths"),
       type = "scalar"
@@ -1444,7 +1447,7 @@ create_sampling_args <- function(pattern = "all",
 
   } else if (pattern == "spatial_only") {
     # Only spatial parameters
-    spatial_params <- c("sample_zeta_1", "sample_zeta_2",
+    spatial_params <- c("sample_zeta_1", "sample_zeta_ratio",
                        "sample_kappa", "sample_tau_i")
     param_names <- names(all_params)
     all_params <- lapply(param_names, function(n) {
