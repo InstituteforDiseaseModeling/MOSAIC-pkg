@@ -10,10 +10,25 @@
 \item{prior_entry}{A prior list with \code{$parameters$min} and \code{$parameters$max}.}
 }
 \value{
-Character string: \code{"beta"}, \code{"lognormal"}, or \code{"normal"}.
+Character string: \code{"beta"} (for proportion-valued priors) or
+\code{"truncnorm"} (for any other finite bounded support).
 }
 \description{
 Uses the parameter domain encoded in min/max to select the natural
 distributional family for posterior fitting when the prior is uniform.
+}
+\details{
+v0.28.1: The non-Beta branch returns \code{"truncnorm"} instead of
+\code{"lognormal"} / \code{"normal"}. Truncnorm preserves the uniform's
+\link{min, max} support through the posterior fit and across all subsequent
+calibration stages (family-match guard in update_priors_from_posteriors.R).
+Previously, uniform priors on non-\code{[0,1]} supports were fit as
+unbounded Lognormal or Normal, silently erasing the prior's bounds in
+stage-2+ posteriors.
+
+Bound plumbing: \code{calc_model_posterior_distributions.R} falls back to
+\code{min}/\code{max} when the truncnorm \code{a}/\code{b} fields are absent
+on the prior entry, so no changes are needed to the uniform priors
+themselves.
 }
 \keyword{internal}

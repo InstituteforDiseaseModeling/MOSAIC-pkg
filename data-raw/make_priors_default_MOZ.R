@@ -736,7 +736,7 @@ priors_default_MOZ$parameters_location$epidemic_threshold <- list(
                      parameters = list(
                           mean = prior_mean,
                           sd   = prior_mean * 0.65,
-                          a    = max(1e-6, prior_mean / 10),
+                          a    = prior_mean / 10,
                           b    = min(0.01, prior_mean * 10)
                      ))
      )

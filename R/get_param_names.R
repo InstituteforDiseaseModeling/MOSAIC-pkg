@@ -116,6 +116,7 @@ get_param_names <- function(object) {
         "zeta_2",
         "kappa",
         "decay_days_short",
+        "decay_days_spread",  # v0.27.0: sampled; decay_days_long derived
         "decay_days_long",
         "decay_shape_1",
         "decay_shape_2",

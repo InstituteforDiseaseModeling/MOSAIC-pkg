@@ -109,7 +109,7 @@ plot_model_parameters <- function(results,
           "alpha_1", "alpha_2",                      # Environmental transmission
           "zeta_1", "zeta_ratio", "zeta_2",           # Environmental parameters
           "kappa",                                   # Environmental capacity
-          "decay_days_short", "decay_days_long",    # Immunity decay
+          "decay_days_short", "decay_days_spread", "decay_days_long",    # Environmental decay (spread sampled, long derived)
           "decay_shape_1", "decay_shape_2",         # Decay shape parameters
           "mobility_omega", "mobility_gamma"         # Mobility parameters
      )

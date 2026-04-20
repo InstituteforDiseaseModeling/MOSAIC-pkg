@@ -261,7 +261,7 @@ Positive values = forward/delay, negative values = backward/advance. Default 0.0
 
 \item{zeta_1}{Shedding rate (numeric > 0).}
 
-\item{zeta_2}{Shedding rate (numeric > 0; must be less than zeta_1).}
+\item{zeta_2}{Asymptomatic shedding rate (numeric > 0). Derived by sample_parameters() as zeta_1 / zeta_ratio.}
 
 \item{kappa}{Concentration required for 50\% infection (numeric > 0).}
 

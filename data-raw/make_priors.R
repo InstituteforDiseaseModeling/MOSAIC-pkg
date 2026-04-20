@@ -1754,8 +1754,11 @@ country_threshold_data$prior_mean <- ifelse(
 # family-match guard now preserves the [a, b] support across all stages.
 # Natural-scale CV = 0.65 approximately matches the old lognormal sdlog=0.5
 # spread (CV ≈ 0.53) with a small inflation buffer.
+#
+# v0.28.2: Removed the absolute lower floor of 1e-6. With a floor, two
+# countries with very low Zheng prior means (BEN, CIV) had a > prior_mean,
+# yielding an ill-posed truncnorm. Pure proportional lower bound avoids it.
 EPIDEMIC_THRESHOLD_SD_REL    <- 0.65   # natural-scale CV
-EPIDEMIC_THRESHOLD_LOWER_ABS <- 1e-6   # global floor: near-silent endemic
 EPIDEMIC_THRESHOLD_UPPER_ABS <- 0.01   # global cap: 1% daily symp prevalence = severe epidemic
 
 priors_default$parameters_location$epidemic_threshold <- list(
@@ -1765,7 +1768,7 @@ priors_default$parameters_location$epidemic_threshold <- list(
           "Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) ",
           "converted via Zheng formula using config rho, chi_endemic, and gamma_1. ",
           "Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, ",
-          "a = max(1e-6, prior_mean/10), b = min(0.01, prior_mean*10))."
+          "a = prior_mean/10, b = min(0.01, prior_mean*10))."
      ),
      location = list()
 )
@@ -1778,7 +1781,7 @@ for (iso in j) {
           parameters   = list(
                mean = pm,
                sd   = pm * EPIDEMIC_THRESHOLD_SD_REL,
-               a    = max(EPIDEMIC_THRESHOLD_LOWER_ABS, pm / 10),
+               a    = pm / 10,
                b    = min(EPIDEMIC_THRESHOLD_UPPER_ABS, pm * 10)
           )
      )

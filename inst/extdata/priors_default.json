@@ -5065,14 +5065,14 @@
       }
     },
     "epidemic_threshold": {
-      "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) converted via Zheng formula using config rho, chi_endemic, and gamma_1. Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, a = max(1e-6, prior_mean/10), b = min(0.01, prior_mean*10)).",
+      "description": "Dimensionless daily Isym/N prevalence threshold for epidemic regime activation. Compared against Isym[t - delta_reporting_cases] / N[t - delta_reporting_cases] in LASER. Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) converted via Zheng formula using config rho, chi_endemic, and gamma_1. Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, a = prior_mean/10, b = min(0.01, prior_mean*10)).",
       "location": {
         "AGO": {
           "distribution": "truncnorm",
           "parameters": {
             "mean": 3.3588e-06,
             "sd": 2.1832e-06,
-            "a": 1e-06,
+            "a": 3.3588e-07,
             "b": 0
           }
         },
@@ -5081,7 +5081,7 @@
           "parameters": {
             "mean": 2.5995e-06,
             "sd": 1.6897e-06,
-            "a": 1e-06,
+            "a": 2.5995e-07,
             "b": 0
           }
         },
@@ -5090,7 +5090,7 @@
           "parameters": {
             "mean": 7.3311e-07,
             "sd": 4.7652e-07,
-            "a": 1e-06,
+            "a": 7.3311e-08,
             "b": 7.3311e-06
           }
         },
@@ -5117,7 +5117,7 @@
           "parameters": {
             "mean": 6.0042e-06,
             "sd": 3.9027e-06,
-            "a": 1e-06,
+            "a": 6.0042e-07,
             "b": 0.0001
           }
         },
@@ -5126,7 +5126,7 @@
           "parameters": {
             "mean": 1.0371e-07,
             "sd": 6.7413e-08,
-            "a": 1e-06,
+            "a": 1.0371e-08,
             "b": 1.0371e-06
           }
         },
@@ -5135,7 +5135,7 @@
           "parameters": {
             "mean": 4.9575e-06,
             "sd": 3.2224e-06,
-            "a": 1e-06,
+            "a": 4.9575e-07,
             "b": 0
           }
         },
@@ -5153,7 +5153,7 @@
           "parameters": {
             "mean": 1.4748e-06,
             "sd": 9.5859e-07,
-            "a": 1e-06,
+            "a": 1.4748e-07,
             "b": 0
           }
         },
@@ -5171,7 +5171,7 @@
           "parameters": {
             "mean": 8.1354e-06,
             "sd": 5.288e-06,
-            "a": 1e-06,
+            "a": 8.1354e-07,
             "b": 0.0001
           }
         },
@@ -5189,7 +5189,7 @@
           "parameters": {
             "mean": 9.0304e-06,
             "sd": 5.8698e-06,
-            "a": 1e-06,
+            "a": 9.0304e-07,
             "b": 0.0001
           }
         },
@@ -5198,7 +5198,7 @@
           "parameters": {
             "mean": 6.9103e-06,
             "sd": 4.4917e-06,
-            "a": 1e-06,
+            "a": 6.9103e-07,
             "b": 0.0001
           }
         },
@@ -5234,7 +5234,7 @@
           "parameters": {
             "mean": 3.2462e-06,
             "sd": 2.11e-06,
-            "a": 1e-06,
+            "a": 3.2462e-07,
             "b": 0
           }
         },
@@ -5243,7 +5243,7 @@
           "parameters": {
             "mean": 1.5703e-06,
             "sd": 1.0207e-06,
-            "a": 1e-06,
+            "a": 1.5703e-07,
             "b": 0
           }
         },
@@ -5279,7 +5279,7 @@
           "parameters": {
             "mean": 1.3232e-06,
             "sd": 8.6006e-07,
-            "a": 1e-06,
+            "a": 1.3232e-07,
             "b": 0
           }
         },
@@ -5297,7 +5297,7 @@
           "parameters": {
             "mean": 2.0376e-06,
             "sd": 1.3244e-06,
-            "a": 1e-06,
+            "a": 2.0376e-07,
             "b": 0
           }
         },
@@ -5306,7 +5306,7 @@
           "parameters": {
             "mean": 1.0871e-06,
             "sd": 7.0662e-07,
-            "a": 1e-06,
+            "a": 1.0871e-07,
             "b": 0
           }
         },
@@ -5315,7 +5315,7 @@
           "parameters": {
             "mean": 1.3235e-06,
             "sd": 8.6025e-07,
-            "a": 1e-06,
+            "a": 1.3235e-07,
             "b": 0
           }
         },
@@ -5369,7 +5369,7 @@
           "parameters": {
             "mean": 1.5347e-06,
             "sd": 9.9754e-07,
-            "a": 1e-06,
+            "a": 1.5347e-07,
             "b": 0
           }
         },
@@ -5378,7 +5378,7 @@
           "parameters": {
             "mean": 2.9598e-06,
             "sd": 1.9239e-06,
-            "a": 1e-06,
+            "a": 2.9598e-07,
             "b": 0
           }
         },
@@ -5387,7 +5387,7 @@
           "parameters": {
             "mean": 4.1674e-06,
             "sd": 2.7088e-06,
-            "a": 1e-06,
+            "a": 4.1674e-07,
             "b": 0
           }
         },
@@ -5396,7 +5396,7 @@
           "parameters": {
             "mean": 1.2969e-06,
             "sd": 8.4301e-07,
-            "a": 1e-06,
+            "a": 1.2969e-07,
             "b": 0
           }
         },
@@ -5414,7 +5414,7 @@
           "parameters": {
             "mean": 5.6023e-06,
             "sd": 3.6415e-06,
-            "a": 1e-06,
+            "a": 5.6023e-07,
             "b": 0.0001
           }
         },

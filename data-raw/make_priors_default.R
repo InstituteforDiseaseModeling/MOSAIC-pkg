@@ -1786,11 +1786,15 @@ country_threshold_data$prior_mean <- ifelse(
 # regime). Lognormal was unbounded above; update_priors_from_posteriors.R's
 # family-match guard now preserves the [a, b] support across all stages.
 # Natural-scale CV = 0.65 approximately matches the old lognormal sdlog=0.5
-# spread (CV ≈ 0.53) with a small inflation buffer. Per-location proportional
-# bounds (pm/10, pm*10) preserve per-location tuning; hard global caps keep
-# all locations inside a biologically meaningful [1e-6, 0.01] band.
+# spread (CV ≈ 0.53) with a small inflation buffer.
+#
+# v0.28.2: Removed the absolute lower floor of 1e-6. With a floor, two
+# countries with very low Zheng prior means (BEN, CIV) had a > prior_mean,
+# yielding an ill-posed truncnorm whose mean lay below the lower bound
+# (fit_truncnorm_from_ci() rejects mode_val <= a). Pure proportional lower
+# bound (pm/10) avoids this. The 1% upper cap remains — that's the real
+# safety net against epidemic-regime-unreachable drift.
 EPIDEMIC_THRESHOLD_SD_REL    <- 0.65   # natural-scale CV
-EPIDEMIC_THRESHOLD_LOWER_ABS <- 1e-6   # global floor: near-silent endemic (~0.1/100k/day symp)
 EPIDEMIC_THRESHOLD_UPPER_ABS <- 0.01   # global cap: 1% daily symp prevalence = severe epidemic
 
 priors_default$parameters_location$epidemic_threshold <- list(
@@ -1800,7 +1804,7 @@ priors_default$parameters_location$epidemic_threshold <- list(
           "Derived from observed median weekly reported incidence per 100k (outbreak-positive weeks) ",
           "converted via Zheng formula using config rho, chi_endemic, and gamma_1. ",
           "Truncnorm(mean = prior_mean, sd = 0.65*prior_mean, ",
-          "a = max(1e-6, prior_mean/10), b = min(0.01, prior_mean*10))."
+          "a = prior_mean/10, b = min(0.01, prior_mean*10))."
      ),
      location = list()
 )
@@ -1813,7 +1817,7 @@ for (iso in j) {
           parameters   = list(
                mean = pm,
                sd   = pm * EPIDEMIC_THRESHOLD_SD_REL,
-               a    = max(EPIDEMIC_THRESHOLD_LOWER_ABS, pm / 10),
+               a    = pm / 10,
                b    = min(EPIDEMIC_THRESHOLD_UPPER_ABS, pm * 10)
           )
      )

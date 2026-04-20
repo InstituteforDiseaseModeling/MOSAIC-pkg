@@ -22,8 +22,14 @@
 #' @keywords internal
 .infer_posterior_family_uniform <- function(prior_entry) {
     p <- prior_entry$parameters
-    lo <- as.numeric(p$min)
-    hi <- as.numeric(p$max)
+    # Defensive: uniform priors without min/max can't drive domain inference.
+    # Fall back to truncnorm (which is always bound-preserving when bounds are
+    # recoverable, and harmless when they aren't — fit_truncnorm_from_ci will
+    # use NULL/Inf bounds and degenerate to normal-like behavior).
+    if (is.null(p$min) || is.null(p$max)) return("truncnorm")
+    lo <- suppressWarnings(as.numeric(p$min))
+    hi <- suppressWarnings(as.numeric(p$max))
+    if (length(lo) != 1L || length(hi) != 1L) return("truncnorm")
     if (is.finite(lo) && lo >= 0 && is.finite(hi) && hi <= 1) {
         "beta"
     } else {
