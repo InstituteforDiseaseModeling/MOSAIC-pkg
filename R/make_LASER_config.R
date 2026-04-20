@@ -123,7 +123,7 @@
 #' @param psi_star_k Time offset in days for psi_jt calibration (numeric vector of length(location_name)).
 #'        Positive values = forward/delay, negative values = backward/advance. Default 0.0 (no offset).
 #' @param zeta_1 Shedding rate (numeric > 0).
-#' @param zeta_2 Shedding rate (numeric > 0; must be less than zeta_1).
+#' @param zeta_2 Asymptomatic shedding rate (numeric > 0). Derived by sample_parameters() as zeta_1 / zeta_ratio.
 #' @param kappa Concentration required for 50% infection (numeric > 0).
 #' @param decay_days_short Time constant (in days) for short-term survival of *V. cholerae* in the environment.
 #'        Must be > 0 and < decay_days_long.

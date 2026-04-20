@@ -7,7 +7,7 @@
 "decay_shape_2","Decay Shape Parameter 2","Second shape parameter of Beta distribution for V. cholerae decay","dimensionless","uniform","global","environmental",6,"01","02","04"
 "kappa","50% Infectious Dose","Concentration of V. cholerae for 50% infectious dose","bacteria/mL","uniform","global","environmental",7,"01","02","05"
 "zeta_1","Symptomatic Shedding Rate","Shedding rate for symptomatic infections","bacteria/day","uniform","global","environmental",8,"01","02","06"
-"zeta_2","Asymptomatic Shedding Rate","Shedding rate for asymptomatic infections","bacteria/day","uniform","global","environmental",9,"01","02","07"
+"zeta_ratio","Shedding Ratio (Sym/Asym)","Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)","dimensionless (ratio)","lognormal","global","environmental",9,"01","02","07"
 "gamma_1","Symptomatic Recovery Rate","Recovery rate for symptomatic/severe infections","per day","lognormal","global","disease",10,"01","03","01"
 "gamma_2","Asymptomatic Recovery Rate","Recovery rate for asymptomatic/mild infections","per day","lognormal","global","disease",11,"01","03","02"
 "iota","Incubation Period","Rate parameter for incubation period (per day, 1/iota = mean incubation time)","per day","lognormal","global","disease",12,"01","03","03"
