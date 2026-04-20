@@ -79,17 +79,18 @@ priors_default_MOZ$parameters_global$decay_days_short <- list(
 )
 
 # decay_shape_1
+# Truncnorm (was Uniform) so the [0.1, 10] support is preserved through staged posteriors.
 priors_default_MOZ$parameters_global$decay_shape_1 <- list(
      description = "First shape parameter of Beta distribution for V. cholerae decay",
-     distribution = "uniform",
-     parameters = list(min = 0.1, max = 10.0)
+     distribution = "truncnorm",
+     parameters = list(mean = 3, sd = 5, a = 0.1, b = 10.0)
 )
 
 # decay_shape_2
 priors_default_MOZ$parameters_global$decay_shape_2 <- list(
      description = "Second shape parameter of Beta distribution for V. cholerae decay",
-     distribution = "uniform",
-     parameters = list(min = 0.1, max = 10.0)
+     distribution = "truncnorm",
+     parameters = list(mean = 3, sd = 5, a = 0.1, b = 10.0)
 )
 
 # epsilon - Natural immunity waning rate

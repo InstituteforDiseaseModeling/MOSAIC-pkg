@@ -165,10 +165,10 @@ global_params <- data.frame(
     # Transmission
     "beta", "beta",
     # Environmental - reordered
-    # decay_days_short: TruncNorm (updated from Uniform in make_priors.R)
-    # decay_days_long, decay_shape_1, decay_shape_2: Uniform (unchanged)
+    # decay_days_short: TruncNorm; decay_days_long: Uniform (to be reparameterized in later commit)
+    # decay_shape_1, decay_shape_2: TruncNorm (was Uniform; bounds [0.1, 10] now preserved through stages)
     # zeta_1, zeta_ratio, kappa: lognormal; zeta_2 is derived (zeta_1/zeta_ratio)
-    "truncnorm", "uniform", "uniform", "uniform", "lognormal", "lognormal", "lognormal",
+    "truncnorm", "uniform", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
     # Disease - reordered
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
@@ -247,8 +247,10 @@ global_params$posterior_distribution <- c(
   # Environmental: non-uniform priors retain family; uniform priors use domain
   #   inference at runtime (min >= 0 → lognormal):
   #   decay_days_short: truncnorm → truncnorm; decay_days_long: uniform → lognormal;
-  #   decay_shape_1/2: uniform → lognormal; zeta_1, zeta_ratio, kappa: lognormal → lognormal
-  "truncnorm", "lognormal", "lognormal", "lognormal", "lognormal", "lognormal", "lognormal",
+  #   decay_shape_1/2: truncnorm → truncnorm (bounds [0.1, 10] preserved through stages,
+  #     was uniform → lognormal which silently erased the biological upper bound);
+  #   zeta_1, zeta_ratio, kappa: lognormal → lognormal
+  "truncnorm", "lognormal", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
   # Disease: unchanged
   "lognormal", "beta", "lognormal", "lognormal",
   # Immunity: unchanged
