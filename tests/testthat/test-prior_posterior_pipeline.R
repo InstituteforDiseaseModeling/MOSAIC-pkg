@@ -84,9 +84,9 @@ test_that("calc_model_posterior_quantiles uses actual prior family when provided
 
 test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", {
 
-  # Exercises the uniform -> lognormal domain inference path. After v0.27.0
-  # no default prior in the package is uniform, so we inject one on
-  # decay_days_spread (an inventory parameter) via the priors argument. The
+  # Exercises the uniform -> truncnorm domain inference path (v0.28.1). After
+  # Commits 1-3, no default prior in the package is uniform, so we inject one
+  # on decay_days_spread (an inventory parameter) via the priors argument. The
   # actual_family branch at calc_model_posterior_quantiles.R:336-355 reads the
   # passed priors, not the inventory default, so domain inference kicks in.
 
@@ -101,7 +101,7 @@ test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", 
     likelihood = rnorm(n, -100, 10)
   )
 
-  # Prior is uniform — posterior family inferred from domain (min >= 0 → lognormal)
+  # Prior is uniform — posterior family inferred from domain (not [0,1] → truncnorm)
   priors <- list(
     metadata = list(version = "test"),
     parameters_global = list(
@@ -127,18 +127,22 @@ test_that("calc_model_posterior_quantiles preserves uniform→upgraded family", 
   # Prior distribution should be "uniform" (the actual prior)
   expect_equal(unique(dds$prior_distribution), "uniform")
 
-  # Posterior distribution should be lognormal (domain inference: min >= 0)
-  expect_equal(unique(dds$posterior_distribution), "lognormal",
-               info = "Uniform priors on (0, inf) should infer lognormal posterior")
+  # Posterior distribution should be truncnorm (v0.28.1: uniform → truncnorm
+  # preserves the uniform's [min, max] support through staged posteriors).
+  expect_equal(unique(dds$posterior_distribution), "truncnorm",
+               info = "Uniform priors outside [0,1] should infer truncnorm posterior (v0.28.1)")
 })
 
 
-test_that("domain inference from uniform bounds: proportion → beta, positive → lognormal, other → normal", {
+test_that("domain inference from uniform bounds: proportion → beta, anything else → truncnorm", {
 
-  # Test the internal domain inference helper directly
+  # Test the internal domain inference helper directly.
+  # v0.28.1: The non-[0,1] branch returns "truncnorm" instead of lognormal/normal.
+  # Truncnorm preserves the uniform's [min, max] support through the staged-
+  # posterior family-match guard (see update_priors_from_posteriors.R).
   infer <- MOSAIC:::.infer_posterior_family_uniform
 
-  # [0, 1] → beta (proportion domain)
+  # [0, 1] → beta (proportion domain — Beta honors [0,1] natively)
   expect_equal(
     infer(list(distribution = "uniform", parameters = list(min = 0, max = 1))),
     "beta"
@@ -148,33 +152,33 @@ test_that("domain inference from uniform bounds: proportion → beta, positive �
     "beta"
   )
 
-  # [0, inf) or [a, b] with a >= 0 → lognormal (positive domain)
+  # [0, inf) or [a, b] with a >= 0 and b > 1 → truncnorm (positive domain, not proportion)
   expect_equal(
     infer(list(distribution = "uniform", parameters = list(min = 30, max = 365))),
-    "lognormal"
+    "truncnorm"
   )
   expect_equal(
     infer(list(distribution = "uniform", parameters = list(min = 0.1, max = 10))),
-    "lognormal"
+    "truncnorm"
   )
   expect_equal(
     infer(list(distribution = "uniform", parameters = list(min = 0, max = 100))),
-    "lognormal"
+    "truncnorm"
   )
 
-  # min < 0 → normal (unconstrained domain)
+  # min < 0 → truncnorm (unconstrained domain; bounds still preserved via truncation)
   expect_equal(
     infer(list(distribution = "uniform", parameters = list(min = -10, max = 10))),
-    "normal"
+    "truncnorm"
   )
   expect_equal(
     infer(list(distribution = "uniform", parameters = list(min = -1, max = 1))),
-    "normal"
+    "truncnorm"
   )
 })
 
 
-test_that("uniform prior decay_shape_1 gets lognormal posterior via domain inference", {
+test_that("uniform prior decay_shape_1 gets truncnorm posterior via domain inference (v0.28.1)", {
 
   set.seed(42)
   n <- 200
@@ -187,7 +191,7 @@ test_that("uniform prior decay_shape_1 gets lognormal posterior via domain infer
     likelihood = rnorm(n, -100, 10)
   )
 
-  # Actual prior: Uniform(0.1, 10) → domain inference: min >= 0 → lognormal
+  # Actual prior: Uniform(0.1, 10) → domain inference: non-[0,1] → truncnorm
   priors <- list(
     metadata = list(version = "test"),
     parameters_global = list(
@@ -210,8 +214,75 @@ test_that("uniform prior decay_shape_1 gets lognormal posterior via domain infer
   ds1 <- result[result$parameter == "decay_shape_1", ]
   expect_true(nrow(ds1) > 0)
   expect_equal(unique(ds1$prior_distribution), "uniform")
-  expect_equal(unique(ds1$posterior_distribution), "lognormal",
-               info = "Uniform(0.1, 10) should infer lognormal via domain (min >= 0)")
+  expect_equal(unique(ds1$posterior_distribution), "truncnorm",
+               info = "Uniform(0.1, 10) should infer truncnorm preserving [0.1, 10] support (v0.28.1)")
+})
+
+
+test_that("uniform prior end-to-end: truncnorm posterior preserves original bounds (v0.28.1)", {
+
+  # Backstop regression test. Confirms the full pipeline (quantiles → fit →
+  # sample from fitted) preserves the uniform prior's support. Before v0.28.1
+  # a uniform prior was fit as unbounded lognormal/normal at stage 2+, so
+  # stage-2 samples could drift past the original min/max.
+
+  set.seed(42)
+  n <- 2000
+  results <- data.frame(
+    decay_shape_1 = runif(n, 0.1, 10),
+    is_finite = TRUE,
+    is_retained = TRUE,
+    is_best_subset = c(rep(TRUE, 500), rep(FALSE, n - 500)),
+    weight_best = c(rep(1/500, 500), rep(0, n - 500)),
+    likelihood = rnorm(n, -100, 10)
+  )
+
+  priors <- list(
+    metadata = list(version = "test"),
+    parameters_global = list(
+      decay_shape_1 = list(distribution = "uniform", parameters = list(min = 0.1, max = 10))
+    ),
+    parameters_location = list()
+  )
+
+  out_dir <- tempfile("test_backstop_")
+  dir.create(out_dir, recursive = TRUE)
+  on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
+
+  # Stage 1: compute quantiles
+  calc_model_posterior_quantiles(
+    results = results,
+    output_dir = out_dir,
+    priors = priors,
+    verbose = FALSE
+  )
+
+  # Stage 2: fit posterior distribution (should read min/max as truncnorm a/b)
+  priors_path <- file.path(out_dir, "priors.json")
+  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE)
+
+  calc_model_posterior_distributions(
+    quantiles_file = file.path(out_dir, "posterior_quantiles.csv"),
+    priors_file = priors_path,
+    output_dir = out_dir,
+    verbose = FALSE
+  )
+
+  fitted <- jsonlite::fromJSON(
+    file.path(out_dir, "posteriors.json"),
+    simplifyVector = FALSE
+  )$parameters_global$decay_shape_1
+
+  # Fitted posterior should be truncnorm with bounds inherited from uniform prior
+  expect_equal(fitted$distribution, "truncnorm")
+  expect_equal(as.numeric(fitted$parameters$a), 0.1)
+  expect_equal(as.numeric(fitted$parameters$b), 10)
+
+  # Sample from the fitted posterior: every sample must respect the bounds
+  post_samples <- sample_from_prior(n = 5000, prior = fitted)
+  expect_true(all(is.finite(post_samples)))
+  expect_true(all(post_samples >= 0.1))
+  expect_true(all(post_samples <= 10))
 })
 
 

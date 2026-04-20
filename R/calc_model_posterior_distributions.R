@@ -388,6 +388,13 @@ calc_model_posterior_distributions <- function(
                 # e.g., psi_star_a >= 0 and psi_star_k <= 0.
                 # posterior_lower/upper columns override when present
                 # (e.g., delta_reporting_* integer support).
+                #
+                # v0.28.1: When the prior is uniform (has min/max rather than a/b),
+                # fall back to min/max so that the inferred truncnorm posterior
+                # preserves the uniform's original support. This closes the
+                # pre-v0.28.1 loophole where uniform priors were fit as unbounded
+                # lognormal/normal and drifted past their original support at
+                # stage 2+.
                 parse_bound <- function(x) {
                     if (is.null(x)) return(NULL)
                     if (is.character(x) && trimws(x) == "Inf")  return(Inf)
@@ -401,7 +408,9 @@ calc_model_posterior_distributions <- function(
                     priors$parameters_global[[param_base]]
                 }
                 prior_a <- parse_bound(prior_entry$parameters$a)
+                if (is.null(prior_a)) prior_a <- parse_bound(prior_entry$parameters$min)
                 prior_b <- parse_bound(prior_entry$parameters$b)
+                if (is.null(prior_b)) prior_b <- parse_bound(prior_entry$parameters$max)
 
                 a_bound <- if ("posterior_lower" %in% names(param_row) &&
                                !is.na(param_row$posterior_lower))
