@@ -190,7 +190,7 @@ Claude Code working on MOSAIC must act as a **production systems software engine
 
 **Bump version on every commit.** Patch (bugs/docs), Minor (features), Major (breaking changes). Include version in commit message: `"Fix bug (v0.13.26)"`.
 
-**Data object versioning:** `config_default` version in `data-raw/make_default_LASER_config_files.R`, `priors_default` version in `data-raw/make_priors.R`. Bump and rebuild `.rda`/`.json` when contents change.
+**Data object versioning:** `config_default` version in `data-raw/make_config_default.R`, `priors_default` version in `data-raw/make_priors_default.R`. Bump and rebuild `.rda`/`.json` when contents change.
 
 ### Testing
 

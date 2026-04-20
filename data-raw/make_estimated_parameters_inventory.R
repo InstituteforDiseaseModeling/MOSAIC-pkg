@@ -439,7 +439,7 @@ disease_params <- data.frame(
     "Case incidence threshold for epidemic period classification"
   ),
   units = c("proportion", "per year", "dimensionless", "cases/100k/week"),
-  # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors.R — corrected from lognormal (v0.14.35)
+  # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors_default.R — corrected from lognormal (v0.14.35)
   # epidemic_threshold: Truncnorm with per-location proportional bounds (v0.28.0, was Lognormal).
   #   Bounds a/b are read from the prior template per location at fit time
   #   (calc_model_posterior_distributions.R:398-411), so posterior_lower/upper stay NA.
@@ -472,7 +472,7 @@ calibration_params <- data.frame(
     "Time offset in days for suitability calibration (k>0: delay, k<0: advance)"
   ),
   units = c("dimensionless", "dimensionless", "proportion", "days"),
-  # psi_star_a prior is Truncnorm(1, 0.5, [0,Inf]) in make_priors.R — corrected from lognormal (v0.14.35)
+  # psi_star_a prior is Truncnorm(1, 0.5, [0,Inf]) in make_priors_default.R — corrected from lognormal (v0.14.35)
   distribution = c("truncnorm", "normal", "beta", "truncnorm"),
   posterior_distribution = c("truncnorm", "normal", "beta", "truncnorm"),
   posterior_lower = rep(NA_real_, 4),

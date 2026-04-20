@@ -20,9 +20,9 @@ distributional family for posterior fitting when the prior is uniform.
 \details{
 v0.28.1: The non-Beta branch returns \code{"truncnorm"} instead of
 \code{"lognormal"} / \code{"normal"}. Truncnorm preserves the uniform's
-\link{min, max} support through the posterior fit and across all subsequent
+\verb{[min, max]} support through the posterior fit and across all subsequent
 calibration stages (family-match guard in update_priors_from_posteriors.R).
-Previously, uniform priors on non-\code{[0,1]} supports were fit as
+Previously, uniform priors on non-\verb{[0,1]} supports were fit as
 unbounded Lognormal or Normal, silently erasing the prior's bounds in
 stage-2+ posteriors.
 

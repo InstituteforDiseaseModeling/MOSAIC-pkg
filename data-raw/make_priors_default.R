@@ -1,7 +1,8 @@
 library(MOSAIC)
 library(jsonlite)
 
-# make_priors.R - Generate default prior distributions for MOSAIC model parameters
+# make_priors_default.R - Generate default prior distributions for MOSAIC model parameters
+# Canonical source for priors_default.rda (v0.28.4: retired duplicate make_priors.R).
 
 # Set up paths
 MOSAIC::set_root_directory("~/MOSAIC")
@@ -969,64 +970,8 @@ for (iso in j) {
 
 
 
-# Update default priors with estimated initial conditions for V1 and V2
-
-initial_conditions_V1_V2 <- est_initial_V1_V2(
-     PATHS = PATHS,
-     priors = priors_default,
-     config = config_default,
-     n_samples = 100,
-     t0 = date_start,
-     variance_inflation = 0,
-     parallel = TRUE,
-     verbose = FALSE
-)
-
-
-# Update initial conditions priors with priors from est_initial_V1_V2()
-# The new structure matches priors_default exactly, so integration is simple
-# Only update locations that already exist - do NOT create new locations
-
-n_updated <- 0
-
-# Update prop_V1_initial for each location
-for (loc in names(initial_conditions_V1_V2$parameters_location$prop_V1_initial$parameters$location)) {
-     # Only update if location already exists in priors_default
-     if (!is.null(priors_default$parameters_location$prop_V1_initial$location[[loc]])) {
-          loc_estimate <- initial_conditions_V1_V2$parameters_location$prop_V1_initial$parameters$location[[loc]]
-
-          if (!is.na(loc_estimate$shape1)) {
-               # Extract parameters and create proper structure
-               priors_default$parameters_location$prop_V1_initial$location[[loc]] <- list(
-                    distribution = "beta",
-                    parameters = list(
-                         shape1 = loc_estimate$shape1,
-                         shape2 = loc_estimate$shape2
-                    )
-               )
-               n_updated <- n_updated + 1
-          }
-     }
-}
-
-# Update prop_V2_initial for each location
-for (loc in names(initial_conditions_V1_V2$parameters_location$prop_V2_initial$parameters$location)) {
-     # Only update if location already exists in priors_default
-     if (!is.null(priors_default$parameters_location$prop_V2_initial$location[[loc]])) {
-          loc_estimate <- initial_conditions_V1_V2$parameters_location$prop_V2_initial$parameters$location[[loc]]
-
-          if (!is.na(loc_estimate$shape1)) {
-               # Extract parameters and create proper structure
-               priors_default$parameters_location$prop_V2_initial$location[[loc]] <- list(
-                    distribution = "beta",
-                    parameters = list(
-                         shape1 = loc_estimate$shape1,
-                         shape2 = loc_estimate$shape2
-                    )
-               )
-          }
-     }
-}
+# V1/V2 initial conditions are data-driven elsewhere in the pipeline since v0.22.11;
+# est_initial_V1_V2() override removed. Default Beta priors above are retained.
 
 
 

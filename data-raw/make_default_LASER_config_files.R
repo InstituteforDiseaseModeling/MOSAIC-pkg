@@ -215,7 +215,7 @@ names(theta_j) <- tmp$j[sel]
 message("Calculate transmission parameters from beta_j0_tot and p_beta")
 
 # Set default values for beta_j0_tot and p_beta
-# These match the priors in make_priors.R
+# These match the priors in make_priors_default.R
 beta_j0_tot_default <- 1e-6  # Total transmission rate (matching prior mode)
 p_beta_default <- 0.33        # Proportion human transmission (matching prior mode)
 

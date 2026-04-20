@@ -5,9 +5,9 @@
 #'
 #' v0.28.1: The non-Beta branch returns \code{"truncnorm"} instead of
 #' \code{"lognormal"} / \code{"normal"}. Truncnorm preserves the uniform's
-#' [min, max] support through the posterior fit and across all subsequent
+#' `[min, max]` support through the posterior fit and across all subsequent
 #' calibration stages (family-match guard in update_priors_from_posteriors.R).
-#' Previously, uniform priors on non-\code{[0,1]} supports were fit as
+#' Previously, uniform priors on non-`[0,1]` supports were fit as
 #' unbounded Lognormal or Normal, silently erasing the prior's bounds in
 #' stage-2+ posteriors.
 #'

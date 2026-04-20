@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "2.2",
-    "date": "2026-04-02",
+    "date": "2026-04-20",
     "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
   },
   "parameters_global": {
@@ -19,6 +19,16 @@
       "parameters": {
         "shape1": 7.5,
         "shape2": 7.5
+      }
+    },
+    "decay_days_spread": {
+      "description": "Spread between min and max V. cholerae survival time (days)",
+      "distribution": "truncnorm",
+      "parameters": {
+        "mean": 180,
+        "sd": 95,
+        "a": 1,
+        "b": 365
       }
     },
     "decay_days_short": {
@@ -95,7 +105,7 @@
       "description": "Mobility distance decay parameter",
       "distribution": "gamma",
       "parameters": {
-        "shape": 3.7212,
+        "shape": 3.7244,
         "rate": 2
       }
     },
@@ -103,7 +113,7 @@
       "description": "Mobility population scaling parameter",
       "distribution": "gamma",
       "parameters": {
-        "shape": 2.2251,
+        "shape": 2.2328,
         "rate": 2
       }
     },
@@ -175,16 +185,16 @@
       "description": "Symptomatic shedding rate (total bacteria per infected person per day)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 6.4998,
-        "sdlog": 2
+        "meanlog": 11.1563,
+        "sdlog": 0.8
       }
     },
-    "zeta_2": {
-      "description": "Asymptomatic shedding rate (total bacteria per infected person per day)",
+    "zeta_ratio": {
+      "description": "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 2.3026,
-        "sdlog": 3
+        "meanlog": 5.7038,
+        "sdlog": 1.2
       }
     },
     "delta_reporting_cases": {
@@ -205,16 +215,6 @@
         "sd": 3,
         "a": 1,
         "b": 14
-      }
-    },
-    "decay_days_spread": {
-      "description": "Spread between min and max V. cholerae survival time (days)",
-      "distribution": "truncnorm",
-      "parameters": {
-        "mean": 180,
-        "sd": 95,
-        "a": 1,
-        "b": 365
       }
     }
   },
@@ -249,8 +249,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 0.5092,
-            "shape2": 25453.1634
+            "shape1": 0.5661,
+            "shape2": 28356.1444
           }
         }
       }
@@ -273,8 +273,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 0.3767,
-            "sd": 0.1203
+            "mean": 0,
+            "sd": 0.7071
           }
         }
       }
@@ -285,8 +285,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": -0.7575,
-            "sd": 0.1205
+            "mean": 0,
+            "sd": 0.7071
           }
         }
       }
@@ -297,8 +297,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 1.1565,
-            "sd": 0.1208
+            "mean": 0,
+            "sd": 0.7071
           }
         }
       }
@@ -309,8 +309,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 0.0876,
-            "sd": 0.1206
+            "mean": 0,
+            "sd": 0.7071
           }
         }
       }
@@ -321,8 +321,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 495.9824,
-            "shape2": 17359.5861
+            "shape1": 0.5,
+            "shape2": 49.5
           }
         }
       }

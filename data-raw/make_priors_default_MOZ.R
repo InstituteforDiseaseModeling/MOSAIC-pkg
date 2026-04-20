@@ -514,33 +514,8 @@ priors_default_MOZ$parameters_location$prop_S_initial <- list(
      )
 )
 
-# Update V1/V2 priors from vaccination history
-# For 2017 start: first MOZ OCV campaign was Oct 2016 (425k doses, ~1.5% of pop)
-# est_initial_V1_V2 estimates from campaign data; run with error handling for single-location
-tryCatch({
-     initial_conditions_V1_V2 <- est_initial_V1_V2(
-          PATHS = PATHS,
-          priors = priors_default_MOZ,
-          config = config_default_MOZ,
-          n_samples = 100,
-          t0 = date_start,
-          variance_inflation = 0,
-          parallel = FALSE,
-          verbose = TRUE
-     )
-     for (compartment in c("prop_V1_initial", "prop_V2_initial")) {
-          locs <- initial_conditions_V1_V2$parameters_location[[compartment]]$parameters$location
-          if (!is.null(locs[[j]]) && !is.na(locs[[j]]$shape1)) {
-               priors_default_MOZ$parameters_location[[compartment]]$location[[j]] <- list(
-                    distribution = "beta",
-                    parameters = list(shape1 = locs[[j]]$shape1, shape2 = locs[[j]]$shape2)
-               )
-          }
-     }
-     message("V1/V2 priors updated from est_initial_V1_V2()")
-}, error = function(e) {
-     message("est_initial_V1_V2 failed for single-location; using default V1/V2 priors: ", e$message)
-})
+# V1/V2 initial conditions are data-driven elsewhere in the pipeline since v0.22.11;
+# est_initial_V1_V2() override removed. Default Beta priors above are retained.
 
 # Update E/I priors from surveillance data near model start
 # June 2017: no cases reported yet (first cases Aug 2017), so E/I should be near-zero
