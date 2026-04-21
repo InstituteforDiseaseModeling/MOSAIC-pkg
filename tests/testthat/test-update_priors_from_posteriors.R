@@ -363,8 +363,8 @@ test_that("accepts file paths and loads JSON", {
   priors_path <- file.path(tmp_dir, "test_priors.json")
   post_path <- file.path(tmp_dir, "test_posteriors.json")
 
-  writeLines(jsonlite::toJSON(priors, auto_unbox = TRUE, pretty = TRUE), priors_path)
-  writeLines(jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE), post_path)
+  writeLines(jsonlite::toJSON(priors, auto_unbox = TRUE, pretty = TRUE, digits = NA), priors_path)
+  writeLines(jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE, digits = NA), post_path)
 
   result <- update_priors_from_posteriors(priors_path, post_path, verbose = FALSE)
 
@@ -412,8 +412,8 @@ test_that("provenance uses file paths when provided, falls back for lists", {
   tmp_dir <- tempdir()
   priors_path <- file.path(tmp_dir, "prov_priors.json")
   post_path <- file.path(tmp_dir, "prov_posteriors.json")
-  writeLines(jsonlite::toJSON(priors, auto_unbox = TRUE, pretty = TRUE), priors_path)
-  writeLines(jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE), post_path)
+  writeLines(jsonlite::toJSON(priors, auto_unbox = TRUE, pretty = TRUE, digits = NA), priors_path)
+  writeLines(jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE, digits = NA), post_path)
 
   result_file <- update_priors_from_posteriors(priors_path, post_path, verbose = FALSE)
   expect_equal(result_file$metadata$source_priors, priors_path)

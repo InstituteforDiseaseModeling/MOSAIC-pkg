@@ -12,7 +12,7 @@ est_initial_V1_V2(
   omega_1 = NULL,
   omega_2 = NULL,
   t_lag = 14,
-  vacc_ceiling_frac = 0.6,
+  vacc_ceiling_frac = 0.7,
   fallback_shape1_V1 = 0.5,
   fallback_shape2_V1 = 49.5,
   fallback_shape1_V2 = 0.5,
@@ -46,8 +46,11 @@ mean of \code{priors_default$parameters_global$omega_2}.}
 \code{event_date + t_lag}. Default 14.}
 
 \item{vacc_ceiling_frac}{Hard ceiling on combined V1+V2 coverage (fraction
-of population). Default 0.60. If the waned dose sum exceeds this, V1 and V2
-are scaled proportionally.}
+of population). Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If the waned
+dose sum exceeds this, V1 and V2 are scaled proportionally. Rationale for
+0.70: published OCV campaigns routinely reach 65-80\\% coverage
+(Abubakar et al. 2018 DRC 65\\%; Qadri et al. 2015 BGD 75\\%; Luquero et al.
+2014 Haiti 80\\%+). A lower ceiling under-captures real emergency responses.}
 
 \item{fallback_shape1_V1, fallback_shape2_V1, fallback_shape1_V2, fallback_shape2_V2}{Beta shape parameters used as a fallback when a country has no OCV history
 in the CSV. Defaults match the pre-v0.22.11 uninformative priors
@@ -87,6 +90,17 @@ from R01 onward.
 \item Single-dose Euvichol-S campaigns contribute only to V1.
 \item Blank/unknown vaccine products are treated conservatively as
 two-dose (most pre-2022 campaigns were two-dose Shanchol).
+\item \strong{Waning model:} single exponential. Real OCV waning is
+biphasic (fast decay in months 0-12, slower thereafter; see Xu et al.
+2024, Bi et al. 2017). Single exponential biases V1/V2 counts upward
+by roughly 10-20\\% for campaigns 2-3 years pre-\code{date_start}
+relative to a biphasic model. This is considered acceptable for
+initial-condition purposes; implement biphasic separately if needed.
+\item \strong{Coverage ceiling:} \code{vacc_ceiling_frac = 0.70}
+reflects observed peak OCV coverage in published campaigns: DRC Katanga
+65\\% (Abubakar et al. 2018), Bangladesh 75\\% (Qadri et al. 2015),
+Haiti 80\\%+ (Luquero et al. 2014). A lower ceiling under-captures
+real high-coverage emergency responses.
 }
 }
 \seealso{

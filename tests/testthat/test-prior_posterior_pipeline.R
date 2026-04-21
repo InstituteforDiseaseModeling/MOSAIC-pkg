@@ -259,7 +259,7 @@ test_that("uniform prior end-to-end: truncnorm posterior preserves original boun
 
   # Stage 2: fit posterior distribution (should read min/max as truncnorm a/b)
   priors_path <- file.path(out_dir, "priors.json")
-  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE)
+  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE, digits = NA)
 
   calc_model_posterior_distributions(
     quantiles_file = file.path(out_dir, "posterior_quantiles.csv"),
@@ -417,7 +417,7 @@ test_that("calc_model_posterior_distributions respects prior family from quantil
   )
 
   priors_path <- file.path(out_dir, "priors.json")
-  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE)
+  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE, digits = NA)
 
   # Run posterior distribution fitting
   calc_model_posterior_distributions(

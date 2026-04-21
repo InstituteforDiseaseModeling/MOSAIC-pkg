@@ -62,7 +62,7 @@ run_roundtrip <- function(param_name, prior_entry, scale = "global", iso = NULL)
 
   # Step 2: Posterior distribution fitting
   priors_path <- file.path(out_dir, "priors.json")
-  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE)
+  jsonlite::write_json(priors, priors_path, auto_unbox = TRUE, pretty = TRUE, digits = NA)
 
   calc_model_posterior_distributions(
     quantiles_file = file.path(out_dir, "posterior_quantiles.csv"),

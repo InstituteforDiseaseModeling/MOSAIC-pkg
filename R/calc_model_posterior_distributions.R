@@ -619,8 +619,14 @@ calc_model_posterior_distributions <- function(
         message("Writing posteriors to: ", output_file)
     }
 
-    # Post-process JSON with auto_unbox = TRUE to remove single-element arrays
-    json_content <- jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE, digits = 10)
+    # Post-process JSON with auto_unbox = TRUE to remove single-element arrays.
+    # digits = NA preserves full numerical precision; fitted posterior shape
+    # parameters can be very small (e.g. Beta(0.5, 99.5) for rare-event IC
+    # compartments, or small sdlog for tight lognormal fits) and digits < NA
+    # silently rounds them to 0. posteriors.json is consumed by
+    # update_priors_from_posteriors, plot_model_posteriors_detail, and
+    # plot_model_distributions, all of which require exact values.
+    json_content <- jsonlite::toJSON(posteriors, auto_unbox = TRUE, pretty = TRUE, digits = NA)
 
     # Write JSON directly (already prettified)
     writeLines(json_content, output_file)

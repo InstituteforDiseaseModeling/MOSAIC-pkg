@@ -346,8 +346,10 @@ test_that("Diagnostics can be serialized to JSON", {
           verbose = FALSE
      )
 
-     # Should be able to convert to JSON without error
-     json_str <- jsonlite::toJSON(diag, pretty = TRUE, auto_unbox = TRUE)
+     # Should be able to convert to JSON without error.
+     # digits = NA preserves full precision so diagnostic values < 1e-4
+     # (e.g., p-values, ESS ratios, small effect sizes) don't round to 0.
+     json_str <- jsonlite::toJSON(diag, pretty = TRUE, auto_unbox = TRUE, digits = NA)
      expect_true(is.character(json_str))
      expect_true(nchar(json_str) > 0)
 

@@ -72,7 +72,7 @@ write_list_to_json <- function(data_list, file_path, compress = FALSE) {
      }
 
      json_text <- jsonlite::toJSON(data_list,
-                                   digits = 10,   # Matches precision of HDF5
+                                   digits = NA,   # Full R precision (~15-16 sig figs)
                                    pretty = TRUE,
                                    auto_unbox = TRUE)
 
