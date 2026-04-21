@@ -52,15 +52,21 @@ global_params <- data.frame(
     # Transmission (2 params)
     "alpha_1",
     "alpha_2",
-    # Environmental (7 params) - reordered
-    # decay_days_long is DERIVED (= decay_days_short + decay_days_spread) and excluded
-    # from the inventory, same convention as zeta_2 (derived from zeta_1 / zeta_ratio).
+    # Environmental (9 params) - reordered
+    # decay_days_long is DERIVED (= decay_days_short + decay_days_spread) and
+    # zeta_2 is DERIVED (= zeta_1 / zeta_ratio). Both are included in the inventory
+    # (v0.28.11) so their posteriors are fit from the simulated sample quantiles and
+    # rendered in plot_model_distributions. Priors are NOT defined for derived params,
+    # so update_priors_from_posteriors will skip them during staged merges
+    # (update_priors_from_posteriors.R:157-161 "not in original priors" guard).
     "decay_days_short",
     "decay_days_spread",
+    "decay_days_long",
     "decay_shape_1",
     "decay_shape_2",
     "zeta_1",
     "zeta_ratio",
+    "zeta_2",
     "kappa",
     # Disease (4 params) - reordered
     "iota",
@@ -87,13 +93,15 @@ global_params <- data.frame(
     # Transmission
     "Population Mixing",
     "Frequency-Driven Transmission",
-    # Environmental - reordered
+    # Environmental - reordered (9 params, including derived decay_days_long and zeta_2)
     "Minimum V. cholerae Survival",
     "V. cholerae Survival Spread",
+    "Maximum V. cholerae Survival (derived)",
     "Decay Shape Parameter 1",
     "Decay Shape Parameter 2",
     "Symptomatic Shedding Rate",
     "Shedding Ratio (Sym/Asym)",
+    "Asymptomatic Shedding Rate (derived)",
     "50% Infectious Dose",
     # Disease - reordered
     "Incubation Rate",
@@ -123,10 +131,12 @@ global_params <- data.frame(
     # Environmental - reordered
     "Minimum V. cholerae survival time in environment",
     "Spread between min and max V. cholerae survival time (decay_days_long - decay_days_short)",
+    "Maximum V. cholerae survival time in environment (DERIVED = decay_days_short + decay_days_spread)",
     "First shape parameter of Beta distribution for V. cholerae decay",
     "Second shape parameter of Beta distribution for V. cholerae decay",
     "Shedding rate for symptomatic infections",
     "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
+    "Shedding rate for asymptomatic infections (DERIVED = zeta_1 / zeta_ratio)",
     "Concentration of V. cholerae for 50% infectious dose",
     # Disease - reordered
     "Rate parameter for incubation period (per day, 1/iota = mean incubation time)",
@@ -152,8 +162,10 @@ global_params <- data.frame(
   units = c(
     # Transmission
     "proportion", "proportion",
-    # Environmental - reordered
-    "days", "days", "dimensionless", "dimensionless", "bacteria/day (rate)", "dimensionless (ratio)", "bacteria/mL",
+    # Environmental - reordered (decay_days_short, decay_days_spread, decay_days_long,
+    # decay_shape_1, decay_shape_2, zeta_1, zeta_ratio, zeta_2, kappa)
+    "days", "days", "days", "dimensionless", "dimensionless",
+    "bacteria/day (rate)", "dimensionless (ratio)", "bacteria/day (rate)", "bacteria/mL",
     # Disease - reordered
     "per day (rate)", "proportion", "per day (rate)", "per day (rate)",
     # Immunity - reordered
@@ -166,12 +178,16 @@ global_params <- data.frame(
   distribution = c(
     # Transmission
     "beta", "beta",
-    # Environmental - reordered
-    # decay_days_short: TruncNorm; decay_days_spread: TruncNorm (replaces decay_days_long
-    #   direct prior in v0.27.0; decay_days_long is now derived = short + spread);
-    # decay_shape_1, decay_shape_2: TruncNorm (was Uniform; bounds [0.1, 10] preserved through stages);
-    # zeta_1, zeta_ratio, kappa: lognormal; zeta_2 is derived (zeta_1/zeta_ratio).
-    "truncnorm", "truncnorm", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
+    # Environmental - reordered (9 params, including derived decay_days_long and zeta_2)
+    # decay_days_short: TruncNorm; decay_days_spread: TruncNorm (replaces direct decay_days_long
+    #   prior in v0.27.0); decay_days_long: DERIVED = short + spread, posterior fit as truncnorm
+    #   (v0.28.11); decay_shape_1/2: TruncNorm ([0.1, 10]); zeta_1/zeta_ratio/kappa: lognormal;
+    #   zeta_2: DERIVED = zeta_1/zeta_ratio, posterior fit as lognormal (v0.28.11).
+    # Derived params have no prior row in priors_default — the `distribution` column below
+    # records the posterior family we expect; update_priors_from_posteriors.R:157-161 safely
+    # skips them during staged merges because updated$parameters_global[[derived]] is NULL.
+    "truncnorm", "truncnorm", "truncnorm", "truncnorm", "truncnorm",
+    "lognormal", "lognormal", "lognormal", "lognormal",
     # Disease - reordered
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
@@ -186,8 +202,9 @@ global_params <- data.frame(
   category = c(
     # Transmission
     "transmission", "transmission",
-    # Environmental - reordered
-    "environmental", "environmental", "environmental", "environmental", "environmental", "environmental", "environmental",
+    # Environmental - reordered (9 params)
+    "environmental", "environmental", "environmental", "environmental", "environmental",
+    "environmental", "environmental", "environmental", "environmental",
     # Disease - reordered
     "disease", "disease", "disease", "disease",
     # Immunity - reordered
@@ -197,13 +214,13 @@ global_params <- data.frame(
     # Mobility
     "mobility", "mobility"
   ),
-  order = 1:25,
+  order = 1:27,
   order_scale = "01",
   order_category = c(
     # Transmission (01)
     "01", "01",
-    # Environmental (02)
-    "02", "02", "02", "02", "02", "02", "02",
+    # Environmental (02) - 9 params
+    "02", "02", "02", "02", "02", "02", "02", "02", "02",
     # Disease (03)
     "03", "03", "03", "03",
     # Immunity (04)
@@ -216,8 +233,9 @@ global_params <- data.frame(
   order_parameter = c(
     # Transmission
     "01", "02",
-    # Environmental (decay_days_short, decay_days_long, decay_shape_1, decay_shape_2, zeta_1, zeta_ratio, kappa)
-    "01", "02", "03", "04", "05", "06", "07",
+    # Environmental (9 in plot order: decay_days_short, decay_days_spread, decay_days_long,
+    # decay_shape_1, decay_shape_2, zeta_1, zeta_ratio, zeta_2, kappa)
+    "01", "02", "03", "04", "05", "06", "07", "08", "09",
     # Disease (iota, sigma, gamma_1, gamma_2)
     "01", "02", "03", "04",
     # Immunity (phi_1, phi_2, omega_1, omega_2, epsilon)
@@ -247,15 +265,16 @@ global_params <- data.frame(
 global_params$posterior_distribution <- c(
   # Transmission: beta prior → beta posterior
   "beta", "beta",
-  # Environmental: all non-uniform after v0.27.0 — posterior family matches prior family
-  # via the family-match guard in update_priors_from_posteriors.R.
+  # Environmental (9 params): all non-uniform after v0.27.0 — posterior family matches
+  # prior family via the family-match guard in update_priors_from_posteriors.R.
   #   decay_days_short: truncnorm → truncnorm
-  #   decay_days_spread: truncnorm → truncnorm (replaces decay_days_long; the old
-  #     Uniform(30, 365) was being fit as unbounded Lognormal at stage 2+ via domain
-  #     inference, silently erasing the 365-day biological ceiling)
-  #   decay_shape_1/2: truncnorm → truncnorm (same reason; bounds [0.1, 10] preserved)
+  #   decay_days_spread: truncnorm → truncnorm
+  #   decay_days_long (DERIVED): posterior fit as truncnorm from short+spread samples (v0.28.11)
+  #   decay_shape_1/2: truncnorm → truncnorm (bounds [0.1, 10] preserved)
   #   zeta_1, zeta_ratio, kappa: lognormal → lognormal
-  "truncnorm", "truncnorm", "truncnorm", "truncnorm", "lognormal", "lognormal", "lognormal",
+  #   zeta_2 (DERIVED): posterior fit as lognormal from zeta_1/zeta_ratio samples (v0.28.11)
+  "truncnorm", "truncnorm", "truncnorm", "truncnorm", "truncnorm",
+  "lognormal", "lognormal", "lognormal", "lognormal",
   # Disease: unchanged
   "lognormal", "beta", "lognormal", "lognormal",
   # Immunity: unchanged
@@ -267,20 +286,23 @@ global_params$posterior_distribution <- c(
   "gamma", "gamma"
 )
 global_params$posterior_lower <- c(
-  NA, NA,
-  NA, NA, NA, NA, NA, NA, NA,
-  NA, NA, NA, NA,
-  NA, NA, NA, NA, NA,
-  NA, NA, 0, 0, NA,  # delta_reporting_cases lower bound = 0
-  NA, NA
+  NA, NA,                                # transmission
+  # environmental (9): short, spread, long (DERIVED min=1.01), shape_1, shape_2, zeta_1,
+  # zeta_ratio, zeta_2 (DERIVED min=0, handled by lognormal support), kappa
+  NA, NA, 1.01, NA, NA, NA, NA, NA, NA,
+  NA, NA, NA, NA,                        # disease
+  NA, NA, NA, NA, NA,                    # immunity
+  NA, NA, 0, 0, NA,                      # surveillance (delta_reporting_cases lower = 0)
+  NA, NA                                 # mobility
 )
 global_params$posterior_upper <- c(
-  NA, NA,
-  NA, NA, NA, NA, NA, NA, NA,
-  NA, NA, NA, NA,
-  NA, NA, NA, NA, NA,
-  NA, NA, 7, 14, NA,  # delta_reporting_cases upper = 7, delta_reporting_deaths upper = 14
-  NA, NA
+  NA, NA,                                # transmission
+  # environmental (9): decay_days_long DERIVED max = short_max + spread_max = 60 + 365 = 425
+  NA, NA, 425, NA, NA, NA, NA, NA, NA,
+  NA, NA, NA, NA,                        # disease
+  NA, NA, NA, NA, NA,                    # immunity
+  NA, NA, 7, 14, NA,                     # surveillance (delta_reporting_cases=7, _deaths=14)
+  NA, NA                                 # mobility
 )
 
 # =============================================================================

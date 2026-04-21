@@ -465,13 +465,13 @@ calc_model_posterior_distributions <- function(
                 )
             )
 
-            # Insert failed marker into posteriors structure
+            # Insert failed marker into posteriors structure.
+            # Global: create the slot if it doesn't exist yet (derived params
+            # have no prior slot).
             success_marker <- FALSE
             if (param_scale == "global") {
-                if (!is.null(posteriors$parameters_global[[param_base]])) {
-                    posteriors$parameters_global[[param_base]] <- failed_marker
-                    success_marker <- TRUE
-                }
+                posteriors$parameters_global[[param_base]] <- failed_marker
+                success_marker <- TRUE
             } else if (param_scale == "location" && !is.null(location)) {
                 if (!is.null(posteriors$parameters_location[[param_base]])) {
                     if (!is.null(posteriors$parameters_location[[param_base]]$location[[location]])) {
@@ -531,11 +531,13 @@ calc_model_posterior_distributions <- function(
         )
 
         if (param_scale == "global") {
-            # Update global parameter
-            if (!is.null(posteriors$parameters_global[[param_base]])) {
-                posteriors$parameters_global[[param_base]] <- structured_dist
-                success <- TRUE
-            }
+            # Update global parameter. If the slot does not exist in the
+            # priors template (e.g. derived parameters like zeta_2 and
+            # decay_days_long that have no independent prior), create it
+            # dynamically — the fitted posterior is a meaningful summary
+            # computed from the derived sample values.
+            posteriors$parameters_global[[param_base]] <- structured_dist
+            success <- TRUE
         } else if (param_scale == "location" && !is.null(location)) {
             # Update location-specific parameter
             if (!is.null(posteriors$parameters_location[[param_base]])) {
