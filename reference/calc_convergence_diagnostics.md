@@ -224,9 +224,11 @@ diagnostics <- calc_convergence_diagnostics(
     ess_method = "kish"
 )
 
-# Save to JSON
+# Save to JSON. digits = NA preserves full numerical precision;
+# the default digits = 4 silently rounds small diagnostic values
+# (p-values, ESS ratios, etc.) to zero.
 jsonlite::write_json(diagnostics, "convergence_diagnostics.json",
-                     pretty = TRUE, auto_unbox = TRUE)
+                     pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
 # Check overall status
 print(diagnostics$summary$convergence_status)

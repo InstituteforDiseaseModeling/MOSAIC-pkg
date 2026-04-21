@@ -449,7 +449,8 @@ make_LASER_config(
 
 - zeta_2:
 
-  Shedding rate (numeric \> 0; must be less than zeta_1).
+  Asymptomatic shedding rate (numeric \> 0). Derived by
+  sample_parameters() as zeta_1 / zeta_ratio.
 
 - kappa:
 

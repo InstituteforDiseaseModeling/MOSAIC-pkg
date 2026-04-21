@@ -142,6 +142,9 @@ Estimation and fitting functions
   : Estimate Initial R Compartment for Single Location
 - [`est_initial_S()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_S.md)
   : Estimate Initial S Compartment from Other Compartment Priors
+- [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
+  : Estimate V1/V2 Initial-Condition Beta Priors from OCV Campaign
+  History
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
@@ -718,6 +721,9 @@ Other exported functions and internal helpers
   : Estimate Initial R Compartment for Single Location
 - [`est_initial_S()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_S.md)
   : Estimate Initial S Compartment from Other Compartment Priors
+- [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
+  : Estimate V1/V2 Initial-Condition Beta Priors from OCV Campaign
+  History
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)

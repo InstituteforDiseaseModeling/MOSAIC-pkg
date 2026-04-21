@@ -9,7 +9,7 @@ distributional family for posterior fitting when the prior is uniform."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,7 +61,22 @@ distributional family for posterior fitting when the prior is uniform.</p>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>Character string: <code>"beta"</code>, <code>"lognormal"</code>, or <code>"normal"</code>.</p>
+    <p>Character string: <code>"beta"</code> (for proportion-valued priors) or
+<code>"truncnorm"</code> (for any other finite bounded support).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>v0.28.1: The non-Beta branch returns <code>"truncnorm"</code> instead of
+<code>"lognormal"</code> / <code>"normal"</code>. Truncnorm preserves the uniform's
+<code>[min, max]</code> support through the posterior fit and across all subsequent
+calibration stages (family-match guard in update_priors_from_posteriors.R).
+Previously, uniform priors on non-<code>[0,1]</code> supports were fit as
+unbounded Lognormal or Normal, silently erasing the prior's bounds in
+stage-2+ posteriors.</p>
+<p>Bound plumbing: <code>calc_model_posterior_distributions.R</code> falls back to
+<code>min</code>/<code>max</code> when the truncnorm <code>a</code>/<code>b</code> fields are absent
+on the prior entry, so no changes are needed to the uniform priors
+themselves.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

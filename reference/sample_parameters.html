@@ -11,7 +11,7 @@ explicit control over which parameters to sample."><meta property="og:image" con
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -88,8 +88,9 @@ explicit control over which parameters to sample.</p>
 Each element should be named as <code>sample_[parameter]</code> with a logical value.
 Available options include:</p><ul><li><p>sample_alpha_1: Population mixing within metapops (default TRUE)</p></li>
 <li><p>sample_alpha_2: Degree of frequency driven transmission (default TRUE)</p></li>
-<li><p>sample_decay_days_long: Maximum V. cholerae survival (default TRUE)</p></li>
 <li><p>sample_decay_days_short: Minimum V. cholerae survival (default TRUE)</p></li>
+<li><p>sample_decay_days_spread: Spread between min and max V. cholerae
+survival; decay_days_long is derived as short + spread (default TRUE)</p></li>
 <li><p>sample_decay_shape_1: First Beta shape for decay (default TRUE)</p></li>
 <li><p>sample_decay_shape_2: Second Beta shape for decay (default TRUE)</p></li>
 <li><p>sample_epsilon: Immunity (default TRUE)</p></li>

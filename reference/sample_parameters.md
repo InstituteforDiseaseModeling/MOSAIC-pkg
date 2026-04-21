@@ -50,9 +50,11 @@ sample_parameters(
   - sample_alpha_2: Degree of frequency driven transmission (default
     TRUE)
 
-  - sample_decay_days_long: Maximum V. cholerae survival (default TRUE)
-
   - sample_decay_days_short: Minimum V. cholerae survival (default TRUE)
+
+  - sample_decay_days_spread: Spread between min and max V. cholerae
+    survival; decay_days_long is derived as short + spread (default
+    TRUE)
 
   - sample_decay_shape_1: First Beta shape for decay (default TRUE)
 

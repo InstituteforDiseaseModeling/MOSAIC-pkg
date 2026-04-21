@@ -13,7 +13,7 @@ and aggregates to an overall convergence status."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.25.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -248,9 +248,11 @@ statuses:</p><ul><li><p><strong>FAIL</strong>: Any metric has status "fail"</p><
 <span class="r-in"><span>    ess_method <span class="op">=</span> <span class="st">"kish"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Save to JSON</span></span></span>
+<span class="r-in"><span><span class="co"># Save to JSON. digits = NA preserves full numerical precision;</span></span></span>
+<span class="r-in"><span><span class="co"># the default digits = 4 silently rounds small diagnostic values</span></span></span>
+<span class="r-in"><span><span class="co"># (p-values, ESS ratios, etc.) to zero.</span></span></span>
 <span class="r-in"><span><span class="fu">jsonlite</span><span class="fu">::</span><span class="fu"><a href="https://jeroen.r-universe.dev/jsonlite/reference/read_json.html" class="external-link">write_json</a></span><span class="op">(</span><span class="va">diagnostics</span>, <span class="st">"convergence_diagnostics.json"</span>,</span></span>
-<span class="r-in"><span>                     pretty <span class="op">=</span> <span class="cn">TRUE</span>, auto_unbox <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span>                     pretty <span class="op">=</span> <span class="cn">TRUE</span>, auto_unbox <span class="op">=</span> <span class="cn">TRUE</span>, digits <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Check overall status</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">diagnostics</span><span class="op">$</span><span class="va">summary</span><span class="op">$</span><span class="va">convergence_status</span><span class="op">)</span></span></span>

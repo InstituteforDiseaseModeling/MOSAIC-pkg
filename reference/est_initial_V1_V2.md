@@ -1,23 +1,30 @@
-# Estimate Initial V1 and V2 Compartments for All Locations
+# Estimate V1/V2 Initial-Condition Beta Priors from OCV Campaign History
 
-Estimates initial V1 (one-dose) and V2 (two-dose) vaccination
-compartment values for all locations specified in a config, with
-uncertainty quantification through Monte Carlo sampling from prior
-distributions. Returns results formatted as a priors-like object with
-Beta distribution parameters for V1/N and V2/N proportions.
+Builds country-specific Beta priors for `prop_V1_initial` and
+`prop_V2_initial` by reading the raw GTFCC OCV request log, classifying
+doses by regimen (single-dose Euvichol-S vs. two-dose
+Shanchol/Euvichol/Euvichol+), pairing rounds within each campaign,
+applying `omega_1` / `omega_2` waning from administration date to
+simulation start, and moment-matching the resulting country-level
+proportions to Beta distributions.
 
 ## Usage
 
 ``` r
 est_initial_V1_V2(
   PATHS,
-  priors,
   config,
-  n_samples = 1000,
-  t0 = NULL,
-  verbose = TRUE,
-  parallel = FALSE,
-  variance_inflation = 1
+  date_start = NULL,
+  cv = 0.4,
+  omega_1 = NULL,
+  omega_2 = NULL,
+  t_lag = 14,
+  vacc_ceiling_frac = 0.7,
+  fallback_shape1_V1 = 0.5,
+  fallback_shape2_V1 = 49.5,
+  fallback_shape1_V2 = 0.5,
+  fallback_shape2_V2 = 99.5,
+  verbose = TRUE
 )
 ```
 
@@ -25,90 +32,106 @@ est_initial_V1_V2(
 
 - PATHS:
 
-  List object from get_paths() containing data directory paths
-
-- priors:
-
-  Prior distributions object (e.g., from priors_default or custom)
+  A list of paths (as returned by
+  [`get_paths`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)).
+  Used to locate
+  `ees-cholera-mapping/data/cholera/epicentre/gtfcc/cholera_vacc_requests.csv`
+  via `PATHS$ROOT`.
 
 - config:
 
-  Configuration object containing location names (location_name or
-  location_codes) and parameters
+  A MOSAIC config list (e.g. `config_default`). Used for
+  `location_name`, `N_j_initial`, and `date_start`.
 
-- n_samples:
+- date_start:
 
-  Integer, number of Monte Carlo samples for uncertainty (default 1000)
+  Simulation start date (Date or character `"YYYY-MM-DD"`). Defaults to
+  `config$date_start`. Only campaigns delivered strictly before this
+  date contribute to V1/V2 initial conditions.
 
-- t0:
+- cv:
 
-  Date object for initial condition estimation (default from
-  config\$date_start or config\$t0)
+  Coefficient of variation for the Beta prior (natural scale). Default
+  `0.40`. Tighter values produce narrower priors; looser values permit
+  more data-driven posterior movement.
+
+- omega_1:
+
+  One-dose waning rate (per day). Defaults to the natural-scale mean of
+  `priors_default$parameters_global$omega_1`.
+
+- omega_2:
+
+  Two-dose waning rate (per day). Defaults to the natural-scale mean of
+  `priors_default$parameters_global$omega_2`.
+
+- t_lag:
+
+  Protection onset lag (days). Waning starts at `event_date + t_lag`.
+  Default 14.
+
+- vacc_ceiling_frac:
+
+  Hard ceiling on combined V1+V2 coverage (fraction of population).
+  Default 0.70 (v0.28.7; was 0.60 in v0.28.6). If the waned dose sum
+  exceeds this, V1 and V2 are scaled proportionally. Rationale for 0.70:
+  published OCV campaigns routinely reach 65-80% coverage (Abubakar et
+  al. 2018 DRC 65%; Qadri et al. 2015 BGD 75%; Luquero et al. 2014 Haiti
+  80%+). A lower ceiling under-captures real emergency responses.
+
+- fallback_shape1_V1, fallback_shape2_V1, fallback_shape1_V2,
+  fallback_shape2_V2:
+
+  Beta shape parameters used as a fallback when a country has no OCV
+  history in the CSV. Defaults match the pre-v0.22.11 uninformative
+  priors (`Beta(0.5, 49.5)` for V1, `Beta(0.5, 99.5)` for V2).
 
 - verbose:
 
-  Logical, whether to print progress messages (default TRUE)
-
-- parallel:
-
-  Logical, whether to use parallel processing (default FALSE). When
-  TRUE, automatically detects cores and handles platform differences.
-
-- variance_inflation:
-
-  Numeric factor to inflate variance of fitted Beta distributions
-  (default 1 = no inflation). Values \> 1 increase uncertainty while
-  preserving the mean. For example, 2 doubles the variance.
+  Logical; emit per-country diagnostics. Default TRUE.
 
 ## Value
 
-A list with priors_default-compatible structure containing:
-
-- metadata:
-
-  Information about the estimation run including summary statistics
-
-- parameters_location:
-
-  Parameter-first hierarchy matching priors_default:
-
-  - prop_V1_initial: Beta distribution parameters for V1/N by location
-
-  - prop_V2_initial: Beta distribution parameters for V2/N by location
-
-  Each parameter contains \$parameters\$location\$ISO_CODE with shape1,
-  shape2, and metadata
+A list with the same nested structure as
+`priors_default$parameters_location`: `$prop_V1_initial$location[[iso]]`
+and `$prop_V2_initial$location[[iso]]` each carry
+`list(distribution = "beta", parameters = list(shape1, shape2))`.
 
 ## Details
 
-The function performs the following steps for each location:
+Biological notes:
 
-1.  Loads vaccination and population data
+- V1/V2 in the MOSAIC/LASER model are *administrative* compartments
+  (dose received). LASER's `vaccinated.py` independently splits the
+  initial counts into immune (V*k*imm) and susceptible (V*k*sus)
+  substates via `phi_1`/`phi_2`. This function therefore does NOT
+  multiply by `phi_1`/`phi_2` — doing so would double-count
+  effectiveness, a bug present in the pre-v0.22.11 implementation.
 
-2.  Runs Monte Carlo simulation sampling from priors for omega and phi
+- For two-dose regimens, the R01 attendees who return for R02 transition
+  V1\\\to\\V2 at the R02 date. Non-returners (R01_doses \\-\\ R02_doses,
+  when positive) remain in V1 with `omega_1` waning from R01 onward.
 
-3.  Calculates V1 and V2 for each sample
+- Single-dose Euvichol-S campaigns contribute only to V1.
 
-4.  Fits Beta distributions to V1/N and V2/N proportions
+- Blank/unknown vaccine products are treated conservatively as two-dose
+  (most pre-2022 campaigns were two-dose Shanchol).
 
-5.  Compiles results in standardized format
+- **Waning model:** single exponential. Real OCV waning is biphasic
+  (fast decay in months 0-12, slower thereafter; see Xu et al. 2024, Bi
+  et al. 2017). Single exponential biases V1/V2 counts upward by roughly
+  10-20% for campaigns 2-3 years pre-`date_start` relative to a biphasic
+  model. This is considered acceptable for initial-condition purposes;
+  implement biphasic separately if needed.
 
-## Examples
+- **Coverage ceiling:** `vacc_ceiling_frac = 0.70` reflects observed
+  peak OCV coverage in published campaigns: DRC Katanga 65% (Abubakar et
+  al. 2018), Bangladesh 75% (Qadri et al. 2015), Haiti 80%+ (Luquero et
+  al. 2014). A lower ceiling under-captures real high-coverage emergency
+  responses.
 
-``` r
-if (FALSE) { # \dontrun{
-# Standard usage
-PATHS <- get_paths()
-initial_conditions <- est_initial_V1_V2(
-  PATHS = PATHS,
-  priors = priors_default,
-  config = config_example,
-  n_samples = 1000
-)
+## See also
 
-# Access results for a location (priors_default-compatible structure)
-eth_v1_params <- initial_conditions$parameters_location$prop_V1_initial$parameters$location$ETH
-eth_v1_shape1 <- eth_v1_params$shape1
-eth_v1_mean <- eth_v1_params$metadata$mean
-} # }
-```
+[`process_GTFCC_vaccination_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md),
+[`est_vaccination_rate`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccination_rate.md),
+[`convert_country_to_iso`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/convert_country_to_iso.md).
