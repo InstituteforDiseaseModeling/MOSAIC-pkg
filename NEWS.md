@@ -1,3 +1,9 @@
+# MOSAIC 0.28.13
+
+## Other
+
+* Added Tony Ting, Dejan Lukacevic, and Meikang Wu to package authors as contributors (`ctb`) in `DESCRIPTION` and the pkgdown site.
+
 # MOSAIC 0.24.1
 
 ## Bug fixes
