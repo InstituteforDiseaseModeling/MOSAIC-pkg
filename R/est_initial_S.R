@@ -245,12 +245,17 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
             setTxtProgressBar(pb, i)
         }
 
-        # Get prior parameters for this location (with fallbacks)
-        V1_params <- priors$parameters_location$prop_V1_initial$parameters$location[[loc]]
-        V2_params <- priors$parameters_location$prop_V2_initial$parameters$location[[loc]]
-        E_params <- priors$parameters_location$prop_E_initial$parameters$location[[loc]]
-        I_params <- priors$parameters_location$prop_I_initial$parameters$location[[loc]]
-        R_params <- priors$parameters_location$prop_R_initial$parameters$location[[loc]]
+        # Get prior parameters for this location (with fallbacks).
+        # v0.28.7: corrected path — priors_default uses
+        # $prop_X_initial$location[[loc]]$parameters, not
+        # $prop_X_initial$parameters$location[[loc]] (pre-fix had them swapped,
+        # so has_estimates was always FALSE and S defaulted to Beta(30, 7.5)
+        # regardless of the actual V1/V2/E/I/R priors — silent data corruption).
+        V1_params <- priors$parameters_location$prop_V1_initial$location[[loc]]$parameters
+        V2_params <- priors$parameters_location$prop_V2_initial$location[[loc]]$parameters
+        E_params  <- priors$parameters_location$prop_E_initial$location[[loc]]$parameters
+        I_params  <- priors$parameters_location$prop_I_initial$location[[loc]]$parameters
+        R_params  <- priors$parameters_location$prop_R_initial$location[[loc]]$parameters
 
         # Check if we have any estimated compartments for this location
         has_estimates <- (!is.null(V1_params) && !is.null(V1_params$shape1) && !is.na(V1_params$shape1)) ||
@@ -424,52 +429,21 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
             I_mean <- 0
             R_mean <- 0
 
-            # Extract means from priors if available
-            if (!is.null(priors$parameters_location$prop_V1_initial$parameters$location[[loc]]$metadata$mean)) {
-                V1_mean <- priors$parameters_location$prop_V1_initial$parameters$location[[loc]]$metadata$mean
-            } else if (!is.null(priors$parameters_location$prop_V1_initial$parameters$location[[loc]])) {
-                # Calculate from Beta parameters if metadata not available
-                V1_params <- priors$parameters_location$prop_V1_initial$parameters$location[[loc]]
-                if (!is.na(V1_params$shape1)) {
-                    V1_mean <- V1_params$shape1 / (V1_params$shape1 + V1_params$shape2)
-                }
+            # Extract means from priors if available.
+            # v0.28.7: corrected path (see note at line ~248 for details).
+            get_beta_mean <- function(entry) {
+                if (is.null(entry)) return(0)
+                if (!is.null(entry$metadata$mean)) return(entry$metadata$mean)
+                p <- entry$parameters
+                if (is.null(p) || is.null(p$shape1) || is.null(p$shape2) ||
+                    is.na(p$shape1) || is.na(p$shape2)) return(0)
+                p$shape1 / (p$shape1 + p$shape2)
             }
-
-            if (!is.null(priors$parameters_location$prop_V2_initial$parameters$location[[loc]]$metadata$mean)) {
-                V2_mean <- priors$parameters_location$prop_V2_initial$parameters$location[[loc]]$metadata$mean
-            } else if (!is.null(priors$parameters_location$prop_V2_initial$parameters$location[[loc]])) {
-                V2_params <- priors$parameters_location$prop_V2_initial$parameters$location[[loc]]
-                if (!is.na(V2_params$shape1)) {
-                    V2_mean <- V2_params$shape1 / (V2_params$shape1 + V2_params$shape2)
-                }
-            }
-
-            if (!is.null(priors$parameters_location$prop_E_initial$parameters$location[[loc]]$metadata$mean)) {
-                E_mean <- priors$parameters_location$prop_E_initial$parameters$location[[loc]]$metadata$mean
-            } else if (!is.null(priors$parameters_location$prop_E_initial$parameters$location[[loc]])) {
-                E_params <- priors$parameters_location$prop_E_initial$parameters$location[[loc]]
-                if (!is.na(E_params$shape1)) {
-                    E_mean <- E_params$shape1 / (E_params$shape1 + E_params$shape2)
-                }
-            }
-
-            if (!is.null(priors$parameters_location$prop_I_initial$parameters$location[[loc]]$metadata$mean)) {
-                I_mean <- priors$parameters_location$prop_I_initial$parameters$location[[loc]]$metadata$mean
-            } else if (!is.null(priors$parameters_location$prop_I_initial$parameters$location[[loc]])) {
-                I_params <- priors$parameters_location$prop_I_initial$parameters$location[[loc]]
-                if (!is.na(I_params$shape1)) {
-                    I_mean <- I_params$shape1 / (I_params$shape1 + I_params$shape2)
-                }
-            }
-
-            if (!is.null(priors$parameters_location$prop_R_initial$parameters$location[[loc]]$metadata$mean)) {
-                R_mean <- priors$parameters_location$prop_R_initial$parameters$location[[loc]]$metadata$mean
-            } else if (!is.null(priors$parameters_location$prop_R_initial$parameters$location[[loc]])) {
-                R_params <- priors$parameters_location$prop_R_initial$parameters$location[[loc]]
-                if (!is.na(R_params$shape1)) {
-                    R_mean <- R_params$shape1 / (R_params$shape1 + R_params$shape2)
-                }
-            }
+            V1_mean <- get_beta_mean(priors$parameters_location$prop_V1_initial$location[[loc]])
+            V2_mean <- get_beta_mean(priors$parameters_location$prop_V2_initial$location[[loc]])
+            E_mean  <- get_beta_mean(priors$parameters_location$prop_E_initial$location[[loc]])
+            I_mean  <- get_beta_mean(priors$parameters_location$prop_I_initial$location[[loc]])
+            R_mean  <- get_beta_mean(priors$parameters_location$prop_R_initial$location[[loc]])
 
             # Calculate total
             total_mean <- S_mean + V1_mean + V2_mean + E_mean + I_mean + R_mean
