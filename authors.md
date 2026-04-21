@@ -18,7 +18,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/v0.28.13/DESCRIPTION)
 
 Giles J, Lorton C (2026). *MOSAIC: Metapopulation Outbreak Simulation
 And Interventions for Cholera (MOSAIC)*. R package version 0.28.13,
