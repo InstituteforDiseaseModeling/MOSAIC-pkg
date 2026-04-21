@@ -290,17 +290,31 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       shape1 <- as.numeric(parameters$shape1)
       shape2 <- as.numeric(parameters$shape2)
       if (!is.null(shape1) && !is.null(shape2) && !is.na(shape1) && !is.na(shape2)) {
-        x <- seq(0, 1, length.out = 1000)
-        y <- dbeta(x, shape1, shape2)
-
-        # Special handling for highly skewed distributions
-        if (param_info$category == "initial_conditions" && param_name %in% c("prop_E_initial", "prop_I_initial")) {
-          x_max <- qbeta(0.9999, shape1, shape2)
-          mean_val <- shape1 / (shape1 + shape2)
-          x_max <- max(x_max, mean_val * 5)
-          x <- seq(0, x_max, length.out = 1000)
-          y <- dbeta(x, shape1, shape2)
+        # Adaptive x-range: for highly skewed Betas (mass concentrated in a
+        # narrow sub-interval), a uniform seq(0, 1, 1000) leaves most points
+        # where the density is effectively zero and fails the downstream
+        # finite-positive filter. Use quantile-based bounds so the grid
+        # always lands on the support where mass exists. This covers both
+        # left-skewed (e.g. prop_E_initial Beta(0.01, 1e4), tau_i
+        # Beta(0.57, 2.8e4)) and right-skewed (e.g. prop_S_initial
+        # Beta(2.6e4, 5e3)) cases.
+        max_shape <- max(shape1, shape2)
+        needs_zoom <- max_shape > 50 || min(shape1, shape2) < 1
+        if (needs_zoom) {
+          x_lo <- qbeta(0.0001, shape1, shape2)
+          x_hi <- qbeta(0.9999, shape1, shape2)
+          # Pad edges a little if the interval is extremely narrow
+          pad <- max(1e-9, (x_hi - x_lo) * 0.05)
+          x_lo <- max(0, x_lo - pad)
+          x_hi <- min(1, x_hi + pad)
+          if (!is.finite(x_lo) || !is.finite(x_hi) || x_hi <= x_lo) {
+            x_lo <- 0; x_hi <- 1
+          }
+        } else {
+          x_lo <- 0; x_hi <- 1
         }
+        x <- seq(x_lo, x_hi, length.out = 1000)
+        y <- dbeta(x, shape1, shape2)
 
         if (shape1 < 1) {
           dist_str <- sprintf("Beta(%.2g, %.0f)", shape1, shape2)

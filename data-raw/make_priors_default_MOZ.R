@@ -784,7 +784,9 @@ priors_default_MOZ$parameters_location$psi_star_k <- list(
 #========================================
 
 fp <- file.path(PATHS$ROOT, 'MOSAIC-pkg/inst/extdata/priors_default_MOZ.json')
-jsonlite::write_json(priors_default_MOZ, fp, pretty = TRUE, auto_unbox = TRUE)
+# digits = NA preserves full precision; default digits=4 rounds small
+# truncnorm bounds to 0 (see note in make_priors_default.R).
+jsonlite::write_json(priors_default_MOZ, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
 tmp_priors <- jsonlite::fromJSON(fp, simplifyVector = FALSE)
 identical(priors_default_MOZ$parameters_global$alpha_1, tmp_priors$parameters_global$alpha_1)

@@ -65,7 +65,7 @@
       "description": "Natural immunity waning rate (per day)",
       "distribution": "lognormal",
       "parameters": {
-        "mean": 0.0004,
+        "mean": 0.00039,
         "sd": 0.0004
       }
     },
@@ -73,7 +73,7 @@
       "description": "Symptomatic/severe shedding duration rate (per day)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": -2.3026,
+        "meanlog": -2.30258509299405,
         "sdlog": 0.5
       }
     },
@@ -81,7 +81,7 @@
       "description": "Asymptomatic/mild shedding duration rate (per day)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": -0.6931,
+        "meanlog": -0.693147180559945,
         "sdlog": 0.4
       }
     },
@@ -97,7 +97,7 @@
       "description": "Concentration of V. cholerae for 50% infectious dose",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 13.878,
+        "meanlog": 13.8780105579643,
         "sdlog": 0.25
       }
     },
@@ -105,7 +105,7 @@
       "description": "Mobility distance decay parameter",
       "distribution": "gamma",
       "parameters": {
-        "shape": 3.7244,
+        "shape": 3.72436825806088,
         "rate": 2
       }
     },
@@ -113,7 +113,7 @@
       "description": "Mobility population scaling parameter",
       "distribution": "gamma",
       "parameters": {
-        "shape": 2.2328,
+        "shape": 2.23280919493869,
         "rate": 2
       }
     },
@@ -121,56 +121,56 @@
       "description": "Vaccine waning rate (one dose, per day)",
       "distribution": "gamma",
       "parameters": {
-        "shape": 23.33,
-        "rate": 31693.8276
+        "shape": 23.3299949171649,
+        "rate": 31693.8276408133
       }
     },
     "omega_2": {
       "description": "Vaccine waning rate (two dose, per day)",
       "distribution": "gamma",
       "parameters": {
-        "shape": 2.7133,
-        "rate": 5079.2397
+        "shape": 2.713283144173,
+        "rate": 5079.23970665351
       }
     },
     "phi_1": {
       "description": "Initial vaccine effectiveness (one dose)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 91.843,
-        "shape2": 25.4934
+        "shape1": 91.8430481703201,
+        "shape2": 25.4934335058671
       }
     },
     "phi_2": {
       "description": "Initial vaccine effectiveness (two dose)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 115.0976,
-        "shape2": 35.3227
+        "shape1": 115.097591451044,
+        "shape2": 35.3226818969424
       }
     },
     "chi_endemic": {
       "description": "PPV among suspected cases during endemic periods (Weins et al. 2023, all settings)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 5.4299,
-        "shape2": 5.009
+        "shape1": 5.42988327430809,
+        "shape2": 5.00904617715547
       }
     },
     "chi_epidemic": {
       "description": "PPV among suspected cases during epidemic periods (Weins et al. 2023, during outbreaks)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 4.7881,
-        "shape2": 1.5328
+        "shape1": 4.78806160754615,
+        "shape2": 1.53280128097088
       }
     },
     "rho": {
       "description": "Care-seeking rate: probability a symptomatic infection is reported as suspected (GEMS + Wiens 2025)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 6.8143,
-        "shape2": 17.8944
+        "shape1": 6.81427258303886,
+        "shape2": 17.8943797428517
       }
     },
     "sigma": {
@@ -185,7 +185,7 @@
       "description": "Symptomatic shedding rate (total bacteria per infected person per day)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 11.1563,
+        "meanlog": 11.1562505210315,
         "sdlog": 0.8
       }
     },
@@ -193,7 +193,7 @@
       "description": "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 5.7038,
+        "meanlog": 5.7037824746562,
         "sdlog": 1.2
       }
     },
@@ -225,8 +225,8 @@
         "MOZ": {
           "distribution": "lognormal",
           "parameters": {
-            "meanlog": -11.5129,
-            "sdlog": 1.1748
+            "meanlog": -11.5129254649702,
+            "sdlog": 1.17480990015967
           }
         }
       }
@@ -237,8 +237,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 7.0308,
-            "shape2": 13.2443
+            "shape1": 7.030783,
+            "shape2": 13.244317
           }
         }
       }
@@ -249,8 +249,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 0.5661,
-            "shape2": 28356.1444
+            "shape1": 0.566144888256504,
+            "shape2": 28356.1443860672
           }
         }
       }
@@ -261,8 +261,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 235.5965,
-            "shape2": 127.9096
+            "shape1": 235.596459024374,
+            "shape2": 127.909584855678
           }
         }
       }
@@ -274,7 +274,7 @@
           "distribution": "normal",
           "parameters": {
             "mean": 0,
-            "sd": 0.7071
+            "sd": 0.707106781186547
           }
         }
       }
@@ -286,7 +286,7 @@
           "distribution": "normal",
           "parameters": {
             "mean": 0,
-            "sd": 0.7071
+            "sd": 0.707106781186547
           }
         }
       }
@@ -298,7 +298,7 @@
           "distribution": "normal",
           "parameters": {
             "mean": 0,
-            "sd": 0.7071
+            "sd": 0.707106781186547
           }
         }
       }
@@ -310,7 +310,7 @@
           "distribution": "normal",
           "parameters": {
             "mean": 0,
-            "sd": 0.7071
+            "sd": 0.707106781186547
           }
         }
       }
@@ -321,8 +321,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 6.0768,
-            "shape2": 248.2443
+            "shape1": 6.07676789759842,
+            "shape2": 248.244265252821
           }
         }
       }
@@ -429,10 +429,10 @@
         "MOZ": {
           "distribution": "truncnorm",
           "parameters": {
-            "mean": 0,
-            "sd": 7.1428e-06,
-            "a": 1.0989e-06,
-            "b": 0.0001
+            "mean": 1.09889579758272e-05,
+            "sd": 7.14282268428766e-06,
+            "a": 1.09889579758272e-06,
+            "b": 0.000109889579758272
           }
         }
       }

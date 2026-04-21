@@ -1919,8 +1919,11 @@ priors_default$parameters_location$psi_star_k$location[["MOZ"]] <- list(
 
 fp <- file.path(PATHS$ROOT, 'MOSAIC-pkg/inst/extdata/priors_default.json')
 
-# save to file
-jsonlite::write_json(priors_default, fp, pretty = TRUE, auto_unbox = TRUE)
+# save to file. digits = NA preserves full numerical precision; the default
+# digits = 4 rounds small bounds (e.g. 2.277e-05) to 0, silently corrupting
+# truncnorm epidemic_threshold entries and any other small-scale priors
+# (bug discovered in v0.28.7 plot_model_distributions debugging).
+jsonlite::write_json(priors_default, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
 # Read back to verify
 tmp_priors <- jsonlite::fromJSON(fp, simplifyVector = FALSE)
