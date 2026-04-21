@@ -377,7 +377,10 @@ default_args <- list(
      psi_star_k = setNames(rep(0.0, length(j)), j),    # Default: no time offset
      psi_jt = psi_jt,
      zeta_1 = 70000,       # Symptomatic shedding; prior median 70k (reparameterized from 665)
-     zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300; zeta_2 is derived
+     zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300
+     zeta_2 = 70000 / 300, # v0.28.12: DERIVED at sampling time (= zeta_1/zeta_ratio);
+                           # included here as a tracked placeholder so run_MOSAIC's
+                           # param_names_all picks it up for samples.parquet
      kappa = 10^6,
      decay_days_short = 16, # Min V. cholerae survival (was 3; prior median 16, posteriors 15-48)
      decay_days_spread = 184, # Spread; v0.27.0+ (prior median 180; decay_days_long = short + spread)

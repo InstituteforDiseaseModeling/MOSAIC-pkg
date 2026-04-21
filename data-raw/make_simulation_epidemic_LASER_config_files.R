@@ -144,6 +144,7 @@ sim_args <- list(
      psi_star_z       = rep(1, n_loc),    # No smoothing (use raw psi_jt)
      psi_star_k       = rep(0, n_loc),    # No time lag
      zeta_1           = 7.5,
+     zeta_ratio       = 3,      # v0.28.12: zeta_ratio = zeta_1/zeta_2 (sampled); zeta_2 derived
      zeta_2           = 2.5,
      kappa            = 1e5,
      decay_days_short  = 3,
