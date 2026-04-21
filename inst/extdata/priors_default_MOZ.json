@@ -321,8 +321,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 0.5,
-            "shape2": 49.5
+            "shape1": 6.0768,
+            "shape2": 248.2443
           }
         }
       }
@@ -469,7 +469,7 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1,
+            "shape1": 2,
             "shape2": 1
           }
         }

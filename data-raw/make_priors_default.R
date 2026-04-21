@@ -871,6 +871,23 @@ for (iso in j) {
      )
 }
 
+# v0.28.5: Override the uniform-across-countries fallback above with country-specific
+# Beta priors derived from OCV campaign history (GTFCC request log). Countries with
+# no pre-t0 OCV campaigns retain the fallback values. See R/est_initial_V1_V2.R.
+message("Building OCV data-driven V1/V2 initial-condition priors...")
+ocv_priors <- est_initial_V1_V2(PATHS = PATHS, config = config_default,
+                                 date_start = date_start, verbose = FALSE)
+for (iso in j) {
+     if (!is.null(ocv_priors$parameters_location$prop_V1_initial$location[[iso]])) {
+          priors_default$parameters_location$prop_V1_initial$location[[iso]] <-
+               ocv_priors$parameters_location$prop_V1_initial$location[[iso]]
+     }
+     if (!is.null(ocv_priors$parameters_location$prop_V2_initial$location[[iso]])) {
+          priors_default$parameters_location$prop_V2_initial$location[[iso]] <-
+               ocv_priors$parameters_location$prop_V2_initial$location[[iso]]
+     }
+}
+
 # prop_E_initial - Initial proportion exposed
 priors_default$parameters_location$prop_E_initial <- list(
      description = "Initial proportion in exposed (E) compartment",
@@ -1849,8 +1866,12 @@ for (iso in j) {
      priors_default$parameters_location$psi_star_z$location[[iso]] <- list(
           distribution = "beta",
           parameters = list(
-               shape1 = 1,      # Beta(1,1): uniform on [0,1]; no prior preference for smoothing level
-               shape2 = 1       # Old posterior (MOZ) median=0.56, 95% CI=[0.07, 0.95] -- full range used
+               shape1 = 2,      # Beta(2,1): mode=1 (null: no smoothing); mean=0.667; monotonically
+               shape2 = 1       # decreasing toward z=0. Encodes null assumption that z=1 is the
+                                # identity (no EWMA smoothing). Beta(1,1) was equally permissive of
+                                # z=0 (max smoothing) and z=1 (null), producing U-shaped posteriors
+                                # (shape1<1, shape2<1) in staged calibration when the likelihood is
+                                # flat across z — amplifying bimodality into the final ensemble.
           )
      )
 }

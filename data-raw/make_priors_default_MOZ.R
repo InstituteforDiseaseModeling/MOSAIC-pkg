@@ -476,6 +476,20 @@ priors_default_MOZ$parameters_location$prop_V2_initial <- list(
      )
 )
 
+# v0.28.5: Override with OCV data-driven Beta priors for MOZ using campaign history
+# up to MOZ config date_start (2017-01-01 by default). See R/est_initial_V1_V2.R.
+message("Building OCV data-driven V1/V2 initial-condition priors for MOZ...")
+ocv_priors_MOZ <- est_initial_V1_V2(PATHS = PATHS, config = config_default_MOZ,
+                                     date_start = date_start, verbose = FALSE)
+if (!is.null(ocv_priors_MOZ$parameters_location$prop_V1_initial$location[["MOZ"]])) {
+     priors_default_MOZ$parameters_location$prop_V1_initial$location[["MOZ"]] <-
+          ocv_priors_MOZ$parameters_location$prop_V1_initial$location[["MOZ"]]
+}
+if (!is.null(ocv_priors_MOZ$parameters_location$prop_V2_initial$location[["MOZ"]])) {
+     priors_default_MOZ$parameters_location$prop_V2_initial$location[["MOZ"]] <-
+          ocv_priors_MOZ$parameters_location$prop_V2_initial$location[["MOZ"]]
+}
+
 # prop_E_initial - Near-zero: 8 weeks of zero cases after t0
 # Beta(0.1, 99999): mode=0, mean=28 people, upper 95%=275
 priors_default_MOZ$parameters_location$prop_E_initial <- list(
@@ -740,13 +754,17 @@ priors_default_MOZ$parameters_location$psi_star_b <- list(
      )
 )
 
-# psi_star_z - Completely uninformative. Beta(1,1) = Uniform(0,1).
-# Old Beta(3, 1.5) biased toward light smoothing. MOZ 6-7 posterior width=0.95,
-# confirming the data doesn't constrain this — let it be flat.
+# psi_star_z - Beta(2,1): mode at z=1 (null: no smoothing), mean=0.667.
+# Monotonically decreasing toward z=0; data can override toward heavy smoothing.
+# Old Beta(1,1) was uniform — equally permissive of z=0 (max smoothing) and z=1
+# (null), which in staged calibration produced U-shaped posteriors (both shape
+# parameters < 1) when the likelihood was flat across z, amplifying bimodality
+# into the final ensemble. Old Beta(3,1.5) had mode=0.8, biased toward light
+# smoothing; Beta(2,1) is more diffuse while still encoding the null correctly.
 priors_default_MOZ$parameters_location$psi_star_z <- list(
      description = "Smoothing weight for causal EWMA of calibrated suitability",
      location = list(
-          MOZ = list(distribution = "beta", parameters = list(shape1 = 1, shape2 = 1))
+          MOZ = list(distribution = "beta", parameters = list(shape1 = 2, shape2 = 1))
      )
 )
 
