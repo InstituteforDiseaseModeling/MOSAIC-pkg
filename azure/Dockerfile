@@ -103,9 +103,10 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 # ============================================================
 # Install MOSAIC R package from GitHub
 # ============================================================
+ARG MOSAIC_REF=main
 RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
     remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', \
-        ref = 'main', \
+        ref = '${MOSAIC_REF}', \
         dependencies = TRUE, \
         upgrade = 'never', \
         force = TRUE); \
@@ -113,7 +114,7 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
     if (!requireNamespace('MOSAIC', quietly = FALSE)) { \
         stop('MOSAIC installation failed!'); \
     }; \
-    cat('✓ MOSAIC R package installed\n')"
+    cat('✓ MOSAIC R package installed (ref=${MOSAIC_REF})\n')"
 
 # ============================================================
 # Install Python dependencies + Dask/Coiled (single layer)
