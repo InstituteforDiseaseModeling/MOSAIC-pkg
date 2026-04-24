@@ -769,25 +769,21 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
                                             long  = ggplot2::unit(0.15, "cm"))
     }
 
-    # Add central-tendency lines for distributional posteriors. For
-    # log-scale params the median (exp(meanlog) for lognormal, qbeta(0.5)
-    # for beta) aligns with the visible peak of the log10-density curve;
-    # the mean can sit many decades away when sdlog is large. For linear
-    # params the mean is the long-standing reference.
+    # Dashed mode lines: argmax of the density curve as plotted. For
+    # log-scale params the curve is the density w.r.t. log10(x) so the
+    # mode corresponds to exp(meanlog) for a lognormal (the median of X)
+    # — which is where the visible peak sits. For linear-axis params the
+    # mode corresponds to the classical mode of X (e.g. (s1-1)/(s1+s2-2)
+    # for a Beta with s1>1 and s2>1). Drawn for every method so both
+    # prior and posterior are marked on every panel.
     for (method_name in names(method_results)) {
       result <- method_results[[method_name]]
-      line_val <- if (param_name %in% log_scale_params) {
-        if (!is.null(result$median_val) && is.finite(result$median_val)) result$median_val else result$mean_val
-      } else {
-        result$mean_val
-      }
-      if (!is.null(line_val) && is.finite(line_val) &&
-          !param_distributions[[method_name]]$distribution %in% c("uniform")) {
-        x_range <- range(plot_data$x, na.rm = TRUE)
-        if (line_val >= x_range[1] && line_val <= x_range[2]) {
-          p <- p + ggplot2::geom_vline(xintercept = line_val, linetype = "dashed",
-                             color = method_colors[method_name], alpha = 0.5)
-        }
+      if (param_distributions[[method_name]]$distribution %in% c("uniform")) next
+      idx <- which.max(result$y)
+      mode_val <- if (length(idx) == 1 && is.finite(result$x[idx])) result$x[idx] else NA_real_
+      if (is.finite(mode_val)) {
+        p <- p + ggplot2::geom_vline(xintercept = mode_val, linetype = "dashed",
+                                     color = method_colors[method_name], alpha = 0.6)
       }
     }
 

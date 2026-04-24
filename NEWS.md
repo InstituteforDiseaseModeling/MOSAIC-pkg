@@ -1,3 +1,16 @@
+# MOSAIC 0.29.9
+
+## Prior/posterior panels: draw mode vlines for every method in every panel
+
+Dashed central-tendency lines in `distributions_*_Prior_Posterior.pdf` panels now:
+
+1. Mark the **mode** of the plotted density (argmax of the displayed curve) rather than the mean (v0.29.4 and earlier) or median (v0.29.8). On a log-scale axis the mode corresponds to `exp(meanlog)` for a lognormal (= median of X, the visible peak of the log10-density bell). On a linear axis the mode corresponds to the classical mode of X (e.g. `(s1-1)/(s1+s2-2)` for a Beta with `s1>1` and `s2>1`). Computed directly from `x[which.max(y)]` on the grid, so it always aligns with the visible peak regardless of axis.
+2. Draw for **every method** in every panel, not just the ones whose center falls inside the data range. The previous `line_val >= x_range[1] && line_val <= x_range[2]` gate occasionally suppressed a line when the mean of a skewed distribution fell outside the plotted support. Lines are drawn unconditionally now — ggplot extends the axis if the mode sits outside the density's effective range.
+
+Near-delta distributions demoted to `fixed_values` vlines (v0.29.8) still render as solid lines at the median, so the prior/posterior marks remain visually distinct when one method is effectively a point estimate.
+
+---
+
 # MOSAIC 0.29.8
 
 ## Fix vertical-line alignment, near-delta posteriors, and add beta_j0_tot to log scale
