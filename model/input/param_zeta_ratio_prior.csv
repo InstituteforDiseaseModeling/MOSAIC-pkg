@@ -1,0 +1,7 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); combined (C) lognormal","point",NA,NA,NA,"low",2383.45112083041
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); combined (C) lognormal","point",NA,NA,NA,"median",215673.398951477
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); combined (C) lognormal","point",NA,NA,NA,"mode",1094.28757122138
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); combined (C) lognormal","point",NA,NA,NA,"high",19515825.0189233
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); combined (C) lognormal","lognormal",NA,NA,NA,"meanlog",12.281520500486
+"zeta_ratio","Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2); combined (C) lognormal","lognormal",NA,NA,NA,"sdlog",2.29862169350886

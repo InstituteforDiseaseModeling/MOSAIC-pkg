@@ -1,0 +1,7 @@
+"variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
+"kappa","V. cholerae environmental dose-response half-saturation constant (CFU); concentration giving 50% infection probability","point",NA,NA,NA,"low",3643.56741108227
+"kappa","V. cholerae environmental dose-response half-saturation constant (CFU); concentration giving 50% infection probability","point",NA,NA,NA,"median",129370.483333399
+"kappa","V. cholerae environmental dose-response half-saturation constant (CFU); concentration giving 50% infection probability","point",NA,NA,NA,"mode",4690.23309269757
+"kappa","V. cholerae environmental dose-response half-saturation constant (CFU); concentration giving 50% infection probability","point",NA,NA,NA,"high",4593498.64284405
+"kappa","V. cholerae environmental dose-response half-saturation constant (CFU); concentration giving 50% infection probability","lognormal",NA,NA,NA,"meanlog",11.7704355309597
+"kappa","V. cholerae environmental dose-response half-saturation constant (CFU); concentration giving 50% infection probability","lognormal",NA,NA,NA,"sdlog",1.82131764687515
