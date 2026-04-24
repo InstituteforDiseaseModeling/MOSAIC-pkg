@@ -1,3 +1,20 @@
+# MOSAIC 0.30.0
+
+## Route per-location prediction CSVs to `3_results/predictions/`
+
+Previously `plot_model_ensemble(save_predictions = TRUE)` wrote per-location CSVs (`predictions_<type>_<LOC>.csv`) to its `output_dir`, which `run_MOSAIC()` sets to `3_results/figures/predictions/` — mixing data files into a tree meant for figures. The combining step then wrote `predictions_<type>_all.csv` into `3_results/predictions/`, a byte-identical duplicate when the run covers a single location.
+
+This release:
+
+1. **Separate data/figures trees.** Added `data_dir` argument to `plot_model_ensemble()`. When provided, per-location CSVs are written there instead of `output_dir`. `run_MOSAIC()` passes `data_dir = dirs$res_predictions` at all three call sites (best, medioid, ensemble). `figures/predictions/` now holds PDFs only.
+2. **Combining step reads from `predictions/`** (the new canonical location) instead of `figures/predictions/`. Regex excludes `*_all.csv` so the combine pass ignores its own output.
+3. **Single-location runs no longer emit `_all.csv`.** When only one per-location CSV exists, the canonical file is the per-location CSV itself — no `file.copy()` to a byte-identical `_all.csv`. `_all.csv` is written only for multi-location runs where there's genuine concatenation happening.
+4. **`plot_model_ppc()`** now reads from `dirs$res_predictions` rather than `dirs$res_fig_pred` (auto-discovery still works; the function's docstring example updated to match).
+
+Backwards-compatibility: `plot_model_ensemble()` defaults `data_dir = NULL`, which falls back to `output_dir` — external callers of the function keep working unchanged.
+
+---
+
 # MOSAIC 0.29.9
 
 ## Prior/posterior panels: draw mode vlines for every method in every panel

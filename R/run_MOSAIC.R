@@ -2170,6 +2170,7 @@ run_MOSAIC <- function(config,
         plot_model_ensemble(
           ensemble         = best_ensemble,
           output_dir       = dirs$res_fig_pred,
+          data_dir         = dirs$res_predictions,
           file_prefix      = "best",
           title_label      = "Best Model",
           save_predictions = TRUE,
@@ -2258,6 +2259,7 @@ run_MOSAIC <- function(config,
               plot_model_ensemble(
                 ensemble         = medioid_ensemble,
                 output_dir       = dirs$res_fig_pred,
+                data_dir         = dirs$res_predictions,
                 file_prefix      = "medioid",
                 title_label      = "Medioid Model",
                 save_predictions = TRUE,
@@ -2345,6 +2347,7 @@ run_MOSAIC <- function(config,
       plot_model_ensemble(
         ensemble         = ensemble,
         output_dir       = dirs$res_fig_pred,
+        data_dir         = dirs$res_predictions,
         file_prefix      = "ensemble",
         title_label      = "Posterior Ensemble",
         save_predictions = TRUE,
@@ -2362,11 +2365,16 @@ run_MOSAIC <- function(config,
 
   # Combine per-location prediction CSVs by type. Ensemble, best, medioid, and
   # stochastic each have their own column schema and cannot be rbind'd together.
-  # Pattern: predictions_<type>_<LOC>.csv (per-location) → predictions_<type>_all.csv (combined)
+  # Per-location files live in dirs$res_predictions alongside the combined
+  # file. Pattern: predictions_<type>_<LOC>.csv (per-location) ->
+  # predictions_<type>_all.csv (combined, multi-location only). For N=1 the
+  # per-location CSV is canonical on its own and no _all.csv is written.
   for (pred_type in c("ensemble", "best", "medioid", "stochastic")) {
-    pred_csvs <- list.files(dirs$res_fig_pred,
-                            pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
-                            full.names = TRUE)
+    pred_csvs <- list.files(
+      dirs$res_predictions,
+      pattern = sprintf("^predictions_%s_(?!all\\.csv).*\\.csv$", pred_type),
+      full.names = TRUE, perl = TRUE
+    )
     if (length(pred_csvs) > 1) {
       combined <- tryCatch({
         pred_list <- lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE)
@@ -2380,10 +2388,6 @@ run_MOSAIC <- function(config,
         utils::write.csv(combined, out_file, row.names = FALSE)
         log_msg("Combined %d %s prediction files into %s", length(pred_csvs), pred_type, basename(out_file))
       }
-    } else if (length(pred_csvs) == 1) {
-      # Single location — copy directly rather than combining
-      out_file <- file.path(dirs$res_predictions, sprintf("predictions_%s_all.csv", pred_type))
-      file.copy(pred_csvs, out_file, overwrite = TRUE)
     }
   }
 
@@ -2396,7 +2400,7 @@ run_MOSAIC <- function(config,
     ppc_result <- tryCatch(
       {
         plot_model_ppc(
-          predictions_dir = dirs$res_fig_pred,
+          predictions_dir = dirs$res_predictions,
           output_dir = dirs$res_figures,
           verbose = control$logging$verbose
         )

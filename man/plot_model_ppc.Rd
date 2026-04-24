@@ -59,8 +59,8 @@ Output files:
 \dontrun{
 # From predictions directory (auto-discovers CSV files)
 plot_model_ppc(
-  predictions_dir = "output/3_results/figures/predictions",
-  output_dir = "output/3_results/figures/predictions"
+  predictions_dir = "output/3_results/predictions",
+  output_dir = "output/3_results/figures"
 )
 
 # Specific locations only

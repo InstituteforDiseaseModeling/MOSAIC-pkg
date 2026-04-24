@@ -7,6 +7,7 @@
 plot_model_ensemble(
   ensemble,
   output_dir,
+  data_dir = NULL,
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
@@ -17,8 +18,14 @@ plot_model_ensemble(
 \item{ensemble}{A \code{mosaic_ensemble} object returned by
 \code{\link{calc_model_ensemble}}.}
 
-\item{output_dir}{Character. Directory where plots and CSVs are saved.
-Created if it does not exist.}
+\item{output_dir}{Character. Directory where plots are saved (and CSVs,
+when \code{data_dir} is not provided). Created if it does not exist.}
+
+\item{data_dir}{Character. Directory where per-location prediction CSVs
+are written when \code{save_predictions = TRUE}. Defaults to
+\code{output_dir} for backwards compatibility. Pass a separate path
+(e.g. \code{3_results/predictions}) to keep CSVs out of the figures
+tree. Created if it does not exist.}
 
 \item{file_prefix}{Character. Prefix used in output filenames:
 \code{predictions_<prefix>_<LOC>.pdf/csv} for per-location outputs and

@@ -8,8 +8,13 @@
 #'
 #' @param ensemble A \code{mosaic_ensemble} object returned by
 #'   \code{\link{calc_model_ensemble}}.
-#' @param output_dir Character. Directory where plots and CSVs are saved.
-#'   Created if it does not exist.
+#' @param output_dir Character. Directory where plots are saved (and CSVs,
+#'   when \code{data_dir} is not provided). Created if it does not exist.
+#' @param data_dir Character. Directory where per-location prediction CSVs
+#'   are written when \code{save_predictions = TRUE}. Defaults to
+#'   \code{output_dir} for backwards compatibility. Pass a separate path
+#'   (e.g. \code{3_results/predictions}) to keep CSVs out of the figures
+#'   tree. Created if it does not exist.
 #' @param file_prefix Character. Prefix used in output filenames:
 #'   \code{predictions_<prefix>_<LOC>.pdf/csv} for per-location outputs and
 #'   \code{predictions_<prefix>_cases_all.pdf} / \code{_deaths_all.pdf} for
@@ -38,6 +43,7 @@
 #' @importFrom scales comma
 plot_model_ensemble <- function(ensemble,
                                 output_dir,
+                                data_dir         = NULL,
                                 file_prefix      = "ensemble",
                                 title_label      = "Posterior Ensemble",
                                 save_predictions = FALSE,
@@ -135,11 +141,13 @@ plot_model_ensemble <- function(ensemble,
   # ---------------------------------------------------------------------------
 
   if (save_predictions) {
-    if (verbose) message("Saving prediction CSVs...")
+    csv_dir <- if (!is.null(data_dir) && nzchar(data_dir)) data_dir else output_dir
+    if (!dir.exists(csv_dir)) dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
+    if (verbose) message("Saving prediction CSVs to ", csv_dir, "...")
     for (i in seq_len(n_locations)) {
       loc     <- location_names[i]
       loc_df  <- plot_data[plot_data$location == loc, ]
-      csv_out <- file.path(output_dir, paste0("predictions_", file_prefix, "_", loc, ".csv"))
+      csv_out <- file.path(csv_dir, paste0("predictions_", file_prefix, "_", loc, ".csv"))
       utils::write.csv(loc_df, csv_out, row.names = FALSE)
       if (verbose) message("  Saved: ", csv_out)
     }
