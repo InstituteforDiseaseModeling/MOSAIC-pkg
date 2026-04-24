@@ -105,8 +105,8 @@ CONTROL_SETTINGS <- list(
   weight_deaths = 0.05,         # Weight for death data
 
   # Predictions
-  best_model_n_sims = 100,      # Simulations for best-fit model
-  ensemble_n_sims_per_param = 10,  # Simulations per parameter set
+  n_iter_best = 100,            # Stochastic runs for best + medioid single-config plots
+  n_iter_ensemble = 10,         # Stochastic runs per posterior parameter set (ensemble)
 
   # Parallel
   use_parallel = TRUE,          # Enable parallel execution
@@ -320,8 +320,8 @@ for (i in seq_along(COUNTRIES)) {
     control$likelihood$weight_deaths <- CONTROL_SETTINGS$weight_deaths
 
     # Predictions
-    control$predictions$best_model_n_sims <- CONTROL_SETTINGS$best_model_n_sims
-    control$predictions$ensemble_n_sims_per_param <- CONTROL_SETTINGS$ensemble_n_sims_per_param
+    control$predictions$n_iter_best <- CONTROL_SETTINGS$n_iter_best
+    control$predictions$n_iter_ensemble <- CONTROL_SETTINGS$n_iter_ensemble
 
     # I/O and paths
     control$paths$clean_output <- CONTROL_SETTINGS$clean_output

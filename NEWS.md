@@ -1,3 +1,20 @@
+# MOSAIC 0.29.5
+
+## Best/medioid prediction plots: independent `n_iter` and parallel execution
+
+Best and medioid single-config prediction plots previously reused `ensemble_n_sims_per_param` (default 5, sequential) because they were refactored into `calc_model_ensemble()` in 0.29.2 without giving them their own iteration control. For tight stochastic CI envelopes on the best/medioid plots, users had to bump the ensemble count — paying the cost across all N posterior parameter sets.
+
+This release splits the two:
+
+* `control$predictions$n_iter_ensemble` (default **10L**) — stochastic runs per posterior parameter set in the weighted ensemble. Renamed from `ensemble_n_sims_per_param`.
+* `control$predictions$n_iter_best` (default **100L**) — stochastic runs for the best and medioid single-config plots. Applied identically to both models.
+
+Best/medioid now also run in parallel: `calc_model_ensemble()` is invoked with `parallel = control$parallel$enable` and `n_cores = control$parallel$n_cores` (previously hardcoded `parallel = FALSE`). Parallelization uses an internal PSOCK cluster — same infrastructure the posterior ensemble already uses in the non-Dask path. For Dask calibrations, the best/medioid step still uses local PSOCK since the Dask cluster is closed after the posterior-ensemble sims.
+
+**Breaking rename:** `control$predictions$ensemble_n_sims_per_param` → `control$predictions$n_iter_ensemble`. User scripts (`vm/`, `azure/`, vignettes) updated accordingly. Existing scripts setting `best_model_n_sims` (previously an orphaned no-op control field) migrate to `n_iter_best` and are now wired in.
+
+---
+
 # MOSAIC 0.29.3
 
 ## Unified stochastic-median R² and bias across best, medioid, and ensemble

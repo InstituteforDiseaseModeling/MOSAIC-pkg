@@ -16,8 +16,8 @@ Two post-calibration steps require LASER simulations:
 
 | Step | Function | Default sims | Previous execution |
 |------|----------|-------------|-------------------|
-| Stochastic ensemble R² + plots | `calc_model_ensemble()` | `best_model_n_sims` (default 100) | Local R parallel |
-| Parameter uncertainty ensemble | `plot_model_fit_stochastic_param()` | posterior params × `ensemble_n_sims_per_param` (up to ~10,000) | Local R parallel |
+| Stochastic ensemble R² + plots | `calc_model_ensemble()` | `n_iter_best` (default 100) | Local R parallel |
+| Parameter uncertainty ensemble | `plot_model_fit_stochastic_param()` | posterior params × `n_iter_ensemble` (up to ~10,000) | Local R parallel |
 
 For a large Coiled run (50K sims on 100 workers, ~30 min), the parameter uncertainty ensemble alone could run for **hours** on the local machine.
 

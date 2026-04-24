@@ -83,8 +83,8 @@ control$sampling$sample_mobility_omega <- length(iso_codes) > 1  # Mobility rate
 control$likelihood$weight_cases <- 1
 control$likelihood$weight_deaths <- 0.05
 
-control$predictions$best_model_n_sims <- 100
-control$predictions$ensemble_n_sims_per_param <- 10
+control$predictions$n_iter_best <- 100
+control$predictions$n_iter_ensemble <- 10
 
 control$paths$clean_output <- TRUE
 control$io <- mosaic_io_presets("fast")

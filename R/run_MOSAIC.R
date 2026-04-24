@@ -1693,7 +1693,7 @@ run_MOSAIC <- function(config,
 
       # Build stochastic param configs (always, not just when plots = TRUE)
       stoch_param_configs <- NULL
-      n_stochastic_per <- control$predictions$ensemble_n_sims_per_param %||% 10L
+      n_stochastic_per <- control$predictions$n_iter_ensemble %||% 10L
 
       if (sum(results$is_best_subset) > 0) {
         best_subset_results <- results[results$is_best_subset == TRUE, ]
@@ -1751,7 +1751,8 @@ run_MOSAIC <- function(config,
   bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
   n_ensemble_params          <- 0L
-  n_ensemble_stochastic_per  <- as.integer(control$predictions$ensemble_n_sims_per_param %||% 10L)
+  n_ensemble_stochastic_per  <- as.integer(control$predictions$n_iter_ensemble %||% 10L)
+  n_best_stochastic_per      <- as.integer(control$predictions$n_iter_best %||% 100L)
 
   # Tier-subset ensemble metrics — populated only when optimize_subset = TRUE
   # (preserved for comparison against the canonical optimized-ensemble metrics).
@@ -2127,15 +2128,17 @@ run_MOSAIC <- function(config,
   bias_ratio_cases <- NA_real_
   bias_ratio_deaths <- NA_real_
 
-  log_msg("Running best model stochastic ensemble (%d reruns)...",
-          n_ensemble_stochastic_per)
+  log_msg("Running best model stochastic ensemble (%d reruns, parallel=%s)...",
+          n_best_stochastic_per, isTRUE(control$parallel$enable))
   best_ensemble <- tryCatch(
     calc_model_ensemble(
       config                   = config_best,
       configs                  = list(config_best),
-      n_simulations_per_config = n_ensemble_stochastic_per,
+      n_simulations_per_config = n_best_stochastic_per,
       envelope_quantiles       = c(0.025, 0.975),
-      parallel                 = FALSE,
+      parallel                 = isTRUE(control$parallel$enable),
+      n_cores                  = control$parallel$n_cores,
+      root_dir                 = root_dir,
       verbose                  = control$logging$verbose
     ),
     error = function(e) {
@@ -2156,7 +2159,7 @@ run_MOSAIC <- function(config,
     bias_ratio_deaths <- tryCatch(calc_bias_ratio(obs_d_flat, best_d_flat), error = function(e) NA_real_)
 
     log_msg("Best model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-            n_ensemble_stochastic_per,
+            n_best_stochastic_per,
             ifelse(is.na(r2_cases),          0, r2_cases),
             ifelse(is.na(bias_ratio_cases),  0, bias_ratio_cases),
             ifelse(is.na(r2_deaths),         0, r2_deaths),
@@ -2213,15 +2216,17 @@ run_MOSAIC <- function(config,
         # Run N stochastic reruns of the medioid config. Same pattern as the
         # best-model block: R²/bias and the prediction plot both derive from
         # the stochastic median for consistency with the posterior ensemble.
-        log_msg("Running medioid model stochastic ensemble (%d reruns)...",
-                n_ensemble_stochastic_per)
+        log_msg("Running medioid model stochastic ensemble (%d reruns, parallel=%s)...",
+                n_best_stochastic_per, isTRUE(control$parallel$enable))
         medioid_ensemble <- tryCatch(
           calc_model_ensemble(
             config                   = config_medioid,
             configs                  = list(config_medioid),
-            n_simulations_per_config = n_ensemble_stochastic_per,
+            n_simulations_per_config = n_best_stochastic_per,
             envelope_quantiles       = c(0.025, 0.975),
-            parallel                 = FALSE,
+            parallel                 = isTRUE(control$parallel$enable),
+            n_cores                  = control$parallel$n_cores,
+            root_dir                 = root_dir,
             verbose                  = control$logging$verbose
           ),
           error = function(e) {
@@ -2242,7 +2247,7 @@ run_MOSAIC <- function(config,
           bias_deaths_med <- tryCatch(calc_bias_ratio(obs_d_flat, med_d_flat), error = function(e) NA_real_)
 
           log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-                  n_ensemble_stochastic_per,
+                  n_best_stochastic_per,
                   ifelse(is.na(r2_cases_med),    0, r2_cases_med),
                   ifelse(is.na(bias_cases_med),  0, bias_cases_med),
                   ifelse(is.na(r2_deaths_med),   0, r2_deaths_med),
@@ -2571,7 +2576,13 @@ run_mosaic <- run_MOSAIC
 #'
 #' @param predictions List of prediction generation settings. Default is:
 #'   \itemize{
-#'     \item \code{ensemble_n_sims_per_param}: Stochastic runs per parameter set (default: 5L)
+#'     \item \code{n_iter_ensemble}: Stochastic runs per posterior parameter set
+#'       in the weighted ensemble (default: 10L). Total ensemble sims =
+#'       N parameter sets x \code{n_iter_ensemble}.
+#'     \item \code{n_iter_best}: Stochastic runs for the best and medioid single-config
+#'       prediction plots (default: 100L). Applied identically to both models.
+#'       These runs execute on an internal PSOCK cluster when
+#'       \code{parallel$enable = TRUE}.
 #'     \item \code{optimize_subset}: Logical; when \code{TRUE}, the post-ensemble
 #'       optimizer (MAE / WIS / R²+bias) refines the best subset used for
 #'       \code{posteriors.json}, \code{posterior_quantiles.csv}, and the ensemble
@@ -2834,7 +2845,8 @@ mosaic_control_defaults <- function(calibration = NULL,
 
   # Default prediction settings
   default_predictions <- list(
-    ensemble_n_sims_per_param = 5L,     # Stochastic runs per parameter set
+    n_iter_ensemble    = 10L,            # Stochastic runs per posterior parameter set (ensemble)
+    n_iter_best        = 100L,           # Stochastic runs for best + medioid single-config plots
     optimize_subset    = FALSE,          # Post-ensemble subset optimization
     optimize_min_n     = 30L,            # Minimum subset size — raised from 4L (Fox et al. 2024)
                                           # to guard against KDE degeneracy when the

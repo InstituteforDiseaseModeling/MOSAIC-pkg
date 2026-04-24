@@ -40,8 +40,8 @@ control_ETH$sampling$sample_mobility_omega <- FALSE   # Mobility rate
 control_ETH$likelihood$weight_cases <- 1
 control_ETH$likelihood$weight_deaths <- 0.05
 
-control_ETH$predictions$best_model_n_sims <- 30
-control_ETH$predictions$ensemble_n_sims_per_param <- 5
+control_ETH$predictions$n_iter_best <- 30
+control_ETH$predictions$n_iter_ensemble <- 5
 
 control_ETH$paths$clean_output <- TRUE
 control_ETH$io <- mosaic_io_presets("fast")

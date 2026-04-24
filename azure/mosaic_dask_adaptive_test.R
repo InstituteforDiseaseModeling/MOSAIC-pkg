@@ -53,8 +53,8 @@ ctrl$likelihood$weight_cases  <- 1
 ctrl$likelihood$weight_deaths <- 0.05
 
 # Predictions
-ctrl$predictions$best_model_n_sims        <- 30
-ctrl$predictions$ensemble_n_sims_per_param <- 5
+ctrl$predictions$n_iter_best     <- 30
+ctrl$predictions$n_iter_ensemble <- 5
 
 # NPE disabled
 ctrl$npe$enable <- FALSE
