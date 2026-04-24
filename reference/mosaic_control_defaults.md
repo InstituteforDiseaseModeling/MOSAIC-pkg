@@ -133,8 +133,14 @@ mosaic_control_defaults(
 
   List of prediction generation settings. Default is:
 
-  - `ensemble_n_sims_per_param`: Stochastic runs per parameter set
-    (default: 5L)
+  - `n_iter_ensemble`: Stochastic runs per posterior parameter set in
+    the weighted ensemble (default: 10L). Total ensemble sims = N
+    parameter sets x `n_iter_ensemble`.
+
+  - `n_iter_best`: Stochastic runs for the best and medioid
+    single-config prediction plots (default: 100L). Applied identically
+    to both models. These runs execute on an internal PSOCK cluster when
+    `parallel$enable = TRUE`.
 
   - `optimize_subset`: Logical; when `TRUE`, the post-ensemble optimizer
     (MAE / WIS / R²+bias) refines the best subset used for

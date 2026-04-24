@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -218,6 +218,7 @@
 <li>Rewriting <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> and <code><a href="reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> silently dropped the best-model prediction plot — the old workflow generated it via the old ensemble function, and the rewrite replaced that with the posterior ensemble plot without preserving the single-best-model plot (v0.22.15 fix)</li>
 <li>
 <code><a href="reference/plot_model_likelihood.html">plot_model_likelihood()</a></code> call was silently removed from <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> during a refactor — the function still existed but the call site was dropped, so the likelihood curve diagnostic plot stopped being generated without any error or warning (v0.22.17 fix)</li>
+<li>v0.14.22 fixed the <code>expected_cases</code> → <code>reported_cases</code> field rename in three sibling plotting functions (<code>plot_model_ppc.R</code>, <code>plot_model_fit_stochastic.R</code>, <code>plot_model_fit_stochastic_param.R</code>) but missed the fourth (<code>plot_model_fit.R</code>). The bug was latent because <code>plot_model_fit()</code> was temporarily unused by <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> at the time. Nine releases later (v0.22.15) the function was re-wired into the best-model block and the stale <code>expected_cases</code> reference started rendering inflated predicted lines against observed surveillance points — best-model plots looked catastrophically wrong while the ensemble plot (which used <code>reported_cases</code>) looked fine. Lesson: when renaming a field or changing a semantic convention across similar functions, grep exhaustively (e.g. <code>grep -l "old_name" R/</code>) and list every file in the commit message. Do not skip temporarily-unused functions — the bug becomes real the moment they are re-wired. Prefer consolidating into a single shared code path over maintaining N parallel functions that must be updated in lockstep; this fix retired <code>plot_model_fit()</code> and routes best/medioid plots through the parameterized <code><a href="reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> for exactly this reason (v0.29.2 fix)</li>
 </ol></div>
 </div>
 </div>

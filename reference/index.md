@@ -86,6 +86,9 @@ Estimation and fitting functions
 - [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
   : Estimate V1/V2 Initial-Condition Beta Priors from OCV Campaign
   History
+- [`est_kappa_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_kappa_prior.md)
+  : Estimate Prior Distribution for Environmental Half-Saturation
+  Constant (kappa)
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
@@ -99,6 +102,13 @@ Estimation and fitting functions
   : Estimate OCV Vaccination Rates
 - [`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
   : Estimate Vaccine Effectiveness Decay Parameters
+- [`est_zeta_1_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_1_prior.md)
+  : Estimate Prior Distribution for Symptomatic Shedding Rate (zeta_1)
+- [`est_zeta_2_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_2_prior.md)
+  : Estimate Prior Distribution for Asymptomatic Shedding Rate (zeta_2)
+- [`est_zeta_ratio_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_ratio_prior.md)
+  : Estimate Prior Distribution for the Shedding Ratio (zeta_ratio =
+  zeta_1 / zeta_2)
 - [`fit_beta_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_from_ci.md)
   : Fit Beta Distribution from Mode and 95% Confidence Intervals
 - [`fit_beta_safe()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_safe.md)
@@ -286,8 +296,6 @@ Plotting functions
   : Plot Multi-Method Parameter Distributions
 - [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
   : Plot Ensemble Predictions from a mosaic_ensemble Object
-- [`plot_model_fit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit.md)
-  : Plot Model Fit: Timeseries of Predicted vs Observed
 - [`plot_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_likelihood.md)
   : Plot Model Likelihood Curve
 - [`plot_model_parameter_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_correlation.md)
@@ -306,6 +314,8 @@ Plotting functions
   : Plot MOSAIC Country Map
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
   : Display a Color Palette as Swatches
+- [`plot_psi_star_diagnostic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_psi_star_diagnostic.md)
+  : Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ\*)
 - [`plot_recovery_duration()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.md)
   : Plot recovery durations and rates for symptomatic and asymptomatic
   infections
@@ -665,6 +675,9 @@ Other exported functions and internal helpers
 - [`est_initial_V1_V2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_initial_V1_V2.md)
   : Estimate V1/V2 Initial-Condition Beta Priors from OCV Campaign
   History
+- [`est_kappa_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_kappa_prior.md)
+  : Estimate Prior Distribution for Environmental Half-Saturation
+  Constant (kappa)
 - [`est_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_mobility.md)
   : Fit Mobility Model Using Flight Data and Distance Matrices
 - [`est_seasonal_dynamics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_seasonal_dynamics.md)
@@ -678,6 +691,13 @@ Other exported functions and internal helpers
   : Estimate OCV Vaccination Rates
 - [`est_vaccine_effectiveness()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_vaccine_effectiveness.md)
   : Estimate Vaccine Effectiveness Decay Parameters
+- [`est_zeta_1_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_1_prior.md)
+  : Estimate Prior Distribution for Symptomatic Shedding Rate (zeta_1)
+- [`est_zeta_2_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_2_prior.md)
+  : Estimate Prior Distribution for Asymptomatic Shedding Rate (zeta_2)
+- [`est_zeta_ratio_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_zeta_ratio_prior.md)
+  : Estimate Prior Distribution for the Shedding Ratio (zeta_ratio =
+  zeta_1 / zeta_2)
 - [`estimated_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/estimated_parameters.md)
   : Estimated Parameters Inventory
 - [`extract_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/extract_sampling_metadata.md)
@@ -868,8 +888,6 @@ Other exported functions and internal helpers
   : Plot Multi-Method Parameter Distributions
 - [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
   : Plot Ensemble Predictions from a mosaic_ensemble Object
-- [`plot_model_fit()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_fit.md)
-  : Plot Model Fit: Timeseries of Predicted vs Observed
 - [`plot_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_likelihood.md)
   : Plot Model Likelihood Curve
 - [`plot_model_parameter_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_correlation.md)
@@ -888,6 +906,8 @@ Other exported functions and internal helpers
   : Plot MOSAIC Country Map
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
   : Display a Color Palette as Swatches
+- [`plot_psi_star_diagnostic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_psi_star_diagnostic.md)
+  : Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ\*)
 - [`plot_recovery_duration()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.md)
   : Plot recovery durations and rates for symptomatic and asymptomatic
   infections

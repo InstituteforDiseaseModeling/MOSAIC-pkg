@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -141,7 +141,13 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 
 
 <dt id="arg-predictions">predictions<a class="anchor" aria-label="anchor" href="#arg-predictions"></a></dt>
-<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>ensemble_n_sims_per_param</code>: Stochastic runs per parameter set (default: 5L)</p></li>
+<dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>n_iter_ensemble</code>: Stochastic runs per posterior parameter set
+in the weighted ensemble (default: 10L). Total ensemble sims =
+N parameter sets x <code>n_iter_ensemble</code>.</p></li>
+<li><p><code>n_iter_best</code>: Stochastic runs for the best and medioid single-config
+prediction plots (default: 100L). Applied identically to both models.
+These runs execute on an internal PSOCK cluster when
+<code>parallel$enable = TRUE</code>.</p></li>
 <li><p><code>optimize_subset</code>: Logical; when <code>TRUE</code>, the post-ensemble
 optimizer (MAE / WIS / R²+bias) refines the best subset used for
 <code>posteriors.json</code>, <code>posterior_quantiles.csv</code>, and the ensemble

@@ -366,3 +366,25 @@ before starting work — they represent patterns to actively avoid.
     during a refactor — the function still existed but the call site was
     dropped, so the likelihood curve diagnostic plot stopped being
     generated without any error or warning (v0.22.17 fix)
+11. v0.14.22 fixed the `expected_cases` → `reported_cases` field rename
+    in three sibling plotting functions (`plot_model_ppc.R`,
+    `plot_model_fit_stochastic.R`, `plot_model_fit_stochastic_param.R`)
+    but missed the fourth (`plot_model_fit.R`). The bug was latent
+    because `plot_model_fit()` was temporarily unused by
+    [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    at the time. Nine releases later (v0.22.15) the function was
+    re-wired into the best-model block and the stale `expected_cases`
+    reference started rendering inflated predicted lines against
+    observed surveillance points — best-model plots looked
+    catastrophically wrong while the ensemble plot (which used
+    `reported_cases`) looked fine. Lesson: when renaming a field or
+    changing a semantic convention across similar functions, grep
+    exhaustively (e.g. `grep -l "old_name" R/`) and list every file in
+    the commit message. Do not skip temporarily-unused functions — the
+    bug becomes real the moment they are re-wired. Prefer consolidating
+    into a single shared code path over maintaining N parallel functions
+    that must be updated in lockstep; this fix retired
+    `plot_model_fit()` and routes best/medioid plots through the
+    parameterized
+    [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+    for exactly this reason (v0.29.2 fix)

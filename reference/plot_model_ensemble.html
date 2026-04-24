@@ -13,7 +13,7 @@ per-location prediction CSVs for downstream use."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,6 +57,9 @@ per-location prediction CSVs for downstream use.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_model_ensemble</span><span class="op">(</span></span>
 <span>  <span class="va">ensemble</span>,</span>
 <span>  <span class="va">output_dir</span>,</span>
+<span>  data_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  file_prefix <span class="op">=</span> <span class="st">"ensemble"</span>,</span>
+<span>  title_label <span class="op">=</span> <span class="st">"Posterior Ensemble"</span>,</span>
 <span>  save_predictions <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -72,8 +75,28 @@ per-location prediction CSVs for downstream use.</p>
 
 
 <dt id="arg-output-dir">output_dir<a class="anchor" aria-label="anchor" href="#arg-output-dir"></a></dt>
-<dd><p>Character. Directory where plots and CSVs are saved.
-Created if it does not exist.</p></dd>
+<dd><p>Character. Directory where plots are saved (and CSVs,
+when <code>data_dir</code> is not provided). Created if it does not exist.</p></dd>
+
+
+<dt id="arg-data-dir">data_dir<a class="anchor" aria-label="anchor" href="#arg-data-dir"></a></dt>
+<dd><p>Character. Directory where per-location prediction CSVs
+are written when <code>save_predictions = TRUE</code>. Defaults to
+<code>output_dir</code> for backwards compatibility. Pass a separate path
+(e.g. <code>3_results/predictions</code>) to keep CSVs out of the figures
+tree. Created if it does not exist.</p></dd>
+
+
+<dt id="arg-file-prefix">file_prefix<a class="anchor" aria-label="anchor" href="#arg-file-prefix"></a></dt>
+<dd><p>Character. Prefix used in output filenames:
+<code>predictions_&lt;prefix&gt;_&lt;LOC&gt;.pdf/csv</code> for per-location outputs and
+<code>predictions_&lt;prefix&gt;_cases_all.pdf</code> / <code>_deaths_all.pdf</code> for
+multi-location overview plots. Default <code>"ensemble"</code>.</p></dd>
+
+
+<dt id="arg-title-label">title_label<a class="anchor" aria-label="anchor" href="#arg-title-label"></a></dt>
+<dd><p>Character. Leading label used in plot titles
+(<code>"&lt;title_label&gt;: &lt;LOC&gt;"</code>). Default <code>"Posterior Ensemble"</code>.</p></dd>
 
 
 <dt id="arg-save-predictions">save_predictions<a class="anchor" aria-label="anchor" href="#arg-save-predictions"></a></dt>

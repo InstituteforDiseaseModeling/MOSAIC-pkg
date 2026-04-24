@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.28.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,167 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.0" id="mosaic-0300">MOSAIC 0.30.0<a class="anchor" aria-label="anchor" href="#mosaic-0300"></a></h2>
+<div class="section level3">
+<h3 id="route-per-location-prediction-csvs-to_resultspredictions-0-30-0">Route per-location prediction CSVs to <code>3_results/predictions/</code>
+<a class="anchor" aria-label="anchor" href="#route-per-location-prediction-csvs-to_resultspredictions-0-30-0"></a></h3>
+<p>Previously <code>plot_model_ensemble(save_predictions = TRUE)</code> wrote per-location CSVs (<code>predictions_&lt;type&gt;_&lt;LOC&gt;.csv</code>) to its <code>output_dir</code>, which <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> sets to <code>3_results/figures/predictions/</code> — mixing data files into a tree meant for figures. The combining step then wrote <code>predictions_&lt;type&gt;_all.csv</code> into <code>3_results/predictions/</code>, a byte-identical duplicate when the run covers a single location.</p>
+<p>This release:</p>
+<ol style="list-style-type: decimal"><li>
+<strong>Separate data/figures trees.</strong> Added <code>data_dir</code> argument to <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code>. When provided, per-location CSVs are written there instead of <code>output_dir</code>. <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> passes <code>data_dir = dirs$res_predictions</code> at all three call sites (best, medioid, ensemble). <code>figures/predictions/</code> now holds PDFs only.</li>
+<li>
+<strong>Combining step reads from <code>predictions/</code></strong> (the new canonical location) instead of <code>figures/predictions/</code>. Regex excludes <code>*_all.csv</code> so the combine pass ignores its own output.</li>
+<li>
+<strong>Single-location runs no longer emit <code>_all.csv</code>.</strong> When only one per-location CSV exists, the canonical file is the per-location CSV itself — no <code><a href="https://rdrr.io/r/base/files.html" class="external-link">file.copy()</a></code> to a byte-identical <code>_all.csv</code>. <code>_all.csv</code> is written only for multi-location runs where there’s genuine concatenation happening.</li>
+<li>
+<strong><code><a href="../reference/plot_model_ppc.html">plot_model_ppc()</a></code></strong> now reads from <code>dirs$res_predictions</code> rather than <code>dirs$res_fig_pred</code> (auto-discovery still works; the function’s docstring example updated to match).</li>
+</ol><p>Backwards-compatibility: <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> defaults <code>data_dir = NULL</code>, which falls back to <code>output_dir</code> — external callers of the function keep working unchanged.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.9" id="mosaic-0299">MOSAIC 0.29.9<a class="anchor" aria-label="anchor" href="#mosaic-0299"></a></h2>
+<div class="section level3">
+<h3 id="priorposterior-panels-draw-mode-vlines-for-every-method-in-every-panel-0-29-9">Prior/posterior panels: draw mode vlines for every method in every panel<a class="anchor" aria-label="anchor" href="#priorposterior-panels-draw-mode-vlines-for-every-method-in-every-panel-0-29-9"></a></h3>
+<p>Dashed central-tendency lines in <code>distributions_*_Prior_Posterior.pdf</code> panels now:</p>
+<ol style="list-style-type: decimal"><li>Mark the <strong>mode</strong> of the plotted density (argmax of the displayed curve) rather than the mean (v0.29.4 and earlier) or median (v0.29.8). On a log-scale axis the mode corresponds to <code>exp(meanlog)</code> for a lognormal (= median of X, the visible peak of the log10-density bell). On a linear axis the mode corresponds to the classical mode of X (e.g. <code>(s1-1)/(s1+s2-2)</code> for a Beta with <code>s1&gt;1</code> and <code>s2&gt;1</code>). Computed directly from <code>x[which.max(y)]</code> on the grid, so it always aligns with the visible peak regardless of axis.</li>
+<li>Draw for <strong>every method</strong> in every panel, not just the ones whose center falls inside the data range. The previous <code>line_val &gt;= x_range[1] &amp;&amp; line_val &lt;= x_range[2]</code> gate occasionally suppressed a line when the mean of a skewed distribution fell outside the plotted support. Lines are drawn unconditionally now — ggplot extends the axis if the mode sits outside the density’s effective range.</li>
+</ol><p>Near-delta distributions demoted to <code>fixed_values</code> vlines (v0.29.8) still render as solid lines at the median, so the prior/posterior marks remain visually distinct when one method is effectively a point estimate.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.8" id="mosaic-0298">MOSAIC 0.29.8<a class="anchor" aria-label="anchor" href="#mosaic-0298"></a></h2>
+<div class="section level3">
+<h3 id="fix-vertical-line-alignment-near-delta-posteriors-and-add-beta_j0_tot-to-log-scale-0-29-8">Fix vertical-line alignment, near-delta posteriors, and add beta_j0_tot to log scale<a class="anchor" aria-label="anchor" href="#fix-vertical-line-alignment-near-delta-posteriors-and-add-beta_j0_tot-to-log-scale-0-29-8"></a></h3>
+<p>Three follow-ups to the log-scale posterior plotting in v0.29.6/0.29.7:</p>
+<ol style="list-style-type: decimal"><li><p><strong>Mean vertical lines were misaligned with the visible peak on log-x.</strong> For a wide lognormal the arithmetic mean <code>exp(meanlog + sdlog²/2)</code> sits many decades to the right of the density peak on the log10 axis (the peak is at the median <code>exp(meanlog)</code>). For zeta_ratio prior the mean was ~15,000× to the right of the visible peak. Fix: for log-scale params the dashed central-tendency line is now drawn at the median (<code>qbeta(0.5, ...)</code> for Beta, <code>exp(meanlog)</code> for lognormal). Linear-axis params still use the mean as before.</p></li>
+<li><p><strong>prop_E_initial / prop_I_initial prior curves collapsed to flat lines.</strong> The posterior Beta(62199, 6e11) has a 0.008-decade effective support — a near-delta distribution whose peak density on log10-axis is ~600× larger than the prior’s. On shared y-axis the wider prior rendered as a flat line. Fix: distributions with <code>log10(q_0.99) - log10(q_0.01) &lt; 0.05</code> on log-scale axes are demoted to a solid vertical line at the median (matching the <code>fixed_values</code> styling), letting the wider prior/posterior set the y-axis scale.</p></li>
+<li><p><strong>Added beta_j0_tot to the log-scale list.</strong> <code>beta_j0_tot</code> is lognormal(meanlog=-10.8, sdlog=2.0), a 3.4-decade span — a natural log-scale candidate, missed in v0.29.6.</p></li>
+</ol><hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.7" id="mosaic-0297">MOSAIC 0.29.7<a class="anchor" aria-label="anchor" href="#mosaic-0297"></a></h2>
+<div class="section level3">
+<h3 id="fix-collapsed-posteriors-on-log-scale-priorposterior-plots-0-29-7">Fix collapsed posteriors on log-scale prior/posterior plots<a class="anchor" aria-label="anchor" href="#fix-collapsed-posteriors-on-log-scale-priorposterior-plots-0-29-7"></a></h3>
+<p>The v0.29.6 log-scale switch in <code><a href="../reference/plot_model_distributions.html">plot_model_distributions()</a></code> plotted <code>dlnorm(x, ...)</code> (density w.r.t. <code>x</code>) against a log-x axis. Linear-space densities for wide lognormals shrink with scale — e.g. the zeta_ratio posterior in MOZ_s1_explore_v2 has a peak <code>dlnorm</code> of 9.9e-7 vs the prior at 8.1 (7 orders of magnitude smaller). On a shared linear y-axis the posterior flattened to a line at zero.</p>
+<p>Fix is the standard change of variables for density on a log axis: for <code>Y = log10(X)</code>,</p>
+<p><code>f_Y(log10(x)) = f_X(x) · x · ln(10)</code></p>
+<p>Applied to the lognormal and beta branches whenever the param is on log-scale. For lognormal, this is equivalent to <code>dnorm(log10(x), meanlog/ln(10), sdlog/ln(10))</code> — the same symmetric-bell convention used in <code>est_kappa_prior.R:281</code>.</p>
+<p>After the fix, the zeta_1 and zeta_ratio posteriors for the MOZ run now render as visible curves rather than collapsed lines. Peak heights are comparable across prior/posterior (all in the 0.2–0.4 range for zeta_* on the log10 density scale) regardless of where mass sits on the x-axis.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.6" id="mosaic-0296">MOSAIC 0.29.6<a class="anchor" aria-label="anchor" href="#mosaic-0296"></a></h2>
+<div class="section level3">
+<h3 id="log-scale-x-axis-for-wide-span-parameters-in-global-priorposterior-plots-0-29-6">Log-scale x-axis for wide-span parameters in global prior/posterior plots<a class="anchor" aria-label="anchor" href="#log-scale-x-axis-for-wide-span-parameters-in-global-priorposterior-plots-0-29-6"></a></h3>
+<p><code><a href="../reference/plot_model_distributions.html">plot_model_distributions()</a></code> renders prior vs. posterior densities for all global parameters into <code>distributions_global_Prior_Posterior.pdf</code>. Parameters with multi-order-of-magnitude support (lognormal <code>kappa</code>, <code>zeta_1</code>, <code>zeta_2</code>, <code>zeta_ratio</code>; heavily left-skewed Beta priors on <code>prop_E_initial</code>, <code>prop_I_initial</code>) previously rendered on a linear x-axis — the distribution looked like a spike at zero with an invisible right tail, wasting the panel and hiding the posterior shape.</p>
+<p>This release switches those six panels to <code><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_log10()</a></code> with <code>annotation_logticks(sides = "b")</code>, matching the styling already used in <code>est_kappa_prior.R:375</code> for the <code>kappa_prior.png</code> forest/density plots. Density grids for these params are now log-spaced (<code>exp(seq(log(x_min), log(x_max), ...))</code>) so the rendered curve is smooth across the full log range rather than linear-clumped at the right edge.</p>
+<p><strong>Log-scale params:</strong> <code>kappa</code>, <code>zeta_1</code>, <code>zeta_2</code>, <code>zeta_ratio</code>, <code>prop_E_initial</code>, <code>prop_I_initial</code>.</p>
+<p><strong>Unchanged:</strong> All Beta priors on [0,1] probabilities, truncnorm priors on bounded absolute ranges, and narrow-span lognormal/gamma priors still use linear x.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.5" id="mosaic-0295">MOSAIC 0.29.5<a class="anchor" aria-label="anchor" href="#mosaic-0295"></a></h2>
+<div class="section level3">
+<h3 id="bestmedioid-prediction-plots-independent-n_iter-and-parallel-execution-0-29-5">Best/medioid prediction plots: independent <code>n_iter</code> and parallel execution<a class="anchor" aria-label="anchor" href="#bestmedioid-prediction-plots-independent-n_iter-and-parallel-execution-0-29-5"></a></h3>
+<p>Best and medioid single-config prediction plots previously reused <code>ensemble_n_sims_per_param</code> (default 5, sequential) because they were refactored into <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> in 0.29.2 without giving them their own iteration control. For tight stochastic CI envelopes on the best/medioid plots, users had to bump the ensemble count — paying the cost across all N posterior parameter sets.</p>
+<p>This release splits the two:</p>
+<ul><li>
+<code>control$predictions$n_iter_ensemble</code> (default <strong>10L</strong>) — stochastic runs per posterior parameter set in the weighted ensemble. Renamed from <code>ensemble_n_sims_per_param</code>.</li>
+<li>
+<code>control$predictions$n_iter_best</code> (default <strong>100L</strong>) — stochastic runs for the best and medioid single-config plots. Applied identically to both models.</li>
+</ul><p>Best/medioid now also run in parallel: <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> is invoked with <code>parallel = control$parallel$enable</code> and <code>n_cores = control$parallel$n_cores</code> (previously hardcoded <code>parallel = FALSE</code>). Parallelization uses an internal PSOCK cluster — same infrastructure the posterior ensemble already uses in the non-Dask path. For Dask calibrations, the best/medioid step still uses local PSOCK since the Dask cluster is closed after the posterior-ensemble sims.</p>
+<p><strong>Breaking rename:</strong> <code>control$predictions$ensemble_n_sims_per_param</code> → <code>control$predictions$n_iter_ensemble</code>. User scripts (<code>vm/</code>, <code>azure/</code>, vignettes) updated accordingly. Existing scripts setting <code>best_model_n_sims</code> (previously an orphaned no-op control field) migrate to <code>n_iter_best</code> and are now wired in.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.3" id="mosaic-0293">MOSAIC 0.29.3<a class="anchor" aria-label="anchor" href="#mosaic-0293"></a></h2>
+<div class="section level3">
+<h3 id="unified-stochastic-median-r²-and-bias-across-best-medioid-and-ensemble-0-29-3">Unified stochastic-median R² and bias across best, medioid, and ensemble<a class="anchor" aria-label="anchor" href="#unified-stochastic-median-r%C2%B2-and-bias-across-best-medioid-and-ensemble-0-29-3"></a></h3>
+<p>Follow-up to 0.29.2. The 0.29.2 fix routed the best and medioid prediction <strong>plots</strong> through <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> + <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> so the plot captions report R²/bias from the stochastic median. But the separate <code>"Best model R²"</code> / <code>"Medioid model R²"</code> <strong>log lines</strong> still came from a single deterministic <code>lc$run_model()</code> call, producing two different numbers for the same thing (log vs plot caption). Red-team review flagged the inconsistency.</p>
+<p>This release eliminates the separate deterministic LASER calls for best/medioid and sources all three sets of reported metrics — best, medioid, ensemble — from the stochastic median of their respective <code>mosaic_ensemble</code> objects:</p>
+<ul><li>
+<code>R/run_MOSAIC.R</code> best-model block reordered: <code>calc_model_ensemble(configs = list(config_best), ...)</code> is called once; R²/bias are computed from <code>best_ensemble$cases_median</code> / <code>$deaths_median</code> and passed to both the log line and downstream <code>summary.json</code>. Same refactor applied to the medioid block.</li>
+<li>Log format now: <code>"Best model R² (1 params x N stoch): cases = X (bias=Y), deaths = ..."</code> — mirrors the existing ensemble log format.</li>
+<li>Removes two per-run LASER calls (the single deterministic <code>best_model &lt;-</code> and <code>medioid_model &lt;-</code> runs) that are no longer needed; best/medioid each now run <code>n_ensemble_stochastic_per</code> LASER sims total (default 10), same as before the 0.29.2 fix <em>plus</em> plot but minus the deterministic R² helper run.</li>
+<li>Retires the <code>lc &lt;- reticulate::import(...)</code> import in the main <code>run_MOSAIC</code> body — <code>calc_model_ensemble</code> handles the import internally.</li>
+</ul><p>No public API changes.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.2" id="mosaic-0292">MOSAIC 0.29.2<a class="anchor" aria-label="anchor" href="#mosaic-0292"></a></h2>
+<div class="section level3">
+<h3 id="fix-bestmedioid-prediction-plots-reported_cases-stochastic-ci-unified-naming-0-29-2">Fix best/medioid prediction plots: <code>reported_cases</code>, stochastic CI, unified naming<a class="anchor" aria-label="anchor" href="#fix-bestmedioid-prediction-plots-reported_cases-stochastic-ci-unified-naming-0-29-2"></a></h3>
+<p><code>plot_model_fit()</code> (used by the best-model and medioid-model plots in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>) rendered <code>model$results$expected_cases</code> — the back-calculated burden <code>new_symptomatic / rho</code>, typically 5-10x inflated vs surveillance-comparable cases. Every other part of the pipeline (likelihood, R², ensemble) used <code>model$results$reported_cases = Isym * rho / chi_eff</code>. The v0.14.22 commit that renamed <code>expected_cases</code> → <code>reported_cases</code> in sibling plotting functions missed this fourth file; the bug was latent until v0.22.15 re-wired <code>plot_model_fit()</code> into the best-model block, and real from v0.22.15 through v0.29.1.</p>
+<p><strong>Fix consolidates best/medioid plots into the existing <code>calc_model_ensemble</code> + <code>plot_model_ensemble</code> pipeline</strong> — the same functions the posterior ensemble uses — in single-config mode (one parameter set × N stochastic reruns). One codepath for all three plot types eliminates the parallel-implementation drift that caused the original bug.</p>
+<p><strong>Changes:</strong></p>
+<ul><li>
+<code>R/plot_model_ensemble.R</code>: new <code>file_prefix</code> (default <code>"ensemble"</code>) and <code>title_label</code> (default <code>"Posterior Ensemble"</code>) parameters; hardcoded filename and title strings replaced; single-param-set subtitle branch added.</li>
+<li>
+<code>R/run_MOSAIC.R</code>: best and medioid plot calls replaced with <code>calc_model_ensemble(configs = list(config_&lt;...&gt;), n_simulations_per_config = n_ensemble_stochastic_per, envelope_quantiles = c(0.025, 0.975))</code> + <code>plot_model_ensemble(file_prefix = "best" | "medioid", ...)</code>. Medioid output moved from <code>2_calibration/best_model/</code> to <code>3_results/figures/predictions/</code> alongside the ensemble plots. Explicit <code>file_prefix = "ensemble"</code> added at the main ensemble plot call for self-documentation.</li>
+<li>Prediction-CSV combining loop extended to iterate <code>c("ensemble", "best", "medioid", "stochastic")</code> and filename pattern renamed from <code>all_predictions_&lt;type&gt;.csv</code> → <code>predictions_&lt;type&gt;_all.csv</code> for consistency with the plot naming.</li>
+<li>
+<code>R/plot_model_fit.R</code>: deleted (retired). The function was the single source of the drift bug and had no internal callers after the refactor.</li>
+</ul><p><strong>Output naming</strong> (all under <code>3_results/figures/predictions/</code> unless noted):</p>
+<ul><li>
+<code>predictions_&lt;prefix&gt;_&lt;LOC&gt;.pdf</code> + <code>.csv</code> per-location (prefixes: <code>ensemble</code>, <code>best</code>, <code>medioid</code>)</li>
+<li>
+<code>predictions_&lt;prefix&gt;_cases_all.pdf</code>, <code>predictions_&lt;prefix&gt;_deaths_all.pdf</code> faceted multi-location overviews</li>
+<li>
+<code>predictions_&lt;type&gt;_all.csv</code> combined across locations (in <code>3_results/predictions/</code>)</li>
+</ul><p><strong>Lesson recorded</strong> in <code>CLAUDE.md</code> (item 11): when renaming a field across sibling functions, grep exhaustively; do not skip temporarily-unused functions; prefer consolidating into one shared code path over maintaining N parallel implementations that must be updated in lockstep.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.1" id="mosaic-0291">MOSAIC 0.29.1<a class="anchor" aria-label="anchor" href="#mosaic-0291"></a></h2>
+<div class="section level3">
+<h3 id="bias-corrections--zeta_ratio-channel-switch-follow-up-to-0-29-1">Bias corrections + zeta_ratio channel switch (follow-up to 0.29.0)<a class="anchor" aria-label="anchor" href="#bias-corrections--zeta_ratio-channel-switch-follow-up-to-0-29-1"></a></h3>
+<p>Two changes landed together in this patch:</p>
+<ol style="list-style-type: decimal"><li><p><strong><code>zeta_ratio</code> default switched from combined (C) to direct literature-anchor channel (A).</strong> The combined precision-weighted fit at median 2.16e5 was pulled high by the derived-from-marginals channel (~1.15e6), overestimating the per-day asymptomatic:symptomatic shedding asymmetry vs modelling-convention + household-transmission evidence (Smith 2026 ~1.6x, Chao/Finger ~10). The direct channel is now what <code>make_priors_default.R</code> and <code>make_priors_default_MOZ.R</code> write into <code>priors_default$parameters_global$zeta_ratio</code>. The combined and derived fits remain available via <code>est_zeta_ratio_prior()$diagnostics$fit_combined</code> and <code>$fit_derived</code>.</p></li>
+<li><p><strong>Bias corrections to zeta_1.</strong> Code review identified several compounding upward biases in the v0.29.0 <code>zeta_1</code> fit. All are addressed here; <code>zeta_1</code> median drops from 3.72e11 to 1.39e11 (mode ÷66).</p></li>
+</ol><p><strong>Corrections applied:</strong> * <code>R/est_zeta_1_prior.R</code>: V_sev central value lowered from 8 L/day to 4 L/day (time-averaged over the 1-2 week clinical course rather than first-24-h peak rate from Harris 2012); V_mod 4 -&gt; 2 L/day; V_mild 500 -&gt; 300 mL/day. Mild concentration lowered from 10^6 to 10^5 cells/mL (non-rice-water stool). Nelson 2020, Kaper 1995, and Harris 2012 downweighted from 0.50 to 0.10 (reviews that cite the same Nelson-era primary data, not independent measurements). Endemic and outbreak severity-weighted pool rows given weight 0 (they are derived quantities of rows 1/4/5 and including them was triple-counting the severe class). * <code>R/est_zeta_2_prior.R</code>: Kaper rows downweighted from 0.25 to 0.10 (review overlap). * <code>R/est_zeta_ratio_prior.R</code> direct channel: Nelson 2009 paired weight 1.00 -&gt; 0.30 (value 10^5 is a stool concentration ratio, not a per-day rate ratio - unit-inconsistent with zeta_ratio). Kaper and Harris paired rows 0.25 -&gt; 0.10 (review overlap).</p>
+<p><strong>Net prior shifts (main = MOZ):</strong> * <code>zeta_1</code>: LN(26.64, 1.69) -&gt; LN(25.65, 2.46); median 3.72e11 -&gt; 1.39e11; mode 2.15e10 -&gt; <strong>3.29e8</strong> (the config point estimate uses the mode). * <code>zeta_2</code>: LN(12.69, 2.00) -&gt; LN(12.30, 2.00); median 3.23e5 -&gt; 2.20e5. * <code>zeta_ratio</code> direct channel: LN(6.64, 4.81) -&gt; LN(4.31, 4.39); median 763 -&gt; <strong>74.7</strong> (config point estimate uses median; mode is pathological for sdlog=4.39).</p>
+<p><strong>config_default and config_default_MOZ placeholders updated</strong> to reflect the new modes/medians.</p>
+<p><strong>Test updates:</strong> <code>tests/testthat/test-sample_parameters_zeta.R</code> coverage range for <code>zeta_1</code> widened from <code>(1e9, 1e14)</code> to <code>(1e8, 1e14)</code> to match the wider bias-corrected sdlog. All 18 zeta tests pass.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.29.0" id="mosaic-0290">MOSAIC 0.29.0<a class="anchor" aria-label="anchor" href="#mosaic-0290"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-prior-scale-shift-0-29-0">Breaking changes (prior scale shift)<a class="anchor" aria-label="anchor" href="#breaking-changes-prior-scale-shift-0-29-0"></a></h3>
+<ul><li>
+<strong><code>zeta_1</code>, <code>zeta_2</code>, and <code>zeta_ratio</code> priors are re-estimated from a literature meta-analysis</strong> (<code>R/est_zeta_1_prior.R</code>, <code>R/est_zeta_2_prior.R</code>, <code>R/est_zeta_ratio_prior.R</code>). The new priors encode the biological scale of <em>V. cholerae</em> shedding (cells per infected person per day) rather than the Frame-B LASER count-scale used by prior defaults. This is a ~6 order-of-magnitude upward shift on <code>zeta_1</code> (prior median moves from 70 000 to ~1e11-1e12 cells/person/day) and a corresponding re-centring of <code>zeta_ratio</code>. The previous defaults <code>LN(log(70 000), 0.8)</code> and <code>LN(log(300), 1.2)</code> are replaced by weighted-MLE lognormal fits on primary-source anchors (Nelson 2009, Merrell 2002, Harris 2012, Smith 2026 medRxiv, Kaper 1995, etc.).</li>
+<li>
+<strong><code>zeta_2</code> becomes a first-class prior.</strong> <code>priors_default$parameters_global$zeta_2</code> is now populated with the literature-derived lognormal. <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code> still derives the sampled <code>zeta_2 = zeta_1 / zeta_ratio</code> at sampling time (guarantees <code>zeta_1 &gt; zeta_2</code> algebraically); the stored <code>zeta_2</code> prior is the reference distribution used for validation and downstream diagnostics.</li>
+<li>
+<strong>Existing calibration posteriors are invalidated.</strong> The current <code>zeta_1</code> posterior centred at ~48 k has effectively probability 0 under the new prior. Every existing calibration artefact under <code>MOSAIC-Mozambique/output/calibration/</code> must be re-run with the new priors before use.</li>
+<li>
+<strong><code>config_default.rda</code> scale shift.</strong> <code>make_config_default.R</code> placeholder constants (<code>zeta_1</code>, <code>zeta_2</code>, <code>.zeta_ratio_default</code>) have been updated to the new prior medians. Any code that reads <code>config_default$zeta_*</code> expecting the old numeric scale will behave differently.</li>
+<li>
+<strong><code>config_default_MOZ.rda</code> scale shift.</strong> The same placeholder constants in <code>make_config_default_MOZ.R</code> have been updated.</li>
+<li>
+<strong>MOZ project override (stand-alone MOSAIC-Mozambique)</strong> uses its own <code>zeta_ratio</code> centre (50) independent of the pkg default. That override is unaffected; the MOZ team decides adoption there.</li>
+<li>
+<strong>LASER reservoir storage precision.</strong> At the new biological scale (<code>zeta_1 ~ 1e11</code>, <code>I_sym ~ 100</code>), the daily Poisson mean contribution to <code>W</code> reaches ~1e13 cells - far above float32’s exact-integer limit (~1.7e7). <strong><code>laser-cholera/src/laser/cholera/metapop/environmental.py</code> must widen <code>W</code> / <code>W_next</code> to float64 before this release can be merged.</strong> This is an EXTERNAL (READ-ONLY) laser-cholera change and is tracked as a pending prerequisite; until the dtype change lands, running <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> against the new priors will silently accumulate rounding error in the reservoir update each tick.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-functions-0-29-0">New functions<a class="anchor" aria-label="anchor" href="#new-functions-0-29-0"></a></h3>
+<ul><li>
+<code>est_zeta_1_prior(PATHS, severity_mix)</code> - weighted-MLE lognormal on symptomatic shedding anchors.</li>
+<li>
+<code>est_zeta_2_prior(PATHS)</code> - weighted-MLE lognormal on asymptomatic shedding anchors with hard <code>sdlog &gt;= 2.0</code> floor.</li>
+<li>
+<code>est_zeta_ratio_prior(PATHS, zeta_1_fit, zeta_2_fit, n_sim, seed)</code> - precision-weighted combination of direct-literature and derived paired-Monte-Carlo channels.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="migration-notes-0-29-0">Migration notes<a class="anchor" aria-label="anchor" href="#migration-notes-0-29-0"></a></h3>
+<ul><li>Rebuild priors: <code>source("data-raw/make_priors_default.R")</code>.</li>
+<li>Rebuild MOZ priors: <code>source("data-raw/make_priors_default_MOZ.R")</code>.</li>
+<li>Rebuild configs: <code>source("data-raw/make_config_default.R")</code> and <code>source("data-raw/make_config_default_MOZ.R")</code>.</li>
+<li>Downstream MOSAIC-docs figures with <code>zeta_*</code> axes must be regenerated.</li>
+<li>Re-run calibration for every production configuration before using outputs in interventions analyses.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.28.13" id="mosaic-02813">MOSAIC 0.28.13<a class="anchor" aria-label="anchor" href="#mosaic-02813"></a></h2>
 <div class="section level3">

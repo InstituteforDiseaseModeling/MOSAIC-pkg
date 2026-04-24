@@ -12,6 +12,9 @@ prediction CSVs for downstream use.
 plot_model_ensemble(
   ensemble,
   output_dir,
+  data_dir = NULL,
+  file_prefix = "ensemble",
+  title_label = "Posterior Ensemble",
   save_predictions = FALSE,
   verbose = TRUE
 )
@@ -26,8 +29,27 @@ plot_model_ensemble(
 
 - output_dir:
 
-  Character. Directory where plots and CSVs are saved. Created if it
-  does not exist.
+  Character. Directory where plots are saved (and CSVs, when `data_dir`
+  is not provided). Created if it does not exist.
+
+- data_dir:
+
+  Character. Directory where per-location prediction CSVs are written
+  when `save_predictions = TRUE`. Defaults to `output_dir` for backwards
+  compatibility. Pass a separate path (e.g. `3_results/predictions`) to
+  keep CSVs out of the figures tree. Created if it does not exist.
+
+- file_prefix:
+
+  Character. Prefix used in output filenames:
+  `predictions_<prefix>_<LOC>.pdf/csv` for per-location outputs and
+  `predictions_<prefix>_cases_all.pdf` / `_deaths_all.pdf` for
+  multi-location overview plots. Default `"ensemble"`.
+
+- title_label:
+
+  Character. Leading label used in plot titles
+  (`"<title_label>: <LOC>"`). Default `"Posterior Ensemble"`.
 
 - save_predictions:
 
