@@ -272,11 +272,19 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
   # styling with annotation_logticks). Density grids for these params are
   # log-spaced so the curve renders smoothly under scale_x_log10().
   log_scale_params <- c("kappa", "zeta_1", "zeta_2", "zeta_ratio",
-                        "prop_E_initial", "prop_I_initial")
+                        "prop_E_initial", "prop_I_initial",
+                        "beta_j0_tot")
+
+  # Distributions whose effective support (q_0.01, q_0.99) spans less than
+  # this many decades on a log-x axis are rendered as a vertical line at
+  # the median rather than a narrow density spike — the latter would
+  # dominate the y-axis and visually erase wider prior/posterior curves.
+  log_scale_point_decades <- 0.05
 
   # Helper function to calculate distribution density
   calc_distribution_density <- function(dist_data, param_name, param_info) {
-    x <- NULL; y <- NULL; dist_str <- NULL; mean_val <- NULL
+    x <- NULL; y <- NULL; dist_str <- NULL; mean_val <- NULL; median_val <- NULL
+    log10_width <- NA_real_   # Width in decades on log10-x; used to detect near-delta posteriors
     failure_reason <- NULL  # Track why density calculation failed
 
     distribution <- dist_data$distribution
@@ -342,6 +350,14 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           dist_str <- sprintf("Beta(%.1f, %.1f)", shape1, shape2)
         }
         mean_val <- if (!is.null(parameters$fitted_mean)) as.numeric(parameters$fitted_mean) else shape1 / (shape1 + shape2)
+        median_val <- tryCatch(qbeta(0.5, shape1, shape2), error = function(e) NA_real_)
+        if (param_name %in% log_scale_params) {
+          q_lo <- tryCatch(qbeta(0.01, shape1, shape2), error = function(e) NA_real_)
+          q_hi <- tryCatch(qbeta(0.99, shape1, shape2), error = function(e) NA_real_)
+          if (is.finite(q_lo) && is.finite(q_hi) && q_lo > 0 && q_hi > q_lo) {
+            log10_width <- log10(q_hi) - log10(q_lo)
+          }
+        }
       }
     } else if (distribution == "lognormal" && !is.null(parameters)) {
       # Handle both parameter naming conventions
@@ -415,6 +431,16 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
                 as.numeric(parameters$fitted_mean %||% parameters$mean)
               } else {
                 exp(meanlog_val + sdlog_val^2/2)
+              }
+              median_val <- exp(meanlog_val)
+              if (param_name %in% log_scale_params) {
+                # On a log-x axis, density_log10 peaks at the median (exp(meanlog))
+                # rather than the mean, which can sit decades away when sdlog is large.
+                q_lo <- qlnorm(0.01, meanlog_val, sdlog_val)
+                q_hi <- qlnorm(0.99, meanlog_val, sdlog_val)
+                if (is.finite(q_lo) && is.finite(q_hi) && q_lo > 0) {
+                  log10_width <- log10(q_hi) - log10(q_lo)
+                }
               }
             }
           }
@@ -502,7 +528,9 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
       }
     }
 
-    return(list(x = x, y = y, dist_str = dist_str, mean_val = mean_val, failure_reason = failure_reason))
+    return(list(x = x, y = y, dist_str = dist_str, mean_val = mean_val,
+                median_val = median_val, log10_width = log10_width,
+                failure_reason = failure_reason))
   }
 
   # =========================================================================
@@ -585,7 +613,22 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     for (method_name in names(param_distributions)) {
       result <- calc_distribution_density(param_distributions[[method_name]], param_name, param_info)
       if (!is.null(result$x) && !is.null(result$y)) {
-        method_results[[method_name]] <- result
+        # Near-delta distributions on log-x axis: the density spike would
+        # dominate the y-axis and erase any co-plotted wider distributions.
+        # Demote to a point marker drawn as a vline at the median.
+        if (param_name %in% log_scale_params &&
+            is.finite(result$log10_width) &&
+            result$log10_width < log_scale_point_decades &&
+            is.finite(result$median_val %||% NA_real_)) {
+          fixed_values[[method_name]] <- result$median_val
+          if (verbose) {
+            cat(sprintf("  [POINT] %s (%s): log10 width %.3f < %.2f, drawing as vline at median %.3e\n",
+                       param_name, method_name, result$log10_width,
+                       log_scale_point_decades, result$median_val))
+          }
+        } else {
+          method_results[[method_name]] <- result
+        }
       } else {
         if (verbose) {
           dist_type <- param_distributions[[method_name]]$distribution
@@ -726,14 +769,23 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
                                             long  = ggplot2::unit(0.15, "cm"))
     }
 
-    # Add mean lines for distributional posteriors
+    # Add central-tendency lines for distributional posteriors. For
+    # log-scale params the median (exp(meanlog) for lognormal, qbeta(0.5)
+    # for beta) aligns with the visible peak of the log10-density curve;
+    # the mean can sit many decades away when sdlog is large. For linear
+    # params the mean is the long-standing reference.
     for (method_name in names(method_results)) {
       result <- method_results[[method_name]]
-      if (!is.null(result$mean_val) && is.finite(result$mean_val) &&
+      line_val <- if (param_name %in% log_scale_params) {
+        if (!is.null(result$median_val) && is.finite(result$median_val)) result$median_val else result$mean_val
+      } else {
+        result$mean_val
+      }
+      if (!is.null(line_val) && is.finite(line_val) &&
           !param_distributions[[method_name]]$distribution %in% c("uniform")) {
         x_range <- range(plot_data$x, na.rm = TRUE)
-        if (result$mean_val >= x_range[1] && result$mean_val <= x_range[2]) {
-          p <- p + ggplot2::geom_vline(xintercept = result$mean_val, linetype = "dashed",
+        if (line_val >= x_range[1] && line_val <= x_range[2]) {
+          p <- p + ggplot2::geom_vline(xintercept = line_val, linetype = "dashed",
                              color = method_colors[method_name], alpha = 0.5)
         }
       }

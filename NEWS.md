@@ -1,3 +1,17 @@
+# MOSAIC 0.29.8
+
+## Fix vertical-line alignment, near-delta posteriors, and add beta_j0_tot to log scale
+
+Three follow-ups to the log-scale posterior plotting in v0.29.6/0.29.7:
+
+1. **Mean vertical lines were misaligned with the visible peak on log-x.** For a wide lognormal the arithmetic mean `exp(meanlog + sdlog²/2)` sits many decades to the right of the density peak on the log10 axis (the peak is at the median `exp(meanlog)`). For zeta_ratio prior the mean was ~15,000× to the right of the visible peak. Fix: for log-scale params the dashed central-tendency line is now drawn at the median (`qbeta(0.5, ...)` for Beta, `exp(meanlog)` for lognormal). Linear-axis params still use the mean as before.
+
+2. **prop_E_initial / prop_I_initial prior curves collapsed to flat lines.** The posterior Beta(62199, 6e11) has a 0.008-decade effective support — a near-delta distribution whose peak density on log10-axis is ~600× larger than the prior's. On shared y-axis the wider prior rendered as a flat line. Fix: distributions with `log10(q_0.99) - log10(q_0.01) < 0.05` on log-scale axes are demoted to a solid vertical line at the median (matching the `fixed_values` styling), letting the wider prior/posterior set the y-axis scale.
+
+3. **Added beta_j0_tot to the log-scale list.** `beta_j0_tot` is lognormal(meanlog=-10.8, sdlog=2.0), a 3.4-decade span — a natural log-scale candidate, missed in v0.29.6.
+
+---
+
 # MOSAIC 0.29.7
 
 ## Fix collapsed posteriors on log-scale prior/posterior plots
