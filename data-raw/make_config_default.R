@@ -379,15 +379,20 @@ default_args <- list(
      # v0.29.0: zeta_* defaults rescaled from the Frame-B 70k/300 scale to the
      # biological scale implied by the literature meta-analysis in
      # est_zeta_1_prior() / est_zeta_2_prior() / est_zeta_ratio_prior().
-     # Values are the MODES of the fitted priors (most probable value under
-     # LN(meanlog, sdlog); mode = exp(meanlog - sdlog^2)). Modes are used
-     # rather than medians because for the wide lognormals here (sdlog ~1.7-2.3)
-     # the median sits on the right-tail shoulder of the density.
-     zeta_1 = 2.148e10,    # Mode of LN(26.641, 1.688) = exp(26.641 - 1.688^2)
-     zeta_2 = 2.148e10 / 1.094e3,  # DERIVED at sampling time (= zeta_1/zeta_ratio);
+     # zeta_1 uses the MODE of its lognormal prior (mode = exp(meanlog - sdlog^2));
+     # zeta_ratio uses the MEDIAN of its direct-channel prior (exp(meanlog))
+     # because the direct-channel mode is pathological (~1e-7) due to the
+     # wide sdlog (4.807) reflecting the 5-OOM tension in direct literature.
+     zeta_1 = 3.29e8,      # Mode of LN(25.654, 2.458) = exp(25.654 - 2.458^2)
+                           # v0.29.1 bias-corrected (was 2.148e10 under
+                           # pre-correction LN(26.641, 1.688); new value
+                           # reflects lowered V_sev 8->4 L/day, lowered mild
+                           # concentration 10^6->10^5, removed derived pool
+                           # row, downweighted review sources)
+     zeta_2 = 3.29e8 / 74.69,      # DERIVED at sampling time (= zeta_1/zeta_ratio);
                                    # tracked placeholder so run_MOSAIC's
                                    # param_names_all picks it up for samples.parquet.
-                                   # Uses z1_mode/z_ratio_mode = 1.964e7.
+                                   # = z1_mode / z_ratio_median = 4.40e6
      kappa = 10^6,
      decay_days_short = 16, # Min V. cholerae survival (was 3; prior median 16, posteriors 15-48)
      decay_days_long = 200, # Max V. cholerae survival; DERIVED at sampling time from short + spread
@@ -402,7 +407,7 @@ config_default <- do.call(make_LASER_config, default_args)
 # Derived-parameter tracking fields not accepted by make_LASER_config signature.
 # Injected into config_default (and the written JSONs below) so run_MOSAIC's
 # convert_config_to_matrix picks them up for samples.parquet.
-.zeta_ratio_default <- 1.094e3      # Mode of LN(12.282, 2.299) = exp(12.282 - 2.299^2); was 300 (Frame B)
+.zeta_ratio_default <- 74.69        # Median of direct-channel LN(4.313, 4.394) = exp(4.313); v0.29.1 bias-corrected (was 763 pre-correction). Median (not mode) used because mode is pathological for sdlog=4.394.
 .decay_days_spread_default <- 184   # Spread; prior median 180 (decay_days_long = short + spread)
 
 # Add metadata for provenance tracking

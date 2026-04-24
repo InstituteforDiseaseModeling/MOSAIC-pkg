@@ -265,9 +265,10 @@ default_args <- list(
      psi_jt = psi_jt,
      # v0.29.0: zeta_* defaults rescaled from Frame-B 70k/300 to the biological
      # scale implied by est_zeta_*_prior() meta-analysis (priors_default v15.0).
-     # Values are the MODES of the fitted priors (mode = exp(meanlog - sdlog^2)).
-     zeta_1 = 2.148e10,    # Mode of LN(26.641, 1.688) = exp(26.641 - 1.688^2)
-     zeta_2 = 2.148e10 / 1.094e3, # v0.28.12: DERIVED at sampling time; tracked placeholder (= 1.964e7)
+     # zeta_1 uses MODE; zeta_ratio uses MEDIAN of the direct-channel prior
+     # (mode is pathological for direct sdlog=4.807).
+     zeta_1 = 3.29e8,      # Mode of LN(25.654, 2.458); v0.29.1 bias-corrected
+     zeta_2 = 3.29e8 / 74.69,     # v0.28.12: DERIVED at sampling time; tracked placeholder (= 4.40e6)
      kappa = 10^6,
      decay_days_short = 18,      # MOZ 7 best: 19.8 days
      decay_days_long = 365,      # Upper bound matches old prior U(30, 365); now derived from short+spread
@@ -282,7 +283,7 @@ config_default_MOZ <- do.call(make_LASER_config, default_args)
 # Derived-parameter tracking fields not accepted by make_LASER_config signature.
 # Injected into the rda and written JSONs below so run_MOSAIC's
 # convert_config_to_matrix picks them up for samples.parquet.
-.zeta_ratio_MOZ <- 1.094e3      # Mode of LN(12.282, 2.299) = exp(12.282 - 2.299^2); was 300 (Frame B)
+.zeta_ratio_MOZ <- 74.69        # Median of direct-channel LN(4.313, 4.394); v0.29.1 bias-corrected (was 763 pre-correction).
 .decay_days_spread_MOZ <- 347   # MOZ-specific spread (decay_days_long = short + spread)
 
 config_default_MOZ$metadata <- list(

@@ -501,23 +501,25 @@ priors_default$parameters_global$zeta_2 <- list(
 )
 
 # zeta_ratio - Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2).
-# UPDATED v0.29.0: Precision-weighted combination of (A) direct-literature
-# weighted-MLE (Smith 2026, Nelson 2009 paired, Chao 2011, Finger 2018,
-# Sugimoto 2014, etc.) and (B) paired Monte-Carlo derived from the fitted
-# zeta_1 / zeta_2 marginals with shared-Nelson bootstrap. See
-# plan_zeta_priors_implementation.md Section 7.
+# UPDATED v0.29.0: DIRECT literature-anchor channel only (A). The combined
+# channel (C) was switched off 2026-04-23 because its median ~2e5 overestimates
+# zeta_ratio relative to the modelling-convention + household-transmission
+# evidence (Smith 2026 ~1.6x, Chao/Finger ~10, etc.). The direct channel
+# takes Smith 2026, Nelson 2009 paired, Chao 2011, Finger 2018, Sugimoto
+# 2014, etc. as literature anchors (median 763, sdlog 4.807). See
+# plan_zeta_priors_implementation.md Section 7.2 (Table 7.A).
 # zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio. Guarantees zeta_1 > zeta_2
-# algebraically (P(zeta_ratio > 1) ~ 1 - 1e-6).
+# algebraically when zeta_ratio > 1.
 zeta_ratio_res <- MOSAIC::est_zeta_ratio_prior(
      PATHS,
      zeta_1_fit = zeta_1_res,   # full return list; .extract_fit() unwraps
      zeta_2_fit = zeta_2_res
 )
 priors_default$parameters_global$zeta_ratio <- list(
-     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); precision-weighted combination of direct-literature and derived-from-marginals channels",
+     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); direct literature-anchor channel (Smith 2026, Chao 2011, Finger 2018, Nelson 2009 paired, etc.)",
      distribution = "lognormal",
-     parameters = list(meanlog = zeta_ratio_res$fit$meanlog,
-                       sdlog   = zeta_ratio_res$fit$sdlog)
+     parameters = list(meanlog = zeta_ratio_res$diagnostics$fit_direct$meanlog,
+                       sdlog   = zeta_ratio_res$diagnostics$fit_direct$sdlog)
 )
 
 # delta_reporting_cases - Symptom-onset-to-case reporting delay

@@ -142,7 +142,7 @@ est_zeta_2_prior <- function(PATHS) {
           zeta_2         = c(1.5e5, 1.5e5, 1.5e7, NA),
           zeta_2_lo      = c(1.5e3, 1e4, 1e6, NA),
           zeta_2_hi      = c(1.5e7, 1e6, 1e8, NA),
-          weight         = c(1.00, 0.25, 0.25, 0.00),
+          weight         = c(1.00, 0.10, 0.10, 0.00),  # v0.29.1 bias-correction: Kaper rows 0.25 -> 0.10 (review only; overlaps Nelson primary)
           study_type     = c("Expert review", "Expert review",
                              "Expert review", "Expert review"),
           notes          = c("Only primary anchor; verbatim 'approximately 10^3 vibrios per gram of stool'",

@@ -1,7 +1,7 @@
 "variable_name","variable_description","parameter_distribution","i","j","t","parameter_name","parameter_value"
-"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"low",13579969932.9179
-"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"median",371520975865.942
-"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"mode",21482627969.3235
-"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"high",10164075192375.9
-"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","lognormal",NA,NA,NA,"meanlog",26.6408711621373
-"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","lognormal",NA,NA,NA,"sdlog",1.68830113371199
+"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"low",1119778592.80744
+"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"median",138500859661.563
+"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"mode",329139392.360977
+"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","point",NA,NA,NA,"high",17130608006087
+"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","lognormal",NA,NA,NA,"meanlog",25.6541423694972
+"zeta_1","Symptomatic shedding rate (V. cholerae cells per infected person per day)","lognormal",NA,NA,NA,"sdlog",2.45807861255676

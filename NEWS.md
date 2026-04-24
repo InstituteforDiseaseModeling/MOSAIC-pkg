@@ -1,3 +1,29 @@
+# MOSAIC 0.29.1
+
+## Bias corrections + zeta_ratio channel switch (follow-up to 0.29.0)
+
+Two changes landed together in this patch:
+
+1. **`zeta_ratio` default switched from combined (C) to direct literature-anchor channel (A).** The combined precision-weighted fit at median 2.16e5 was pulled high by the derived-from-marginals channel (~1.15e6), overestimating the per-day asymptomatic:symptomatic shedding asymmetry vs modelling-convention + household-transmission evidence (Smith 2026 ~1.6x, Chao/Finger ~10). The direct channel is now what `make_priors_default.R` and `make_priors_default_MOZ.R` write into `priors_default$parameters_global$zeta_ratio`. The combined and derived fits remain available via `est_zeta_ratio_prior()$diagnostics$fit_combined` and `$fit_derived`.
+
+2. **Bias corrections to zeta_1.** Code review identified several compounding upward biases in the v0.29.0 `zeta_1` fit. All are addressed here; `zeta_1` median drops from 3.72e11 to 1.39e11 (mode ÷66).
+
+**Corrections applied:**
+* `R/est_zeta_1_prior.R`: V_sev central value lowered from 8 L/day to 4 L/day (time-averaged over the 1-2 week clinical course rather than first-24-h peak rate from Harris 2012); V_mod 4 -> 2 L/day; V_mild 500 -> 300 mL/day. Mild concentration lowered from 10^6 to 10^5 cells/mL (non-rice-water stool). Nelson 2020, Kaper 1995, and Harris 2012 downweighted from 0.50 to 0.10 (reviews that cite the same Nelson-era primary data, not independent measurements). Endemic and outbreak severity-weighted pool rows given weight 0 (they are derived quantities of rows 1/4/5 and including them was triple-counting the severe class).
+* `R/est_zeta_2_prior.R`: Kaper rows downweighted from 0.25 to 0.10 (review overlap).
+* `R/est_zeta_ratio_prior.R` direct channel: Nelson 2009 paired weight 1.00 -> 0.30 (value 10^5 is a stool concentration ratio, not a per-day rate ratio - unit-inconsistent with zeta_ratio). Kaper and Harris paired rows 0.25 -> 0.10 (review overlap).
+
+**Net prior shifts (main = MOZ):**
+* `zeta_1`: LN(26.64, 1.69) -> LN(25.65, 2.46); median 3.72e11 -> 1.39e11; mode 2.15e10 -> **3.29e8** (the config point estimate uses the mode).
+* `zeta_2`: LN(12.69, 2.00) -> LN(12.30, 2.00); median 3.23e5 -> 2.20e5.
+* `zeta_ratio` direct channel: LN(6.64, 4.81) -> LN(4.31, 4.39); median 763 -> **74.7** (config point estimate uses median; mode is pathological for sdlog=4.39).
+
+**config_default and config_default_MOZ placeholders updated** to reflect the new modes/medians.
+
+**Test updates:** `tests/testthat/test-sample_parameters_zeta.R` coverage range for `zeta_1` widened from `(1e9, 1e14)` to `(1e8, 1e14)` to match the wider bias-corrected sdlog. All 18 zeta tests pass.
+
+---
+
 # MOSAIC 0.29.0
 
 ## Breaking changes (prior scale shift)

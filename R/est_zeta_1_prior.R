@@ -170,13 +170,24 @@ est_zeta_1_prior <- function(PATHS,
      #--------------------------------------------------------------------------
 
      # Severity-weighted pool (row 9) computed from severity_mix argument.
+     # v0.29.1 bias-corrected values (per plan_zeta_priors_implementation.md
+     # §4.3 revision):
+     #   - V_sev lowered from 8 L/day to 4 L/day (time-averaged over the
+     #     1-2 week clinical course rather than first-24-h peak rate)
+     #   - V_mod lowered from 4 L/day to 2 L/day (same rationale)
+     #   - V_mild lowered from 500 to 300 mL/day
+     #   - Mild concentration lowered from 10^6 to 10^5 cells/mL
+     #     (non-rice-water stool has substantially lower bacterial load)
      # Per-class central point estimates (cells per person per day):
-     #   severe:   10^8 cells/mL * 8000 mL/day = 8e11
-     #   moderate: 10^7 cells/mL * 4000 mL/day = 4e10
-     #   mild:     10^6 cells/mL *  500 mL/day = 5e8
-     zeta_sev_pt  <- 1e8 * 8000
-     zeta_mod_pt  <- 1e7 * 4000
-     zeta_mild_pt <- 1e6 * 500
+     #   severe:   10^8 cells/mL * 4000 mL/day = 4e11
+     #   moderate: 10^7 cells/mL * 2000 mL/day = 2e10
+     #   mild:     10^5 cells/mL *  300 mL/day = 3e7
+     # Note: rows 9 and 10 (pool rows) are kept in the table for the forest
+     # plot but excluded from the fit (weight 0) — they are derived quantities
+     # of rows 1, 4, 5 and including them was triple-counting the severe class.
+     zeta_sev_pt  <- 1e8 * 4000
+     zeta_mod_pt  <- 1e7 * 2000
+     zeta_mild_pt <- 1e5 * 300
      pool_endemic_pt <- severity_mix["severe"]   * zeta_sev_pt +
                        severity_mix["moderate"] * zeta_mod_pt +
                        severity_mix["mild"]     * zeta_mild_pt
@@ -202,8 +213,8 @@ est_zeta_1_prior <- function(PATHS,
                              "Nelson 2008 (Bangladesh acute)",
                              "Kirpich 2015 (Haiti)",
                              "Fung 2014 (population model)",
-                             "V_sev peak sensitivity (12 L/day)",
-                             "V_sev low sensitivity (6 L/day)",
+                             "V_sev high sensitivity (10 L/day)",
+                             "V_sev low sensitivity (1.5 L/day)",
                              "MOSAIC calibration posterior (Frame B)"),
           author_year    = c("Nelson et al. 2009; Harris et al. 2012",
                              "Merrell et al. 2002",
@@ -231,51 +242,57 @@ est_zeta_1_prior <- function(PATHS,
                              "Empirical"),
           # Stool concentration (cells per mL); NA for pool and posterior rows
           c              = c(1e8, 1e8, 3e8,
-                             1e7, 1e6,
+                             1e7, 1e5,
                              1e8, 1e8, 10^7.5,
                              NA, NA,
                              1e8, 1e8,
                              NA,
                              1e8, 1e8,
                              NA),
-          # Time-averaged stool volume (mL per day)
-          V              = c(8e3, 8e3, 8e3,
-                             4e3, 5e2,
-                             8e3, 8e3, 8e3,
+          # Time-averaged stool volume (mL per day) — averaged over the full
+          # 1-2 week clinical course, not first-24-h peak rate
+          V              = c(4e3, 4e3, 4e3,
+                             2e3, 3e2,
+                             4e3, 4e3, 4e3,
                              NA, NA,
-                             8e3, 8e3,
+                             4e3, 4e3,
                              NA,
-                             1.2e4, 6e3,
+                             1.0e4, 1.5e3,
                              NA),
-          # Point estimate of zeta_1 (cells per person per day)
-          zeta_1         = c(8e11, 8e11, 2.4e12,
-                             4e10, 5e8,
-                             8e11, 8e11, 2.5e11,
+          # Point estimate of zeta_1 (cells per person per day) = c * V
+          zeta_1         = c(4e11, 4e11, 1.2e12,
+                             2e10, 3e7,
+                             4e11, 4e11, 1.26e11,
                              pool_endemic_pt, pool_outbreak_pt,
-                             8e11, 8e11,
-                             1e10,
-                             1.2e12, 6e11,
+                             4e11, 4e11,
+                             1e9,
+                             1e12, 1.5e11,
                              5e4),
-          zeta_1_lo      = c(1e11, 1e11, 5e11,
-                             1e9, 1e7,
-                             1e10, 1e11, 1e10,
+          zeta_1_lo      = c(4e10, 4e10, 3e11,
+                             1e9, 1e6,
+                             1e10, 4e10, 1e10,
                              1e10, 1e10,
-                             1e11, 1e11,
+                             4e10, 4e10,
                              1e8,
                              1e11, 1e10,
                              2.7e4),
-          zeta_1_hi      = c(1e13, 1e13, 5e13,
-                             1e12, 1e10,
-                             1e14, 1e13, 1e13,
+          zeta_1_hi      = c(4e12, 4e12, 1.2e13,
+                             1e11, 1e9,
+                             1e13, 4e12, 1e12,
                              1e13, 1e13,
-                             1e13, 1e13,
-                             1e12,
-                             1e13, 1e12,
+                             4e12, 4e12,
+                             1e11,
+                             5e12, 1e12,
                              8.7e4),
-          weight         = c(1.00, 1.00, 0.50,
+          # v0.29.1 bias-corrected weights:
+          #   - Nelson 2020 (row 3): 0.50 -> 0.10 (community-consensus reference, not primary)
+          #   - Kaper 1995 (row 6):  0.50 -> 0.10 (review overlaps Nelson primary)
+          #   - Harris 2012 (row 7): 0.50 -> 0.10 (review overlaps Nelson primary)
+          #   - Pool rows 9, 10:     -> 0.00 (derived from rows 1/4/5 — avoid double-counting)
+          weight         = c(1.00, 1.00, 0.10,
                              0.50, 0.25,
-                             0.50, 0.50, 0.25,
-                             1.00, 0.25,
+                             0.10, 0.10, 0.25,
+                             0.00, 0.00,
                              0.25, 0.25,
                              0.10,
                              0.25, 0.25,
@@ -392,19 +409,19 @@ est_zeta_1_prior <- function(PATHS,
      # peak-volume (12 L/day) anchors. We swap rows 1-2 and 6-7 zeta_1 values
      # by the 1.5x factor (12/8) and refit with the original weights.
      peak_df          <- fit_df
-     # Scale ALL severe-class rows that use the central V_sev = 8000 anchor
+     # Scale ALL severe-class rows that use the central V_sev = 4000 anchor
      # (Nelson 2009 + Harris, Merrell 2002, Nelson 2020, Kaper 1995 severe,
      # Harris 2012, Codeco 2001, Nelson 2008, Kirpich 2015). Rows that use a
      # different V by construction (the V_sev sensitivity rows 14/15) are
      # intentionally not rescaled.
      peak_sev_mask    <- peak_df$severity_class == "Severe" &
-                         abs(peak_df$V - 8000) < 1e-6
-     peak_df$zeta_1[peak_sev_mask] <- peak_df$zeta_1[peak_sev_mask] * (12 / 8)
+                         abs(peak_df$V - 4000) < 1e-6
+     peak_df$zeta_1[peak_sev_mask] <- peak_df$zeta_1[peak_sev_mask] * (10 / 4)
      volume_peak_fit  <- .refit(peak_df)
 
      # Volume-low sensitivity: apply 6/8 = 0.75 factor to the same severe rows.
      low_df           <- fit_df
-     low_df$zeta_1[peak_sev_mask] <- low_df$zeta_1[peak_sev_mask] * (6 / 8)
+     low_df$zeta_1[peak_sev_mask] <- low_df$zeta_1[peak_sev_mask] * (1.5 / 4)
      volume_low_fit   <- .refit(low_df)
 
      sensitivity <- list(

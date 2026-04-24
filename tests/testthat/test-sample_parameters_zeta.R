@@ -21,6 +21,12 @@ test_that("zeta draws fall in expected ranges in >=95% of draws", {
      draws <- lapply(1:100, function(s) sample_parameters(seed = s, verbose = FALSE))
      z1  <- vapply(draws, function(d) d$zeta_1,     numeric(1))
      zr  <- vapply(draws, function(d) d$zeta_ratio, numeric(1))
-     expect_gte(mean(z1 > 1e9  & z1 < 1e14), 0.95)
-     expect_gte(mean(zr > 1e0  & zr < 1e10), 0.95)
+     # zeta_1 ~ LN(25.65, 2.46) after v0.29.1 bias corrections.
+     # 95% coverage of (1e8, 1e14) ~ 99%; old (1e9, 1e14) bound now too tight.
+     expect_gte(mean(z1 > 1e8  & z1 < 1e14), 0.95)
+     # zeta_ratio uses the DIRECT literature-anchor channel (LN(6.638, 4.807)),
+     # whose sdlog reflects the genuine 5-OOM tension in direct literature.
+     # 95% coverage range is [1e-2, 1e8] -- wider than the combined-channel
+     # range because the direct channel is intentionally uninformative.
+     expect_gte(mean(zr > 1e-2 & zr < 1e8), 0.95)
 })

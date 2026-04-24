@@ -185,24 +185,24 @@
       "description": "Symptomatic shedding rate (V. cholerae cells per infected person per day)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 26.640869,
-        "sdlog": 1.688301
+        "meanlog": 25.654136,
+        "sdlog": 2.458114
       }
     },
     "zeta_2": {
       "description": "Asymptomatic shedding rate (V. cholerae cells per infected person per day); derived at sampling time as zeta_1/zeta_ratio, this prior is the literature-derived reference for validation",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 12.685919,
+        "meanlog": 12.302179,
         "sdlog": 2
       }
     },
     "zeta_ratio": {
-      "description": "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); precision-weighted combination of direct-literature and derived-from-marginals channels",
+      "description": "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); direct literature-anchor channel (Smith 2026, Chao 2011, Finger 2018, Nelson 2009 paired, etc.)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 12.281866,
-        "sdlog": 2.29886
+        "meanlog": 4.313378,
+        "sdlog": 4.393627
       }
     },
     "delta_reporting_cases": {

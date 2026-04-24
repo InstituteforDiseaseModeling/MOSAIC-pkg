@@ -305,7 +305,7 @@ priors_default_MOZ$parameters_global$sigma <- list(
 priors_default_MOZ$parameters_global$zeta_1 <- list(
      description = "Symptomatic shedding rate (V. cholerae cells per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = 26.640869, sdlog = 1.688301)
+     parameters = list(meanlog = 25.654136, sdlog = 2.458114)
 )
 
 # zeta_2 - Asymptomatic shedding rate (V. cholerae cells per infected person per day)
@@ -315,18 +315,21 @@ priors_default_MOZ$parameters_global$zeta_1 <- list(
 priors_default_MOZ$parameters_global$zeta_2 <- list(
      description = "Asymptomatic shedding rate (V. cholerae cells per infected person per day); derived at sampling time as zeta_1/zeta_ratio, this prior is the literature-derived reference for validation",
      distribution = "lognormal",
-     parameters = list(meanlog = 12.685919, sdlog = 2.000000)
+     parameters = list(meanlog = 12.302179, sdlog = 2.000000)
 )
 
 # zeta_ratio - Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2).
-# v0.29.0: Hardcoded from est_zeta_ratio_prior() output on 2026-04-23
-# (precision-weighted combination of direct-literature and derived-from-marginals
-# channels). See plan_zeta_priors_implementation.md Section 7.
+# v0.29.0: Hardcoded from est_zeta_ratio_prior()$diagnostics$fit_direct on
+# 2026-04-23 (DIRECT literature-anchor channel only; combined channel was
+# switched off because its median ~2e5 overestimates zeta_ratio vs
+# modelling-convention + household-transmission evidence). Anchors: Smith
+# 2026, Nelson 2009 paired, Chao 2011, Finger 2018, Sugimoto 2014, etc.
+# See plan_zeta_priors_implementation.md Section 7.2 (Table 7.A).
 # zeta_2 derived at sampling time: zeta_2 = zeta_1 / zeta_ratio.
 priors_default_MOZ$parameters_global$zeta_ratio <- list(
-     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); precision-weighted combination of direct-literature and derived-from-marginals channels",
+     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); direct literature-anchor channel (Smith 2026, Chao 2011, Finger 2018, Nelson 2009 paired, etc.)",
      distribution = "lognormal",
-     parameters = list(meanlog = 12.281866, sdlog = 2.298860)
+     parameters = list(meanlog = 4.313378, sdlog = 4.393627)
 )
 
 # delta_reporting_cases

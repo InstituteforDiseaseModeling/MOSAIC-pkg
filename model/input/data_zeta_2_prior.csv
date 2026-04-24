@@ -1,5 +1,5 @@
 "source","author_year","c","V","zeta_2","zeta_2_lo","zeta_2_hi","weight","study_type","notes"
 "Nelson 2009 (primary)","Nelson et al. 2009",1000,150,150000,1500,1.5e+07,1,"Expert review","Only primary anchor; verbatim 'approximately 10^3 vibrios per gram of stool'"
-"Kaper 1995 (asymp range low)","Kaper, Morris & Levine 1995",1000,150,150000,10000,1e+06,0.25,"Expert review","Review; overlaps Nelson primary - weight 0.25 avoids double-counting"
-"Kaper 1995 (asymp range high)","Kaper, Morris & Levine 1995",1e+05,150,1.5e+07,1e+06,1e+08,0.25,"Expert review","Review range upper bound"
+"Kaper 1995 (asymp range low)","Kaper, Morris & Levine 1995",1000,150,150000,10000,1e+06,0.1,"Expert review","Review; overlaps Nelson primary - weight 0.25 avoids double-counting"
+"Kaper 1995 (asymp range high)","Kaper, Morris & Levine 1995",1e+05,150,1.5e+07,1e+06,1e+08,0.1,"Expert review","Review range upper bound"
 "Levine & Robins-Browne 2012","Levine & Robins-Browne 2012",NA,NA,NA,NA,NA,0,"Expert review","Mechanism review; no cholera-specific CFU data (Excluded)"

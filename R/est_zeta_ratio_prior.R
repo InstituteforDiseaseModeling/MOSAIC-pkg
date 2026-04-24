@@ -217,7 +217,14 @@ est_zeta_ratio_prior <- function(PATHS,
           ratio          = c(1.6, 1e5, 1e3, 1e5, 10, 10, 1, 3, 400),
           ratio_lo       = c(0.3, 1e4, 1e2, 1e4, 3, 3, 0.5, 1, 200),
           ratio_hi       = c(9.1, 1e6, 1e5, 1e6, 30, 30, 3, 10, 580),
-          weight         = c(0.50, 1.00, 0.25, 0.25, 0.10, 0.10, 0.10, 0.25, 0.25),
+          # v0.29.1 bias-correction:
+          #   - Nelson 2009 paired (row 2):  1.00 -> 0.30
+          #     (value 10^5 is a stool-CONCENTRATION ratio, not a per-day
+          #     RATE ratio; correcting for stool-volume asymmetry would push
+          #     it higher, but it is not the same quantity as zeta_ratio)
+          #   - Kaper 1995 paired (row 3):   0.25 -> 0.10 (review overlaps Nelson)
+          #   - Harris 2012 paired (row 4):  0.25 -> 0.10 (review overlaps Nelson)
+          weight         = c(0.50, 0.30, 0.10, 0.10, 0.10, 0.10, 0.10, 0.25, 0.25),
           study_type     = c("Household cohort",
                              "Primary clinical",
                              "Expert review",
