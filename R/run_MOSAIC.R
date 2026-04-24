@@ -1526,8 +1526,6 @@ run_MOSAIC <- function(config,
       verbose = control$logging$verbose
     )
     results$weight_retained[results$is_retained] <- retained_weights
-    ESS_retained <- calc_model_ess(retained_weights, method = control$targets$ESS_method)
-    log_msg("    ESS (retained): %.1f", ESS_retained)
   }
 
   if (sum(results$is_best_subset) > 0) {
@@ -1766,6 +1764,8 @@ run_MOSAIC <- function(config,
   ensemble     <- NULL
   fit_windows  <- control$predictions$fit_windows %||% c(365L, 120L, 90L, 60L, 30L)
 
+  param_seeds <- NULL   # initialised here; assigned inside block below if best subset exists
+
   if (sum(results$is_best_subset) > 0) {
     best_subset_results <- results[results$is_best_subset == TRUE, ]
     nonzero <- best_subset_results$weight_best > 0
@@ -1819,6 +1819,8 @@ run_MOSAIC <- function(config,
   # observed cases/deaths and write the optimizer-selected subset to new _opt
   # columns on the results frame. Downstream posterior construction is then
   # driven by the optimized subset via .mosaic_active_subset_cols().
+
+  subset_opt <- NULL   # initialised here; assigned inside block below if optimize_subset=TRUE
 
   if (!is.null(ensemble) && isTRUE(control$predictions$optimize_subset)) {
 
@@ -1940,6 +1942,49 @@ run_MOSAIC <- function(config,
         }
       }
     }
+  }
+
+  # ===========================================================================
+  # MEDIOID SEED — computed once on the final ensemble after all subset logic
+  # ===========================================================================
+  # The medioid is the ensemble member whose predicted case trajectory is closest
+  # (log-scale MAE) to the ensemble median. Computing here ensures it always
+  # reflects the FINAL ensemble (optimized when optimize_subset=TRUE, candidate
+  # otherwise), using the correct median and the matching seed vector.
+
+  medioid_seed_sim <- NULL
+
+  if (!is.null(ensemble)) {
+    tryCatch({
+      # Aggregate stochastic runs: median over dim 4 -> [n_locs, n_times, n_params]
+      member_cases_agg <- apply(ensemble$cases_array, c(1L, 2L, 3L), stats::median)
+
+      # Log-scale MAE from each member to ensemble median (location 1, cases)
+      eps_med <- 1.0
+      medioid_distances <- vapply(seq_len(ensemble$n_param_sets), function(i) {
+        mean(abs(log(member_cases_agg[1L, , i]        + eps_med) -
+                 log(ensemble$cases_median[1L, ] + eps_med)), na.rm = TRUE)
+      }, numeric(1L))
+
+      medioid_idx <- which.min(medioid_distances)
+
+      # Seed lookup: optimized subset uses subset_opt$optimal_seeds; candidate uses param_seeds
+      final_seeds <- if (!is.null(subset_opt) && !is.null(subset_opt$optimal_seeds) &&
+                         length(subset_opt$optimal_seeds) == ensemble$n_param_sets) {
+        subset_opt$optimal_seeds
+      } else {
+        param_seeds
+      }
+
+      if (medioid_idx >= 1L && medioid_idx <= length(final_seeds)) {
+        medioid_seed_sim <- final_seeds[[medioid_idx]]
+        log_msg("Medioid: param set %d of %d (seed=%d, MAE=%.4f)",
+                medioid_idx, ensemble$n_param_sets,
+                medioid_seed_sim, medioid_distances[medioid_idx])
+      }
+    }, error = function(e) {
+      log_msg("Warning: medioid computation failed: %s", e$message)
+    })
   }
 
   # ===========================================================================
@@ -2115,6 +2160,88 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
+  # MEDIOID MODEL — ensemble member closest to ensemble median trajectory
+  # Runs after best model using the same pattern: config → LASER → R² → plot
+  # config_medioid.json and prediction plot saved alongside best model outputs
+  # ===========================================================================
+
+  tryCatch({
+    if (!is.null(medioid_seed_sim)) {
+
+      config_medioid <- tryCatch(
+        sample_parameters(
+          PATHS       = PATHS,
+          priors      = priors,
+          config      = config,
+          seed        = medioid_seed_sim,
+          sample_args = sampling_args,
+          verbose     = FALSE
+        ),
+        error = function(e) {
+          log_msg("Warning: sample_parameters failed for medioid seed %d: %s",
+                  medioid_seed_sim, e$message)
+          NULL
+        }
+      )
+
+      if (!is.null(config_medioid)) {
+
+        # Save config
+        config_medioid_file <- file.path(dirs$cal_best_model, "config_medioid.json")
+        jsonlite::write_json(config_medioid, config_medioid_file,
+                             pretty = TRUE, auto_unbox = TRUE, digits = NA)
+        log_msg("Saved %s", config_medioid_file)
+
+        # Run LASER model
+        medioid_model <- lc$run_model(
+          paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_medioid),
+          quiet     = TRUE
+        )
+
+        # Compute R² and bias
+        r2_cases_med <- tryCatch(
+          calc_model_R2(config_medioid$reported_cases,
+                        medioid_model$results$reported_cases),
+          error = function(e) NA_real_)
+        r2_deaths_med <- tryCatch(
+          calc_model_R2(config_medioid$reported_deaths,
+                        medioid_model$results$disease_deaths),
+          error = function(e) NA_real_)
+        bias_cases_med <- tryCatch(
+          calc_bias_ratio(config_medioid$reported_cases,
+                          medioid_model$results$reported_cases),
+          error = function(e) NA_real_)
+        bias_deaths_med <- tryCatch(
+          calc_bias_ratio(config_medioid$reported_deaths,
+                          medioid_model$results$disease_deaths),
+          error = function(e) NA_real_)
+
+        log_msg("Medioid model R\u00b2: cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+                ifelse(is.na(r2_cases_med),   0, r2_cases_med),
+                ifelse(is.na(bias_cases_med), 0, bias_cases_med),
+                ifelse(is.na(r2_deaths_med),  0, r2_deaths_med),
+                ifelse(is.na(bias_deaths_med),0, bias_deaths_med))
+
+        # Prediction plot — saved to best_model dir to keep separate from ensemble plots
+        if (control$paths$plots) {
+          tryCatch({
+            log_msg("Generating medioid model prediction plot...")
+            plot_model_fit(
+              model      = medioid_model,
+              output_dir = dirs$cal_best_model,
+              verbose    = FALSE
+            )
+          }, error = function(e) {
+            log_msg("Warning: medioid prediction plot failed: %s", e$message)
+          })
+        }
+      }
+    }
+  }, error = function(e) {
+    log_msg("Warning: medioid model block failed: %s", e$message)
+  })
+
+  # ===========================================================================
   # ENSEMBLE METRICS, WINDOWED FIT, AND PREDICTIVE PLOTS
   # ===========================================================================
   # The `ensemble` variable is the canonical object — the optimized ensemble
@@ -2262,6 +2389,19 @@ run_MOSAIC <- function(config,
   log_msg("Writing parameter estimates...")
   .mosaic_write_parameter_estimates(dirs)
   log_msg("  Saved 3_results/posterior/parameter_estimates.csv")
+
+  # psi_star diagnostic plot (raw LSTM psi vs calibrated psi*)
+  if (control$paths$plots) {
+    tryCatch(
+      plot_psi_star_diagnostic(
+        dirs           = dirs,
+        PATHS          = PATHS,
+        location_names = location_names,
+        verbose        = control$logging$verbose
+      ),
+      error = function(e) log_msg("Warning: psi_star diagnostic plot failed: %s", e$message)
+    )
+  }
 
   # Summary JSON (machine-readable run summary)
   log_msg("Writing summary...")
