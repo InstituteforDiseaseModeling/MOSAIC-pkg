@@ -1,3 +1,45 @@
+# MOSAIC 0.29.3
+
+## Unified stochastic-median R² and bias across best, medioid, and ensemble
+
+Follow-up to 0.29.2. The 0.29.2 fix routed the best and medioid prediction **plots** through `calc_model_ensemble()` + `plot_model_ensemble()` so the plot captions report R²/bias from the stochastic median. But the separate `"Best model R²"` / `"Medioid model R²"` **log lines** still came from a single deterministic `lc$run_model()` call, producing two different numbers for the same thing (log vs plot caption). Red-team review flagged the inconsistency.
+
+This release eliminates the separate deterministic LASER calls for best/medioid and sources all three sets of reported metrics — best, medioid, ensemble — from the stochastic median of their respective `mosaic_ensemble` objects:
+
+* `R/run_MOSAIC.R` best-model block reordered: `calc_model_ensemble(configs = list(config_best), ...)` is called once; R²/bias are computed from `best_ensemble$cases_median` / `$deaths_median` and passed to both the log line and downstream `summary.json`. Same refactor applied to the medioid block.
+* Log format now: `"Best model R² (1 params x N stoch): cases = X (bias=Y), deaths = ..."` — mirrors the existing ensemble log format.
+* Removes two per-run LASER calls (the single deterministic `best_model <-` and `medioid_model <-` runs) that are no longer needed; best/medioid each now run `n_ensemble_stochastic_per` LASER sims total (default 10), same as before the 0.29.2 fix *plus* plot but minus the deterministic R² helper run.
+* Retires the `lc <- reticulate::import(...)` import in the main `run_MOSAIC` body — `calc_model_ensemble` handles the import internally.
+
+No public API changes.
+
+---
+
+# MOSAIC 0.29.2
+
+## Fix best/medioid prediction plots: `reported_cases`, stochastic CI, unified naming
+
+`plot_model_fit()` (used by the best-model and medioid-model plots in `run_MOSAIC()`) rendered `model$results$expected_cases` — the back-calculated burden `new_symptomatic / rho`, typically 5-10x inflated vs surveillance-comparable cases. Every other part of the pipeline (likelihood, R², ensemble) used `model$results$reported_cases = Isym * rho / chi_eff`. The v0.14.22 commit that renamed `expected_cases` → `reported_cases` in sibling plotting functions missed this fourth file; the bug was latent until v0.22.15 re-wired `plot_model_fit()` into the best-model block, and real from v0.22.15 through v0.29.1.
+
+**Fix consolidates best/medioid plots into the existing `calc_model_ensemble` + `plot_model_ensemble` pipeline** — the same functions the posterior ensemble uses — in single-config mode (one parameter set × N stochastic reruns). One codepath for all three plot types eliminates the parallel-implementation drift that caused the original bug.
+
+**Changes:**
+
+* `R/plot_model_ensemble.R`: new `file_prefix` (default `"ensemble"`) and `title_label` (default `"Posterior Ensemble"`) parameters; hardcoded filename and title strings replaced; single-param-set subtitle branch added.
+* `R/run_MOSAIC.R`: best and medioid plot calls replaced with `calc_model_ensemble(configs = list(config_<...>), n_simulations_per_config = n_ensemble_stochastic_per, envelope_quantiles = c(0.025, 0.975))` + `plot_model_ensemble(file_prefix = "best" | "medioid", ...)`. Medioid output moved from `2_calibration/best_model/` to `3_results/figures/predictions/` alongside the ensemble plots. Explicit `file_prefix = "ensemble"` added at the main ensemble plot call for self-documentation.
+* Prediction-CSV combining loop extended to iterate `c("ensemble", "best", "medioid", "stochastic")` and filename pattern renamed from `all_predictions_<type>.csv` → `predictions_<type>_all.csv` for consistency with the plot naming.
+* `R/plot_model_fit.R`: deleted (retired). The function was the single source of the drift bug and had no internal callers after the refactor.
+
+**Output naming** (all under `3_results/figures/predictions/` unless noted):
+
+* `predictions_<prefix>_<LOC>.pdf` + `.csv` per-location (prefixes: `ensemble`, `best`, `medioid`)
+* `predictions_<prefix>_cases_all.pdf`, `predictions_<prefix>_deaths_all.pdf` faceted multi-location overviews
+* `predictions_<type>_all.csv` combined across locations (in `3_results/predictions/`)
+
+**Lesson recorded** in `CLAUDE.md` (item 11): when renaming a field across sibling functions, grep exhaustively; do not skip temporarily-unused functions; prefer consolidating into one shared code path over maintaining N parallel implementations that must be updated in lockstep.
+
+---
+
 # MOSAIC 0.29.1
 
 ## Bias corrections + zeta_ratio channel switch (follow-up to 0.29.0)

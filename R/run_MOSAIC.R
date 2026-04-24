@@ -2118,59 +2118,63 @@ run_MOSAIC <- function(config,
   jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved %s", config_best_file)
 
-  lc <- reticulate::import("laser.cholera.metapop.model")
-  .mosaic_strip_laser_file_handler()
-  best_model <- lc$run_model(paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_best), quiet = TRUE)
+  # Run N stochastic reruns of the best config. Produces the mosaic_ensemble
+  # object used for both R²/bias (from the stochastic median) and the prediction
+  # plot, matching how the posterior ensemble reports its metrics. Replaces the
+  # earlier single-deterministic-run R²/bias which disagreed with the plot caption.
+  r2_cases         <- NA_real_
+  r2_deaths        <- NA_real_
+  bias_ratio_cases <- NA_real_
+  bias_ratio_deaths <- NA_real_
 
-  # Compute overall model-fit R² and bias ratio (best model vs observed data)
-  r2_cases <- tryCatch({
-    calc_model_R2(config_best$reported_cases, best_model$results$reported_cases)
-  }, error = function(e) NA_real_)
+  log_msg("Running best model stochastic ensemble (%d reruns)...",
+          n_ensemble_stochastic_per)
+  best_ensemble <- tryCatch(
+    calc_model_ensemble(
+      config                   = config_best,
+      configs                  = list(config_best),
+      n_simulations_per_config = n_ensemble_stochastic_per,
+      envelope_quantiles       = c(0.025, 0.975),
+      parallel                 = FALSE,
+      verbose                  = control$logging$verbose
+    ),
+    error = function(e) {
+      log_msg("Warning: best model stochastic ensemble failed: %s", e$message)
+      NULL
+    }
+  )
 
-  r2_deaths <- tryCatch({
-    calc_model_R2(config_best$reported_deaths, best_model$results$disease_deaths)
-  }, error = function(e) NA_real_)
+  if (!is.null(best_ensemble)) {
+    best_c_flat <- as.numeric(best_ensemble$cases_median)
+    best_d_flat <- as.numeric(best_ensemble$deaths_median)
+    obs_c_flat  <- as.numeric(best_ensemble$obs_cases)
+    obs_d_flat  <- as.numeric(best_ensemble$obs_deaths)
 
-  bias_ratio_cases <- tryCatch({
-    calc_bias_ratio(config_best$reported_cases, best_model$results$reported_cases)
-  }, error = function(e) NA_real_)
+    r2_cases          <- tryCatch(calc_model_R2(obs_c_flat, best_c_flat),  error = function(e) NA_real_)
+    r2_deaths         <- tryCatch(calc_model_R2(obs_d_flat, best_d_flat),  error = function(e) NA_real_)
+    bias_ratio_cases  <- tryCatch(calc_bias_ratio(obs_c_flat, best_c_flat), error = function(e) NA_real_)
+    bias_ratio_deaths <- tryCatch(calc_bias_ratio(obs_d_flat, best_d_flat), error = function(e) NA_real_)
 
-  bias_ratio_deaths <- tryCatch({
-    calc_bias_ratio(config_best$reported_deaths, best_model$results$disease_deaths)
-  }, error = function(e) NA_real_)
+    log_msg("Best model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+            n_ensemble_stochastic_per,
+            ifelse(is.na(r2_cases),          0, r2_cases),
+            ifelse(is.na(bias_ratio_cases),  0, bias_ratio_cases),
+            ifelse(is.na(r2_deaths),         0, r2_deaths),
+            ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
-  log_msg("Best model R²: cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-          ifelse(is.na(r2_cases), 0, r2_cases),
-          ifelse(is.na(bias_ratio_cases), 0, bias_ratio_cases),
-          ifelse(is.na(r2_deaths), 0, r2_deaths),
-          ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
-
-  # Best model prediction plot — stochastic CI over n_ensemble_stochastic_per reruns
-  # of the single best parameter set. Uses the same calc_model_ensemble +
-  # plot_model_ensemble pipeline as the posterior ensemble for consistency.
-  if (control$paths$plots) {
-    tryCatch({
-      log_msg("Generating best model prediction plot (%d stochastic reruns)...",
-              n_ensemble_stochastic_per)
-      best_ensemble <- calc_model_ensemble(
-        config                   = config_best,
-        configs                  = list(config_best),
-        n_simulations_per_config = n_ensemble_stochastic_per,
-        envelope_quantiles       = c(0.025, 0.975),
-        parallel                 = FALSE,
-        verbose                  = control$logging$verbose
+    if (control$paths$plots) {
+      tryCatch(
+        plot_model_ensemble(
+          ensemble         = best_ensemble,
+          output_dir       = dirs$res_fig_pred,
+          file_prefix      = "best",
+          title_label      = "Best Model",
+          save_predictions = TRUE,
+          verbose          = control$logging$verbose
+        ),
+        error = function(e) log_msg("Warning: best model plot failed: %s", e$message)
       )
-      plot_model_ensemble(
-        ensemble         = best_ensemble,
-        output_dir       = dirs$res_fig_pred,
-        file_prefix      = "best",
-        title_label      = "Best Model",
-        save_predictions = TRUE,
-        verbose          = control$logging$verbose
-      )
-    }, error = function(e) {
-      log_msg("Warning: best model plot failed: %s", e$message)
-    })
+    }
   }
 
   # ===========================================================================
@@ -2206,61 +2210,57 @@ run_MOSAIC <- function(config,
                              pretty = TRUE, auto_unbox = TRUE, digits = NA)
         log_msg("Saved %s", config_medioid_file)
 
-        # Run LASER model
-        medioid_model <- lc$run_model(
-          paramfile = MOSAIC:::.mosaic_prepare_config_for_python(config_medioid),
-          quiet     = TRUE
+        # Run N stochastic reruns of the medioid config. Same pattern as the
+        # best-model block: R²/bias and the prediction plot both derive from
+        # the stochastic median for consistency with the posterior ensemble.
+        log_msg("Running medioid model stochastic ensemble (%d reruns)...",
+                n_ensemble_stochastic_per)
+        medioid_ensemble <- tryCatch(
+          calc_model_ensemble(
+            config                   = config_medioid,
+            configs                  = list(config_medioid),
+            n_simulations_per_config = n_ensemble_stochastic_per,
+            envelope_quantiles       = c(0.025, 0.975),
+            parallel                 = FALSE,
+            verbose                  = control$logging$verbose
+          ),
+          error = function(e) {
+            log_msg("Warning: medioid model stochastic ensemble failed: %s", e$message)
+            NULL
+          }
         )
 
-        # Compute R² and bias
-        r2_cases_med <- tryCatch(
-          calc_model_R2(config_medioid$reported_cases,
-                        medioid_model$results$reported_cases),
-          error = function(e) NA_real_)
-        r2_deaths_med <- tryCatch(
-          calc_model_R2(config_medioid$reported_deaths,
-                        medioid_model$results$disease_deaths),
-          error = function(e) NA_real_)
-        bias_cases_med <- tryCatch(
-          calc_bias_ratio(config_medioid$reported_cases,
-                          medioid_model$results$reported_cases),
-          error = function(e) NA_real_)
-        bias_deaths_med <- tryCatch(
-          calc_bias_ratio(config_medioid$reported_deaths,
-                          medioid_model$results$disease_deaths),
-          error = function(e) NA_real_)
+        if (!is.null(medioid_ensemble)) {
+          med_c_flat <- as.numeric(medioid_ensemble$cases_median)
+          med_d_flat <- as.numeric(medioid_ensemble$deaths_median)
+          obs_c_flat <- as.numeric(medioid_ensemble$obs_cases)
+          obs_d_flat <- as.numeric(medioid_ensemble$obs_deaths)
 
-        log_msg("Medioid model R\u00b2: cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-                ifelse(is.na(r2_cases_med),   0, r2_cases_med),
-                ifelse(is.na(bias_cases_med), 0, bias_cases_med),
-                ifelse(is.na(r2_deaths_med),  0, r2_deaths_med),
-                ifelse(is.na(bias_deaths_med),0, bias_deaths_med))
+          r2_cases_med   <- tryCatch(calc_model_R2(obs_c_flat, med_c_flat),  error = function(e) NA_real_)
+          r2_deaths_med  <- tryCatch(calc_model_R2(obs_d_flat, med_d_flat),  error = function(e) NA_real_)
+          bias_cases_med <- tryCatch(calc_bias_ratio(obs_c_flat, med_c_flat), error = function(e) NA_real_)
+          bias_deaths_med <- tryCatch(calc_bias_ratio(obs_d_flat, med_d_flat), error = function(e) NA_real_)
 
-        # Prediction plot — stochastic CI over n_ensemble_stochastic_per reruns of
-        # the medioid parameter set, saved alongside ensemble plots in figures/predictions/
-        if (control$paths$plots) {
-          tryCatch({
-            log_msg("Generating medioid model prediction plot (%d stochastic reruns)...",
-                    n_ensemble_stochastic_per)
-            medioid_ensemble <- calc_model_ensemble(
-              config                   = config_medioid,
-              configs                  = list(config_medioid),
-              n_simulations_per_config = n_ensemble_stochastic_per,
-              envelope_quantiles       = c(0.025, 0.975),
-              parallel                 = FALSE,
-              verbose                  = control$logging$verbose
+          log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+                  n_ensemble_stochastic_per,
+                  ifelse(is.na(r2_cases_med),    0, r2_cases_med),
+                  ifelse(is.na(bias_cases_med),  0, bias_cases_med),
+                  ifelse(is.na(r2_deaths_med),   0, r2_deaths_med),
+                  ifelse(is.na(bias_deaths_med), 0, bias_deaths_med))
+
+          if (control$paths$plots) {
+            tryCatch(
+              plot_model_ensemble(
+                ensemble         = medioid_ensemble,
+                output_dir       = dirs$res_fig_pred,
+                file_prefix      = "medioid",
+                title_label      = "Medioid Model",
+                save_predictions = TRUE,
+                verbose          = control$logging$verbose
+              ),
+              error = function(e) log_msg("Warning: medioid prediction plot failed: %s", e$message)
             )
-            plot_model_ensemble(
-              ensemble         = medioid_ensemble,
-              output_dir       = dirs$res_fig_pred,
-              file_prefix      = "medioid",
-              title_label      = "Medioid Model",
-              save_predictions = TRUE,
-              verbose          = control$logging$verbose
-            )
-          }, error = function(e) {
-            log_msg("Warning: medioid prediction plot failed: %s", e$message)
-          })
+          }
         }
       }
     }
