@@ -292,7 +292,7 @@ global_params$posterior_lower <- c(
   NA, NA, 1.01, NA, NA, NA, NA, NA, NA,
   NA, NA, NA, NA,                        # disease
   NA, NA, NA, NA, NA,                    # immunity
-  NA, NA, 0, 0, NA,                      # surveillance (delta_reporting_cases lower = 0)
+  NA, NA, 0, 1, NA,                      # surveillance (cases lower = 0, deaths lower = 1)
   NA, NA                                 # mobility
 )
 global_params$posterior_upper <- c(
