@@ -10,6 +10,12 @@
 #'   \code{\link{calc_model_ensemble}}.
 #' @param output_dir Character. Directory where plots and CSVs are saved.
 #'   Created if it does not exist.
+#' @param file_prefix Character. Prefix used in output filenames:
+#'   \code{predictions_<prefix>_<LOC>.pdf/csv} for per-location outputs and
+#'   \code{predictions_<prefix>_cases_all.pdf} / \code{_deaths_all.pdf} for
+#'   multi-location overview plots. Default \code{"ensemble"}.
+#' @param title_label Character. Leading label used in plot titles
+#'   (\code{"<title_label>: <LOC>"}). Default \code{"Posterior Ensemble"}.
 #' @param save_predictions Logical. Save per-location prediction CSVs. Default
 #'   \code{FALSE}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
@@ -32,6 +38,8 @@
 #' @importFrom scales comma
 plot_model_ensemble <- function(ensemble,
                                 output_dir,
+                                file_prefix      = "ensemble",
+                                title_label      = "Posterior Ensemble",
                                 save_predictions = FALSE,
                                 verbose          = TRUE) {
 
@@ -131,7 +139,7 @@ plot_model_ensemble <- function(ensemble,
     for (i in seq_len(n_locations)) {
       loc     <- location_names[i]
       loc_df  <- plot_data[plot_data$location == loc, ]
-      csv_out <- file.path(output_dir, paste0("predictions_ensemble_", loc, ".csv"))
+      csv_out <- file.path(output_dir, paste0("predictions_", file_prefix, "_", loc, ".csv"))
       utils::write.csv(loc_df, csv_out, row.names = FALSE)
       if (verbose) message("  Saved: ", csv_out)
     }
@@ -211,12 +219,16 @@ plot_model_ensemble <- function(ensemble,
       ggplot2::labs(
         x = if (use_date_axis) "Date" else "Time",
         y = NULL,
-        title = paste0("Posterior Ensemble: ", loc),
-        subtitle = paste0(
-          n_param_sets, " parameter sets \u00d7 ",
-          n_stoch_per, " stochastic = ",
-          total_sims, " total simulations"
-        ),
+        title = paste0(title_label, ": ", loc),
+        subtitle = if (n_param_sets == 1L) {
+          paste0(n_stoch_per, " stochastic reruns from single parameter set")
+        } else {
+          paste0(
+            n_param_sets, " parameter sets \u00d7 ",
+            n_stoch_per, " stochastic = ",
+            total_sims, " total simulations"
+          )
+        },
         caption = paste0(
           "Ribbons show ", paste(
             paste0(round(envelope_quantiles[seq(1, length(envelope_quantiles), by = 2)] * 100), "-",
@@ -239,7 +251,7 @@ plot_model_ensemble <- function(ensemble,
     plot_list$individual[[loc]] <- p
     if (verbose) print(p)
 
-    out_file <- file.path(output_dir, paste0("model_ensemble_", loc, ".pdf"))
+    out_file <- file.path(output_dir, paste0("predictions_", file_prefix, "_", loc, ".pdf"))
     ggplot2::ggsave(out_file, plot = p, width = 10, height = 6, dpi = 300)
     if (verbose) message("  Saved: ", out_file)
   }
@@ -288,9 +300,14 @@ plot_model_ensemble <- function(ensemble,
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8)) +
       ggplot2::labs(
         x = if (use_date_axis) "Date" else "Time", y = "Suspected Cases",
-        title    = "Posterior Ensemble: Suspected Cases by Location",
-        subtitle = paste0(n_param_sets, " parameter sets \u00d7 ", n_stoch_per,
-                          " stochastic | ", n_successful, " successful sims"),
+        title    = paste0(title_label, ": Suspected Cases by Location"),
+        subtitle = if (n_param_sets == 1L) {
+          paste0(n_stoch_per, " stochastic reruns from single parameter set | ",
+                 n_successful, " successful sims")
+        } else {
+          paste0(n_param_sets, " parameter sets \u00d7 ", n_stoch_per,
+                 " stochastic | ", n_successful, " successful sims")
+        },
         caption  = paste0(
           "Total: Obs = ",    format(round(sum(obs_cases, na.rm = TRUE)), big.mark = ","),
           ", Pred = ",         format(round(sum(cases_median, na.rm = TRUE)), big.mark = ","),
@@ -308,7 +325,7 @@ plot_model_ensemble <- function(ensemble,
     plot_h <- if (n_locations <= 3L) 5  else if (n_locations <= 6L) 8  else
               max(10, ceiling(n_locations / 3L) * 3L)
 
-    out_file <- file.path(output_dir, "model_ensemble_cases_all.pdf")
+    out_file <- file.path(output_dir, paste0("predictions_", file_prefix, "_cases_all.pdf"))
     ggplot2::ggsave(out_file, plot = p_cases,
                     width = plot_w, height = plot_h, dpi = 300, limitsize = FALSE)
     if (verbose) message("  Saved: ", out_file)
@@ -351,9 +368,14 @@ plot_model_ensemble <- function(ensemble,
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8)) +
       ggplot2::labs(
         x = if (use_date_axis) "Date" else "Time", y = "Deaths",
-        title    = "Posterior Ensemble: Deaths by Location",
-        subtitle = paste0(n_param_sets, " parameter sets \u00d7 ", n_stoch_per,
-                          " stochastic | ", n_successful, " successful sims"),
+        title    = paste0(title_label, ": Deaths by Location"),
+        subtitle = if (n_param_sets == 1L) {
+          paste0(n_stoch_per, " stochastic reruns from single parameter set | ",
+                 n_successful, " successful sims")
+        } else {
+          paste0(n_param_sets, " parameter sets \u00d7 ", n_stoch_per,
+                 " stochastic | ", n_successful, " successful sims")
+        },
         caption  = paste0(
           "Total: Obs = ",    format(round(sum(obs_deaths, na.rm = TRUE)), big.mark = ","),
           ", Pred = ",         format(round(sum(deaths_median, na.rm = TRUE)), big.mark = ","),
@@ -367,7 +389,7 @@ plot_model_ensemble <- function(ensemble,
     plot_list$deaths_faceted <- p_deaths
     if (verbose) print(p_deaths)
 
-    out_file <- file.path(output_dir, "model_ensemble_deaths_all.pdf")
+    out_file <- file.path(output_dir, paste0("predictions_", file_prefix, "_deaths_all.pdf"))
     ggplot2::ggsave(out_file, plot = p_deaths,
                     width = plot_w, height = plot_h, dpi = 300, limitsize = FALSE)
     if (verbose) message("  Saved: ", out_file)

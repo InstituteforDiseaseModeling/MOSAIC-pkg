@@ -2145,14 +2145,28 @@ run_MOSAIC <- function(config,
           ifelse(is.na(r2_deaths), 0, r2_deaths),
           ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
 
-  # Best model prediction plot
+  # Best model prediction plot — stochastic CI over n_ensemble_stochastic_per reruns
+  # of the single best parameter set. Uses the same calc_model_ensemble +
+  # plot_model_ensemble pipeline as the posterior ensemble for consistency.
   if (control$paths$plots) {
     tryCatch({
-      log_msg("Generating best model prediction plot...")
-      plot_model_fit(
-        model      = best_model,
-        output_dir = dirs$res_fig_pred,
-        verbose    = FALSE
+      log_msg("Generating best model prediction plot (%d stochastic reruns)...",
+              n_ensemble_stochastic_per)
+      best_ensemble <- calc_model_ensemble(
+        config                   = config_best,
+        configs                  = list(config_best),
+        n_simulations_per_config = n_ensemble_stochastic_per,
+        envelope_quantiles       = c(0.025, 0.975),
+        parallel                 = FALSE,
+        verbose                  = control$logging$verbose
+      )
+      plot_model_ensemble(
+        ensemble         = best_ensemble,
+        output_dir       = dirs$res_fig_pred,
+        file_prefix      = "best",
+        title_label      = "Best Model",
+        save_predictions = TRUE,
+        verbose          = control$logging$verbose
       )
     }, error = function(e) {
       log_msg("Warning: best model plot failed: %s", e$message)
@@ -2222,14 +2236,27 @@ run_MOSAIC <- function(config,
                 ifelse(is.na(r2_deaths_med),  0, r2_deaths_med),
                 ifelse(is.na(bias_deaths_med),0, bias_deaths_med))
 
-        # Prediction plot — saved to best_model dir to keep separate from ensemble plots
+        # Prediction plot — stochastic CI over n_ensemble_stochastic_per reruns of
+        # the medioid parameter set, saved alongside ensemble plots in figures/predictions/
         if (control$paths$plots) {
           tryCatch({
-            log_msg("Generating medioid model prediction plot...")
-            plot_model_fit(
-              model      = medioid_model,
-              output_dir = dirs$cal_best_model,
-              verbose    = FALSE
+            log_msg("Generating medioid model prediction plot (%d stochastic reruns)...",
+                    n_ensemble_stochastic_per)
+            medioid_ensemble <- calc_model_ensemble(
+              config                   = config_medioid,
+              configs                  = list(config_medioid),
+              n_simulations_per_config = n_ensemble_stochastic_per,
+              envelope_quantiles       = c(0.025, 0.975),
+              parallel                 = FALSE,
+              verbose                  = control$logging$verbose
+            )
+            plot_model_ensemble(
+              ensemble         = medioid_ensemble,
+              output_dir       = dirs$res_fig_pred,
+              file_prefix      = "medioid",
+              title_label      = "Medioid Model",
+              save_predictions = TRUE,
+              verbose          = control$logging$verbose
             )
           }, error = function(e) {
             log_msg("Warning: medioid prediction plot failed: %s", e$message)
@@ -2313,6 +2340,8 @@ run_MOSAIC <- function(config,
       plot_model_ensemble(
         ensemble         = ensemble,
         output_dir       = dirs$res_fig_pred,
+        file_prefix      = "ensemble",
+        title_label      = "Posterior Ensemble",
         save_predictions = TRUE,
         verbose          = control$logging$verbose
       )
@@ -2326,9 +2355,10 @@ run_MOSAIC <- function(config,
   # COMBINE PREDICTION CSVs
   # ===========================================================================
 
-  # Combine per-location prediction CSVs by type (ensemble and stochastic have
-  # different column schemas and cannot be rbind'd together)
-  for (pred_type in c("ensemble", "stochastic")) {
+  # Combine per-location prediction CSVs by type. Ensemble, best, medioid, and
+  # stochastic each have their own column schema and cannot be rbind'd together.
+  # Pattern: predictions_<type>_<LOC>.csv (per-location) → predictions_<type>_all.csv (combined)
+  for (pred_type in c("ensemble", "best", "medioid", "stochastic")) {
     pred_csvs <- list.files(dirs$res_fig_pred,
                             pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
                             full.names = TRUE)
@@ -2341,13 +2371,13 @@ run_MOSAIC <- function(config,
         NULL
       })
       if (!is.null(combined)) {
-        out_file <- file.path(dirs$res_predictions, sprintf("all_predictions_%s.csv", pred_type))
+        out_file <- file.path(dirs$res_predictions, sprintf("predictions_%s_all.csv", pred_type))
         utils::write.csv(combined, out_file, row.names = FALSE)
         log_msg("Combined %d %s prediction files into %s", length(pred_csvs), pred_type, basename(out_file))
       }
     } else if (length(pred_csvs) == 1) {
       # Single location — copy directly rather than combining
-      out_file <- file.path(dirs$res_predictions, sprintf("all_predictions_%s.csv", pred_type))
+      out_file <- file.path(dirs$res_predictions, sprintf("predictions_%s_all.csv", pred_type))
       file.copy(pred_csvs, out_file, overwrite = TRUE)
     }
   }

@@ -7,6 +7,8 @@
 plot_model_ensemble(
   ensemble,
   output_dir,
+  file_prefix = "ensemble",
+  title_label = "Posterior Ensemble",
   save_predictions = FALSE,
   verbose = TRUE
 )
@@ -17,6 +19,14 @@ plot_model_ensemble(
 
 \item{output_dir}{Character. Directory where plots and CSVs are saved.
 Created if it does not exist.}
+
+\item{file_prefix}{Character. Prefix used in output filenames:
+\code{predictions_<prefix>_<LOC>.pdf/csv} for per-location outputs and
+\code{predictions_<prefix>_cases_all.pdf} / \code{_deaths_all.pdf} for
+multi-location overview plots. Default \code{"ensemble"}.}
+
+\item{title_label}{Character. Leading label used in plot titles
+(\code{"<title_label>: <LOC>"}). Default \code{"Posterior Ensemble"}.}
 
 \item{save_predictions}{Logical. Save per-location prediction CSVs. Default
 \code{FALSE}.}
