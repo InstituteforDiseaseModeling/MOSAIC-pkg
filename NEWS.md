@@ -1,3 +1,19 @@
+# MOSAIC 0.29.7
+
+## Fix collapsed posteriors on log-scale prior/posterior plots
+
+The v0.29.6 log-scale switch in `plot_model_distributions()` plotted `dlnorm(x, ...)` (density w.r.t. `x`) against a log-x axis. Linear-space densities for wide lognormals shrink with scale — e.g. the zeta_ratio posterior in MOZ_s1_explore_v2 has a peak `dlnorm` of 9.9e-7 vs the prior at 8.1 (7 orders of magnitude smaller). On a shared linear y-axis the posterior flattened to a line at zero.
+
+Fix is the standard change of variables for density on a log axis: for `Y = log10(X)`,
+
+`f_Y(log10(x)) = f_X(x) · x · ln(10)`
+
+Applied to the lognormal and beta branches whenever the param is on log-scale. For lognormal, this is equivalent to `dnorm(log10(x), meanlog/ln(10), sdlog/ln(10))` — the same symmetric-bell convention used in `est_kappa_prior.R:281`.
+
+After the fix, the zeta_1 and zeta_ratio posteriors for the MOZ run now render as visible curves rather than collapsed lines. Peak heights are comparable across prior/posterior (all in the 0.2–0.4 range for zeta_* on the log10 density scale) regardless of where mass sits on the x-axis.
+
+---
+
 # MOSAIC 0.29.6
 
 ## Log-scale x-axis for wide-span parameters in global prior/posterior plots

@@ -327,10 +327,14 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
           x_lo_log <- max(x_lo, 1e-12)
           x_hi_log <- max(x_hi, x_lo_log * 1.01)
           x <- exp(seq(log(x_lo_log), log(x_hi_log), length.out = 1000))
+          # Density w.r.t. log10(x) so peak height is comparable across
+          # distributions with very different scales on a log-x plot.
+          # Jacobian: f_{log10(X)}(log10(x)) = f_X(x) * x * ln(10).
+          y <- dbeta(x, shape1, shape2) * x * log(10)
         } else {
           x <- seq(x_lo, x_hi, length.out = 1000)
+          y <- dbeta(x, shape1, shape2)
         }
-        y <- dbeta(x, shape1, shape2)
 
         if (shape1 < 1) {
           dist_str <- sprintf("Beta(%.2g, %.0f)", shape1, shape2)
@@ -373,10 +377,15 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         } else {
           if (param_name %in% log_scale_params && x_min > 0) {
             x <- exp(seq(log(x_min), log(x_max), length.out = 1000))
+            # Density w.r.t. log10(x) so peak height is comparable across
+            # prior and posterior when they sit on different decades of
+            # the log-x axis. For lognormal this is equivalent to
+            # dnorm(log10(x), meanlog/ln(10), sdlog/ln(10)).
+            y <- dlnorm(x, meanlog_val, sdlog_val) * x * log(10)
           } else {
             x <- seq(x_min, x_max, length.out = 1000)
+            y <- dlnorm(x, meanlog_val, sdlog_val)
           }
-          y <- dlnorm(x, meanlog_val, sdlog_val)
 
           # Check if density is non-negligible (avoid flat lines from numerical precision issues)
           max_density <- max(y, na.rm = TRUE)
