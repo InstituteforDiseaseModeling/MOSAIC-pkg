@@ -582,8 +582,10 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
   # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
   # zeta_2 > 0 is guaranteed (ratio of two positive lognormals). zeta_1 > zeta_2
-  # requires zeta_ratio > 1, which holds with probability ~(1 - 1e-6) given the
-  # zeta_ratio prior LN(log(300), 1.2).
+  # requires zeta_ratio > 1. Under the rev-2 priors (v0.29.0+) the combined
+  # zeta_ratio lognormal has meanlog ~10 and sdlog ~2, so
+  # P(zeta_ratio > 1) = 1 - Phi(-meanlog/sdlog) ~ 1 - 1e-6 -- the constraint
+  # holds with probability essentially 1.
   if ("zeta_1" %in% names(config_sampled) && "zeta_ratio" %in% names(config_sampled)) {
 
     if (verbose) cat("\n  Deriving zeta_2 from zeta_1 and zeta_ratio...\n")

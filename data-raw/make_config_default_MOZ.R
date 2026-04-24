@@ -121,10 +121,10 @@ message("Get Fourier seasonality parameters")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv"))
 tmp <- tmp[tmp$country_iso_code == j & tmp$response == 'cases',]
 
-a1 <- setNames(tmp$mean[tmp$parameter == 'a1'], j)
-a2 <- setNames(tmp$mean[tmp$parameter == 'a2'], j)
-b1 <- setNames(tmp$mean[tmp$parameter == 'b1'], j)
-b2 <- setNames(tmp$mean[tmp$parameter == 'b2'], j)
+a1 <- setNames(tmp$mean[tmp$parameter == 'a_1'], j)
+a2 <- setNames(tmp$mean[tmp$parameter == 'a_2'], j)
+b1 <- setNames(tmp$mean[tmp$parameter == 'b_1'], j)
+b2 <- setNames(tmp$mean[tmp$parameter == 'b_2'], j)
 
 message("Get departure probability (tau_i)")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_tau_departure.csv'))
@@ -263,12 +263,13 @@ default_args <- list(
      psi_star_z = setNames(0.6, j),      # MOZ 7 best: 0.615; moderate smoothing
      psi_star_k = setNames(-10, j),      # MOZ 7 best: -21.1; centered near new prior mean
      psi_jt = psi_jt,
-     zeta_1 = 70000,       # Symptomatic shedding; prior median 70k (reparameterized from 665)
-     zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300
-     zeta_2 = 70000 / 300, # v0.28.12: DERIVED at sampling time; tracked placeholder
+     # v0.29.0: zeta_* defaults rescaled from Frame-B 70k/300 to the biological
+     # scale implied by est_zeta_*_prior() meta-analysis (priors_default v15.0).
+     # Values are the MODES of the fitted priors (mode = exp(meanlog - sdlog^2)).
+     zeta_1 = 2.148e10,    # Mode of LN(26.641, 1.688) = exp(26.641 - 1.688^2)
+     zeta_2 = 2.148e10 / 1.094e3, # v0.28.12: DERIVED at sampling time; tracked placeholder (= 1.964e7)
      kappa = 10^6,
      decay_days_short = 18,      # MOZ 7 best: 19.8 days
-     decay_days_spread = 347,    # v0.27.0+: long is derived = short + spread. MOZ fallback when sampling off.
      decay_days_long = 365,      # Upper bound matches old prior U(30, 365); now derived from short+spread
      decay_shape_1 = 6.0,        # MOZ 7 best: 6.85; rapid initial decay
      decay_shape_2 = 4.5,        # MOZ 7 best: 4.30; right-skewed decay profile
@@ -278,10 +279,16 @@ default_args <- list(
 
 config_default_MOZ <- do.call(make_LASER_config, default_args)
 
+# Derived-parameter tracking fields not accepted by make_LASER_config signature.
+# Injected into the rda and written JSONs below so run_MOSAIC's
+# convert_config_to_matrix picks them up for samples.parquet.
+.zeta_ratio_MOZ <- 1.094e3      # Mode of LN(12.282, 2.299) = exp(12.282 - 2.299^2); was 300 (Frame B)
+.decay_days_spread_MOZ <- 347   # MOZ-specific spread (decay_days_long = short + spread)
+
 config_default_MOZ$metadata <- list(
-     version = "2.3",
+     version = "2.5",
      date = as.character(Sys.Date()),
-     description = "MOZ-specific LASER configuration with extended date range (2017-2026). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
+     description = "MOZ-specific LASER configuration with extended date range (2017-2026). v2.5 (2026-04-23): zeta_* defaults rescaled from Frame-B (70k / 300) to the biological scale implied by est_zeta_*_prior() (priors_default v15.0). v2.4: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )
 
 message("Transmission parameter validation")
@@ -304,6 +311,19 @@ for (fp in file_paths) {
      do.call(MOSAIC::make_LASER_config, args)
      rm(args)
 }
+
+# Patch written JSONs to include tracking fields not accepted by make_LASER_config
+for (fp in file_paths) {
+     if (!grepl("\\.json$", fp) || !file.exists(fp)) next
+     j_cfg <- jsonlite::fromJSON(fp)
+     j_cfg$zeta_ratio <- .zeta_ratio_MOZ
+     j_cfg$decay_days_spread <- .decay_days_spread_MOZ
+     jsonlite::write_json(j_cfg, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+}
+
+# Attach tracking fields to the rda-bound config_default_MOZ
+config_default_MOZ$zeta_ratio <- .zeta_ratio_MOZ
+config_default_MOZ$decay_days_spread <- .decay_days_spread_MOZ
 
 tmp_config <- jsonlite::fromJSON(file_paths[[1]])
 all.equal(config_default_MOZ, tmp_config)

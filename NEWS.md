@@ -1,3 +1,29 @@
+# MOSAIC 0.29.0
+
+## Breaking changes (prior scale shift)
+
+* **`zeta_1`, `zeta_2`, and `zeta_ratio` priors are re-estimated from a literature meta-analysis** (`R/est_zeta_1_prior.R`, `R/est_zeta_2_prior.R`, `R/est_zeta_ratio_prior.R`). The new priors encode the biological scale of *V. cholerae* shedding (cells per infected person per day) rather than the Frame-B LASER count-scale used by prior defaults. This is a ~6 order-of-magnitude upward shift on `zeta_1` (prior median moves from 70 000 to ~1e11-1e12 cells/person/day) and a corresponding re-centring of `zeta_ratio`. The previous defaults `LN(log(70 000), 0.8)` and `LN(log(300), 1.2)` are replaced by weighted-MLE lognormal fits on primary-source anchors (Nelson 2009, Merrell 2002, Harris 2012, Smith 2026 medRxiv, Kaper 1995, etc.).
+* **`zeta_2` becomes a first-class prior.** `priors_default$parameters_global$zeta_2` is now populated with the literature-derived lognormal. `sample_parameters()` still derives the sampled `zeta_2 = zeta_1 / zeta_ratio` at sampling time (guarantees `zeta_1 > zeta_2` algebraically); the stored `zeta_2` prior is the reference distribution used for validation and downstream diagnostics.
+* **Existing calibration posteriors are invalidated.** The current `zeta_1` posterior centred at ~48 k has effectively probability 0 under the new prior. Every existing calibration artefact under `MOSAIC-Mozambique/output/calibration/` must be re-run with the new priors before use.
+* **`config_default.rda` scale shift.** `make_config_default.R` placeholder constants (`zeta_1`, `zeta_2`, `.zeta_ratio_default`) have been updated to the new prior medians. Any code that reads `config_default$zeta_*` expecting the old numeric scale will behave differently.
+* **`config_default_MOZ.rda` scale shift.** The same placeholder constants in `make_config_default_MOZ.R` have been updated.
+* **MOZ project override (stand-alone MOSAIC-Mozambique)** uses its own `zeta_ratio` centre (50) independent of the pkg default. That override is unaffected; the MOZ team decides adoption there.
+* **LASER reservoir storage precision.** At the new biological scale (`zeta_1 ~ 1e11`, `I_sym ~ 100`), the daily Poisson mean contribution to `W` reaches ~1e13 cells - far above float32's exact-integer limit (~1.7e7). **`laser-cholera/src/laser/cholera/metapop/environmental.py` must widen `W` / `W_next` to float64 before this release can be merged.** This is an EXTERNAL (READ-ONLY) laser-cholera change and is tracked as a pending prerequisite; until the dtype change lands, running `run_MOSAIC()` against the new priors will silently accumulate rounding error in the reservoir update each tick.
+
+## New functions
+
+* `est_zeta_1_prior(PATHS, severity_mix)` - weighted-MLE lognormal on symptomatic shedding anchors.
+* `est_zeta_2_prior(PATHS)` - weighted-MLE lognormal on asymptomatic shedding anchors with hard `sdlog >= 2.0` floor.
+* `est_zeta_ratio_prior(PATHS, zeta_1_fit, zeta_2_fit, n_sim, seed)` - precision-weighted combination of direct-literature and derived paired-Monte-Carlo channels.
+
+## Migration notes
+
+* Rebuild priors: `source("data-raw/make_priors_default.R")`.
+* Rebuild MOZ priors: `source("data-raw/make_priors_default_MOZ.R")`.
+* Rebuild configs: `source("data-raw/make_config_default.R")` and `source("data-raw/make_config_default_MOZ.R")`.
+* Downstream MOSAIC-docs figures with `zeta_*` axes must be regenerated.
+* Re-run calibration for every production configuration before using outputs in interventions analyses.
+
 # MOSAIC 0.28.13
 
 ## Other

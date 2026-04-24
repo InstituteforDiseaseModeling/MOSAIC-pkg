@@ -30,9 +30,9 @@ dem_annual <- read.csv(
 
 priors_default_MOZ <- list(
      metadata = list(
-          version = "2.2",
+          version = "3.0",
           date = Sys.Date(),
-          description = "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
+          description = "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
      ),
      parameters_global = list(),
      parameters_location = list()
@@ -297,22 +297,36 @@ priors_default_MOZ$parameters_global$sigma <- list(
      parameters = list(shape1 = 4.30, shape2 = 13.51)
 )
 
-# zeta_1 - Symptomatic shedding rate
-# Anchored on MOZ production best-fit models (86k best single, 27k best ensemble config)
-# and single-stage BFRS posteriors (4.6k-14.3k). Q2.5=12.5k, median=70k, Q97.5=392k.
+# zeta_1 - Symptomatic shedding rate (V. cholerae cells per infected person per day)
+# v0.29.0: Hardcoded from est_zeta_1_prior() output on 2026-04-23 to match
+# priors_default main (see plan_zeta_priors_implementation.md Section 5 and
+# Section 9 step 6). MOZ hardcodes rather than calling est_*() to keep the
+# build self-contained -- matching how kappa is handled here.
 priors_default_MOZ$parameters_global$zeta_1 <- list(
-     description = "Symptomatic shedding rate (total bacteria per infected person per day)",
+     description = "Symptomatic shedding rate (V. cholerae cells per infected person per day)",
      distribution = "lognormal",
-     parameters = list(meanlog = log(70000), sdlog = 0.8)
+     parameters = list(meanlog = 26.640869, sdlog = 1.688301)
+)
+
+# zeta_2 - Asymptomatic shedding rate (V. cholerae cells per infected person per day)
+# v0.29.0: Hardcoded from est_zeta_2_prior() output on 2026-04-23. sdlog hard
+# floor of 2.0 applied in est_zeta_2_prior() due to single-primary-source
+# anchor (Nelson 2009). See plan_zeta_priors_implementation.md Section 6.
+priors_default_MOZ$parameters_global$zeta_2 <- list(
+     description = "Asymptomatic shedding rate (V. cholerae cells per infected person per day); derived at sampling time as zeta_1/zeta_ratio, this prior is the literature-derived reference for validation",
+     distribution = "lognormal",
+     parameters = list(meanlog = 12.685919, sdlog = 2.000000)
 )
 
 # zeta_ratio - Symptomatic-to-asymptomatic shedding ratio (zeta_1 / zeta_2).
-# zeta_2 is derived: zeta_2 = zeta_1 / zeta_ratio. Guaranteed zeta_1 > zeta_2.
-# MOZ single-stage posteriors: ratio 200-580. Prior median 300.
+# v0.29.0: Hardcoded from est_zeta_ratio_prior() output on 2026-04-23
+# (precision-weighted combination of direct-literature and derived-from-marginals
+# channels). See plan_zeta_priors_implementation.md Section 7.
+# zeta_2 derived at sampling time: zeta_2 = zeta_1 / zeta_ratio.
 priors_default_MOZ$parameters_global$zeta_ratio <- list(
-     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
+     description = "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); precision-weighted combination of direct-literature and derived-from-marginals channels",
      distribution = "lognormal",
-     parameters = list(meanlog = log(300), sdlog = 1.2)
+     parameters = list(meanlog = 12.281866, sdlog = 2.298860)
 )
 
 # delta_reporting_cases

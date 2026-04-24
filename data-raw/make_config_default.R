@@ -376,14 +376,20 @@ default_args <- list(
      psi_star_z = setNames(rep(1.0, length(j)), j),    # Default: no smoothing
      psi_star_k = setNames(rep(0.0, length(j)), j),    # Default: no time offset
      psi_jt = psi_jt,
-     zeta_1 = 70000,       # Symptomatic shedding; prior median 70k (reparameterized from 665)
-     zeta_ratio = 300,     # zeta_1/zeta_2 ratio; prior median 300
-     zeta_2 = 70000 / 300, # v0.28.12: DERIVED at sampling time (= zeta_1/zeta_ratio);
-                           # included here as a tracked placeholder so run_MOSAIC's
-                           # param_names_all picks it up for samples.parquet
+     # v0.29.0: zeta_* defaults rescaled from the Frame-B 70k/300 scale to the
+     # biological scale implied by the literature meta-analysis in
+     # est_zeta_1_prior() / est_zeta_2_prior() / est_zeta_ratio_prior().
+     # Values are the MODES of the fitted priors (most probable value under
+     # LN(meanlog, sdlog); mode = exp(meanlog - sdlog^2)). Modes are used
+     # rather than medians because for the wide lognormals here (sdlog ~1.7-2.3)
+     # the median sits on the right-tail shoulder of the density.
+     zeta_1 = 2.148e10,    # Mode of LN(26.641, 1.688) = exp(26.641 - 1.688^2)
+     zeta_2 = 2.148e10 / 1.094e3,  # DERIVED at sampling time (= zeta_1/zeta_ratio);
+                                   # tracked placeholder so run_MOSAIC's
+                                   # param_names_all picks it up for samples.parquet.
+                                   # Uses z1_mode/z_ratio_mode = 1.964e7.
      kappa = 10^6,
      decay_days_short = 16, # Min V. cholerae survival (was 3; prior median 16, posteriors 15-48)
-     decay_days_spread = 184, # Spread; v0.27.0+ (prior median 180; decay_days_long = short + spread)
      decay_days_long = 200, # Max V. cholerae survival; DERIVED at sampling time from short + spread
      decay_shape_1 = 5,
      decay_shape_2 = 2.5,
@@ -393,11 +399,17 @@ default_args <- list(
 
 config_default <- do.call(make_LASER_config, default_args)
 
+# Derived-parameter tracking fields not accepted by make_LASER_config signature.
+# Injected into config_default (and the written JSONs below) so run_MOSAIC's
+# convert_config_to_matrix picks them up for samples.parquet.
+.zeta_ratio_default <- 1.094e3      # Mode of LN(12.282, 2.299) = exp(12.282 - 2.299^2); was 300 (Frame B)
+.decay_days_spread_default <- 184   # Spread; prior median 180 (decay_days_long = short + spread)
+
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "2.0",
+     version = "3.0",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships
@@ -438,6 +450,19 @@ for (fp in file_paths) {
      rm(args)
 
 }
+
+# Patch written JSONs to include tracking fields not accepted by make_LASER_config
+for (fp in file_paths) {
+     if (!grepl("\\.json$", fp) || !file.exists(fp)) next
+     j <- jsonlite::fromJSON(fp)
+     j$zeta_ratio <- .zeta_ratio_default
+     j$decay_days_spread <- .decay_days_spread_default
+     jsonlite::write_json(j, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+}
+
+# Attach tracking fields to the rda-bound config_default
+config_default$zeta_ratio <- .zeta_ratio_default
+config_default$decay_days_spread <- .decay_days_spread_default
 
 tmp_config <- jsonlite::fromJSON(file_paths[[1]])
 

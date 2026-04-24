@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "version": "2.2",
-    "date": "2026-04-20",
-    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration (updated from test_31 MOZ 6-7 analysis)"
+    "version": "3.0",
+    "date": "2026-04-23",
+    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
   },
   "parameters_global": {
     "alpha_1": {
@@ -182,19 +182,27 @@
       }
     },
     "zeta_1": {
-      "description": "Symptomatic shedding rate (total bacteria per infected person per day)",
+      "description": "Symptomatic shedding rate (V. cholerae cells per infected person per day)",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 11.1562505210315,
-        "sdlog": 0.8
+        "meanlog": 26.640869,
+        "sdlog": 1.688301
+      }
+    },
+    "zeta_2": {
+      "description": "Asymptomatic shedding rate (V. cholerae cells per infected person per day); derived at sampling time as zeta_1/zeta_ratio, this prior is the literature-derived reference for validation",
+      "distribution": "lognormal",
+      "parameters": {
+        "meanlog": 12.685919,
+        "sdlog": 2
       }
     },
     "zeta_ratio": {
-      "description": "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2)",
+      "description": "Ratio of symptomatic to asymptomatic shedding rate (zeta_1 / zeta_2); precision-weighted combination of direct-literature and derived-from-marginals channels",
       "distribution": "lognormal",
       "parameters": {
-        "meanlog": 5.7037824746562,
-        "sdlog": 1.2
+        "meanlog": 12.281866,
+        "sdlog": 2.29886
       }
     },
     "delta_reporting_cases": {
