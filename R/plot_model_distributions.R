@@ -267,6 +267,13 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     return(kl)
   }
 
+  # Parameters whose x-axis spans multiple orders of magnitude and read
+  # much better on a log10 scale (matches the kappa_prior.png reference
+  # styling with annotation_logticks). Density grids for these params are
+  # log-spaced so the curve renders smoothly under scale_x_log10().
+  log_scale_params <- c("kappa", "zeta_1", "zeta_2", "zeta_ratio",
+                        "prop_E_initial", "prop_I_initial")
+
   # Helper function to calculate distribution density
   calc_distribution_density <- function(dist_data, param_name, param_info) {
     x <- NULL; y <- NULL; dist_str <- NULL; mean_val <- NULL
@@ -313,7 +320,16 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         } else {
           x_lo <- 0; x_hi <- 1
         }
-        x <- seq(x_lo, x_hi, length.out = 1000)
+        if (param_name %in% log_scale_params) {
+          # Log-spaced grid requires strictly positive lower bound. Floor at
+          # 1e-12 to keep log(x) finite for highly left-skewed Betas like
+          # Beta(0.01, 9999.99) where qbeta(0.0001) can underflow to 0.
+          x_lo_log <- max(x_lo, 1e-12)
+          x_hi_log <- max(x_hi, x_lo_log * 1.01)
+          x <- exp(seq(log(x_lo_log), log(x_hi_log), length.out = 1000))
+        } else {
+          x <- seq(x_lo, x_hi, length.out = 1000)
+        }
         y <- dbeta(x, shape1, shape2)
 
         if (shape1 < 1) {
@@ -355,7 +371,11 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         } else if (x_max <= x_min) {
           failure_reason <- sprintf("lognormal: x_max <= x_min (%.4g <= %.4g)", x_max, x_min)
         } else {
-          x <- seq(x_min, x_max, length.out = 1000)
+          if (param_name %in% log_scale_params && x_min > 0) {
+            x <- exp(seq(log(x_min), log(x_max), length.out = 1000))
+          } else {
+            x <- seq(x_min, x_max, length.out = 1000)
+          }
           y <- dlnorm(x, meanlog_val, sdlog_val)
 
           # Check if density is non-negligible (avoid flat lines from numerical precision issues)
@@ -643,14 +663,20 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     }
     subtitle_str <- paste(subtitle_lines, collapse = "\n")
 
-    # Determine x-axis formatting
-    x_scale <- if (param_info$category == "initial_conditions" && param_name %in% c("prop_E_initial", "prop_I_initial")) {
-      ggplot2::scale_x_continuous(labels = scales::scientific)
+    # Determine x-axis formatting. Params spanning multiple orders of
+    # magnitude (lognormal kappa/zeta_*, heavily left-skewed Beta priors on
+    # initial conditions) render better on log10 — mirrors the kappa_prior
+    # styling in est_kappa_prior.R:375.
+    x_scale <- if (param_name %in% log_scale_params) {
+      ggplot2::scale_x_log10(labels = scales::label_log())
     } else if (grepl("beta.*transmission", param_name)) {
       ggplot2::scale_x_continuous(labels = scales::scientific)
     } else {
       ggplot2::scale_x_continuous()
     }
+    # Log-scale params also get the annotation_logticks decoration applied
+    # later when the scale is added to the plot.
+    add_logticks <- param_name %in% log_scale_params
 
     # Build base plot — use an empty data frame when only fixed values exist
     if (fixed_only) {
@@ -683,6 +709,13 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         subtitle = subtitle_str,
         x = param_info$units
       )
+
+    if (add_logticks) {
+      p <- p + ggplot2::annotation_logticks(sides = "b",
+                                            short = ggplot2::unit(0.05, "cm"),
+                                            mid   = ggplot2::unit(0.1,  "cm"),
+                                            long  = ggplot2::unit(0.15, "cm"))
+    }
 
     # Add mean lines for distributional posteriors
     for (method_name in names(method_results)) {

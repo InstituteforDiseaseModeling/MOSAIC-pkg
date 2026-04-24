@@ -1,3 +1,17 @@
+# MOSAIC 0.29.6
+
+## Log-scale x-axis for wide-span parameters in global prior/posterior plots
+
+`plot_model_distributions()` renders prior vs. posterior densities for all global parameters into `distributions_global_Prior_Posterior.pdf`. Parameters with multi-order-of-magnitude support (lognormal `kappa`, `zeta_1`, `zeta_2`, `zeta_ratio`; heavily left-skewed Beta priors on `prop_E_initial`, `prop_I_initial`) previously rendered on a linear x-axis — the distribution looked like a spike at zero with an invisible right tail, wasting the panel and hiding the posterior shape.
+
+This release switches those six panels to `scale_x_log10()` with `annotation_logticks(sides = "b")`, matching the styling already used in `est_kappa_prior.R:375` for the `kappa_prior.png` forest/density plots. Density grids for these params are now log-spaced (`exp(seq(log(x_min), log(x_max), ...))`) so the rendered curve is smooth across the full log range rather than linear-clumped at the right edge.
+
+**Log-scale params:** `kappa`, `zeta_1`, `zeta_2`, `zeta_ratio`, `prop_E_initial`, `prop_I_initial`.
+
+**Unchanged:** All Beta priors on [0,1] probabilities, truncnorm priors on bounded absolute ranges, and narrow-span lognormal/gamma priors still use linear x.
+
+---
+
 # MOSAIC 0.29.5
 
 ## Best/medioid prediction plots: independent `n_iter` and parallel execution
