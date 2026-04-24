@@ -385,7 +385,6 @@ default_args <- list(
      # duplicate of make_config_default.R; reconciling the other drifted fields
      # is out of scope.)
      decay_days_short = 16,
-     decay_days_spread = 184,
      decay_days_long = 200,
      decay_shape_1 = 5,
      decay_shape_2 = 2.5,
@@ -395,11 +394,16 @@ default_args <- list(
 
 config_default <- do.call(make_LASER_config, default_args)
 
+# Derived-parameter tracking field not accepted by make_LASER_config signature.
+# Injected into the rda and written JSONs below so run_MOSAIC's
+# convert_config_to_matrix picks it up for samples.parquet.
+.decay_days_spread_default <- 184
+
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "1.0",
+     version = "1.1",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model"
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v1.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5)."
 )
 
 # Validate transmission parameter relationships
@@ -440,6 +444,17 @@ for (fp in file_paths) {
      rm(args)
 
 }
+
+# Patch written JSONs to include tracking field not accepted by make_LASER_config
+for (fp in file_paths) {
+     if (!grepl("\\.json$", fp) || !file.exists(fp)) next
+     j_cfg <- jsonlite::fromJSON(fp)
+     j_cfg$decay_days_spread <- .decay_days_spread_default
+     jsonlite::write_json(j_cfg, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+}
+
+# Attach tracking field to the rda-bound config_default
+config_default$decay_days_spread <- .decay_days_spread_default
 
 tmp_config <- jsonlite::fromJSON(file_paths[[1]])
 
