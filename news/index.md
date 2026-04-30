@@ -1,5 +1,26 @@
 # Changelog
 
+## MOSAIC 0.30.5
+
+### Show all contributors in pkgdown sidebar; fix Christopher’s broken GitHub link
+
+Two pkgdown configuration fixes for the authors page and Developers
+sidebar:
+
+1.  **Sidebar shows all five roles, not just `aut` + `cre`.** Added
+    `authors.sidebar.roles: [aut, cre, ctb]` to `_pkgdown.yml`.
+    Previously the right-hand “Developers” block on the home page listed
+    only John (aut, cre) and Christopher (aut, ctb); Tony, Dejan, and
+    Meikang (all `ctb` only) were hidden. They now all appear.
+2.  **Christopher’s GitHub link was 404.** `_pkgdown.yml` had
+    `https://github.com/ChristopherWLorton` (no such user); the actual
+    handle is `clorton`. Fixed.
+3.  **Tony’s GitHub link added.** `https://github.com/tinghf`.
+
+John’s `gilesjohnr` link was already correct.
+
+------------------------------------------------------------------------
+
 ## MOSAIC 0.30.3
 
 ### Sync `rho_deaths` into MOZ data-raw, JSON sidecars, and simulation configs

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,20 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.5" id="mosaic-0305">MOSAIC 0.30.5<a class="anchor" aria-label="anchor" href="#mosaic-0305"></a></h2>
+<div class="section level3">
+<h3 id="show-all-contributors-in-pkgdown-sidebar-fix-christophers-broken-github-link-0-30-5">Show all contributors in pkgdown sidebar; fix Christopher’s broken GitHub link<a class="anchor" aria-label="anchor" href="#show-all-contributors-in-pkgdown-sidebar-fix-christophers-broken-github-link-0-30-5"></a></h3>
+<p>Two pkgdown configuration fixes for the authors page and Developers sidebar:</p>
+<ol style="list-style-type: decimal"><li>
+<strong>Sidebar shows all five roles, not just <code>aut</code> + <code>cre</code>.</strong> Added <code>authors.sidebar.roles: [aut, cre, ctb]</code> to <code>_pkgdown.yml</code>. Previously the right-hand “Developers” block on the home page listed only John (aut, cre) and Christopher (aut, ctb); Tony, Dejan, and Meikang (all <code>ctb</code> only) were hidden. They now all appear.</li>
+<li>
+<strong>Christopher’s GitHub link was 404.</strong> <code>_pkgdown.yml</code> had <code>https://github.com/ChristopherWLorton</code> (no such user); the actual handle is <code>clorton</code>. Fixed.</li>
+<li>
+<strong>Tony’s GitHub link added.</strong> <code>https://github.com/tinghf</code>.</li>
+</ol><p>John’s <code>gilesjohnr</code> link was already correct.</p>
+<hr></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.30.3" id="mosaic-0303">MOSAIC 0.30.3<a class="anchor" aria-label="anchor" href="#mosaic-0303"></a></h2>
 <div class="section level3">
@@ -1090,7 +1104,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by <a href="https://github.com/gilesjohnr" class="external-link">John R Giles</a>, <a href="https://github.com/ChristopherWLorton" class="external-link">Christopher W Lorton</a>.</p>
+  <p>Developed by <a href="https://github.com/gilesjohnr" class="external-link">John R Giles</a>, <a href="https://github.com/clorton" class="external-link">Christopher W Lorton</a>.</p>
 </div>
 
 <div class="pkgdown-footer-right">
