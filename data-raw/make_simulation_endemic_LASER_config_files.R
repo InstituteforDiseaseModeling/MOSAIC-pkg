@@ -138,7 +138,8 @@ sim_args <- list(
      phi_1            = 0.64,
      phi_2            = 0.85,
      omega_1          = 0.0056,    # ≈ 1 / 180 days (moderate waning)
-     omega_2          = 0.0033,    # ≈ 1 / 300 days
+     omega_2          = 0.0033,
+     nu_jt_sources    = c("S", "E", "Isym", "Iasym", "R"),
      iota             = 1 / 1.4,
      gamma_1          = 0.20,
      gamma_2          = 0.10,

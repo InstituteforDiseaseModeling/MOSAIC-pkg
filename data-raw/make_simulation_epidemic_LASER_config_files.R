@@ -113,6 +113,7 @@ sim_args <- list(
      phi_2            = 0.85,
      omega_1          = 0.0006,
      omega_2          = 0.0004,
+     nu_jt_sources    = c("S", "E", "Isym", "Iasym", "R"),
      iota             = 1/1.4,
      gamma_1          = 0.2,
      gamma_2          = 0.1,
