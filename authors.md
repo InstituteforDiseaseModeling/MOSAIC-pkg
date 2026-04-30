@@ -13,7 +13,7 @@
 - **Dejan Lukacevic**. Contributor.
   [](https://orcid.org/0009-0001-1011-1084)
 
-- **Meikang Wu**. Contributor.
+- **Meikang Wu**. Contributor. [](https://orcid.org/0009-0007-7748-4890)
 
 ## Citation
 
