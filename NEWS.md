@@ -1,3 +1,11 @@
+# MOSAIC 0.30.6
+
+## Add GitHub profile links for Dejan Lukacevic and Meikang Wu
+
+`_pkgdown.yml` now wires Dejan to `DLukacevic-IDM` and Meikang to `MeWu-IDM`. All five contributors in the sidebar and authors page now have working GitHub profile links.
+
+---
+
 # MOSAIC 0.30.5
 
 ## Show all contributors in pkgdown sidebar; fix Christopher's broken GitHub link
