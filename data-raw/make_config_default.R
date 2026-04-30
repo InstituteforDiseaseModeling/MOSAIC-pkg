@@ -337,6 +337,7 @@ default_args <- list(
      phi_2 = 0.768,
      omega_1 = 0.00073,
      omega_2 = 0.000485,
+     nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"),
      iota = 1/1.4,
      gamma_1 = 0.1,       # Symptomatic recovery ~10 days (was 0.2 = 5 days; posteriors consistently 0.09-0.11)
      gamma_2 = 0.5,       # Asymptomatic recovery ~2 days (was 0.1 = 10 days; posteriors consistently 0.34-0.78)
@@ -413,9 +414,9 @@ config_default <- do.call(make_LASER_config, default_args)
 
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "3.0",
+     version = "3.1",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships
