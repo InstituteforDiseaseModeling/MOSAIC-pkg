@@ -131,6 +131,12 @@ sim_args <- list(
      R_j_initial      = R_j,
      V1_j_initial     = V1_j,
      V2_j_initial     = V2_j,
+     prop_S_initial   = setNames(S_j  / N_j, j),
+     prop_E_initial   = setNames(E_j  / N_j, j),
+     prop_I_initial   = setNames(I_j  / N_j, j),
+     prop_R_initial   = setNames(R_j  / N_j, j),
+     prop_V1_initial  = setNames(V1_j / N_j, j),
+     prop_V2_initial  = setNames(V2_j / N_j, j),
      b_jt             = b_jt,
      d_jt             = d_jt,
      nu_1_jt          = nu_1_jt,
@@ -151,6 +157,8 @@ sim_args <- list(
      rho              = 0.52,
      rho_deaths       = 0.6,       # Death detection rate (laser-cholera#49; mean of Beta(3, 2))
      sigma            = 0.24,
+     delta_reporting_cases  = 0,   # Infection-to-case reporting delay (days)
+     delta_reporting_deaths = 5,   # Infection-to-death reporting delay (days)
      longitude        = longitude,
      latitude         = latitude,
      mobility_omega   = mobility_omega,
@@ -172,11 +180,9 @@ sim_args <- list(
      psi_star_z       = rep(1, n_loc),    # No smoothing (use raw psi_jt)
      psi_star_k       = rep(0, n_loc),    # No time lag
      zeta_1           = 7.5,
-     zeta_ratio       = 3,      # v0.28.12: zeta_ratio = zeta_1/zeta_2 (sampled); zeta_2 derived
      zeta_2           = 2.5,
      kappa            = 1e5,
      decay_days_short  = 1,          # short burst
-     decay_days_spread = 89,         # v0.27.0+: long is derived = short + spread
      decay_days_long  = 90,       # vibrios can persist ≈ 1 yr in water
      decay_shape_1    = 1,
      decay_shape_2    = 1,         # Linear/concave response to suitability
@@ -185,6 +191,13 @@ sim_args <- list(
 )
 
 sim_config <- do.call(MOSAIC::make_LASER_config, sim_args)
+
+# Tracking fields not accepted by make_LASER_config — inject after construction.
+.zeta_ratio_sim        <- 3
+.decay_days_spread_sim <- 89   # decay_days_long = short + spread
+
+sim_config$zeta_ratio       <- .zeta_ratio_sim
+sim_config$decay_days_spread <- .decay_days_spread_sim
 
 # --------------------------- 9. Write to disk ----------------------------- #
 
@@ -197,10 +210,17 @@ file_paths <- c(
 )
 
 for (fp in file_paths) {
-     args2 <- sim_config
+     args2 <- sim_config[!names(sim_config) %in% c("zeta_ratio", "decay_days_spread")]
      args2$output_file_path <- fp
      do.call(MOSAIC::make_LASER_config, args2)
 }
+
+# Patch written JSONs to include tracking fields
+json_fp <- file_paths[grepl("\\.json$", file_paths)]
+j_cfg <- jsonlite::fromJSON(json_fp)
+j_cfg$zeta_ratio       <- .zeta_ratio_sim
+j_cfg$decay_days_spread <- .decay_days_spread_sim
+jsonlite::write_json(j_cfg, json_fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
 message("Endemic LASER config written to:\n",
         paste("  •", normalizePath(file_paths), collapse = "\n"))
