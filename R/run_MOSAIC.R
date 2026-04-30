@@ -2811,6 +2811,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_kappa = TRUE,             # Overdispersion parameter
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
+    sample_rho_deaths = TRUE,        # Death detection rate (laser-cholera#49)
     sample_delta_reporting_cases = TRUE,  # Infection-to-case reporting delay
     sample_delta_reporting_deaths = TRUE, # Infection-to-death reporting delay
 

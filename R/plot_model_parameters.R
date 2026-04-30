@@ -104,6 +104,7 @@ plot_model_parameters <- function(results,
           "gamma_1", "gamma_2",                      # Recovery rates
           "epsilon",                                 # Incubation rate
           "rho",                                     # Care-seeking probability
+          "rho_deaths",                              # Death detection rate (laser-cholera#49)
           "sigma",                                   # Progression rate
           "iota",                                    # Importation rate
           "alpha_1", "alpha_2",                      # Environmental transmission

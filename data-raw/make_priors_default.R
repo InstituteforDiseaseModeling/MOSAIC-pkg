@@ -30,9 +30,9 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "15.0",
+          version = "15.1",
           date = Sys.Date(),
-          description = "Default informative prior distributions for MOSAIC model parameters. v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
+          description = "Default informative prior distributions for MOSAIC model parameters. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
      ),
      parameters_global = list(),    # Single parameters used by all locations
      parameters_location = list()   # Location specific parameters
@@ -462,6 +462,18 @@ priors_default$parameters_global$rho <- list(
      description = "Care-seeking rate: probability a symptomatic infection is reported as suspected (GEMS + Wiens 2025)",
      distribution = "beta",
      parameters = list(shape1 = rho_shape1, shape2 = rho_shape2)
+)
+
+# rho_deaths - Death detection rate (probability a true cholera death is captured by surveillance)
+# Beta(3, 2) gives mean ~0.6 reflecting that ~60% of true cholera deaths
+# enter the surveillance system. Finger et al. 2024 (Lancet ID;
+# https://doi.org/10.1016/S1473-3099(24)00237-8) document that 23-96%
+# of cholera deaths occur in the community (outside health facilities)
+# and are less likely to be captured by surveillance. See laser-cholera#49.
+priors_default$parameters_global$rho_deaths <- list(
+     description = "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+     distribution = "beta",
+     parameters = list(shape1 = 3.0, shape2 = 2.0)
 )
 
 # sigma - Proportion symptomatic

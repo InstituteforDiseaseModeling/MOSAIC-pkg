@@ -84,6 +84,7 @@ convert_config_to_dataframe <- function(config) {
           "gamma_2",
           "epsilon",
           "rho",
+          "rho_deaths",        # Added: Death detection rate (laser-cholera#49)
           "sigma",
           "mobility_omega",
           "mobility_gamma",

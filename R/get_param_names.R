@@ -97,6 +97,7 @@ get_param_names <- function(object) {
         "epsilon",
         "chi",
         "rho",
+        "rho_deaths",
         "sigma",
         "mobility_omega",
         "mobility_gamma",
