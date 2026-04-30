@@ -11,10 +11,11 @@
 - **[Tony Ting](https://github.com/tinghf)**. Contributor.
   [](https://orcid.org/0009-0007-1345-3075)
 
-- **Dejan Lukacevic**. Contributor.
+- **[Dejan Lukacevic](https://github.com/DLukacevic-IDM)**. Contributor.
   [](https://orcid.org/0009-0001-1011-1084)
 
-- **Meikang Wu**. Contributor. [](https://orcid.org/0009-0007-7748-4890)
+- **[Meikang Wu](https://github.com/MeWu-IDM)**. Contributor.
+  [](https://orcid.org/0009-0007-7748-4890)
 
 ## Citation
 
@@ -22,13 +23,13 @@ Source:
 [`DESCRIPTION`](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/DESCRIPTION)
 
 Giles J, Lorton C (2026). *MOSAIC: Metapopulation Outbreak Simulation
-And Interventions for Cholera (MOSAIC)*. R package version 0.30.5,
+And Interventions for Cholera (MOSAIC)*. R package version 0.30.6,
 <https://institutefordiseasemodeling.github.io/MOSAIC-pkg/>.
 
     @Manual{,
       title = {MOSAIC: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)},
       author = {John R Giles and Christopher W Lorton},
       year = {2026},
-      note = {R package version 0.30.5},
+      note = {R package version 0.30.6},
       url = {https://institutefordiseasemodeling.github.io/MOSAIC-pkg/},
     }
