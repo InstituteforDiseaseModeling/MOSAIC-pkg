@@ -31,6 +31,7 @@ make_LASER_config(
   phi_2 = NULL,
   omega_1 = NULL,
   omega_2 = NULL,
+  nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"),
   iota = NULL,
   gamma_1 = NULL,
   gamma_2 = NULL,
@@ -159,7 +160,12 @@ sequence from date_start to date_stop.
 
 \item{omega_1}{Waning immunity rate for one dose (numeric >= 0).}
 
-\item{omega_2}{Waning immunity rate for two doses (numeric >= 0).
+\item{omega_2}{Waning immunity rate for two doses (numeric >= 0).}
+
+\item{nu_jt_sources}{Character vector of compartment names eligible for first-dose vaccination
+(default \code{c("S", "E", "Isym", "Iasym", "R")}). Must be a non-empty subset of
+\code{c("S", "E", "Isym", "Iasym", "R")}. Passed to laser-cholera v0.12+ which draws
+first doses proportionally from all listed compartments.
 \subsection{Infection dynamics}{
 }}
 

@@ -60,6 +60,10 @@
 #' @param phi_2 Effectiveness of two doses of OCV (numeric in \[0, 1\]).
 #' @param omega_1 Waning immunity rate for one dose (numeric >= 0).
 #' @param omega_2 Waning immunity rate for two doses (numeric >= 0).
+#' @param nu_jt_sources Character vector of compartment names eligible for first-dose vaccination
+#'        (default \code{c("S", "E", "Isym", "Iasym", "R")}). Must be a non-empty subset of
+#'        \code{c("S", "E", "Isym", "Iasym", "R")}. Passed to laser-cholera v0.12+ which draws
+#'        first doses proportionally from all listed compartments.
 #'
 #' ## Infection dynamics
 #' @param iota Incubation period (numeric > 0).
@@ -240,6 +244,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               phi_2 = NULL,
                               omega_1 = NULL,
                               omega_2 = NULL,
+                              nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"),
 
                               ## Infection dynamics
                               iota = NULL,
@@ -351,6 +356,7 @@ make_LASER_config <- function(output_file_path = NULL,
           phi_2             = phi_2,
           omega_1           = omega_1,
           omega_2           = omega_2,
+          nu_jt_sources     = nu_jt_sources,
           iota              = iota,
           gamma_1           = gamma_1,
           gamma_2           = gamma_2,
@@ -587,6 +593,12 @@ make_LASER_config <- function(output_file_path = NULL,
      }
      if (!is.numeric(omega_2) || omega_2 < 0) {
           stop("omega_2 must be a numeric scalar greater than or equal to zero.")
+     }
+
+     valid_sources <- c("S", "E", "Isym", "Iasym", "R")
+     if (!is.character(nu_jt_sources) || length(nu_jt_sources) < 1 || !all(nu_jt_sources %in% valid_sources)) {
+          stop(paste0("nu_jt_sources must be a non-empty character vector with entries from: ",
+                      paste(valid_sources, collapse = ", "), "."))
      }
 
      ## Infection dynamics validation.
