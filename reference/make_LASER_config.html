@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -99,6 +99,7 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  mu_j_slope <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mu_j_epidemic_factor <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  rho <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  rho_deaths <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sigma <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  chi_endemic <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  chi_epidemic <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -328,6 +329,10 @@ Numeric vector of length(location_name). Must be &gt;= 0.</p><div class="section
 
 <dt id="arg-rho">rho<a class="anchor" aria-label="anchor" href="#arg-rho"></a></dt>
 <dd><p>Proportion of true infections (numeric in [0, 1]).</p></dd>
+
+
+<dt id="arg-rho-deaths">rho_deaths<a class="anchor" aria-label="anchor" href="#arg-rho-deaths"></a></dt>
+<dd><p>Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Optional; when NULL, laser-cholera 0.12.x ignores it and the deaths observation model uses raw simulated counts. Once laser-cholera#49 ships, the engine consumes this to produce reported_deaths.</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>

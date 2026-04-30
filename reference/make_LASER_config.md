@@ -50,6 +50,7 @@ make_LASER_config(
   mu_j_slope = NULL,
   mu_j_epidemic_factor = NULL,
   rho = NULL,
+  rho_deaths = NULL,
   sigma = NULL,
   chi_endemic = NULL,
   chi_epidemic = NULL,
@@ -291,6 +292,14 @@ make_LASER_config(
 - rho:
 
   Proportion of true infections (numeric in \[0, 1\]).
+
+- rho_deaths:
+
+  Death detection rate: probability a true cholera death is captured by
+  surveillance (numeric in \[0, 1\] or NULL). Optional; when NULL,
+  laser-cholera 0.12.x ignores it and the deaths observation model uses
+  raw simulated counts. Once laser-cholera#49 ships, the engine consumes
+  this to produce reported_deaths.
 
 - sigma:
 
