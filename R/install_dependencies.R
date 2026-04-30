@@ -73,7 +73,7 @@ install_dependencies <- function(force = FALSE) {
      # Locate environment.yml in the package.
      # -----------------------------------------------------------------------
 
-     env_yml_path <- system.file("py", "environment.yml", package = "MOSAIC")
+     env_yml_path <- system.file("python", "environment.yml", package = "MOSAIC")
      if (!file.exists(env_yml_path)) cli::cli_abort("environment.yml not found at: {env_yml_path}")
      cli::cli_alert_info("Using environment.yml at: {env_yml_path}")
 

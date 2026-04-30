@@ -87,7 +87,7 @@ check_dependencies <- function() {
      # Check Python package versions based on environment.yml
      # -----------------------------------------------------------------------
 
-     env_yml_path <- system.file("py", "environment.yml", package = pkgname)
+     env_yml_path <- system.file("python", "environment.yml", package = pkgname)
 
      # Track capabilities
      core_working <- TRUE
