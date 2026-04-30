@@ -90,6 +90,7 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  phi_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  omega_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  omega_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  nu_jt_sources <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"S"</span>, <span class="st">"E"</span>, <span class="st">"Isym"</span>, <span class="st">"Iasym"</span>, <span class="st">"R"</span><span class="op">)</span>,</span>
 <span>  iota <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  gamma_1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  gamma_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -279,7 +280,14 @@ sequence from date_start to date_stop.</p><div class="section">
 
 
 <dt id="arg-omega-">omega_2<a class="anchor" aria-label="anchor" href="#arg-omega-"></a></dt>
-<dd><p>Waning immunity rate for two doses (numeric &gt;= 0).</p><div class="section">
+<dd><p>Waning immunity rate for two doses (numeric &gt;= 0).</p></dd>
+
+
+<dt id="arg-nu-jt-sources">nu_jt_sources<a class="anchor" aria-label="anchor" href="#arg-nu-jt-sources"></a></dt>
+<dd><p>Character vector of compartment names eligible for first-dose vaccination
+(default <code>c("S", "E", "Isym", "Iasym", "R")</code>). Must be a non-empty subset of
+<code>c("S", "E", "Isym", "Iasym", "R")</code>. Passed to laser-cholera v0.12+ which draws
+first doses proportionally from all listed compartments.</p><div class="section">
 <h3 id="infection-dynamics">Infection dynamics<a class="anchor" aria-label="anchor" href="#infection-dynamics"></a></h3>
 
 

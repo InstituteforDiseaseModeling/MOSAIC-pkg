@@ -41,6 +41,7 @@ make_LASER_config(
   phi_2 = NULL,
   omega_1 = NULL,
   omega_2 = NULL,
+  nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"),
   iota = NULL,
   gamma_1 = NULL,
   gamma_2 = NULL,
@@ -244,6 +245,14 @@ make_LASER_config(
 - omega_2:
 
   Waning immunity rate for two doses (numeric \>= 0).
+
+- nu_jt_sources:
+
+  Character vector of compartment names eligible for first-dose
+  vaccination (default `c("S", "E", "Isym", "Iasym", "R")`). Must be a
+  non-empty subset of `c("S", "E", "Isym", "Iasym", "R")`. Passed to
+  laser-cholera v0.12+ which draws first doses proportionally from all
+  listed compartments.
 
   ### Infection dynamics
 
