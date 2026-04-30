@@ -141,6 +141,7 @@ generates prediction plots (only when `plots=TRUE`)
 **Thread safety (CRITICAL for parallel execution):**
 
 ``` r
+
 # Built into run_MOSAIC(), but needed for custom parallel code
 MOSAIC:::.mosaic_set_blas_threads(1L)
 Sys.setenv(OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
@@ -177,18 +178,18 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 
 ## Key Files
 
-| File                            | Purpose                                      |
-|---------------------------------|----------------------------------------------|
-| `R/run_MOSAIC.R`                | Main calibration workflow, simulation worker |
-| `R/run_MOSAIC_helpers.R`        | Convergence detection, weight calculation    |
-| `R/run_MOSAIC_infrastructure.R` | Directory setup, I/O, summary generation     |
-| `R/calc_model_likelihood.R`     | Multi-component likelihood                   |
-| `R/calc_model_ensemble.R`       | Posterior-weighted ensemble predictions      |
-| `R/sample_parameters.R`         | Sample 301 parameters from priors            |
-| `R/make_LASER_config.R`         | Config validation (60+ parameters)           |
-| `R/calc_model_R2.R`             | R² (corr and SSE methods) + bias ratio       |
-| `R/get_paths.R`                 | Directory path management                    |
-| `R/run_LASER.R`                 | Python laser-cholera wrapper                 |
+| File | Purpose |
+|----|----|
+| `R/run_MOSAIC.R` | Main calibration workflow, simulation worker |
+| `R/run_MOSAIC_helpers.R` | Convergence detection, weight calculation |
+| `R/run_MOSAIC_infrastructure.R` | Directory setup, I/O, summary generation |
+| `R/calc_model_likelihood.R` | Multi-component likelihood |
+| `R/calc_model_ensemble.R` | Posterior-weighted ensemble predictions |
+| `R/sample_parameters.R` | Sample 301 parameters from priors |
+| `R/make_LASER_config.R` | Config validation (60+ parameters) |
+| `R/calc_model_R2.R` | R² (corr and SSE methods) + bias ratio |
+| `R/get_paths.R` | Directory path management |
+| `R/run_LASER.R` | Python laser-cholera wrapper |
 
 ## Troubleshooting
 

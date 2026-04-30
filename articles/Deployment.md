@@ -290,6 +290,7 @@ This script is identical to the complete setup but skips R installation
 For running multiple simulations in parallel on a cluster:
 
 ``` r
+
 # Set number of cores
 library(MOSAIC)
 options(mc.cores = parallel::detectCores() - 1)
@@ -315,6 +316,7 @@ results <- run_MOSAIC(
 **Python issues:**
 
 ``` r
+
 # Check Python configuration
 reticulate::py_config()
 

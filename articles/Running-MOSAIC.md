@@ -19,6 +19,7 @@ MOSAIC and its dependencies.
 ## Run a fixed number of simulations for one location
 
 ``` r
+
 # Load required packages
 library(MOSAIC)
 
@@ -74,6 +75,7 @@ result_ETH <- run_MOSAIC(
 ## Run the adaptive simulation algorithm for one location
 
 ``` r
+
 # Load required packages
 library(MOSAIC)
 
@@ -134,6 +136,7 @@ result_ETH <- run_MOSAIC(
 ## Run the adaptive simulation algorithm for multiple locations
 
 ``` r
+
 # Load required packages
 library(MOSAIC)
 

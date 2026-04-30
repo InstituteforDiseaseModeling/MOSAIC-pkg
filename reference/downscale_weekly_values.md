@@ -35,6 +35,7 @@ max date.
 ## Examples
 
 ``` r
+
 downscale_weekly_values(as.Date(c("2023-01-02", "2023-01-16")), c(10, 3), integer = TRUE)
 #>          date value
 #> 1  2023-01-02     1

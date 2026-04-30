@@ -4,9 +4,9 @@
 
 MOSAIC has two installation levels depending on your needs:
 
-| Setup         | Purpose                                                     | Requirements               |
-|:--------------|:------------------------------------------------------------|:---------------------------|
-| **Basic**     | Run models with pre-configured data                         | R + internet               |
+| Setup | Purpose | Requirements |
+|:---|:---|:---|
+| **Basic** | Run models with pre-configured data | R + internet |
 | **Developer** | Full access: data collection, prior estimation, development | R + git + system libraries |
 
 Most users should start with **Basic**.
@@ -20,6 +20,7 @@ dependencies. This is sufficient for running models with pre-configured
 parameters and data.
 
 ``` r
+
 # Install remotes if not already installed
 if (!require("remotes")) install.packages("remotes")
 
@@ -89,6 +90,7 @@ git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 ### Install and Configure
 
 ``` r
+
 # Install R package from source (upgrade = "never" avoids prompts)
 devtools::install("~/MOSAIC/MOSAIC-pkg", upgrade = "never")
 
@@ -105,6 +107,7 @@ check_dependencies()
 ### Development Workflow
 
 ``` r
+
 # Load for development
 devtools::load_all("~/MOSAIC/MOSAIC-pkg")
 
@@ -123,6 +126,7 @@ estimates from scratch. Most users can skip this - pre-computed mobility
 files are included in `model/input/`.
 
 ``` r
+
 # Only install if you need to regenerate mobility data
 # Requires JAGS system library
 
@@ -149,6 +153,7 @@ included with the package.
 **Python issues:**
 
 ``` r
+
 # Check Python environment and dependencies
 check_python_env()
 check_dependencies()
@@ -164,6 +169,7 @@ install_dependencies()
 **Path issues (Developer only):**
 
 ``` r
+
 # Check and reset root directory
 getOption("root_directory")
 set_root_directory("~/MOSAIC")

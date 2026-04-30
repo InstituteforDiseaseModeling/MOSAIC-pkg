@@ -28,6 +28,7 @@ The epidemic configuration simulates outbreak dynamics with explosive
 growth patterns typical of cholera epidemics.
 
 ``` r
+
 # Run endemic scenario
 config <- MOSAIC::config_simulation_endemic
 
@@ -35,6 +36,7 @@ model_endemic <- run_LASER(config = config, seed = 123, quiet = FALSE)
 ```
 
 ``` r
+
 library(MOSAIC)
 
 # Run epidemic scenario
@@ -89,6 +91,7 @@ The endemic configuration simulates stable, persistent transmission
 patterns with seasonal fluctuations.
 
 ``` r
+
 # Run endemic scenario
 config <- MOSAIC::config_simulation_endemic
 
@@ -131,6 +134,7 @@ cat("Saved: figures/running_mosaic_endemic.png\n")
 ### Running LASER for multiple locations
 
 ``` r
+
 library(MOSAIC)
 
 iso_codes <- iso_codes_mosaic[iso_codes_mosaic != 'SSD'] # Current bug with SSD vaccination data

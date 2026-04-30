@@ -702,7 +702,7 @@ to match the wider bias-corrected sdlog. All 18 zeta tests pass.
 
 ### Bug Fixes
 
-- **Respect control$parallel$enable flag in prediction plotting
+- **Respect control$`parallel`$enable flag in prediction plotting
   functions**
   - **Problem**: `plot_model_fit_stochastic()` and
     `plot_model_fit_stochastic_param()` were hardcoded to use
