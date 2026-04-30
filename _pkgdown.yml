@@ -120,10 +120,13 @@ reference:
     - lacks_concepts("internal")
 
 authors:
+  sidebar:
+    roles: [aut, cre, ctb]
   John R Giles:
     href: https://github.com/gilesjohnr
   Christopher W Lorton:
-    href: https://github.com/ChristopherWLorton
-  Tony Ting: {}
+    href: https://github.com/clorton
+  Tony Ting:
+    href: https://github.com/tinghf
   Dejan Lukacevic: {}
   Meikang Wu: {}
