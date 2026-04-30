@@ -348,6 +348,7 @@ default_args <- list(
      sigma = 0.25,
      # Case reporting parameters for calc_cases_from_infections()
      rho = 0.265,                 # Care-seeking rate (mean of Beta(6.8, 17.9) prior, GEMS + Wiens 2025)
+     rho_deaths = 0.6,            # Death detection rate (mean of Beta(3, 2); Finger et al. 2024; laser-cholera#49)
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
      epidemic_threshold = rep(1/10000, length(j)),  # Per-location Isym/N threshold for PPV switching (1 per 10k)

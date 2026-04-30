@@ -148,6 +148,7 @@ sim_args <- list(
      chi_epidemic     = 0.75,      # PPV during epidemic periods
      epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
      rho              = 0.52,
+     rho_deaths       = 0.6,       # Death detection rate (laser-cholera#49; mean of Beta(3, 2))
      sigma            = 0.24,
      longitude        = longitude,
      latitude         = latitude,

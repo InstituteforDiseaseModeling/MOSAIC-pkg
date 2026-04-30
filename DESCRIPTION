@@ -1,8 +1,8 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.30.1
-Date: 2026-04-29
+Version: 0.30.7
+Date: 2026-04-30
 Authors@R: c(
           person("John R", "Giles",
                  email = "john.giles@gatesfoundation.org",
@@ -22,7 +22,8 @@ Authors@R: c(
                  comment = c(ORCID = "0009-0001-1011-1084")),
           person("Meikang", "Wu",
                  email = "Meikang.Wu@gatesfoundation.org",
-                 role = "ctb")
+                 role = "ctb",
+                 comment = c(ORCID = "0009-0007-7748-4890"))
      )
 Description: Tools for preparing data and models for the MOSAIC framework. The MOSAIC framework 
      simulates the transmission dynamics of cholera in Sub-Saharan Africa and provides tools 

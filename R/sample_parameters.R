@@ -142,6 +142,7 @@ sample_parameters <- function(
     sample_chi_endemic = TRUE,
     sample_chi_epidemic = TRUE,
     sample_rho = TRUE,
+    sample_rho_deaths = TRUE,
     sample_sigma = TRUE,
     sample_zeta_1 = TRUE,
     sample_zeta_ratio = TRUE,
@@ -992,7 +993,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
     global = list(
       params = c("phi_1", "phi_2", "omega_1", "omega_2", "iota",
                 "gamma_1", "gamma_2", "epsilon", "chi_endemic", "chi_epidemic",
-                "rho", "sigma", "mobility_omega", "mobility_gamma",
+                "rho", "rho_deaths", "sigma", "mobility_omega", "mobility_gamma",
                 "zeta_1", "zeta_ratio", "zeta_2", "kappa", "alpha_1", "alpha_2",
                 "decay_days_short", "decay_days_spread", "decay_days_long",
                 "decay_shape_1", "decay_shape_2",
@@ -1421,7 +1422,7 @@ create_sampling_args <- function(pattern = "all",
                        "sample_omega_1", "sample_omega_2",
                        "sample_gamma_1", "sample_gamma_2",
                        "sample_epsilon", "sample_chi_endemic",
-                       "sample_chi_epidemic", "sample_rho",
+                       "sample_chi_epidemic", "sample_rho", "sample_rho_deaths",
                        "sample_sigma", "sample_iota")
     param_names <- names(all_params)
     all_params <- lapply(param_names, function(n) {

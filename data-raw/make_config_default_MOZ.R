@@ -236,6 +236,7 @@ default_args <- list(
      mu_j_epidemic_factor = mu_j_epidemic_factor,
      sigma = 0.25,
      rho = 0.265,
+     rho_deaths = 0.6,            # Death detection rate (mean of Beta(3, 2); Finger et al. 2024; laser-cholera#49)
      chi_endemic = 0.50,
      chi_epidemic = 0.75,
      epidemic_threshold = setNames(1/10000, j),
@@ -287,9 +288,9 @@ config_default_MOZ <- do.call(make_LASER_config, default_args)
 .decay_days_spread_MOZ <- 347   # MOZ-specific spread (decay_days_long = short + spread)
 
 config_default_MOZ$metadata <- list(
-     version = "2.5",
+     version = "2.6",
      date = as.character(Sys.Date()),
-     description = "MOZ-specific LASER configuration with extended date range (2017-2026). v2.5 (2026-04-23): zeta_* defaults rescaled from Frame-B (70k / 300) to the biological scale implied by est_zeta_*_prior() (priors_default v15.0). v2.4: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
+     description = "MOZ-specific LASER configuration with extended date range (2017-2026). v2.6 (2026-04-29): rho_deaths = 0.6 added (death detection rate; laser-cholera#49). v2.5 (2026-04-23): zeta_* defaults rescaled from Frame-B (70k / 300) to the biological scale implied by est_zeta_*_prior() (priors_default v15.0). v2.4: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )
 
 message("Transmission parameter validation")

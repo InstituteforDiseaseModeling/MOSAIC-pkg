@@ -1246,7 +1246,19 @@
     "reported_cases", "reported_deaths",
     # Structural / metadata
     "date_start", "date_stop", "location_name",
-    "N_j_initial", "longitude", "latitude"
+    "N_j_initial", "longitude", "latitude",
+    # Likelihood-control + epidemic_peaks + analyzer toggle (issue #100,
+    # plan §3.1, §3.4.1). Only present when injected by
+    # .mosaic_inject_likelihood_settings() on the Dask path; absent on
+    # the local PSOCK/FORK path (no-op).
+    "calc_likelihood",
+    "weight_cases", "weight_deaths",
+    "weights_time", "weights_location",
+    "nb_k_min_cases", "nb_k_min_deaths",
+    "weight_peak_timing", "weight_peak_magnitude",
+    "weight_cumulative_total", "weight_wis",
+    "sigma_peak_time", "sigma_peak_log",
+    "epidemic_peaks"
   )
   config[names(config) %in% keep]
 }

@@ -35,6 +35,51 @@
   config
 }
 
+#' Inject likelihood-control settings + epidemic_peaks into config (Dask path)
+#'
+#' Flattens the resolved \code{control$likelihood} settings, the
+#' \code{MOSAIC::epidemic_peaks} dataset (trimmed to \code{iso_code} /
+#' \code{peak_date}), and the \code{calc_likelihood = TRUE} toggle onto a copy
+#' of the config so they land on \code{model.params} for the laser-cholera
+#' analyzer to read on the worker. Used only on the Dask path; the local
+#' PSOCK/FORK path computes the likelihood in R after the LASER call and does
+#' not need these keys on the paramfile.
+#'
+#' @param config The base config list.
+#' @param likelihood_settings Resolved \code{control$likelihood} list with
+#'   \code{.weights_time_resolved} populated by the caller.
+#' @return The config list with thirteen new keys: twelve likelihood-control
+#'   fields (\code{weight_cases}, \code{weight_deaths}, \code{weights_time}
+#'   (= \code{.weights_time_resolved}), \code{weights_location},
+#'   \code{nb_k_min_cases}, \code{nb_k_min_deaths}, \code{weight_peak_timing},
+#'   \code{weight_peak_magnitude}, \code{weight_cumulative_total},
+#'   \code{weight_wis}, \code{sigma_peak_time}, \code{sigma_peak_log}),
+#'   \code{epidemic_peaks} (two-column data.frame), and
+#'   \code{calc_likelihood = TRUE}.
+#' @noRd
+.mosaic_inject_likelihood_settings <- function(config, likelihood_settings) {
+  config$calc_likelihood          <- TRUE
+  config$weight_cases             <- likelihood_settings$weight_cases
+  config$weight_deaths            <- likelihood_settings$weight_deaths
+  config$weights_time             <- likelihood_settings$.weights_time_resolved
+  config$weights_location         <- likelihood_settings$weights_location
+  config$nb_k_min_cases           <- likelihood_settings$nb_k_min_cases
+  config$nb_k_min_deaths          <- likelihood_settings$nb_k_min_deaths
+  config$weight_peak_timing       <- likelihood_settings$weight_peak_timing
+  config$weight_peak_magnitude    <- likelihood_settings$weight_peak_magnitude
+  config$weight_cumulative_total  <- likelihood_settings$weight_cumulative_total
+  config$weight_wis               <- likelihood_settings$weight_wis
+  config$sigma_peak_time          <- likelihood_settings$sigma_peak_time
+  config$sigma_peak_log           <- likelihood_settings$sigma_peak_log
+  ep <- MOSAIC::epidemic_peaks
+  config$epidemic_peaks <- data.frame(
+    iso_code  = as.character(ep$iso_code),
+    peak_date = as.character(ep$peak_date),
+    stringsAsFactors = FALSE
+  )
+  config
+}
+
 # =============================================================================
 # FAST PARAMETER EXTRACTION (replaces convert_config_to_matrix in hot loop)
 # =============================================================================
@@ -165,6 +210,13 @@
   if (!is.null(params_sim$tau_i)) {
     params_sim$tau_i <- pmin(pmax(params_sim$tau_i, 0), 1)
   }
+
+  # Defensive guard (issue #100): ensure local-path workers never trigger the
+  # Python analyzer. The analyzer requires likelihood-control keys that are
+  # only flattened onto config on the Dask path (see
+  # .mosaic_inject_likelihood_settings()). Local-path scoring happens in R
+  # after the LASER call below.
+  params_sim$calc_likelihood <- FALSE
 
   # Pre-allocate simresults collector (validation mode only)
   simresults_raw <- if (!is.null(dir_cal_simresults)) vector("list", n_iterations) else NULL
@@ -887,6 +939,12 @@ run_MOSAIC <- function(config,
     } else {
       likelihood_settings$.weights_time_resolved <- NULL
     }
+
+    # Inject likelihood-control settings + epidemic_peaks + calc_likelihood
+    # toggle onto config so the laser-cholera analyzer can score on-worker
+    # (issue #100, plan §3.1, §3.4.1). Dask path only — local PSOCK/FORK
+    # path keeps R-side scoring.
+    config <- .mosaic_inject_likelihood_settings(config, likelihood_settings)
 
     # Scatter base config (matrices + metadata) to all workers ONCE
     log_msg("Broadcasting base config to workers...")
@@ -2372,9 +2430,11 @@ run_MOSAIC <- function(config,
   for (pred_type in c("ensemble", "best", "medioid", "stochastic")) {
     pred_csvs <- list.files(
       dirs$res_predictions,
-      pattern = sprintf("^predictions_%s_(?!all\\.csv).*\\.csv$", pred_type),
-      full.names = TRUE, perl = TRUE
+      pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
+      full.names = TRUE
     )
+    pred_csvs <- pred_csvs[!grepl(sprintf("predictions_%s_all\\.csv$", pred_type),
+                                  pred_csvs)]
     if (length(pred_csvs) > 1) {
       combined <- tryCatch({
         pred_list <- lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE)
@@ -2751,6 +2811,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_kappa = TRUE,             # Overdispersion parameter
     sample_chi_endemic = TRUE,       # PPV among suspected cases (endemic)
     sample_chi_epidemic = TRUE,      # PPV among suspected cases (epidemic)
+    sample_rho_deaths = TRUE,        # Death detection rate (laser-cholera#49)
     sample_delta_reporting_cases = TRUE,  # Infection-to-case reporting delay
     sample_delta_reporting_deaths = TRUE, # Infection-to-death reporting delay
 

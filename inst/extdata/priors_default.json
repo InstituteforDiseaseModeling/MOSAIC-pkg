@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "version": "15.0",
+    "version": "15.1",
     "date": "2026-04-23",
     "description": "Default informative prior distributions for MOSAIC model parameters. v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
   },
@@ -223,6 +223,14 @@
         "sd": 3,
         "a": 1,
         "b": 14
+      }
+    },
+    "rho_deaths": {
+      "description": "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 3,
+        "shape2": 2
       }
     }
   },

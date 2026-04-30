@@ -78,6 +78,7 @@
 #'
 #' ## Observation Processes
 #' @param rho Proportion of true infections (numeric in \[0, 1\]).
+#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Optional; when NULL, laser-cholera 0.12.x ignores it and the deaths observation model uses raw simulated counts. Once laser-cholera#49 ships, the engine consumes this to produce reported_deaths.
 #' @param sigma Proportion of symptomatic infections (numeric in \[0, 1\]).
 #' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
 #' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
@@ -252,6 +253,7 @@ make_LASER_config <- function(output_file_path = NULL,
 
                               # Observation Processes
                               rho = NULL,
+                              rho_deaths = NULL,  # Death detection rate (laser-cholera#49)
                               sigma = NULL,
                               # Case reporting parameters for calc_cases_from_infections()
                               chi_endemic = NULL,
@@ -354,6 +356,7 @@ make_LASER_config <- function(output_file_path = NULL,
           gamma_2           = gamma_2,
           epsilon           = epsilon,
           rho               = rho,
+          rho_deaths        = rho_deaths,
           sigma             = sigma,
           chi_endemic       = chi_endemic,
           chi_epidemic      = chi_epidemic,
@@ -671,6 +674,9 @@ make_LASER_config <- function(output_file_path = NULL,
      # Observation Processes validation.
      if (!is.numeric(rho) || rho < 0 || rho > 1) {
           stop("rho must be a numeric scalar between 0 and 1.")
+     }
+     if (!is.null(rho_deaths) && (!is.numeric(rho_deaths) || rho_deaths < 0 || rho_deaths > 1)) {
+          stop("rho_deaths must be a numeric scalar between 0 and 1.")
      }
      if (!is.numeric(sigma) || sigma < 0 || sigma > 1) {
           stop("sigma must be a numeric scalar between 0 and 1.")
