@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "version": "3.0",
+    "version": "3.1",
     "date": "2026-04-23",
     "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
   },
@@ -223,6 +223,14 @@
         "sd": 3,
         "a": 1,
         "b": 14
+      }
+    },
+    "rho_deaths": {
+      "description": "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 3,
+        "shape2": 2
       }
     }
   },
