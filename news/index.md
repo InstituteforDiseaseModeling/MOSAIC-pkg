@@ -1,5 +1,141 @@
 # Changelog
 
+## MOSAIC 0.30.3
+
+### Sync `rho_deaths` into MOZ data-raw, JSON sidecars, and simulation configs
+
+Cleanup pass after independent review of v0.30.2 surfaced three
+medium-severity gaps left over from the targeted `.rda` rebuild. v0.30.2
+rebuilt the top-level `.rda` binaries surgically but left several
+auxiliary data-raw scripts and `inst/extdata` JSON sidecars out of sync
+— re-running any of them would have regressed the `rho_deaths` plumbing.
+This release closes those gaps so all source-of-truth artifacts agree:
+
+- **MOZ data-raw scripts.** `data-raw/make_priors_default_MOZ.R` adds
+  the Beta(3, 2) `rho_deaths` prior block (metadata bumped 3.0 → 3.1);
+  `data-raw/make_config_default_MOZ.R` adds `rho_deaths = 0.6` (metadata
+  bumped 2.5 → 2.6).
+- **LASER config templates.**
+  `data-raw/make_default_LASER_config_files.R`,
+  `make_simulation_endemic_LASER_config_files.R`, and
+  `make_simulation_epidemic_LASER_config_files.R` add
+  `rho_deaths = 0.6`.
+- **`inst/extdata/` JSON sidecars.** All six
+  (`default_parameters{,_MOZ}.json`, `sim_endemic_parameters.json`,
+  `simulated_parameters.json`, `priors_default{,_MOZ}.json`) regenerated
+  with `rho_deaths`; `.gz` mirrors refreshed. The two priors JSONs also
+  bumped to versions 15.1 and 3.1.
+- **Simulation `.rda` binaries.** `config_simulation_endemic.rda` and
+  `config_simulation_epidemic.rda` rebuilt with `rho_deaths = 0.6`.
+- **Version metadata sync.** `priors_default_MOZ.rda` had inherited the
+  wrong version (15.1) during the v0.30.2 surgical rebuild; corrected to
+  the MOZ-track 3.1 to match the source script.
+
+Refs
+[\#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100).
+Phase 1 of the `calc_model_likelihood` Python port (laser-cholera#47) is
+now complete and consistent across all source-of-truth artifacts.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.2
+
+### Add `rho_deaths` plumbing for death detection model
+
+Adds the MOSAIC-side wiring for the `rho_deaths` parameter introduced by
+[laser-cholera#49](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/49)
+(death detection probability, analogous to `rho` for cases). Folded into
+the Phase 1 paramfile work (issue
+[\#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100)
+addendum): laser-cholera 0.12.x’s permissive validator silently
+tolerates the new key in the paramfile; once 0.13 ships with
+[\#49](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/49),
+the engine consumes it and produces `reported_deaths`.
+
+- **Defaults.** `data-raw/make_config_default.R` sets `rho_deaths = 0.6`
+  (mean of Beta(3, 2); Finger et al. 2024 documents ~60% surveillance
+  capture of true cholera deaths). `data-raw/make_priors_default.R` adds
+  the Beta(3, 2) prior block; `priors_default` metadata version bumped
+  15.0 → 15.1.
+- **Targeted `.rda` rebuild** for `config_default`,
+  `config_default_MOZ`, `priors_default`, `priors_default_MOZ`. Avoids
+  re-running the full data-raw pipeline (which depends on paths and
+  external data files).
+- **Sampling control.**
+  `mosaic_control_defaults()$sampling$sample_rho_deaths = TRUE` in
+  `R/run_MOSAIC.R`. `R/sample_parameters.R` adds
+  `sample_rho_deaths = TRUE` to defaults; includes `rho_deaths` in
+  `validate_sampled_config` global params; included in the
+  `disease_only` disabled-flag-resolution list alongside `sample_rho`.
+- **[`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md).**
+  New `rho_deaths = NULL` argument with `[0, 1]` validation when
+  supplied; pass-through to params; `@param` documented.
+- **Round-trip schema.** `R/convert_config_to_matrix.R`,
+  `R/convert_config_to_dataframe.R`, `R/get_param_names.R`,
+  `R/plot_model_parameters.R` include `rho_deaths` in the relevant
+  params/keep lists so it appears in `samples.parquet` and posterior
+  plots.
+- **Test coverage.** New
+  `tests/testthat/test-sample_parameters_rho_deaths.R` confirms the
+  prior exists and shapes are Beta(3, 2); sampling under
+  `sample_rho_deaths = TRUE` produces draws in (0, 1);
+  `sample_rho_deaths = FALSE` holds `rho_deaths` at `config_default`;
+  empirical mean ≈ 0.6 over 200 draws. Tests skip cleanly when MOSAIC
+  root or rebuilt prior is unavailable.
+
+Refs
+[\#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100),
+laser-cholera#49.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.1
+
+### Wire likelihood control + `epidemic_peaks` into Dask paramfile
+
+Phase 1 of the `calc_model_likelihood` Python port
+([laser-cholera#47](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/47),
+tracked in issue
+[\#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100)).
+Additive wiring on the Dask path so the laser-cholera analyzer can score
+on-worker once Phase 2 (laser-cholera 0.13) and Phase 3 (Dask worker
+schema flip, MOSAIC-pkg
+[\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101))
+land. Local PSOCK/FORK path is unchanged.
+
+- **Inject helper.** New `.mosaic_inject_likelihood_settings()` in
+  `R/run_MOSAIC.R` flattens 12 likelihood-control keys (`weight_cases`,
+  `weight_deaths`, `weights_time` (= `.weights_time_resolved`),
+  `weights_location`, `nb_k_min_cases`, `nb_k_min_deaths`,
+  `weight_peak_timing`, `weight_peak_magnitude`,
+  `weight_cumulative_total`, `weight_wis`, `sigma_peak_time`,
+  `sigma_peak_log`) plus `epidemic_peaks` (trimmed to
+  `iso_code`/`peak_date`) plus `calc_likelihood = TRUE` onto config.
+- **Dask preflight.**
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  calls the inject helper before `.extract_base_config()`, so the keys
+  ride along on the scattered `base_config` and land on `model.params`
+  for the analyzer to read. Uses `.weights_time_resolved` (the
+  rescaled-to-sum-`n_t` vector), not the raw
+  `control$likelihood$weights_time`.
+- **Keep list extension.**
+  `R/run_MOSAIC_helpers.R::.extract_base_config()` now keeps the 13 new
+  keys plus `calc_likelihood`. Local-path configs (no inject) keep none
+  of them by construction — the keep filter is membership-based.
+- **Defensive guard.** `.mosaic_run_simulation_worker()` explicitly sets
+  `params_sim$calc_likelihood = FALSE` before the LASER call so a stray
+  user-set `TRUE` on the local path can’t trigger the analyzer with
+  un-flattened keys.
+- **Unit tests.** New `tests/testthat/test-inject_likelihood_settings.R`
+  covers the inject helper (forwards `.weights_time_resolved`, additive
+  only, NULL handling) and the `.extract_base_config` keep list
+  (presence on Dask path, absence on local). 14 assertions, all green.
+
+Refs
+[\#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100).
+
+------------------------------------------------------------------------
+
 ## MOSAIC 0.30.0
 
 ### Route per-location prediction CSVs to `3_results/predictions/`

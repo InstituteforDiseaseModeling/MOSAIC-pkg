@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,62 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.3" id="mosaic-0303">MOSAIC 0.30.3<a class="anchor" aria-label="anchor" href="#mosaic-0303"></a></h2>
+<div class="section level3">
+<h3 id="sync-rho_deaths-into-moz-data-raw-json-sidecars-and-simulation-configs-0-30-3">Sync <code>rho_deaths</code> into MOZ data-raw, JSON sidecars, and simulation configs<a class="anchor" aria-label="anchor" href="#sync-rho_deaths-into-moz-data-raw-json-sidecars-and-simulation-configs-0-30-3"></a></h3>
+<p>Cleanup pass after independent review of v0.30.2 surfaced three medium-severity gaps left over from the targeted <code>.rda</code> rebuild. v0.30.2 rebuilt the top-level <code>.rda</code> binaries surgically but left several auxiliary data-raw scripts and <code>inst/extdata</code> JSON sidecars out of sync — re-running any of them would have regressed the <code>rho_deaths</code> plumbing. This release closes those gaps so all source-of-truth artifacts agree:</p>
+<ul><li>
+<strong>MOZ data-raw scripts.</strong> <code>data-raw/make_priors_default_MOZ.R</code> adds the Beta(3, 2) <code>rho_deaths</code> prior block (metadata bumped 3.0 → 3.1); <code>data-raw/make_config_default_MOZ.R</code> adds <code>rho_deaths = 0.6</code> (metadata bumped 2.5 → 2.6).</li>
+<li>
+<strong>LASER config templates.</strong> <code>data-raw/make_default_LASER_config_files.R</code>, <code>make_simulation_endemic_LASER_config_files.R</code>, and <code>make_simulation_epidemic_LASER_config_files.R</code> add <code>rho_deaths = 0.6</code>.</li>
+<li>
+<strong><code>inst/extdata/</code> JSON sidecars.</strong> All six (<code>default_parameters{,_MOZ}.json</code>, <code>sim_endemic_parameters.json</code>, <code>simulated_parameters.json</code>, <code>priors_default{,_MOZ}.json</code>) regenerated with <code>rho_deaths</code>; <code>.gz</code> mirrors refreshed. The two priors JSONs also bumped to versions 15.1 and 3.1.</li>
+<li>
+<strong>Simulation <code>.rda</code> binaries.</strong> <code>config_simulation_endemic.rda</code> and <code>config_simulation_epidemic.rda</code> rebuilt with <code>rho_deaths = 0.6</code>.</li>
+<li>
+<strong>Version metadata sync.</strong> <code>priors_default_MOZ.rda</code> had inherited the wrong version (15.1) during the v0.30.2 surgical rebuild; corrected to the MOZ-track 3.1 to match the source script.</li>
+</ul><p>Refs <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100" class="external-link">#100</a>. Phase 1 of the <code>calc_model_likelihood</code> Python port (laser-cholera#47) is now complete and consistent across all source-of-truth artifacts.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.2" id="mosaic-0302">MOSAIC 0.30.2<a class="anchor" aria-label="anchor" href="#mosaic-0302"></a></h2>
+<div class="section level3">
+<h3 id="add-rho_deaths-plumbing-for-death-detection-model-0-30-2">Add <code>rho_deaths</code> plumbing for death detection model<a class="anchor" aria-label="anchor" href="#add-rho_deaths-plumbing-for-death-detection-model-0-30-2"></a></h3>
+<p>Adds the MOSAIC-side wiring for the <code>rho_deaths</code> parameter introduced by <a href="https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/49" class="external-link">laser-cholera#49</a> (death detection probability, analogous to <code>rho</code> for cases). Folded into the Phase 1 paramfile work (issue <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100" class="external-link">#100</a> addendum): laser-cholera 0.12.x’s permissive validator silently tolerates the new key in the paramfile; once 0.13 ships with <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/49" class="external-link">#49</a>, the engine consumes it and produces <code>reported_deaths</code>.</p>
+<ul><li>
+<strong>Defaults.</strong> <code>data-raw/make_config_default.R</code> sets <code>rho_deaths = 0.6</code> (mean of Beta(3, 2); Finger et al. 2024 documents ~60% surveillance capture of true cholera deaths). <code>data-raw/make_priors_default.R</code> adds the Beta(3, 2) prior block; <code>priors_default</code> metadata version bumped 15.0 → 15.1.</li>
+<li>
+<strong>Targeted <code>.rda</code> rebuild</strong> for <code>config_default</code>, <code>config_default_MOZ</code>, <code>priors_default</code>, <code>priors_default_MOZ</code>. Avoids re-running the full data-raw pipeline (which depends on paths and external data files).</li>
+<li>
+<strong>Sampling control.</strong> <code>mosaic_control_defaults()$sampling$sample_rho_deaths = TRUE</code> in <code>R/run_MOSAIC.R</code>. <code>R/sample_parameters.R</code> adds <code>sample_rho_deaths = TRUE</code> to defaults; includes <code>rho_deaths</code> in <code>validate_sampled_config</code> global params; included in the <code>disease_only</code> disabled-flag-resolution list alongside <code>sample_rho</code>.</li>
+<li>
+<strong><code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code>.</strong> New <code>rho_deaths = NULL</code> argument with <code>[0, 1]</code> validation when supplied; pass-through to params; <code>@param</code> documented.</li>
+<li>
+<strong>Round-trip schema.</strong> <code>R/convert_config_to_matrix.R</code>, <code>R/convert_config_to_dataframe.R</code>, <code>R/get_param_names.R</code>, <code>R/plot_model_parameters.R</code> include <code>rho_deaths</code> in the relevant params/keep lists so it appears in <code>samples.parquet</code> and posterior plots.</li>
+<li>
+<strong>Test coverage.</strong> New <code>tests/testthat/test-sample_parameters_rho_deaths.R</code> confirms the prior exists and shapes are Beta(3, 2); sampling under <code>sample_rho_deaths = TRUE</code> produces draws in (0, 1); <code>sample_rho_deaths = FALSE</code> holds <code>rho_deaths</code> at <code>config_default</code>; empirical mean ≈ 0.6 over 200 draws. Tests skip cleanly when MOSAIC root or rebuilt prior is unavailable.</li>
+</ul><p>Refs <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100" class="external-link">#100</a>, laser-cholera#49.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.1" id="mosaic-0301">MOSAIC 0.30.1<a class="anchor" aria-label="anchor" href="#mosaic-0301"></a></h2>
+<div class="section level3">
+<h3 id="wire-likelihood-control--epidemic_peaks-into-dask-paramfile-0-30-1">Wire likelihood control + <code>epidemic_peaks</code> into Dask paramfile<a class="anchor" aria-label="anchor" href="#wire-likelihood-control--epidemic_peaks-into-dask-paramfile-0-30-1"></a></h3>
+<p>Phase 1 of the <code>calc_model_likelihood</code> Python port (<a href="https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/47" class="external-link">laser-cholera#47</a>, tracked in issue <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100" class="external-link">#100</a>). Additive wiring on the Dask path so the laser-cholera analyzer can score on-worker once Phase 2 (laser-cholera 0.13) and Phase 3 (Dask worker schema flip, MOSAIC-pkg <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101" class="external-link">#101</a>) land. Local PSOCK/FORK path is unchanged.</p>
+<ul><li>
+<strong>Inject helper.</strong> New <code>.mosaic_inject_likelihood_settings()</code> in <code>R/run_MOSAIC.R</code> flattens 12 likelihood-control keys (<code>weight_cases</code>, <code>weight_deaths</code>, <code>weights_time</code> (= <code>.weights_time_resolved</code>), <code>weights_location</code>, <code>nb_k_min_cases</code>, <code>nb_k_min_deaths</code>, <code>weight_peak_timing</code>, <code>weight_peak_magnitude</code>, <code>weight_cumulative_total</code>, <code>weight_wis</code>, <code>sigma_peak_time</code>, <code>sigma_peak_log</code>) plus <code>epidemic_peaks</code> (trimmed to <code>iso_code</code>/<code>peak_date</code>) plus <code>calc_likelihood = TRUE</code> onto config.</li>
+<li>
+<strong>Dask preflight.</strong> <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> calls the inject helper before <code>.extract_base_config()</code>, so the keys ride along on the scattered <code>base_config</code> and land on <code>model.params</code> for the analyzer to read. Uses <code>.weights_time_resolved</code> (the rescaled-to-sum-<code>n_t</code> vector), not the raw <code>control$likelihood$weights_time</code>.</li>
+<li>
+<strong>Keep list extension.</strong> <code>R/run_MOSAIC_helpers.R::.extract_base_config()</code> now keeps the 13 new keys plus <code>calc_likelihood</code>. Local-path configs (no inject) keep none of them by construction — the keep filter is membership-based.</li>
+<li>
+<strong>Defensive guard.</strong> <code>.mosaic_run_simulation_worker()</code> explicitly sets <code>params_sim$calc_likelihood = FALSE</code> before the LASER call so a stray user-set <code>TRUE</code> on the local path can’t trigger the analyzer with un-flattened keys.</li>
+<li>
+<strong>Unit tests.</strong> New <code>tests/testthat/test-inject_likelihood_settings.R</code> covers the inject helper (forwards <code>.weights_time_resolved</code>, additive only, NULL handling) and the <code>.extract_base_config</code> keep list (presence on Dask path, absence on local). 14 assertions, all green.</li>
+</ul><p>Refs <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100" class="external-link">#100</a>.</p>
+<hr></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.30.0" id="mosaic-0300">MOSAIC 0.30.0<a class="anchor" aria-label="anchor" href="#mosaic-0300"></a></h2>
 <div class="section level3">
