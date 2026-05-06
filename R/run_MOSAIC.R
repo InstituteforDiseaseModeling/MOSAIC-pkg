@@ -681,6 +681,16 @@ run_MOSAIC <- function(config,
 
   # Conditionally create simresults directory for validation output
   save_simresults <- isTRUE(control$io$save_simresults)
+
+  # Preflight: simresults capture is local-path only. Dask workers return
+  # per-iter scalar likelihoods (issue #101 worker schema) instead of full
+  # time-series matrices, so there is no raw (j, t) output to persist on the
+  # Dask path. Reject early rather than silently dropping diagnostics.
+  if (use_dask && save_simresults) {
+    stop("save_simresults is not supported on the Dask path; ",
+         "use the local backend for diagnostic runs.", call. = FALSE)
+  }
+
   if (save_simresults) {
     dirs$cal_simresults <- file.path(dir_output, "2_calibration/simulation_results")
     dir.create(dirs$cal_simresults, recursive = TRUE, showWarnings = FALSE)
@@ -1085,7 +1095,6 @@ run_MOSAIC <- function(config,
           dirs                = dirs,
           param_names_all     = param_names_all,
           control             = control,
-          likelihood_settings = likelihood_settings,
           client              = client,
           base_config_future  = base_config_future,
           mosaic_worker       = mosaic_worker
@@ -1208,7 +1217,6 @@ run_MOSAIC <- function(config,
           dirs                = dirs,
           param_names_all     = param_names_all,
           control             = control,
-          likelihood_settings = likelihood_settings,
           client              = client,
           base_config_future  = base_config_future,
           mosaic_worker       = mosaic_worker

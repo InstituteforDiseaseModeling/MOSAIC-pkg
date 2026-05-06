@@ -1,3 +1,45 @@
+# MOSAIC 0.30.13
+
+## Phase 3 (issue #101): collapse Dask gather adapter to single write loop
+
+Removes the two R-side likelihood scoring branches (parallel PSOCK + sequential
+fallback) inside `.mosaic_run_batch_dask()` and replaces them with a single
+gather-and-write loop that consumes the new worker schema (per-iter scalar
+`likelihood` + sim-level `params` dict, see issue #101 / parent
+laser-cholera#47). Also adds a `run_MOSAIC()` preflight that rejects
+`save_simresults = TRUE` on the Dask path, since the new worker schema does
+not return raw matrices.
+
+This commit lands the R-orchestrator side. The matching worker-side schema
+flip in `inst/python/mosaic_dask_worker.py` and the version-gated
+round-trip tests follow in subsequent commits. None of this is exercised
+end-to-end until laser-cholera 0.13 (Phase 2 / laser-cholera#58) ships and
+`inst/python/environment.yml` is bumped to `>= 0.13`.
+
+### Changed
+
+- `R/run_MOSAIC.R` — preflight rejection of `save_simresults` on the Dask
+  path; both `.mosaic_run_batch_dask()` call sites drop the
+  `likelihood_settings` argument (no longer used; the same settings are
+  injected onto the paramfile by `.mosaic_inject_likelihood_settings()` in
+  Phase 1 and consumed on-worker).
+- `R/run_MOSAIC_helpers.R` — `.mosaic_run_batch_dask()` signature drops
+  `likelihood_settings`; the two scoring branches (~420 lines) collapse
+  to a single ~95-line loop. New loop re-injects `location_name` into
+  `res$params` before `convert_config_to_matrix()` to preserve ISO-suffixed
+  column names; collapses multi-iter likelihoods via `calc_log_mean_exp()`
+  exactly as the local path does.
+
+### Backwards compatibility
+
+The signature change is internal (`.mosaic_run_batch_dask()` is `@noRd`),
+so no user-visible API changes. Calibrations that set
+`control$io$save_simresults = TRUE` together with `dask_spec` will now
+error early with a clear message instead of silently producing parquet
+files but no simresults.
+
+---
+
 # MOSAIC 0.30.6
 
 ## Add GitHub profile links for Dejan Lukacevic and Meikang Wu
