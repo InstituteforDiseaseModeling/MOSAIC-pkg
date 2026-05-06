@@ -157,18 +157,21 @@ def run_laser_sim(sim_id: int, n_iterations: int,
     Returns
     -------
     dict
-        On success::
+        On success (issue #101 schema)::
 
             {
                 "sim_id": int,
                 "success": True,
                 "worker_elapsed_sec": float,
+                "params": dict,        # sampled scalars/vectors echoed back,
+                                       # minus _MATRIX_FIELDS. location_name
+                                       # is NOT included — the R gather path
+                                       # re-injects it before serialization.
                 "iterations": [
                     {
-                        "j": int,                       # 1-based iteration index
-                        "seed": int,                    # seed used for this iter
-                        "reported_cases": list[list],   # shape: n_locs × n_time
-                        "disease_deaths": list[list],   # shape: n_locs × n_time
+                        "iter":       int,    # 1-based iteration index
+                        "seed_iter":  int,    # seed used for this iter
+                        "likelihood": float,  # model.log_likelihood
                     },
                     ...
                 ]
@@ -201,6 +204,15 @@ def run_laser_sim(sim_id: int, n_iterations: int,
 
         config = _apply_sampled_params(base_config, sampled_params_json)
 
+        # The sampled dict (minus matrix fields) is echoed back so the R
+        # gather adapter can flatten it into parquet columns without
+        # re-deserializing the JSON. Built once per sim because params are
+        # constant across iterations.
+        sampled = json.loads(sampled_params_json)
+        params_for_return = {
+            k: v for k, v in sampled.items() if k not in _MATRIX_FIELDS
+        }
+
         t_start = time.monotonic()
         iterations = []
 
@@ -211,19 +223,31 @@ def run_laser_sim(sim_id: int, n_iterations: int,
 
             model = lc.run_model(paramfile=config, quiet=True)
 
+            # Engine-version guard: laser-cholera >= 0.13 populates
+            # model.log_likelihood when the analyzer is enabled (Phase 2 /
+            # laser-cholera#58). Older engines silently lack the attribute,
+            # which would otherwise crash the worker with AttributeError on
+            # the first sim. Fail this iteration cleanly with a clear error
+            # so the gather adapter surfaces an actionable warning.
+            ll = getattr(model, "log_likelihood", None)
+            if ll is None:
+                del model
+                gc.collect()
+                return {
+                    "sim_id": sim_id,
+                    "success": False,
+                    "error": (
+                        "model.log_likelihood is not available; "
+                        "laser-cholera >= 0.13 is required for Dask "
+                        "worker-side scoring (issue #101)."
+                    ),
+                    "traceback": "",
+                }
+
             iterations.append({
-                "j": j,
-                "seed": seed_ij,
-                # Convert numpy → nested Python lists for JSON-safe transport
-                # back to R via reticulate/Dask gather.
-                # Use reported_cases (PPV-adjusted: Isym*rho/chi) to match
-                # the R parallel worker path in .mosaic_run_simulation_worker.
-                "reported_cases": np.array(
-                    model.results.reported_cases
-                ).tolist(),
-                "disease_deaths": np.array(
-                    model.results.disease_deaths
-                ).tolist(),
+                "iter":       j,
+                "seed_iter":  seed_ij,
+                "likelihood": float(ll),
             })
 
             del model  # release Python LASER object immediately
@@ -238,6 +262,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
             "sim_id": sim_id,
             "success": True,
             "worker_elapsed_sec": worker_elapsed_sec,
+            "params": params_for_return,
             "iterations": iterations,
         }
 

@@ -1,3 +1,46 @@
+# MOSAIC 0.30.14
+
+## Phase 3 (issue #101): flip Dask worker schema to per-iter likelihood + params
+
+`inst/python/mosaic_dask_worker.py::run_laser_sim()` now returns a compact
+dict with per-iter scalar `likelihood` (read from `model.log_likelihood`)
+plus a sim-level `params` echo, instead of returning full per-iter
+time-series matrices for `reported_cases` / `disease_deaths`. This is the
+performance-win commit of Phase 3: at 47-country scale the per-sim
+payload drops from ~3.4 MB to a few hundred bytes.
+
+A defensive `getattr(model, "log_likelihood", None)` shim returns a
+clean per-sim failure result (with an actionable error message) when
+the worker imports an engine older than laser-cholera 0.13. This makes
+the schema flip safe to land on the branch ahead of the 0.13 release;
+end-to-end runs against the current 0.12.5 pin will fail-by-design with
+"laser-cholera >= 0.13 is required" rather than crash with
+`AttributeError`.
+
+### Changed
+
+- `inst/python/mosaic_dask_worker.py` — `run_laser_sim()` return shape
+  flips per the issue #101 contract:
+  - Iteration entries change from `{j, seed, reported_cases,
+    disease_deaths}` to `{iter, seed_iter, likelihood}`. Field renames
+    align with the existing parquet column names so the R gather loop
+    can read them positionally.
+  - New top-level `params` key carries the sampled scalars/vectors
+    (built from the JSON-deserialized `sampled` dict, minus
+    `_MATRIX_FIELDS`). `location_name` is intentionally not included;
+    the R gather adapter re-injects it from `config$location_name`.
+  - Engine-version guard inside the per-iter loop returns a clean
+    failure result on `< 0.13` engines.
+
+### Not yet end-to-end
+
+`inst/python/environment.yml` still pins `laser-cholera == 0.12.5`,
+so no real workload runs against the new path until that pin is bumped
+once Phase 2 (laser-cholera#58) tags 0.13. This is intentional — the
+branch holds the wiring ready while #58 is unblocked.
+
+---
+
 # MOSAIC 0.30.13
 
 ## Phase 3 (issue #101): collapse Dask gather adapter to single write loop
