@@ -119,6 +119,37 @@ teardown_cluster <- function(fx) {
 }
 
 # -----------------------------------------------------------------------------
+# Helper: skip tests that depend on the new (issue #101) on-worker likelihood
+# scoring schema unless the installed laser-cholera engine is >= 0.13. The
+# worker function itself fails per-sim with a clear "laser-cholera >= 0.13"
+# error on older engines (the getattr shim); this helper translates that into
+# a testthat skip instead of a hard failure so CI on the current 0.12.5 pin
+# stays green until the env bump lands.
+# -----------------------------------------------------------------------------
+skip_if_no_log_likelihood <- function(fx, cfg) {
+  sentinel_json <- as.character(
+    jsonlite::toJSON(list(), auto_unbox = TRUE, digits = NA)
+  )
+  base_fut <- fx$client$scatter(
+    reticulate::r_to_py(MOSAIC:::.extract_base_config(cfg)),
+    broadcast = TRUE
+  )
+  fut <- fx$client$submit(
+    fx$mosaic_worker$run_laser_sim,
+    -1L, 1L, sentinel_json, base_fut
+  )
+  res <- tryCatch(fx$client$gather(fut),
+                  error = function(e) list(success = FALSE,
+                                           error = conditionMessage(e)))
+  if (inherits(res, "python.builtin.dict")) res <- reticulate::py_to_r(res)
+  err <- as.character(res$error %||% "")
+  if (grepl("laser-cholera >= 0.13", err, fixed = TRUE)) {
+    skip("laser-cholera >= 0.13 required for on-worker likelihood scoring")
+  }
+  invisible(NULL)
+}
+
+# -----------------------------------------------------------------------------
 # Helper: build a minimal single-location config that LASER will actually run.
 # Uses the packaged config_default_MOZ if available; otherwise synthesizes a
 # toy config that's large enough for laser_cholera's validations.
@@ -214,7 +245,7 @@ test_that("client$scatter broadcasts base_config to all workers", {
 # Verifies that (a) the Python worker signature matches what R sends, (b) the
 # returned dict shape is what .mosaic_run_batch_dask expects to consume.
 # =============================================================================
-test_that("client$submit(run_laser_sim) returns expected dict shape", {
+test_that("client$submit(run_laser_sim) returns issue #101 schema", {
   skip_if_no_dask()
   fx_data <- get_tiny_config()
   cfg     <- fx_data$config
@@ -222,6 +253,7 @@ test_that("client$submit(run_laser_sim) returns expected dict shape", {
 
   fx <- local_cluster_fixture(n_workers = 2L)
   on.exit(teardown_cluster(fx), add = TRUE)
+  skip_if_no_log_likelihood(fx, cfg)
 
   # Sample a full parameter set, extract base + sampled, scatter, submit.
   params_sim <- tryCatch(
@@ -270,41 +302,40 @@ test_that("client$submit(run_laser_sim) returns expected dict shape", {
   expect_true(is.list(res) || inherits(res, "python.builtin.dict"))
   res <- if (inherits(res, "python.builtin.dict")) reticulate::py_to_r(res) else res
 
-  expect_named(res, c("sim_id", "success", "worker_elapsed_sec", "iterations"),
+  # Issue #101 success-path schema: {sim_id, success, worker_elapsed_sec,
+  # params, iterations:[{iter, seed_iter, likelihood}]}.
+  expect_named(res,
+               c("sim_id", "success", "worker_elapsed_sec",
+                 "params", "iterations"),
                ignore.order = TRUE, ignore.case = FALSE)
   expect_true(isTRUE(res$success),
               info = paste("worker error:", res$error %||% ""))
   expect_equal(length(res$iterations), 1L)
+  expect_true(is.list(res$params) && length(res$params) > 0L,
+              info = "worker must echo sampled params back")
+  # location_name is intentionally stripped by .extract_sampled_params; the
+  # gather adapter re-injects it on the R side.
+  expect_false("location_name" %in% names(res$params))
 
   iter <- res$iterations[[1]]
-  expect_named(iter, c("j", "seed", "reported_cases", "disease_deaths"),
+  expect_named(iter, c("iter", "seed_iter", "likelihood"),
                ignore.order = TRUE)
-
-  # Matrix reconstruction: nested lists → R matrix with expected dims
-  n_locs <- length(cfg$location_name)
-  cases_mat  <- matrix(unlist(iter$reported_cases),
-                       nrow = n_locs, byrow = FALSE)
-  deaths_mat <- matrix(unlist(iter$disease_deaths),
-                       nrow = n_locs, byrow = FALSE)
+  expect_equal(as.integer(iter$iter), 1L)
+  expect_equal(as.integer(iter$seed_iter), 1L)  # (sim_id-1)*n_iter + j = 1
+  expect_true(is.finite(as.numeric(iter$likelihood)),
+              info = "model.log_likelihood must be finite for trivial sim")
 
   diag("result: sim_id=%d | success=%s | worker_elapsed=%.2fs | roundtrip=%.2fs",
        as.integer(res$sim_id),
        as.character(res$success),
        as.numeric(res$worker_elapsed_sec),
        gather_sec)
-  diag("  iteration j=%d | seed=%d", as.integer(iter$j), as.integer(iter$seed))
-  diag("  reported_cases: dim=%dx%d | sum=%.1f | max=%.1f",
-       nrow(cases_mat), ncol(cases_mat),
-       sum(cases_mat, na.rm = TRUE),
-       max(cases_mat, na.rm = TRUE))
-  diag("  disease_deaths: dim=%dx%d | sum=%.1f | max=%.1f",
-       nrow(deaths_mat), ncol(deaths_mat),
-       sum(deaths_mat, na.rm = TRUE),
-       max(deaths_mat, na.rm = TRUE))
-
-  expect_equal(nrow(cases_mat), n_locs)
-  expect_gt(ncol(cases_mat), 1L)
-  expect_true(all(is.finite(cases_mat) | is.na(cases_mat)))
+  diag("  iter=%d | seed_iter=%d | likelihood=%.3f",
+       as.integer(iter$iter), as.integer(iter$seed_iter),
+       as.numeric(iter$likelihood))
+  diag("  params keys (%d): %s",
+       length(res$params),
+       paste(head(names(res$params), 10), collapse = ","))
 })
 
 
@@ -319,6 +350,7 @@ test_that("client$map dispatches multiple sims and preserves per-sim ordering", 
 
   fx <- local_cluster_fixture(n_workers = 2L)
   on.exit(teardown_cluster(fx), add = TRUE)
+  skip_if_no_log_likelihood(fx, cfg)
 
   # Build 3 parameter sets with different seeds.
   n_sims <- 3L

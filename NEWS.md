@@ -1,3 +1,40 @@
+# MOSAIC 0.30.15
+
+## Phase 3 (issue #101): tests for new worker schema and parquet parity
+
+Adds two test layers around the v0.30.13 / v0.30.14 wiring.
+
+### New: `tests/testthat/test-dask_worker_schema_parity.R`
+
+Engine-free regression tests for the worker round trip. They simulate the
+worker echo + gather adapter re-injection in pure R (no Dask cluster, no
+Python), so they run in every CI configuration. Three tests:
+
+1. **Column-name parity** — `convert_config_to_matrix(reconstituted)`
+   produces the same parquet column names as the local-path
+   `convert_config_to_matrix(params_sim)`.
+2. **ISO-suffix presence** — every location's ISO code appears as a
+   column suffix on at least one parameter (asserts that `_ETH` etc.
+   beats `_1` numeric fallback).
+3. **Failure-mode lock-in** — drops the `location_name` re-injection and
+   asserts numeric suffixes appear instead, locking in the silent break
+   so a future refactor that removes the injection trips a clear failure.
+
+### Updated: `tests/testthat/test-dask_local_cluster_integration.R`
+
+- New `skip_if_no_log_likelihood()` helper submits a tiny sentinel sim
+  and skips when the worker fails-by-design with the
+  "laser-cholera >= 0.13 is required" message from the v0.30.14 shim.
+  Keeps these tests green on the current 0.12.5 pin while leaving them
+  active once 0.13 lands.
+- `TEST 3` (`client$submit(run_laser_sim)`) updated to the issue #101
+  schema: asserts result has `params` plus `iterations` of
+  `{iter, seed_iter, likelihood}`, and that `location_name` is
+  intentionally absent from `res$params`.
+- `TEST 4` (`client$map`) gated on the new helper.
+
+---
+
 # MOSAIC 0.30.14
 
 ## Phase 3 (issue #101): flip Dask worker schema to per-iter likelihood + params
