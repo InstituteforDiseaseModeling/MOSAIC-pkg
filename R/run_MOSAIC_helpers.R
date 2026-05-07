@@ -1499,8 +1499,16 @@
       next
     }
 
-    # Re-inject location_name (stripped by .extract_sampled_params) so the
-    # flat parameter columns carry ISO suffixes that match the local path.
+    # Re-inject base_config fields that .extract_sampled_params() strips but
+    # convert_config_to_matrix() needs for parquet column parity with the
+    # local path. These are constant across sims (live in the broadcast
+    # base_config), so the worker doesn't echo them; the gather adapter
+    # pulls them off `config` instead.
+    #
+    # Currently: location_name (drives ISO column suffixes) and N_j_initial
+    # (per-location initial population). Anything added to `.extract_sampled_params`
+    # base_fields that is also in `convert_config_to_matrix` params_keep
+    # must be re-injected here too — see test-dask_worker_schema_parity.R.
     params <- res$params
     if (is.null(params)) {
       warning("sim ", sim_id, " worker returned no params dict (engine ",
@@ -1509,6 +1517,7 @@
       next
     }
     params$location_name <- config$location_name
+    params$N_j_initial   <- config$N_j_initial
 
     raw_params <- tryCatch({
       pv <- convert_config_to_matrix(params)

@@ -44,24 +44,35 @@ skip_if_no_moz_data <- function() {
 )
 
 # Simulates the Dask round trip in R: extract sampled, JSON ship out,
-# JSON ship back, drop matrix fields (worker filter), re-inject
-# location_name (gather adapter).
+# JSON ship back, drop matrix fields (worker filter), re-inject the
+# base_config fields stripped by .extract_sampled_params() (gather adapter).
 .simulate_worker_round_trip <- function(params_sim, config) {
   sampled <- MOSAIC:::.extract_sampled_params(params_sim)
   sampled_json <- jsonlite::toJSON(sampled, auto_unbox = TRUE, digits = NA)
   # simplifyVector = TRUE matches what reticulate produces when py dicts of
   # py lists/scalars come back to R.
   echoed <- jsonlite::fromJSON(sampled_json, simplifyVector = TRUE)
-  echoed[.matrix_fields] <- NULL              # worker-side filter
-  echoed$location_name <- config$location_name # gather-adapter re-injection
+  echoed[.matrix_fields] <- NULL          # worker-side filter
+  # Gather-adapter re-injections — must mirror .mosaic_run_batch_dask().
+  echoed$location_name <- config$location_name
+  echoed$N_j_initial   <- config$N_j_initial
   echoed
+}
+
+# Mirrors run_MOSAIC.R param_names_all: convert_config_to_matrix(...) output
+# minus `seed`. Used to compare both paths against the canonical parquet
+# column schema rather than raw convert_config_to_matrix() output.
+.parquet_columns <- function(config_like) {
+  pv <- MOSAIC::convert_config_to_matrix(config_like)
+  if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+  names(pv)
 }
 
 
 # =============================================================================
 # TEST 1: column-name parity between local path and Dask round trip
 # =============================================================================
-test_that("worker echo + location_name re-injection produces parquet column names matching the local path", {
+test_that("worker echo + base-field re-injection produces parquet column names matching the local path", {
   fx <- skip_if_no_moz_data()
   cfg <- fx$config
 
@@ -75,10 +86,12 @@ test_that("worker echo + location_name re-injection produces parquet column name
     validate    = FALSE
   )
 
-  local_cols <- names(MOSAIC::convert_config_to_matrix(params_sim))
+  # Compare against the canonical parquet column schema (matches
+  # run_MOSAIC.R param_names_all: convert_config_to_matrix() minus seed).
+  local_cols <- .parquet_columns(params_sim)
 
   reconstituted <- .simulate_worker_round_trip(params_sim, cfg)
-  dask_cols <- names(MOSAIC::convert_config_to_matrix(reconstituted))
+  dask_cols <- .parquet_columns(reconstituted)
 
   expect_setequal(local_cols, dask_cols)
 })

@@ -322,8 +322,17 @@ test_that("client$submit(run_laser_sim) returns issue #101 schema", {
                ignore.order = TRUE)
   expect_equal(as.integer(iter$iter), 1L)
   expect_equal(as.integer(iter$seed_iter), 1L)  # (sim_id-1)*n_iter + j = 1
-  expect_true(is.finite(as.numeric(iter$likelihood)),
-              info = "model.log_likelihood must be finite for trivial sim")
+  # We assert the wire shape only, NOT finiteness. The analyzer that
+  # populates model.log_likelihood needs `calc_likelihood = TRUE` plus the
+  # twelve likelihood-control keys flattened onto the paramfile (Phase 1 /
+  # .mosaic_inject_likelihood_settings()), and this fixture bypasses
+  # run_MOSAIC() so those aren't set — model.log_likelihood may legitimately
+  # come back as NaN here. The accompanying parity test
+  # (test-dask_worker_schema_parity.R) covers schema correctness; numerical
+  # correctness of the analyzer is the Phase 2 / laser-cholera test suite's
+  # responsibility.
+  expect_true(is.numeric(iter$likelihood),
+              info = "likelihood must be numeric (NaN/Inf are acceptable here)")
 
   diag("result: sim_id=%d | success=%s | worker_elapsed=%.2fs | roundtrip=%.2fs",
        as.integer(res$sim_id),

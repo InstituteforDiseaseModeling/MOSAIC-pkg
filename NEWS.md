@@ -1,3 +1,48 @@
+# MOSAIC 0.30.16
+
+## Fix Phase 3 gather adapter: re-inject `N_j_initial` alongside `location_name`
+
+A docker-CI run of the v0.30.15 parity test surfaced a real production
+divergence: `.extract_sampled_params()` strips `N_j_initial` (and
+`location_name`, and a few others) from the JSON shipped to the worker —
+they live in the broadcast `base_config` instead. v0.30.13's gather
+adapter only re-injected `location_name`, so the Dask parquet schema
+silently dropped the `N_j_initial_<ISO>` columns the local path
+populates, producing a real (not just cosmetic) schema asymmetry.
+
+The fix is a one-line addition to `.mosaic_run_batch_dask()`: re-inject
+`config$N_j_initial` from the broadcast config alongside
+`config$location_name`. The accompanying parity test now compares both
+paths against the canonical `param_names_all` schema (i.e.
+`convert_config_to_matrix() minus seed`) instead of raw
+`convert_config_to_matrix()` output, so the test exercises the same
+column set that actually lands in `samples.parquet`.
+
+### Changed
+
+- `R/run_MOSAIC_helpers.R::.mosaic_run_batch_dask()` — adds
+  `params$N_j_initial <- config$N_j_initial` to the gather-adapter
+  re-injection block. Comment block enumerates the contract: any field
+  added to `.extract_sampled_params` `base_fields` that is also in
+  `convert_config_to_matrix` `params_keep` must be re-injected here.
+- `tests/testthat/test-dask_worker_schema_parity.R`:
+  - New `.parquet_columns()` helper that mirrors `param_names_all`
+    construction (`convert_config_to_matrix() minus seed`).
+  - Round-trip simulator re-injects `N_j_initial` to mirror the
+    production gather adapter.
+  - Test 1 now compares canonical parquet columns instead of raw
+    `convert_config_to_matrix()` output, eliminating the false
+    positives on `seed` / `N_j_initial`.
+- `tests/testthat/test-dask_local_cluster_integration.R` — Test 3
+  relaxes the `iter$likelihood` finiteness assertion to a numeric-type
+  check (NaN / Inf accepted). The test fixture bypasses `run_MOSAIC()`
+  and therefore does not run `.mosaic_inject_likelihood_settings()`, so
+  the on-worker analyzer can legitimately return NaN here — finiteness
+  depends on Phase 1 wiring and is the Phase 2 / laser-cholera test
+  suite's responsibility, not Phase 3's wire-schema contract.
+
+---
+
 # MOSAIC 0.30.15
 
 ## Phase 3 (issue #101): tests for new worker schema and parquet parity
