@@ -235,28 +235,71 @@ EOF
 
 ### Step 4 — Verify after Nat confirms
 
-After Nat replies that the workspace is configured, spin up a one-worker cluster and check that the UAI is attached:
+After Nat replies that the workspace is configured, spin up a one-worker cluster and verify the UAI by asking it to mint a token for Azure Storage. A successful token issuance is the conclusive proof that the UAI is attached **and** functional.
+
+> Note: IMDS does not expose a clean "list attached UAIs" endpoint. `/metadata/instance` has no `compute.identity` field, and `/metadata/identity/info` is for system-assigned identities only. The token check below is the right verification.
 
 ```python
 import os, coiled
-WORKSPACE = os.environ["COILED_WORKSPACE"]  # idm-coiled-idmad-r2
+WORKSPACE       = os.environ["COILED_WORKSPACE"]
+EXPECTED_UAI_ID = os.environ.get("UAI_CLIENT", "")  # optional — for cross-check
 
 cluster = coiled.Cluster(workspace=WORKSPACE, n_workers=1)
 client = cluster.get_client()
 
-def check_identity():
+def check_token():
+    """Ask the worker's UAI to mint a token for Azure Storage."""
     import requests
-    # IMDS endpoint — returns identity info from inside the VM
     r = requests.get(
-        "http://169.254.169.254/metadata/identity/info?api-version=2018-02-01",
+        "http://169.254.169.254/metadata/identity/oauth2/token",
+        params={
+            "api-version": "2018-02-01",
+            "resource": "https://storage.azure.com/",
+        },
         headers={"Metadata": "true"}, timeout=5)
-    return r.json()
+    r.raise_for_status()
+    data = r.json()
+    return {k: v for k, v in data.items() if k != "access_token"}  # strip secret
 
-print(client.submit(check_identity).result())
+token_info = client.submit(check_token).result()
+for k, v in token_info.items():
+    print(f"  {k:14s} : {v}")
+
+if EXPECTED_UAI_ID:
+    assert token_info["client_id"] == EXPECTED_UAI_ID, \
+        f"client_id {token_info['client_id']} != expected {EXPECTED_UAI_ID}"
+    print(f"\nOK — UAI client_id matches.")
+
 cluster.close()
 ```
 
-You should see your UAI's `client_id` in the response. If you see `null` or an error, the workspace is not configured yet — ping Nat.
+Cross-check the returned `client_id` against the UAI you created in [Step 1](#step-1--create-the-shared-uai):
+
+```bash
+export UAI_CLIENT=$(az identity show -n $UAI_NAME -g $RG --query clientId -o tsv)
+echo $UAI_CLIENT   # should equal the client_id from the Python output above
+```
+
+**Expected output (success):**
+
+```text
+  client_id      : 82f0ebba-d17f-4310-ad5b-f428c0de083a   # matches $UAI_CLIENT
+  expires_in     : 86400
+  resource       : https://storage.azure.com/
+  token_type     : Bearer
+  ...
+```
+
+**Failure modes:**
+
+| What you see | Means | Fix |
+|---|---|---|
+| `check_token` raises 400 (`identity_not_found`) | No UAI attached to worker VM | Workspace not configured yet — ping Nat |
+| `check_token` raises 400 (`multiple_matching_identities`) | More than one UAI is attached | Unexpected for our setup — confirm with Nat |
+| Token returns, but `client_id` ≠ `$UAI_CLIENT` | Wrong UAI attached | Confirm Nat wired the correct UAI Resource ID |
+| `Unclosed client session` warning from aiohttp at script end | Coiled/dask cleanup is racy with aiohttp — cosmetic only | Ignore |
+
+The full smoke test (blob round-trip + token check, with labelled output and optional `$UAI_CLIENT` assertion) is in [smoke_test_coiled_azure_storage.py](smoke_test_coiled_azure_storage.py).
 
 ---
 
