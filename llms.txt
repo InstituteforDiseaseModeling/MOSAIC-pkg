@@ -1055,6 +1055,8 @@ Other exported functions and internal helpers
   : Read priors or posteriors from JSON with consistent parsing
 - [`read_yaml_to_list()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/read_yaml_to_list.md)
   : Read a YAML File into an R List
+- [`refresh_data_repos()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/refresh_data_repos.md)
+  : Pull latest data from external scraper repos and report coverage
 - [`remove_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.md)
   : Remove the MOSAIC Python Environment
 - [`rgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rgompertz.md)
