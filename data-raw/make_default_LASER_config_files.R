@@ -161,22 +161,22 @@ nu_2_jt[,] <- 0
 message("Add fourier params for seasonal force of infection")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv"))
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'a1'
+sel <- tmp$response == 'cases' & tmp$parameter == 'a_1'
 a1 <- tmp$mean[sel]
 names(a1) <- tmp$country_iso_code[sel]
 a1 <- a1[match(j, names(a1))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'a2'
+sel <- tmp$response == 'cases' & tmp$parameter == 'a_2'
 a2 <- tmp$mean[sel]
 names(a2) <- tmp$country_iso_code[sel]
 a2 <- a2[match(j, names(a2))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'b1'
+sel <- tmp$response == 'cases' & tmp$parameter == 'b_1'
 b1 <- tmp$mean[sel]
 names(b1) <- tmp$country_iso_code[sel]
 b1 <- b1[match(j, names(b1))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'b2'
+sel <- tmp$response == 'cases' & tmp$parameter == 'b_2'
 b2 <- tmp$mean[sel]
 names(b2) <- tmp$country_iso_code[sel]
 b2 <- b2[match(j, names(b2))]
@@ -333,10 +333,10 @@ default_args <- list(
      d_jt = d_jt,
      nu_1_jt = nu_1_jt,
      nu_2_jt = nu_2_jt,
-     phi_1 = 0.787,
-     phi_2 = 0.768,
-     omega_1 = 0.00073,
-     omega_2 = 0.000485,
+     phi_1 = 0.788,               # Mode of Beta(91.84, 25.49); Xu et al. 2024 fit
+     phi_2 = 0.788,               # Mode of Beta(206.96, 56.53); constrained phi_2 >= phi_1
+     omega_1 = 0.000705,          # Mode of Gamma(23.33, 31693.83); half-life ~2.7 years
+     omega_2 = 0.000358,          # Mode of Gamma(2.69, 4720.84); half-life ~5.3 years
      iota = 1/1.4,
      gamma_1 = 0.2,
      gamma_2 = 0.1,

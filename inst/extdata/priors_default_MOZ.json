@@ -1,8 +1,8 @@
 {
   "metadata": {
     "version": "3.1",
-    "date": "2026-04-23",
-    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
+    "date": "2026-05-27",
+    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
   },
   "parameters_global": {
     "alpha_1": {
@@ -129,8 +129,8 @@
       "description": "Vaccine waning rate (two dose, per day)",
       "distribution": "gamma",
       "parameters": {
-        "shape": 2.713283144173,
-        "rate": 5079.23970665351
+        "shape": 2.68783331145694,
+        "rate": 4720.84484791329
       }
     },
     "phi_1": {
@@ -145,8 +145,8 @@
       "description": "Initial vaccine effectiveness (two dose)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 115.097591451044,
-        "shape2": 35.3226818969424
+        "shape1": 206.957008924941,
+        "shape2": 56.5308788594621
       }
     },
     "chi_endemic": {
@@ -171,6 +171,14 @@
       "parameters": {
         "shape1": 6.81427258303886,
         "shape2": 17.8943797428517
+      }
+    },
+    "rho_deaths": {
+      "description": "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+      "distribution": "beta",
+      "parameters": {
+        "shape1": 3,
+        "shape2": 2
       }
     },
     "sigma": {
@@ -223,14 +231,6 @@
         "sd": 3,
         "a": 1,
         "b": 14
-      }
-    },
-    "rho_deaths": {
-      "description": "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
-      "distribution": "beta",
-      "parameters": {
-        "shape1": 3,
-        "shape2": 2
       }
     }
   },
@@ -289,8 +289,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 0,
-            "sd": 0.707106781186547
+            "mean": 0.456639771935193,
+            "sd": 0.108410937909761
           }
         }
       }
@@ -301,8 +301,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 0,
-            "sd": 0.707106781186547
+            "mean": -0.654109653567426,
+            "sd": 0.108830661867417
           }
         }
       }
@@ -313,8 +313,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 0,
-            "sd": 0.707106781186547
+            "mean": 1.1508399903642,
+            "sd": 0.108313561346714
           }
         }
       }
@@ -325,8 +325,8 @@
         "MOZ": {
           "distribution": "normal",
           "parameters": {
-            "mean": 0,
-            "sd": 0.707106781186547
+            "mean": 0.145100863451379,
+            "sd": 0.107874332138806
           }
         }
       }
