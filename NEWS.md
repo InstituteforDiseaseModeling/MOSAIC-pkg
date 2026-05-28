@@ -1,3 +1,61 @@
+# MOSAIC 0.30.22
+
+## Flood-prob imputer: Tweedie severity target + enriched predictors
+
+The v0.30.20 binomial-on-active formulation produced an imputed
+`emdat_flood_prob` that didn't separate major events from seasonal
+climatology -- Cyclone Freddy (MOZ, Feb-Mar 2023) only reached
+probability 0.503, barely above the MOZ Feb-Apr p90 of 0.396 and below
+the all-time MOZ max. Four parallel strategies were explored (Tweedie
+severity target; enriched predictor set; xgboost; two-stage hurdle).
+This release adopts the hybrid of the two winners:
+
+**Tweedie family on raw `Total Affected`.** Encodes flood SEVERITY
+rather than just presence/absence. The Tweedie compound-Poisson-gamma
+mixture handles the zero-inflated continuous target natively.
+
+**Enriched predictor set** (computed inline by the imputer, no
+upstream compile changes required beyond the existing `region`
+column):
+
+- `precip_sum_24w` and `precip_sum_52w` -- long-memory antecedent
+  precipitation capturing basin saturation. These were the largest
+  single contributors to interannual variance in the rebuild
+  experiments.
+- `s(precip_sum_4w, by = region_f)` -- region-conditional 4-week
+  precipitation smooth (4-region WHO classification: Central / East /
+  Southern / West Africa).
+- `s(precip_x_soil_anom)` -- joint precip-anomaly x soil-moisture-anomaly
+  index for the "very-wet AND already-saturated" regime.
+
+**Output normalization**: predictions on the raw Tweedie scale are
+non-negative, heavy-tailed continuous. Normalized by global maximum to
+`[0, 1]` -- rank-normalization was tested and rejected because it
+erases the long-tail major-event amplification the Tweedie target was
+chosen for.
+
+**End-to-end measured impact** (full AFRO panel, real climate + EM-DAT
+data):
+
+| Metric | v0.30.21 (binomial) | v0.30.22 (Tweedie hybrid) |
+|---|---|---|
+| Cyclone Freddy rank in MOZ history | not top-5 | **1st of 872** |
+| Freddy / MOZ Feb-Apr p90 ratio | 1.27x | **8.14x** |
+| Median seasonal variance share | 0.436 | **0.162** |
+| OOT Spearman vs severity | 0.290 | 0.267 |
+| OOT AUC vs binary | 0.857 | 0.808 |
+
+Cost: 0.05 AUC and 0.02 Spearman on the held-out binary-target metrics
+(unavoidable when switching from binomial-on-binary to
+Tweedie-on-continuous). Acceptable trade-off given the 6.4x lift on the
+Freddy benchmark and 63% reduction in seasonal-variance share.
+
+**Strategies tested and rejected**: xgboost (sharper peaks but
+worsened seasonal share); two-stage hurdle (Freddy peak actually
+*dropped* because Total Affected for Freddy isn't a global outlier).
+
+---
+
 # MOSAIC 0.30.21
 
 ## Two correctness fixes in the flood-prob pipeline

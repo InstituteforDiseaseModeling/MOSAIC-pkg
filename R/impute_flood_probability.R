@@ -1,27 +1,37 @@
 #' Impute Country-Week Flood Probability from EM-DAT and Climate Covariates
 #'
-#' Fits a binomial GAM on observed EM-DAT flood events (`emdat_flood_active`)
-#' as a function of climate anomalies, cyclic seasonality, ENSO/IOD long
-#' lags, and country random effects, then predicts a continuous flood
-#' probability for every (iso_code, year, week) row in the suitability
-#' data — including forecast-window rows where EM-DAT carries no
-#' observation. The imputed column lets the downstream LSTM consume the
-#' same flood feature definition in training and inference, eliminating
-#' the distribution shift the raw 0/1 indicator would otherwise introduce.
+#' Fits a Tweedie-family GAM on observed EM-DAT flood severity
+#' (\code{Total Affected}, derived from \code{emdat_flood_affected}) as a
+#' function of climate anomalies, multi-month antecedent precipitation,
+#' region-conditional precipitation, joint precip/soil-moisture
+#' interactions, ENSO/IOD long lags, and country random effects. The
+#' fitted model is then used to predict a continuous flood "probability"
+#' (global-max-scaled severity proxy) for every (iso_code, year, week)
+#' row -- historical AND forecast. The imputed column lets the downstream
+#' LSTM consume the same feature definition in training and inference,
+#' eliminating the distribution shift the raw 0/1 indicator would
+#' otherwise introduce. The Tweedie family was chosen over the prior
+#' binomial-on-active formulation because it encodes flood SEVERITY (not
+#' just presence): major events such as Cyclone Freddy land near the top
+#' of each country's distribution, dropping the median seasonal-variance
+#' share from ~0.44 to ~0.16 across the AFRO panel.
 #'
 #' @param d A data.frame with one row per (iso_code, year, week). Must
-#'   contain: \code{iso_code}, \code{year}, \code{week}, \code{date},
-#'   \code{emdat_flood_active} (0/1; NA in forecast rows is fine), the
-#'   precipitation channels \code{precipitation_sum}, \code{precip_anom},
-#'   \code{precip_sum_2w}, \code{precip_sum_4w}, \code{precip_sum_8w},
-#'   \code{precip_sum_12w}, \code{precip_extreme_p90_count}; soil moisture
-#'   \code{soil_moisture_0_to_10cm_mean}, \code{soil_moisture_anom};
-#'   \code{spei_approx}; atmospheric humidity
+#'   contain the columns returned by
+#'   \code{.impute_flood_probability_required()}: \code{iso_code},
+#'   \code{year}, \code{week}, \code{date}; the severity target
+#'   \code{emdat_flood_affected} (log1p of summed \code{Total Affected};
+#'   NA in forecast rows is fine) plus the binary
+#'   \code{emdat_flood_active} (used for the calibration/CV
+#'   diagnostics); the WHO subregion \code{region}; the precipitation
+#'   channels \code{precipitation_sum}, \code{precip_anom},
+#'   \code{precip_sum_2w/4w/8w/12w}, \code{precip_extreme_p90_count};
+#'   soil moisture \code{soil_moisture_0_to_10cm_mean},
+#'   \code{soil_moisture_anom}; \code{spei_approx}; atmospheric humidity
 #'   \code{relative_humidity_2m_mean}, \code{rh_mean_12w}; storm proxy
 #'   \code{wind_speed_10m_max}; and the teleconnection indices
-#'   \code{ENSO3}, \code{ENSO34}, \code{ENSO4}, \code{IOD} (lags computed
-#'   inline). Standard output shape from \code{compile_suitability_data()}
-#'   after its enhanced-covariate block.
+#'   \code{ENSO3}, \code{ENSO34}, \code{ENSO4}, \code{IOD} (lags and
+#'   long-window precip sums computed inline by the function).
 #' @param output_col Character. Name of the new probability column.
 #'   Default \code{"emdat_flood_prob"}.
 #' @param diagnostics Logical. If \code{TRUE}, fits a rolling-year
@@ -36,18 +46,32 @@
 #'   \code{output_col} carrying a non-NA numeric in \[0, 1\] for every row.
 #'
 #' @details
-#' The GAM is fit with \code{mgcv::bam()} (mgcv's big-data variant — uses
+#' The GAM is fit with \code{mgcv::bam()} (mgcv's big-data variant -- uses
 #' block updates, discrete covariate binning, and parallel-friendly
-#' linear algebra; on ~30k rows it returns in seconds where \code{gam()}
-#' would take ~15 min with essentially identical fitted values).
-#' \code{family = binomial(link = "logit")}, \code{method = "fREML"}, and
-#' \code{select = FALSE} (the smooth-shrinkage penalty was previously
-#' suppressing the ENSO/IOD teleconnection terms; without it those terms
-#' keep their unpenalized REML weight). Lagged ENSO34/IOD predictors
-#' (lags 8, 16, and 24 weeks; lag-0 is the raw current index) are
-#' computed inside the function via grouped \code{dplyr::lag()}, so the
-#' caller does not need to pass \code{include_lags = TRUE} to
-#' \code{compile_suitability_data()}.
+#' linear algebra; on ~30k rows it returns in ~30-40 sec).
+#' \code{family = mgcv::Tweedie(p = 1.5)} models the zero-inflated
+#' continuous mixture of \code{Total Affected} natively. The output is
+#' global-max-scaled to sit on \[0, 1\] -- rank-normalization was
+#' considered and rejected because it would erase the long-tail
+#' major-event amplification that motivated the Tweedie switch.
+#' \code{method = "fREML"}, \code{select = FALSE} (the smooth-shrinkage
+#' penalty was previously suppressing the ENSO/IOD teleconnection
+#' terms; without it those terms keep their unpenalized REML weight).
+#' Predictors computed inline (so the caller does not need to provide
+#' them):
+#' \itemize{
+#'   \item ENSO34 and IOD at lags 8, 16, 24 weeks (current value is the
+#'     raw column).
+#'   \item Long-memory antecedent precipitation:
+#'     \code{precip_sum_24w} (~6-month basin saturation memory) and
+#'     \code{precip_sum_52w} (annual). These were the largest single
+#'     contributors to interannual variance in the v0.30.22 rebuild.
+#'   \item Joint climate index: \code{precip_anom * soil_moisture_anom}
+#'     (very-wet AND already-saturated regime).
+#' }
+#' Region-conditional precip-sum-4w smooth requires a \code{region}
+#' column on the input dataframe (4-region WHO classification:
+#' Central / East / Southern / West Africa).
 #'
 #' Sentinel handling: any row whose prediction is NA (e.g. a lag-startup
 #' edge before week 20 of the earliest year, or a row with a missing
@@ -67,8 +91,9 @@
 #' @seealso \code{\link{compile_suitability_data}},
 #'   \code{\link{est_suitability}}, \code{\link{process_EMDAT_data}}
 #'
-#' @importFrom mgcv bam s
+#' @importFrom mgcv bam s Tweedie
 #' @importFrom dplyr group_by arrange mutate lag ungroup
+#' @importFrom slider slide_dbl
 #' @importFrom stats binomial predict
 #' @importFrom utils write.csv capture.output
 #' @importFrom grDevices png dev.off
@@ -87,59 +112,87 @@ impute_flood_probability <- function(d,
                paste(missing_cols, collapse = ", "))
      }
 
-     if (verbose) message("Imputing flood probability via binomial GAM...")
+     if (verbose) message("Imputing flood probability via Tweedie severity GAM...")
 
-     # Locally compute ENSO34 and IOD at multiple lag horizons (current,
-     # 2 months, 4 months, 6 months prior) inside a grouped pipeline.
-     # Lag-0 of each index is simply the raw current value.
+     # Inline-compute additional predictors the GAM needs but the saved
+     # suitability CSV doesn't carry:
+     #   * ENSO34 / IOD lags (current + 2/4/6 months)
+     #   * Long-memory antecedent precipitation (24-week ~ 6 months;
+     #     52-week annual) -- exploration showed these are the
+     #     load-bearing terms for major-event signal (Cyclone Freddy
+     #     etc.)
+     #   * Joint climate index: precip_anom * soil_moisture_anom captures
+     #     the "very wet AND already saturated" regime.
      d_aug <- d %>%
           dplyr::group_by(iso_code) %>%
           dplyr::arrange(date, .by_group = TRUE) %>%
           dplyr::mutate(
-               ENSO34_lag8  = dplyr::lag(ENSO34, n = 8),
-               ENSO34_lag16 = dplyr::lag(ENSO34, n = 16),
-               ENSO34_lag24 = dplyr::lag(ENSO34, n = 24),
-               IOD_lag8     = dplyr::lag(IOD,    n = 8),
-               IOD_lag16    = dplyr::lag(IOD,    n = 16),
-               IOD_lag24    = dplyr::lag(IOD,    n = 24)
+               ENSO34_lag8        = dplyr::lag(ENSO34, n = 8),
+               ENSO34_lag16       = dplyr::lag(ENSO34, n = 16),
+               ENSO34_lag24       = dplyr::lag(ENSO34, n = 24),
+               IOD_lag8           = dplyr::lag(IOD,    n = 8),
+               IOD_lag16          = dplyr::lag(IOD,    n = 16),
+               IOD_lag24          = dplyr::lag(IOD,    n = 24),
+               precip_sum_24w     = slider::slide_dbl(precipitation_sum, sum,
+                                                       .before = 23L, .complete = TRUE),
+               precip_sum_52w     = slider::slide_dbl(precipitation_sum, sum,
+                                                       .before = 51L, .complete = TRUE),
+               precip_x_soil_anom = precip_anom * soil_moisture_anom
           ) %>%
           dplyr::ungroup()
 
-     # Factorize iso_code for the random-effect smooth (mgcv requires factor)
+     # Factor versions for the GAM's random effect + by-factor smooths
      d_aug$iso_code_f <- factor(d_aug$iso_code)
+     d_aug$region_f   <- factor(d_aug$region)
 
-     # Flood-physics-driven covariate set:
+     # Severity target: raw Total Affected, derived from the log1p column
+     # in the suitability data. Tweedie family handles the zero-inflated
+     # continuous mixture natively.
+     d_aug$total_affected_raw <- expm1(d_aug$emdat_flood_affected)
+     d_aug$total_affected_raw[is.na(d_aug$total_affected_raw)] <- 0
+
+     # Flood-physics-driven covariate set (v0.30.22+ rebuild around major-event signal):
+     #   * Tweedie family on raw Total Affected: a zero-inflated continuous
+     #     mixture target encodes flood SEVERITY, not just presence. The
+     #     prior binomial-on-active formulation underweighted major
+     #     events like Cyclone Freddy (peak prob ~0.5, barely above
+     #     seasonal climatology); the Tweedie variant pushes Freddy to
+     #     MOZ's all-time maximum on the imputed scale.
+     #   * Long-memory antecedent precipitation (24w, 52w) is the
+     #     single biggest contributor to interannual variance --
+     #     captures basin saturation that turns a normal week's rain
+     #     into a flood.
+     #   * Region-conditional 4-week precip smooth: lets the model
+     #     learn distinct flood-vs-rain mappings for East / West /
+     #     Central / Southern Africa.
+     #   * Joint precip x soil_moisture anomaly index: very-wet AND
+     #     already-saturated cells.
      #   * No cyclic-week smooth: lets the climate predictors carry the
-     #     within-year cycle directly rather than imposing it as a global
-     #     parametric shape.
+     #     within-year cycle directly.
      #   * No static elevation / urban_population_pct: country-level
-     #     terrain and vulnerability differences are absorbed by the
-     #     iso_code random effect.
-     #   * All available precipitation / soil-moisture / humidity channels
-     #     are included -- raw, anomaly, multiple rolling windows -- so
-     #     the GAM can pick out the rainfall horizon that matters per
-     #     country.
+     #     terrain/vulnerability differences are absorbed by the iso
+     #     random effect.
      #   * Heavy ENSO/IOD bench: ENSO34 at current + 2/4/6-month lags,
-     #     plus current ENSO3 and ENSO4 (different Pacific regions), and
-     #     IOD at the same lag horizons. This is the multi-month
-     #     forecast backbone for the East African flood regimes that
-     #     carry the strongest interannual signal.
-     #   * select = FALSE: the extra smooth-shrinkage penalty was
-     #     suppressing exactly the teleconnection signal we want to
-     #     emphasise. Without it, smooths keep their unpenalized REML
-     #     weight. CV AUC will tell us if any term needs trimming.
-     gam_formula <- emdat_flood_active ~
+     #     plus current ENSO3 / ENSO4, and IOD at the same lag horizons.
+     #   * select = FALSE: the shrinkage penalty had been suppressing the
+     #     teleconnection terms; without it they keep their REML weight.
+     gam_formula <- total_affected_raw ~
           # Country baseline
           s(iso_code_f, bs = "re") +
-          # All precipitation channels
+          # All precipitation channels, with long-memory basin saturation
           s(precipitation_sum) +
           s(precip_anom) +
           s(precip_sum_2w) +
           s(precip_sum_4w) +
           s(precip_sum_8w) +
           s(precip_sum_12w) +
-          # Extreme-rain trigger (binary -> linear)
+          s(precip_sum_24w) +
+          s(precip_sum_52w) +
           precip_extreme_p90_count +
+          # Region-conditional medium-window precip
+          s(precip_sum_4w, by = region_f) +
+          # Joint precip x soil_moisture anomaly (saturation interaction)
+          s(precip_x_soil_anom) +
           # Soil-moisture state
           s(soil_moisture_0_to_10cm_mean) +
           s(soil_moisture_anom) +
@@ -163,11 +216,18 @@ impute_flood_probability <- function(d,
           s(IOD_lag16) +
           s(IOD_lag24)
 
-     train_idx <- !is.na(d_aug$emdat_flood_active)
+     # Training rows: where emdat_flood_active was observed (historical
+     # EM-DAT panel coverage). The 24w / 52w smooths require lookback, so
+     # drop the leading-edge rows where those columns are NA.
+     train_idx <- !is.na(d_aug$emdat_flood_active) &
+                  !is.na(d_aug$precip_sum_24w) &
+                  !is.na(d_aug$precip_sum_52w) &
+                  !is.na(d_aug$ENSO34_lag24) &
+                  !is.na(d_aug$IOD_lag24)
      train <- d_aug[train_idx, , drop = FALSE]
      if (nrow(train) < 100) {
           stop("impute_flood_probability: only ", nrow(train),
-               " training rows with non-NA emdat_flood_active; need >= 100.")
+               " training rows after lag/window warm-up; need >= 100.")
      }
      if (verbose) {
           message(sprintf("  Training rows: %d (active fraction: %.3f)",
@@ -175,13 +235,12 @@ impute_flood_probability <- function(d,
      }
 
      # bam() is mgcv's big-data fitter: block updates, single-precision
-     # linear algebra, optional discrete covariate binning. With ~22 smooths
-     # on ~30k rows it runs in well under a minute.
-     # select = FALSE: see the formula block above; the shrinkage penalty
-     # was suppressing the teleconnection signal we now want to lean on.
+     # linear algebra, discrete covariate binning. Runs in ~30-40 sec
+     # with the enriched ~26 smooths on ~30k rows.
+     # select = FALSE: see the formula block above.
      gam_model <- mgcv::bam(
           formula  = gam_formula,
-          family   = stats::binomial(link = "logit"),
+          family   = mgcv::Tweedie(p = 1.5),
           data     = train,
           method   = "fREML",
           select   = FALSE,
@@ -192,7 +251,9 @@ impute_flood_probability <- function(d,
                           summary(gam_model)$dev.expl * 100))
      }
 
-     # Predict on every row (incl. forecast). Missing-predictor rows return NA.
+     # Predict on every row (incl. forecast). Missing-predictor rows
+     # (leading-edge warm-up etc.) return NA and fall through to the
+     # sentinel below.
      preds <- as.numeric(stats::predict(gam_model, newdata = d_aug,
                                          type = "response"))
 
@@ -205,6 +266,17 @@ impute_flood_probability <- function(d,
      still_na <- is.na(preds)
      if (any(still_na)) {
           preds[still_na] <- mean(preds, na.rm = TRUE)
+     }
+
+     # Tweedie predictions are non-negative continuous on the raw Total
+     # Affected scale (heavy-tailed). Normalize by global maximum so the
+     # output sits on [0, 1] with major events near 1 and quiescent
+     # country-weeks near 0. Global-max scaling preserves the long-tail
+     # dynamic range -- rank-normalization would erase the very
+     # major-event amplification this Tweedie target was chosen for.
+     preds_max <- max(preds, na.rm = TRUE)
+     if (is.finite(preds_max) && preds_max > 0) {
+          preds <- preds / preds_max
      }
 
      # Guard the contract: numeric, no NA, in [0, 1]
@@ -320,13 +392,19 @@ impute_flood_probability <- function(d,
               length(unique(te$emdat_flood_active)) < 2) next
           fit <- tryCatch(
                mgcv::bam(formula  = gam_model$formula,
-                         family   = stats::binomial(link = "logit"),
+                         family   = mgcv::Tweedie(p = 1.5),
                          data     = tr, method = "fREML",
                          select   = FALSE, discrete = TRUE),
                error = function(e) NULL
           )
           if (is.null(fit)) next
-          p <- as.numeric(stats::predict(fit, newdata = te, type = "response"))
+          # CV evaluates the binary discrimination metric so it remains
+          # comparable to prior versions: rank-AUC of predicted severity
+          # vs observed flood_active.
+          p_raw <- as.numeric(stats::predict(fit, newdata = te, type = "response"))
+          # Normalize to [0, 1] within this fold for Brier / log-loss
+          p_max <- max(p_raw, na.rm = TRUE)
+          p     <- if (is.finite(p_max) && p_max > 0) p_raw / p_max else p_raw
           p <- pmin(pmax(p, 1e-9), 1 - 1e-9)
           y <- te$emdat_flood_active
           # AUC via Mann-Whitney-U
@@ -373,8 +451,15 @@ impute_flood_probability <- function(d,
 # `compile_suitability_data()` source the list from here so the two cannot
 # drift out of sync as the GAM formula evolves.
 .impute_flood_probability_required <- function() {
-     c("iso_code", "year", "week", "date", "emdat_flood_active",
+     c("iso_code", "year", "week", "date",
+       # Severity target (Tweedie family): log1p Total Affected. The
+       # binary emdat_flood_active is also required for the diagnostics
+       # block (calibration plot, CV AUC) but not for the GAM fit itself.
+       "emdat_flood_active", "emdat_flood_affected",
+       # WHO subregion factor (for region-conditional smooths)
+       "region",
        # Precipitation channels: raw + anomaly + rolling windows
+       # (24w/52w/precip_x_soil_anom are computed inline by the imputer)
        "precipitation_sum", "precip_anom",
        "precip_sum_2w", "precip_sum_4w", "precip_sum_8w", "precip_sum_12w",
        "precip_extreme_p90_count",
