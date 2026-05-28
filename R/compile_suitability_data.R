@@ -1224,11 +1224,12 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # excluded from the upstream NA-imputation block so forecast-window rows
      # still carry NA for emdat_flood_active and impute_flood_probability()
      # replaces them with a continuous imputed probability.
-     if (isTRUE(include_flood_prob) &&
-         "emdat_flood_active" %in% names(d) &&
-         all(c("precip_anom", "precip_sum_12w", "soil_moisture_anom",
-               "spei_approx", "temp_anom", "ENSO34", "IOD",
-               "elevation", "urban_population_pct") %in% names(d))) {
+     # Source the required-column list from the imputation function itself
+     # so the gate cannot drift out of sync with the GAM contract as the
+     # formula evolves.
+     gam_required <- MOSAIC:::.impute_flood_probability_required()
+     gam_missing  <- setdiff(gam_required, names(d))
+     if (isTRUE(include_flood_prob) && length(gam_missing) == 0) {
 
           message("Imputing flood probability with binomial GAM...")
           diag_dir <- if (!is.null(PATHS$DOCS_FIGURES)) {
@@ -1242,9 +1243,11 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                verbose     = TRUE
           )
 
-          # Country-grouped rolling-window aggregates of the imputed probability
-          # (mirrors the slider::slide_dbl idiom used for precip/temp windows
-          # earlier in this function)
+          # Country-grouped rolling-window aggregates of the imputed probability.
+          # The anomaly baseline subtracts the per-country mean restricted to
+          # historical rows (emdat_flood_active observed), so the GAM's
+          # forecast-window extrapolations don't contaminate the anomaly
+          # reference for the training period.
           d <- d %>%
                dplyr::group_by(iso_code) %>%
                dplyr::arrange(date, .by_group = TRUE) %>%
@@ -1255,18 +1258,13 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                                                   .before = 11, .complete = TRUE),
                     emdat_flood_prob_12w_sum = slider::slide_dbl(emdat_flood_prob, sum,
                                                                   .before = 11, .complete = TRUE),
-                    emdat_flood_prob_anom    = emdat_flood_prob - mean(emdat_flood_prob, na.rm = TRUE)
+                    emdat_flood_prob_anom    = emdat_flood_prob -
+                         mean(emdat_flood_prob[!is.na(emdat_flood_active)], na.rm = TRUE)
                ) %>%
                dplyr::ungroup()
      } else if (isTRUE(include_flood_prob)) {
-          missing_for_gam <- setdiff(
-               c("emdat_flood_active", "precip_anom", "precip_sum_12w",
-                 "soil_moisture_anom", "spei_approx", "temp_anom",
-                 "ENSO34", "IOD", "elevation", "urban_population_pct"),
-               names(d)
-          )
           message("Skipping flood probability imputation; missing column(s): ",
-                  paste(missing_for_gam, collapse = ", "))
+                  paste(gam_missing, collapse = ", "))
      }
 
      # Remove source column if it exists

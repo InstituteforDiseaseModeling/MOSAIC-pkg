@@ -80,21 +80,7 @@ impute_flood_probability <- function(d,
                                      diag_dir    = NULL,
                                      verbose     = TRUE) {
 
-     required <- c("iso_code", "year", "week", "date", "emdat_flood_active",
-                   # Precipitation channels: raw + anomaly + rolling windows
-                   "precipitation_sum", "precip_anom",
-                   "precip_sum_2w", "precip_sum_4w", "precip_sum_8w", "precip_sum_12w",
-                   "precip_extreme_p90_count",
-                   # Soil moisture (raw + anomaly)
-                   "soil_moisture_0_to_10cm_mean", "soil_moisture_anom",
-                   # Drought/wet bidirectional index
-                   "spei_approx",
-                   # Atmospheric humidity (raw + rolling)
-                   "relative_humidity_2m_mean", "rh_mean_12w",
-                   # Storm/cyclone proxy
-                   "wind_speed_10m_max",
-                   # Teleconnections (lags computed inline)
-                   "ENSO3", "ENSO34", "ENSO4", "IOD")
+     required <- .impute_flood_probability_required()
      missing_cols <- setdiff(required, names(d))
      if (length(missing_cols) > 0) {
           stop("impute_flood_probability: missing required column(s): ",
@@ -379,4 +365,27 @@ impute_flood_probability <- function(d,
           message("  Diagnostics written to: ", diag_dir)
      }
      invisible(NULL)
+}
+
+
+# Internal: canonical list of columns the flood-prob GAM consumes. Both
+# `impute_flood_probability()` and the upstream gate in
+# `compile_suitability_data()` source the list from here so the two cannot
+# drift out of sync as the GAM formula evolves.
+.impute_flood_probability_required <- function() {
+     c("iso_code", "year", "week", "date", "emdat_flood_active",
+       # Precipitation channels: raw + anomaly + rolling windows
+       "precipitation_sum", "precip_anom",
+       "precip_sum_2w", "precip_sum_4w", "precip_sum_8w", "precip_sum_12w",
+       "precip_extreme_p90_count",
+       # Soil moisture (raw + anomaly)
+       "soil_moisture_0_to_10cm_mean", "soil_moisture_anom",
+       # Drought/wet bidirectional index
+       "spei_approx",
+       # Atmospheric humidity (raw + rolling)
+       "relative_humidity_2m_mean", "rh_mean_12w",
+       # Storm/cyclone proxy
+       "wind_speed_10m_max",
+       # Teleconnections (lags computed inline by the imputer)
+       "ENSO3", "ENSO34", "ENSO4", "IOD")
 }

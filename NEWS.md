@@ -1,3 +1,33 @@
+# MOSAIC 0.30.21
+
+## Two correctness fixes in the flood-prob pipeline
+
+Surfaced by an internal review of the EM-DAT integration:
+
+- **Gate / GAM-contract drift fixed.** The `if (include_flood_prob && ...)`
+  gate in `compile_suitability_data()` was still checking the v0.30.19-era
+  predictors (`temp_anom`, `elevation`, `urban_population_pct`) which were
+  removed from the GAM in v0.30.20, and was failing to check the 9 new
+  columns the rebuilt GAM actually requires (`precipitation_sum`,
+  `precip_sum_2w/4w/8w`, `precip_extreme_p90_count`,
+  `soil_moisture_0_to_10cm_mean`, `relative_humidity_2m_mean`,
+  `rh_mean_12w`, `wind_speed_10m_max`, `ENSO3`, `ENSO4`). The result: a
+  missing required column would have caused a hard `stop()` deep inside
+  `impute_flood_probability()` instead of being skipped cleanly by the
+  `else` branch. Both `impute_flood_probability()` and the gate now
+  source the canonical required-column list from a single internal
+  helper `.impute_flood_probability_required()`, eliminating the drift
+  surface entirely.
+- **`emdat_flood_prob_anom` historical baseline fixed.** The per-country
+  mean used as the anomaly baseline was computed over the full series
+  including forecast-window rows, whose probabilities are themselves
+  GAM-extrapolated. This silently leaked a small amount of forecast
+  information into the historical-period anomaly used as an LSTM training
+  feature. The baseline now uses only rows where
+  `emdat_flood_active` is non-NA (the historical EM-DAT panel coverage).
+
+---
+
 # MOSAIC 0.30.20
 
 ## Flood-probability GAM: rebuild around hydrological drivers + ENSO/IOD
