@@ -1,3 +1,120 @@
+# MOSAIC 0.30.20
+
+## Flood-probability GAM: rebuild around hydrological drivers + ENSO/IOD
+
+Variance decomposition of v0.30.19's imputed `emdat_flood_prob` showed
+the highest-flood-activity countries (NGA 92%, TCD 83%, SSD 83%, MLI 75%,
+ETH 75%) were heavily dominated by seasonal pattern, and `summary(model)`
+revealed that the cyclic-week and country-RE terms plus the raw 12-week
+rainfall sum carried virtually all the explanatory power while every
+anomaly/teleconnection term was shrunk by the `select = TRUE` penalty.
+This release rebuilds the GAM formula around variables that are
+ostensibly linked with flood physics, and removes the seasonal /
+static-baseline channels that were crowding out the climate-driven
+interannual signal:
+
+- **Removed** `s(week, bs = "cc")` (cyclic seasonality), `elevation`, and
+  `urban_population_pct`. The country random effect alone absorbs the
+  remaining country-level baseline differences.
+- **Removed** `s(temp_anom)` — temperature isn't a direct flood driver
+  in AFRO (no snowmelt).
+- **Added every precipitation channel**: `precipitation_sum`,
+  `precip_anom`, `precip_sum_2w/4w/8w/12w`, plus the binary
+  `precip_extreme_p90_count` extreme-rain trigger.
+- **Added soil moisture (raw + anomaly)**, atmospheric humidity (raw +
+  12w rolling), and the storm/cyclone proxy `wind_speed_10m_max`.
+- **Heavy ENSO/IOD bench**: ENSO34 at current + 8/16/24-week lags,
+  current ENSO3 and ENSO4 (Eastern and Western Pacific regions), IOD at
+  current + 8/16/24-week lags. Lag-N columns are computed inline.
+- **Removed `select = TRUE`** — the smooth-shrinkage penalty was the
+  mechanism that suppressed exactly the teleconnection terms we now
+  want to emphasise. Without it the smooths keep their unpenalized REML
+  weight; rolling-year CV is the arbiter.
+
+---
+
+# MOSAIC 0.30.19
+
+## Code-review fixes in `compile_suitability_data` and `est_suitability`
+
+Round of correctness fixes surfaced by an internal code review:
+
+- **B1 — `est_suitability()` date auto-detection** referenced `d_all$date_start` / `enso_complete$date_stop`, columns that `compile_suitability_data()` drops before saving. `min(NULL, na.rm=TRUE)` silently returns `Inf` and propagated as bogus dates. Fixed to use `d_all$date`.
+- **B2 — Fine-tuning splits trained against the wrong target scale.** The model output head is `activation = "linear", name = "logit_head"` and the first split correctly fed `qlogis()`-transformed targets. Subsequent fine-tuning splits (default `n_splits = 10`) fed raw `[0, 1]` probabilities, pushing the linear head toward the wrong range and silently undoing the first split's training. Now applies `qlogis(pmax(eps, pmin(1-eps, ...)))` consistently.
+- **B3 — `seasonal_outbreak_risk`** computed `mean(cases_lagged)` inside `group_by(iso_code) %>% mutate(...)`, producing a single per-country mean rather than the week-of-year climatology the comment claimed. Now uses `stats::ave(cases_lagged, week, FUN = mean)` to give the intended weekly seasonality.
+- **B4 — `weeks_since_major_outbreak`** incremented its counter through the `memory_lag` warm-up window (default 17 weeks in forecast mode), producing fake `1, 2, 3, ...` values when the lag target was NA. Now stays NA until the first real observation.
+- **B5 — ISO week 53.** Investigated and documented. Two distinct things were happening: (a) legitimate W53 in 2015 and 2020 was being dropped (~80 country-weeks, 0.2% of training data); (b) an upstream bug in `process_open_meteo_data` emits spurious W53 entries labelled by calendar year for ISO years 2005/2010/2016/2021. The drop-all-W53 filter robustly handles (b). Added a comment block explaining the trade-off; the upstream fix to `process_open_meteo_data` is the structural follow-up (separate ticket).
+- **B6 — Vaccination weekly key** paired `lubridate::isoweek(date)` with `format(date, "%Y")` (calendar year). Dates near the year boundary (e.g., 2024-12-30, which is ISO 2025-W01) were joining under `(year=2024, week=1)`, silently missing the right upstream row. Now uses `lubridate::isoyear()`.
+- **B7 — `pivot_wider` for climate and ENSO** had no `values_fn`, so any residual duplicate `(iso_code, year, week, variable)` row would silently produce list-columns and break every downstream merge. Now passes `values_fn = mean`.
+- **B8 — `est_suitability()` plotting block** was gated by `if (T)` (always on) with a comment claiming "disabled by default", and `par(mfrow = c(2,1))` leaked into the caller's device state. Replaced with a real `plot_country_diagnostics = FALSE` argument and `on.exit(par(old_par))`.
+- **B9 — Positional column renames** (`names(x)[3] <- "..."`) replaced with `dplyr::rename()` so an upstream column reorder can't silently corrupt downstream values.
+- **B10 — Negative case counts** in `est_suitability()` are now flagged with a warning before being clamped to 0 (previously silent).
+- **B11 — Duplicate identical `df <- data.frame(...)` block** in `est_suitability()` removed.
+- **B12 — Dead first `covariates_all` assignment** in `est_suitability()` removed; only the comprehensive (live) assignment remains.
+
+---
+
+# MOSAIC 0.30.18
+
+## Speed up flood-prob GAM and clean the suitability covariate list
+
+- `impute_flood_probability()` now fits with `mgcv::bam(method = "fREML", discrete = TRUE)`
+  rather than `mgcv::gam(method = "REML")`. Same formula, essentially identical
+  fitted values; wall-time on the real ~30k-row training set drops from ~13 min
+  to ~10 sec. Rolling-year CV is also capped at the 3 most recent fully-observed
+  years (previously open-ended). End-to-end pipeline now runs in ~12 sec instead
+  of ~100 min.
+- `est_suitability()` covariate list cleaned: removed `log1p_cum_vaccine_doses`
+  (vaccination intervention — correlated with outbreaks because deployment
+  follows cholera, so including it teaches a non-causal shortcut that breaks at
+  forecast time) and the raw `year` / `month` / `week` timestamps (let the model
+  memorise period-specific cholera waves; the sin/cos cyclic terms already in
+  the list carry seasonality cleanly). Added a comment block to `covariates_all`
+  documenting the rationale.
+- End-to-end validation against the real data: mean rolling-year CV AUC 0.848
+  on 2023/2024/2025 held out; forecast-window `emdat_flood_prob` distribution
+  is shape-similar to historical (mean 0.095 vs 0.062), confirming the GAM
+  uses climate signal rather than collapsing to a constant.
+
+---
+
+# MOSAIC 0.30.17
+
+## Impute country-week flood probability for use in `est_suitability()`
+
+EM-DAT is observed-only — for forecast-window weeks, the raw `emdat_flood_active`
+binary added in v0.30.16 is identically zero, creating a distribution shift
+between training and inference for the suitability LSTM.
+
+This release replaces the raw binary with a continuous **imputed flood
+probability** that is populated identically in historical and forecast
+weeks:
+
+- **New: `impute_flood_probability()`** — fits a binomial GAM
+  (`mgcv::gam`, logit link, REML, `select = TRUE`) on observed
+  `emdat_flood_active` events using climate anomalies, cyclic seasonality,
+  country random effects, and inline-computed `ENSO34_lag20` /
+  `IOD_lag16` predictors. Predicts a non-NA `emdat_flood_prob ∈ [0, 1]`
+  for every (iso × week) row. With `diagnostics = TRUE` (default) writes
+  smooth-term plots, decile-calibration plot, rolling-year CV metrics
+  CSV, and `summary(model)` to `<PATHS$DOCS_FIGURES>/flood_imputation/`.
+  Warns if mean CV AUC < 0.65.
+- **`compile_suitability_data()`** gains `include_flood_prob = TRUE`
+  (default). When on, calls `impute_flood_probability()` after the
+  existing NA-imputation block and adds four rolling-window aggregates:
+  `emdat_flood_prob_4w_max`, `emdat_flood_prob_12w_max`,
+  `emdat_flood_prob_12w_sum`, `emdat_flood_prob_anom`. The previous
+  zero-fill on the raw EM-DAT join is removed so forecast-window rows
+  remain NA for the GAM to impute.
+- **`est_suitability()`** consumes the five `emdat_flood_prob*` columns
+  in place of the four raw `emdat_flood_*` columns added in v0.30.16.
+  The raw columns remain in the suitability dataframe for audit but are
+  not fed to the LSTM.
+
+No new dependencies (`mgcv` was already an Imports dep).
+
+---
+
 # MOSAIC 0.30.6
 
 ## Add GitHub profile links for Dejan Lukacevic and Meikang Wu

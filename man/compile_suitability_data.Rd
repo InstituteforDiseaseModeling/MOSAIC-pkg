@@ -12,7 +12,8 @@ compile_suitability_data(
   date_stop = NULL,
   forecast_mode = TRUE,
   forecast_horizon = 3,
-  include_lags = FALSE
+  include_lags = FALSE,
+  include_flood_prob = TRUE
 )
 }
 \arguments{
@@ -47,6 +48,16 @@ surveillance data beyond this horizon are excluded in forecast mode. Default 3 m
 
 \item{include_lags}{Logical. If TRUE, includes time-lagged climate variables with
 epidemiologically-informed lag periods specific to each variable. Default FALSE.}
+
+\item{include_flood_prob}{Logical. If TRUE (default), imputes a continuous
+\code{emdat_flood_prob} column for every (iso_code, year, week) row via a
+binomial GAM trained on observed \code{emdat_flood_active} events
+(see \code{\link{impute_flood_probability}}), and adds four rolling-window
+aggregates (\code{emdat_flood_prob_4w_max}, \code{emdat_flood_prob_12w_max},
+\code{emdat_flood_prob_12w_sum}, \code{emdat_flood_prob_anom}). The
+probability covariates are populated in both the historical training and
+the forecast windows, so the downstream LSTM consumes the same feature
+definition in both regimes.}
 }
 \value{
 This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.

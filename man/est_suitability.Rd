@@ -15,7 +15,8 @@ est_suitability(
   fine_tune_epochs = 12,
   fine_tune_lr = 0.001,
   split_method = "random",
-  train_prop = 0.6
+  train_prop = 0.6,
+  plot_country_diagnostics = FALSE
 )
 }
 \arguments{

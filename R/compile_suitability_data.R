@@ -30,6 +30,15 @@
 #'   surveillance data beyond this horizon are excluded in forecast mode. Default 3 months.
 #' @param include_lags Logical. If TRUE, includes time-lagged climate variables with
 #'   epidemiologically-informed lag periods specific to each variable. Default FALSE.
+#' @param include_flood_prob Logical. If TRUE (default), imputes a continuous
+#'   \code{emdat_flood_prob} column for every (iso_code, year, week) row via a
+#'   binomial GAM trained on observed \code{emdat_flood_active} events
+#'   (see \code{\link{impute_flood_probability}}), and adds four rolling-window
+#'   aggregates (\code{emdat_flood_prob_4w_max}, \code{emdat_flood_prob_12w_max},
+#'   \code{emdat_flood_prob_12w_sum}, \code{emdat_flood_prob_anom}). The
+#'   probability covariates are populated in both the historical training and
+#'   the forecast windows, so the downstream LSTM consumes the same feature
+#'   definition in both regimes.
 #'
 #' @return This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
 #'
@@ -67,7 +76,8 @@
 #' @export
 compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                     date_start = NULL, date_stop = NULL,
-                                    forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE) {
+                                    forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE,
+                                    include_flood_prob = TRUE) {
 
      requireNamespace('arrow')
      requireNamespace('ISOweek')
@@ -159,11 +169,16 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      }
 
      message("Merging datasets...")
-     # Convert the climate data to wide format, with variable names as new columns
+     # Convert the climate data to wide format, with variable names as new columns.
+     # values_fn = mean defends against the (rare but real) case where the
+     # upstream parquet contains duplicate (iso_code, year, week, variable_name)
+     # rows -- without it pivot_wider silently produces list-columns and every
+     # downstream merge fails with a cryptic error.
      combined_climate_data_wide <- tidyr::pivot_wider(
           combined_climate_data,
           names_from = variable_name,
-          values_from = value
+          values_from = value,
+          values_fn = mean
      )
 
      combined_climate_data_wide <- combined_climate_data_wide %>%
@@ -174,11 +189,15 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # in pivot_wider and silently loses IOD data after the ENSO34 filter at line 210
      enso_data$data_source <- NULL
 
-     # Convert ENSO data to wide format (IOD, ENSO3, ENSO34, ENSO4 as new columns)
+     # Convert ENSO data to wide format (IOD, ENSO3, ENSO34, ENSO4 as new
+     # columns). values_fn = mean: same defensive pattern as the climate
+     # pivot above -- protects against any residual duplicate (year, week,
+     # variable) rows that survive the data_source drop.
      enso_data_wide <- tidyr::pivot_wider(
           enso_data,
           names_from = variable,
-          values_from = value
+          values_from = value,
+          values_fn = mean
      )
 
      enso_data_wide <- enso_data_wide %>%
@@ -192,7 +211,26 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                      nrow(d), paste(head(names(d), 10), collapse = ", ")))
 
 
-     # Limit week values to 1-52
+     # Restrict the panel to ISO weeks 1-52.
+     #
+     # WHY THIS IS NOT JUST `week %in% 1:52`:
+     # A handful of ISO years (2004, 2009, 2015, 2020, 2026, ...) genuinely
+     # have 53 ISO weeks, so dropping W53 removes ~80 legitimate country-week
+     # rows from training years 2015 and 2020 (out of ~37k). The cost is a
+     # small calendar-span bias in year-end rolling windows for those two
+     # years (a 12-row precip_sum_12w near January 2016 / 2021 covers
+     # 13 calendar weeks because the W53 row is missing).
+     #
+     # WHY WE DROP THEM ANYWAY:
+     # The upstream climate processor (process_open_meteo_data) labels W53
+     # rows by *calendar* year rather than ISO year, so it emits spurious
+     # (year=N+1, week=53) rows for the 1-2 January days that fall in
+     # ISO W53 of year N. Keeping W53 would pull those partial-week
+     # artifacts into the panel. Dropping all W53 is the simplest robust
+     # choice until the upstream processor is fixed; see notes/TODOs in
+     # process_open_meteo_data for the structural fix.
+     # The 2026 forecast horizon ends well before W53 of 2026, so this
+     # filter does not affect production forecasts today.
      d <- d %>%
           dplyr::filter(week >= 1 & week <= 52)
 
@@ -258,8 +296,9 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      pop_density_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "population_density_data_world_bank.csv")
      if (file.exists(pop_density_path)) {
           pop_density_data <- utils::read.csv(pop_density_path, stringsAsFactors = FALSE)
-          pop_density_data <- pop_density_data[, c("iso_code", "year", "pop_density")]
-          names(pop_density_data)[3] <- "population_density"  # Rename for consistency
+          pop_density_data <- pop_density_data %>%
+               dplyr::select(iso_code, year, pop_density) %>%
+               dplyr::rename(population_density = pop_density)
           # Filter to MOSAIC countries only
           pop_density_data <- pop_density_data[pop_density_data$iso_code %in% iso_codes_mosaic, ]
           d <- merge(d, pop_density_data, by = c("iso_code", "year"), all.x = TRUE)
@@ -273,8 +312,9 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      urban_path <- file.path(PATHS$DATA_PROCESSED, "world_bank", "world_bank_urban_population_data.csv")
      if (file.exists(urban_path)) {
           urban_data <- utils::read.csv(urban_path, stringsAsFactors = FALSE)
-          urban_data <- urban_data[, c("iso_code", "year", "urban_pop_prop")]
-          names(urban_data)[3] <- "urban_population_pct"  # Rename for consistency
+          urban_data <- urban_data %>%
+               dplyr::select(iso_code, year, urban_pop_prop) %>%
+               dplyr::rename(urban_population_pct = urban_pop_prop)
           # Filter to MOSAIC countries only
           urban_data <- urban_data[urban_data$iso_code %in% iso_codes_mosaic, ]
           d <- merge(d, urban_data, by = c("iso_code", "year"), all.x = TRUE)
@@ -308,7 +348,12 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           vax_data$iso_code <- vax_data$j
           vax_data$value <- vax_data$parameter_value
           # Convert to weekly aggregates
-          vax_data$year <- as.numeric(format(vax_data$date, "%Y"))
+          # Use ISO year alongside ISO week. Pairing calendar year (%Y)
+          # with ISO week leaks dates across the year boundary -- e.g.
+          # 2024-12-30 is ISO week 1 of 2025, so a calendar-year/ISO-week
+          # key would join it to (2024, W1) and silently miss the right
+          # upstream row (which uses ISOweek2date semantics throughout).
+          vax_data$year <- lubridate::isoyear(vax_data$date)
           vax_data$week <- lubridate::isoweek(vax_data$date)
           vax_weekly <- vax_data %>%
                dplyr::group_by(iso_code, year, week) %>%
@@ -340,6 +385,24 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                ) %>%
                dplyr::ungroup() %>%
                dplyr::select(-weekly_doses)  # Remove intermediate calculation
+     }
+
+     # 3b. EM-DAT flood occurrence (weekly, country-level)
+     message("  - Adding EM-DAT flood occurrence indicators...")
+     emdat_path <- file.path(PATHS$DATA_EMDAT, "floods_country_weekly.csv")
+     if (file.exists(emdat_path)) {
+          emdat_data <- utils::read.csv(emdat_path, stringsAsFactors = FALSE)
+          emdat_cols <- c("emdat_flood_active", "emdat_flood_new",
+                          "emdat_flood_affected", "emdat_flood_deaths")
+          emdat_data <- emdat_data[emdat_data$iso_code %in% iso_codes_mosaic,
+                                    c("iso_code", "year", "week", emdat_cols)]
+          d <- merge(d, emdat_data, by = c("iso_code", "year", "week"), all.x = TRUE)
+          # Weeks inside the EM-DAT panel are already zero-filled at the panel
+          # source; weeks beyond it (the LSTM forecast window) intentionally
+          # carry NA so impute_flood_probability() can replace them with a
+          # GAM-imputed continuous probability rather than a degenerate zero.
+     } else {
+          message("    - EM-DAT flood file not found at: ", emdat_path)
      }
 
      # 4. WASH indicators (static, country-level)
@@ -515,7 +578,12 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
 
      # List all numeric columns that might have NAs (exclude identifiers and dates)
      exclude_cols <- c("iso_code", "year", "week", "month", "date", "source",
-                      "cases", "deaths", "cases_binary")
+                      "cases", "deaths", "cases_binary",
+                      # Keep EM-DAT columns NA-aware: forecast-window rows must
+                      # stay NA so impute_flood_probability() can replace them
+                      # downstream with a GAM-imputed continuous probability.
+                      "emdat_flood_active", "emdat_flood_new",
+                      "emdat_flood_affected", "emdat_flood_deaths")
      numeric_cols <- names(d)[sapply(d, is.numeric)]
      numeric_cols <- setdiff(numeric_cols, exclude_cols)
 
@@ -776,17 +844,28 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                      .before = 51, .complete = FALSE)
                },
                
-               # Weeks since last significant outbreak (≥100 cases for major outbreaks)
+               # Weeks since last significant outbreak (>=100 cases for major outbreaks).
+               # Important: while cases_lagged is NA (the leading memory_lag-week
+               # warm-up window at the start of each country's series), this
+               # should stay NA rather than counting up from 0. The original
+               # implementation collapsed the NA via ifelse() and then
+               # incremented the counter through the warm-up, producing fake
+               # "1, 2, 3, ..." values for the first memory_lag weeks of every
+               # country -- a silent leak of structure that does not exist.
                weeks_since_major_outbreak = {
                     cases_lagged <- dplyr::lag(cases, memory_lag)
-                    major_outbreak <- ifelse(is.na(cases_lagged), FALSE, cases_lagged >= 100)
-                    weeks_since <- integer(length(major_outbreak))
-                    counter <- 0
-                    for (i in seq_along(major_outbreak)) {
-                         if (!is.na(major_outbreak[i]) && major_outbreak[i]) {
-                              counter <- 0
-                         } else {
-                              counter <- counter + 1
+                    weeks_since  <- rep(NA_integer_, length(cases_lagged))
+                    counter      <- NA_integer_
+                    for (i in seq_along(cases_lagged)) {
+                         if (is.na(cases_lagged[i])) {
+                              # Still inside the warm-up window or genuinely
+                              # missing -- leave NA and keep counter NA.
+                              next
+                         }
+                         if (cases_lagged[i] >= 100) {
+                              counter <- 0L
+                         } else if (!is.na(counter)) {
+                              counter <- counter + 1L
                          }
                          weeks_since[i] <- counter
                     }
@@ -802,11 +881,16 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                     }, .before = 51, .complete = FALSE)
                },
                
-               # Outbreak seasonality indicator (typical outbreak timing)
+               # Outbreak seasonality indicator: mean lagged cases by
+               # week-of-year (per country). The previous implementation
+               # was a country-wide mean broadcast across all weeks --
+               # which is a country fixed effect, not seasonality. Using
+               # ave() with `week` as the within-group factor gives the
+               # intended week-of-year climatology for this country.
                seasonal_outbreak_risk = {
                     cases_lagged <- dplyr::lag(cases, memory_lag)
-                    # Calculate historical mean cases for this week-of-year
-                    mean(cases_lagged, na.rm = TRUE)
+                    stats::ave(cases_lagged, week,
+                               FUN = function(x) mean(x, na.rm = TRUE))
                }
           ) %>%
           dplyr::ungroup()
@@ -1131,6 +1215,59 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      }
 
      message(sprintf("Enhanced covariates added. Total columns: %d", ncol(d)))
+
+     # ============================================================================
+     # FLOOD PROBABILITY IMPUTATION (binomial GAM)
+     # ============================================================================
+     # Runs here, AFTER climate anomalies and rolling windows are fully
+     # populated, so the GAM has its full predictor set. EM-DAT columns were
+     # excluded from the upstream NA-imputation block so forecast-window rows
+     # still carry NA for emdat_flood_active and impute_flood_probability()
+     # replaces them with a continuous imputed probability.
+     if (isTRUE(include_flood_prob) &&
+         "emdat_flood_active" %in% names(d) &&
+         all(c("precip_anom", "precip_sum_12w", "soil_moisture_anom",
+               "spei_approx", "temp_anom", "ENSO34", "IOD",
+               "elevation", "urban_population_pct") %in% names(d))) {
+
+          message("Imputing flood probability with binomial GAM...")
+          diag_dir <- if (!is.null(PATHS$DOCS_FIGURES)) {
+               file.path(PATHS$DOCS_FIGURES, "flood_imputation")
+          } else NULL
+          d <- MOSAIC::impute_flood_probability(
+               d,
+               output_col  = "emdat_flood_prob",
+               diagnostics = TRUE,
+               diag_dir    = diag_dir,
+               verbose     = TRUE
+          )
+
+          # Country-grouped rolling-window aggregates of the imputed probability
+          # (mirrors the slider::slide_dbl idiom used for precip/temp windows
+          # earlier in this function)
+          d <- d %>%
+               dplyr::group_by(iso_code) %>%
+               dplyr::arrange(date, .by_group = TRUE) %>%
+               dplyr::mutate(
+                    emdat_flood_prob_4w_max  = slider::slide_dbl(emdat_flood_prob, max,
+                                                                  .before = 3,  .complete = TRUE),
+                    emdat_flood_prob_12w_max = slider::slide_dbl(emdat_flood_prob, max,
+                                                                  .before = 11, .complete = TRUE),
+                    emdat_flood_prob_12w_sum = slider::slide_dbl(emdat_flood_prob, sum,
+                                                                  .before = 11, .complete = TRUE),
+                    emdat_flood_prob_anom    = emdat_flood_prob - mean(emdat_flood_prob, na.rm = TRUE)
+               ) %>%
+               dplyr::ungroup()
+     } else if (isTRUE(include_flood_prob)) {
+          missing_for_gam <- setdiff(
+               c("emdat_flood_active", "precip_anom", "precip_sum_12w",
+                 "soil_moisture_anom", "spei_approx", "temp_anom",
+                 "ENSO34", "IOD", "elevation", "urban_population_pct"),
+               names(d)
+          )
+          message("Skipping flood probability imputation; missing column(s): ",
+                  paste(missing_for_gam, collapse = ", "))
+     }
 
      # Remove source column if it exists
      if ("source" %in% names(d)) {
