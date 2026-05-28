@@ -9,9 +9,7 @@ impute_flood_probability(
   output_col = "emdat_flood_prob",
   diagnostics = TRUE,
   diag_dir = NULL,
-  verbose = TRUE,
-  prune_p_threshold = 0.05,
-  prune_max_iter = 30
+  verbose = TRUE
 )
 }
 \arguments{
@@ -42,17 +40,6 @@ cross-validation and writes four artefacts to \code{diag_dir}:
 if missing). Ignored when \code{diagnostics = FALSE}.}
 
 \item{verbose}{Logical. Echo progress messages.}
-
-\item{prune_p_threshold}{Numeric. Significance threshold for the
-iterative backward-elimination loop. Prunable terms whose
-approximate p-value exceeds this are dropped one at a time
-(worst first), the GAM is refit, and the cycle repeats until all
-remaining prunable terms have \code{p <= prune_p_threshold}.
-Default 0.05. Set to 1.0 to disable pruning.}
-
-\item{prune_max_iter}{Integer. Hard cap on pruning iterations.
-Default 30. The loop also halts when fewer than 5 prunable terms
-remain.}
 }
 \value{
 The input data.frame with one added column named
@@ -87,10 +74,10 @@ block updates, discrete covariate binning, and parallel-friendly
 linear algebra; on ~30k rows it returns in ~30-40 sec).
 \code{family = stats::binomial(link = "logit")} produces predictions
 naturally in [0, 1] without rescaling. \code{method = "fREML"},
-\code{select = FALSE} (the smooth-shrinkage penalty was previously
-suppressing the ENSO/IOD teleconnection terms; without it those
-terms keep their unpenalized REML weight). Predictors computed
-inline (so the caller does not need to provide them):
+\code{select = TRUE} (smoothness null-space shrinkage, the principled
+mgcv mechanism for driving uninformative smooths toward zero -- replaces
+the iterative in-sample-p-value pruning loop that v0.30.24 used).
+Predictors computed inline (so the caller does not need to provide them):
 \itemize{
 \item ENSO34 and IOD at lags 8, 16, 24 weeks (current value is the
 raw column).
@@ -110,17 +97,6 @@ predictor that survived upstream imputation) is filled with that
 country's mean predicted probability. Rows where even the country mean
 is NA fall back to the global mean. The function asserts the final
 column is in [0, 1] and contains no NAs.
-
-Backward-elimination pruning is applied iteratively: after each fit
-the smooth + parametric p-values are inspected, the prunable term
-with the highest p-value above \code{prune_p_threshold} is dropped,
-and the model is refit. The country random-effect smooth and the
-region-conditional \code{s(precip_sum_4w, by = region_f)} block are
-treated as structural and never dropped. The trace of dropped terms
-is written to \code{flood_gam_pruning_log.csv} in \code{diag_dir}.
-In-sample p-values are not predictive-importance tests and are
-sensitive to multicollinearity; verify the cyclone benchmark and
-rolling-year CV did not regress after pruning.
 
 If \code{diagnostics = TRUE}, the function additionally runs a
 rolling-year cross-validation: for each of the 3 most recent

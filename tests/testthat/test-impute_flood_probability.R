@@ -84,14 +84,18 @@ testthat::test_that("recovers a known precip-driven flood signal", {
      testthat::expect_true(all(out$emdat_flood_prob <= 1))
 
      # Training-period AUC against the observed binary should be well
-     # above chance. Binomial-on-binary GAM separates classes cleanly.
+     # above chance. select = TRUE (v0.30.25+) applies shrinkage that is
+     # more aggressive on small synthetic datasets (5 ISOs x 4 yrs
+     # ~ 1k rows) than it is on the real ~35k-row training set, so the
+     # synthetic threshold is set conservatively at 0.75. Real-data
+     # CV AUC is 0.85.
      train <- !is.na(d$emdat_flood_active)
      p <- out$emdat_flood_prob[train]
      y <- d$emdat_flood_active[train]
      r <- rank(p)
      n_pos <- sum(y == 1); n_neg <- sum(y == 0)
      auc <- (sum(r[y == 1]) - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
-     testthat::expect_gt(auc, 0.80)
+     testthat::expect_gt(auc, 0.75)
 
      # Mean predicted prob at high precip_anom should be substantially
      # higher than at low precip_anom (binomial logit produces a clear

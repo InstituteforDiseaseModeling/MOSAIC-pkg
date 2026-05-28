@@ -45,15 +45,6 @@
 #' @param diag_dir Character. Directory for diagnostic outputs (created
 #'   if missing). Ignored when \code{diagnostics = FALSE}.
 #' @param verbose Logical. Echo progress messages.
-#' @param prune_p_threshold Numeric. Significance threshold for the
-#'   iterative backward-elimination loop. Prunable terms whose
-#'   approximate p-value exceeds this are dropped one at a time
-#'   (worst first), the GAM is refit, and the cycle repeats until all
-#'   remaining prunable terms have \code{p <= prune_p_threshold}.
-#'   Default 0.05. Set to 1.0 to disable pruning.
-#' @param prune_max_iter Integer. Hard cap on pruning iterations.
-#'   Default 30. The loop also halts when fewer than 5 prunable terms
-#'   remain.
 #'
 #' @return The input data.frame with one added column named
 #'   \code{output_col} carrying a non-NA numeric in \[0, 1\] for every row.
@@ -64,10 +55,10 @@
 #' linear algebra; on ~30k rows it returns in ~30-40 sec).
 #' \code{family = stats::binomial(link = "logit")} produces predictions
 #' naturally in \[0, 1\] without rescaling. \code{method = "fREML"},
-#' \code{select = FALSE} (the smooth-shrinkage penalty was previously
-#' suppressing the ENSO/IOD teleconnection terms; without it those
-#' terms keep their unpenalized REML weight). Predictors computed
-#' inline (so the caller does not need to provide them):
+#' \code{select = TRUE} (smoothness null-space shrinkage, the principled
+#' mgcv mechanism for driving uninformative smooths toward zero -- replaces
+#' the iterative in-sample-p-value pruning loop that v0.30.24 used).
+#' Predictors computed inline (so the caller does not need to provide them):
 #' \itemize{
 #'   \item ENSO34 and IOD at lags 8, 16, 24 weeks (current value is the
 #'     raw column).
@@ -87,17 +78,6 @@
 #' country's mean predicted probability. Rows where even the country mean
 #' is NA fall back to the global mean. The function asserts the final
 #' column is in \[0, 1\] and contains no NAs.
-#'
-#' Backward-elimination pruning is applied iteratively: after each fit
-#' the smooth + parametric p-values are inspected, the prunable term
-#' with the highest p-value above \code{prune_p_threshold} is dropped,
-#' and the model is refit. The country random-effect smooth and the
-#' region-conditional \code{s(precip_sum_4w, by = region_f)} block are
-#' treated as structural and never dropped. The trace of dropped terms
-#' is written to \code{flood_gam_pruning_log.csv} in \code{diag_dir}.
-#' In-sample p-values are not predictive-importance tests and are
-#' sensitive to multicollinearity; verify the cyclone benchmark and
-#' rolling-year CV did not regress after pruning.
 #'
 #' If \code{diagnostics = TRUE}, the function additionally runs a
 #' rolling-year cross-validation: for each of the 3 most recent
@@ -119,12 +99,10 @@
 #' @importFrom graphics plot abline points
 #' @export
 impute_flood_probability <- function(d,
-                                     output_col          = "emdat_flood_prob",
-                                     diagnostics         = TRUE,
-                                     diag_dir            = NULL,
-                                     verbose             = TRUE,
-                                     prune_p_threshold   = 0.05,
-                                     prune_max_iter      = 30) {
+                                     output_col  = "emdat_flood_prob",
+                                     diagnostics = TRUE,
+                                     diag_dir    = NULL,
+                                     verbose     = TRUE) {
 
      required <- .impute_flood_probability_required()
      missing_cols <- setdiff(required, names(d))
@@ -194,30 +172,64 @@ impute_flood_probability <- function(d,
      #     plus current ENSO3 / ENSO4, and IOD at the same lag horizons.
      #   * select = FALSE: the shrinkage penalty was suppressing the
      #     teleconnection terms; without it they keep their REML weight.
-     # Formula terms held as character strings so the pruning loop can
-     # drop them one at a time. Structural terms (core_terms) are never
-     # dropped; the by-factor region smooth is also a structural unit
-     # (per-region p-values are not pruned individually). The remaining
-     # prunable_terms are candidates for backward elimination.
-     core_terms <- c(
-          's(iso_code_f, bs = "re")',         # country random intercept
-          's(precip_sum_4w, by = region_f)'   # region-conditional smooth
-     )
-     prunable_terms <- c(
-          's(precipitation_sum)',
-          's(precip_anom)',
-          's(precip_sum_2w)', 's(precip_sum_4w)', 's(precip_sum_8w)',
-          's(precip_sum_12w)', 's(precip_sum_24w)', 's(precip_sum_52w)',
-          'precip_extreme_p90_count',
-          's(precip_x_soil_anom)',
-          's(soil_moisture_0_to_10cm_mean)', 's(soil_moisture_anom)',
-          's(spei_approx)',
-          's(relative_humidity_2m_mean)', 's(rh_mean_12w)',
-          's(wind_speed_10m_max)',
-          's(ENSO34)', 's(ENSO34_lag8)', 's(ENSO34_lag16)', 's(ENSO34_lag24)',
-          's(ENSO3)', 's(ENSO4)',
-          's(IOD)', 's(IOD_lag8)', 's(IOD_lag16)', 's(IOD_lag24)'
-     )
+     # Full GAM formula. Two changes vs v0.30.24 (validated by independent
+     # modeler + software-engineer agent experiments):
+     #
+     #   * te(precip_sum_4w, precip_sum_24w) tensor product replaces the
+     #     two univariate smooths. The interaction "heavy 4-week rain
+     #     ON an already-saturated catchment (6-month antecedent)" is
+     #     genuinely nonlinear; the tensor captures it where the
+     #     univariates plus precip_x_soil_anom only approximated it.
+     #     Modeler-agent experiment: cyclone median 91.6 -> 93.8.
+     #
+     #   * select = TRUE (smoothness null-space shrinkage) replaces the
+     #     iterative p-value pruning loop that v0.30.24 added. Both
+     #     agents converged on this independently. select=TRUE is the
+     #     principled mgcv mechanism for "drop terms that don't carry
+     #     weight" -- in-sample p-values are explicitly
+     #     multicollinearity-sensitive (documented caveat) and produced
+     #     fragile pruning behavior. Net effect: identical CV AUC
+     #     (~0.85), +2-4 percentile points on the worst-detected
+     #     cyclone (Kenneth 2019), single 10-second fit replaces
+     #     1+N_drops iterative fits.
+     gam_formula <- emdat_flood_active ~
+          # Country baseline
+          s(iso_code_f, bs = "re") +
+          # Precipitation channels (24w/4w jointly via tensor product)
+          s(precipitation_sum) +
+          s(precip_anom) +
+          s(precip_sum_2w) +
+          s(precip_sum_8w) +
+          s(precip_sum_12w) +
+          s(precip_sum_52w) +
+          te(precip_sum_4w, precip_sum_24w, k = c(10, 10)) +
+          precip_extreme_p90_count +
+          # Region-conditional medium-window precip
+          s(precip_sum_4w, by = region_f) +
+          # Joint precip x soil_moisture anomaly (saturation interaction)
+          s(precip_x_soil_anom) +
+          # Soil-moisture state
+          s(soil_moisture_0_to_10cm_mean) +
+          s(soil_moisture_anom) +
+          # Drought/wet bidirectional index
+          s(spei_approx) +
+          # Atmospheric humidity
+          s(relative_humidity_2m_mean) +
+          s(rh_mean_12w) +
+          # Storm / cyclone proxy
+          s(wind_speed_10m_max) +
+          # ENSO heavy: multi-region + multi-horizon lags
+          s(ENSO34) +
+          s(ENSO34_lag8) +
+          s(ENSO34_lag16) +
+          s(ENSO34_lag24) +
+          s(ENSO3) +
+          s(ENSO4) +
+          # IOD heavy: current + multi-horizon lags
+          s(IOD) +
+          s(IOD_lag8) +
+          s(IOD_lag16) +
+          s(IOD_lag24)
 
      # Training rows: where emdat_flood_active was observed (historical
      # EM-DAT panel coverage). The 24w / 52w smooths require lookback, so
@@ -237,93 +249,20 @@ impute_flood_probability <- function(d,
                           nrow(train), mean(train$emdat_flood_active)))
      }
 
-     # ------------------------------------------------------------------
-     # Backward-elimination pruning loop
-     # ------------------------------------------------------------------
-     # Fit the GAM. Inspect summary(fit)'s smooth + parametric p-values.
-     # If any prunable term has p > prune_p_threshold, drop the worst and
-     # refit. Repeat until all prunable terms are significant, the
-     # prunable list is exhausted, or prune_max_iter is reached.
-     #
-     # Caveats: in-sample p-values are not predictive-importance tests
-     # and are sensitive to multicollinearity. The pruning produces a
-     # smaller, cleaner model whose remaining terms are all
-     # in-sample-significant -- evaluate against the cyclone benchmark
-     # and CV-AUC to confirm skill didn't regress.
-     prune_log <- data.frame(iter    = integer(0),
-                              dropped = character(0),
-                              pvalue  = numeric(0),
-                              stringsAsFactors = FALSE)
-     gam_model <- NULL
-     for (iter in seq_len(prune_max_iter)) {
-          current_terms <- c(core_terms, prunable_terms)
-          gam_formula <- stats::reformulate(
-               termlabels = current_terms,
-               response   = "emdat_flood_active"
-          )
-          fit <- mgcv::bam(
-               formula  = gam_formula,
-               family   = stats::binomial(link = "logit"),
-               data     = train,
-               method   = "fREML",
-               select   = FALSE,
-               discrete = TRUE
-          )
-
-          ss <- summary(fit)
-          # Smooth labels in s.table; parametric in p.table (drop intercept)
-          s_pv <- if (!is.null(ss$s.table) && nrow(ss$s.table) > 0)
-                       stats::setNames(ss$s.table[, "p-value"], rownames(ss$s.table))
-                  else numeric(0)
-          p_pv <- if (!is.null(ss$p.table) && nrow(ss$p.table) > 0)
-                       stats::setNames(ss$p.table[, "Pr(>|z|)"], rownames(ss$p.table))
-                  else numeric(0)
-          p_pv <- p_pv[names(p_pv) != "(Intercept)"]
-
-          # Map each prunable term to its current p-value
-          cand_p <- vapply(prunable_terms, function(term) {
-               if (term %in% names(s_pv))      s_pv[[term]]
-               else if (term %in% names(p_pv)) p_pv[[term]]
-               else NA_real_
-          }, numeric(1))
-          names(cand_p) <- prunable_terms
-
-          # Halt if no candidate p-value above threshold
-          max_p   <- suppressWarnings(max(cand_p, na.rm = TRUE))
-          if (!is.finite(max_p) || max_p <= prune_p_threshold) {
-               if (verbose) {
-                    message(sprintf(
-                         "  Pruning converged at iter %d (deviance explained: %.1f%%): all prunable p <= %.3f",
-                         iter, summary(fit)$dev.expl * 100, prune_p_threshold))
-               }
-               gam_model <- fit
-               break
-          }
-          worst <- names(cand_p)[which.max(cand_p)]
-          if (verbose) {
-               message(sprintf("  iter %d: dropping %-40s (p=%.4f)",
-                               iter, worst, max_p))
-          }
-          prune_log <- rbind(prune_log,
-                              data.frame(iter = iter, dropped = worst,
-                                         pvalue = max_p,
-                                         stringsAsFactors = FALSE))
-          prunable_terms <- setdiff(prunable_terms, worst)
-
-          # Safety: don't strip the model to fewer than 5 prunable terms
-          if (length(prunable_terms) < 5) {
-               if (verbose) {
-                    message("  Halting: minimum prunable-term floor (5) reached")
-               }
-               gam_model <- fit
-               break
-          }
-          gam_model <- fit  # keep most-recent fit in case loop terminates externally
-     }
-     # The final fit is gam_model. Persist the prune log to diagnostics dir.
+     # Single bam() fit with smoothness shrinkage (select=TRUE).
+     # No iterative pruning loop -- the null-space penalty drives
+     # uninformative smooths' coefficients toward zero in one shot.
+     gam_model <- mgcv::bam(
+          formula  = gam_formula,
+          family   = stats::binomial(link = "logit"),
+          data     = train,
+          method   = "fREML",
+          select   = TRUE,
+          discrete = TRUE
+     )
      if (verbose) {
-          message(sprintf("  Final formula: %d core + %d prunable terms",
-                          length(core_terms), length(prunable_terms)))
+          message(sprintf("  Deviance explained: %.1f%%",
+                          summary(gam_model)$dev.expl * 100))
      }
 
      # Predict on every row (incl. forecast). Missing-predictor rows
@@ -354,17 +293,6 @@ impute_flood_probability <- function(d,
                diag_dir <- file.path(tempdir(), "flood_imputation")
           }
           dir.create(diag_dir, recursive = TRUE, showWarnings = FALSE)
-          # Persist the pruning trace alongside the GAM diagnostics
-          if (nrow(prune_log) > 0) {
-               utils::write.csv(prune_log,
-                                 file.path(diag_dir, "flood_gam_pruning_log.csv"),
-                                 row.names = FALSE)
-               if (verbose) {
-                    message(sprintf("  Pruning log: %d term(s) dropped, written to %s",
-                                    nrow(prune_log),
-                                    file.path(diag_dir, "flood_gam_pruning_log.csv")))
-               }
-          }
           .write_flood_gam_diagnostics(gam_model, train, d_aug, preds,
                                         diag_dir, verbose)
      }
@@ -470,7 +398,7 @@ impute_flood_probability <- function(d,
                mgcv::bam(formula  = gam_model$formula,
                          family   = stats::binomial(link = "logit"),
                          data     = tr, method = "fREML",
-                         select   = FALSE, discrete = TRUE),
+                         select   = TRUE, discrete = TRUE),
                error = function(e) NULL
           )
           if (is.null(fit)) next

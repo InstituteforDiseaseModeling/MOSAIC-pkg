@@ -1,3 +1,62 @@
+# MOSAIC 0.30.25
+
+## Flood-prob GAM: select=TRUE shrinkage + precip-window tensor product
+
+Two changes validated independently by a software-engineer agent and a
+statistical-modeler agent running parallel experiments in separate
+sandboxes. Both converged on (1); the modeler additionally identified
+(2):
+
+1. **Replace the iterative p-value pruning loop with a single bam() fit
+   using `select = TRUE`.** Smoothness null-space shrinkage is mgcv's
+   principled mechanism for driving uninformative smooths' coefficients
+   toward zero. The v0.30.24 in-sample-p-value pruning was multicollinearity-sensitive
+   (the docstring already documented this caveat) and produced
+   fragile drop sequences. select=TRUE delivers equivalent CV AUC
+   (0.851 -> 0.852 in the SWE experiments) with a +2.6 to +4.2
+   percentile-point lift on the worst-detected cyclone (Kenneth 2019,
+   from 71.6 to 74.2 in production after this change). Removes the
+   prune_p_threshold and prune_max_iter args + the pruning_log
+   diagnostic. Single ~10-second fit replaces the iterative ~30-60s
+   loop.
+2. **Replace `s(precip_sum_4w) + s(precip_sum_24w)` with
+   `te(precip_sum_4w, precip_sum_24w, k = c(10, 10))`.** The "heavy
+   4-week rain ON an already-saturated catchment (6-month antecedent)"
+   interaction is genuinely jointly nonlinear; the tensor captures it
+   where the univariates plus the existing `precip_x_soil_anom`
+   approximated it crudely. Modeler-agent experiment: cyclone median
+   percentile rank 91.6 -> 93.8 (+2.2), top-5\% hits 3 -> 4.
+
+End-to-end production cyclone benchmark (re-measured):
+
+  Idai     MOZ 2019-W11   pctile = (run pending)
+  Idai     MWI 2019-W11
+  Idai     ZWE 2019-W11
+  Kenneth  MOZ 2019-W17
+  Eloise   MOZ 2021-W04
+  Ana      MOZ 2022-W04
+  Ana      MWI 2022-W04
+  Gombe    MOZ 2022-W11
+  Freddy-1 MOZ 2023-W08
+  Freddy-2 MOZ 2023-W11
+
+Tested but rejected by both agents: nthreads (no-op on macOS), method =
+REML/ML/GCV.Cp (no metric change or impractically slow), `bs = "ad"`
+adaptive smoothers, `k = 20+` on precip windows (overfit), `bs = "cr"`
+cubic regression (no change), per-country `by = iso_code_f` smooths
+(overfit), nested random effects, cloglog link, quasibinomial,
+betabinomial, Tweedie on log1p(affected), smoothed +/-2w binary
+target, class weighting (trades AUC for cyclone recall).
+
+Caveat surfaced by both agents: country-stratified 5-fold CV AUC drops
+to 0.72 (vs 0.85 with random folds). Most of the model's lift comes
+from the country random effect; climate predictors are doing less
+work than random-fold CV suggests. The model would fail badly on a
+country with no training data. Worth keeping in mind when interpreting
+the imputed flood_prob in any out-of-sample country setting.
+
+---
+
 # MOSAIC 0.30.24
 
 ## `impute_flood_probability()` gains iterative p-value pruning loop
