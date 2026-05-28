@@ -1,3 +1,48 @@
+# MOSAIC 0.30.23
+
+## Flood-prob imputer: revert to enriched binomial after cyclone benchmark
+
+The v0.30.22 Tweedie-on-severity formulation made Cyclone Freddy stand
+out as MOZ's #1 historical week (the headline visual goal) but a
+10-cyclone benchmark across Idai 2019 (MOZ/MWI/ZWE), Kenneth 2019,
+Eloise 2021, Ana 2022 (MOZ/MWI), Gombe 2022, and Freddy 2023 (x2 landfalls)
+showed the Tweedie variant under-detects other catastrophic events --
+median percentile rank 81.4, minimum 77.8. The root cause: the Tweedie
+target chases EM-DAT's logged Total Affected, and Idai's Total Affected
+was logged smaller than its real impact warranted, so the model
+under-amplified it.
+
+This release reverts to the family + target of v0.30.21 (binomial logit
+on emdat_flood_active 0/1) while keeping the four physics-driven
+predictor enrichments that the v0.30.22 S2 exploration found
+load-bearing:
+
+- `s(precip_sum_24w)` -- ~6-month basin saturation memory (inline-computed)
+- `s(precip_sum_52w)` -- annual antecedent precipitation (inline-computed)
+- `s(precip_sum_4w, by = region_f)` -- region-conditional 4-week precip smooth
+- `s(precip_x_soil_anom)` -- joint precip-anomaly x soil-moisture-anomaly index
+
+Result: median cyclone percentile rank 93.2 (vs 81.4 for Tweedie, 90.8
+for v0.30.21 baseline), minimum 79.1 (every cyclone-week in the top 21%
+of its country's history). Three cyclones in the top 5%.
+
+| Method | Median cyclone pctile | Min | Top 5% hits / 10 |
+|---|---|---|---|
+| **v0.30.23 (enriched binomial)** | **93.2** | **79.1** | **3** |
+| v0.30.22 (Tweedie hybrid) | 81.4 | 77.8 | 2 |
+| v0.30.21 (baseline binomial) | 90.8 | 69.4 | 3 |
+
+Trade-off vs v0.30.22: Freddy's headline rank in MOZ drops back from
+#1 to top-5%, but every other catastrophic cyclone is more reliably
+detected. The right call for cholera forecasting where we care about
+all flood events, not just one outlier.
+
+Output is now naturally on [0, 1] from the logit link -- no global-max
+scaling needed. Test thresholds restored to the binomial-appropriate
+AUC > 0.80 and mean(hi)-mean(lo) > 0.3 discrimination tests.
+
+---
+
 # MOSAIC 0.30.22
 
 ## Flood-prob imputer: Tweedie severity target + enriched predictors

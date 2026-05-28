@@ -83,26 +83,23 @@ testthat::test_that("recovers a known precip-driven flood signal", {
      testthat::expect_true(all(out$emdat_flood_prob >= 0))
      testthat::expect_true(all(out$emdat_flood_prob <= 1))
 
-     # Training-period AUC against the observed binary should be well above
-     # chance. With Tweedie on tiny synthetic data (5 ISOs x 4 yrs) and
-     # global-max scaling concentrating values near 0, AUC bounds are
-     # naturally lower than for a binomial-on-binary fit; 0.70 is the
-     # conservative-but-meaningful threshold.
+     # Training-period AUC against the observed binary should be well
+     # above chance. Binomial-on-binary GAM separates classes cleanly.
      train <- !is.na(d$emdat_flood_active)
      p <- out$emdat_flood_prob[train]
      y <- d$emdat_flood_active[train]
      r <- rank(p)
      n_pos <- sum(y == 1); n_neg <- sum(y == 0)
      auc <- (sum(r[y == 1]) - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
-     testthat::expect_gt(auc, 0.70)
+     testthat::expect_gt(auc, 0.80)
 
-     # Median predicted prob at high precip_anom > median at low precip_anom.
-     # Use median rather than mean because the Tweedie output is heavy-tailed
-     # (most values near 0; a few near 1), so mean is dominated by the few
-     # large predictions in either group.
+     # Mean predicted prob at high precip_anom should be substantially
+     # higher than at low precip_anom (binomial logit produces a clear
+     # separation in mean predicted probability across the predictor
+     # range).
      hi <- out$emdat_flood_prob[d$precip_anom > 1.5]
      lo <- out$emdat_flood_prob[d$precip_anom < -1.5]
-     testthat::expect_gt(stats::median(hi), stats::median(lo))
+     testthat::expect_gt(mean(hi), mean(lo) + 0.3)
 })
 
 
