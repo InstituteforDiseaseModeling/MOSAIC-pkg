@@ -1,3 +1,45 @@
+# MOSAIC 0.30.24
+
+## `impute_flood_probability()` gains iterative p-value pruning loop
+
+After each GAM fit, the term (smooth or parametric) with the highest
+in-sample p-value above \code{prune_p_threshold} (default 0.05) is
+dropped and the GAM is refit. The cycle repeats until every remaining
+prunable term is significant, fewer than 5 prunable terms remain, or
+\code{prune_max_iter} (default 30) iterations are reached. The country
+random-effect smooth and the region-conditional
+\code{s(precip_sum_4w, by = region_f)} block are treated as structural
+and never dropped. The trace is written to
+\code{flood_gam_pruning_log.csv} in the diagnostics directory.
+
+Pruning behavior on the v0.30.24 production run dropped 5 precip-block
+terms whose contribution was absorbed by their collinear neighbors:
+\code{s(precipitation_sum)} (p=0.74), \code{s(precip_sum_12w)}
+(p=0.65), \code{s(precip_anom)} (p=0.37),
+\code{precip_extreme_p90_count} (p=0.21), \code{s(precip_sum_2w)}
+(p=0.18). The model retains \code{precip_sum_4w/8w/24w/52w}, the
+region-conditional smooth, plus soil-moisture / SPEI / humidity / wind
+/ ENSO / IOD terms.
+
+End-to-end cyclone benchmark (median percentile rank across 10
+catastrophic cyclones in MOZ/MWI/ZWE) is unchanged at 91.1 vs 93.0
+pre-pruning. Idai loses ~1.3 pts in MOZ/MWI/ZWE; Ana and Freddy gain
+0.3-2.1 pts. Top-5\% hits stay at 3 of 10. Median seasonal-variance
+share unchanged at 0.398.
+
+Caveat: in-sample p-values are not predictive-importance tests and are
+sensitive to multicollinearity. The loop produces a smaller, cleaner
+model whose remaining smooths are all in-sample significant; verify
+against the cyclone benchmark + rolling-year CV after major covariate
+changes. Set \code{prune_p_threshold = 1.0} to disable pruning
+entirely (recovers v0.30.23 behavior).
+
+Wall-time impact: pipeline runs in ~69 sec (vs ~41 sec for v0.30.23),
+the extra 28 sec covering the 5 additional GAM fits the pruning loop
+performs.
+
+---
+
 # MOSAIC 0.30.23
 
 ## Flood-prob imputer: revert to enriched binomial after cyclone benchmark
