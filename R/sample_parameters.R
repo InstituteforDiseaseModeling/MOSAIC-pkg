@@ -896,40 +896,43 @@ props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
   n_locations <- length(locations)
   ic_compartments_all <- colnames(sampled_props)
 
-  # Convert proportions to integer counts
-  for (comp in ic_compartments_all) {
-    config_field <- paste0(comp, "_j_initial")
-    props <- sampled_props[, comp]
-    counts <- round(props * N_j)
-
-    # Ensure very small compartments aren't completely lost
-    small_nonzero <- (counts == 0) & (props > 0) & (props * N_j >= 0.5)
-    counts[small_nonzero] <- 1
-
-    config_sampled[[config_field]] <- as.integer(counts)
-  }
-
-  # Adjust for rounding errors to ensure sum equals N exactly
-  for (j in seq_along(locations)) {
-    compartment_fields <- c("S_j_initial", "V1_j_initial", "V2_j_initial",
-                           "E_j_initial", "I_j_initial", "R_j_initial")
-    counts <- sapply(compartment_fields, function(f) config_sampled[[f]][j])
-
-    diff <- N_j[j] - sum(counts)
-    if (diff != 0) {
-      # Adjust S compartment (calculated as residual) for rounding
-      config_sampled$S_j_initial[j] <- config_sampled$S_j_initial[j] + diff
-
-      # If S becomes negative, adjust largest compartment instead
-      if (config_sampled$S_j_initial[j] < 0) {
-        config_sampled$S_j_initial[j] <- config_sampled$S_j_initial[j] - diff
-        largest_idx <- which.max(counts)
-        config_sampled[[compartment_fields[largest_idx]]][j] <-
-          config_sampled[[compartment_fields[largest_idx]]][j] + diff
-      }
+  # Hamilton (largest-remainder) apportionment per location:
+  #   1. floor(props * N) for each compartment.
+  #   2. Distribute the residual deficit (N - sum of floors) to compartments
+  #      with the largest fractional parts, one unit at a time.
+  # Guarantees sum(counts) == N exactly and all counts >= 0, replacing the
+  # earlier per-compartment round() + residual-on-S fallback which could
+  # leave a compartment negative or sums off by 1 when S was already the
+  # largest compartment or when the recipient compartment was tiny.
+  counts_mat <- matrix(0L,
+                       nrow = n_locations,
+                       ncol = length(ic_compartments_all),
+                       dimnames = list(NULL, ic_compartments_all))
+  for (j in seq_len(n_locations)) {
+    target  <- sampled_props[j, ] * N_j[j]
+    base    <- floor(target)
+    rem     <- target - base
+    deficit <- as.integer(N_j[j] - sum(base))
+    if (deficit > 0) {
+      ord <- order(rem, decreasing = TRUE)
+      base[ord[seq_len(deficit)]] <- base[ord[seq_len(deficit)]] + 1
+    } else if (deficit < 0) {
+      # Only reachable when sampled_props[j, ] sums to > 1 due to numerical
+      # drift; shrink compartments with smallest remainders first.
+      ord <- order(rem, decreasing = FALSE)
+      take <- min(-deficit, length(ord))
+      base[ord[seq_len(take)]] <- base[ord[seq_len(take)]] - 1
     }
-
+    counts_mat[j, ] <- as.integer(base)
   }
+
+  for (comp in ic_compartments_all) {
+    config_sampled[[paste0(comp, "_j_initial")]] <- counts_mat[, comp]
+  }
+
+  # Hard assertions: every cell non-negative and each row sums to its N_j.
+  stopifnot(all(counts_mat >= 0L))
+  stopifnot(all(rowSums(counts_mat) == N_j))
 
   if (verbose) {
     cat("  ✓ Initial conditions sampled and normalized\n")
