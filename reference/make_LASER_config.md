@@ -89,6 +89,7 @@ make_LASER_config(
   decay_shape_2 = NULL,
   reported_cases = NULL,
   reported_deaths = NULL,
+  epidemic_peaks = NULL,
   sigfigs = 8
 )
 ```
@@ -507,6 +508,17 @@ make_LASER_config(
 
   Matrix of daily reported cholera deaths. Must be integer. NA allowed.
   nrow=length(location_name), ncol=length(t).
+
+- epidemic_peaks:
+
+  Optional data.frame of observed epidemic peaks consumed by the
+  peak-timing / peak-magnitude shape terms in
+  [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
+  (R and the Python port in laser-cholera). Must contain two character
+  columns: `iso_code` (matching entries in `location_name`) and
+  `peak_date` (ISO `YYYY-MM-DD` strings parseable by `as.Date`). NULL
+  allowed; when NULL the peak shape terms contribute 0 to the
+  likelihood.
 
 - sigfigs:
 

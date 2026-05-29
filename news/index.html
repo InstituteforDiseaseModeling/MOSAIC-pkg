@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,210 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.26" id="mosaic-03026">MOSAIC 0.30.26<a class="anchor" aria-label="anchor" href="#mosaic-03026"></a></h2>
+<div class="section level3">
+<h3 id="compile_suitability_data--remove-three-dormant-blocks-0-30-26">
+<code>compile_suitability_data()</code> — remove three dormant blocks<a class="anchor" aria-label="anchor" href="#compile_suitability_data--remove-three-dormant-blocks-0-30-26"></a></h3>
+<p>Three blocks of derived covariates were being computed and persisted to <code>cholera_country_weekly_suitability_data.csv</code> even though <code><a href="../reference/est_suitability.html">est_suitability()</a></code>’s <code>covariates_all</code> list intentionally excludes every one of them. Computing and saving them was wasted IO + a foot-gun for any future contributor who re-enables them without realising why they were excluded. Removed entirely from the function:</p>
+<ul><li>
+<strong>Vaccination block (3 columns)</strong>: <code>vaccination_rate_daily</code>, <code>cumulative_vaccine_doses</code>, <code>log1p_cum_vaccine_doses</code>. Vaccination is a downstream intervention – vaccines are deployed in response to cholera, not in anticipation of environmental suitability – so these are non-causal predictors for the suitability model.</li>
+<li>
+<strong>Epidemic-memory block (8 columns)</strong>: <code>r_t</code>, <code>cum_cases_4w/8w/12w/52w</code>, <code>nonzero_ratio_52w</code>, <code>weeks_since_major_outbreak</code>, <code>peak_cases_52w</code>, <code>seasonal_outbreak_risk</code>, plus the <code>epidemic_week</code> alias. All case-derived; predicting a case-derived target (<code>cases_binary</code>) from any function of <code>cases</code> is target leakage even with the forecast-safe <code>memory_lag</code>.</li>
+<li>
+<strong>Spatial-import block (7 columns)</strong>: <code>import_vulnerability</code>, <code>export_potential</code>, <code>weighted_import_connectivity</code>, <code>connectivity_degree</code>, <code>betweenness_centrality</code>, <code>eigenvector_centrality</code>, <code>import_export_balance</code>. Mobility-network features that were computed but excluded from the LSTM input set.</li>
+</ul><p>Net: 18 columns dropped from the saved suitability CSV. The columns were already excluded from the LSTM covariate list so this is purely hygiene – no model behavior changes. Compile wall-time should drop slightly (no vaccination merge + cumulative-doses computation, no epidemic-memory <code>slide_dbl()</code> loops, no mobility-matrix calculations).</p>
+<p>The <code>forecast_mode</code> argument is now mostly cosmetic (controls summary messages and a small bit of climate-anomaly leading-edge behavior). Kept for backward compatibility.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.25" id="mosaic-03025">MOSAIC 0.30.25<a class="anchor" aria-label="anchor" href="#mosaic-03025"></a></h2>
+<div class="section level3">
+<h3 id="flood-prob-gam-selecttrue-shrinkage--precip-window-tensor-product-0-30-25">Flood-prob GAM: select=TRUE shrinkage + precip-window tensor product<a class="anchor" aria-label="anchor" href="#flood-prob-gam-selecttrue-shrinkage--precip-window-tensor-product-0-30-25"></a></h3>
+<p>Two changes validated independently by a software-engineer agent and a statistical-modeler agent running parallel experiments in separate sandboxes. Both converged on (1); the modeler additionally identified (2):</p>
+<ol style="list-style-type: decimal"><li>
+<strong>Replace the iterative p-value pruning loop with a single bam() fit using <code>select = TRUE</code>.</strong> Smoothness null-space shrinkage is mgcv’s principled mechanism for driving uninformative smooths’ coefficients toward zero. The v0.30.24 in-sample-p-value pruning was multicollinearity-sensitive (the docstring already documented this caveat) and produced fragile drop sequences. select=TRUE delivers equivalent CV AUC (0.851 -&gt; 0.852 in the SWE experiments) with a +2.6 to +4.2 percentile-point lift on the worst-detected cyclone (Kenneth 2019, from 71.6 to 74.2 in production after this change). Removes the prune_p_threshold and prune_max_iter args + the pruning_log diagnostic. Single ~10-second fit replaces the iterative ~30-60s loop.</li>
+<li>
+<strong>Replace <code>s(precip_sum_4w) + s(precip_sum_24w)</code> with <code>te(precip_sum_4w, precip_sum_24w, k = c(10, 10))</code>.</strong> The “heavy 4-week rain ON an already-saturated catchment (6-month antecedent)” interaction is genuinely jointly nonlinear; the tensor captures it where the univariates plus the existing <code>precip_x_soil_anom</code> approximated it crudely. Modeler-agent experiment: cyclone median percentile rank 91.6 -&gt; 93.8 (+2.2), top-5% hits 3 -&gt; 4.</li>
+</ol><p>End-to-end production cyclone benchmark (re-measured):</p>
+<p>Idai MOZ 2019-W11 pctile = (run pending) Idai MWI 2019-W11 Idai ZWE 2019-W11 Kenneth MOZ 2019-W17 Eloise MOZ 2021-W04 Ana MOZ 2022-W04 Ana MWI 2022-W04 Gombe MOZ 2022-W11 Freddy-1 MOZ 2023-W08 Freddy-2 MOZ 2023-W11</p>
+<p>Tested but rejected by both agents: nthreads (no-op on macOS), method = REML/ML/GCV.Cp (no metric change or impractically slow), <code>bs = "ad"</code> adaptive smoothers, <code>k = 20+</code> on precip windows (overfit), <code>bs = "cr"</code> cubic regression (no change), per-country <code>by = iso_code_f</code> smooths (overfit), nested random effects, cloglog link, quasibinomial, betabinomial, Tweedie on log1p(affected), smoothed +/-2w binary target, class weighting (trades AUC for cyclone recall).</p>
+<p>Caveat surfaced by both agents: country-stratified 5-fold CV AUC drops to 0.72 (vs 0.85 with random folds). Most of the model’s lift comes from the country random effect; climate predictors are doing less work than random-fold CV suggests. The model would fail badly on a country with no training data. Worth keeping in mind when interpreting the imputed flood_prob in any out-of-sample country setting.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.24" id="mosaic-03024">MOSAIC 0.30.24<a class="anchor" aria-label="anchor" href="#mosaic-03024"></a></h2>
+<div class="section level3">
+<h3 id="impute_flood_probability-gains-iterative-p-value-pruning-loop-0-30-24">
+<code>impute_flood_probability()</code> gains iterative p-value pruning loop<a class="anchor" aria-label="anchor" href="#impute_flood_probability-gains-iterative-p-value-pruning-loop-0-30-24"></a></h3>
+<p>After each GAM fit, the term (smooth or parametric) with the highest in-sample p-value above  (default 0.05) is dropped and the GAM is refit. The cycle repeats until every remaining prunable term is significant, fewer than 5 prunable terms remain, or  (default 30) iterations are reached. The country random-effect smooth and the region-conditional  block are treated as structural and never dropped. The trace is written to  in the diagnostics directory.</p>
+<p>Pruning behavior on the v0.30.24 production run dropped 5 precip-block terms whose contribution was absorbed by their collinear neighbors:  (p=0.74),  (p=0.65),  (p=0.37),  (p=0.21),  (p=0.18). The model retains , the region-conditional smooth, plus soil-moisture / SPEI / humidity / wind / ENSO / IOD terms.</p>
+<p>End-to-end cyclone benchmark (median percentile rank across 10 catastrophic cyclones in MOZ/MWI/ZWE) is unchanged at 91.1 vs 93.0 pre-pruning. Idai loses ~1.3 pts in MOZ/MWI/ZWE; Ana and Freddy gain 0.3-2.1 pts. Top-5% hits stay at 3 of 10. Median seasonal-variance share unchanged at 0.398.</p>
+<p>Caveat: in-sample p-values are not predictive-importance tests and are sensitive to multicollinearity. The loop produces a smaller, cleaner model whose remaining smooths are all in-sample significant; verify against the cyclone benchmark + rolling-year CV after major covariate changes. Set  to disable pruning entirely (recovers v0.30.23 behavior).</p>
+<p>Wall-time impact: pipeline runs in ~69 sec (vs ~41 sec for v0.30.23), the extra 28 sec covering the 5 additional GAM fits the pruning loop performs.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.23" id="mosaic-03023">MOSAIC 0.30.23<a class="anchor" aria-label="anchor" href="#mosaic-03023"></a></h2>
+<div class="section level3">
+<h3 id="flood-prob-imputer-revert-to-enriched-binomial-after-cyclone-benchmark-0-30-23">Flood-prob imputer: revert to enriched binomial after cyclone benchmark<a class="anchor" aria-label="anchor" href="#flood-prob-imputer-revert-to-enriched-binomial-after-cyclone-benchmark-0-30-23"></a></h3>
+<p>The v0.30.22 Tweedie-on-severity formulation made Cyclone Freddy stand out as MOZ’s <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/1" class="external-link">#1</a> historical week (the headline visual goal) but a 10-cyclone benchmark across Idai 2019 (MOZ/MWI/ZWE), Kenneth 2019, Eloise 2021, Ana 2022 (MOZ/MWI), Gombe 2022, and Freddy 2023 (x2 landfalls) showed the Tweedie variant under-detects other catastrophic events – median percentile rank 81.4, minimum 77.8. The root cause: the Tweedie target chases EM-DAT’s logged Total Affected, and Idai’s Total Affected was logged smaller than its real impact warranted, so the model under-amplified it.</p>
+<p>This release reverts to the family + target of v0.30.21 (binomial logit on emdat_flood_active 0/1) while keeping the four physics-driven predictor enrichments that the v0.30.22 S2 exploration found load-bearing:</p>
+<ul><li>
+<code>s(precip_sum_24w)</code> – ~6-month basin saturation memory (inline-computed)</li>
+<li>
+<code>s(precip_sum_52w)</code> – annual antecedent precipitation (inline-computed)</li>
+<li>
+<code>s(precip_sum_4w, by = region_f)</code> – region-conditional 4-week precip smooth</li>
+<li>
+<code>s(precip_x_soil_anom)</code> – joint precip-anomaly x soil-moisture-anomaly index</li>
+</ul><p>Result: median cyclone percentile rank 93.2 (vs 81.4 for Tweedie, 90.8 for v0.30.21 baseline), minimum 79.1 (every cyclone-week in the top 21% of its country’s history). Three cyclones in the top 5%.</p>
+<table class="table"><thead><tr><th>Method</th>
+<th>Median cyclone pctile</th>
+<th>Min</th>
+<th>Top 5% hits / 10</th>
+</tr></thead><tbody><tr><td><strong>v0.30.23 (enriched binomial)</strong></td>
+<td><strong>93.2</strong></td>
+<td><strong>79.1</strong></td>
+<td><strong>3</strong></td>
+</tr><tr><td>v0.30.22 (Tweedie hybrid)</td>
+<td>81.4</td>
+<td>77.8</td>
+<td>2</td>
+</tr><tr><td>v0.30.21 (baseline binomial)</td>
+<td>90.8</td>
+<td>69.4</td>
+<td>3</td>
+</tr></tbody></table><p>Trade-off vs v0.30.22: Freddy’s headline rank in MOZ drops back from <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/1" class="external-link">#1</a> to top-5%, but every other catastrophic cyclone is more reliably detected. The right call for cholera forecasting where we care about all flood events, not just one outlier.</p>
+<p>Output is now naturally on [0, 1] from the logit link – no global-max scaling needed. Test thresholds restored to the binomial-appropriate AUC &gt; 0.80 and mean(hi)-mean(lo) &gt; 0.3 discrimination tests.</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.22" id="mosaic-03022">MOSAIC 0.30.22<a class="anchor" aria-label="anchor" href="#mosaic-03022"></a></h2>
+<div class="section level3">
+<h3 id="flood-prob-imputer-tweedie-severity-target--enriched-predictors-0-30-22">Flood-prob imputer: Tweedie severity target + enriched predictors<a class="anchor" aria-label="anchor" href="#flood-prob-imputer-tweedie-severity-target--enriched-predictors-0-30-22"></a></h3>
+<p>The v0.30.20 binomial-on-active formulation produced an imputed <code>emdat_flood_prob</code> that didn’t separate major events from seasonal climatology – Cyclone Freddy (MOZ, Feb-Mar 2023) only reached probability 0.503, barely above the MOZ Feb-Apr p90 of 0.396 and below the all-time MOZ max. Four parallel strategies were explored (Tweedie severity target; enriched predictor set; xgboost; two-stage hurdle). This release adopts the hybrid of the two winners:</p>
+<p><strong>Tweedie family on raw <code>Total Affected</code>.</strong> Encodes flood SEVERITY rather than just presence/absence. The Tweedie compound-Poisson-gamma mixture handles the zero-inflated continuous target natively.</p>
+<p><strong>Enriched predictor set</strong> (computed inline by the imputer, no upstream compile changes required beyond the existing <code>region</code> column):</p>
+<ul><li>
+<code>precip_sum_24w</code> and <code>precip_sum_52w</code> – long-memory antecedent precipitation capturing basin saturation. These were the largest single contributors to interannual variance in the rebuild experiments.</li>
+<li>
+<code>s(precip_sum_4w, by = region_f)</code> – region-conditional 4-week precipitation smooth (4-region WHO classification: Central / East / Southern / West Africa).</li>
+<li>
+<code>s(precip_x_soil_anom)</code> – joint precip-anomaly x soil-moisture-anomaly index for the “very-wet AND already-saturated” regime.</li>
+</ul><p><strong>Output normalization</strong>: predictions on the raw Tweedie scale are non-negative, heavy-tailed continuous. Normalized by global maximum to <code>[0, 1]</code> – rank-normalization was tested and rejected because it erases the long-tail major-event amplification the Tweedie target was chosen for.</p>
+<p><strong>End-to-end measured impact</strong> (full AFRO panel, real climate + EM-DAT data):</p>
+<table class="table"><thead><tr><th>Metric</th>
+<th>v0.30.21 (binomial)</th>
+<th>v0.30.22 (Tweedie hybrid)</th>
+</tr></thead><tbody><tr><td>Cyclone Freddy rank in MOZ history</td>
+<td>not top-5</td>
+<td><strong>1st of 872</strong></td>
+</tr><tr><td>Freddy / MOZ Feb-Apr p90 ratio</td>
+<td>1.27x</td>
+<td><strong>8.14x</strong></td>
+</tr><tr><td>Median seasonal variance share</td>
+<td>0.436</td>
+<td><strong>0.162</strong></td>
+</tr><tr><td>OOT Spearman vs severity</td>
+<td>0.290</td>
+<td>0.267</td>
+</tr><tr><td>OOT AUC vs binary</td>
+<td>0.857</td>
+<td>0.808</td>
+</tr></tbody></table><p>Cost: 0.05 AUC and 0.02 Spearman on the held-out binary-target metrics (unavoidable when switching from binomial-on-binary to Tweedie-on-continuous). Acceptable trade-off given the 6.4x lift on the Freddy benchmark and 63% reduction in seasonal-variance share.</p>
+<p><strong>Strategies tested and rejected</strong>: xgboost (sharper peaks but worsened seasonal share); two-stage hurdle (Freddy peak actually <em>dropped</em> because Total Affected for Freddy isn’t a global outlier).</p>
+<hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.21" id="mosaic-03021">MOSAIC 0.30.21<a class="anchor" aria-label="anchor" href="#mosaic-03021"></a></h2>
+<div class="section level3">
+<h3 id="two-correctness-fixes-in-the-flood-prob-pipeline-0-30-21">Two correctness fixes in the flood-prob pipeline<a class="anchor" aria-label="anchor" href="#two-correctness-fixes-in-the-flood-prob-pipeline-0-30-21"></a></h3>
+<p>Surfaced by an internal review of the EM-DAT integration:</p>
+<ul><li>
+<strong>Gate / GAM-contract drift fixed.</strong> The <code>if (include_flood_prob &amp;&amp; ...)</code> gate in <code><a href="../reference/compile_suitability_data.html">compile_suitability_data()</a></code> was still checking the v0.30.19-era predictors (<code>temp_anom</code>, <code>elevation</code>, <code>urban_population_pct</code>) which were removed from the GAM in v0.30.20, and was failing to check the 9 new columns the rebuilt GAM actually requires (<code>precipitation_sum</code>, <code>precip_sum_2w/4w/8w</code>, <code>precip_extreme_p90_count</code>, <code>soil_moisture_0_to_10cm_mean</code>, <code>relative_humidity_2m_mean</code>, <code>rh_mean_12w</code>, <code>wind_speed_10m_max</code>, <code>ENSO3</code>, <code>ENSO4</code>). The result: a missing required column would have caused a hard <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> deep inside <code><a href="../reference/impute_flood_probability.html">impute_flood_probability()</a></code> instead of being skipped cleanly by the <code>else</code> branch. Both <code><a href="../reference/impute_flood_probability.html">impute_flood_probability()</a></code> and the gate now source the canonical required-column list from a single internal helper <code>.impute_flood_probability_required()</code>, eliminating the drift surface entirely.</li>
+<li>
+<strong><code>emdat_flood_prob_anom</code> historical baseline fixed.</strong> The per-country mean used as the anomaly baseline was computed over the full series including forecast-window rows, whose probabilities are themselves GAM-extrapolated. This silently leaked a small amount of forecast information into the historical-period anomaly used as an LSTM training feature. The baseline now uses only rows where <code>emdat_flood_active</code> is non-NA (the historical EM-DAT panel coverage).</li>
+</ul><hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.20" id="mosaic-03020">MOSAIC 0.30.20<a class="anchor" aria-label="anchor" href="#mosaic-03020"></a></h2>
+<div class="section level3">
+<h3 id="flood-probability-gam-rebuild-around-hydrological-drivers--ensoiod-0-30-20">Flood-probability GAM: rebuild around hydrological drivers + ENSO/IOD<a class="anchor" aria-label="anchor" href="#flood-probability-gam-rebuild-around-hydrological-drivers--ensoiod-0-30-20"></a></h3>
+<p>Variance decomposition of v0.30.19’s imputed <code>emdat_flood_prob</code> showed the highest-flood-activity countries (NGA 92%, TCD 83%, SSD 83%, MLI 75%, ETH 75%) were heavily dominated by seasonal pattern, and <code>summary(model)</code> revealed that the cyclic-week and country-RE terms plus the raw 12-week rainfall sum carried virtually all the explanatory power while every anomaly/teleconnection term was shrunk by the <code>select = TRUE</code> penalty. This release rebuilds the GAM formula around variables that are ostensibly linked with flood physics, and removes the seasonal / static-baseline channels that were crowding out the climate-driven interannual signal:</p>
+<ul><li>
+<strong>Removed</strong> <code>s(week, bs = "cc")</code> (cyclic seasonality), <code>elevation</code>, and <code>urban_population_pct</code>. The country random effect alone absorbs the remaining country-level baseline differences.</li>
+<li>
+<strong>Removed</strong> <code>s(temp_anom)</code> — temperature isn’t a direct flood driver in AFRO (no snowmelt).</li>
+<li>
+<strong>Added every precipitation channel</strong>: <code>precipitation_sum</code>, <code>precip_anom</code>, <code>precip_sum_2w/4w/8w/12w</code>, plus the binary <code>precip_extreme_p90_count</code> extreme-rain trigger.</li>
+<li>
+<strong>Added soil moisture (raw + anomaly)</strong>, atmospheric humidity (raw + 12w rolling), and the storm/cyclone proxy <code>wind_speed_10m_max</code>.</li>
+<li>
+<strong>Heavy ENSO/IOD bench</strong>: ENSO34 at current + 8/16/24-week lags, current ENSO3 and ENSO4 (Eastern and Western Pacific regions), IOD at current + 8/16/24-week lags. Lag-N columns are computed inline.</li>
+<li>
+<strong>Removed <code>select = TRUE</code></strong> — the smooth-shrinkage penalty was the mechanism that suppressed exactly the teleconnection terms we now want to emphasise. Without it the smooths keep their unpenalized REML weight; rolling-year CV is the arbiter.</li>
+</ul><hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.19" id="mosaic-03019">MOSAIC 0.30.19<a class="anchor" aria-label="anchor" href="#mosaic-03019"></a></h2>
+<div class="section level3">
+<h3 id="code-review-fixes-in-compile_suitability_data-and-est_suitability-0-30-19">Code-review fixes in <code>compile_suitability_data</code> and <code>est_suitability</code>
+<a class="anchor" aria-label="anchor" href="#code-review-fixes-in-compile_suitability_data-and-est_suitability-0-30-19"></a></h3>
+<p>Round of correctness fixes surfaced by an internal code review:</p>
+<ul><li>
+<strong>B1 — <code><a href="../reference/est_suitability.html">est_suitability()</a></code> date auto-detection</strong> referenced <code>d_all$date_start</code> / <code>enso_complete$date_stop</code>, columns that <code><a href="../reference/compile_suitability_data.html">compile_suitability_data()</a></code> drops before saving. <code>min(NULL, na.rm=TRUE)</code> silently returns <code>Inf</code> and propagated as bogus dates. Fixed to use <code>d_all$date</code>.</li>
+<li>
+<strong>B2 — Fine-tuning splits trained against the wrong target scale.</strong> The model output head is <code>activation = "linear", name = "logit_head"</code> and the first split correctly fed <code><a href="https://rdrr.io/r/stats/Logistic.html" class="external-link">qlogis()</a></code>-transformed targets. Subsequent fine-tuning splits (default <code>n_splits = 10</code>) fed raw <code>[0, 1]</code> probabilities, pushing the linear head toward the wrong range and silently undoing the first split’s training. Now applies <code>qlogis(pmax(eps, pmin(1-eps, ...)))</code> consistently.</li>
+<li>
+<strong>B3 — <code>seasonal_outbreak_risk</code></strong> computed <code>mean(cases_lagged)</code> inside <code>group_by(iso_code) %&gt;% mutate(...)</code>, producing a single per-country mean rather than the week-of-year climatology the comment claimed. Now uses <code>stats::ave(cases_lagged, week, FUN = mean)</code> to give the intended weekly seasonality.</li>
+<li>
+<strong>B4 — <code>weeks_since_major_outbreak</code></strong> incremented its counter through the <code>memory_lag</code> warm-up window (default 17 weeks in forecast mode), producing fake <code>1, 2, 3, ...</code> values when the lag target was NA. Now stays NA until the first real observation.</li>
+<li>
+<strong>B5 — ISO week 53.</strong> Investigated and documented. Two distinct things were happening: (a) legitimate W53 in 2015 and 2020 was being dropped (~80 country-weeks, 0.2% of training data); (b) an upstream bug in <code>process_open_meteo_data</code> emits spurious W53 entries labelled by calendar year for ISO years 2005/2010/2016/2021. The drop-all-W53 filter robustly handles (b). Added a comment block explaining the trade-off; the upstream fix to <code>process_open_meteo_data</code> is the structural follow-up (separate ticket).</li>
+<li>
+<strong>B6 — Vaccination weekly key</strong> paired <code>lubridate::isoweek(date)</code> with <code>format(date, "%Y")</code> (calendar year). Dates near the year boundary (e.g., 2024-12-30, which is ISO 2025-W01) were joining under <code>(year=2024, week=1)</code>, silently missing the right upstream row. Now uses <code><a href="https://lubridate.tidyverse.org/reference/year.html" class="external-link">lubridate::isoyear()</a></code>.</li>
+<li>
+<strong>B7 — <code>pivot_wider</code> for climate and ENSO</strong> had no <code>values_fn</code>, so any residual duplicate <code>(iso_code, year, week, variable)</code> row would silently produce list-columns and break every downstream merge. Now passes <code>values_fn = mean</code>.</li>
+<li>
+<strong>B8 — <code><a href="../reference/est_suitability.html">est_suitability()</a></code> plotting block</strong> was gated by <code>if (T)</code> (always on) with a comment claiming “disabled by default”, and <code>par(mfrow = c(2,1))</code> leaked into the caller’s device state. Replaced with a real <code>plot_country_diagnostics = FALSE</code> argument and <code>on.exit(par(old_par))</code>.</li>
+<li>
+<strong>B9 — Positional column renames</strong> (<code>names(x)[3] &lt;- "..."</code>) replaced with <code><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">dplyr::rename()</a></code> so an upstream column reorder can’t silently corrupt downstream values.</li>
+<li>
+<strong>B10 — Negative case counts</strong> in <code><a href="../reference/est_suitability.html">est_suitability()</a></code> are now flagged with a warning before being clamped to 0 (previously silent).</li>
+<li>
+<strong>B11 — Duplicate identical <code>df &lt;- data.frame(...)</code> block</strong> in <code><a href="../reference/est_suitability.html">est_suitability()</a></code> removed.</li>
+<li>
+<strong>B12 — Dead first <code>covariates_all</code> assignment</strong> in <code><a href="../reference/est_suitability.html">est_suitability()</a></code> removed; only the comprehensive (live) assignment remains.</li>
+</ul><hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.18" id="mosaic-03018">MOSAIC 0.30.18<a class="anchor" aria-label="anchor" href="#mosaic-03018"></a></h2>
+<div class="section level3">
+<h3 id="speed-up-flood-prob-gam-and-clean-the-suitability-covariate-list-0-30-18">Speed up flood-prob GAM and clean the suitability covariate list<a class="anchor" aria-label="anchor" href="#speed-up-flood-prob-gam-and-clean-the-suitability-covariate-list-0-30-18"></a></h3>
+<ul><li>
+<code><a href="../reference/impute_flood_probability.html">impute_flood_probability()</a></code> now fits with <code>mgcv::bam(method = "fREML", discrete = TRUE)</code> rather than <code>mgcv::gam(method = "REML")</code>. Same formula, essentially identical fitted values; wall-time on the real ~30k-row training set drops from ~13 min to ~10 sec. Rolling-year CV is also capped at the 3 most recent fully-observed years (previously open-ended). End-to-end pipeline now runs in ~12 sec instead of ~100 min.</li>
+<li>
+<code><a href="../reference/est_suitability.html">est_suitability()</a></code> covariate list cleaned: removed <code>log1p_cum_vaccine_doses</code> (vaccination intervention — correlated with outbreaks because deployment follows cholera, so including it teaches a non-causal shortcut that breaks at forecast time) and the raw <code>year</code> / <code>month</code> / <code>week</code> timestamps (let the model memorise period-specific cholera waves; the sin/cos cyclic terms already in the list carry seasonality cleanly). Added a comment block to <code>covariates_all</code> documenting the rationale.</li>
+<li>End-to-end validation against the real data: mean rolling-year CV AUC 0.848 on 2023/2024/2025 held out; forecast-window <code>emdat_flood_prob</code> distribution is shape-similar to historical (mean 0.095 vs 0.062), confirming the GAM uses climate signal rather than collapsing to a constant.</li>
+</ul><hr></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.17" id="mosaic-03017">MOSAIC 0.30.17<a class="anchor" aria-label="anchor" href="#mosaic-03017"></a></h2>
+<div class="section level3">
+<h3 id="impute-country-week-flood-probability-for-use-in-est_suitability-0-30-17">Impute country-week flood probability for use in <code>est_suitability()</code>
+<a class="anchor" aria-label="anchor" href="#impute-country-week-flood-probability-for-use-in-est_suitability-0-30-17"></a></h3>
+<p>EM-DAT is observed-only — for forecast-window weeks, the raw <code>emdat_flood_active</code> binary added in v0.30.16 is identically zero, creating a distribution shift between training and inference for the suitability LSTM.</p>
+<p>This release replaces the raw binary with a continuous <strong>imputed flood probability</strong> that is populated identically in historical and forecast weeks:</p>
+<ul><li>
+<strong>New: <code><a href="../reference/impute_flood_probability.html">impute_flood_probability()</a></code></strong> — fits a binomial GAM (<code><a href="https://rdrr.io/pkg/mgcv/man/gam.html" class="external-link">mgcv::gam</a></code>, logit link, REML, <code>select = TRUE</code>) on observed <code>emdat_flood_active</code> events using climate anomalies, cyclic seasonality, country random effects, and inline-computed <code>ENSO34_lag20</code> / <code>IOD_lag16</code> predictors. Predicts a non-NA <code>emdat_flood_prob ∈ [0, 1]</code> for every (iso × week) row. With <code>diagnostics = TRUE</code> (default) writes smooth-term plots, decile-calibration plot, rolling-year CV metrics CSV, and <code>summary(model)</code> to <code>&lt;PATHS$DOCS_FIGURES&gt;/flood_imputation/</code>. Warns if mean CV AUC &lt; 0.65.</li>
+<li>
+<strong><code><a href="../reference/compile_suitability_data.html">compile_suitability_data()</a></code></strong> gains <code>include_flood_prob = TRUE</code> (default). When on, calls <code><a href="../reference/impute_flood_probability.html">impute_flood_probability()</a></code> after the existing NA-imputation block and adds four rolling-window aggregates: <code>emdat_flood_prob_4w_max</code>, <code>emdat_flood_prob_12w_max</code>, <code>emdat_flood_prob_12w_sum</code>, <code>emdat_flood_prob_anom</code>. The previous zero-fill on the raw EM-DAT join is removed so forecast-window rows remain NA for the GAM to impute.</li>
+<li>
+<strong><code><a href="../reference/est_suitability.html">est_suitability()</a></code></strong> consumes the five <code>emdat_flood_prob*</code> columns in place of the four raw <code>emdat_flood_*</code> columns added in v0.30.16. The raw columns remain in the suitability dataframe for audit but are not fed to the LSTM.</li>
+</ul><p>No new dependencies (<code>mgcv</code> was already an Imports dep).</p>
+<hr></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.30.6" id="mosaic-0306">MOSAIC 0.30.6<a class="anchor" aria-label="anchor" href="#mosaic-0306"></a></h2>
 <div class="section level3">

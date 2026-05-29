@@ -1,10 +1,10 @@
 # Compile Environmental Suitability Data for Cholera Transmission
 
 Compiles multiple processed data sources (climate, ENSO, cholera
-surveillance, demographics, WASH, vaccination, mobility) into a single
-feature-engineered training dataset for environmental suitability
-modeling. Computes ~60 derived covariates including rolling windows,
-anomalies, interaction terms, and epidemic memory variables.
+surveillance, demographics, WASH) into a single feature-engineered
+training dataset for environmental suitability modeling. Computes
+derived covariates including rolling windows, anomalies, and climate /
+WASH interaction terms.
 
 ## Usage
 
@@ -17,7 +17,8 @@ compile_suitability_data(
   date_stop = NULL,
   forecast_mode = TRUE,
   forecast_horizon = 3,
-  include_lags = FALSE
+  include_lags = FALSE,
+  include_flood_prob = TRUE
 )
 ```
 
@@ -67,8 +68,10 @@ compile_suitability_data(
 - forecast_mode:
 
   Logical. If TRUE, only includes variables that can support forecasting
-  at the specified horizon. Excludes case-dependent epidemic memory and
-  spatial import pressure variables. Default TRUE.
+  at the specified horizon. (As of v0.30.26 the case-dependent epidemic
+  memory and spatial-import blocks are removed entirely, so this flag
+  now affects only the final summary-message text and the
+  climate-anomaly leading-edge behavior.) Default TRUE.
 
 - forecast_horizon:
 
@@ -82,6 +85,18 @@ compile_suitability_data(
   epidemiologically-informed lag periods specific to each variable.
   Default FALSE.
 
+- include_flood_prob:
+
+  Logical. If TRUE (default), imputes a continuous `emdat_flood_prob`
+  column for every (iso_code, year, week) row via a binomial GAM trained
+  on observed `emdat_flood_active` events (see
+  [`impute_flood_probability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)),
+  and adds four rolling-window aggregates (`emdat_flood_prob_4w_max`,
+  `emdat_flood_prob_12w_max`, `emdat_flood_prob_12w_sum`,
+  `emdat_flood_prob_anom`). The probability covariates are populated in
+  both the historical training and the forecast windows, so the
+  downstream LSTM consumes the same feature definition in both regimes.
+
 ## Value
 
 This function processes the data and merges the climate, ENSO, and
@@ -91,6 +106,16 @@ sophisticated temporal logic. The processed dataset is saved as a CSV
 file.
 
 ## Details
+
+As of v0.30.26 the vaccination, epidemic-memory (cases-derived), and
+spatial-import (mobility-network) blocks are no longer computed. They
+were already excluded from
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)'s
+LSTM covariate list – the vaccination signal is a downstream
+intervention (deployed in response to cholera, not in anticipation of
+environmental suitability), and the case-derived epidemic-memory
+features are target leakage for a model whose response is itself a
+case-derived binary.
 
 The function performs the following key steps:
 

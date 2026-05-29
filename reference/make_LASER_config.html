@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -138,6 +138,7 @@ The file extension determines which output format is used:</p><ul><li><p>.json o
 <span>  decay_shape_2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reported_cases <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  reported_deaths <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  epidemic_peaks <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sigfigs <span class="op">=</span> <span class="fl">8</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -521,6 +522,15 @@ nrow=length(location_name), ncol=length(t).</p></dd>
 <dt id="arg-reported-deaths">reported_deaths<a class="anchor" aria-label="anchor" href="#arg-reported-deaths"></a></dt>
 <dd><p>Matrix of daily reported cholera deaths. Must be integer. NA allowed.
 nrow=length(location_name), ncol=length(t).</p></dd>
+
+
+<dt id="arg-epidemic-peaks">epidemic_peaks<a class="anchor" aria-label="anchor" href="#arg-epidemic-peaks"></a></dt>
+<dd><p>Optional data.frame of observed epidemic peaks consumed by the
+peak-timing / peak-magnitude shape terms in <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code> (R and
+the Python port in laser-cholera). Must contain two character columns:
+<code>iso_code</code> (matching entries in <code>location_name</code>) and <code>peak_date</code>
+(ISO <code>YYYY-MM-DD</code> strings parseable by <code>as.Date</code>). NULL allowed; when
+NULL the peak shape terms contribute 0 to the likelihood.</p></dd>
 
 
 <dt id="arg-sigfigs">sigfigs<a class="anchor" aria-label="anchor" href="#arg-sigfigs"></a></dt>

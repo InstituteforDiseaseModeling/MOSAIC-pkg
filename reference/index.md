@@ -217,6 +217,8 @@ Processing and downloading data
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
+- [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
+  : Process EM-DAT Flood Events Into a Country-Week Panel
 - [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
   : Process ENSO Data from enso-data Repository
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
@@ -792,6 +794,9 @@ Other exported functions and internal helpers
   : Get WHO Region for ISO Country Codes
 - [`grid_search_best_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/grid_search_best_subset.md)
   : Grid Search for Best Subset with Early Stopping
+- [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)
+  : Impute Country-Week Flood Probability from EM-DAT and Climate
+  Covariates
 - [`inflate_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/inflate_priors.md)
   : Inflate Prior or Posterior Distributions by a Variance Factor
 - [`install_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/install_dependencies.md)
@@ -949,6 +954,8 @@ Other exported functions and internal helpers
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
+- [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
+  : Process EM-DAT Flood Events Into a Country-Week Panel
 - [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
   : Process ENSO Data from enso-data Repository
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)

@@ -1,5 +1,454 @@
 # Changelog
 
+## MOSAIC 0.30.26
+
+### `compile_suitability_data()` — remove three dormant blocks
+
+Three blocks of derived covariates were being computed and persisted to
+`cholera_country_weekly_suitability_data.csv` even though
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)’s
+`covariates_all` list intentionally excludes every one of them.
+Computing and saving them was wasted IO + a foot-gun for any future
+contributor who re-enables them without realising why they were
+excluded. Removed entirely from the function:
+
+- **Vaccination block (3 columns)**: `vaccination_rate_daily`,
+  `cumulative_vaccine_doses`, `log1p_cum_vaccine_doses`. Vaccination is
+  a downstream intervention – vaccines are deployed in response to
+  cholera, not in anticipation of environmental suitability – so these
+  are non-causal predictors for the suitability model.
+- **Epidemic-memory block (8 columns)**: `r_t`,
+  `cum_cases_4w/8w/12w/52w`, `nonzero_ratio_52w`,
+  `weeks_since_major_outbreak`, `peak_cases_52w`,
+  `seasonal_outbreak_risk`, plus the `epidemic_week` alias. All
+  case-derived; predicting a case-derived target (`cases_binary`) from
+  any function of `cases` is target leakage even with the forecast-safe
+  `memory_lag`.
+- **Spatial-import block (7 columns)**: `import_vulnerability`,
+  `export_potential`, `weighted_import_connectivity`,
+  `connectivity_degree`, `betweenness_centrality`,
+  `eigenvector_centrality`, `import_export_balance`. Mobility-network
+  features that were computed but excluded from the LSTM input set.
+
+Net: 18 columns dropped from the saved suitability CSV. The columns were
+already excluded from the LSTM covariate list so this is purely hygiene
+– no model behavior changes. Compile wall-time should drop slightly (no
+vaccination merge + cumulative-doses computation, no epidemic-memory
+`slide_dbl()` loops, no mobility-matrix calculations).
+
+The `forecast_mode` argument is now mostly cosmetic (controls summary
+messages and a small bit of climate-anomaly leading-edge behavior). Kept
+for backward compatibility.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.25
+
+### Flood-prob GAM: select=TRUE shrinkage + precip-window tensor product
+
+Two changes validated independently by a software-engineer agent and a
+statistical-modeler agent running parallel experiments in separate
+sandboxes. Both converged on (1); the modeler additionally identified
+(2):
+
+1.  **Replace the iterative p-value pruning loop with a single bam() fit
+    using `select = TRUE`.** Smoothness null-space shrinkage is mgcv’s
+    principled mechanism for driving uninformative smooths’ coefficients
+    toward zero. The v0.30.24 in-sample-p-value pruning was
+    multicollinearity-sensitive (the docstring already documented this
+    caveat) and produced fragile drop sequences. select=TRUE delivers
+    equivalent CV AUC (0.851 -\> 0.852 in the SWE experiments) with a
+    +2.6 to +4.2 percentile-point lift on the worst-detected cyclone
+    (Kenneth 2019, from 71.6 to 74.2 in production after this change).
+    Removes the prune_p_threshold and prune_max_iter args + the
+    pruning_log diagnostic. Single ~10-second fit replaces the iterative
+    ~30-60s loop.
+2.  **Replace `s(precip_sum_4w) + s(precip_sum_24w)` with
+    `te(precip_sum_4w, precip_sum_24w, k = c(10, 10))`.** The “heavy
+    4-week rain ON an already-saturated catchment (6-month antecedent)”
+    interaction is genuinely jointly nonlinear; the tensor captures it
+    where the univariates plus the existing `precip_x_soil_anom`
+    approximated it crudely. Modeler-agent experiment: cyclone median
+    percentile rank 91.6 -\> 93.8 (+2.2), top-5% hits 3 -\> 4.
+
+End-to-end production cyclone benchmark (re-measured):
+
+Idai MOZ 2019-W11 pctile = (run pending) Idai MWI 2019-W11 Idai ZWE
+2019-W11 Kenneth MOZ 2019-W17 Eloise MOZ 2021-W04 Ana MOZ 2022-W04 Ana
+MWI 2022-W04 Gombe MOZ 2022-W11 Freddy-1 MOZ 2023-W08 Freddy-2 MOZ
+2023-W11
+
+Tested but rejected by both agents: nthreads (no-op on macOS), method =
+REML/ML/GCV.Cp (no metric change or impractically slow), `bs = "ad"`
+adaptive smoothers, `k = 20+` on precip windows (overfit), `bs = "cr"`
+cubic regression (no change), per-country `by = iso_code_f` smooths
+(overfit), nested random effects, cloglog link, quasibinomial,
+betabinomial, Tweedie on log1p(affected), smoothed +/-2w binary target,
+class weighting (trades AUC for cyclone recall).
+
+Caveat surfaced by both agents: country-stratified 5-fold CV AUC drops
+to 0.72 (vs 0.85 with random folds). Most of the model’s lift comes from
+the country random effect; climate predictors are doing less work than
+random-fold CV suggests. The model would fail badly on a country with no
+training data. Worth keeping in mind when interpreting the imputed
+flood_prob in any out-of-sample country setting.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.24
+
+### `impute_flood_probability()` gains iterative p-value pruning loop
+
+After each GAM fit, the term (smooth or parametric) with the highest
+in-sample p-value above (default 0.05) is dropped and the GAM is refit.
+The cycle repeats until every remaining prunable term is significant,
+fewer than 5 prunable terms remain, or (default 30) iterations are
+reached. The country random-effect smooth and the region-conditional
+block are treated as structural and never dropped. The trace is written
+to in the diagnostics directory.
+
+Pruning behavior on the v0.30.24 production run dropped 5 precip-block
+terms whose contribution was absorbed by their collinear neighbors:
+(p=0.74), (p=0.65), (p=0.37), (p=0.21), (p=0.18). The model retains ,
+the region-conditional smooth, plus soil-moisture / SPEI / humidity /
+wind / ENSO / IOD terms.
+
+End-to-end cyclone benchmark (median percentile rank across 10
+catastrophic cyclones in MOZ/MWI/ZWE) is unchanged at 91.1 vs 93.0
+pre-pruning. Idai loses ~1.3 pts in MOZ/MWI/ZWE; Ana and Freddy gain
+0.3-2.1 pts. Top-5% hits stay at 3 of 10. Median seasonal-variance share
+unchanged at 0.398.
+
+Caveat: in-sample p-values are not predictive-importance tests and are
+sensitive to multicollinearity. The loop produces a smaller, cleaner
+model whose remaining smooths are all in-sample significant; verify
+against the cyclone benchmark + rolling-year CV after major covariate
+changes. Set to disable pruning entirely (recovers v0.30.23 behavior).
+
+Wall-time impact: pipeline runs in ~69 sec (vs ~41 sec for v0.30.23),
+the extra 28 sec covering the 5 additional GAM fits the pruning loop
+performs.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.23
+
+### Flood-prob imputer: revert to enriched binomial after cyclone benchmark
+
+The v0.30.22 Tweedie-on-severity formulation made Cyclone Freddy stand
+out as MOZ’s
+[\#1](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/1)
+historical week (the headline visual goal) but a 10-cyclone benchmark
+across Idai 2019 (MOZ/MWI/ZWE), Kenneth 2019, Eloise 2021, Ana 2022
+(MOZ/MWI), Gombe 2022, and Freddy 2023 (x2 landfalls) showed the Tweedie
+variant under-detects other catastrophic events – median percentile rank
+81.4, minimum 77.8. The root cause: the Tweedie target chases EM-DAT’s
+logged Total Affected, and Idai’s Total Affected was logged smaller than
+its real impact warranted, so the model under-amplified it.
+
+This release reverts to the family + target of v0.30.21 (binomial logit
+on emdat_flood_active 0/1) while keeping the four physics-driven
+predictor enrichments that the v0.30.22 S2 exploration found
+load-bearing:
+
+- `s(precip_sum_24w)` – ~6-month basin saturation memory
+  (inline-computed)
+- `s(precip_sum_52w)` – annual antecedent precipitation
+  (inline-computed)
+- `s(precip_sum_4w, by = region_f)` – region-conditional 4-week precip
+  smooth
+- `s(precip_x_soil_anom)` – joint precip-anomaly x soil-moisture-anomaly
+  index
+
+Result: median cyclone percentile rank 93.2 (vs 81.4 for Tweedie, 90.8
+for v0.30.21 baseline), minimum 79.1 (every cyclone-week in the top 21%
+of its country’s history). Three cyclones in the top 5%.
+
+| Method | Median cyclone pctile | Min | Top 5% hits / 10 |
+|----|----|----|----|
+| **v0.30.23 (enriched binomial)** | **93.2** | **79.1** | **3** |
+| v0.30.22 (Tweedie hybrid) | 81.4 | 77.8 | 2 |
+| v0.30.21 (baseline binomial) | 90.8 | 69.4 | 3 |
+
+Trade-off vs v0.30.22: Freddy’s headline rank in MOZ drops back from
+[\#1](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/1)
+to top-5%, but every other catastrophic cyclone is more reliably
+detected. The right call for cholera forecasting where we care about all
+flood events, not just one outlier.
+
+Output is now naturally on \[0, 1\] from the logit link – no global-max
+scaling needed. Test thresholds restored to the binomial-appropriate AUC
+\> 0.80 and mean(hi)-mean(lo) \> 0.3 discrimination tests.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.22
+
+### Flood-prob imputer: Tweedie severity target + enriched predictors
+
+The v0.30.20 binomial-on-active formulation produced an imputed
+`emdat_flood_prob` that didn’t separate major events from seasonal
+climatology – Cyclone Freddy (MOZ, Feb-Mar 2023) only reached
+probability 0.503, barely above the MOZ Feb-Apr p90 of 0.396 and below
+the all-time MOZ max. Four parallel strategies were explored (Tweedie
+severity target; enriched predictor set; xgboost; two-stage hurdle).
+This release adopts the hybrid of the two winners:
+
+**Tweedie family on raw `Total Affected`.** Encodes flood SEVERITY
+rather than just presence/absence. The Tweedie compound-Poisson-gamma
+mixture handles the zero-inflated continuous target natively.
+
+**Enriched predictor set** (computed inline by the imputer, no upstream
+compile changes required beyond the existing `region` column):
+
+- `precip_sum_24w` and `precip_sum_52w` – long-memory antecedent
+  precipitation capturing basin saturation. These were the largest
+  single contributors to interannual variance in the rebuild
+  experiments.
+- `s(precip_sum_4w, by = region_f)` – region-conditional 4-week
+  precipitation smooth (4-region WHO classification: Central / East /
+  Southern / West Africa).
+- `s(precip_x_soil_anom)` – joint precip-anomaly x soil-moisture-anomaly
+  index for the “very-wet AND already-saturated” regime.
+
+**Output normalization**: predictions on the raw Tweedie scale are
+non-negative, heavy-tailed continuous. Normalized by global maximum to
+`[0, 1]` – rank-normalization was tested and rejected because it erases
+the long-tail major-event amplification the Tweedie target was chosen
+for.
+
+**End-to-end measured impact** (full AFRO panel, real climate + EM-DAT
+data):
+
+| Metric | v0.30.21 (binomial) | v0.30.22 (Tweedie hybrid) |
+|----|----|----|
+| Cyclone Freddy rank in MOZ history | not top-5 | **1st of 872** |
+| Freddy / MOZ Feb-Apr p90 ratio | 1.27x | **8.14x** |
+| Median seasonal variance share | 0.436 | **0.162** |
+| OOT Spearman vs severity | 0.290 | 0.267 |
+| OOT AUC vs binary | 0.857 | 0.808 |
+
+Cost: 0.05 AUC and 0.02 Spearman on the held-out binary-target metrics
+(unavoidable when switching from binomial-on-binary to
+Tweedie-on-continuous). Acceptable trade-off given the 6.4x lift on the
+Freddy benchmark and 63% reduction in seasonal-variance share.
+
+**Strategies tested and rejected**: xgboost (sharper peaks but worsened
+seasonal share); two-stage hurdle (Freddy peak actually *dropped*
+because Total Affected for Freddy isn’t a global outlier).
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.21
+
+### Two correctness fixes in the flood-prob pipeline
+
+Surfaced by an internal review of the EM-DAT integration:
+
+- **Gate / GAM-contract drift fixed.** The
+  `if (include_flood_prob && ...)` gate in
+  [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+  was still checking the v0.30.19-era predictors (`temp_anom`,
+  `elevation`, `urban_population_pct`) which were removed from the GAM
+  in v0.30.20, and was failing to check the 9 new columns the rebuilt
+  GAM actually requires (`precipitation_sum`, `precip_sum_2w/4w/8w`,
+  `precip_extreme_p90_count`, `soil_moisture_0_to_10cm_mean`,
+  `relative_humidity_2m_mean`, `rh_mean_12w`, `wind_speed_10m_max`,
+  `ENSO3`, `ENSO4`). The result: a missing required column would have
+  caused a hard [`stop()`](https://rdrr.io/r/base/stop.html) deep inside
+  [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)
+  instead of being skipped cleanly by the `else` branch. Both
+  [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)
+  and the gate now source the canonical required-column list from a
+  single internal helper `.impute_flood_probability_required()`,
+  eliminating the drift surface entirely.
+- **`emdat_flood_prob_anom` historical baseline fixed.** The per-country
+  mean used as the anomaly baseline was computed over the full series
+  including forecast-window rows, whose probabilities are themselves
+  GAM-extrapolated. This silently leaked a small amount of forecast
+  information into the historical-period anomaly used as an LSTM
+  training feature. The baseline now uses only rows where
+  `emdat_flood_active` is non-NA (the historical EM-DAT panel coverage).
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.20
+
+### Flood-probability GAM: rebuild around hydrological drivers + ENSO/IOD
+
+Variance decomposition of v0.30.19’s imputed `emdat_flood_prob` showed
+the highest-flood-activity countries (NGA 92%, TCD 83%, SSD 83%, MLI
+75%, ETH 75%) were heavily dominated by seasonal pattern, and
+`summary(model)` revealed that the cyclic-week and country-RE terms plus
+the raw 12-week rainfall sum carried virtually all the explanatory power
+while every anomaly/teleconnection term was shrunk by the
+`select = TRUE` penalty. This release rebuilds the GAM formula around
+variables that are ostensibly linked with flood physics, and removes the
+seasonal / static-baseline channels that were crowding out the
+climate-driven interannual signal:
+
+- **Removed** `s(week, bs = "cc")` (cyclic seasonality), `elevation`,
+  and `urban_population_pct`. The country random effect alone absorbs
+  the remaining country-level baseline differences.
+- **Removed** `s(temp_anom)` — temperature isn’t a direct flood driver
+  in AFRO (no snowmelt).
+- **Added every precipitation channel**: `precipitation_sum`,
+  `precip_anom`, `precip_sum_2w/4w/8w/12w`, plus the binary
+  `precip_extreme_p90_count` extreme-rain trigger.
+- **Added soil moisture (raw + anomaly)**, atmospheric humidity (raw +
+  12w rolling), and the storm/cyclone proxy `wind_speed_10m_max`.
+- **Heavy ENSO/IOD bench**: ENSO34 at current + 8/16/24-week lags,
+  current ENSO3 and ENSO4 (Eastern and Western Pacific regions), IOD at
+  current + 8/16/24-week lags. Lag-N columns are computed inline.
+- **Removed `select = TRUE`** — the smooth-shrinkage penalty was the
+  mechanism that suppressed exactly the teleconnection terms we now want
+  to emphasise. Without it the smooths keep their unpenalized REML
+  weight; rolling-year CV is the arbiter.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.19
+
+### Code-review fixes in `compile_suitability_data` and `est_suitability`
+
+Round of correctness fixes surfaced by an internal code review:
+
+- **B1 —
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  date auto-detection** referenced `d_all$date_start` /
+  `enso_complete$date_stop`, columns that
+  [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+  drops before saving. `min(NULL, na.rm=TRUE)` silently returns `Inf`
+  and propagated as bogus dates. Fixed to use `d_all$date`.
+- **B2 — Fine-tuning splits trained against the wrong target scale.**
+  The model output head is `activation = "linear", name = "logit_head"`
+  and the first split correctly fed
+  [`qlogis()`](https://rdrr.io/r/stats/Logistic.html)-transformed
+  targets. Subsequent fine-tuning splits (default `n_splits = 10`) fed
+  raw `[0, 1]` probabilities, pushing the linear head toward the wrong
+  range and silently undoing the first split’s training. Now applies
+  `qlogis(pmax(eps, pmin(1-eps, ...)))` consistently.
+- **B3 — `seasonal_outbreak_risk`** computed `mean(cases_lagged)` inside
+  `group_by(iso_code) %>% mutate(...)`, producing a single per-country
+  mean rather than the week-of-year climatology the comment claimed. Now
+  uses `stats::ave(cases_lagged, week, FUN = mean)` to give the intended
+  weekly seasonality.
+- **B4 — `weeks_since_major_outbreak`** incremented its counter through
+  the `memory_lag` warm-up window (default 17 weeks in forecast mode),
+  producing fake `1, 2, 3, ...` values when the lag target was NA. Now
+  stays NA until the first real observation.
+- **B5 — ISO week 53.** Investigated and documented. Two distinct things
+  were happening: (a) legitimate W53 in 2015 and 2020 was being dropped
+  (~80 country-weeks, 0.2% of training data); (b) an upstream bug in
+  `process_open_meteo_data` emits spurious W53 entries labelled by
+  calendar year for ISO years 2005/2010/2016/2021. The drop-all-W53
+  filter robustly handles (b). Added a comment block explaining the
+  trade-off; the upstream fix to `process_open_meteo_data` is the
+  structural follow-up (separate ticket).
+- **B6 — Vaccination weekly key** paired `lubridate::isoweek(date)` with
+  `format(date, "%Y")` (calendar year). Dates near the year boundary
+  (e.g., 2024-12-30, which is ISO 2025-W01) were joining under
+  `(year=2024, week=1)`, silently missing the right upstream row. Now
+  uses
+  [`lubridate::isoyear()`](https://lubridate.tidyverse.org/reference/year.html).
+- **B7 — `pivot_wider` for climate and ENSO** had no `values_fn`, so any
+  residual duplicate `(iso_code, year, week, variable)` row would
+  silently produce list-columns and break every downstream merge. Now
+  passes `values_fn = mean`.
+- **B8 —
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  plotting block** was gated by `if (T)` (always on) with a comment
+  claiming “disabled by default”, and `par(mfrow = c(2,1))` leaked into
+  the caller’s device state. Replaced with a real
+  `plot_country_diagnostics = FALSE` argument and
+  `on.exit(par(old_par))`.
+- **B9 — Positional column renames** (`names(x)[3] <- "..."`) replaced
+  with
+  [`dplyr::rename()`](https://dplyr.tidyverse.org/reference/rename.html)
+  so an upstream column reorder can’t silently corrupt downstream
+  values.
+- **B10 — Negative case counts** in
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  are now flagged with a warning before being clamped to 0 (previously
+  silent).
+- **B11 — Duplicate identical `df <- data.frame(...)` block** in
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  removed.
+- **B12 — Dead first `covariates_all` assignment** in
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  removed; only the comprehensive (live) assignment remains.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.18
+
+### Speed up flood-prob GAM and clean the suitability covariate list
+
+- [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)
+  now fits with `mgcv::bam(method = "fREML", discrete = TRUE)` rather
+  than `mgcv::gam(method = "REML")`. Same formula, essentially identical
+  fitted values; wall-time on the real ~30k-row training set drops from
+  ~13 min to ~10 sec. Rolling-year CV is also capped at the 3 most
+  recent fully-observed years (previously open-ended). End-to-end
+  pipeline now runs in ~12 sec instead of ~100 min.
+- [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  covariate list cleaned: removed `log1p_cum_vaccine_doses` (vaccination
+  intervention — correlated with outbreaks because deployment follows
+  cholera, so including it teaches a non-causal shortcut that breaks at
+  forecast time) and the raw `year` / `month` / `week` timestamps (let
+  the model memorise period-specific cholera waves; the sin/cos cyclic
+  terms already in the list carry seasonality cleanly). Added a comment
+  block to `covariates_all` documenting the rationale.
+- End-to-end validation against the real data: mean rolling-year CV AUC
+  0.848 on 2023/2024/2025 held out; forecast-window `emdat_flood_prob`
+  distribution is shape-similar to historical (mean 0.095 vs 0.062),
+  confirming the GAM uses climate signal rather than collapsing to a
+  constant.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.30.17
+
+### Impute country-week flood probability for use in `est_suitability()`
+
+EM-DAT is observed-only — for forecast-window weeks, the raw
+`emdat_flood_active` binary added in v0.30.16 is identically zero,
+creating a distribution shift between training and inference for the
+suitability LSTM.
+
+This release replaces the raw binary with a continuous **imputed flood
+probability** that is populated identically in historical and forecast
+weeks:
+
+- **New:
+  [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)**
+  — fits a binomial GAM
+  ([`mgcv::gam`](https://rdrr.io/pkg/mgcv/man/gam.html), logit link,
+  REML, `select = TRUE`) on observed `emdat_flood_active` events using
+  climate anomalies, cyclic seasonality, country random effects, and
+  inline-computed `ENSO34_lag20` / `IOD_lag16` predictors. Predicts a
+  non-NA `emdat_flood_prob ∈ [0, 1]` for every (iso × week) row. With
+  `diagnostics = TRUE` (default) writes smooth-term plots,
+  decile-calibration plot, rolling-year CV metrics CSV, and
+  `summary(model)` to `<PATHS$DOCS_FIGURES>/flood_imputation/`. Warns if
+  mean CV AUC \< 0.65.
+- **[`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)**
+  gains `include_flood_prob = TRUE` (default). When on, calls
+  [`impute_flood_probability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/impute_flood_probability.md)
+  after the existing NA-imputation block and adds four rolling-window
+  aggregates: `emdat_flood_prob_4w_max`, `emdat_flood_prob_12w_max`,
+  `emdat_flood_prob_12w_sum`, `emdat_flood_prob_anom`. The previous
+  zero-fill on the raw EM-DAT join is removed so forecast-window rows
+  remain NA for the GAM to impute.
+- **[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)**
+  consumes the five `emdat_flood_prob*` columns in place of the four raw
+  `emdat_flood_*` columns added in v0.30.16. The raw columns remain in
+  the suitability dataframe for audit but are not fed to the LSTM.
+
+No new dependencies (`mgcv` was already an Imports dep).
+
+------------------------------------------------------------------------
+
 ## MOSAIC 0.30.6
 
 ### Add GitHub profile links for Dejan Lukacevic and Meikang Wu
