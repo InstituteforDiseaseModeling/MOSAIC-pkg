@@ -803,24 +803,16 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
   chi_endemic <- config_sampled$chi_endemic  # PPV among suspected cases
   iota        <- config_sampled$iota         # incubation rate (E→I)
 
-  # Find the first 7-day window with positive observed cases
-  obs_raw <- as.numeric(unlist(config_sampled$reported_cases))
-  positive_idx <- which(!is.na(obs_raw) & obs_raw > 0)
-
-  if (length(positive_idx) == 0) {
-    if (verbose) cat("  - ic_moment_match: no positive obs data found, using prior ICs\n")
+  # reported_cases is a matrix (n_locations x T). Compute the first-week
+  # window per location -- prior versions of this function unlist()ed the
+  # full matrix and used a single scalar obs_week1 for every country, which
+  # made the moment match location-invariant.
+  obs_mat <- config_sampled$reported_cases
+  if (is.null(obs_mat)) {
+    if (verbose) cat("  - ic_moment_match: no reported_cases in config, using prior ICs\n")
     return(sampled_props)
   }
-
-  # Use the first 7 days starting from the first positive observation
-  first_pos <- positive_idx[1]
-  window_end <- min(first_pos + 6, length(obs_raw))
-  obs_week1 <- mean(obs_raw[first_pos:window_end], na.rm = TRUE)
-
-  if (!is.finite(obs_week1) || obs_week1 <= 0) {
-    if (verbose) cat("  - ic_moment_match: no valid early obs data, using prior ICs\n")
-    return(sampled_props)
-  }
+  if (!is.matrix(obs_mat)) obs_mat <- as.matrix(obs_mat)
 
   # Guard: reporting chain product must be positive and non-trivial
   reporting_product <- sigma * rho  # cases = I * sigma * rho / chi_endemic
@@ -836,8 +828,30 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
 
   for (j in seq_along(locations)) {
 
-    I_count <- obs_week1 * chi_endemic / reporting_product
-    E_count <- I_count * iota  # E scales with I via incubation rate
+    # Per-location first-week-of-positives window
+    obs_row <- as.numeric(obs_mat[j, ])
+    positive_idx_j <- which(!is.na(obs_row) & obs_row > 0)
+    if (length(positive_idx_j) == 0) {
+      if (verbose) cat(sprintf("  - ic_moment_match [%s]: no positive obs, using prior IC\n",
+                               locations[j]))
+      next
+    }
+    first_pos_j  <- positive_idx_j[1]
+    window_end_j <- min(first_pos_j + 6, length(obs_row))
+    obs_week1_j  <- mean(obs_row[first_pos_j:window_end_j], na.rm = TRUE)
+    if (!is.finite(obs_week1_j) || obs_week1_j <= 0) {
+      if (verbose) cat(sprintf("  - ic_moment_match [%s]: no valid early obs, using prior IC\n",
+                               locations[j]))
+      next
+    }
+
+    I_count <- obs_week1_j * chi_endemic / reporting_product
+    # NOTE: this E_count formula is dimensionally suspect (count * 1/day);
+    # steady-state E:I balance gives E = I * gamma_1 / (sigma * iota).
+    # ic_moment_match defaults to FALSE so this is not on the hot path,
+    # but flagging here for the next biology pass to confirm intent.
+    E_count <- I_count * iota
+    obs_week1 <- obs_week1_j  # for the verbose message below
 
     # Convert to proportions of population
     prop_I <- I_count / N_j[j]
