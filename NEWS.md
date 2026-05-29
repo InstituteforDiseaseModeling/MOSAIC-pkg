@@ -1,3 +1,94 @@
+# MOSAIC 0.30.39
+
+## Engineering review sweep (v0.30.29 – v0.30.38)
+
+Series of focused fixes from a five-agent deep-review of the package.
+No model-behavior changes; package hygiene, correctness on edge cases,
+and consistency with the documented design.
+
+- **v0.30.29** — Add `rlang` to `DESCRIPTION` Imports (`NAMESPACE` had
+  `import(rlang)` but the dep was missing, producing an R CMD check
+  ERROR). Declare column names referenced by recent plot edits in
+  `R/globals.R` to silence "no visible binding" NOTEs.
+- **v0.30.30** — Repo hygiene: remove tracked zero-byte `=` file,
+  delete stray `MOSAIC.Rcheck/`, `..Rcheck/`, `.Rd2pdf*/`, root
+  `Rplots.pdf`, and `model/input/*.bak{,_*}` on disk. Expand
+  `.Rbuildignore` (vm/, CLAUDE.md, .Rcheck/, =, .RData, .Rhistory, …)
+  and `.gitignore` (*.bak, .Rd2pdf*/).
+- **v0.30.31** — `data-raw/make_*` builders patched only `.json`
+  outputs (`grepl("\\.json$")`) so the `.json.gz` siblings were
+  shipping without `zeta_ratio` and `decay_days_spread`, breaking the
+  downstream `zeta_2 = zeta_1 / zeta_ratio` derivation. Switch regex
+  to `\\.json(\\.gz)?$`, read via `read_json_to_list()`, write via
+  `write_list_to_json()` with the right compress flag. Regenerated
+  all four `.json.gz` artifacts so each pair is now content-identical.
+- **v0.30.32** — `get_default_config()` and `get_default_LASER_config()`
+  hardcoded `file.path(PATHS\$ROOT, "MOSAIC-pkg", ...)` -- only works on
+  a developer checkout. Switch to `system.file("extdata", ...,
+  package = "MOSAIC")`; `PATHS` retained for backward compatibility.
+- **v0.30.33** — Introduce `.mosaic_set_all_thread_env(n)` as a single
+  source of truth for the six canonical thread-env vars documented in
+  CLAUDE.md (`OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`,
+  `NUMEXPR_NUM_THREADS`, `TBB_NUM_THREADS`, `NUMBA_NUM_THREADS`). The
+  fallback branch of `.mosaic_set_blas_threads` had been setting only
+  3, `calc_model_ensemble.R` 5, `make_mosaic_cluster.R` 5 in two
+  places. Route every site through the helper.
+- **v0.30.34** — `plot_vaccination_maps.R`: `ggsave(plot = print(...))`
+  was saving the invisible return value and double-printing to the
+  active device. Replaced with `plot = final_combined_plot`.
+- **v0.30.35** — `calc_model_likelihood()` peak-shape terms:
+  `which.min(abs(date_seq - peak_date))` always returns an in-range
+  index, so peaks whose date fell outside `[date_start, date_stop]`
+  were silently snapped to t=1 / t=N, biasing the peak-timing and
+  peak-magnitude likelihoods. Filter `peak_date` against
+  `[date_seq[1], date_seq[N]]` before snapping, in all three sites
+  (main path + two legacy helpers).
+- **v0.30.36** — `calc_model_ensemble()` weighted mean was biased
+  toward zero under simulation failures: `sum(values * w,
+  na.rm=TRUE)` drops the NA term but does not redistribute its
+  weight mass. Filter valid then divide by sum of surviving weights,
+  matching the behavior of `weighted_quantiles()`.
+- **v0.30.37** — `props_to_counts()` integer-rounding fallback could
+  leave a compartment negative or sum off by 1 in edge cases.
+  Replace per-compartment `round()` + residual-on-S with Hamilton
+  (largest-remainder) apportionment in a single per-location pass;
+  `stopifnot()` asserts sum == N and all counts >= 0.
+- **v0.30.38** — `moment_match_E_I()` was location-invariant due to
+  `unlist(reported_cases)` flattening the matrix; every country got
+  identical initial infections. Compute first-week-of-positives
+  window per location row. (E_count = I_count * iota formula left
+  unchanged with an inline note for the next biology pass; flag is
+  OFF by default.)
+- **v0.30.39** — Update `epidemic_peaks` docstring to match actual
+  code defaults (28-day smoothing, 10-day comparison, 75-day
+  separation, 8% prominence) and backfill NEWS for the
+  v0.30.27/0.30.28 entries that were silently missed.
+
+# MOSAIC 0.30.28
+
+## `calc_model_likelihood`: source `epidemic_peaks` from config
+
+When the caller supplies `config\$epidemic_peaks` (a data.frame with
+`iso_code` + `peak_date` columns), the likelihood now prefers that
+over the lazy-loaded `MOSAIC::epidemic_peaks` package dataset. This
+keeps the R likelihood aligned with the Python port at
+`laser_cholera.metapop.calc_model_likelihood`, which reads the same
+field from its config dict. The legacy helpers
+`calc_multi_peak_timing_ll` and `calc_multi_peak_magnitude_ll` now
+accept an optional `epidemic_peaks=` argument with the same fallback.
+
+# MOSAIC 0.30.27
+
+## Ship `epidemic_peaks` in `config_default` for the Python port
+
+`config_default\$epidemic_peaks` is now populated from
+`MOSAIC::epidemic_peaks` at build time and written into both the
+`.rda` and the `default_parameters.json{,.gz}` artifacts. This is the
+counterpart to a parallel change in laser-cholera that consumes
+`config["epidemic_peaks"]` instead of requiring the R package to be
+loaded. Configs built before this version remain readable: missing
+`epidemic_peaks` falls back to the lazy-loaded package dataset.
+
 # MOSAIC 0.30.26
 
 ## `compile_suitability_data()` — remove three dormant blocks
