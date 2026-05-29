@@ -123,7 +123,16 @@ calc_model_likelihood <- function(obs_cases,
                }
 
                if (!is.null(date_seq)) {
-                    epidemic_peaks <- MOSAIC::epidemic_peaks
+                    # Prefer config-supplied epidemic_peaks (matches the Python
+                    # port's config.get("epidemic_peaks") path; ships in
+                    # config_default v3.2+); fall back to the lazy-loaded
+                    # package dataset when the field is absent so older
+                    # configs continue to work.
+                    epidemic_peaks <- if (!is.null(config$epidemic_peaks)) {
+                         config$epidemic_peaks
+                    } else {
+                         MOSAIC::epidemic_peaks
+                    }
                     peak_indices_by_loc <- vector("list", n_locations)
                     for (j_pk in seq_len(n_locations)) {
                          iso_code <- if (j_pk <= length(location_names)) location_names[j_pk] else NA_character_
@@ -379,9 +388,12 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 # Peak timing likelihood using epidemic_peaks data
 calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                      date_start = NULL, date_stop = NULL,
-                                     sigma_peak_time = 1) {
-     # Use lazy-loaded package data (cached in namespace after first access)
-     epidemic_peaks <- MOSAIC::epidemic_peaks
+                                     sigma_peak_time = 1,
+                                     epidemic_peaks = NULL) {
+     # Caller may supply a peaks data.frame (iso_code, peak_date); default
+     # falls back to the lazy-loaded MOSAIC::epidemic_peaks for backwards
+     # compatibility with pre-v0.30.28 callers.
+     if (is.null(epidemic_peaks)) epidemic_peaks <- MOSAIC::epidemic_peaks
 
      # If required info missing, return 0
      if (is.null(iso_code) || is.null(date_start) || is.null(date_stop)) return(0)
@@ -431,9 +443,12 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
 # Peak magnitude likelihood using epidemic_peaks data
 calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
                                         date_start = NULL, date_stop = NULL,
-                                        sigma_peak_log = 0.5) {
-     # Use lazy-loaded package data (cached in namespace after first access)
-     epidemic_peaks <- MOSAIC::epidemic_peaks
+                                        sigma_peak_log = 0.5,
+                                        epidemic_peaks = NULL) {
+     # Caller may supply a peaks data.frame (iso_code, peak_date); default
+     # falls back to the lazy-loaded MOSAIC::epidemic_peaks for backwards
+     # compatibility with pre-v0.30.28 callers.
+     if (is.null(epidemic_peaks)) epidemic_peaks <- MOSAIC::epidemic_peaks
 
      # If required info missing, return 0
      if (is.null(iso_code) || is.null(date_start) || is.null(date_stop)) return(0)

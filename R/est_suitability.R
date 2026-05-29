@@ -129,7 +129,9 @@ est_suitability <- function(PATHS,
                             fine_tune_epochs = 12, # Epochs for fine-tuning on additional splits
                             fine_tune_lr = 0.001, # Lower learning rate for fine-tuning
                             split_method = "random", # Split method: "random" or "location_month_block"
-                            train_prop = 0.6 # Proportion for training in initial split
+                            train_prop = 0.6, # Proportion for training in initial split
+                            plot_country_diagnostics = FALSE, # Per-country base-R diagnostic plots during smoothing loop
+                            exclude_covariates = character(0) # Column names to drop from the LSTM input set (for ablation / leave-one-out comparisons)
 ) {
 
      # All required packages loaded via NAMESPACE
@@ -150,8 +152,17 @@ est_suitability <- function(PATHS,
 
      message("Creating transmission intensity transformation...")
 
-     # Handle missing or negative case values
+     # Handle missing or negative case values. Negative cases would be a
+     # genuine upstream data error (e.g. a bad merge or a manual edit) --
+     # surface it as a warning before silently clamping so the user can
+     # investigate root cause rather than have it masked.
      d_all$cases[is.na(d_all$cases)] <- 0
+     n_neg <- sum(d_all$cases < 0, na.rm = TRUE)
+     if (n_neg > 0) {
+          warning(sprintf(
+               "est_suitability: %d row(s) had negative case counts in the suitability data; clamping to 0. Investigate the upstream cholera-surveillance merge.",
+               n_neg))
+     }
      d_all$cases[d_all$cases < 0] <- 0
 
      # Calculate 97.5th percentile for normalization (better peak resolution)
@@ -180,8 +191,10 @@ est_suitability <- function(PATHS,
 
      # Auto-detect fitting date range
      if (is.null(fit_date_start)) {
-          # Find first date with actual cholera case data
-          fit_date_start <- min(d_all$date_start[!is.na(d_all$cases) & d_all$cases >= 0], na.rm = TRUE)
+          # Find first date with actual cholera case data. compile_suitability_data()
+          # drops the date_start/date_stop columns before saving, so use `date`
+          # (which is the Thursday-center-of-ISO-week date it does keep).
+          fit_date_start <- min(d_all$date[!is.na(d_all$cases) & d_all$cases >= 0], na.rm = TRUE)
           message(glue::glue("Auto-detected cholera data start: {fit_date_start}"))
      } else {
           fit_date_start <- as.Date(fit_date_start)
@@ -194,7 +207,7 @@ est_suitability <- function(PATHS,
           complete_cases <- d_all[!is.na(d_all$cases) & d_all$cases >= 0, ]
           enso_complete <- complete_cases[complete.cases(complete_cases[enso_cols]), ]
           if (nrow(enso_complete) > 0) {
-               fit_date_stop <- max(enso_complete$date_stop, na.rm = TRUE)
+               fit_date_stop <- max(enso_complete$date, na.rm = TRUE)
                message(glue::glue("Auto-detected fitting end (cholera + ENSO): {fit_date_stop}"))
           } else {
                stop("No periods found with both cholera case data and complete ENSO data")
@@ -214,11 +227,13 @@ est_suitability <- function(PATHS,
      }
 
      if (is.null(pred_date_stop)) {
-          # Extend to full ENSO data availability for prediction
+          # Extend to full ENSO data availability for prediction. As with the
+          # fit_date_stop branch above, the saved CSV does not carry
+          # date_stop -- use `date` (Thursday-centered ISO-week date).
           enso_cols <- c("IOD", "ENSO3", "ENSO34", "ENSO4")
           enso_complete <- d_all[complete.cases(d_all[enso_cols]), ]
           if (nrow(enso_complete) > 0) {
-               pred_date_stop <- max(enso_complete$date_stop, na.rm = TRUE)
+               pred_date_stop <- max(enso_complete$date, na.rm = TRUE)
                message(glue::glue("Auto-detected prediction end (ENSO availability): {pred_date_stop}"))
           } else {
                stop("No periods found with complete ENSO data for prediction")
@@ -237,24 +252,24 @@ est_suitability <- function(PATHS,
      message(glue::glue("  Prediction: {pred_date_start} to {pred_date_stop} ({as.numeric(pred_date_stop - pred_date_start)} days)"))
 
      message("Adding covariates...")
-     covariates_all <- c(
-          "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
-          "wind_speed_10m_mean", "wind_speed_10m_max", "cloud_cover_mean",
-          "shortwave_radiation_sum", "relative_humidity_2m_mean",
-          "relative_humidity_2m_max", "relative_humidity_2m_min",
-          "dew_point_2m_mean", "dew_point_2m_min", "dew_point_2m_max",
-          "precipitation_sum", "snowfall_sum", "pressure_msl_mean",
-          "soil_moisture_0_to_10cm_mean", "et0_fao_evapotranspiration_sum",
-          "IOD", "ENSO3", "ENSO34", "ENSO4", "elevation"
-     )
 
+     # Covariate philosophy: the suitability LSTM is trained to predict the
+     # *environmental* propensity for cholera transmission. Predictors must be
+     # environmental drivers or infrastructure that mediates environmental
+     # response. Two classes are intentionally excluded:
+     #   - Intervention features (vaccination): correlated with outbreaks
+     #     because vaccines are deployed in response to cholera, so the model
+     #     would learn a non-causal shortcut that breaks at forecast time
+     #     where future vaccination data does not exist.
+     #   - Raw timestamps (year/month/week): let the model memorise
+     #     period-specific outbreak waves rather than learn the
+     #     climate-driven seasonality. Sin/cos cyclic terms below carry the
+     #     within-year seasonality cleanly.
      covariates_all <- c(
-          "year", "month", "week",
           "sin_annual", "cos_annual",
           "sin_biannual", "cos_biannual",
           "sin_quarterly", "cos_quarterly",
           "sin_monthly", "cos_monthly",
-          #"time_linear", "years_since_2020",
           "total_population", "population_density", "urban_population_pct",
           "GDP", "poverty_ratio",
           "Piped_Water", "Other_Improved_Water", "Septic_or_Sewer_Sanitation",
@@ -272,7 +287,7 @@ est_suitability <- function(PATHS,
           "temp_precip_interaction"         , "humidity_temp_interaction"       , "enso_precip_interaction"     ,
           "iod_temp_interaction"            , "elevation_temp_interaction"      , "moisture_temp_interaction"   ,
           "wash_precip_extreme_interaction" , "urban_precip_anom_interaction"   , "precip_anom_sq"              ,
-          "temp_anom_sq"                    , "log1p_cum_vaccine_doses"         , "vpd"                         ,
+          "temp_anom_sq"                    , "vpd"                         ,
           "moisture_deficit"                , "aridity_index"                   , "spei_approx"                 ,
           "gdd_cholera"                     , "diurnal_temp_range"              , "heat_index",
           "dew_point_2m_max",
@@ -280,6 +295,9 @@ est_suitability <- function(PATHS,
           "relative_humidity_2m_max",        "relative_humidity_2m_min"  ,      "shortwave_radiation_sum" ,
           "wind_speed_10m_max",
           "IOD", "ENSO3", "ENSO34", "ENSO4", "elevation",
+          "emdat_flood_prob", "emdat_flood_prob_4w_max",
+          "emdat_flood_prob_12w_max", "emdat_flood_prob_12w_sum",
+          "emdat_flood_prob_anom",
           colnames(d_all)[grep('_lag', colnames(d_all))]
      )
 
@@ -292,6 +310,23 @@ est_suitability <- function(PATHS,
 
      if (length(missing_covariates) > 0) {
           message(glue::glue("Note: Missing covariates in dataset: {paste(missing_covariates, collapse=', ')}"))
+     }
+
+     # Ablation hook: drop any caller-named covariates from the LSTM input
+     # set. Lets `est_suitability()` run leave-one-out / feature-group
+     # ablations without source edits.
+     if (length(exclude_covariates) > 0) {
+          excluded_present <- intersect(exclude_covariates, covariates)
+          if (length(excluded_present) > 0) {
+               covariates <- setdiff(covariates, excluded_present)
+               message(glue::glue(
+                    "Ablation: excluded {length(excluded_present)} covariate(s) from the LSTM input: {paste(excluded_present, collapse=', ')}"))
+          }
+          excluded_missing <- setdiff(exclude_covariates, excluded_present)
+          if (length(excluded_missing) > 0) {
+               message(glue::glue(
+                    "Ablation: requested exclusion of {length(excluded_missing)} covariate(s) not present in dataset: {paste(excluded_missing, collapse=', ')}"))
+          }
      }
 
      message(glue::glue("Using {length(covariates)} available covariates: {paste(covariates, collapse=', ')}"))
@@ -661,9 +696,20 @@ est_suitability <- function(PATHS,
                X_val_fine_tune <- X_train_reshaped[val_fine_tune_indices, , ]
                y_val_fine_tune <- y_train_sequences[val_fine_tune_indices]
 
+               # Targets must be on the same logit scale as the first split's
+               # training (the model output head is `activation = "linear",
+               # name = "logit_head"` — see L580). Feeding raw [0,1]
+               # probabilities here would push the head to fit values in
+               # [0,1], silently undoing the first split's training across
+               # every subsequent fine-tune iteration.
+               y_fine_tune_logit     <- qlogis(pmax(eps, pmin(1 - eps, y_fine_tune)))
+               y_val_fine_tune_logit <- qlogis(pmax(eps, pmin(1 - eps, y_val_fine_tune)))
+
                # Reshape targets for fine-tuning
-               y_fine_tune_array <- array(y_fine_tune, dim = c(length(y_fine_tune), 1))
-               y_val_fine_tune_array <- array(y_val_fine_tune, dim = c(length(y_val_fine_tune), 1))
+               y_fine_tune_array     <- array(y_fine_tune_logit,
+                                              dim = c(length(y_fine_tune_logit), 1))
+               y_val_fine_tune_array <- array(y_val_fine_tune_logit,
+                                              dim = c(length(y_val_fine_tune_logit), 1))
 
                # Recompile model with adaptive fine-tuning configuration
                keras3::compile(model,
@@ -739,16 +785,6 @@ est_suitability <- function(PATHS,
      # Get final model performance metrics
      final_loss <- score$loss
      final_mae <- score$mae
-
-
-
-     df <- data.frame(
-          epoch = 1:length(history$metrics$loss),
-          loss = history$metrics$loss,
-          val_loss = history$metrics$val_loss,
-          mae = history$metrics$mae,
-          val_mae = history$metrics$val_mae
-     )
 
      loss_plot <-
           ggplot2::ggplot(df, ggplot2::aes(x = epoch)) +
@@ -940,9 +976,12 @@ est_suitability <- function(PATHS,
                # Add iso_code to output for tracking
                tmp$iso_code <- iso_code
 
-               # Optional plotting (disabled by default)
-               if (T) {
-                    par(mfrow=c(2,1))
+               # Optional per-country diagnostic plots (opt-in via the
+               # plot_country_diagnostics argument). Restore par() on exit
+               # so the device state does not leak to the caller.
+               if (isTRUE(plot_country_diagnostics)) {
+                    old_par <- par(mfrow = c(2, 1), no.readonly = TRUE)
+                    on.exit(par(old_par), add = TRUE)
 
                     if (all(is.na(tmp$cases))) {
                          plot(tmp$date, rep(0, length(tmp$date)), type='n', main=paste(iso_code, "(no case data)"), ylab="Cases", xlab="Date")
@@ -951,7 +990,7 @@ est_suitability <- function(PATHS,
                     }
                     abline(v=fit_date_stop, lty=2)
 
-                    plot(tmp$date, tmp$pred, type='l', col='orange2', lwd=1.5, ylim=c(0,1), , ylab="Env Suitability", xlab="Date")
+                    plot(tmp$date, tmp$pred, type='l', col='orange2', lwd=1.5, ylim=c(0,1), ylab="Env Suitability", xlab="Date")
                     abline(h=0.5, lty=3, col='grey50')
                     lines(tmp$date, tmp$pred_smooth, col='red2', lwd=2)
                     abline(v=fit_date_stop, lty=2)

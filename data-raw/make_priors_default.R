@@ -809,8 +809,8 @@ if (seasonal_params_exist) {
 }
 
 # Create priors for each seasonality parameter
-# Map R config keys (a_1_j etc.) to CSV parameter column values (a1 etc.)
-seasonality_csv_lookup <- c("a_1_j" = "a1", "a_2_j" = "a2", "b_1_j" = "b1", "b_2_j" = "b2")
+# Map R config keys (a_1_j etc.) to CSV parameter column values (a_1 etc.)
+seasonality_csv_lookup <- c("a_1_j" = "a_1", "a_2_j" = "a_2", "b_1_j" = "b_1", "b_2_j" = "b_2")
 
 for (param in names(seasonality_csv_lookup)) {
      param_name <- param  # Storage key in priors list

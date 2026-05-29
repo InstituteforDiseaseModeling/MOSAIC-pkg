@@ -161,22 +161,22 @@ nu_2_jt[,] <- 0
 message("Add fourier params for seasonal force of infection")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv"))
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'a1'
+sel <- tmp$response == 'cases' & tmp$parameter == 'a_1'
 a1 <- tmp$mean[sel]
 names(a1) <- tmp$country_iso_code[sel]
 a1 <- a1[match(j, names(a1))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'a2'
+sel <- tmp$response == 'cases' & tmp$parameter == 'a_2'
 a2 <- tmp$mean[sel]
 names(a2) <- tmp$country_iso_code[sel]
 a2 <- a2[match(j, names(a2))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'b1'
+sel <- tmp$response == 'cases' & tmp$parameter == 'b_1'
 b1 <- tmp$mean[sel]
 names(b1) <- tmp$country_iso_code[sel]
 b1 <- b1[match(j, names(b1))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'b2'
+sel <- tmp$response == 'cases' & tmp$parameter == 'b_2'
 b2 <- tmp$mean[sel]
 names(b2) <- tmp$country_iso_code[sel]
 b2 <- b2[match(j, names(b2))]
@@ -333,10 +333,10 @@ default_args <- list(
      d_jt = d_jt,
      nu_1_jt = nu_1_jt,
      nu_2_jt = nu_2_jt,
-     phi_1 = 0.787,
-     phi_2 = 0.768,
-     omega_1 = 0.00073,
-     omega_2 = 0.000485,
+     phi_1 = 0.788,               # Mode of Beta(91.84, 25.49); Xu et al. 2024 fit
+     phi_2 = 0.788,               # Mode of Beta(206.96, 56.53); constrained phi_2 >= phi_1
+     omega_1 = 0.000705,          # Mode of Gamma(23.33, 31693.83); half-life ~2.7 years
+     omega_2 = 0.000358,          # Mode of Gamma(2.69, 4720.84); half-life ~5.3 years
      nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"),
      iota = 1/1.4,
      gamma_1 = 0.1,       # Symptomatic recovery ~10 days (was 0.2 = 5 days; posteriors consistently 0.09-0.11)
@@ -401,7 +401,23 @@ default_args <- list(
      decay_shape_1 = 5,
      decay_shape_2 = 2.5,
      reported_cases = mat_cases,
-     reported_deaths = mat_deaths
+     reported_deaths = mat_deaths,
+     # Observed epidemic peaks (iso_code, peak_date) shipped with the default config
+     # so the Python likelihood port (laser-cholera#47) can compute the peak-timing
+     # and peak-magnitude shape terms without an extra runtime injection. Slim
+     # 2-column form matches what calc_model_likelihood() consumes on both sides.
+     # Filtered to locations actually present in this config — peaks for locations
+     # outside iso_codes_mosaic (e.g. SDN) would never be looked up by the per-loc
+     # scoring loop and only bloat the JSON.
+     epidemic_peaks = local({
+          ep <- MOSAIC::epidemic_peaks
+          ep <- ep[ep$iso_code %in% j, , drop = FALSE]
+          data.frame(
+               iso_code  = as.character(ep$iso_code),
+               peak_date = as.character(ep$peak_date),
+               stringsAsFactors = FALSE
+          )
+     })
 )
 
 config_default <- do.call(make_LASER_config, default_args)
@@ -414,9 +430,9 @@ config_default <- do.call(make_LASER_config, default_args)
 
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "3.1",
+     version = "3.2",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships

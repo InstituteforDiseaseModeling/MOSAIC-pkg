@@ -455,7 +455,7 @@ if (seasonal_params_exist) {
      param_seasonal <- param_seasonal[param_seasonal$response == "cases",]
 }
 
-seasonality_csv_lookup <- c("a_1_j" = "a1", "a_2_j" = "a2", "b_1_j" = "b1", "b_2_j" = "b2")
+seasonality_csv_lookup <- c("a_1_j" = "a_1", "a_2_j" = "a_2", "b_1_j" = "b_1", "b_2_j" = "b_2")
 
 for (param in names(seasonality_csv_lookup)) {
      csv_param <- seasonality_csv_lookup[[param]]

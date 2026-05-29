@@ -144,6 +144,12 @@
 #'        nrow=length(location_name), ncol=length(t).
 #' @param reported_deaths Matrix of daily reported cholera deaths. Must be integer. NA allowed.
 #'        nrow=length(location_name), ncol=length(t).
+#' @param epidemic_peaks Optional data.frame of observed epidemic peaks consumed by the
+#'        peak-timing / peak-magnitude shape terms in \code{calc_model_likelihood()} (R and
+#'        the Python port in laser-cholera). Must contain two character columns:
+#'        \code{iso_code} (matching entries in \code{location_name}) and \code{peak_date}
+#'        (ISO \code{YYYY-MM-DD} strings parseable by \code{as.Date}). NULL allowed; when
+#'        NULL the peak shape terms contribute 0 to the likelihood.
 #'
 #'
 #' @param sigfigs Integer; number of significant figures to round all numeric values to. Default is 4.
@@ -305,6 +311,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               ## Reported data
                               reported_cases = NULL,
                               reported_deaths = NULL,
+                              epidemic_peaks = NULL,
 
                               # Outputs
                               sigfigs = 8
@@ -395,7 +402,8 @@ make_LASER_config <- function(output_file_path = NULL,
           decay_shape_1     = decay_shape_1,
           decay_shape_2     = decay_shape_2,
           reported_cases    = reported_cases,
-          reported_deaths   = reported_deaths
+          reported_deaths   = reported_deaths,
+          epidemic_peaks    = epidemic_peaks
      )
 
      # Add optional parameters if they are not NULL
@@ -866,19 +874,57 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("reported_deaths must be integer (NA allowed).")
      }
 
+     # epidemic_peaks: optional 2-column data.frame keyed on iso_code + peak_date.
+     # Consumed by the peak shape terms of calc_model_likelihood() (R + Python port,
+     # laser-cholera#47). Stored as character columns so the structure survives JSON
+     # round-tripping unchanged.
+     if (!is.null(epidemic_peaks)) {
+          if (!is.data.frame(epidemic_peaks)) {
+               stop("epidemic_peaks must be a data.frame with columns 'iso_code' and 'peak_date'.")
+          }
+          required_cols <- c("iso_code", "peak_date")
+          missing_cols  <- setdiff(required_cols, names(epidemic_peaks))
+          if (length(missing_cols) > 0) {
+               stop(sprintf("epidemic_peaks is missing required column(s): %s",
+                            paste(missing_cols, collapse = ", ")))
+          }
+          epidemic_peaks$iso_code  <- as.character(epidemic_peaks$iso_code)
+          epidemic_peaks$peak_date <- as.character(epidemic_peaks$peak_date)
+          # Use explicit format so non-matching strings become NA (rather than
+          # erroring as as.Date() does in current R versions). NA inputs stay NA.
+          parsed_dates <- as.Date(epidemic_peaks$peak_date, format = "%Y-%m-%d")
+          bad_dates <- is.na(parsed_dates) & !is.na(epidemic_peaks$peak_date)
+          if (any(bad_dates)) {
+               stop(sprintf("epidemic_peaks$peak_date contains %d unparseable date(s); expected 'YYYY-MM-DD'.",
+                            sum(bad_dates)))
+          }
+          unknown_iso <- setdiff(unique(epidemic_peaks$iso_code), location_name)
+          if (length(unknown_iso) > 0) {
+               warning(sprintf("epidemic_peaks contains iso_code(s) not in location_name: %s",
+                               paste(unknown_iso, collapse = ", ")))
+          }
+          params$epidemic_peaks <- epidemic_peaks
+     }
+
      message("All parameters have passed config checks.")
 
      # Convert date objects to character in the final param list
      params$date_start <- as.character(date_start)
      params$date_stop  <- as.character(date_stop)
 
-     # Remove dimnames from all list objects
+     # Remove dimnames from all list objects (skip data.frames — they need their
+     # column names preserved for downstream JSON record-style serialisation, e.g.
+     # epidemic_peaks).
      message("Cleaning parameter list for output...")
      for (nm in names(params)) {
 
           val <- params[[nm]]
 
-          if (is.matrix(val) || length(dim(val)) > 1) {
+          if (is.data.frame(val)) {
+
+               next
+
+          } else if (is.matrix(val) || length(dim(val)) > 1) {
 
                dimnames(val) <- NULL
                params[[nm]] <- val

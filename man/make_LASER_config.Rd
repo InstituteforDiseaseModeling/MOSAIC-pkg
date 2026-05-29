@@ -79,6 +79,7 @@ make_LASER_config(
   decay_shape_2 = NULL,
   reported_cases = NULL,
   reported_deaths = NULL,
+  epidemic_peaks = NULL,
   sigfigs = 8
 )
 }
@@ -293,6 +294,13 @@ nrow=length(location_name), ncol=length(t).}
 
 \item{reported_deaths}{Matrix of daily reported cholera deaths. Must be integer. NA allowed.
 nrow=length(location_name), ncol=length(t).}
+
+\item{epidemic_peaks}{Optional data.frame of observed epidemic peaks consumed by the
+peak-timing / peak-magnitude shape terms in \code{calc_model_likelihood()} (R and
+the Python port in laser-cholera). Must contain two character columns:
+\code{iso_code} (matching entries in \code{location_name}) and \code{peak_date}
+(ISO \code{YYYY-MM-DD} strings parseable by \code{as.Date}). NULL allowed; when
+NULL the peak shape terms contribute 0 to the likelihood.}
 
 \item{sigfigs}{Integer; number of significant figures to round all numeric values to. Default is 4.}
 }
