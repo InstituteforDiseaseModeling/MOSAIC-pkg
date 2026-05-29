@@ -268,9 +268,7 @@ calc_model_ensemble <- function(config,
     if (parallel) {
       n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
 
-      Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
-                 OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-                 OPENBLAS_NUM_THREADS = "1")
+      MOSAIC:::.mosaic_set_all_thread_env(1L)
 
       cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
       on.exit(parallel::stopCluster(cl), add = TRUE)
@@ -280,9 +278,6 @@ calc_model_ensemble <- function(config,
         library(MOSAIC)
         library(reticulate)
         MOSAIC:::.mosaic_set_blas_threads(1L)
-        Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
-                   OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-                   OPENBLAS_NUM_THREADS = "1")
         lc <- reticulate::import("laser.cholera.metapop.model")
         MOSAIC:::.mosaic_strip_laser_file_handler()
         assign("lc", lc, envir = .GlobalEnv)
