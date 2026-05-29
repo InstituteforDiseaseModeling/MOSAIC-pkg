@@ -133,14 +133,22 @@ calc_model_likelihood <- function(obs_cases,
                     } else {
                          MOSAIC::epidemic_peaks
                     }
+                    # Only keep peaks whose date falls inside the simulation
+                    # window; without this filter which.min() snaps out-of-window
+                    # peaks to t=1 or t=n_time_steps, biasing peak-shape terms.
+                    date_lo <- date_seq[1L]
+                    date_hi <- date_seq[length(date_seq)]
                     peak_indices_by_loc <- vector("list", n_locations)
                     for (j_pk in seq_len(n_locations)) {
                          iso_code <- if (j_pk <= length(location_names)) location_names[j_pk] else NA_character_
                          if (is.na(iso_code)) { peak_indices_by_loc[[j_pk]] <- integer(0); next }
                          loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
                          if (nrow(loc_peaks) == 0) { peak_indices_by_loc[[j_pk]] <- integer(0); next }
-                         idx <- vapply(loc_peaks$peak_date, function(pd) {
-                              which.min(abs(date_seq - as.Date(pd)))
+                         pd <- as.Date(loc_peaks$peak_date)
+                         in_window <- !is.na(pd) & pd >= date_lo & pd <= date_hi
+                         if (!any(in_window)) { peak_indices_by_loc[[j_pk]] <- integer(0); next }
+                         idx <- vapply(pd[in_window], function(d) {
+                              which.min(abs(date_seq - d))
                          }, integer(1))
                          peak_indices_by_loc[[j_pk]] <- idx[idx > 0L & idx <= n_time_steps]
                     }
@@ -410,10 +418,17 @@ calc_multi_peak_timing_ll <- function(obs_vec, est_vec, iso_code = NULL,
           if (length(date_seq) != length(obs_vec)) return(0)  # Can't match dates
      }
 
+     # Drop peaks whose date is outside the simulation window; without this
+     # filter which.min() snaps them to t=1 or t=N, biasing the LL term.
+     pd <- as.Date(loc_peaks$peak_date)
+     in_window <- !is.na(pd) & pd >= date_seq[1L] & pd <= date_seq[length(date_seq)]
+     if (!any(in_window)) return(0)
+     pd <- pd[in_window]
+
      # Convert peak dates to indices
-     peak_indices <- numeric(nrow(loc_peaks))
-     for (i in 1:nrow(loc_peaks)) {
-          idx <- which.min(abs(date_seq - as.Date(loc_peaks$peak_date[i])))
+     peak_indices <- integer(length(pd))
+     for (i in seq_along(pd)) {
+          idx <- which.min(abs(date_seq - pd[i]))
           if (length(idx) > 0) peak_indices[i] <- idx[1]
      }
      peak_indices <- peak_indices[peak_indices > 0 & peak_indices <= length(obs_vec)]
@@ -456,7 +471,7 @@ calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
      # Get peaks for this location
      loc_peaks <- epidemic_peaks[epidemic_peaks$iso_code == iso_code, ]
      if (nrow(loc_peaks) == 0) return(0)
-     
+
      # Create date sequence for the time series
      date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "day")
      if (length(date_seq) != length(obs_vec)) {
@@ -464,11 +479,18 @@ calc_multi_peak_magnitude_ll <- function(obs_vec, est_vec, iso_code = NULL,
           date_seq <- seq(as.Date(date_start), as.Date(date_stop), by = "week")
           if (length(date_seq) != length(obs_vec)) return(0)  # Can't match dates
      }
-     
+
+     # Drop peaks whose date is outside the simulation window; without this
+     # filter which.min() snaps them to t=1 or t=N, biasing the LL term.
+     pd <- as.Date(loc_peaks$peak_date)
+     in_window <- !is.na(pd) & pd >= date_seq[1L] & pd <= date_seq[length(date_seq)]
+     if (!any(in_window)) return(0)
+     pd <- pd[in_window]
+
      # Convert peak dates to indices
-     peak_indices <- numeric(nrow(loc_peaks))
-     for (i in 1:nrow(loc_peaks)) {
-          idx <- which.min(abs(date_seq - as.Date(loc_peaks$peak_date[i])))
+     peak_indices <- integer(length(pd))
+     for (i in seq_along(pd)) {
+          idx <- which.min(abs(date_seq - pd[i]))
           if (length(idx) > 0) peak_indices[i] <- idx[1]
      }
      peak_indices <- peak_indices[peak_indices > 0 & peak_indices <= length(obs_vec)]
