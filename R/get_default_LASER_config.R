@@ -23,9 +23,9 @@
 
 get_default_LASER_config <- function(PATHS = NULL) {
 
-     path <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
+     path <- system.file("extdata", "config_default.json", package = "MOSAIC")
      if (!nzchar(path)) {
-          stop("Could not locate default_parameters.json in installed MOSAIC package.")
+          stop("Could not locate config_default.json in installed MOSAIC package.")
      }
      MOSAIC::read_json_to_list(path)
 

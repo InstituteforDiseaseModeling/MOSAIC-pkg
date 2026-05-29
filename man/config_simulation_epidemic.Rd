@@ -16,7 +16,7 @@ config_simulation_epidemic
 \description{
 A \strong{toy one-year outbreak} parameter set for quick unit-tests and
 vignette examples.
-The object is created by \code{make_simulated_LASER_config_files.R} and saved in
+The object is created by \code{make_simulation_epidemic_LASER_config_files.R} and saved in
 the package as \strong{\code{config_simulation_epidemic}}.
 }
 \details{
@@ -43,7 +43,7 @@ ideal for automated tests and teaching materials.
 \itemize{
 \item \link{config_simulation_endemic} – long-run endemic scenario.
 \item \link{config_default} – comprehensive default configuration.
-\item \code{make_simulated_LASER_config_files.R} – script that generates this object.
+\item \code{make_simulation_epidemic_LASER_config_files.R} – script that generates this object.
 }
 }
 \keyword{datasets}

@@ -454,21 +454,14 @@ message("Transmission parameter validation complete")
 
 
 # --------------------------------------------------------------------------- #
-# Write the JSON artifact, plus an optional .json.gz sidecar.
-#
-# Build the validated parameter list once (no output_file_path -> returns the
-# validated list), attach tracking fields that make_LASER_config does not
-# accept as args, then write the .json once with MOSAIC::write_json_with_optional_gz().
-#
-# The .json.gz sidecar is OFF by default. To produce it on a given run set
-# the environment variable before invoking R:
-#   MOSAIC_WRITE_GZ_SIDECARS=true Rscript data-raw/make_config_default.R
-# The sidecar is a byte-for-byte gzip of the just-written .json (via
-# R.utils::gzip), so the pair cannot drift.
+# Write the JSON artifact. Set write_gz = TRUE to also produce the .json.gz;
+# write_gz = FALSE is the default. When both flags are TRUE the .json and
+# .json.gz are byte-equal by construction (written from the same in-memory
+# JSON string -- no parallel serialisation).
 # --------------------------------------------------------------------------- #
 
 pkg_dir <- file.path(PATHS$ROOT, "MOSAIC-pkg")
-fp_json <- file.path(pkg_dir, 'inst/extdata/default_parameters.json')
+fp_json <- file.path(pkg_dir, 'inst/extdata/config_default.json')
 
 args <- config_default
 args$metadata <- NULL          # excluded from JSON; kept on the .rda below
@@ -480,10 +473,11 @@ rm(args)
 params_validated$zeta_ratio       <- .zeta_ratio_default
 params_validated$decay_days_spread <- .decay_days_spread_default
 
-MOSAIC::write_json_with_optional_gz(
+MOSAIC::write_json_or_gz(
      params_validated,
      fp_json,
-     gz_sidecar = MOSAIC:::.mosaic_write_gz_sidecars()
+     write_json = TRUE,
+     write_gz   = FALSE
 )
 
 # Attach tracking fields to the rda-bound config_default and persist

@@ -300,12 +300,12 @@ if (abs(total_check - beta_j0_tot) > 1e-10) {
      warning("Transmission parameter inconsistency: hum + env != tot")
 }
 
-# Save outputs
-# .json.gz sidecar is opt-in via MOSAIC_WRITE_GZ_SIDECARS=true env var;
-# defaults off. When on, the .gz is a byte-equal gzip of the just-written
-# .json (via R.utils::gzip) so the pair cannot drift.
+# Save outputs.
+# Flip write_gz = TRUE to also produce the .json.gz. Both flags can be TRUE;
+# the .json and .json.gz are byte-equal when both are written (single
+# in-memory JSON string fans out to both streams).
 pkg_dir <- file.path(PATHS$ROOT, "MOSAIC-pkg")
-fp_json <- file.path(pkg_dir, 'inst/extdata/default_parameters_MOZ.json')
+fp_json <- file.path(pkg_dir, 'inst/extdata/config_default_MOZ.json')
 
 args <- config_default_MOZ
 args$metadata <- NULL
@@ -316,10 +316,11 @@ rm(args)
 params_validated$zeta_ratio        <- .zeta_ratio_MOZ
 params_validated$decay_days_spread <- .decay_days_spread_MOZ
 
-MOSAIC::write_json_with_optional_gz(
+MOSAIC::write_json_or_gz(
      params_validated,
      fp_json,
-     gz_sidecar = MOSAIC:::.mosaic_write_gz_sidecars()
+     write_json = TRUE,
+     write_gz   = FALSE
 )
 
 # Attach tracking fields to the rda-bound config_default_MOZ

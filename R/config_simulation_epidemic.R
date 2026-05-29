@@ -2,7 +2,7 @@
 #'
 #' A **toy one-year outbreak** parameter set for quick unit-tests and
 #' vignette examples.
-#' The object is created by `make_simulated_LASER_config_files.R` and saved in
+#' The object is created by `make_simulation_epidemic_LASER_config_files.R` and saved in
 #' the package as **`config_simulation_epidemic`**.
 #'
 #' @format A named **list** identical in structure to
@@ -34,7 +34,7 @@
 #' @seealso
 #'   * [config_simulation_endemic] – long-run endemic scenario.
 #'   * [config_default] – comprehensive default configuration.
-#'   * `make_simulated_LASER_config_files.R` – script that generates this object.
+#'   * `make_simulation_epidemic_LASER_config_files.R` – script that generates this object.
 #'
 #' @keywords datasets
 "config_simulation_epidemic"
