@@ -174,37 +174,28 @@ sim_config$zeta_ratio       <- .zeta_ratio_sim
 sim_config$decay_days_spread <- .decay_days_spread_sim
 
 # --------------------------- 9. Write to disk ----------------------------- #
+# Simulation configs are .json only (no .gz sidecar -- gzip is reserved for
+# the production calibration configs that consumers may want compressed).
 
 out_dir <- file.path(getwd(), "inst", "extdata")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+fp_json <- file.path(out_dir, "simulated_parameters.json")
 
-file_paths <- c(
-     file.path(out_dir, "simulated_parameters.json"),
-     file.path(out_dir, "simulated_parameters.json.gz")
-)
+args2 <- sim_config[!names(sim_config) %in% c("zeta_ratio", "decay_days_spread")]
+args2$output_file_path <- NULL  # return validated list instead of writing
+params_validated <- do.call(MOSAIC::make_LASER_config, args2)
+rm(args2)
 
-for (fp in file_paths) {
-     args2 <- sim_config[!names(sim_config) %in% c("zeta_ratio", "decay_days_spread")]
-     args2$output_file_path <- fp
-     do.call(MOSAIC::make_LASER_config, args2)
-}
+params_validated$zeta_ratio        <- .zeta_ratio_sim
+params_validated$decay_days_spread <- .decay_days_spread_sim
 
-# Patch written JSONs to include tracking fields.
-# Patches both the plain .json AND the .json.gz so the pair stays in sync.
-for (fp in file_paths) {
-     if (!grepl("\\.json(\\.gz)?$", fp) || !file.exists(fp)) next
-     j_cfg <- MOSAIC::read_json_to_list(fp)
-     j_cfg$zeta_ratio       <- .zeta_ratio_sim
-     j_cfg$decay_days_spread <- .decay_days_spread_sim
-     MOSAIC::write_list_to_json(j_cfg, fp, compress = grepl("\\.gz$", fp))
-}
+MOSAIC::write_json_with_optional_gz(params_validated, fp_json, gz_sidecar = FALSE)
 
-message("Toy LASER config written to:\n",
-        paste("  •", normalizePath(file_paths), collapse = "\n"))
+message("Toy LASER config written to:\n  - ", normalizePath(fp_json))
 
 # --------------------------- 10. Sanity check ----------------------------- #
 
-identical(sim_config, jsonlite::fromJSON(file_paths[[1]]))
+identical(sim_config, MOSAIC::read_json_to_list(fp_json))
 
 
 mpm <- reticulate::import("laser_cholera.metapop.model")

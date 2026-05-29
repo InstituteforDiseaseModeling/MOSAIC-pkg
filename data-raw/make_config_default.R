@@ -453,43 +453,44 @@ message("Transmission parameter validation complete")
 
 
 
-# Define output file paths using PATHS
-# The inst/extdata directory is in the MOSAIC-pkg directory
+# --------------------------------------------------------------------------- #
+# Write the JSON artifact, plus an optional .json.gz sidecar.
+#
+# Build the validated parameter list once (no output_file_path -> returns the
+# validated list), attach tracking fields that make_LASER_config does not
+# accept as args, then write the .json once with MOSAIC::write_json_with_optional_gz().
+#
+# The .json.gz sidecar is OFF by default. To produce it on a given run set
+# the environment variable before invoking R:
+#   MOSAIC_WRITE_GZ_SIDECARS=true Rscript data-raw/make_config_default.R
+# The sidecar is a byte-for-byte gzip of the just-written .json (via
+# R.utils::gzip), so the pair cannot drift.
+# --------------------------------------------------------------------------- #
+
 pkg_dir <- file.path(PATHS$ROOT, "MOSAIC-pkg")
-file_paths <- list(
-     file.path(pkg_dir, 'inst/extdata/default_parameters.json'),
-     file.path(pkg_dir, 'inst/extdata/default_parameters.json.gz')
+fp_json <- file.path(pkg_dir, 'inst/extdata/default_parameters.json')
+
+args <- config_default
+args$metadata <- NULL          # excluded from JSON; kept on the .rda below
+args$output_file_path <- NULL  # return the validated list instead of writing
+params_validated <- do.call(MOSAIC::make_LASER_config, args)
+rm(args)
+
+# Tracking fields that make_LASER_config rejects as unknown args
+params_validated$zeta_ratio       <- .zeta_ratio_default
+params_validated$decay_days_spread <- .decay_days_spread_default
+
+MOSAIC::write_json_with_optional_gz(
+     params_validated,
+     fp_json,
+     gz_sidecar = MOSAIC:::.mosaic_write_gz_sidecars()
 )
 
-
-
-# Loop over the file paths and call make_LASER_config() for each
-for (fp in file_paths) {
-
-     args <- config_default
-     args$metadata <- NULL
-     args$output_file_path <- fp
-     do.call(MOSAIC::make_LASER_config, args)
-     rm(args)
-
-}
-
-# Patch written JSONs to include tracking fields not accepted by make_LASER_config.
-# Patches both the plain .json AND the .json.gz so the pair stays in sync.
-for (fp in file_paths) {
-     if (!grepl("\\.json(\\.gz)?$", fp) || !file.exists(fp)) next
-     j <- MOSAIC::read_json_to_list(fp)
-     j$zeta_ratio <- .zeta_ratio_default
-     j$decay_days_spread <- .decay_days_spread_default
-     MOSAIC::write_list_to_json(j, fp, compress = grepl("\\.gz$", fp))
-}
-
-# Attach tracking fields to the rda-bound config_default
-config_default$zeta_ratio <- .zeta_ratio_default
+# Attach tracking fields to the rda-bound config_default and persist
+config_default$zeta_ratio        <- .zeta_ratio_default
 config_default$decay_days_spread <- .decay_days_spread_default
 
-tmp_config <- jsonlite::fromJSON(file_paths[[1]])
-
+tmp_config <- MOSAIC::read_json_to_list(fp_json)
 identical(config_default, tmp_config)
 all.equal(config_default, tmp_config)
 

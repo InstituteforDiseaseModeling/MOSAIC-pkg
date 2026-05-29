@@ -301,35 +301,32 @@ if (abs(total_check - beta_j0_tot) > 1e-10) {
 }
 
 # Save outputs
+# .json.gz sidecar is opt-in via MOSAIC_WRITE_GZ_SIDECARS=true env var;
+# defaults off. When on, the .gz is a byte-equal gzip of the just-written
+# .json (via R.utils::gzip) so the pair cannot drift.
 pkg_dir <- file.path(PATHS$ROOT, "MOSAIC-pkg")
-file_paths <- list(
-     file.path(pkg_dir, 'inst/extdata/default_parameters_MOZ.json'),
-     file.path(pkg_dir, 'inst/extdata/default_parameters_MOZ.json.gz')
+fp_json <- file.path(pkg_dir, 'inst/extdata/default_parameters_MOZ.json')
+
+args <- config_default_MOZ
+args$metadata <- NULL
+args$output_file_path <- NULL  # return validated list instead of writing
+params_validated <- do.call(MOSAIC::make_LASER_config, args)
+rm(args)
+
+params_validated$zeta_ratio        <- .zeta_ratio_MOZ
+params_validated$decay_days_spread <- .decay_days_spread_MOZ
+
+MOSAIC::write_json_with_optional_gz(
+     params_validated,
+     fp_json,
+     gz_sidecar = MOSAIC:::.mosaic_write_gz_sidecars()
 )
 
-for (fp in file_paths) {
-     args <- config_default_MOZ
-     args$metadata <- NULL
-     args$output_file_path <- fp
-     do.call(MOSAIC::make_LASER_config, args)
-     rm(args)
-}
-
-# Patch written JSONs to include tracking fields not accepted by make_LASER_config.
-# Patches both the plain .json AND the .json.gz so the pair stays in sync.
-for (fp in file_paths) {
-     if (!grepl("\\.json(\\.gz)?$", fp) || !file.exists(fp)) next
-     j_cfg <- MOSAIC::read_json_to_list(fp)
-     j_cfg$zeta_ratio <- .zeta_ratio_MOZ
-     j_cfg$decay_days_spread <- .decay_days_spread_MOZ
-     MOSAIC::write_list_to_json(j_cfg, fp, compress = grepl("\\.gz$", fp))
-}
-
 # Attach tracking fields to the rda-bound config_default_MOZ
-config_default_MOZ$zeta_ratio <- .zeta_ratio_MOZ
+config_default_MOZ$zeta_ratio        <- .zeta_ratio_MOZ
 config_default_MOZ$decay_days_spread <- .decay_days_spread_MOZ
 
-tmp_config <- jsonlite::fromJSON(file_paths[[1]])
+tmp_config <- MOSAIC::read_json_to_list(fp_json)
 all.equal(config_default_MOZ, tmp_config)
 
 usethis::use_data(config_default_MOZ, overwrite = TRUE)
