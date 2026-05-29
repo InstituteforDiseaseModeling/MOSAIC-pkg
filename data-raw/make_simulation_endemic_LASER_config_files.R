@@ -215,12 +215,15 @@ for (fp in file_paths) {
      do.call(MOSAIC::make_LASER_config, args2)
 }
 
-# Patch written JSONs to include tracking fields
-json_fp <- file_paths[grepl("\\.json$", file_paths)]
-j_cfg <- jsonlite::fromJSON(json_fp)
-j_cfg$zeta_ratio       <- .zeta_ratio_sim
-j_cfg$decay_days_spread <- .decay_days_spread_sim
-jsonlite::write_json(j_cfg, json_fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+# Patch written JSONs to include tracking fields.
+# Patches both the plain .json AND the .json.gz so the pair stays in sync.
+for (fp in file_paths) {
+     if (!grepl("\\.json(\\.gz)?$", fp) || !file.exists(fp)) next
+     j_cfg <- MOSAIC::read_json_to_list(fp)
+     j_cfg$zeta_ratio       <- .zeta_ratio_sim
+     j_cfg$decay_days_spread <- .decay_days_spread_sim
+     MOSAIC::write_list_to_json(j_cfg, fp, compress = grepl("\\.gz$", fp))
+}
 
 message("Endemic LASER config written to:\n",
         paste("  •", normalizePath(file_paths), collapse = "\n"))

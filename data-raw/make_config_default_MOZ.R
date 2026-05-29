@@ -315,13 +315,14 @@ for (fp in file_paths) {
      rm(args)
 }
 
-# Patch written JSONs to include tracking fields not accepted by make_LASER_config
+# Patch written JSONs to include tracking fields not accepted by make_LASER_config.
+# Patches both the plain .json AND the .json.gz so the pair stays in sync.
 for (fp in file_paths) {
-     if (!grepl("\\.json$", fp) || !file.exists(fp)) next
-     j_cfg <- jsonlite::fromJSON(fp)
+     if (!grepl("\\.json(\\.gz)?$", fp) || !file.exists(fp)) next
+     j_cfg <- MOSAIC::read_json_to_list(fp)
      j_cfg$zeta_ratio <- .zeta_ratio_MOZ
      j_cfg$decay_days_spread <- .decay_days_spread_MOZ
-     jsonlite::write_json(j_cfg, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+     MOSAIC::write_list_to_json(j_cfg, fp, compress = grepl("\\.gz$", fp))
 }
 
 # Attach tracking fields to the rda-bound config_default_MOZ
