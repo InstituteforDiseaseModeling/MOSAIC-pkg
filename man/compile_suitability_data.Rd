@@ -40,8 +40,10 @@ from case data (one year prior to earliest case observation).}
 from latest ENSO data availability.}
 
 \item{forecast_mode}{Logical. If TRUE, only includes variables that can support forecasting
-at the specified horizon. Excludes case-dependent epidemic memory and spatial import
-pressure variables. Default TRUE.}
+at the specified horizon. (As of v0.30.26 the case-dependent epidemic memory and
+spatial-import blocks are removed entirely, so this flag now affects only the
+final summary-message text and the climate-anomaly leading-edge behavior.)
+Default TRUE.}
 
 \item{forecast_horizon}{Numeric. Forecasting horizon in months. Variables dependent on
 surveillance data beyond this horizon are excluded in forecast mode. Default 3 months.}
@@ -64,12 +66,19 @@ This function processes the data and merges the climate, ENSO, and cholera cases
 }
 \description{
 Compiles multiple processed data sources (climate, ENSO, cholera surveillance,
-demographics, WASH, vaccination, mobility) into a single feature-engineered
-training dataset for environmental suitability modeling. Computes ~60 derived
-covariates including rolling windows, anomalies, interaction terms, and
-epidemic memory variables.
+demographics, WASH) into a single feature-engineered training dataset for
+environmental suitability modeling. Computes derived covariates including
+rolling windows, anomalies, and climate / WASH interaction terms.
 }
 \details{
+As of v0.30.26 the vaccination, epidemic-memory (cases-derived), and
+spatial-import (mobility-network) blocks are no longer computed. They were
+already excluded from \code{est_suitability()}'s LSTM covariate list -- the
+vaccination signal is a downstream intervention (deployed in response to
+cholera, not in anticipation of environmental suitability), and the
+case-derived epidemic-memory features are target leakage for a model whose
+response is itself a case-derived binary.
+
 The function performs the following key steps:
 \itemize{
 \item Loads and merges climate data (temperature, precipitation, etc.) from multiple countries

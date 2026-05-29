@@ -1,3 +1,43 @@
+# MOSAIC 0.30.26
+
+## `compile_suitability_data()` — remove three dormant blocks
+
+Three blocks of derived covariates were being computed and persisted to
+`cholera_country_weekly_suitability_data.csv` even though
+`est_suitability()`'s `covariates_all` list intentionally excludes
+every one of them. Computing and saving them was wasted IO + a foot-gun
+for any future contributor who re-enables them without realising why
+they were excluded. Removed entirely from the function:
+
+- **Vaccination block (3 columns)**: `vaccination_rate_daily`,
+  `cumulative_vaccine_doses`, `log1p_cum_vaccine_doses`. Vaccination is
+  a downstream intervention -- vaccines are deployed in response to
+  cholera, not in anticipation of environmental suitability -- so
+  these are non-causal predictors for the suitability model.
+- **Epidemic-memory block (8 columns)**: `r_t`, `cum_cases_4w/8w/12w/52w`,
+  `nonzero_ratio_52w`, `weeks_since_major_outbreak`, `peak_cases_52w`,
+  `seasonal_outbreak_risk`, plus the `epidemic_week` alias. All
+  case-derived; predicting a case-derived target (`cases_binary`)
+  from any function of `cases` is target leakage even with the
+  forecast-safe `memory_lag`.
+- **Spatial-import block (7 columns)**: `import_vulnerability`,
+  `export_potential`, `weighted_import_connectivity`,
+  `connectivity_degree`, `betweenness_centrality`,
+  `eigenvector_centrality`, `import_export_balance`. Mobility-network
+  features that were computed but excluded from the LSTM input set.
+
+Net: 18 columns dropped from the saved suitability CSV. The columns
+were already excluded from the LSTM covariate list so this is purely
+hygiene -- no model behavior changes. Compile wall-time should drop
+slightly (no vaccination merge + cumulative-doses computation, no
+epidemic-memory `slide_dbl()` loops, no mobility-matrix calculations).
+
+The `forecast_mode` argument is now mostly cosmetic (controls summary
+messages and a small bit of climate-anomaly leading-edge behavior).
+Kept for backward compatibility.
+
+---
+
 # MOSAIC 0.30.25
 
 ## Flood-prob GAM: select=TRUE shrinkage + precip-window tensor product
