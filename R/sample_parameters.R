@@ -801,7 +801,8 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
   sigma       <- config_sampled$sigma        # symptomatic fraction
   rho         <- config_sampled$rho          # care-seeking rate
   chi_endemic <- config_sampled$chi_endemic  # PPV among suspected cases
-  iota        <- config_sampled$iota         # incubation rate (E→I)
+  iota        <- config_sampled$iota         # incubation rate (E -> I)
+  gamma_1     <- config_sampled$gamma_1      # symptomatic recovery rate (Isym -> R)
 
   # reported_cases is a matrix (n_locations x T). Compute the first-week
   # window per location -- prior versions of this function unlist()ed the
@@ -818,6 +819,14 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
   reporting_product <- sigma * rho  # cases = I * sigma * rho / chi_endemic
   if (!is.finite(reporting_product) || reporting_product < 1e-10) {
     if (verbose) cat("  - ic_moment_match: sigma*rho near zero, using prior ICs\n")
+    return(sampled_props)
+  }
+
+  # Guard: need positive gamma_1, sigma, iota for the steady-state E formula
+  if (!is.finite(gamma_1) || gamma_1 <= 0 ||
+      !is.finite(iota)    || iota    <= 0 ||
+      !is.finite(sigma)   || sigma   <= 0) {
+    if (verbose) cat("  - ic_moment_match: gamma_1/sigma/iota non-positive, using prior ICs\n")
     return(sampled_props)
   }
 
@@ -845,12 +854,20 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
       next
     }
 
-    I_count <- obs_week1_j * chi_endemic / reporting_product
-    # NOTE: this E_count formula is dimensionally suspect (count * 1/day);
-    # steady-state E:I balance gives E = I * gamma_1 / (sigma * iota).
-    # ic_moment_match defaults to FALSE so this is not on the hot path,
-    # but flagging here for the next biology pass to confirm intent.
-    E_count <- I_count * iota
+    # I_count is an estimate of Isym (symptomatic-infectious compartment),
+    # since cases = Isym * rho * chi_endemic in the laser-cholera model.
+    # The earlier comment labelled this "I" but the reporting chain only
+    # observes Isym.
+    Isym_count <- obs_week1_j * chi_endemic / reporting_product
+    I_count    <- Isym_count   # kept for the verbose message + downstream prop_I
+
+    # Steady-state E:Isym balance for the laser-cholera SEIRVW engine:
+    #   inflow to Isym = sigma * iota * E
+    #   outflow        = gamma_1 * Isym
+    # so E = Isym * gamma_1 / (sigma * iota). The earlier
+    # E_count = I_count * iota was dimensionally wrong (count * 1/day) and
+    # over-seeded E by ~5x at prior medians.
+    E_count <- Isym_count * gamma_1 / (sigma * iota)
     obs_week1 <- obs_week1_j  # for the verbose message below
 
     # Convert to proportions of population

@@ -1,3 +1,35 @@
+# MOSAIC 0.30.40
+
+## Biology fixes from deep-review re-validation
+
+Two findings from the disease-modeling deep review that survived
+re-validation against MOSAIC-docs and project history:
+
+- **moment_match_E_I steady-state formula corrected.** The optional
+  `ic_moment_match` feature was using `E_count = I_count * iota`, which
+  is dimensionally inconsistent (count x 1/day) and over-seeded E by
+  ~5x at prior medians. The laser-cholera engine has
+  `E -> Isym` at rate `sigma * iota` per E and `Isym -> R` at rate
+  `gamma_1`, so the steady-state balance is
+  `E = Isym * gamma_1 / (sigma * iota)`. At prior medians
+  (`gamma_1 = 0.1/d`, `sigma = 0.24`, `iota = 0.71/d`) the corrected
+  E/Isym ratio is ~0.59 instead of ~0.71. The `I_count` variable was
+  renamed `Isym_count` internally to reflect that the reporting chain
+  (`cases = Isym * rho * chi_endemic`) only observes the symptomatic
+  compartment. Flag still defaults to FALSE; this fixes the formula
+  for any caller who turns it on.
+- **epsilon prior 2x variance-inflation removed.** A
+  variance-inflation step at `data-raw/make_priors_default.R:127-128`
+  was doubling the sd of the natural-immunity waning rate from 2.0e-4
+  to 4.0e-4, pushing the 95% CI on immunity duration to roughly
+  [1.9, 53] years -- the upper-tail value is biologically
+  implausible and the inflation had no documented rationale. With
+  the inflation removed, sd is back to 2.0e-4 (95% CI on rate
+  [1.7e-4, 1.03e-3], corresponding immunity duration CI ~[2.7,
+  16] years) -- the range supported by the cited King et al. 2008
+  and the project's two-cohort re-fit (~7 yr mean). `priors_default`
+  metadata version bumped to 15.2 and the .rda re-built.
+
 # MOSAIC 0.30.39
 
 ## Engineering review sweep (v0.30.29 – v0.30.38)

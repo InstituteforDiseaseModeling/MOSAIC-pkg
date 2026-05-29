@@ -30,9 +30,9 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "15.1",
+          version = "15.2",
           date = Sys.Date(),
-          description = "Default informative prior distributions for MOSAIC model parameters. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
+          description = "Default informative prior distributions for MOSAIC model parameters. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
      ),
      parameters_global = list(),    # Single parameters used by all locations
      parameters_location = list()   # Location specific parameters
@@ -117,15 +117,15 @@ priors_default$parameters_global$decay_shape_2 <- list(
 )
 
 # epsilon - Natural immunity waning rate
+# sd = 2.0e-4 derived from the 95% CI [1.7e-4, 1.03e-3] reported in King et al.
+# 2008 and the project's own 2-cohort re-fit (~7 yr mean duration). A 2x
+# variance-inflation step previously applied here pushed the upper tail to
+# ~53 yr immunity duration with no documented rationale and has been removed.
 priors_default$parameters_global$epsilon <- list(
      description = "Natural immunity waning rate (per day)",
      distribution = "lognormal",
-     parameters = list(mean = 3.9e-4, sd = 2.0e-4)  # sd derived from 95% CI [1.7e-4, 1.03e-3]
+     parameters = list(mean = 3.9e-4, sd = 2.0e-4)
 )
-
-# Apply variance inflation to epsilon
-priors_default$parameters_global$epsilon$parameters$sd <-
-     priors_default$parameters_global$epsilon$parameters$sd * 2
 
 # gamma_1 - Symptomatic/severe shedding duration rate
 priors_default$parameters_global$gamma_1 <- list(
