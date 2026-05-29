@@ -365,7 +365,14 @@ calc_model_ensemble <- function(config,
     for (i in seq_len(n_locs)) {
       for (j in seq_len(n_times)) {
         values <- as.vector(data_array[i, j, , ])
-        stats_mean[i, j]   <- sum(values * sim_weights, na.rm = TRUE)
+        # Failed sims show up as NA. Drop them from the mean and
+        # renormalize the surviving weights so a 10% failure rate
+        # doesn't bias the ensemble mean toward zero. (The median
+        # path already filters and renormalizes inside
+        # weighted_quantiles, so the two stats stay consistent.)
+        valid <- is.finite(values) & is.finite(sim_weights) & sim_weights > 0
+        w_sum <- if (any(valid)) sum(sim_weights[valid]) else 0
+        stats_mean[i, j]   <- if (w_sum > 0) sum(values[valid] * sim_weights[valid]) / w_sum else NA_real_
         stats_median[i, j] <- weighted_quantiles(values, sim_weights, 0.5)
 
         all_q <- weighted_quantiles(values, sim_weights, envelope_quantiles)
