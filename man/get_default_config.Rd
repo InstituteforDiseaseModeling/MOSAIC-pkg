@@ -4,15 +4,12 @@
 \alias{get_default_config}
 \title{Create Default LASER Configuration}
 \usage{
-get_default_config(PATHS)
+get_default_config(PATHS = NULL)
 }
 \arguments{
-\item{PATHS}{A named list of file path components required for accessing
-input data. Expected list elements include:
-\describe{
-\item{MODEL_INPUT}{Character string. Path to directory containing model input CSV files.}
-\item{DATA_WHO_DAILY}{Character string. Path to directory containing processed WHO cholera daily CSV data.}
-}}
+\item{PATHS}{Optional. Retained for backwards compatibility; no longer used.
+The default config is now located via \code{system.file()} so the function
+works from any installed MOSAIC package.}
 }
 \value{
 A list object containing all necessary parameters and initial conditions for LASER
@@ -26,12 +23,7 @@ that all parameter values meet model specifications.
 }
 \examples{
 \dontrun{
-PATHS <- list(
-  MODEL_INPUT = "path/to/model_input",
-  DATA_WHO_DAILY = "path/to/daily_data"
-)
-
-default_config <- get_default_config(PATHS)
+default_config <- get_default_config()
 }
 
 }

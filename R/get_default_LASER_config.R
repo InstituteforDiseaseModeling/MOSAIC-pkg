@@ -5,12 +5,9 @@
 #' conditions for the cholera metapopulation transmission model. The function uses \code{\link{make_LASER_config}} to check
 #' that all parameter values meet model specifications.
 #'
-#' @param PATHS A named list of file path components required for accessing
-#' input data. Expected list elements include:
-#' \describe{
-#'   \item{MODEL_INPUT}{Character string. Path to directory containing model input CSV files.}
-#'   \item{DATA_WHO_DAILY}{Character string. Path to directory containing processed WHO cholera daily CSV data.}
-#' }
+#' @param PATHS Optional. Retained for backwards compatibility; no longer used.
+#'        The default config is now located via `system.file()` so the function
+#'        works from any installed MOSAIC package.
 #'
 #' @return
 #' A list object containing all necessary parameters and initial conditions for LASER
@@ -18,21 +15,18 @@
 #'
 #' @examples
 #' \dontrun{
-#' PATHS <- list(
-#'   MODEL_INPUT = "path/to/model_input",
-#'   DATA_WHO_DAILY = "path/to/daily_data"
-#' )
-#'
-#' default_config <- get_default_config(PATHS)
+#' default_config <- get_default_LASER_config()
 #' }
 #'
 #' @export
 #'
 
-get_default_LASER_config <- function(PATHS) {
+get_default_LASER_config <- function(PATHS = NULL) {
 
-     path <- file.path(PATHS$ROOT,"MOSAIC-pkg", "inst", "extdata", "default_parameters.json")
-     out <- jsonlite::fromJSON(path)
-     return(out)
+     path <- system.file("extdata", "default_parameters.json", package = "MOSAIC")
+     if (!nzchar(path)) {
+          stop("Could not locate default_parameters.json in installed MOSAIC package.")
+     }
+     MOSAIC::read_json_to_list(path)
 
 }
