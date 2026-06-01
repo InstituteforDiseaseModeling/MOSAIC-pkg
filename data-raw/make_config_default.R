@@ -22,32 +22,84 @@ names(N_j) <- tmp$j
 sel <- match(j, names(N_j))
 N_j <- as.integer(N_j[sel])
 
-# Get number of infected individuals in each location
-# New default: 100 infected per location for better epidemic seeding
-I_j <- rep(100, length(N_j))
-I_j <- as.integer(I_j)
+# -----------------------------------------------------------------------------
+# Initial conditions per location, seeded from per-iso priors.
+#
+# Earlier versions hard-coded `S/N = 0.50`, `R/N = 0.50` and pinned V1/V2/E to
+# zero across all 40 countries -- bypassing the per-iso `prop_*_initial`
+# Beta priors built by est_initial_S/V1_V2/E_I/R(). The flat 50/50 split was
+# the dominant defect behind ETH (and 39 other countries) failing to sustain
+# transmission in the default fit: with R0 ~ 1.44, R_eff(t=0) = 1.44 * 0.5
+# = 0.72, so the 100-case seed decays before it can grow. At the prior mean
+# S/N ~ 0.80, R_eff ~ 1.15 and outbreaks become possible.
+#
+# Seeding strategy: pull the mean of each per-iso prop_*_initial Beta prior,
+# normalise across the six compartments so each row sums to 1.0, then
+# Hamilton-apportion to integer counts that sum exactly to N_j.
+# -----------------------------------------------------------------------------
 
-# Get number of exposed individuals in each location
-# Set to zero for simple method compatibility
-E_j <- rep(0, length(N_j))
-E_j <- as.integer(E_j)
+.compartment_props <- c("S","V1","V2","E","I","R")
+.prop_means <- vapply(
+     j,
+     function(iso) {
+          vapply(
+               paste0("prop_", .compartment_props, "_initial"),
+               function(pname) {
+                    loc <- priors_default$parameters_location[[pname]]$location[[iso]]
+                    if (is.null(loc)) return(NA_real_)
+                    p <- loc$parameters
+                    if (loc$distribution == "beta") return(unname(p$shape1 / (p$shape1 + p$shape2)))
+                    if (loc$distribution == "truncnorm" || loc$distribution == "normal") return(unname(p$mean))
+                    NA_real_
+               },
+               numeric(1)
+          )
+     },
+     numeric(6)
+)
+# .prop_means is a 6 x length(j) matrix with rownames "prop_X_initial"
+rownames(.prop_means) <- .compartment_props
+.prop_means <- t(.prop_means)            # now length(j) x 6
+.prop_means[is.na(.prop_means)] <- 0     # any missing iso => 0 for that compartment
 
-# Get number of susceptible individuals in each location
-# Adjusted to account for 100 infected
-S_j <- N_j - as.integer(N_j * 0.5) - I_j
-S_j <- pmax(S_j, 1)  # Ensure at least 1 susceptible
+# Per-row normalisation so each iso sums to 1 (independent Beta priors do not
+# sum to 1 exactly; ETH typical row sum ~0.96-1.01).
+.row_sums <- rowSums(.prop_means)
+.prop_means <- .prop_means / .row_sums
 
-# Vaccination compartments - set to zero by default
-V1_j <- rep(0, length(N_j))
-V1_j <- as.integer(V1_j)
+# Hamilton (largest-remainder) apportionment to integer counts per iso.
+.counts_mat <- matrix(0L, nrow = length(j), ncol = 6,
+                      dimnames = list(j, .compartment_props))
+for (jj in seq_along(j)) {
+     target  <- .prop_means[jj, ] * N_j[jj]
+     base    <- floor(target)
+     rem     <- target - base
+     deficit <- as.integer(N_j[jj] - sum(base))
+     if (deficit > 0) {
+          ord <- order(rem, decreasing = TRUE)
+          base[ord[seq_len(deficit)]] <- base[ord[seq_len(deficit)]] + 1
+     } else if (deficit < 0) {
+          ord <- order(rem, decreasing = FALSE)
+          take <- min(-deficit, length(ord))
+          base[ord[seq_len(take)]] <- base[ord[seq_len(take)]] - 1
+     }
+     .counts_mat[jj, ] <- as.integer(base)
+}
+stopifnot(all(.counts_mat >= 0L))
+stopifnot(all(rowSums(.counts_mat) == N_j))
 
-V2_j <- rep(0, length(N_j))
-V2_j <- as.integer(V2_j)
-
-# Calculate recovered to balance the equation
-# R = N - (S + E + I + V1 + V2)
-R_j <- N_j - S_j - E_j - I_j - V1_j - V2_j
-R_j <- pmax(R_j, 0)  # Ensure non-negative
+S_j  <- .counts_mat[, "S"]
+V1_j <- .counts_mat[, "V1"]
+V2_j <- .counts_mat[, "V2"]
+E_j  <- .counts_mat[, "E"]
+I_j  <- .counts_mat[, "I"]
+R_j  <- .counts_mat[, "R"]
+prop_S_initial  <- .prop_means[, "S"]
+prop_V1_initial <- .prop_means[, "V1"]
+prop_V2_initial <- .prop_means[, "V2"]
+prop_E_initial  <- .prop_means[, "E"]
+prop_I_initial  <- .prop_means[, "I"]
+prop_R_initial  <- .prop_means[, "R"]
 
 message("Get birth rate of each location (b_j)")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_b_birth_rate.csv'))
