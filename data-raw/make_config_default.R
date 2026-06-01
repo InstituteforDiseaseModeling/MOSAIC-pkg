@@ -170,12 +170,28 @@ if (file.exists(cfr_file)) {
 mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
 names(mu_j_baseline) <- j
 
-# Initialize mu_j_slope to 0 (no temporal trend by default)
+# Initialize mu_j_slope to 0 (no temporal trend by default).
+# Prior is Gamma centred on 0 for each iso; default of 0 (== prior mode) is fine.
 mu_j_slope <- rep(0, length(j))
 names(mu_j_slope) <- j
 
-# Initialize mu_j_epidemic_factor to 0.5 (50% increase during epidemics by default)
-mu_j_epidemic_factor <- rep(0, length(j))
+# Seed mu_j_epidemic_factor from per-iso prior means rather than zero.
+# Prior is Gamma per iso (most isos mean=0.5, MOZ mean=3.0). The previous
+# hardcoded 0 sat at the support boundary -- the epidemic-phase IFR
+# multiplier could never engage, so the death series LL was stuck at
+# baseline regardless of outbreak phase.
+mu_j_epidemic_factor <- vapply(
+     j,
+     function(iso) {
+          loc <- priors_default$parameters_location$mu_j_epidemic_factor$location[[iso]]
+          if (is.null(loc)) return(0.5)  # fallback if iso missing from prior
+          p <- loc$parameters
+          if (loc$distribution == "gamma") return(unname(p$shape / p$rate))
+          if (loc$distribution %in% c("truncnorm","normal")) return(unname(p$mean))
+          0.5
+     },
+     numeric(1)
+)
 names(mu_j_epidemic_factor) <- j
 
 message("Created mu_j_baseline, mu_j_slope, and mu_j_epidemic_factor parameters from mu_jt")
@@ -404,7 +420,23 @@ default_args <- list(
      rho_deaths = 0.6,            # Death detection rate: probability a true cholera death is captured by surveillance (mean of Beta(3, 2) prior; Finger et al. 2024)
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
-     epidemic_threshold = rep(1/10000, length(j)),  # Per-location Isym/N threshold for PPV switching (1 per 10k)
+     # Per-iso Isym/N threshold for PPV / IFR phase switching. Seeded from
+     # the per-iso Truncnorm prior means (range ~7e-7 NGA to ~8.7e-6 COD;
+     # ETH 3.36e-6). The earlier flat 1/10000 default was 12-142x above the
+     # prior means and never let any country enter "epidemic" phase, so
+     # chi_epidemic and mu_j_epidemic_factor never engaged.
+     epidemic_threshold = vapply(
+          j,
+          function(iso) {
+               loc <- priors_default$parameters_location$epidemic_threshold$location[[iso]]
+               if (is.null(loc)) return(1e-5)
+               p <- loc$parameters
+               if (loc$distribution == "truncnorm") return(unname(p$mean))
+               if (loc$distribution == "gamma")     return(unname(p$shape / p$rate))
+               1e-5
+          },
+          numeric(1)
+     ),
      delta_reporting_cases = 0,   # Case reporting delay (was 2; posteriors collapse to 0 in every test, KL=14.2)
      delta_reporting_deaths = 5,  # Death reporting delay (was 7; posteriors consistently at 4-6 days)
      longitude         = longitude,
