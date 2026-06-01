@@ -170,13 +170,18 @@ first doses proportionally from all listed compartments.
 \subsection{Infection dynamics}{
 }}
 
-\item{iota}{Incubation period (numeric > 0).}
+\item{iota}{Incubation rate \code{E -> I} (numeric > 0, per day). Note this is
+a \emph{rate}, not a period -- prior median ~0.71/day. The engine uses
+\code{iota * E} as the flow out of E.}
 
-\item{gamma_1}{Recovery rate for severe infection (numeric >= 0).}
+\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric
+>= 0, per day; "severe / symptomatic" branch).}
 
-\item{gamma_2}{Recovery rate for mild infection (numeric >= 0).}
+\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric
+>= 0, per day; "mild / asymptomatic" branch).}
 
-\item{epsilon}{Waning immunity rate (numeric >= 0).}
+\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric
+>= 0, per day). Distinct from vaccine waning (\code{omega_1}, \code{omega_2}).}
 
 \item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
@@ -193,11 +198,14 @@ Numeric vector of length(location_name). Must be >= 0.
 \subsection{Observation Processes}{
 }}
 
-\item{rho}{Proportion of true infections (numeric in [0, 1]).}
+\item{rho}{Care-seeking rate: probability a symptomatic individual
+presents to surveillance (numeric in [0, 1]). \emph{Not} a reporting
+fraction and \emph{not} sigma -- this is the upstream care-seeking
+step of the surveillance cascade.}
 
-\item{rho_deaths}{Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Optional; when NULL, laser-cholera 0.12.x ignores it and the deaths observation model uses raw simulated counts. Once laser-cholera#49 ships, the engine consumes this to produce reported_deaths.}
+\item{rho_deaths}{Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Consumed by the engine from laser-cholera v0.13+ (laser-cholera#49) to produce reported_deaths; older engine versions ignore this and use raw simulated counts.}
 
-\item{sigma}{Proportion of symptomatic infections (numeric in [0, 1]).}
+\item{sigma}{Proportion of infections that are symptomatic (numeric in [0, 1]).}
 
 \item{chi_endemic}{Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).}
 
@@ -206,9 +214,12 @@ Numeric vector of length(location_name). Must be >= 0.
 \item{epidemic_threshold}{Isym/N point prevalence threshold for epidemic regime activation. Used for both
 case reporting and IFR threshold models. Numeric scalar or length-n vector in [0, 1].}
 
-\item{delta_reporting_cases}{Infection-to-case reporting delay in days (non-negative integer).}
+\item{delta_reporting_cases}{Symptom-onset-to-surveillance reporting delay
+in days (non-negative integer). \emph{Not} infection-to-report --
+incubation is handled separately by the E compartment and \code{iota}.}
 
-\item{delta_reporting_deaths}{Infection-to-death reporting delay in days (non-negative integer).
+\item{delta_reporting_deaths}{Symptom-onset-to-death-report delay in days
+(non-negative integer).
 \subsection{Spatial model}{
 }}
 
@@ -243,9 +254,13 @@ If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_t
 
 \item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.}
 
-\item{alpha_1}{Transmission parameter for mixing (numeric in [0, 1]).}
+\item{alpha_1}{FOI mixing exponent applied to the infectious term \code{(I/N)}
+(numeric in [0, 1]; 1 = well-mixed contacts).}
 
-\item{alpha_2}{Transmission parameter for density dependence (numeric in [0, 1]).
+\item{alpha_2}{Exponent on \code{N_jt} in the FOI denominator
+(numeric in [0, 1]). \code{alpha_2 = 1} is frequency-dependent
+transmission (FOI proportional to \code{I/N}); \code{alpha_2 = 0} is
+density-dependent (FOI proportional to \code{I}).
 \subsection{Force of Infection (environment-to-human)}{
 }}
 

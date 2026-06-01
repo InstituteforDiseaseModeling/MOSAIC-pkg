@@ -5,8 +5,8 @@
 #' vectors, and file-path references required to run the full cholera
 #' metapopulation transmission model across any number of locations.
 #'
-#' @format A named **list** created by `make_default_LASER_config()`, whose
-#'   elements include:
+#' @format A named **list** built by the `data-raw/make_config_default.R`
+#'   script and persisted as `data/config_default.rda`. Elements include:
 #'   * **Metadata** – `metadata$version`, `metadata$date`, `metadata$description`
 #'     for provenance tracking;
 #'   * **Scalars** – biological constants (`phi_1`, `gamma_1`, `epsilon`, …);
@@ -51,7 +51,9 @@
 #' config_default
 #'
 #' @seealso
-#' * make_defaut_LASER_config() – function that creates this object.
+#' * `data-raw/make_config_default.R` – the script that builds this object.
+#' * [make_LASER_config()] – the validator/factory function used internally
+#'   by the build script to validate every parameter.
 #' * [config_simulation_epidemic] – one-year outbreak toy data set.
 #' * [config_simulation_endemic] – 5-year endemic toy data set.
 #'

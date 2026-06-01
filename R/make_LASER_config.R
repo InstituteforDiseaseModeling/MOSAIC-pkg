@@ -66,10 +66,15 @@
 #'        first doses proportionally from all listed compartments.
 #'
 #' ## Infection dynamics
-#' @param iota Incubation period (numeric > 0).
-#' @param gamma_1 Recovery rate for severe infection (numeric >= 0).
-#' @param gamma_2 Recovery rate for mild infection (numeric >= 0).
-#' @param epsilon Waning immunity rate (numeric >= 0).
+#' @param iota Incubation rate `E -> I` (numeric > 0, per day). Note this is
+#'        a *rate*, not a period -- prior median ~0.71/day. The engine uses
+#'        `iota * E` as the flow out of E.
+#' @param gamma_1 Symptomatic shedding-duration rate `I_sym -> R` (numeric
+#'        >= 0, per day; "severe / symptomatic" branch).
+#' @param gamma_2 Asymptomatic shedding-duration rate `I_asym -> R` (numeric
+#'        >= 0, per day; "mild / asymptomatic" branch).
+#' @param epsilon Natural-infection immunity waning rate `R -> S` (numeric
+#'        >= 0, per day). Distinct from vaccine waning (`omega_1`, `omega_2`).
 #' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 #'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
 #'        If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().
@@ -81,15 +86,21 @@
 #'        Numeric vector of length(location_name). Must be >= 0.
 #'
 #' ## Observation Processes
-#' @param rho Proportion of true infections (numeric in \[0, 1\]).
-#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Optional; when NULL, laser-cholera 0.12.x ignores it and the deaths observation model uses raw simulated counts. Once laser-cholera#49 ships, the engine consumes this to produce reported_deaths.
-#' @param sigma Proportion of symptomatic infections (numeric in \[0, 1\]).
+#' @param rho Care-seeking rate: probability a symptomatic individual
+#'        presents to surveillance (numeric in \[0, 1\]). *Not* a reporting
+#'        fraction and *not* sigma -- this is the upstream care-seeking
+#'        step of the surveillance cascade.
+#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine from laser-cholera v0.13+ (laser-cholera#49) to produce reported_deaths; older engine versions ignore this and use raw simulated counts.
+#' @param sigma Proportion of infections that are symptomatic (numeric in \[0, 1\]).
 #' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
 #' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
 #' @param epidemic_threshold Isym/N point prevalence threshold for epidemic regime activation. Used for both
 #'        case reporting and IFR threshold models. Numeric scalar or length-n vector in \[0, 1\].
-#' @param delta_reporting_cases Infection-to-case reporting delay in days (non-negative integer).
-#' @param delta_reporting_deaths Infection-to-death reporting delay in days (non-negative integer).
+#' @param delta_reporting_cases Symptom-onset-to-surveillance reporting delay
+#'        in days (non-negative integer). *Not* infection-to-report --
+#'        incubation is handled separately by the E compartment and `iota`.
+#' @param delta_reporting_deaths Symptom-onset-to-death-report delay in days
+#'        (non-negative integer).
 #'
 #' ## Spatial model
 #' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
@@ -110,8 +121,12 @@
 #' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
 #' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.
-#' @param alpha_1 Transmission parameter for mixing (numeric in \[0, 1\]).
-#' @param alpha_2 Transmission parameter for density dependence (numeric in \[0, 1\]).
+#' @param alpha_1 FOI mixing exponent applied to the infectious term `(I/N)`
+#'        (numeric in \[0, 1\]; 1 = well-mixed contacts).
+#' @param alpha_2 Exponent on `N_jt` in the FOI denominator
+#'        (numeric in \[0, 1\]). `alpha_2 = 1` is frequency-dependent
+#'        transmission (FOI proportional to `I/N`); `alpha_2 = 0` is
+#'        density-dependent (FOI proportional to `I`).
 #'
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).

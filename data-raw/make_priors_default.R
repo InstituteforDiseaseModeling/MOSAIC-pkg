@@ -133,7 +133,7 @@ priors_default$parameters_global$gamma_1 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/10),  # log of median rate: 1/10 per day = 10 days shedding
-          sdlog = 0.5          # uncertainty allowing 7-14 day range
+          sdlog = 0.5           # 95% CI on shedding duration ~3.75-26.6 days
      )
 )
 
@@ -143,7 +143,7 @@ priors_default$parameters_global$gamma_2 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/2),   # log of median rate: 1/2 per day = 2 days shedding
-          sdlog = 0.4           # uncertainty allowing 1-3 day range
+          sdlog = 0.4           # 95% CI on shedding duration ~0.91-4.39 days
      )
 )
 

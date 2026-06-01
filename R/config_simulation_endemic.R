@@ -17,7 +17,7 @@
 #' | **Initial mix** | 25 % susceptible, 30 % first-dose vaccinated, 20 % recovered, ~0.5 % infectious (≥ 1 case each site). |
 #' | **Transmission** | Site-specific baseline β: **0.18**, **0.30**, **0.24** with ±0.10 annual forcing (Fourier first harmonic). |
 #' | **Environment** | Suitability ψ<sub>jt</sub> = 0.55 + annual 0.25 sin (2π t/365) + quadrennial 0.15 sin (2π t/1 460); values clipped to \[0,1\]. |
-#' | **Environmental half-life** | `decay_days_long = 500` days (≈ 14 months). |
+#' | **Environmental half-life** | `decay_days_long = 90` days (~3 months). |
 #' | **Immunity waning** | ω₁ ≈ 1/180 d (0.0056), ω₂ ≈ 1/300 d (0.0033). |
 #' | **Mobility** | τ<sub>i</sub> = 0.005, 0.002, 0.006 per day. |
 #' | **Observed data** | `reported_cases` / `reported_deaths` matrices filled with **NA**. |
