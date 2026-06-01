@@ -903,6 +903,20 @@ make_LASER_config <- function(output_file_path = NULL,
                warning(sprintf("epidemic_peaks contains iso_code(s) not in location_name: %s",
                                paste(unknown_iso, collapse = ", ")))
           }
+          # Off-window peaks would silently snap to t=1 / t=N in the
+          # peak-shape likelihood terms; warn the caller rather than
+          # erroring so older configs still load.
+          out_of_window <- !is.na(parsed_dates) &
+               (parsed_dates < as.Date(date_start) |
+                parsed_dates > as.Date(date_stop))
+          if (any(out_of_window)) {
+               warning(sprintf(
+                    paste0("epidemic_peaks contains %d row(s) with peak_date outside ",
+                           "[%s, %s]; these will not contribute to peak-shape likelihood ",
+                           "terms. Pre-filter via MOSAIC:::.filter_epidemic_peaks() at ",
+                           "build time."),
+                    sum(out_of_window), date_start, date_stop), call. = FALSE)
+          }
           params$epidemic_peaks <- epidemic_peaks
      }
 

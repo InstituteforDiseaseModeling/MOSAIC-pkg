@@ -406,12 +406,17 @@ default_args <- list(
      # so the Python likelihood port (laser-cholera#47) can compute the peak-timing
      # and peak-magnitude shape terms without an extra runtime injection. Slim
      # 2-column form matches what calc_model_likelihood() consumes on both sides.
-     # Filtered to locations actually present in this config — peaks for locations
-     # outside iso_codes_mosaic (e.g. SDN) would never be looked up by the per-loc
-     # scoring loop and only bloat the JSON.
+     # Filtered to locations actually present in this config AND to the
+     # configured [date_start, date_stop] window — peaks outside this window
+     # would silently snap to t=1 or t=N in the peak-shape likelihood terms
+     # (see .filter_epidemic_peaks docstring).
      epidemic_peaks = local({
-          ep <- MOSAIC::epidemic_peaks
-          ep <- ep[ep$iso_code %in% j, , drop = FALSE]
+          ep <- MOSAIC:::.filter_epidemic_peaks(
+               MOSAIC::epidemic_peaks,
+               date_start     = date_start,
+               date_stop      = date_stop,
+               location_names = j
+          )
           data.frame(
                iso_code  = as.character(ep$iso_code),
                peak_date = as.character(ep$peak_date),
@@ -430,9 +435,9 @@ config_default <- do.call(make_LASER_config, default_args)
 
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "3.2",
+     version = "3.3",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships

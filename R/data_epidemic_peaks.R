@@ -4,6 +4,19 @@
 #' across African countries. Peaks are detected using time series analysis with
 #' smoothing and prominence-based peak detection algorithms.
 #'
+#' **Scope:** The dataset is the full historical detection record from the
+#' surveillance time series (2010+) and is **not** pre-trimmed to any
+#' particular simulation window. Consumers that score peaks against a
+#' specific config window (e.g. `calc_model_likelihood()`, the Python
+#' likelihood port, the LASER config builders) must filter against
+#' `[date_start, date_stop]` first -- otherwise `which.min(abs(date_seq -
+#' peak_date))` silently snaps out-of-window peaks to t=1 or t=N and
+#' biases the peak-shape likelihood terms. The internal helper
+#' `MOSAIC:::.filter_epidemic_peaks()` is the canonical filter and is
+#' applied at build time inside `make_config_default.R`, at runtime
+#' inside `run_MOSAIC()`'s Dask injector, and defensively inside
+#' `calc_model_likelihood()`.
+#'
 #' @format A data frame with 5 variables:
 #' \describe{
 #'   \item{iso_code}{ISO 3166-1 alpha-3 country code}
