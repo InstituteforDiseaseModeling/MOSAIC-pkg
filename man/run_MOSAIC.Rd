@@ -186,6 +186,13 @@ custom_priors <- list(
 )
 
 run_MOSAIC(custom_config, custom_priors, "./output")
+
+# === RESUME AN INTERRUPTED RUN ===
+
+# If a calibration is killed mid-run, re-call with resume = TRUE and the same
+# config/priors/output directory. Completed simulations on disk are reused and
+# the run continues from the next sim_id (bit-identical to an uninterrupted run).
+run_MOSAIC(config, priors, "./output", resume = TRUE)
 }
 
 }
