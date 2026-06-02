@@ -638,16 +638,22 @@
                       full.names = FALSE)
   if (!length(files)) return(empty)
 
-  # Validate readability: a complete shard exposes >= 1 row via parquet
-  # metadata. A truncated/zero-byte file throws or reports 0 rows → quarantine.
+  # Validate each shard by actually READING its data (not just parquet footer
+  # metadata): this decodes the data pages, so a torn/byte-corrupt shard throws,
+  # and we additionally require the load-bearing columns (sim, likelihood) to be
+  # present with a numeric likelihood. A footer-valid but data-corrupt or
+  # schema-wrong shard would otherwise survive the scan and abort/poison the
+  # downstream combine. Shards are one row, so the read is cheap.
   bad    <- character(0)
   ok_ids <- integer(0)
   for (f in files) {
-    n_row <- tryCatch(
-      arrow::open_dataset(file.path(dir_cal_samples, f))$num_rows,
-      error = function(e) NA_integer_
-    )
     parsed <- .mosaic_parse_sim_ids(f)
+    n_row <- tryCatch({
+      df <- as.data.frame(arrow::read_parquet(file.path(dir_cal_samples, f)))
+      if (!all(c("sim", "likelihood") %in% names(df))) NA_integer_
+      else if (!is.numeric(df$likelihood)) NA_integer_
+      else nrow(df)
+    }, error = function(e) NA_integer_)
     if (is.na(n_row) || n_row < 1L || !length(parsed)) {
       bad <- c(bad, f)
     } else {
@@ -662,7 +668,12 @@
       # Clear any prior-quarantine collisions so the rename can't silently fail.
       targets <- file.path(qdir, bad)
       unlink(targets[file.exists(targets)], force = TRUE)
-      file.rename(file.path(dir_cal_samples, bad), targets)
+      sources <- file.path(dir_cal_samples, bad)
+      moved   <- file.rename(sources, targets)
+      # If a rename failed (e.g. cross-device .quarantine), the bad shard would
+      # otherwise remain in the live sim_*.parquet glob and abort the combine.
+      # Delete the unreadable source so it can never re-enter the pool.
+      if (any(!moved)) unlink(sources[!moved], force = TRUE)
     }
     log_msg("[RESUME] Quarantined %d unreadable shard(s)", length(bad))
   }
@@ -835,10 +846,13 @@
 #'
 #' Also guards the laser-cholera engine version: resuming across the v0.12 ->
 #' v0.13 deaths-likelihood-scale boundary is a hard error (the on-disk shards
-#' would mix incompatible scales).
+#' would mix incompatible scales). When \code{control} is supplied, the
+#' likelihood target (\code{control$likelihood}) is also compared, since it is
+#' not part of config.json/priors.json but changing it re-scores draws under a
+#' different target.
 #'
 #' @noRd
-.mosaic_resume_check_inputs <- function(dirs, config, priors) {
+.mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL) {
   serialize_obj <- function(obj) {
     tmp <- tempfile(fileext = ".json")
     on.exit(unlink(tmp), add = TRUE)
@@ -870,6 +884,28 @@
   }
   check_one(priors, file.path(dirs$inputs, "priors.json"), "priors")
   check_one(config, file.path(dirs$inputs, "config.json"), "config")
+
+  # Likelihood target lives in control$likelihood (weights, sigmas, k_min), not
+  # in config.json/priors.json. Changing it re-scores new draws under a different
+  # target, making them incomparable to the persisted shards. control.json nests
+  # the full control under $control, plus a per-run timestamp, so compare only
+  # the likelihood sub-object rather than byte-comparing the whole file.
+  ctrl_file <- file.path(dirs$inputs, "control.json")
+  if (!is.null(control) && !is.null(control$likelihood) && file.exists(ctrl_file)) {
+    persisted_ctrl <- tryCatch(jsonlite::fromJSON(ctrl_file, simplifyVector = TRUE),
+                               error = function(e) NULL)
+    persisted_lik <- tryCatch(persisted_ctrl$control$likelihood, error = function(e) NULL)
+    if (!is.null(persisted_lik)) {
+      a <- serialize_obj(control$likelihood)
+      b <- serialize_obj(persisted_lik)
+      if (!is.na(a) && !is.na(b) && !identical(a, b)) {
+        stop("resume: supplied control$likelihood differs from 1_inputs/control.json. ",
+             "Changing the likelihood weights/settings re-scores new draws under a different ",
+             "target, making them incomparable to the existing shards. Resume with the same ",
+             "control$likelihood, or start a fresh run in a new directory.", call. = FALSE)
+      }
+    }
+  }
 
   # laser-cholera engine version check: the v0.12 -> v0.13 transition flipped
   # the deaths likelihood scale (raw disease_deaths -> rho_deaths-adjusted

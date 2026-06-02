@@ -83,6 +83,57 @@ test_that(".mosaic_resume_scan quarantines bad shards and sweeps temp files", {
   expect_true(file.exists(file.path(d, ".quarantine", "sim_0000004.parquet")))
 })
 
+# ---- shard validation (read data + schema/type, not just num_rows) ---------
+
+test_that(".mosaic_resume_scan quarantines schema/type-invalid shards", {
+  d <- new_samples_dir()
+  make_shard(d, 1L); make_shard(d, 2L)
+  # likelihood written as a string → must be rejected (would coerce the whole
+  # combined column to character and silently zero the posterior)
+  arrow::write_parquet(
+    data.frame(sim = 3L, iter = 1L, seed_sim = 3L, seed_iter = NA_real_,
+               likelihood = "not_a_number"),
+    file.path(d, "sim_0000003.parquet"))
+  # missing the likelihood column entirely → must be rejected
+  arrow::write_parquet(
+    data.frame(sim = 4L, iter = 1L, seed_sim = 4L, foo = 1.0),
+    file.path(d, "sim_0000004.parquet"))
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+  expect_equal(scan$ids, c(1L, 2L))        # only the well-formed shards survive
+  expect_equal(scan$watermark, 2L)
+  expect_true(file.exists(file.path(d, ".quarantine", "sim_0000003.parquet")))
+  expect_true(file.exists(file.path(d, ".quarantine", "sim_0000004.parquet")))
+})
+
+# ---- control$likelihood drift guard ----------------------------------------
+
+test_that(".mosaic_resume_check_inputs guards control$likelihood drift", {
+  base <- tempfile("ctl_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+  priors <- list(a = 1); config <- list(location_name = "ETH")
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+  wj(priors, file.path(inp, "priors.json"))
+  wj(config, file.path(inp, "config.json"))
+
+  lik <- list(weight_cases = 1, weight_deaths = 1, weight_wis = 0)
+  control <- list(likelihood = lik)
+  # control.json is written as sim_params: list(control = control, ...)
+  wj(list(control = control, timestamp = "t0"), file.path(inp, "control.json"))
+
+  # identical likelihood → passes
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, control))
+
+  # changed weight → hard error
+  control2 <- list(likelihood = list(weight_cases = 1, weight_deaths = 2, weight_wis = 0))
+  expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, control2),
+               "control\\$likelihood")
+
+  # control omitted (back-compat) → likelihood check skipped, no error
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+})
+
 # ---- checkpoint round-trip -------------------------------------------------
 
 test_that("resume checkpoint round-trips decision state", {
