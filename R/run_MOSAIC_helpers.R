@@ -594,6 +594,234 @@
   file.rename(tmp, path)
 }
 
+# =============================================================================
+# RESUME SUPPORT
+# =============================================================================
+#
+# Resuming an interrupted calibration treats the per-sim parquet shards in
+# 2_calibration/samples/ as the single source of truth. Because each sim's
+# parameters are a deterministic function of seed = sim_id (content-addressed
+# seeds; see .mosaic_run_simulation_worker), a resumed run must continue from
+# max(sim_id on disk) + 1 — never count + 1 — or it would regenerate existing
+# draws and double-count mass in the post-hoc importance weights.
+#
+# Decision-relevant state that cannot be recovered from shards alone
+# (ess_tracking, phase, batch counters, convergence flags) is persisted each
+# batch to an internal RDS checkpoint (resume_checkpoint.rds). This is distinct
+# from the slim, human-facing run_state.json monitoring file.
+
+#' Scan Calibration Samples Directory for Resume
+#'
+#' Inventories the per-sim parquet shards to support resume. Sweeps orphaned
+#' atomic-write temp files left by a hard crash mid-rename, validates each shard
+#' is readable with at least one row, and quarantines unreadable shards. Returns
+#' the sorted valid sim IDs and the high-water-mark.
+#'
+#' @param dir_cal_samples Path to 2_calibration/samples
+#' @param quarantine Logical; move unreadable shards to samples/.quarantine/
+#' @return list(ids = sorted integer vector, watermark = integer, n = integer)
+#' @noRd
+.mosaic_resume_scan <- function(dir_cal_samples, quarantine = TRUE) {
+  empty <- list(ids = integer(0), watermark = 0L, n = 0L)
+  if (is.null(dir_cal_samples) || !dir.exists(dir_cal_samples)) return(empty)
+
+  # Sweep orphaned atomic-write temp files (.mosaic_tmp_*) from an interrupted
+  # rename. They never match the sim_*.parquet glob but are dead weight.
+  tmp_files <- list.files(dir_cal_samples, pattern = "^\\.mosaic_tmp_",
+                          all.files = TRUE, full.names = TRUE)
+  if (length(tmp_files)) {
+    unlink(tmp_files, force = TRUE)
+    log_msg("[RESUME] Swept %d orphaned temp file(s)", length(tmp_files))
+  }
+
+  files <- list.files(dir_cal_samples, pattern = "^sim_.*\\.parquet$",
+                      full.names = FALSE)
+  if (!length(files)) return(empty)
+
+  # Validate readability: a complete shard exposes >= 1 row via parquet
+  # metadata. A truncated/zero-byte file throws or reports 0 rows → quarantine.
+  bad    <- character(0)
+  ok_ids <- integer(0)
+  for (f in files) {
+    n_row <- tryCatch(
+      arrow::open_dataset(file.path(dir_cal_samples, f))$num_rows,
+      error = function(e) NA_integer_
+    )
+    parsed <- .mosaic_parse_sim_ids(f)
+    if (is.na(n_row) || n_row < 1L || !length(parsed)) {
+      bad <- c(bad, f)
+    } else {
+      ok_ids <- c(ok_ids, parsed)
+    }
+  }
+
+  if (length(bad)) {
+    if (quarantine) {
+      qdir <- file.path(dir_cal_samples, ".quarantine")
+      dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
+      file.rename(file.path(dir_cal_samples, bad), file.path(qdir, bad))
+    }
+    log_msg("[RESUME] Quarantined %d unreadable shard(s)", length(bad))
+  }
+
+  ok_ids <- sort(unique(ok_ids))
+  if (!length(ok_ids)) return(empty)
+  list(ids = ok_ids, watermark = max(ok_ids), n = length(ok_ids))
+}
+
+#' Save Internal Resume Checkpoint
+#'
+#' Persists the decision-relevant calibration state to RDS so an interrupted run
+#' resumes with bit-identical stop/continue/phase decisions. Internal durability
+#' state, distinct from the slim run_state.json monitoring file. Atomic write;
+#' failures warn but never abort the run in progress.
+#'
+#' @noRd
+.mosaic_save_checkpoint <- function(state, checkpoint_file) {
+  ckpt <- list(
+    schema_version      = 1L,
+    total_sims_run      = state$total_sims_run,
+    batch_number        = state$batch_number,
+    phase               = state$phase,
+    phase_batch_count   = state$phase_batch_count,
+    calib_batches       = state$calib_batches,
+    r2_ess              = state$r2_ess,
+    calibration_done    = state$calibration_done,
+    predictive_done     = state$predictive_done,
+    converged           = state$converged,
+    ess_tracking        = state$ess_tracking,
+    batch_success_rates = state$batch_success_rates,
+    batch_sizes_used    = state$batch_sizes_used
+  )
+  tryCatch(
+    .mosaic_atomic_write(ckpt, checkpoint_file, saveRDS),
+    error = function(e)
+      log_msg("[RESUME] WARNING: failed to write resume checkpoint: %s", conditionMessage(e))
+  )
+  invisible(checkpoint_file)
+}
+
+#' Load Internal Resume Checkpoint
+#' @noRd
+.mosaic_load_checkpoint <- function(checkpoint_file) {
+  if (is.null(checkpoint_file) || !file.exists(checkpoint_file)) return(NULL)
+  tryCatch(readRDS(checkpoint_file), error = function(e) {
+    log_msg("[RESUME] WARNING: resume checkpoint unreadable (%s); reconstructing from shards",
+            conditionMessage(e))
+    NULL
+  })
+}
+
+#' Reconstruct Calibration State From Disk for Resume
+#'
+#' Overlays the fresh-init `state` with state recovered from the shards on disk
+#' (and the resume checkpoint if present). Always sets total_sims_run from the
+#' disk watermark so the next sim_id never collides with an existing draw.
+#'
+#' @param state Fresh state from .mosaic_init_state()
+#' @param dirs Directory list
+#' @param control Control list
+#' @param param_names_est Estimated-parameter names
+#' @return Reconstructed state (unchanged if no shards exist → fresh run)
+#' @noRd
+.mosaic_reconstruct_state <- function(state, dirs, control, param_names_est) {
+  scan <- .mosaic_resume_scan(dirs$cal_samples)
+
+  if (scan$n == 0L) {
+    log_msg("[RESUME] No existing shards in %s — starting fresh run", dirs$cal_samples)
+    return(state)
+  }
+
+  # Disk watermark is authoritative for the sim_id frontier (avoids seed reuse).
+  state$total_sims_run        <- scan$watermark
+  state$total_sims_successful <- scan$n
+
+  ckpt <- .mosaic_load_checkpoint(file.path(dirs$cal_state, "resume_checkpoint.rds"))
+
+  if (!is.null(ckpt)) {
+    # ---- Exact restore from checkpoint -------------------------------------
+    state$batch_number        <- ckpt$batch_number        %||% state$batch_number
+    state$phase               <- ckpt$phase               %||% state$phase
+    state$phase_batch_count   <- ckpt$phase_batch_count   %||% state$phase_batch_count
+    state$calib_batches       <- ckpt$calib_batches       %||% state$calib_batches
+    state$r2_ess              <- ckpt$r2_ess              %||% state$r2_ess
+    state$calibration_done    <- isTRUE(ckpt$calibration_done)
+    state$predictive_done     <- isTRUE(ckpt$predictive_done)
+    state$converged           <- isTRUE(ckpt$converged)
+    state$ess_tracking        <- ckpt$ess_tracking        %||% list()
+    state$batch_success_rates <- ckpt$batch_success_rates %||% numeric()
+    state$batch_sizes_used    <- ckpt$batch_sizes_used    %||% integer()
+
+    last_n <- if (length(state$ess_tracking))
+      tail(vapply(state$ess_tracking, `[[`, numeric(1), "total_sims"), 1) else 0
+    log_msg("[RESUME] Restored checkpoint: %d sims, batch %d, phase '%s', converged=%s",
+            state$total_sims_run, state$batch_number, state$phase, isTRUE(state$converged))
+
+    # New shards beyond the last checkpoint (a partial batch wrote after the
+    # last checkpoint) → refresh ESS/convergence over the full pool.
+    if (identical(state$mode, "auto") && !state$converged && scan$watermark > last_n) {
+      state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
+    }
+
+  } else if (identical(state$mode, "auto")) {
+    # ---- Lightweight bootstrap (no checkpoint; e.g. pre-feature run) --------
+    bs <- control$calibration$batch_size_adaptive %||% 1000L
+    state$batch_number <- max(1L, as.integer(ceiling(scan$watermark / max(bs, 1L))))
+    log_msg("[RESUME] No checkpoint; bootstrapping from %d shards (watermark %d, batch %d)",
+            scan$n, scan$watermark, state$batch_number)
+    state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
+
+  } else {
+    log_msg("[RESUME] Fixed mode: %d shards present (watermark %d)", scan$n, scan$watermark)
+  }
+
+  state
+}
+
+#' Verify Resume Inputs Match the Interrupted Run
+#'
+#' On resume, the incoming config/priors must match those persisted in 1_inputs/.
+#' Changing the prior or likelihood target makes existing shards incomparable to
+#' new draws, so a mismatch is a hard error. Comparison uses the same serializer
+#' that wrote the files (byte-exact for identical inputs); if serialization
+#' cannot be performed the check downgrades to a warning rather than blocking.
+#'
+#' @noRd
+.mosaic_resume_check_inputs <- function(dirs, config, priors) {
+  serialize_obj <- function(obj) {
+    tmp <- tempfile(fileext = ".json")
+    on.exit(unlink(tmp), add = TRUE)
+    ok <- tryCatch({
+      jsonlite::write_json(obj, tmp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+      TRUE
+    }, error = function(e) FALSE)
+    if (!ok) return(NA_character_)
+    paste(readLines(tmp, warn = FALSE), collapse = "\n")
+  }
+  check_one <- function(obj, file, label) {
+    if (!file.exists(file)) return(invisible())
+    incoming  <- serialize_obj(obj)
+    persisted <- tryCatch(paste(readLines(file, warn = FALSE), collapse = "\n"),
+                          error = function(e) NA_character_)
+    if (is.na(incoming) || is.na(persisted)) {
+      warning(sprintf("resume: could not compare %s against 1_inputs/; skipping integrity check",
+                      label), call. = FALSE)
+      return(invisible())
+    }
+    if (!identical(incoming, persisted)) {
+      stop(sprintf(paste0("resume: supplied %s differs from 1_inputs/%s.json. Changing %s ",
+                          "alters the sampling/likelihood target, making the existing shards ",
+                          "incomparable to new draws. Resume with identical %s, or start a ",
+                          "fresh run in a new directory."),
+                   label, label, label, label), call. = FALSE)
+    }
+    invisible()
+  }
+  check_one(priors, file.path(dirs$inputs, "priors.json"), "priors")
+  check_one(config, file.path(dirs$inputs, "config.json"), "config")
+  invisible(TRUE)
+}
+
 #' Decide Next Batch Size
 #' @noRd
 .mosaic_decide_next_batch <- function(state, control, ess_tracking) {

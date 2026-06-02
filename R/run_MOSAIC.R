@@ -428,6 +428,15 @@
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
+#' @param resume Logical (default \code{FALSE}). When \code{TRUE}, the run
+#'   reconstructs calibration state from the per-sim shards already present in
+#'   \code{<dir_output>/2_calibration/samples/} and continues from the next
+#'   unused \code{sim_id} instead of starting fresh. The shards on disk are the
+#'   sole source of truth (an internal \code{resume_checkpoint.rds} restores the
+#'   adaptive ESS/phase state when present; otherwise it is reconstructed from
+#'   the shards). Requires \code{control$paths$clean_output = FALSE} and that the
+#'   supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Has no
+#'   effect when no shards exist (equivalent to a fresh run).
 #' @param cluster Optional pre-built R parallel cluster from
 #'   \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
 #'   When provided, skips cluster creation and teardown, reusing existing workers.
@@ -540,6 +549,7 @@ run_MOSAIC <- function(config,
                        priors,
                        dir_output,
                        control   = NULL,
+                       resume    = FALSE,
                        cluster   = NULL,
                        dask_spec = NULL) {
 
@@ -553,7 +563,9 @@ run_MOSAIC <- function(config,
     "priors is required and must be a list" =
       !missing(priors) && is.list(priors) && length(priors) > 0,
     "dir_output is required and must be character string" =
-      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L
+      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L,
+    "resume must be a single logical (TRUE/FALSE)" =
+      is.logical(resume) && length(resume) == 1L && !is.na(resume)
   )
 
   # Validate config structure
@@ -642,6 +654,14 @@ run_MOSAIC <- function(config,
   # Merge and validate control
   control <- .mosaic_validate_and_merge_control(control)
 
+  # Resume is incompatible with clean_output: the directory wipe would delete
+  # the very shards resume reads from. Fail fast before any heavy setup.
+  if (isTRUE(resume) && isTRUE(control$paths$clean_output)) {
+    stop("resume = TRUE is incompatible with control$paths$clean_output = TRUE: ",
+         "cleaning the output directory would delete the shards resume reads from.",
+         call. = FALSE)
+  }
+
   # Extract parameters from control structure
   n_iterations <- control$calibration$n_iterations
   n_simulations <- control$calibration$n_simulations
@@ -695,6 +715,13 @@ run_MOSAIC <- function(config,
   # ===========================================================================
   # WRITE SETUP FILES (with cluster metadata)
   # ===========================================================================
+
+  # On resume, verify the supplied config/priors match those persisted by the
+  # interrupted run BEFORE the setup files below overwrite them. A mismatch
+  # changes the sampling/likelihood target and is a hard error.
+  if (isTRUE(resume)) {
+    .mosaic_resume_check_inputs(dirs, config, priors)
+  }
 
   # Capture full environment snapshot (versions, system, git, data)
   env_snapshot <- .mosaic_capture_environment(
@@ -1048,8 +1075,20 @@ run_MOSAIC <- function(config,
 
   nspec <- .mosaic_normalize_n_sims(n_simulations)
   state_file <- file.path(dirs$cal_state, "run_state.json")
+  checkpoint_file <- file.path(dirs$cal_state, "resume_checkpoint.rds")
 
   state <- .mosaic_init_state(control, param_names_sampled, nspec)
+
+  # Resume: overlay the fresh-init state with state reconstructed from the
+  # shards on disk. When resume = FALSE this branch is skipped and the run is
+  # byte-identical to a fresh calibration.
+  if (isTRUE(resume)) {
+    state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled)
+    if (isTRUE(state$converged)) {
+      log_msg("[RESUME] Reconstructed state already converged — skipping simulation, ",
+              "proceeding to post-processing")
+    }
+  }
 
   log_msg("Starting simulation (mode: %s)", state$mode)
   start_time <- Sys.time()
@@ -1069,7 +1108,14 @@ run_MOSAIC <- function(config,
     log_msg("[FIXED MODE] Running exactly %d simulations", target)
 
     all_ids <- seq_len(target)
-    done_ids <- integer()
+    # On resume, skip sim_ids whose shards already exist on disk. setdiff fills
+    # any gaps (a missing id is re-run, reproducing the same draw via its seed)
+    # so the fixed target is met exactly.
+    done_ids <- if (isTRUE(resume)) {
+      intersect(.mosaic_resume_scan(dirs$cal_samples)$ids, all_ids)
+    } else {
+      integer()
+    }
     sim_ids <- setdiff(all_ids, done_ids)
 
     if (length(sim_ids) == 0L) {
@@ -1140,6 +1186,7 @@ run_MOSAIC <- function(config,
               as.numeric(batch_runtime))
 
       .mosaic_save_state(state, state_file)
+      .mosaic_save_checkpoint(state, checkpoint_file)
     }
 
   # ===========================================================================
@@ -1181,6 +1228,7 @@ run_MOSAIC <- function(config,
       if (current_batch_size <= 0) {
         log_msg("No additional simulations needed (batch_size = 0)")
         .mosaic_save_state(state, state_file)
+        .mosaic_save_checkpoint(state, checkpoint_file)
         break
       }
 
@@ -1271,6 +1319,7 @@ run_MOSAIC <- function(config,
       # target was met on that last batch.
       state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
       .mosaic_save_state(state, state_file)
+      .mosaic_save_checkpoint(state, checkpoint_file)
 
       if (state$total_sims_run >= control$calibration$max_simulations_total && !state$converged) {
         log_msg("WARNING: Reached maximum simulations (%d) without convergence",

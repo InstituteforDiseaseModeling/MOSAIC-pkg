@@ -1,0 +1,203 @@
+# Tests for run_MOSAIC() resume capability (resume = TRUE).
+#
+# These exercise the factored, engine-free internals so they run without the
+# Python/LASER engine. The full end-to-end interrupt/resume reproducibility
+# check lives in the smoke test (claude/smoke_test_resume.R) since it needs the
+# simulation engine.
+
+# ---- helpers ---------------------------------------------------------------
+
+new_samples_dir <- function() {
+  d <- file.path(tempfile("resume_"), "samples")
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  d
+}
+
+make_shard <- function(dir, sim_id, rows = 1L) {
+  df <- data.frame(
+    sim       = rep(as.integer(sim_id), rows),
+    iter      = 1L,
+    seed_sim  = as.integer(sim_id),
+    seed_iter = NA_real_,
+    likelihood = -10
+  )
+  arrow::write_parquet(df, file.path(dir, sprintf("sim_%07d.parquet", sim_id)))
+}
+
+state_template <- function() {
+  list(
+    total_sims_run = 0L, total_sims_successful = 0L, batch_number = 0L,
+    batch_success_rates = numeric(), batch_sizes_used = integer(),
+    phase = "calibration", calib_batches = 0L, r2_ess = NA_real_,
+    calibration_done = FALSE, ess_history = list(), ess_tracking = list(),
+    param_names_est = c("a", "b"), converged = FALSE, predictive_done = FALSE,
+    mode = "auto", fixed_target = NA_integer_, phase_batch_count = 0L,
+    phase_last = NULL
+  )
+}
+
+# ---- signature -------------------------------------------------------------
+
+test_that("run_MOSAIC signature adds resume defaulting to FALSE", {
+  fmls <- formals(run_MOSAIC)
+  expect_true("resume" %in% names(fmls))
+  expect_identical(eval(fmls$resume), FALSE)
+  # Only addition; rest of the public signature is unchanged.
+  expect_setequal(
+    names(fmls),
+    c("config", "priors", "dir_output", "control", "resume", "cluster", "dask_spec")
+  )
+})
+
+# ---- .mosaic_resume_scan ---------------------------------------------------
+
+test_that(".mosaic_resume_scan uses max id as watermark, not count", {
+  d <- new_samples_dir()
+  for (id in c(1L, 2L, 3L, 5L, 8L)) make_shard(d, id)
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+  expect_equal(scan$watermark, 8L)   # critical: max, never count (5)
+  expect_equal(scan$n, 5L)
+  expect_equal(scan$ids, c(1L, 2L, 3L, 5L, 8L))
+})
+
+test_that(".mosaic_resume_scan handles empty and missing directories", {
+  d <- new_samples_dir()
+  expect_equal(MOSAIC:::.mosaic_resume_scan(d)$n, 0L)
+  expect_equal(MOSAIC:::.mosaic_resume_scan(d)$watermark, 0L)
+  expect_equal(MOSAIC:::.mosaic_resume_scan(file.path(d, "does_not_exist"))$n, 0L)
+})
+
+test_that(".mosaic_resume_scan quarantines bad shards and sweeps temp files", {
+  d <- new_samples_dir()
+  make_shard(d, 1L); make_shard(d, 2L)
+  writeLines("garbage", file.path(d, "sim_0000003.parquet"))  # corrupt
+  file.create(file.path(d, "sim_0000004.parquet"))            # zero-byte
+  file.create(file.path(d, ".mosaic_tmp_sim_0000009.parquet_abc"))  # orphaned temp
+
+  scan <- MOSAIC:::.mosaic_resume_scan(d)
+
+  expect_equal(scan$ids, c(1L, 2L))
+  expect_equal(scan$watermark, 2L)
+  expect_false(file.exists(file.path(d, ".mosaic_tmp_sim_0000009.parquet_abc")))
+  expect_true(file.exists(file.path(d, ".quarantine", "sim_0000003.parquet")))
+  expect_true(file.exists(file.path(d, ".quarantine", "sim_0000004.parquet")))
+})
+
+# ---- checkpoint round-trip -------------------------------------------------
+
+test_that("resume checkpoint round-trips decision state", {
+  d <- tempfile("ckpt_"); dir.create(d, recursive = TRUE)
+  f <- file.path(d, "resume_checkpoint.rds")
+  st <- state_template()
+  st$total_sims_run <- 2000L; st$batch_number <- 4L; st$phase <- "predictive"
+  st$phase_batch_count <- 2L; st$calibration_done <- TRUE; st$converged <- FALSE
+  st$ess_tracking <- list(list(batch = 1L, total_sims = 500L, threshold_ess = 20,
+                               min_ess = 10, median_ess = 30, max_ess = 50))
+  st$batch_success_rates <- c(99, 100); st$batch_sizes_used <- c(500L, 500L)
+
+  MOSAIC:::.mosaic_save_checkpoint(st, f)
+  ck <- MOSAIC:::.mosaic_load_checkpoint(f)
+
+  expect_equal(ck$batch_number, 4L)
+  expect_equal(ck$phase, "predictive")
+  expect_true(ck$calibration_done)
+  expect_equal(ck$ess_tracking, st$ess_tracking)
+  expect_equal(ck$batch_sizes_used, c(500L, 500L))
+})
+
+test_that(".mosaic_load_checkpoint returns NULL on missing/corrupt files", {
+  expect_null(MOSAIC:::.mosaic_load_checkpoint(tempfile()))
+  f <- tempfile(fileext = ".rds"); writeLines("not an rds file", f)
+  expect_null(MOSAIC:::.mosaic_load_checkpoint(f))
+})
+
+# ---- .mosaic_reconstruct_state ---------------------------------------------
+
+make_dirs <- function() {
+  base <- tempfile("recon_")
+  dirs <- list(
+    cal_samples = file.path(base, "2_calibration/samples"),
+    cal_state   = file.path(base, "2_calibration/state")
+  )
+  dir.create(dirs$cal_samples, recursive = TRUE)
+  dir.create(dirs$cal_state, recursive = TRUE)
+  dirs
+}
+
+test_that(".mosaic_reconstruct_state restores exactly from checkpoint", {
+  dirs <- make_dirs()
+  for (id in 1:5) make_shard(dirs$cal_samples, id)
+
+  ck <- state_template()
+  ck$batch_number <- 3L; ck$phase <- "predictive"; ck$phase_batch_count <- 1L
+  ck$calib_batches <- 2L; ck$r2_ess <- 0.97; ck$calibration_done <- TRUE
+  ck$converged <- TRUE   # already-done run → no ESS recompute needed
+  ck$ess_tracking <- list(list(batch = 3L, total_sims = 5L, threshold_ess = 120,
+                               min_ess = 110, median_ess = 130, max_ess = 150))
+  MOSAIC:::.mosaic_save_checkpoint(ck, file.path(dirs$cal_state, "resume_checkpoint.rds"))
+
+  control <- list(calibration = list(batch_size_adaptive = 2L))
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, c("a", "b"))
+
+  expect_equal(st$total_sims_run, 5L)   # disk watermark, NOT checkpoint's total
+  expect_equal(st$total_sims_successful, 5L)
+  expect_equal(st$batch_number, 3L)
+  expect_equal(st$phase, "predictive")
+  expect_true(st$calibration_done)
+  expect_true(st$converged)
+})
+
+test_that(".mosaic_reconstruct_state bootstraps from shards without a checkpoint", {
+  dirs <- make_dirs()
+  for (id in 1:10) make_shard(dirs$cal_samples, id)  # < 50 → ESS check short-circuits
+
+  control <- list(calibration = list(batch_size_adaptive = 5L),
+                  io = list(), targets = list())
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, c("a", "b"))
+
+  expect_equal(st$total_sims_run, 10L)
+  expect_equal(st$total_sims_successful, 10L)
+  expect_equal(st$batch_number, 2L)     # ceiling(10 / 5)
+  expect_false(st$converged)
+})
+
+test_that(".mosaic_reconstruct_state returns unchanged state when no shards (fresh)", {
+  dirs <- make_dirs()
+  control <- list(calibration = list(batch_size_adaptive = 5L))
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, c("a", "b"))
+  expect_equal(st$total_sims_run, 0L)   # untouched → behaves as a fresh run
+  expect_equal(st$batch_number, 0L)
+})
+
+# ---- input integrity check -------------------------------------------------
+
+test_that(".mosaic_resume_check_inputs passes on match, errors on drift", {
+  base <- tempfile("inputs_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+
+  priors <- list(tau_i = list(shape = 2, rate = 1))
+  config <- list(location_name = "ETH", value = 1)
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+  wj(priors, file.path(inp, "priors.json"))
+  wj(config, file.path(inp, "config.json"))
+
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+
+  expect_error(
+    MOSAIC:::.mosaic_resume_check_inputs(dirs, config, list(tau_i = list(shape = 20, rate = 1))),
+    "priors"
+  )
+  expect_error(
+    MOSAIC:::.mosaic_resume_check_inputs(dirs, list(location_name = "ETH", value = 2), priors),
+    "config"
+  )
+})
+
+test_that(".mosaic_resume_check_inputs is a no-op when inputs not yet persisted", {
+  base <- tempfile("inputs_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+  # No priors.json/config.json on disk (fresh resume) → must not error.
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, list(x = 1), list(y = 2)))
+})
