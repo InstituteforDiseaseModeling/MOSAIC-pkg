@@ -1,3 +1,66 @@
+# MOSAIC 0.30.48
+
+## Audit pass: ic_moment_match latent bug + metadata + docs
+
+Deep-review sweep across v0.30.33 → v0.30.47 surfaced three notable issues; this release fixes them.
+
+- **`moment_match_E_I` two latent bugs (R/sample_parameters.R).**
+  The optional initial-conditions moment match (default `ic_moment_match = FALSE`) had two bugs that did not surface in production but broke the unit tests:
+  - **Vector reshape direction.** When `reported_cases` arrives as a length-T vector (e.g. single-location tests), `as.matrix(vec)` returned a T×1 column matrix; the function then read `obs_mat[j, ]` and got just element [1]. Production code always passes an n×T matrix so the branch was never hit there. Fixed by reshaping vectors as `matrix(vec, nrow = 1)` (single-location row).
+  - **Guard clause NA propagation.** When `gamma_1` (or `iota` / `sigma`) was `NULL` in the config, `is.finite(NULL) || NULL <= 0` yielded `NA`, and the enclosing `if(...)` failed with "missing value where TRUE/FALSE needed." Rewritten with `isTRUE(is.finite(x) && x > 0)` so the guard coerces NA/NULL to FALSE and falls back cleanly to the prior IC.
+  Three unit-test expectations in `test-ic_moment_match.R` that pinned the old (pre-v0.30.40) `E = I * iota` formula were also updated to the corrected `E = Isym * gamma_1 / (sigma * iota)` formula.
+- **MOZ `config_default_MOZ` `rho_deaths` artifact missed in v0.30.47.** `data/config_default_MOZ.rda` still carried the old `rho_deaths = 0.6` even though the JSON sidecar had been updated to 0.42. Both are now consistent at 0.42, with the MOZ config metadata bumped to v2.8 and the rationale linked.
+- **`config_default` metadata bumped (v3.4 → v3.5).** The global config metadata description was extended to reference the v0.30.47 `rho_deaths` switch; previously it referenced v3.4 (the beta_j0_tot per-iso seeding) as the most recent change.
+- **`R/est_suitability.R` missing `@param exclude_covariates`.** The function signature has accepted `exclude_covariates = character(0)` for ablation studies for some time, but the parameter was not roxygen-documented. Added the tag; `man/est_suitability.Rd` regenerated.
+- **`NEWS.md` backfill for v0.30.41–v0.30.47.** Six version entries were missing; added below.
+
+# MOSAIC 0.30.47
+
+## rho_deaths informative prior from SSA meta-analysis
+
+The `rho_deaths` default prior is replaced (`Beta(3, 2)` → `Beta(36.95, 51.02)`) and the default value drops from 0.6 to 0.42.
+
+- **Methodology.** Random-effects (DerSimonian-Laird, logit-scale) meta-analysis of three Sub-Saharan African studies — Routh 2017 (Tanzania, EID; binomial CI from 48/101), Shikanga 2009 (Kenya, AJTMH; approximate binomial CI from implied ~25/73), Bwire 2013 (Uganda, PLOS NTDs; sensitivity range). Inverse-variance weighting yields Routh 53%, Shikanga 42%, Bwire 5% — Bwire's wide CI auto-down-weights it. Pooled mean 0.419 (essentially identical to the earlier ad-hoc 3:2 quality-weighted mean 0.417).
+- **Informative variant.** Beta fit to the 95% CI of the pooled mean (not the prediction interval) gives `Beta(36.95, 51.02)`, mean 0.420, 95% CI [0.319, 0.524], ESS ~88.
+- **Methodology mirrors `R/get_rho_care_seeking_params.R`** (cases-side `rho`), establishing parallel statistical machinery for the two observation-model detection probabilities.
+- **Previous attribution to Finger et al. 2024 corrected** — that paper is an editorial without a quantitative anchor; the 23–96% range cited belonged to Pampaka et al. 2025 and described place of death, not surveillance capture. Full provenance: `claude/rho_deaths_research/SYNTHESIS_REPORT.md`.
+
+# MOSAIC 0.30.46
+
+## `config_default`: phase-switching params seeded from per-iso priors
+
+`epidemic_threshold` and `mu_j_epidemic_factor` in the global `config_default` are now sourced PER-COUNTRY from `priors_default$parameters_location` rather than flat values (formerly `1/10000` and `1.25`). The per-iso prior means span roughly 7e-7 to 8.7e-6 for `epidemic_threshold` and 0.5 to 3.0 for `mu_j_epidemic_factor`, restoring the epidemiological heterogeneity required for the engine's phase-switching to actually engage.
+
+# MOSAIC 0.30.45
+
+## `config_default`: initial conditions seeded from per-iso priors
+
+`S_j_initial`, `E_j_initial`, `I_j_initial`, `R_j_initial`, `V1_j_initial`, `V2_j_initial` are now seeded from each country's `prop_*_initial` Beta priors with Hamilton apportionment, rather than the old flat `S = 80%` / `R = 50%` defaults. The flat default had `R_eff = 0.72 < 1` at many ISOs, blocking transmission before the calibration loop could begin.
+
+# MOSAIC 0.30.44
+
+## Docs: mislabeled params, phantom function refs, stale value claims
+
+Audit-driven cleanup of roxygen documentation across `R/priors_default.R`, `R/config_default.R`, `R/config_simulation_endemic.R`, and `R/make_LASER_config.R`: corrected 19 mislabeled `@param` fields, removed phantom `\link{}` references to functions that no longer exist, and resynced value claims in roxygen text with the actual data shipped in `data/priors_default.rda`. Man pages regenerated.
+
+# MOSAIC 0.30.43
+
+## `epidemic_peaks`: filter at build time + warn on bad configs
+
+The 129-row `epidemic_peaks` table shipped with `config_default` is now filtered at build time to `[date_start, date_stop]` (47 rows after filtering). The 82 out-of-window rows were silently snapping to `t = 1` / `t = N` in the peak-shape likelihood terms and bloating the JSON. New helper `filter_epidemic_peaks()` (`R/filter_epidemic_peaks.R`) is also called from `make_LASER_config()` to warn whenever a user-supplied config carries peaks outside the simulation window.
+
+# MOSAIC 0.30.42
+
+## `write_json_or_gz`: peer-arg API + JSON rename to match .rda
+
+`R/write_json_with_optional_gz.R` is replaced by `R/write_json_or_gz.R` with a clearer peer-arg API (`write_json = TRUE` / `write_gz = TRUE` controlled independently). The four `inst/extdata` JSON sidecars are renamed to match the `.rda` they correspond to: `default_parameters*.json` → `config_default*.json`, `simulated_parameters.json` → `config_simulation_epidemic.json`, `sim_endemic_parameters.json` → `config_simulation_endemic.json`.
+
+# MOSAIC 0.30.41
+
+## `inst/extdata`: opt-in .gz sidecar for production configs only
+
+The `.json.gz` sidecars that previously shipped automatically alongside every `inst/extdata/*.json` are now opt-in. They were redundant for the simulation configs (`config_simulation_*`) which are small and never read from disk by performance-sensitive code; production builds for `config_default` / `priors_default` still produce the `.gz` sidecar when explicitly requested via `write_gz = TRUE` in the data-raw scripts.
+
 # MOSAIC 0.30.40
 
 ## Biology fixes from deep-review re-validation

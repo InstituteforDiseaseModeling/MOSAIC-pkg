@@ -289,9 +289,9 @@ config_default_MOZ <- do.call(make_LASER_config, default_args)
 .decay_days_spread_MOZ <- 347   # MOZ-specific spread (decay_days_long = short + spread)
 
 config_default_MOZ$metadata <- list(
-     version = "2.7",
+     version = "2.8",
      date = as.character(Sys.Date()),
-     description = "MOZ-specific LASER Configuration with extended date range (2017-2026). v2.7 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v2.6 (2026-04-29): rho_deaths = 0.6 added (death detection rate; laser-cholera#49). v2.5 (2026-04-23): zeta_* defaults rescaled from Frame-B (70k / 300) to the biological scale implied by est_zeta_*_prior() (priors_default v15.0). v2.4: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
+     description = "MOZ-specific LASER Configuration with extended date range (2017-2026). v2.8 (2026-06-02): rho_deaths changed from 0.6 to 0.42 (informative Beta(36.95, 51.02) mean) following the RE meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013; see claude/rho_deaths_research/SYNTHESIS_REPORT.md. v2.7 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v2.6 (2026-04-29): rho_deaths = 0.6 added (death detection rate; laser-cholera#49). v2.5 (2026-04-23): zeta_* defaults rescaled from Frame-B (70k / 300) to the biological scale implied by est_zeta_*_prior() (priors_default v15.0). v2.4: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). Updated from test_31 MOZ 6-7 analysis. Uses combined JHU + WHO surveillance data."
 )
 
 message("Transmission parameter validation")

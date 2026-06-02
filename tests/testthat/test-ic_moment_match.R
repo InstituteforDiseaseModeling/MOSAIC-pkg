@@ -16,11 +16,15 @@ make_test_config <- function(N = 1000000L,
                              sigma = 0.5,
                              rho = 0.2,
                              chi_endemic = 0.5,
-                             iota = 0.5) {
+                             iota = 0.5,
+                             gamma_1 = 0.5) {
   if (is.null(reported_cases)) {
     # 100 days, first 10 are zero, then 10 cases/day for a week
     reported_cases <- c(rep(0, 10), rep(10, 7), rep(5, 83))
   }
+  # gamma_1 is required by moment_match_E_I's steady-state formula
+  # (E = Isym * gamma_1 / (sigma * iota)); without it the function falls
+  # back to prior ICs but the guard clause must still receive a numeric.
   list(
     N_j_initial     = N,
     reported_cases  = reported_cases,
@@ -28,6 +32,7 @@ make_test_config <- function(N = 1000000L,
     rho             = rho,
     chi_endemic     = chi_endemic,
     iota            = iota,
+    gamma_1         = gamma_1,
     location_name   = "TST"
   )
 }
@@ -105,7 +110,10 @@ test_that("moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
   # Expected I = obs_week1 * chi / (sigma * rho)
   obs_week1 <- 100  # first 7 positive days are all 100
   expected_I_count <- obs_week1 * 0.4 / (0.5 * 0.2)  # = 400
-  expected_E_count <- expected_I_count * 0.3            # = 120
+  # Steady-state E (v0.30.40 fix): E = Isym * gamma_1 / (sigma * iota).
+  # With gamma_1 = 0.5 (default), sigma = 0.5, iota = 0.3:
+  #   E = 400 * 0.5 / (0.5 * 0.3) = 1333.33
+  expected_E_count <- expected_I_count * 0.5 / (0.5 * 0.3)
   expected_prop_I <- expected_I_count / 1000000
   expected_prop_E <- expected_E_count / 1000000
 
@@ -287,15 +295,19 @@ test_that("moment_match_E_I preserves E/I ratio when cap triggers", {
     sigma = 0.01,
     rho = 0.01,
     chi_endemic = 0.5,
-    iota = 0.4  # E = 0.4 * I
+    iota = 0.4,
+    gamma_1 = 0.5
   )
   props <- make_test_props()
 
   result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
-  # E/I ratio should be preserved at iota = 0.4
+  # Steady-state E/Isym ratio (v0.30.40 fix): gamma_1 / (sigma * iota)
+  # With gamma_1 = 0.5, sigma = 0.01, iota = 0.4: ratio = 125.
+  # Scaling preserves the ratio when the 10% cap triggers.
+  expected_ratio <- 0.5 / (0.01 * 0.4)
   ratio <- result[1, "E"] / result[1, "I"]
-  expect_equal(ratio, 0.4, tolerance = 1e-6)
+  expect_equal(ratio, expected_ratio, tolerance = 1e-6)
 })
 
 test_that("moment_match_E_I ensures at least 1 person in E and I", {

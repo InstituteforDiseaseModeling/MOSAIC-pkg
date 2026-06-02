@@ -813,7 +813,11 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
     if (verbose) cat("  - ic_moment_match: no reported_cases in config, using prior ICs\n")
     return(sampled_props)
   }
-  if (!is.matrix(obs_mat)) obs_mat <- as.matrix(obs_mat)
+  # Reshape vectors as a single-location row matrix (1 x T). The function
+  # indexes obs_mat[j, ] expecting each row to be a time series; the naive
+  # as.matrix(vec) returns a T x 1 column matrix and silently breaks the
+  # per-location lookup for single-location callers (e.g. unit tests).
+  if (!is.matrix(obs_mat)) obs_mat <- matrix(obs_mat, nrow = 1)
 
   # Guard: reporting chain product must be positive and non-trivial
   reporting_product <- sigma * rho  # cases = I * sigma * rho / chi_endemic
@@ -822,10 +826,12 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
     return(sampled_props)
   }
 
-  # Guard: need positive gamma_1, sigma, iota for the steady-state E formula
-  if (!is.finite(gamma_1) || gamma_1 <= 0 ||
-      !is.finite(iota)    || iota    <= 0 ||
-      !is.finite(sigma)   || sigma   <= 0) {
+  # Guard: need positive gamma_1, sigma, iota for the steady-state E formula.
+  # isTRUE() coerces NA/NULL/non-logical to FALSE so the if() never sees NA
+  # (e.g. when a config omits gamma_1 entirely).
+  if (!isTRUE(is.finite(gamma_1) && gamma_1 > 0) ||
+      !isTRUE(is.finite(iota)    && iota    > 0) ||
+      !isTRUE(is.finite(sigma)   && sigma   > 0)) {
     if (verbose) cat("  - ic_moment_match: gamma_1/sigma/iota non-positive, using prior ICs\n")
     return(sampled_props)
   }
@@ -958,7 +964,11 @@ props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
   }
 
   for (comp in ic_compartments_all) {
-    config_sampled[[paste0(comp, "_j_initial")]] <- counts_mat[, comp]
+    # unname() strips the column-name attribute that R attaches when
+    # subsetting a 1-row matrix (counts_mat[, "S"] returns c(S = ...) for
+    # single-location configs). Keeping the name silently propagates through
+    # downstream sum() calls and makes name-sensitive tests fail.
+    config_sampled[[paste0(comp, "_j_initial")]] <- unname(counts_mat[, comp])
   }
 
   # Hard assertions: every cell non-negative and each row sums to its N_j.

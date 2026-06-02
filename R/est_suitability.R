@@ -25,6 +25,7 @@
 #'   The "location_month_block" method groups sequences by country-month and randomly assigns entire blocks,
 #'   which better tests spatial-temporal generalization by preventing data leakage within location-months.
 #' @param train_prop Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.
+#' @param exclude_covariates Character vector of column names to drop from the LSTM input set before fitting. Default `character(0)` (no exclusions). Used for ablation and leave-one-out covariate comparisons; names that are not present in the covariate set are silently ignored after a warning.
 #'
 #' @return This function processes climate and cholera case data, fits an LSTM model, makes predictions on
 #'         environmental suitability (psi), and saves both the predictions and covariate data. It also
