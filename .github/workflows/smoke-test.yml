@@ -39,7 +39,7 @@ jobs:
             sampled_config <- sample_parameters(seed = 1, priors = priors, config = config)
             model  <- run_LASER(config = sampled_config, seed = 1L)
             est_cases  <- as.matrix(model$results$reported_cases)
-            est_deaths <- as.matrix(model$results$disease_deaths)
+            est_deaths <- as.matrix(model$results$reported_deaths)
             ll <- calc_model_likelihood(
               obs_cases  = sampled_config$reported_cases,
               est_cases  = est_cases,

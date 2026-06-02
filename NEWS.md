@@ -2,6 +2,19 @@
 
 ## CFR pipeline reworked for v0.13+ schema; WHO data refreshed through 2025
 
+### rho_deaths variant: production pin to informative Beta(36.95, 51.02)
+
+`rho_deaths` uses the **informative** variant Beta(36.95, 51.02) (mean 0.42, sd 0.052, 95% CI [0.32, 0.52]) for production calibrations. This is the SYNTHESIS_REPORT §3.3 pooled-mean-CI fit. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis only. **Rationale:** within a single country, the deaths likelihood identifies the product `mu_j_baseline * rho_deaths`, leaving a flat factorization direction. Pinning `rho_deaths` near 0.42 lets `mu_j_baseline` posteriors carry the cross-country CFR signal cleanly. All three meta-analysis anchor studies (Routh 2017, Shikanga 2009, Bwire 2013) are SSA outbreak settings — the regime MOSAIC calibrates — so the pooled-mean precision is the operative target.
+
+### CFR parameter tracking — closing the gaps
+
+Parameter tracking surfaces were updated for consistency with the v0.13+ CFR pipeline:
+
+- `R/plot_model_parameters.R` location_params_base now includes `mu_j_baseline`, `mu_j_slope`, `mu_j_epidemic_factor`, `epidemic_threshold`, `beta_j0_tot`, `psi_star_*` — these were silently dropped from posterior visualization despite being sampled per-country.
+- `R/get_param_names.R` replaces the stale `mu_j` placeholder with the actual sampled triple (`mu_j_baseline`, `mu_j_slope`, `mu_j_epidemic_factor`) plus `epidemic_threshold` and the `delta_reporting_*` integers.
+- `R/calc_model_ess_parameter.R` docstring example updated from `mu_j` to `mu_j_baseline`.
+- `R/run_MOSAIC.R` docstring example flags updated from `sample_mu_j` to `sample_mu_j_baseline`.
+
 The mu_j_baseline derivation in `data-raw/make_priors_default.R` is corrected for the laser-cholera v0.13+ schema. The conversion factor from observed reported CFR to the engine's daily mortality hazard is now `rho / (rho_deaths * chi)` (~1.015) instead of `rho / chi` (~0.43). Per-country `mu_j_baseline` Gamma priors are ~2.36x their pre-v0.32.1 values, which corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed `1/rho_deaths`. The conversion factor is now derived inline from the actual `rho`, `rho_deaths`, `chi_endemic`, `chi_epidemic` Beta priors so it stays in sync if those upstream priors are updated.
 
 `make_config_default.R` now sources `mu_j_baseline` UNIVERSALLY from `priors_default` Gamma means (was: raw CFR `rowMeans(mu_jt)` with an ETH-only hand-patch). config_default and priors_default agree by construction; a new regression test (`test-cfr-pipeline-consistency.R`) asserts this invariant per country.

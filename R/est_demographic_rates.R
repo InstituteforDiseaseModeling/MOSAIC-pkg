@@ -101,7 +101,7 @@ est_demographic_rates <- function(PATHS, date_start, date_stop, smooth_method) {
 
 
      message("Removing reported cholera deaths from all-cause mortality")
-     who_afro_annual <- read.csv(file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2024.csv"), stringsAsFactors = FALSE)
+     who_afro_annual <- read.csv(file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv"), stringsAsFactors = FALSE)
 
      for (iso_code in unique(out$iso_code)) {
 

@@ -138,7 +138,16 @@ get_location_config <- function(iso, config = NULL) {
           out[[l]] <- out[[l]][sel, , drop = FALSE]
      }
 
-
+     # Filter epidemic_peaks to the selected ISO codes. laser-cholera v0.13+
+     # asserts every iso_code in epidemic_peaks appears in location_name.
+     if (!is.null(out$epidemic_peaks) && nrow(out$epidemic_peaks) > 0L) {
+          out$epidemic_peaks <- .filter_epidemic_peaks(
+               peaks          = out$epidemic_peaks,
+               date_start     = out$date_start,
+               date_stop      = out$date_stop,
+               location_names = out$location_name
+          )
+     }
 
      return(out)
 }

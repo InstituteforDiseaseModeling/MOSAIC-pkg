@@ -90,13 +90,25 @@ individual presents to surveillance (Beta; not a reporting fraction).
 deaths (Beta; random-effects meta-analysis of Routh 2017, Shikanga 2009,
 Bwire 2013 — see
 \code{MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md}).
+Consumed by laser-cholera v0.13+ in the deaths likelihood: observed
+surveillance \code{reported_deaths} is compared against simulated
+\code{reported_deaths = round(disease_deaths * rho_deaths)} (lagged
+by \code{delta_reporting_deaths}). Production prior is the recommended
+prediction-interval variant Beta(6.30, 8.52); the informative variant
+Beta(36.95, 51.02) is retained for sensitivity per SYNTHESIS_REPORT
+sec 3.4.
 \item \code{chi_endemic}, \code{chi_epidemic} -- Positive predictive
 value among suspected cases during endemic vs epidemic phases (Beta).
 \item \code{delta_reporting_cases} -- Symptom-onset-to-surveillance-report
 delay (Truncnorm, days). \emph{Not} infection-to-report -- incubation is
 handled separately by the E compartment and \code{iota}.
-\item \code{delta_reporting_deaths} -- Symptom-onset-to-death-report
-delay (Truncnorm, days).
+\item \code{delta_reporting_deaths} -- Death-event-to-death-report
+delay in days (Truncnorm). This is the time from a true cholera death
+to its appearance in surveillance reports. The symptom-onset-to-death
+interval itself is implicit in the SEIR dynamics
+(\eqn{\gamma_1^{-1}} ~ 5-7 days symptomatic to recovery/death).
+Consumed by laser-cholera v0.13+ at \code{infectious.py:88-92} as
+\code{reported_deaths[t] = round(disease_deaths[t-delta] * rho_deaths)}.
 }
 
 Environmental shedding intensity (V. cholerae cells per person per day):

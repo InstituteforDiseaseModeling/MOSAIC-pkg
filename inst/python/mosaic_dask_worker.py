@@ -2,7 +2,7 @@
 MOSAIC Dask Worker — Pure Python LASER simulation runner
 =========================================================
 Called by Dask workers to run individual LASER simulations.
-No R dependency — uses laser_cholera.metapop.model directly.
+No R dependency — uses laser.cholera.metapop.model directly.
 
 This module is uploaded to all workers via client.upload_file() from the R
 orchestrator (run_MOSAIC_dask), then imported on each worker with:
@@ -168,7 +168,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
                         "j": int,                       # 1-based iteration index
                         "seed": int,                    # seed used for this iter
                         "reported_cases": list[list],   # shape: n_locs × n_time
-                        "disease_deaths": list[list],   # shape: n_locs × n_time
+                        "reported_deaths": list[list],  # shape: n_locs × n_time
                     },
                     ...
                 ]
@@ -216,13 +216,17 @@ def run_laser_sim(sim_id: int, n_iterations: int,
                 "seed": seed_ij,
                 # Convert numpy → nested Python lists for JSON-safe transport
                 # back to R via reticulate/Dask gather.
-                # Use reported_cases (PPV-adjusted: Isym*rho/chi) to match
-                # the R parallel worker path in .mosaic_run_simulation_worker.
+                # Use reported_cases/reported_deaths (PPV / rho_deaths adjusted)
+                # to match the R parallel worker path in
+                # .mosaic_run_simulation_worker. reported_deaths is
+                # round(disease_deaths * rho_deaths) per laser-cholera v0.13+
+                # so observed surveillance and simulated output are on the
+                # same scale for likelihood scoring.
                 "reported_cases": np.array(
                     model.results.reported_cases
                 ).tolist(),
-                "disease_deaths": np.array(
-                    model.results.disease_deaths
+                "reported_deaths": np.array(
+                    model.results.reported_deaths
                 ).tolist(),
             })
 
@@ -273,7 +277,7 @@ def run_laser_postca(task_id: int, seed: int,
 
     Returns
     -------
-    dict with keys: task_id, seed, success, reported_cases, disease_deaths
+    dict with keys: task_id, seed, success, reported_cases, reported_deaths
     """
     for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS",
                  "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
@@ -318,7 +322,7 @@ def run_laser_postca(task_id: int, seed: int,
             "seed": seed,
             "success": True,
             "reported_cases": np.array(model.results.reported_cases).tolist(),
-            "disease_deaths": np.array(model.results.disease_deaths).tolist(),
+            "reported_deaths": np.array(model.results.reported_deaths).tolist(),
         }
 
         del model
