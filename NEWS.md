@@ -1,3 +1,24 @@
+# MOSAIC 0.30.49
+
+## Remove `config_default_MOZ` / `priors_default_MOZ` (BREAKING for direct users)
+
+The `config_default_MOZ` and `priors_default_MOZ` data objects and their `data-raw` builders are removed from the package. The objects were never exported in `NAMESPACE`, never documented in `man/`, and never consumed by production R code; their only callers were three integration test files (CRAN-skipped) and the MOSAIC-Mozambique calibration project deliberately does not depend on them — it builds its own MOZ artifacts from scratch via `MOSAIC::make_LASER_config()` + cherry-picked entries from the *global* `MOSAIC::priors_default`.
+
+The parallel `_MOZ` build pipeline was a recurring source of silent drift: it had to be hand-maintained whenever the global `make_config_default.R` / `make_priors_default.R` changed, and the v0.30.47 `rho_deaths` switch caught one such miss (the .rda kept the old 0.6 value while the JSON was updated to 0.42).
+
+**Removed files:**
+
+- `data/config_default_MOZ.rda`
+- `data/priors_default_MOZ.rda`
+- `inst/extdata/config_default_MOZ.json`
+- `inst/extdata/priors_default_MOZ.json`
+- `data-raw/make_config_default_MOZ.R`
+- `data-raw/make_priors_default_MOZ.R`
+- `tests/testthat/test-dask_local_cluster_integration.R` (only consumer; depended entirely on the fixture)
+- 4 integration tests at the end of `tests/testthat/test-ic_moment_match.R` (the deterministic-math + guard-clause tests stay; the integration tests that needed a single-location config fixture are removed)
+
+**Migration:** if you were loading `MOSAIC::config_default_MOZ` for ad-hoc experiments, the MOSAIC-Mozambique project (`MOSAIC-Mozambique/code/R/make_config_MOZ.R`) is the canonical way to build a Mozambique calibration config from the package's global priors.
+
 # MOSAIC 0.30.48
 
 ## Audit pass: ic_moment_match latent bug + metadata + docs
