@@ -79,12 +79,13 @@ global_params <- data.frame(
     "omega_1",
     "omega_2",
     "epsilon",
-    # Surveillance (4 params)
+    # Surveillance (6 params)
     "chi_endemic",
     "chi_epidemic",
     "delta_reporting_cases",
     "delta_reporting_deaths",
     "rho",
+    "rho_deaths",
     # Mobility (2 params)
     "mobility_gamma",
     "mobility_omega"
@@ -120,6 +121,7 @@ global_params <- data.frame(
     "Case Reporting Delay",
     "Death Reporting Delay",
     "Care-Seeking Probability",
+    "Death Detection Rate",
     # Mobility
     "Mobility Distance Decay",
     "Mobility Population Scaling"
@@ -153,8 +155,9 @@ global_params <- data.frame(
     "Positive predictive value of suspected cholera cases in endemic periods",
     "Positive predictive value of suspected cholera cases in epidemic periods",
     "Days from infection to case report in surveillance data",
-    "Days from infection to death report in surveillance data",
+    "Days from death event to death report in surveillance data (laser-cholera v0.13+: NOT symptom-onset-to-report; symptom-onset-to-death is in gamma_1^-1)",
     "Probability a symptomatic infection is reported as a suspected case",
+    "Probability a true cholera death is captured by surveillance (informative prior derived from SSA meta-analysis: Routh 2017, Shikanga 2009, Bwire 2013)",
     # Mobility
     "Distance decay parameter for human mobility",
     "Population scaling parameter for human mobility"
@@ -170,8 +173,8 @@ global_params <- data.frame(
     "per day (rate)", "proportion", "per day (rate)", "per day (rate)",
     # Immunity - reordered
     "proportion", "proportion", "per day (rate)", "per day (rate)", "per day (rate)",
-    # Surveillance
-    "proportion", "proportion", "days", "days", "proportion",
+    # Surveillance (6 params)
+    "proportion", "proportion", "days", "days", "proportion", "proportion",
     # Mobility
     "dimensionless", "dimensionless"
   ),
@@ -192,9 +195,9 @@ global_params <- data.frame(
     "lognormal", "beta", "lognormal", "lognormal",
     # Immunity - reordered
     "beta", "beta", "gamma", "gamma", "lognormal",
-    # Surveillance
-    # chi_endemic, chi_epidemic: Beta; delta_reporting_*: TruncNorm prior ([0,7],[0,14]); rho: Beta
-    "beta", "beta", "truncnorm", "truncnorm", "beta",
+    # Surveillance (6 params)
+    # chi_endemic, chi_epidemic: Beta; delta_reporting_*: TruncNorm prior ([0,7],[0,14]); rho: Beta; rho_deaths: Beta
+    "beta", "beta", "truncnorm", "truncnorm", "beta", "beta",
     # Mobility
     "gamma", "gamma"
   ),
@@ -209,12 +212,12 @@ global_params <- data.frame(
     "disease", "disease", "disease", "disease",
     # Immunity - reordered
     "immunity", "immunity", "immunity", "immunity", "immunity",
-    # Surveillance
-    "surveillance", "surveillance", "surveillance", "surveillance", "surveillance",
+    # Surveillance (6 params)
+    "surveillance", "surveillance", "surveillance", "surveillance", "surveillance", "surveillance",
     # Mobility
     "mobility", "mobility"
   ),
-  order = 1:27,
+  order = 1:28,
   order_scale = "01",
   order_category = c(
     # Transmission (01)
@@ -225,8 +228,8 @@ global_params <- data.frame(
     "03", "03", "03", "03",
     # Immunity (04)
     "04", "04", "04", "04", "04",
-    # Surveillance (05): chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho
-    "05", "05", "05", "05", "05",
+    # Surveillance (05): chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho, rho_deaths
+    "05", "05", "05", "05", "05", "05",
     # Mobility (06)
     "06", "06"
   ),
@@ -240,8 +243,8 @@ global_params <- data.frame(
     "01", "02", "03", "04",
     # Immunity (phi_1, phi_2, omega_1, omega_2, epsilon)
     "01", "02", "03", "04", "05",
-    # Surveillance (chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho)
-    "01", "02", "03", "04", "05",
+    # Surveillance (chi_endemic, chi_epidemic, delta_reporting_cases, delta_reporting_deaths, rho, rho_deaths)
+    "01", "02", "03", "04", "05", "06",
     # Mobility
     "01", "02"
   ),
@@ -280,8 +283,8 @@ global_params$posterior_distribution <- c(
   # Immunity: unchanged
   "beta", "beta", "gamma", "gamma", "lognormal",
   # Surveillance: chi_endemic/epidemic unchanged; delta_reporting_* uniform → truncnorm
-  #   posterior with hard bounds enforcing the integer support; rho unchanged
-  "beta", "beta", "truncnorm", "truncnorm", "beta",
+  #   posterior with hard bounds enforcing the integer support; rho unchanged; rho_deaths Beta→Beta
+  "beta", "beta", "truncnorm", "truncnorm", "beta", "beta",
   # Mobility: unchanged
   "gamma", "gamma"
 )
@@ -292,7 +295,7 @@ global_params$posterior_lower <- c(
   NA, NA, 1.01, NA, NA, NA, NA, NA, NA,
   NA, NA, NA, NA,                        # disease
   NA, NA, NA, NA, NA,                    # immunity
-  NA, NA, 0, 1, NA,                      # surveillance (cases lower = 0, deaths lower = 1)
+  NA, NA, 0, 1, NA, NA,                  # surveillance (cases lower = 0, deaths lower = 1; rho/rho_deaths NA)
   NA, NA                                 # mobility
 )
 global_params$posterior_upper <- c(
@@ -301,7 +304,7 @@ global_params$posterior_upper <- c(
   NA, NA, 425, NA, NA, NA, NA, NA, NA,
   NA, NA, NA, NA,                        # disease
   NA, NA, NA, NA, NA,                    # immunity
-  NA, NA, 7, 14, NA,                     # surveillance (delta_reporting_cases=7, _deaths=14)
+  NA, NA, 7, 14, NA, NA,                 # surveillance (delta_reporting_cases=7, _deaths=14; rho/rho_deaths NA)
   NA, NA                                 # mobility
 )
 
