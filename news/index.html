@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.48</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,90 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.48" id="mosaic-03048">MOSAIC 0.30.48<a class="anchor" aria-label="anchor" href="#mosaic-03048"></a></h2>
+<div class="section level3">
+<h3 id="audit-pass-ic_moment_match-latent-bug--metadata--docs-0-30-48">Audit pass: ic_moment_match latent bug + metadata + docs<a class="anchor" aria-label="anchor" href="#audit-pass-ic_moment_match-latent-bug--metadata--docs-0-30-48"></a></h3>
+<p>Deep-review sweep across v0.30.33 → v0.30.47 surfaced three notable issues; this release fixes them.</p>
+<ul><li>
+<strong><code>moment_match_E_I</code> two latent bugs (R/sample_parameters.R).</strong> The optional initial-conditions moment match (default <code>ic_moment_match = FALSE</code>) had two bugs that did not surface in production but broke the unit tests:
+<ul><li>
+<strong>Vector reshape direction.</strong> When <code>reported_cases</code> arrives as a length-T vector (e.g. single-location tests), <code>as.matrix(vec)</code> returned a T×1 column matrix; the function then read <code>obs_mat[j, ]</code> and got just element [1]. Production code always passes an n×T matrix so the branch was never hit there. Fixed by reshaping vectors as <code>matrix(vec, nrow = 1)</code> (single-location row).</li>
+<li>
+<strong>Guard clause NA propagation.</strong> When <code>gamma_1</code> (or <code>iota</code> / <code>sigma</code>) was <code>NULL</code> in the config, <code>is.finite(NULL) || NULL &lt;= 0</code> yielded <code>NA</code>, and the enclosing <code>if(...)</code> failed with “missing value where TRUE/FALSE needed.” Rewritten with <code>isTRUE(is.finite(x) &amp;&amp; x &gt; 0)</code> so the guard coerces NA/NULL to FALSE and falls back cleanly to the prior IC. Three unit-test expectations in <code>test-ic_moment_match.R</code> that pinned the old (pre-v0.30.40) <code>E = I * iota</code> formula were also updated to the corrected <code>E = Isym * gamma_1 / (sigma * iota)</code> formula.</li>
+</ul></li>
+<li>
+<strong>MOZ <code>config_default_MOZ</code> <code>rho_deaths</code> artifact missed in v0.30.47.</strong> <code>data/config_default_MOZ.rda</code> still carried the old <code>rho_deaths = 0.6</code> even though the JSON sidecar had been updated to 0.42. Both are now consistent at 0.42, with the MOZ config metadata bumped to v2.8 and the rationale linked.</li>
+<li>
+<strong><code>config_default</code> metadata bumped (v3.4 → v3.5).</strong> The global config metadata description was extended to reference the v0.30.47 <code>rho_deaths</code> switch; previously it referenced v3.4 (the beta_j0_tot per-iso seeding) as the most recent change.</li>
+<li>
+<strong><code>R/est_suitability.R</code> missing <code>@param exclude_covariates</code>.</strong> The function signature has accepted <code>exclude_covariates = character(0)</code> for ablation studies for some time, but the parameter was not roxygen-documented. Added the tag; <code>man/est_suitability.Rd</code> regenerated.</li>
+<li>
+<strong><code>NEWS.md</code> backfill for v0.30.41–v0.30.47.</strong> Six version entries were missing; added below.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.47" id="mosaic-03047">MOSAIC 0.30.47<a class="anchor" aria-label="anchor" href="#mosaic-03047"></a></h2>
+<div class="section level3">
+<h3 id="rho_deaths-informative-prior-from-ssa-meta-analysis-0-30-47">rho_deaths informative prior from SSA meta-analysis<a class="anchor" aria-label="anchor" href="#rho_deaths-informative-prior-from-ssa-meta-analysis-0-30-47"></a></h3>
+<p>The <code>rho_deaths</code> default prior is replaced (<code>Beta(3, 2)</code> → <code>Beta(36.95, 51.02)</code>) and the default value drops from 0.6 to 0.42.</p>
+<ul><li>
+<strong>Methodology.</strong> Random-effects (DerSimonian-Laird, logit-scale) meta-analysis of three Sub-Saharan African studies — Routh 2017 (Tanzania, EID; binomial CI from 48/101), Shikanga 2009 (Kenya, AJTMH; approximate binomial CI from implied ~25/73), Bwire 2013 (Uganda, PLOS NTDs; sensitivity range). Inverse-variance weighting yields Routh 53%, Shikanga 42%, Bwire 5% — Bwire’s wide CI auto-down-weights it. Pooled mean 0.419 (essentially identical to the earlier ad-hoc 3:2 quality-weighted mean 0.417).</li>
+<li>
+<strong>Informative variant.</strong> Beta fit to the 95% CI of the pooled mean (not the prediction interval) gives <code>Beta(36.95, 51.02)</code>, mean 0.420, 95% CI [0.319, 0.524], ESS ~88.</li>
+<li>
+<strong>Methodology mirrors <code>R/get_rho_care_seeking_params.R</code></strong> (cases-side <code>rho</code>), establishing parallel statistical machinery for the two observation-model detection probabilities.</li>
+<li>
+<strong>Previous attribution to Finger et al. 2024 corrected</strong> — that paper is an editorial without a quantitative anchor; the 23–96% range cited belonged to Pampaka et al. 2025 and described place of death, not surveillance capture. Full provenance: <code>claude/rho_deaths_research/SYNTHESIS_REPORT.md</code>.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.46" id="mosaic-03046">MOSAIC 0.30.46<a class="anchor" aria-label="anchor" href="#mosaic-03046"></a></h2>
+<div class="section level3">
+<h3 id="config_default-phase-switching-params-seeded-from-per-iso-priors-0-30-46">
+<code>config_default</code>: phase-switching params seeded from per-iso priors<a class="anchor" aria-label="anchor" href="#config_default-phase-switching-params-seeded-from-per-iso-priors-0-30-46"></a></h3>
+<p><code>epidemic_threshold</code> and <code>mu_j_epidemic_factor</code> in the global <code>config_default</code> are now sourced PER-COUNTRY from <code>priors_default$parameters_location</code> rather than flat values (formerly <code>1/10000</code> and <code>1.25</code>). The per-iso prior means span roughly 7e-7 to 8.7e-6 for <code>epidemic_threshold</code> and 0.5 to 3.0 for <code>mu_j_epidemic_factor</code>, restoring the epidemiological heterogeneity required for the engine’s phase-switching to actually engage.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.45" id="mosaic-03045">MOSAIC 0.30.45<a class="anchor" aria-label="anchor" href="#mosaic-03045"></a></h2>
+<div class="section level3">
+<h3 id="config_default-initial-conditions-seeded-from-per-iso-priors-0-30-45">
+<code>config_default</code>: initial conditions seeded from per-iso priors<a class="anchor" aria-label="anchor" href="#config_default-initial-conditions-seeded-from-per-iso-priors-0-30-45"></a></h3>
+<p><code>S_j_initial</code>, <code>E_j_initial</code>, <code>I_j_initial</code>, <code>R_j_initial</code>, <code>V1_j_initial</code>, <code>V2_j_initial</code> are now seeded from each country’s <code>prop_*_initial</code> Beta priors with Hamilton apportionment, rather than the old flat <code>S = 80%</code> / <code>R = 50%</code> defaults. The flat default had <code>R_eff = 0.72 &lt; 1</code> at many ISOs, blocking transmission before the calibration loop could begin.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.44" id="mosaic-03044">MOSAIC 0.30.44<a class="anchor" aria-label="anchor" href="#mosaic-03044"></a></h2>
+<div class="section level3">
+<h3 id="docs-mislabeled-params-phantom-function-refs-stale-value-claims-0-30-44">Docs: mislabeled params, phantom function refs, stale value claims<a class="anchor" aria-label="anchor" href="#docs-mislabeled-params-phantom-function-refs-stale-value-claims-0-30-44"></a></h3>
+<p>Audit-driven cleanup of roxygen documentation across <code>R/priors_default.R</code>, <code>R/config_default.R</code>, <code>R/config_simulation_endemic.R</code>, and <code>R/make_LASER_config.R</code>: corrected 19 mislabeled <code>@param</code> fields, removed phantom <code>\link{}</code> references to functions that no longer exist, and resynced value claims in roxygen text with the actual data shipped in <code>data/priors_default.rda</code>. Man pages regenerated.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.43" id="mosaic-03043">MOSAIC 0.30.43<a class="anchor" aria-label="anchor" href="#mosaic-03043"></a></h2>
+<div class="section level3">
+<h3 id="epidemic_peaks-filter-at-build-time--warn-on-bad-configs-0-30-43">
+<code>epidemic_peaks</code>: filter at build time + warn on bad configs<a class="anchor" aria-label="anchor" href="#epidemic_peaks-filter-at-build-time--warn-on-bad-configs-0-30-43"></a></h3>
+<p>The 129-row <code>epidemic_peaks</code> table shipped with <code>config_default</code> is now filtered at build time to <code>[date_start, date_stop]</code> (47 rows after filtering). The 82 out-of-window rows were silently snapping to <code>t = 1</code> / <code>t = N</code> in the peak-shape likelihood terms and bloating the JSON. New helper <code>filter_epidemic_peaks()</code> (<code>R/filter_epidemic_peaks.R</code>) is also called from <code><a href="../reference/make_LASER_config.html">make_LASER_config()</a></code> to warn whenever a user-supplied config carries peaks outside the simulation window.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.42" id="mosaic-03042">MOSAIC 0.30.42<a class="anchor" aria-label="anchor" href="#mosaic-03042"></a></h2>
+<div class="section level3">
+<h3 id="write_json_or_gz-peer-arg-api--json-rename-to-match-rda-0-30-42">
+<code>write_json_or_gz</code>: peer-arg API + JSON rename to match .rda<a class="anchor" aria-label="anchor" href="#write_json_or_gz-peer-arg-api--json-rename-to-match-rda-0-30-42"></a></h3>
+<p><code>R/write_json_with_optional_gz.R</code> is replaced by <code>R/write_json_or_gz.R</code> with a clearer peer-arg API (<code>write_json = TRUE</code> / <code>write_gz = TRUE</code> controlled independently). The four <code>inst/extdata</code> JSON sidecars are renamed to match the <code>.rda</code> they correspond to: <code>default_parameters*.json</code> → <code>config_default*.json</code>, <code>simulated_parameters.json</code> → <code>config_simulation_epidemic.json</code>, <code>sim_endemic_parameters.json</code> → <code>config_simulation_endemic.json</code>.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.41" id="mosaic-03041">MOSAIC 0.30.41<a class="anchor" aria-label="anchor" href="#mosaic-03041"></a></h2>
+<div class="section level3">
+<h3 id="instextdata-opt-in-gz-sidecar-for-production-configs-only-0-30-41">
+<code>inst/extdata</code>: opt-in .gz sidecar for production configs only<a class="anchor" aria-label="anchor" href="#instextdata-opt-in-gz-sidecar-for-production-configs-only-0-30-41"></a></h3>
+<p>The <code>.json.gz</code> sidecars that previously shipped automatically alongside every <code>inst/extdata/*.json</code> are now opt-in. They were redundant for the simulation configs (<code>config_simulation_*</code>) which are small and never read from disk by performance-sensitive code; production builds for <code>config_default</code> / <code>priors_default</code> still produce the <code>.gz</code> sidecar when explicitly requested via <code>write_gz = TRUE</code> in the data-raw scripts.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.30.40" id="mosaic-03040">MOSAIC 0.30.40<a class="anchor" aria-label="anchor" href="#mosaic-03040"></a></h2>
 <div class="section level3">

@@ -23,7 +23,8 @@ est_suitability(
   fine_tune_lr = 0.001,
   split_method = "random",
   train_prop = 0.6,
-  plot_country_diagnostics = FALSE
+  plot_country_diagnostics = FALSE,
+  exclude_covariates = character(0)
 )
 ```
 
@@ -100,6 +101,13 @@ est_suitability(
 
   Numeric. Proportion of data for training in initial split (default
   0.6). Used for both splitting methods.
+
+- exclude_covariates:
+
+  Character vector of column names to drop from the LSTM input set
+  before fitting. Default `character(0)` (no exclusions). Used for
+  ablation and leave-one-out covariate comparisons; names that are not
+  present in the covariate set are silently ignored after a warning.
 
 ## Value
 

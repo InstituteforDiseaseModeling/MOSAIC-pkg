@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.48</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,7 +69,8 @@ suitability (psi) based on the climate covariates.</p>
 <span>  fine_tune_lr <span class="op">=</span> <span class="fl">0.001</span>,</span>
 <span>  split_method <span class="op">=</span> <span class="st">"random"</span>,</span>
 <span>  train_prop <span class="op">=</span> <span class="fl">0.6</span>,</span>
-<span>  plot_country_diagnostics <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  plot_country_diagnostics <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  exclude_covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -125,6 +126,10 @@ which better tests spatial-temporal generalization by preventing data leakage wi
 
 <dt id="arg-train-prop">train_prop<a class="anchor" aria-label="anchor" href="#arg-train-prop"></a></dt>
 <dd><p>Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.</p></dd>
+
+
+<dt id="arg-exclude-covariates">exclude_covariates<a class="anchor" aria-label="anchor" href="#arg-exclude-covariates"></a></dt>
+<dd><p>Character vector of column names to drop from the LSTM input set before fitting. Default <code>character(0)</code> (no exclusions). Used for ablation and leave-one-out covariate comparisons; names that are not present in the covariate set are silently ignored after a warning.</p></dd>
 
 </dl></div>
     <div class="section level2">

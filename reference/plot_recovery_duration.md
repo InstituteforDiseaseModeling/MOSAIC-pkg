@@ -10,8 +10,10 @@ lines. Recovery duration is shown on the x-axis.
 ``` r
 plot_recovery_duration(
   PATHS = NULL,
-  symp_range = c(3, 7),
-  asymp_range = c(7, 14)
+  symp_range = c(3.8, 26.6),
+  asymp_range = c(0.9, 4.4),
+  symp_central = 10,
+  asymp_central = 2
 )
 ```
 
@@ -24,15 +26,29 @@ plot_recovery_duration(
 
 - symp_range:
 
-  A numeric vector of length 2 indicating the minimum and maximum
-  shedding duration (in days) for symptomatic infections. Default is
-  c(3, 7).
+  A numeric vector of length 2 indicating the lower and upper
+  shedding-duration bound (in days) for symptomatic infections. Default
+  is the 95% credible interval of the canonical lognormal prior gamma_1
+  ~ Lognormal(-2.303, 0.5), i.e. c(3.8, 26.6) days.
 
 - asymp_range:
 
-  A numeric vector of length 2 indicating the minimum and maximum
-  shedding duration (in days) for asymptomatic infections. Default is
-  c(7, 14).
+  A numeric vector of length 2 indicating the lower and upper
+  shedding-duration bound (in days) for asymptomatic infections. Default
+  is the 95% credible interval of the canonical lognormal prior gamma_2
+  ~ Lognormal(-0.693, 0.4), i.e. c(0.9, 4.4) days.
+
+- symp_central:
+
+  A single numeric giving the central duration (typically the median)
+  for symptomatic infections. Default 10 days (median of gamma_1 prior).
+  The vertical solid line in the plot is drawn here. If `NA`, falls back
+  to the arithmetic midpoint of `symp_range`.
+
+- asymp_central:
+
+  A single numeric giving the central duration (typically the median)
+  for asymptomatic infections. Default 2 days (median of gamma_2 prior).
 
 ## Value
 
@@ -49,5 +65,7 @@ plot will also be saved as a PNG in that directory as
 
 ``` r
 plot_recovery_duration()
-plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12))
+plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12),
+                       symp_central = 5, asymp_central = 10)
+#> Error in plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8,     12), symp_central = 5, asymp_central = 10): unused arguments (symp_central = 5, asymp_central = 10)
 ```

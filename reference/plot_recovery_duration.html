@@ -11,7 +11,7 @@ and solid mean lines. Recovery duration is shown on the x-axis."><meta property=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.48</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,8 +53,10 @@ and solid mean lines. Recovery duration is shown on the x-axis.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_recovery_duration</span><span class="op">(</span></span>
 <span>  PATHS <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  symp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">7</span><span class="op">)</span>,</span>
-<span>  asymp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">7</span>, <span class="fl">14</span><span class="op">)</span></span>
+<span>  symp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3.8</span>, <span class="fl">26.6</span><span class="op">)</span>,</span>
+<span>  asymp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.9</span>, <span class="fl">4.4</span><span class="op">)</span>,</span>
+<span>  symp_central <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>  asymp_central <span class="op">=</span> <span class="fl">2</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -67,11 +69,19 @@ and solid mean lines. Recovery duration is shown on the x-axis.</p>
 
 
 <dt id="arg-symp-range">symp_range<a class="anchor" aria-label="anchor" href="#arg-symp-range"></a></dt>
-<dd><p>A numeric vector of length 2 indicating the minimum and maximum shedding duration (in days) for symptomatic infections. Default is c(3, 7).</p></dd>
+<dd><p>A numeric vector of length 2 indicating the lower and upper shedding-duration bound (in days) for symptomatic infections. Default is the 95% credible interval of the canonical lognormal prior gamma_1 ~ Lognormal(-2.303, 0.5), i.e. c(3.8, 26.6) days.</p></dd>
 
 
 <dt id="arg-asymp-range">asymp_range<a class="anchor" aria-label="anchor" href="#arg-asymp-range"></a></dt>
-<dd><p>A numeric vector of length 2 indicating the minimum and maximum shedding duration (in days) for asymptomatic infections. Default is c(7, 14).</p></dd>
+<dd><p>A numeric vector of length 2 indicating the lower and upper shedding-duration bound (in days) for asymptomatic infections. Default is the 95% credible interval of the canonical lognormal prior gamma_2 ~ Lognormal(-0.693, 0.4), i.e. c(0.9, 4.4) days.</p></dd>
+
+
+<dt id="arg-symp-central">symp_central<a class="anchor" aria-label="anchor" href="#arg-symp-central"></a></dt>
+<dd><p>A single numeric giving the central duration (typically the median) for symptomatic infections. Default 10 days (median of gamma_1 prior). The vertical solid line in the plot is drawn here. If <code>NA</code>, falls back to the arithmetic midpoint of <code>symp_range</code>.</p></dd>
+
+
+<dt id="arg-asymp-central">asymp_central<a class="anchor" aria-label="anchor" href="#arg-asymp-central"></a></dt>
+<dd><p>A single numeric giving the central duration (typically the median) for asymptomatic infections. Default 2 days (median of gamma_2 prior).</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -87,7 +97,9 @@ saved as a PNG in that directory as "recovery_rates.png".</p>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">plot_recovery_duration</span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu">plot_recovery_duration</span><span class="op">(</span>symp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">6</span><span class="op">)</span>, asymp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">8</span>, <span class="fl">12</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">plot_recovery_duration</span><span class="op">(</span>symp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">6</span><span class="op">)</span>, asymp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">8</span>, <span class="fl">12</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                       symp_central <span class="op">=</span> <span class="fl">5</span>, asymp_central <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8,     12), symp_central = 5, asymp_central = 10):</span> unused arguments (symp_central = 5, asymp_central = 10)</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
