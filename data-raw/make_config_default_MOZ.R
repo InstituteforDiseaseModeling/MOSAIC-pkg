@@ -237,7 +237,7 @@ default_args <- list(
      mu_j_epidemic_factor = mu_j_epidemic_factor,
      sigma = 0.25,
      rho = 0.265,
-     rho_deaths = 0.6,            # Death detection rate (mean of Beta(3, 2); Finger et al. 2024; laser-cholera#49)
+     rho_deaths = 0.42,           # Death detection rate (mean of informative Beta(36.95, 51.02); RE meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013; laser-cholera#49)
      chi_endemic = 0.50,
      chi_epidemic = 0.75,
      epidemic_threshold = setNames(1/10000, j),

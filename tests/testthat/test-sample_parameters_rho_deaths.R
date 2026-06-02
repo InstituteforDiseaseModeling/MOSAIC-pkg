@@ -24,12 +24,16 @@ test_that("rho_deaths is present in default config", {
   expect_lte(cfg$rho_deaths, 1)
 })
 
-test_that("priors_default carries a Beta(3, 2) prior for rho_deaths", {
+test_that("priors_default carries the Beta(36.95, 51.02) informative prior for rho_deaths", {
   skip_if_no_rho_deaths_prior()
+  # Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524]. Derived from
+  # random-effects meta-analysis of three SSA studies (Routh 2017, Shikanga 2009,
+  # Bwire 2013); informative variant fit to the CI of the pooled mean.
+  # See MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md.
   prior <- MOSAIC::priors_default$parameters_global$rho_deaths
   expect_equal(prior$distribution, "beta")
-  expect_equal(prior$parameters$shape1, 3.0)
-  expect_equal(prior$parameters$shape2, 2.0)
+  expect_equal(prior$parameters$shape1, 36.95)
+  expect_equal(prior$parameters$shape2, 51.02)
 })
 
 test_that("sample_parameters draws rho_deaths in (0, 1) when sample_rho_deaths = TRUE", {
@@ -55,14 +59,14 @@ test_that("sample_parameters holds rho_deaths fixed when sample_rho_deaths = FAL
   expect_equal(cfg$rho_deaths, fixed_value, tolerance = 1e-10)
 })
 
-test_that("rho_deaths empirical draws match Beta(3, 2) in >= 95% range", {
+test_that("rho_deaths empirical draws match Beta(36.95, 51.02)", {
   skip_if_no_rho_deaths_prior()
   draws <- vapply(1:200, function(s) {
     sample_parameters(seed = s, verbose = FALSE)$rho_deaths
   }, numeric(1))
   expect_true(all(is.finite(draws)))
-  # Beta(3, 2) has mean 0.6 and 99% interval roughly [0.13, 0.96].
-  expect_gte(mean(draws > 0.05 & draws < 0.99), 0.95)
-  expect_gt(mean(draws), 0.45)
-  expect_lt(mean(draws), 0.75)
+  # Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524].
+  expect_gte(mean(draws > 0.20 & draws < 0.60), 0.95)
+  expect_gt(mean(draws), 0.37)
+  expect_lt(mean(draws), 0.47)
 })

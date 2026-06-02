@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "version": "3.1",
-    "date": "2026-05-27",
-    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
+    "version": "3.2",
+    "date": "2026-06-01",
+    "description": "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.2 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); informative variant fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. See MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v3.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
   },
   "parameters_global": {
     "alpha_1": {
@@ -174,11 +174,11 @@
       }
     },
     "rho_deaths": {
-      "description": "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+      "description": "Death detection rate: probability a true cholera death is captured by surveillance (random-effects meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013; informative variant)",
       "distribution": "beta",
       "parameters": {
-        "shape1": 3,
-        "shape2": 2
+        "shape1": 36.95,
+        "shape2": 51.02
       }
     },
     "sigma": {

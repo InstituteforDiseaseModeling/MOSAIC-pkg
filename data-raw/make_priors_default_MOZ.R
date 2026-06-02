@@ -30,9 +30,9 @@ dem_annual <- read.csv(
 
 priors_default_MOZ <- list(
      metadata = list(
-          version = "3.1",
+          version = "3.2",
           date = Sys.Date(),
-          description = "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
+          description = "MOZ-specific informative prior distributions for extended 2017-2026 calibration. v3.2 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); informative variant fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. See MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v3.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (priors_default v15.0; ~6 OOM scale shift on zeta_1). Hardcoded from est_zeta_*_prior() output to keep MOZ build self-contained. Previous: updated from test_31 MOZ 6-7 analysis."
      ),
      parameters_global = list(),
      parameters_location = list()
@@ -291,15 +291,16 @@ priors_default_MOZ$parameters_global$rho <- list(
 )
 
 # rho_deaths - Death detection rate (laser-cholera#49)
-# Beta(3, 2) gives mean ~0.6 reflecting that ~60% of true cholera deaths
-# enter the surveillance system. Finger et al. 2024 (Lancet ID;
-# https://doi.org/10.1016/S1473-3099(24)00237-8) document that 23-96%
-# of cholera deaths occur in the community (outside health facilities)
-# and are less likely to be captured by surveillance.
+# Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524], ESS ~88.
+# Random-effects meta-analysis (DerSimonian-Laird, logit scale) of three SSA
+# studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the
+# informative variant fits Beta to the 95% CI of the pooled mean.
+# See MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md for full
+# provenance. Mirrors the global priors_default rho_deaths.
 priors_default_MOZ$parameters_global$rho_deaths <- list(
-     description = "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+     description = "Death detection rate: probability a true cholera death is captured by surveillance (random-effects meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013; informative variant)",
      distribution = "beta",
-     parameters = list(shape1 = 3.0, shape2 = 2.0)
+     parameters = list(shape1 = 36.95, shape2 = 51.02)
 )
 
 # sigma - Proportion symptomatic

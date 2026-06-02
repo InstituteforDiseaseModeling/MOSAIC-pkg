@@ -154,7 +154,7 @@ sim_args <- list(
      chi_epidemic     = 0.75,      # PPV during epidemic periods
      epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
      rho              = 0.52,
-     rho_deaths       = 0.6,       # Death detection rate (laser-cholera#49; mean of Beta(3, 2))
+     rho_deaths       = 0.42,      # Death detection rate (laser-cholera#49; mean of informative Beta(36.95, 51.02))
      sigma            = 0.24,
      delta_reporting_cases  = 0,   # Infection-to-case reporting delay (days)
      delta_reporting_deaths = 5,   # Infection-to-death reporting delay (days)

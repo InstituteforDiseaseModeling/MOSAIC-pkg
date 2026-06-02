@@ -170,6 +170,15 @@ if (file.exists(cfr_file)) {
 mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
 names(mu_j_baseline) <- j
 
+# ETH: source mu_j_baseline from its prior mean instead of mean(mu_jt). The prior
+# applies the reporting adjustment (mu = reported_CFR * rho / chi) that rowMeans(mu_jt)
+# omits; without it ETH deaths over-predict ~2x. The prior value is data-derived
+# (re-estimated from CFR each build), so this is not a hardcoded constant.
+# NOTE: the same mismatch likely inflates deaths for all countries -- reconciling the
+# global mu_jt -> mu_j_baseline derivation with the prior formula is a separate fix.
+.mu_eth <- priors_default$parameters_location$mu_j_baseline$location[["ETH"]]$parameters
+mu_j_baseline[["ETH"]] <- unname(.mu_eth$shape / .mu_eth$rate)   # gamma prior mean
+
 # Initialize mu_j_slope to 0 (no temporal trend by default).
 # Prior is Gamma centred on 0 for each iso; default of 0 (== prior mode) is fine.
 mu_j_slope <- rep(0, length(j))
@@ -283,12 +292,17 @@ names(theta_j) <- tmp$j[sel]
 message("Calculate transmission parameters from beta_j0_tot and p_beta")
 
 # Set default values for beta_j0_tot and p_beta
-# Updated to match prior medians (was 1e-6 which is 20x below posterior range 5e-6 to 2e-5)
-beta_j0_tot_default <- 2e-5  # Total transmission rate (prior median from Lognormal)
+# beta_j0_tot is sourced PER-COUNTRY from the priors_default location medians
+# (lognormal median = exp(meanlog)) rather than a single global constant, mirroring
+# how the initial conditions and mu_j_* defaults are sourced above. This lets
+# country-specific transmission defaults (e.g. ETH, recentred to 1.75e-6) flow
+# through automatically; every other country still resolves to its prior median (2e-5).
 p_beta_default <- 0.33        # Proportion human transmission (matching prior mode)
 
 # Create vectors for all locations
-beta_j0_tot <- rep(beta_j0_tot_default, length(j))
+beta_j0_tot <- vapply(j, function(iso) {
+     exp(priors_default$parameters_location$beta_j0_tot$location[[iso]]$parameters$meanlog)
+}, numeric(1))
 p_beta <- rep(p_beta_default, length(j))
 
 # Calculate derived parameters
@@ -302,7 +316,8 @@ names(beta_j0_hum) <- j
 names(beta_j0_env) <- j
 
 # Print summary for verification
-message(sprintf("  beta_j0_tot = %.2e (total transmission rate)", beta_j0_tot_default))
+message(sprintf("  beta_j0_tot = %.2e to %.2e (per-country prior medians; ETH = %.2e)",
+                min(beta_j0_tot), max(beta_j0_tot), beta_j0_tot[["ETH"]]))
 message(sprintf("  p_beta = %.2f (%.0f%% human, %.0f%% environmental)",
                 p_beta_default, p_beta_default * 100, (1 - p_beta_default) * 100))
 message(sprintf("  beta_j0_hum = %.2e (human component)", beta_j0_hum[1]))
@@ -417,7 +432,7 @@ default_args <- list(
      sigma = 0.25,
      # Case reporting parameters for calc_cases_from_infections()
      rho = 0.265,                 # Care-seeking rate (mean of Beta(6.8, 17.9) prior, GEMS + Wiens 2025)
-     rho_deaths = 0.6,            # Death detection rate: probability a true cholera death is captured by surveillance (mean of Beta(3, 2) prior; Finger et al. 2024)
+     rho_deaths = 0.42,           # Death detection rate: probability a true cholera death is captured by surveillance (mean of informative Beta(36.95, 51.02) prior; RE meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013 — see claude/rho_deaths_research/SYNTHESIS_REPORT.md)
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
      # Per-iso Isym/N threshold for PPV / IFR phase switching. Seeded from
@@ -519,9 +534,9 @@ config_default <- do.call(make_LASER_config, default_args)
 
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "3.3",
+     version = "3.4",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.4 (2026-06-01): beta_j0_tot now sourced PER-COUNTRY from priors_default location medians (was a global 2e-5 constant); ETH resolves to its recentred 1.75e-6 median while all other countries are unchanged at 2e-5. Also ETH mu_j_baseline sourced from its prior mean (reporting-adjusted CFR) instead of mean(mu_jt), fixing a ~2x deaths over-prediction. With these, the fixed-ensemble ETH default fits observed cases at bias~1.05 (R2corr~0.50) and deaths at bias~0.9. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships

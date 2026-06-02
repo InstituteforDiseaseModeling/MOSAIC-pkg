@@ -78,7 +78,9 @@
 #'   \item \code{rho} -- Care-seeking rate: probability a symptomatic
 #'     individual presents to surveillance (Beta; not a reporting fraction).
 #'   \item \code{rho_deaths} -- Surveillance capture rate of true cholera
-#'     deaths (Beta; Finger et al. 2024).
+#'     deaths (Beta; random-effects meta-analysis of Routh 2017, Shikanga 2009,
+#'     Bwire 2013 — see
+#'     \code{MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md}).
 #'   \item \code{chi_endemic}, \code{chi_epidemic} -- Positive predictive
 #'     value among suspected cases during endemic vs epidemic phases (Beta).
 #'   \item \code{delta_reporting_cases} -- Symptom-onset-to-surveillance-report
