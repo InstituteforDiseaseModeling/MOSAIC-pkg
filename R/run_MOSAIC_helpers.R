@@ -789,6 +789,42 @@
   state
 }
 
+#' Is a laser-cholera Version Pre-v0.13?
+#'
+#' Returns TRUE for engine versions before 0.13.0, which used the raw
+#' disease_deaths deaths-likelihood scale (v0.13 switched to rho_deaths-adjusted
+#' reported_deaths). Tolerant of PEP440 suffixes (e.g. "0.12rc1", "0.13.0.dev1",
+#' "0.13.0+local"): each dotted component is reduced to its leading integer.
+#' Returns NA when the version cannot be parsed to at least major.minor.
+#'
+#' @noRd
+.mosaic_lc_pre013 <- function(v) {
+  if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA)
+  # Reduce each dotted component to its leading run of digits ("12rc1" -> 12).
+  parts <- strsplit(v, "\\.")[[1]]
+  nums  <- suppressWarnings(as.integer(sub("^([0-9]+).*$", "\\1", parts)))
+  if (length(nums) < 2L || is.na(nums[1]) || is.na(nums[2])) return(NA)
+  nums[1] < 1L && nums[2] < 13L
+}
+
+#' Deaths-Scale Compatibility of Two laser-cholera Versions
+#'
+#' The v0.12 -> v0.13 transition flipped the deaths-likelihood scale, so resuming
+#' across that boundary mixes incompatible scales in the on-disk shards. Two
+#' versions on the SAME side of the boundary are compatible (even if they differ).
+#'
+#' @return "incompatible" if the versions straddle the v0.13 boundary,
+#'   "compatible" if both are on the same side, "unknown" if either cannot be
+#'   classified.
+#' @noRd
+.mosaic_lc_deaths_scale <- function(persisted, current) {
+  pp <- .mosaic_lc_pre013(persisted)
+  pc <- .mosaic_lc_pre013(current)
+  if (is.na(pp) || is.na(pc)) return("unknown")
+  if (!identical(pp, pc)) return("incompatible")
+  "compatible"
+}
+
 #' Verify Resume Inputs Match the Interrupted Run
 #'
 #' On resume, the incoming config/priors must match those persisted in 1_inputs/.
@@ -796,6 +832,10 @@
 #' new draws, so a mismatch is a hard error. Comparison uses the same serializer
 #' that wrote the files (byte-exact for identical inputs); if serialization
 #' cannot be performed the check downgrades to a warning rather than blocking.
+#'
+#' Also guards the laser-cholera engine version: resuming across the v0.12 ->
+#' v0.13 deaths-likelihood-scale boundary is a hard error (the on-disk shards
+#' would mix incompatible scales).
 #'
 #' @noRd
 .mosaic_resume_check_inputs <- function(dirs, config, priors) {
@@ -830,6 +870,54 @@
   }
   check_one(priors, file.path(dirs$inputs, "priors.json"), "priors")
   check_one(config, file.path(dirs$inputs, "config.json"), "config")
+
+  # laser-cholera engine version check: the v0.12 -> v0.13 transition flipped
+  # the deaths likelihood scale (raw disease_deaths -> rho_deaths-adjusted
+  # reported_deaths). Resuming a pre-v0.13 run on v0.13+ silently mixes
+  # incompatible scales in the on-disk shards.
+  env_file <- file.path(dirs$inputs, "environment.json")
+  if (file.exists(env_file)) {
+    persisted_env <- tryCatch(
+      jsonlite::fromJSON(env_file, simplifyVector = TRUE),
+      error = function(e) NULL
+    )
+    persisted_lc <- tryCatch(persisted_env$python$pkg_laser_cholera, error = function(e) NA_character_)
+    current_lc <- tryCatch({
+      if (reticulate::py_available(initialize = FALSE)) {
+        importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
+        as.character(importlib$version("laser-cholera"))
+      } else NA_character_
+    }, error = function(e) NA_character_)
+    if (!is.null(persisted_lc) && !is.na(persisted_lc) && nzchar(persisted_lc) &&
+        !is.na(current_lc) && nzchar(current_lc) && persisted_lc != current_lc) {
+      # Hard-error only when the two versions straddle the v0.12 -> v0.13
+      # boundary (the deaths-likelihood-scale flip). Two versions on the SAME
+      # side (both pre-0.13, or both >= 0.13) keep a compatible deaths scale.
+      verdict <- .mosaic_lc_deaths_scale(persisted_lc, current_lc)
+      if (identical(verdict, "incompatible")) {
+        stop(sprintf(paste0(
+          "resume: laser-cholera engine version mismatch (persisted '%s' vs current '%s'). ",
+          "The v0.12 -> v0.13 transition flipped the deaths likelihood scale (raw disease_deaths ",
+          "-> rho_deaths-adjusted reported_deaths). Resuming would silently mix incompatible ",
+          "scales in 2_calibration/samples/. Start a fresh run in a new directory."),
+          persisted_lc, current_lc), call. = FALSE)
+      } else if (identical(verdict, "unknown")) {
+        # Could not classify one side — warn rather than silently assume safe.
+        warning(sprintf(paste0(
+          "resume: could not compare laser-cholera versions (persisted '%s' vs current '%s'); ",
+          "skipping the engine deaths-scale check. Verify both are on the same side of the ",
+          "v0.13 boundary before trusting the resumed posterior."),
+          persisted_lc, current_lc), call. = FALSE)
+      } else {
+        warning(sprintf(paste0(
+          "resume: laser-cholera engine version differs (persisted '%s' vs current '%s'), ",
+          "but both are on the same side of the v0.13 deaths-scale boundary so the schema is ",
+          "compatible. Minor numerical differences may exist. Proceeding."),
+          persisted_lc, current_lc), call. = FALSE)
+      }
+    }
+  }
+
   invisible(TRUE)
 }
 
