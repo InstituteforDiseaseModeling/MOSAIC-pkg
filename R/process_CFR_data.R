@@ -115,9 +115,11 @@ process_CFR_data <- function(PATHS, min_obs) {
           }
      }
 
-     # Save the processed data to both DOCS_TABLES and DATA_WHO_ANNUAL
-     file_out_tables <- file.path(PATHS$DOCS_TABLES, "case_fatality_ratio_2014_2024.csv")
-     file_out_who <- file.path(PATHS$DATA_WHO_ANNUAL, "case_fatality_ratio_2014_2024.csv")
+     # Save the processed data to both DOCS_TABLES and DATA_WHO_ANNUAL with a
+     # year-flexible filename that reflects the actual coverage of the input.
+     out_basename <- sprintf("case_fatality_ratio_2014_%d.csv", max_year)
+     file_out_tables <- file.path(PATHS$DOCS_TABLES, out_basename)
+     file_out_who    <- file.path(PATHS$DATA_WHO_ANNUAL, out_basename)
 
      utils::write.csv(aggregated_data, file = file_out_tables, row.names = FALSE)
      utils::write.csv(aggregated_data, file = file_out_who, row.names = FALSE)
