@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.48</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.49</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,25 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.49" id="mosaic-03049">MOSAIC 0.30.49<a class="anchor" aria-label="anchor" href="#mosaic-03049"></a></h2>
+<div class="section level3">
+<h3 id="remove-config_default_moz--priors_default_moz-breaking-for-direct-users-0-30-49">Remove <code>config_default_MOZ</code> / <code>priors_default_MOZ</code> (BREAKING for direct users)<a class="anchor" aria-label="anchor" href="#remove-config_default_moz--priors_default_moz-breaking-for-direct-users-0-30-49"></a></h3>
+<p>The <code>config_default_MOZ</code> and <code>priors_default_MOZ</code> data objects and their <code>data-raw</code> builders are removed from the package. The objects were never exported in <code>NAMESPACE</code>, never documented in <code>man/</code>, and never consumed by production R code; their only callers were three integration test files (CRAN-skipped) and the MOSAIC-Mozambique calibration project deliberately does not depend on them — it builds its own MOZ artifacts from scratch via <code><a href="../reference/make_LASER_config.html">MOSAIC::make_LASER_config()</a></code> + cherry-picked entries from the <em>global</em> <code><a href="../reference/priors_default.html">MOSAIC::priors_default</a></code>.</p>
+<p>The parallel <code>_MOZ</code> build pipeline was a recurring source of silent drift: it had to be hand-maintained whenever the global <code>make_config_default.R</code> / <code>make_priors_default.R</code> changed, and the v0.30.47 <code>rho_deaths</code> switch caught one such miss (the .rda kept the old 0.6 value while the JSON was updated to 0.42).</p>
+<p><strong>Removed files:</strong></p>
+<ul><li><code>data/config_default_MOZ.rda</code></li>
+<li><code>data/priors_default_MOZ.rda</code></li>
+<li><code>inst/extdata/config_default_MOZ.json</code></li>
+<li><code>inst/extdata/priors_default_MOZ.json</code></li>
+<li><code>data-raw/make_config_default_MOZ.R</code></li>
+<li><code>data-raw/make_priors_default_MOZ.R</code></li>
+<li>
+<code>tests/testthat/test-dask_local_cluster_integration.R</code> (only consumer; depended entirely on the fixture)</li>
+<li>4 integration tests at the end of <code>tests/testthat/test-ic_moment_match.R</code> (the deterministic-math + guard-clause tests stay; the integration tests that needed a single-location config fixture are removed)</li>
+</ul><p><strong>Migration:</strong> if you were loading <code>MOSAIC::config_default_MOZ</code> for ad-hoc experiments, the MOSAIC-Mozambique project (<code>MOSAIC-Mozambique/code/R/make_config_MOZ.R</code>) is the canonical way to build a Mozambique calibration config from the package’s global priors.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.30.48" id="mosaic-03048">MOSAIC 0.30.48<a class="anchor" aria-label="anchor" href="#mosaic-03048"></a></h2>
 <div class="section level3">
