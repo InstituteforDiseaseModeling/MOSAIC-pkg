@@ -78,10 +78,19 @@
   config$sigma_peak_time          <- likelihood_settings$sigma_peak_time
   config$sigma_peak_log           <- likelihood_settings$sigma_peak_log
   ep <- MOSAIC::epidemic_peaks
-  config$epidemic_peaks <- data.frame(
+  ep_df <- data.frame(
     iso_code  = as.character(ep$iso_code),
     peak_date = as.character(ep$peak_date),
     stringsAsFactors = FALSE
+  )
+  # laser-cholera v0.13+ asserts every iso_code in epidemic_peaks appears in
+  # location_name. Also drop peaks outside the simulation window so the
+  # peak-shape likelihood terms don't snap to t=1/t=N boundaries.
+  config$epidemic_peaks <- .filter_epidemic_peaks(
+    peaks          = ep_df,
+    date_start     = config$date_start,
+    date_stop      = config$date_stop,
+    location_names = config$location_name
   )
   config
 }
@@ -435,8 +444,10 @@
 #'   sole source of truth (an internal \code{resume_checkpoint.rds} restores the
 #'   adaptive ESS/phase state when present; otherwise it is reconstructed from
 #'   the shards). Requires \code{control$paths$clean_output = FALSE} and that the
-#'   supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Has no
-#'   effect when no shards exist (equivalent to a fresh run).
+#'   supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Resume
+#'   is also rejected when the current \code{laser-cholera} engine version crosses
+#'   the v0.13 deaths-scale boundary relative to the original run. Has no effect
+#'   when no shards exist (equivalent to a fresh run).
 #' @param cluster Optional pre-built R parallel cluster from
 #'   \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
 #'   When provided, skips cluster creation and teardown, reusing existing workers.

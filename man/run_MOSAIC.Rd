@@ -54,8 +54,10 @@ unused \code{sim_id} instead of starting fresh. The shards on disk are the
 sole source of truth (an internal \code{resume_checkpoint.rds} restores the
 adaptive ESS/phase state when present; otherwise it is reconstructed from
 the shards). Requires \code{control$paths$clean_output = FALSE} and that the
-supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Has no
-effect when no shards exist (equivalent to a fresh run).}
+supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Resume
+is also rejected when the current \code{laser-cholera} engine version crosses
+the v0.13 deaths-scale boundary relative to the original run. Has no effect
+when no shards exist (equivalent to a fresh run).}
 
 \item{cluster}{Optional pre-built R parallel cluster from
 \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.

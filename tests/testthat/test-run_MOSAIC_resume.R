@@ -246,3 +246,66 @@ test_that(".mosaic_resume_check_inputs is a no-op when inputs not yet persisted"
   # No priors.json/config.json on disk (fresh resume) → must not error.
   expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, list(x = 1), list(y = 2)))
 })
+
+# ---- engine-version (deaths-scale) guard -----------------------------------
+
+test_that(".mosaic_lc_pre013 classifies the v0.13 deaths-scale boundary", {
+  f <- MOSAIC:::.mosaic_lc_pre013
+  expect_true(f("0.12.5"))
+  expect_true(f("0.12"))
+  expect_true(f("0.0.9"))
+  expect_false(f("0.13.0"))
+  expect_false(f("0.13.5"))
+  expect_false(f("1.0.0"))
+  # PEP440 suffixes reduce to the leading integer of each component
+  expect_true(f("0.12rc1"))
+  expect_false(f("0.13.0.dev1"))
+  expect_false(f("0.13.0+local"))
+  # unparseable / degenerate → NA
+  expect_true(is.na(f("garbage")))
+  expect_true(is.na(f("")))
+  expect_true(is.na(f(NA_character_)))
+  expect_true(is.na(f("0")))   # major only, no minor
+})
+
+test_that(".mosaic_lc_deaths_scale flags only boundary-crossing version pairs", {
+  g <- MOSAIC:::.mosaic_lc_deaths_scale
+  # same side of the boundary → compatible (regression for the old || bug:
+  # two different pre-0.13 versions must NOT be flagged incompatible)
+  expect_equal(g("0.12.1", "0.12.5"), "compatible")
+  expect_equal(g("0.13.0", "0.13.5"), "compatible")
+  # straddles the boundary → incompatible (both directions)
+  expect_equal(g("0.12.5", "0.13.0"), "incompatible")
+  expect_equal(g("0.13.0", "0.12.5"), "incompatible")
+  # unclassifiable either side → unknown
+  expect_equal(g("garbage", "0.13.0"), "unknown")
+  expect_equal(g("0.12.0", ""), "unknown")
+})
+
+test_that(".mosaic_resume_check_inputs hard-errors across the v0.13 engine boundary", {
+  # Requires the installed laser-cholera to be classifiable as >= v0.13 so a
+  # persisted 0.12.x crosses the boundary against the live version.
+  current_lc <- tryCatch({
+    if (reticulate::py_available(initialize = FALSE)) {
+      as.character(reticulate::import("importlib.metadata", delay_load = FALSE)$version("laser-cholera"))
+    } else NA_character_
+  }, error = function(e) NA_character_)
+  skip_if(is.na(current_lc) || isTRUE(MOSAIC:::.mosaic_lc_pre013(current_lc)),
+          "installed laser-cholera not classifiable as >= v0.13")
+
+  base <- tempfile("eng_"); inp <- file.path(base, "1_inputs"); dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+  priors <- list(a = 1); config <- list(location_name = "ETH")
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+  wj(priors, file.path(inp, "priors.json"))
+  wj(config, file.path(inp, "config.json"))
+
+  # persisted pre-0.13 vs current >= 0.13 → boundary crossed → hard error
+  wj(list(python = list(pkg_laser_cholera = "0.12.4")), file.path(inp, "environment.json"))
+  expect_error(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors),
+               "engine version mismatch")
+
+  # persisted == current → compatible → no error
+  wj(list(python = list(pkg_laser_cholera = current_lc)), file.path(inp, "environment.json"))
+  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+})
