@@ -675,7 +675,13 @@
       # Delete the unreadable source so it can never re-enter the pool.
       if (any(!moved)) unlink(sources[!moved], force = TRUE)
     }
-    log_msg("[RESUME] Quarantined %d unreadable shard(s)", length(bad))
+    # Name the affected shards and the consequence: in auto mode these draws are
+    # NOT regenerated (the frontier moves past the watermark), so the pool shrinks
+    # by this many; in fixed mode the missing ids are re-run to hit the target.
+    log_msg("[RESUME] Quarantined %d unreadable/invalid shard(s) to %s (corrupt, or missing sim/likelihood column): %s",
+            length(bad),
+            if (quarantine) file.path(basename(dir_cal_samples), ".quarantine") else "(not moved)",
+            paste(utils::head(bad, 10L), collapse = ", "))
   }
 
   ok_ids <- sort(unique(ok_ids))
@@ -773,16 +779,23 @@
     log_msg("[RESUME] Restored checkpoint: %d sims, batch %d, phase '%s', converged=%s",
             state$total_sims_run, state$batch_number, state$phase, isTRUE(state$converged))
 
-    # New shards beyond the last checkpoint (a partial batch wrote after the
-    # last checkpoint) → refresh ESS/convergence over the full pool.
-    if (identical(state$mode, "auto") && !state$converged && scan$n > last_count) {
+    # Refresh ESS/convergence from the ACTUAL on-disk pool whenever it differs
+    # from what the checkpoint was certified against:
+    #   - more shards than the checkpoint (a partial batch wrote after it), or
+    #   - FEWER shards (some were quarantined on this scan) — in which case a
+    #     stale converged=TRUE no longer matches the pool, so clear it and let
+    #     the ESS check re-derive convergence rather than trusting the flag.
+    if (identical(state$mode, "auto") && scan$n != last_count) {
+      if (state$converged && scan$n < last_count) state$converged <- FALSE
       state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
     }
 
   } else if (identical(state$mode, "auto")) {
     # ---- Lightweight bootstrap (no checkpoint; e.g. pre-feature run) --------
     bs <- control$calibration$batch_size_adaptive %||% 1000L
-    state$batch_number <- max(1L, as.integer(ceiling(scan$watermark / max(bs, 1L))))
+    # Estimate batches from the shard COUNT (not the max-id watermark, which
+    # over-counts when failed sims leave gaps).
+    state$batch_number <- max(1L, as.integer(ceiling(scan$n / max(bs, 1L))))
     # If the recovered pool already exhausted the adaptive batch budget, mark
     # calibration done so resume proceeds to the predictive phase rather than
     # re-running the full adaptive allotment from the resume point.
@@ -885,24 +898,63 @@
   check_one(priors, file.path(dirs$inputs, "priors.json"), "priors")
   check_one(config, file.path(dirs$inputs, "config.json"), "config")
 
-  # Likelihood target lives in control$likelihood (weights, sigmas, k_min), not
-  # in config.json/priors.json. Changing it re-scores new draws under a different
-  # target, making them incomparable to the persisted shards. control.json nests
-  # the full control under $control, plus a per-run timestamp, so compare only
-  # the likelihood sub-object rather than byte-comparing the whole file.
+  # Several control fields beyond config/priors change the draws or the stored
+  # likelihood and so must also match on resume, or the pooled shards become
+  # incomparable. control.json nests the full control under $control (plus a
+  # per-run timestamp), so compare the relevant sub-objects rather than
+  # byte-comparing the whole file:
+  #   - control$likelihood        : weights/sigmas/k_min -> the scoring target
+  #   - control$sampling          : which of the ~301 params are sampled; changing
+  #                                 it shifts the RNG stream so sample_parameters(
+  #                                 seed = sim_id) yields different draws per id
+  #   - calibration$n_iterations  : the stored likelihood is log_mean_exp over
+  #                                 n_iterations stochastic replicates (and the
+  #                                 per-iteration seed embeds n_iterations), so
+  #                                 changing it puts new shards on a different scale
+  #   - calibration mode (auto/fixed) : switching discards the adaptive state and
+  #                                 mixes bookkeeping
   ctrl_file <- file.path(dirs$inputs, "control.json")
-  if (!is.null(control) && !is.null(control$likelihood) && file.exists(ctrl_file)) {
+  if (!is.null(control) && file.exists(ctrl_file)) {
     persisted_ctrl <- tryCatch(jsonlite::fromJSON(ctrl_file, simplifyVector = TRUE),
                                error = function(e) NULL)
-    persisted_lik <- tryCatch(persisted_ctrl$control$likelihood, error = function(e) NULL)
-    if (!is.null(persisted_lik)) {
-      a <- serialize_obj(control$likelihood)
-      b <- serialize_obj(persisted_lik)
-      if (!is.na(a) && !is.na(b) && !identical(a, b)) {
-        stop("resume: supplied control$likelihood differs from 1_inputs/control.json. ",
-             "Changing the likelihood weights/settings re-scores new draws under a different ",
-             "target, making them incomparable to the existing shards. Resume with the same ",
-             "control$likelihood, or start a fresh run in a new directory.", call. = FALSE)
+    pc <- tryCatch(persisted_ctrl$control, error = function(e) NULL)
+    if (!is.null(pc)) {
+      mismatch <- function(incoming, persisted) {
+        a <- serialize_obj(incoming); b <- serialize_obj(persisted)
+        !is.na(a) && !is.na(b) && !identical(a, b)
+      }
+      fail_field <- function(field) {
+        stop(sprintf(paste0(
+          "resume: supplied %s differs from 1_inputs/control.json. Changing it alters the ",
+          "draws or the likelihood scale, making new simulations incomparable to the existing ",
+          "shards. Resume with the same %s, or start a fresh run in a new directory."),
+          field, field), call. = FALSE)
+      }
+      if (!is.null(control$likelihood) && !is.null(pc$likelihood) &&
+          mismatch(control$likelihood, pc$likelihood)) fail_field("control$likelihood")
+      if (!is.null(control$sampling) && !is.null(pc$sampling) &&
+          mismatch(control$sampling, pc$sampling)) fail_field("control$sampling")
+      in_iter <- control$calibration$n_iterations
+      pc_iter <- pc$calibration$n_iterations
+      if (!is.null(in_iter) && !is.null(pc_iter) &&
+          !isTRUE(all.equal(as.numeric(in_iter), as.numeric(pc_iter))))
+        fail_field("control$calibration$n_iterations")
+      # Tolerant mode classifier (NULL/empty/character -> auto, positive number
+      # -> fixed); robust to how a NULL n_simulations round-trips through JSON,
+      # which .mosaic_normalize_n_sims would reject with an error.
+      mode_of <- function(n) {
+        if (is.null(n) || length(n) == 0L || is.character(n)) return("auto")
+        if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) return("fixed")
+        "auto"
+      }
+      in_mode <- mode_of(control$calibration$n_simulations)
+      pc_mode <- mode_of(pc$calibration$n_simulations)
+      if (!identical(in_mode, pc_mode)) {
+        stop(sprintf(paste0(
+          "resume: calibration mode changed (persisted '%s' vs supplied '%s'). Switching ",
+          "between fixed and adaptive(auto) mode discards the adaptive state and mixes ",
+          "incompatible bookkeeping. Resume in the original mode, or start a fresh run."),
+          pc_mode, in_mode), call. = FALSE)
       }
     }
   }
@@ -912,46 +964,64 @@
   # reported_deaths). Resuming a pre-v0.13 run on v0.13+ silently mixes
   # incompatible scales in the on-disk shards.
   env_file <- file.path(dirs$inputs, "environment.json")
+  persisted_lc <- NA_character_
   if (file.exists(env_file)) {
     persisted_env <- tryCatch(
       jsonlite::fromJSON(env_file, simplifyVector = TRUE),
       error = function(e) NULL
     )
     persisted_lc <- tryCatch(persisted_env$python$pkg_laser_cholera, error = function(e) NA_character_)
-    current_lc <- tryCatch({
-      if (reticulate::py_available(initialize = FALSE)) {
-        importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-        as.character(importlib$version("laser-cholera"))
-      } else NA_character_
-    }, error = function(e) NA_character_)
-    if (!is.null(persisted_lc) && !is.na(persisted_lc) && nzchar(persisted_lc) &&
-        !is.na(current_lc) && nzchar(current_lc) && persisted_lc != current_lc) {
-      # Hard-error only when the two versions straddle the v0.12 -> v0.13
-      # boundary (the deaths-likelihood-scale flip). Two versions on the SAME
-      # side (both pre-0.13, or both >= 0.13) keep a compatible deaths scale.
-      verdict <- .mosaic_lc_deaths_scale(persisted_lc, current_lc)
-      if (identical(verdict, "incompatible")) {
-        stop(sprintf(paste0(
-          "resume: laser-cholera engine version mismatch (persisted '%s' vs current '%s'). ",
-          "The v0.12 -> v0.13 transition flipped the deaths likelihood scale (raw disease_deaths ",
-          "-> rho_deaths-adjusted reported_deaths). Resuming would silently mix incompatible ",
-          "scales in 2_calibration/samples/. Start a fresh run in a new directory."),
-          persisted_lc, current_lc), call. = FALSE)
-      } else if (identical(verdict, "unknown")) {
-        # Could not classify one side — warn rather than silently assume safe.
-        warning(sprintf(paste0(
-          "resume: could not compare laser-cholera versions (persisted '%s' vs current '%s'); ",
-          "skipping the engine deaths-scale check. Verify both are on the same side of the ",
-          "v0.13 boundary before trusting the resumed posterior."),
-          persisted_lc, current_lc), call. = FALSE)
-      } else {
-        warning(sprintf(paste0(
-          "resume: laser-cholera engine version differs (persisted '%s' vs current '%s'), ",
-          "but both are on the same side of the v0.13 deaths-scale boundary so the schema is ",
-          "compatible. Minor numerical differences may exist. Proceeding."),
-          persisted_lc, current_lc), call. = FALSE)
-      }
+    if (is.null(persisted_lc) || length(persisted_lc) != 1L) persisted_lc <- NA_character_
+  }
+  current_lc <- tryCatch({
+    if (reticulate::py_available(initialize = FALSE)) {
+      importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
+      as.character(importlib$version("laser-cholera"))
+    } else NA_character_
+  }, error = function(e) NA_character_)
+
+  have_persisted <- !is.na(persisted_lc) && nzchar(persisted_lc)
+  have_current   <- !is.na(current_lc) && nzchar(current_lc)
+
+  if (have_persisted && have_current && persisted_lc != current_lc) {
+    # Hard-error only when the two versions straddle the v0.12 -> v0.13 boundary
+    # (the deaths-likelihood-scale flip). Two versions on the SAME side (both
+    # pre-0.13, or both >= 0.13) keep a compatible deaths scale.
+    verdict <- .mosaic_lc_deaths_scale(persisted_lc, current_lc)
+    if (identical(verdict, "incompatible")) {
+      stop(sprintf(paste0(
+        "resume: laser-cholera engine version mismatch (persisted '%s' vs current '%s'). ",
+        "The v0.12 -> v0.13 transition flipped the deaths likelihood scale (raw disease_deaths ",
+        "-> rho_deaths-adjusted reported_deaths). Resuming would silently mix incompatible ",
+        "scales in 2_calibration/samples/. Start a fresh run in a new directory."),
+        persisted_lc, current_lc), call. = FALSE)
+    } else if (identical(verdict, "unknown")) {
+      warning(sprintf(paste0(
+        "resume: could not classify laser-cholera versions (persisted '%s' vs current '%s') ",
+        "against the v0.13 deaths-scale boundary; proceeding, but verify both are on the same ",
+        "side before trusting the resumed posterior."),
+        persisted_lc, current_lc), call. = FALSE)
+    } else {
+      warning(sprintf(paste0(
+        "resume: laser-cholera engine version differs (persisted '%s' vs current '%s'), ",
+        "but both are on the same side of the v0.13 deaths-scale boundary so the schema is ",
+        "compatible. Minor numerical differences may exist. Proceeding."),
+        persisted_lc, current_lc), call. = FALSE)
     }
+  } else if (!have_persisted || !have_current) {
+    # Surface a SKIPPED guard rather than passing silently: this is the exact
+    # condition (pre-feature run with no recorded version, or Python not bound)
+    # under which an undetected v0.13 boundary crossing could mix deaths scales.
+    reason <- if (!have_persisted && !have_current)
+      "no version recorded in 1_inputs/environment.json and laser-cholera not available in this session"
+    else if (!have_persisted)
+      "no laser-cholera version recorded in 1_inputs/environment.json"
+    else
+      "laser-cholera not available in this session"
+    warning(sprintf(paste0(
+      "resume: the laser-cholera engine deaths-scale guard was SKIPPED (%s). If the engine ",
+      "crossed the v0.13 boundary since this run started, the resumed posterior could mix ",
+      "incompatible deaths scales."), reason), call. = FALSE)
   }
 
   invisible(TRUE)

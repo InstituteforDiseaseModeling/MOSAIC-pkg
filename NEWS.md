@@ -67,7 +67,7 @@ The Python engine is bumped from v0.12.5 to v0.13.0 (`inst/python/environment.ym
 
 - The shards on disk are the source of truth. The next `sim_id` is always `max(id on disk) + 1`, so no draw is ever duplicated.
 - An internal `2_calibration/state/resume_checkpoint.rds` (written every batch) restores the adaptive ESS/phase state exactly; runs without a checkpoint bootstrap the state from the shards.
-- `resume = TRUE` is rejected with `clean_output = TRUE`, and the supplied `config`/`priors` must match those persisted in `1_inputs/` (a mismatch changes the target distribution and is a hard error).
+- `resume = TRUE` is rejected with `clean_output = TRUE`; when the run already completed (a consolidated `samples.parquet` the shards would shrink); and when the supplied `config`, `priors`, `control$likelihood`, `control$sampling`, `control$calibration$n_iterations`, or the calibration mode (auto vs fixed) differ from those persisted in `1_inputs/` (each changes the draws or likelihood and would make the pooled shards incomparable — a hard error). In adaptive mode resume continues from `max(sim_id)+1` and does not backfill interior gaps; fixed mode re-runs any missing id to hit the target. Corrupt/invalid shards are read-validated and quarantined; resumed runs are recorded in `summary.json` (`resumed`, `n_simulations_reused`).
 - `resume = FALSE` (the default) is byte-identical to prior behavior. The slim `run_state.json` monitoring file is unchanged.
 
 # MOSAIC 0.30.49
