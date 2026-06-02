@@ -445,6 +445,9 @@ Helper and utility functions
   : Read priors or posteriors from JSON with consistent parsing
 - [`read_yaml_to_list()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/read_yaml_to_list.md)
   : Read a YAML File into an R List
+- [`write_json_or_gz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_json_or_gz.md)
+  : Write a list to .json, .json.gz, or both – byte-equal by
+  construction
 - [`write_list_to_hdf5()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_list_to_hdf5.md)
   : Write an R list to an HDF5 file
 - [`write_list_to_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_list_to_json.md)
@@ -1056,6 +1059,9 @@ Other exported functions and internal helpers
   : Weighted quantiles
 - [`weighted_var()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_var.md)
   : Weighted Statistical Functions for Posterior Analysis
+- [`write_json_or_gz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_json_or_gz.md)
+  : Write a list to .json, .json.gz, or both – byte-equal by
+  construction
 - [`write_list_to_hdf5()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_list_to_hdf5.md)
   : Write an R list to an HDF5 file
 - [`write_list_to_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_list_to_json.md)

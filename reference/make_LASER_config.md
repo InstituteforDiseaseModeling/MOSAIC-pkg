@@ -259,19 +259,24 @@ make_LASER_config(
 
 - iota:
 
-  Incubation period (numeric \> 0).
+  Incubation rate `E -> I` (numeric \> 0, per day). Note this is a
+  *rate*, not a period – prior median ~0.71/day. The engine uses
+  `iota * E` as the flow out of E.
 
 - gamma_1:
 
-  Recovery rate for severe infection (numeric \>= 0).
+  Symptomatic shedding-duration rate `I_sym -> R` (numeric \>= 0, per
+  day; "severe / symptomatic" branch).
 
 - gamma_2:
 
-  Recovery rate for mild infection (numeric \>= 0).
+  Asymptomatic shedding-duration rate `I_asym -> R` (numeric \>= 0, per
+  day; "mild / asymptomatic" branch).
 
 - epsilon:
 
-  Waning immunity rate (numeric \>= 0).
+  Natural-infection immunity waning rate `R -> S` (numeric \>= 0, per
+  day). Distinct from vaccine waning (`omega_1`, `omega_2`).
 
 - mu_jt:
 
@@ -301,19 +306,22 @@ make_LASER_config(
 
 - rho:
 
-  Proportion of true infections (numeric in \[0, 1\]).
+  Care-seeking rate: probability a symptomatic individual presents to
+  surveillance (numeric in \[0, 1\]). *Not* a reporting fraction and
+  *not* sigma – this is the upstream care-seeking step of the
+  surveillance cascade.
 
 - rho_deaths:
 
   Death detection rate: probability a true cholera death is captured by
-  surveillance (numeric in \[0, 1\] or NULL). Optional; when NULL,
-  laser-cholera 0.12.x ignores it and the deaths observation model uses
-  raw simulated counts. Once laser-cholera#49 ships, the engine consumes
-  this to produce reported_deaths.
+  surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine
+  from laser-cholera v0.13+ (laser-cholera#49) to produce
+  reported_deaths; older engine versions ignore this and use raw
+  simulated counts.
 
 - sigma:
 
-  Proportion of symptomatic infections (numeric in \[0, 1\]).
+  Proportion of infections that are symptomatic (numeric in \[0, 1\]).
 
 - chi_endemic:
 
@@ -333,11 +341,13 @@ make_LASER_config(
 
 - delta_reporting_cases:
 
-  Infection-to-case reporting delay in days (non-negative integer).
+  Symptom-onset-to-surveillance reporting delay in days (non-negative
+  integer). *Not* infection-to-report – incubation is handled separately
+  by the E compartment and `iota`.
 
 - delta_reporting_deaths:
 
-  Infection-to-death reporting delay in days (non-negative integer).
+  Symptom-onset-to-death-report delay in days (non-negative integer).
 
   ### Spatial model
 
@@ -413,11 +423,14 @@ make_LASER_config(
 
 - alpha_1:
 
-  Transmission parameter for mixing (numeric in \[0, 1\]).
+  FOI mixing exponent applied to the infectious term `(I/N)` (numeric in
+  \[0, 1\]; 1 = well-mixed contacts).
 
 - alpha_2:
 
-  Transmission parameter for density dependence (numeric in \[0, 1\]).
+  Exponent on `N_jt` in the FOI denominator (numeric in \[0, 1\]).
+  `alpha_2 = 1` is frequency-dependent transmission (FOI proportional to
+  `I/N`); `alpha_2 = 0` is density-dependent (FOI proportional to `I`).
 
   ### Force of Infection (environment-to-human)
 

@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -296,19 +296,24 @@ first doses proportionally from all listed compartments.</p><div class="section"
 
 
 <dt id="arg-iota">iota<a class="anchor" aria-label="anchor" href="#arg-iota"></a></dt>
-<dd><p>Incubation period (numeric &gt; 0).</p></dd>
+<dd><p>Incubation rate <code>E -&gt; I</code> (numeric &gt; 0, per day). Note this is
+a <em>rate</em>, not a period – prior median ~0.71/day. The engine uses
+<code>iota * E</code> as the flow out of E.</p></dd>
 
 
 <dt id="arg-gamma-">gamma_1<a class="anchor" aria-label="anchor" href="#arg-gamma-"></a></dt>
-<dd><p>Recovery rate for severe infection (numeric &gt;= 0).</p></dd>
+<dd><p>Symptomatic shedding-duration rate <code>I_sym -&gt; R</code> (numeric
+&gt;= 0, per day; "severe / symptomatic" branch).</p></dd>
 
 
 <dt id="arg-gamma-">gamma_2<a class="anchor" aria-label="anchor" href="#arg-gamma-"></a></dt>
-<dd><p>Recovery rate for mild infection (numeric &gt;= 0).</p></dd>
+<dd><p>Asymptomatic shedding-duration rate <code>I_asym -&gt; R</code> (numeric
+&gt;= 0, per day; "mild / asymptomatic" branch).</p></dd>
 
 
 <dt id="arg-epsilon">epsilon<a class="anchor" aria-label="anchor" href="#arg-epsilon"></a></dt>
-<dd><p>Waning immunity rate (numeric &gt;= 0).</p></dd>
+<dd><p>Natural-infection immunity waning rate <code>R -&gt; S</code> (numeric
+&gt;= 0, per day). Distinct from vaccine waning (<code>omega_1</code>, <code>omega_2</code>).</p></dd>
 
 
 <dt id="arg-mu-jt">mu_jt<a class="anchor" aria-label="anchor" href="#arg-mu-jt"></a></dt>
@@ -337,15 +342,18 @@ Numeric vector of length(location_name). Must be &gt;= 0.</p><div class="section
 
 
 <dt id="arg-rho">rho<a class="anchor" aria-label="anchor" href="#arg-rho"></a></dt>
-<dd><p>Proportion of true infections (numeric in [0, 1]).</p></dd>
+<dd><p>Care-seeking rate: probability a symptomatic individual
+presents to surveillance (numeric in [0, 1]). <em>Not</em> a reporting
+fraction and <em>not</em> sigma – this is the upstream care-seeking
+step of the surveillance cascade.</p></dd>
 
 
 <dt id="arg-rho-deaths">rho_deaths<a class="anchor" aria-label="anchor" href="#arg-rho-deaths"></a></dt>
-<dd><p>Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Optional; when NULL, laser-cholera 0.12.x ignores it and the deaths observation model uses raw simulated counts. Once laser-cholera#49 ships, the engine consumes this to produce reported_deaths.</p></dd>
+<dd><p>Death detection rate: probability a true cholera death is captured by surveillance (numeric in [0, 1] or NULL). Consumed by the engine from laser-cholera v0.13+ (laser-cholera#49) to produce reported_deaths; older engine versions ignore this and use raw simulated counts.</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
-<dd><p>Proportion of symptomatic infections (numeric in [0, 1]).</p></dd>
+<dd><p>Proportion of infections that are symptomatic (numeric in [0, 1]).</p></dd>
 
 
 <dt id="arg-chi-endemic">chi_endemic<a class="anchor" aria-label="anchor" href="#arg-chi-endemic"></a></dt>
@@ -362,11 +370,14 @@ case reporting and IFR threshold models. Numeric scalar or length-n vector in [0
 
 
 <dt id="arg-delta-reporting-cases">delta_reporting_cases<a class="anchor" aria-label="anchor" href="#arg-delta-reporting-cases"></a></dt>
-<dd><p>Infection-to-case reporting delay in days (non-negative integer).</p></dd>
+<dd><p>Symptom-onset-to-surveillance reporting delay
+in days (non-negative integer). <em>Not</em> infection-to-report –
+incubation is handled separately by the E compartment and <code>iota</code>.</p></dd>
 
 
 <dt id="arg-delta-reporting-deaths">delta_reporting_deaths<a class="anchor" aria-label="anchor" href="#arg-delta-reporting-deaths"></a></dt>
-<dd><p>Infection-to-death reporting delay in days (non-negative integer).</p><div class="section">
+<dd><p>Symptom-onset-to-death-report delay in days
+(non-negative integer).</p><div class="section">
 <h3 id="spatial-model">Spatial model<a class="anchor" aria-label="anchor" href="#spatial-model"></a></h3>
 
 
@@ -433,11 +444,15 @@ If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_t
 
 
 <dt id="arg-alpha-">alpha_1<a class="anchor" aria-label="anchor" href="#arg-alpha-"></a></dt>
-<dd><p>Transmission parameter for mixing (numeric in [0, 1]).</p></dd>
+<dd><p>FOI mixing exponent applied to the infectious term <code>(I/N)</code>
+(numeric in [0, 1]; 1 = well-mixed contacts).</p></dd>
 
 
 <dt id="arg-alpha-">alpha_2<a class="anchor" aria-label="anchor" href="#arg-alpha-"></a></dt>
-<dd><p>Transmission parameter for density dependence (numeric in [0, 1]).</p><div class="section">
+<dd><p>Exponent on <code>N_jt</code> in the FOI denominator
+(numeric in [0, 1]). <code>alpha_2 = 1</code> is frequency-dependent
+transmission (FOI proportional to <code>I/N</code>); <code>alpha_2 = 0</code> is
+density-dependent (FOI proportional to <code>I</code>).</p><div class="section">
 <h3 id="force-of-infection-environment-to-human-">Force of Infection (environment-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-environment-to-human-"></a></h3>
 
 

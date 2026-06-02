@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,61 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.40" id="mosaic-03040">MOSAIC 0.30.40<a class="anchor" aria-label="anchor" href="#mosaic-03040"></a></h2>
+<div class="section level3">
+<h3 id="biology-fixes-from-deep-review-re-validation-0-30-40">Biology fixes from deep-review re-validation<a class="anchor" aria-label="anchor" href="#biology-fixes-from-deep-review-re-validation-0-30-40"></a></h3>
+<p>Two findings from the disease-modeling deep review that survived re-validation against MOSAIC-docs and project history:</p>
+<ul><li>
+<strong>moment_match_E_I steady-state formula corrected.</strong> The optional <code>ic_moment_match</code> feature was using <code>E_count = I_count * iota</code>, which is dimensionally inconsistent (count x 1/day) and over-seeded E by ~5x at prior medians. The laser-cholera engine has <code>E -&gt; Isym</code> at rate <code>sigma * iota</code> per E and <code>Isym -&gt; R</code> at rate <code>gamma_1</code>, so the steady-state balance is <code>E = Isym * gamma_1 / (sigma * iota)</code>. At prior medians (<code>gamma_1 = 0.1/d</code>, <code>sigma = 0.24</code>, <code>iota = 0.71/d</code>) the corrected E/Isym ratio is ~0.59 instead of ~0.71. The <code>I_count</code> variable was renamed <code>Isym_count</code> internally to reflect that the reporting chain (<code>cases = Isym * rho * chi_endemic</code>) only observes the symptomatic compartment. Flag still defaults to FALSE; this fixes the formula for any caller who turns it on.</li>
+<li>
+<strong>epsilon prior 2x variance-inflation removed.</strong> A variance-inflation step at <code>data-raw/make_priors_default.R:127-128</code> was doubling the sd of the natural-immunity waning rate from 2.0e-4 to 4.0e-4, pushing the 95% CI on immunity duration to roughly [1.9, 53] years – the upper-tail value is biologically implausible and the inflation had no documented rationale. With the inflation removed, sd is back to 2.0e-4 (95% CI on rate [1.7e-4, 1.03e-3], corresponding immunity duration CI ~[2.7, 16] years) – the range supported by the cited King et al. 2008 and the project’s two-cohort re-fit (~7 yr mean). <code>priors_default</code> metadata version bumped to 15.2 and the .rda re-built.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.39" id="mosaic-03039">MOSAIC 0.30.39<a class="anchor" aria-label="anchor" href="#mosaic-03039"></a></h2>
+<div class="section level3">
+<h3 id="engineering-review-sweep-v03029--v03038-0-30-39">Engineering review sweep (v0.30.29 – v0.30.38)<a class="anchor" aria-label="anchor" href="#engineering-review-sweep-v03029--v03038-0-30-39"></a></h3>
+<p>Series of focused fixes from a five-agent deep-review of the package. No model-behavior changes; package hygiene, correctness on edge cases, and consistency with the documented design.</p>
+<ul><li>
+<strong>v0.30.29</strong> — Add <code>rlang</code> to <code>DESCRIPTION</code> Imports (<code>NAMESPACE</code> had <code>import(rlang)</code> but the dep was missing, producing an R CMD check ERROR). Declare column names referenced by recent plot edits in <code>R/globals.R</code> to silence “no visible binding” NOTEs.</li>
+<li>
+<strong>v0.30.30</strong> — Repo hygiene: remove tracked zero-byte <code>=</code> file, delete stray <code>MOSAIC.Rcheck/</code>, <code>..Rcheck/</code>, <code>.Rd2pdf*/</code>, root <code>Rplots.pdf</code>, and <code>model/input/*.bak{,_*}</code> on disk. Expand <code>.Rbuildignore</code> (vm/, CLAUDE.md, .Rcheck/, =, .RData, .Rhistory, …) and <code>.gitignore</code> (<em>.bak, .Rd2pdf</em>/).</li>
+<li>
+<strong>v0.30.31</strong> — <code>data-raw/make_*</code> builders patched only <code>.json</code> outputs (<code>grepl("\\.json$")</code>) so the <code>.json.gz</code> siblings were shipping without <code>zeta_ratio</code> and <code>decay_days_spread</code>, breaking the downstream <code>zeta_2 = zeta_1 / zeta_ratio</code> derivation. Switch regex to <code>\\.json(\\.gz)?$</code>, read via <code><a href="../reference/read_json_to_list.html">read_json_to_list()</a></code>, write via <code><a href="../reference/write_list_to_json.html">write_list_to_json()</a></code> with the right compress flag. Regenerated all four <code>.json.gz</code> artifacts so each pair is now content-identical.</li>
+<li>
+<strong>v0.30.32</strong> — <code><a href="../reference/get_default_config.html">get_default_config()</a></code> and <code><a href="../reference/get_default_LASER_config.html">get_default_LASER_config()</a></code> hardcoded <code>file.path(PATHS\$ROOT, "MOSAIC-pkg", ...)</code> – only works on a developer checkout. Switch to <code>system.file("extdata", ..., package = "MOSAIC")</code>; <code>PATHS</code> retained for backward compatibility.</li>
+<li>
+<strong>v0.30.33</strong> — Introduce <code>.mosaic_set_all_thread_env(n)</code> as a single source of truth for the six canonical thread-env vars documented in CLAUDE.md (<code>OMP_NUM_THREADS</code>, <code>MKL_NUM_THREADS</code>, <code>OPENBLAS_NUM_THREADS</code>, <code>NUMEXPR_NUM_THREADS</code>, <code>TBB_NUM_THREADS</code>, <code>NUMBA_NUM_THREADS</code>). The fallback branch of <code>.mosaic_set_blas_threads</code> had been setting only 3, <code>calc_model_ensemble.R</code> 5, <code>make_mosaic_cluster.R</code> 5 in two places. Route every site through the helper.</li>
+<li>
+<strong>v0.30.34</strong> — <code>plot_vaccination_maps.R</code>: <code>ggsave(plot = print(...))</code> was saving the invisible return value and double-printing to the active device. Replaced with <code>plot = final_combined_plot</code>.</li>
+<li>
+<strong>v0.30.35</strong> — <code><a href="../reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> peak-shape terms: <code>which.min(abs(date_seq - peak_date))</code> always returns an in-range index, so peaks whose date fell outside <code>[date_start, date_stop]</code> were silently snapped to t=1 / t=N, biasing the peak-timing and peak-magnitude likelihoods. Filter <code>peak_date</code> against <code>[date_seq[1], date_seq[N]]</code> before snapping, in all three sites (main path + two legacy helpers).</li>
+<li>
+<strong>v0.30.36</strong> — <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> weighted mean was biased toward zero under simulation failures: <code>sum(values * w, na.rm=TRUE)</code> drops the NA term but does not redistribute its weight mass. Filter valid then divide by sum of surviving weights, matching the behavior of <code><a href="../reference/weighted_quantiles.html">weighted_quantiles()</a></code>.</li>
+<li>
+<strong>v0.30.37</strong> — <code>props_to_counts()</code> integer-rounding fallback could leave a compartment negative or sum off by 1 in edge cases. Replace per-compartment <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">round()</a></code> + residual-on-S with Hamilton (largest-remainder) apportionment in a single per-location pass; <code><a href="https://rdrr.io/r/base/stopifnot.html" class="external-link">stopifnot()</a></code> asserts sum == N and all counts &gt;= 0.</li>
+<li>
+<strong>v0.30.38</strong> — <code>moment_match_E_I()</code> was location-invariant due to <code>unlist(reported_cases)</code> flattening the matrix; every country got identical initial infections. Compute first-week-of-positives window per location row. (E_count = I_count * iota formula left unchanged with an inline note for the next biology pass; flag is OFF by default.)</li>
+<li>
+<strong>v0.30.39</strong> — Update <code>epidemic_peaks</code> docstring to match actual code defaults (28-day smoothing, 10-day comparison, 75-day separation, 8% prominence) and backfill NEWS for the v0.30.27/0.30.28 entries that were silently missed.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.28" id="mosaic-03028">MOSAIC 0.30.28<a class="anchor" aria-label="anchor" href="#mosaic-03028"></a></h2>
+<div class="section level3">
+<h3 id="calc_model_likelihood-source-epidemic_peaks-from-config-0-30-28">
+<code>calc_model_likelihood</code>: source <code>epidemic_peaks</code> from config<a class="anchor" aria-label="anchor" href="#calc_model_likelihood-source-epidemic_peaks-from-config-0-30-28"></a></h3>
+<p>When the caller supplies <code>config\$epidemic_peaks</code> (a data.frame with <code>iso_code</code> + <code>peak_date</code> columns), the likelihood now prefers that over the lazy-loaded <code><a href="../reference/epidemic_peaks.html">MOSAIC::epidemic_peaks</a></code> package dataset. This keeps the R likelihood aligned with the Python port at <code>laser_cholera.metapop.calc_model_likelihood</code>, which reads the same field from its config dict. The legacy helpers <code>calc_multi_peak_timing_ll</code> and <code>calc_multi_peak_magnitude_ll</code> now accept an optional <code>epidemic_peaks=</code> argument with the same fallback.</p>
+</div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.30.27" id="mosaic-03027">MOSAIC 0.30.27<a class="anchor" aria-label="anchor" href="#mosaic-03027"></a></h2>
+<div class="section level3">
+<h3 id="ship-epidemic_peaks-in-config_default-for-the-python-port-0-30-27">Ship <code>epidemic_peaks</code> in <code>config_default</code> for the Python port<a class="anchor" aria-label="anchor" href="#ship-epidemic_peaks-in-config_default-for-the-python-port-0-30-27"></a></h3>
+<p><code>config_default\$epidemic_peaks</code> is now populated from <code><a href="../reference/epidemic_peaks.html">MOSAIC::epidemic_peaks</a></code> at build time and written into both the <code>.rda</code> and the <code>default_parameters.json{,.gz}</code> artifacts. This is the counterpart to a parallel change in laser-cholera that consumes <code>config["epidemic_peaks"]</code> instead of requiring the R package to be loaded. Configs built before this version remain readable: missing <code>epidemic_peaks</code> falls back to the lazy-loaded package dataset.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.30.26" id="mosaic-03026">MOSAIC 0.30.26<a class="anchor" aria-label="anchor" href="#mosaic-03026"></a></h2>
 <div class="section level3">

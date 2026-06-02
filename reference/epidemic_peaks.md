@@ -42,27 +42,44 @@ function on combined daily surveillance data from WHO and other sources.
 
 ## Details
 
+**Scope:** The dataset is the full historical detection record from the
+surveillance time series (2010+) and is **not** pre-trimmed to any
+particular simulation window. Consumers that score peaks against a
+specific config window (e.g.
+[`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md),
+the Python likelihood port, the LASER config builders) must filter
+against `[date_start, date_stop]` first – otherwise
+`which.min(abs(date_seq - peak_date))` silently snaps out-of-window
+peaks to t=1 or t=N and biases the peak-shape likelihood terms. The
+internal helper `MOSAIC:::.filter_epidemic_peaks()` is the canonical
+filter and is applied at build time inside `make_config_default.R`, at
+runtime inside
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)'s
+Dask injector, and defensively inside
+[`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md).
+
 Epidemic peaks are identified using the following methodology:
 
-- Time series smoothing with 21-day running mean window
+- Time series smoothing with 28-day running mean window
 
-- Local maxima detection with 7-day comparison windows
+- Local maxima detection with 10-day comparison windows
 
-- Prominence-based filtering (minimum 10\\
+- Prominence-based filtering (minimum 8\\ for most countries;
+  country-specific overrides below)
 
-- Minimum peak height threshold of 10 smoothed cases
+- Minimum peak height threshold of 3 smoothed cases (default)
 
-- Minimum 90-day separation between consecutive peaks
+- Minimum 75-day separation between consecutive peaks
 
 - Peak boundaries defined where incidence drops to 1/3 of peak height
 
 Country-specific adjustments are applied for:
 
-- Niger (NER): Lower prominence threshold (2\\
+- Niger (NER): Lower prominence threshold (1.5\\
 
-- Cameroon (CMR): Adjusted threshold (5\\
+- Cameroon (CMR): Adjusted threshold (4\\
 
-- Ethiopia (ETH): Standard threshold (7\\
+- Ethiopia (ETH): Lower threshold (3\\
 
 Manual corrections have been applied for known issues including:
 

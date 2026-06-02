@@ -13,7 +13,7 @@ that all parameter values meet model specifications."><meta property="og:image" 
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +54,7 @@ that all parameter values meet model specifications.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">get_default_LASER_config</span><span class="op">(</span><span class="va">PATHS</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">get_default_LASER_config</span><span class="op">(</span>PATHS <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -62,15 +62,9 @@ that all parameter values meet model specifications.</p>
 
 
 <dl><dt id="arg-paths">PATHS<a class="anchor" aria-label="anchor" href="#arg-paths"></a></dt>
-<dd><p>A named list of file path components required for accessing
-input data. Expected list elements include:</p><dl><dt>MODEL_INPUT</dt>
-<dd><p>Character string. Path to directory containing model input CSV files.</p></dd>
-
-<dt>DATA_WHO_DAILY</dt>
-<dd><p>Character string. Path to directory containing processed WHO cholera daily CSV data.</p></dd>
-
-
-</dl></dd>
+<dd><p>Optional. Retained for backwards compatibility; no longer used.
+The default config is now located via <code><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file()</a></code> so the function
+works from any installed MOSAIC package.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -82,12 +76,7 @@ model simulation.</p>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="va">PATHS</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  MODEL_INPUT <span class="op">=</span> <span class="st">"path/to/model_input"</span>,</span></span>
-<span class="r-in"><span>  DATA_WHO_DAILY <span class="op">=</span> <span class="st">"path/to/daily_data"</span></span></span>
-<span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">default_config</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_default_config.html">get_default_config</a></span><span class="op">(</span><span class="va">PATHS</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">default_config</span> <span class="op">&lt;-</span> <span class="fu">get_default_LASER_config</span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

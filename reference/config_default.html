@@ -13,7 +13,7 @@ metapopulation transmission model across any number of locations."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,8 +59,8 @@ metapopulation transmission model across any number of locations.</p>
 
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
-    <p>A named <strong>list</strong> created by <code>make_default_LASER_config()</code>, whose
-elements include:</p><ul><li><p><strong>Metadata</strong> – <code>metadata$version</code>, <code>metadata$date</code>, <code>metadata$description</code>
+    <p>A named <strong>list</strong> built by the <code>data-raw/make_config_default.R</code>
+script and persisted as <code>data/config_default.rda</code>. Elements include:</p><ul><li><p><strong>Metadata</strong> – <code>metadata$version</code>, <code>metadata$date</code>, <code>metadata$description</code>
 for provenance tracking;</p></li>
 <li><p><strong>Scalars</strong> – biological constants (<code>phi_1</code>, <code>gamma_1</code>, <code>epsilon</code>, …);</p></li>
 <li><p><strong>Vectors</strong> – initial populations (<code>S_j_initial</code>, <code>I_j_initial</code>, …),
@@ -106,7 +106,9 @@ parameter sampling operations.</p>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index">
-<ul><li><p>make_defaut_LASER_config() – function that creates this object.</p></li>
+<ul><li><p><code>data-raw/make_config_default.R</code> – the script that builds this object.</p></li>
+<li><p><code><a href="make_LASER_config.html">make_LASER_config()</a></code> – the validator/factory function used internally
+by the build script to validate every parameter.</p></li>
 <li><p><a href="config_simulation_epidemic.html">config_simulation_epidemic</a> – one-year outbreak toy data set.</p></li>
 <li><p><a href="config_simulation_endemic.html">config_simulation_endemic</a> – 5-year endemic toy data set.</p></li>
 </ul></div>

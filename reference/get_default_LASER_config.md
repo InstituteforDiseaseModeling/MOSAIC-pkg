@@ -10,25 +10,17 @@ to check that all parameter values meet model specifications.
 ## Usage
 
 ``` r
-get_default_LASER_config(PATHS)
+get_default_LASER_config(PATHS = NULL)
 ```
 
 ## Arguments
 
 - PATHS:
 
-  A named list of file path components required for accessing input
-  data. Expected list elements include:
-
-  MODEL_INPUT
-
-  :   Character string. Path to directory containing model input CSV
-      files.
-
-  DATA_WHO_DAILY
-
-  :   Character string. Path to directory containing processed WHO
-      cholera daily CSV data.
+  Optional. Retained for backwards compatibility; no longer used. The
+  default config is now located via
+  [`system.file()`](https://rdrr.io/r/base/system.file.html) so the
+  function works from any installed MOSAIC package.
 
 ## Value
 
@@ -39,11 +31,6 @@ for LASER model simulation.
 
 ``` r
 if (FALSE) { # \dontrun{
-PATHS <- list(
-  MODEL_INPUT = "path/to/model_input",
-  DATA_WHO_DAILY = "path/to/daily_data"
-)
-
-default_config <- get_default_config(PATHS)
+default_config <- get_default_LASER_config()
 } # }
 ```

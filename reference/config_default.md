@@ -13,8 +13,8 @@ config_default
 
 ## Format
 
-A named **list** created by `make_default_LASER_config()`, whose
-elements include:
+A named **list** built by the `data-raw/make_config_default.R` script
+and persisted as `data/config_default.rda`. Elements include:
 
 - **Metadata** – `metadata$version`, `metadata$date`,
   `metadata$description` for provenance tracking;
@@ -71,7 +71,11 @@ maintained in sync during parameter sampling operations.
 
 ## See also
 
-- make_defaut_LASER_config() – function that creates this object.
+- `data-raw/make_config_default.R` – the script that builds this object.
+
+- [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
+  – the validator/factory function used internally by the build script
+  to validate every parameter.
 
 - [config_simulation_epidemic](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_simulation_epidemic.md)
   – one-year outbreak toy data set.

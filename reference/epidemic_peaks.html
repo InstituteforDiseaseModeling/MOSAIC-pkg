@@ -11,7 +11,7 @@ smoothing and prominence-based peak detection algorithms."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.28</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.47</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,15 +80,27 @@ function on combined daily surveillance data from WHO and other sources.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Epidemic peaks are identified using the following methodology:</p><ul><li><p>Time series smoothing with 21-day running mean window</p></li>
-<li><p>Local maxima detection with 7-day comparison windows</p></li>
-<li><p>Prominence-based filtering (minimum 10\<!-- % of maximum smoothed value) --></p></li>
-<li><p>Minimum peak height threshold of 10 smoothed cases</p></li>
-<li><p>Minimum 90-day separation between consecutive peaks</p></li>
+    <p><strong>Scope:</strong> The dataset is the full historical detection record from the
+surveillance time series (2010+) and is <strong>not</strong> pre-trimmed to any
+particular simulation window. Consumers that score peaks against a
+specific config window (e.g. <code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code>, the Python
+likelihood port, the LASER config builders) must filter against
+<code>[date_start, date_stop]</code> first – otherwise <code>which.min(abs(date_seq - peak_date))</code> silently snaps out-of-window peaks to t=1 or t=N and
+biases the peak-shape likelihood terms. The internal helper
+<code>MOSAIC:::.filter_epidemic_peaks()</code> is the canonical filter and is
+applied at build time inside <code>make_config_default.R</code>, at runtime
+inside <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>'s Dask injector, and defensively inside
+<code><a href="calc_model_likelihood.html">calc_model_likelihood()</a></code>.</p>
+<p>Epidemic peaks are identified using the following methodology:</p><ul><li><p>Time series smoothing with 28-day running mean window</p></li>
+<li><p>Local maxima detection with 10-day comparison windows</p></li>
+<li><p>Prominence-based filtering (minimum 8\<!-- % of maximum smoothed value -->
+for most countries; country-specific overrides below)</p></li>
+<li><p>Minimum peak height threshold of 3 smoothed cases (default)</p></li>
+<li><p>Minimum 75-day separation between consecutive peaks</p></li>
 <li><p>Peak boundaries defined where incidence drops to 1/3 of peak height</p></li>
-</ul><p>Country-specific adjustments are applied for:</p><ul><li><p>Niger (NER): Lower prominence threshold (2\<!-- %) for gradual peaks --></p></li>
-<li><p>Cameroon (CMR): Adjusted threshold (5\<!-- %) for plateau-shaped peaks --></p></li>
-<li><p>Ethiopia (ETH): Standard threshold (7\<!-- %) for multiple outbreaks --></p></li>
+</ul><p>Country-specific adjustments are applied for:</p><ul><li><p>Niger (NER): Lower prominence threshold (1.5\<!-- %) for gradual peaks --></p></li>
+<li><p>Cameroon (CMR): Adjusted threshold (4\<!-- %) for plateau-shaped peaks --></p></li>
+<li><p>Ethiopia (ETH): Lower threshold (3\<!-- %) for multiple outbreaks --></p></li>
 </ul><p>Manual corrections have been applied for known issues including:</p><ul><li><p>Ethiopia 2024: February peak corrected to March (sustained outbreak)</p></li>
 <li><p>DRC 2023: Added January peak (filtered due to proximity)</p></li>
 <li><p>Nigeria 2024: Added October peak</p></li>

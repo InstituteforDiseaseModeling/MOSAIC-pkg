@@ -2,8 +2,8 @@
 
 A **toy one-year outbreak** parameter set for quick unit-tests and
 vignette examples. The object is created by
-`make_simulated_LASER_config_files.R` and saved in the package as
-**`config_simulation_epidemic`**.
+`make_simulation_epidemic_LASER_config_files.R` and saved in the package
+as **`config_simulation_epidemic`**.
 
 ## Usage
 
@@ -47,5 +47,5 @@ it ideal for automated tests and teaching materials.
 - [config_default](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
   – comprehensive default configuration.
 
-- `make_simulated_LASER_config_files.R` – script that generates this
-  object.
+- `make_simulation_epidemic_LASER_config_files.R` – script that
+  generates this object.
