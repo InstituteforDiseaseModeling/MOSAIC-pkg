@@ -274,7 +274,7 @@
         obs_cases <- params_sim$reported_cases
         est_cases <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi (comparable to surveillance data)
         obs_deaths <- params_sim$reported_deaths
-        est_deaths <- model$results$disease_deaths
+        est_deaths <- model$results$reported_deaths  # v0.13.0: reported_deaths = round(disease_deaths * rho_deaths) (comparable to surveillance data)
 
         if (!is.null(obs_cases) && !is.null(est_cases) &&
             !is.null(obs_deaths) && !is.null(est_deaths)) {
@@ -312,7 +312,7 @@
       # Capture raw per-(j, t) output for validation simresults
       if (!is.null(simresults_raw)) {
         raw_cases  <- model$results$reported_cases
-        raw_deaths <- model$results$disease_deaths
+        raw_deaths <- model$results$reported_deaths
         if (!is.null(raw_cases) && !is.null(raw_deaths)) {
           if (!is.matrix(raw_cases))  raw_cases  <- matrix(raw_cases,  nrow = 1)
           if (!is.matrix(raw_deaths)) raw_deaths <- matrix(raw_deaths, nrow = 1)
@@ -541,6 +541,13 @@
 #' )
 #'
 #' run_MOSAIC(custom_config, custom_priors, "./output")
+#'
+#' # === RESUME AN INTERRUPTED RUN ===
+#'
+#' # If a calibration is killed mid-run, re-call with resume = TRUE and the same
+#' # config/priors/output directory. Completed simulations on disk are reused and
+#' # the run continues from the next sim_id (bit-identical to an uninterrupted run).
+#' run_MOSAIC(config, priors, "./output", resume = TRUE)
 #' }
 #'
 #' @seealso [mosaic_control_defaults()] for building control structures
@@ -1081,8 +1088,10 @@ run_MOSAIC <- function(config,
 
   # Resume: overlay the fresh-init state with state reconstructed from the
   # shards on disk. When resume = FALSE this branch is skipped and the run is
-  # byte-identical to a fresh calibration.
-  if (isTRUE(resume)) {
+  # byte-identical to a fresh calibration. Only auto mode reconstructs the
+  # adaptive ESS/phase state here; fixed mode recovers purely from done_ids
+  # below (a single directory scan), so it is left out to avoid scanning twice.
+  if (isTRUE(resume) && identical(state$mode, "auto")) {
     state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled)
     if (isTRUE(state$converged)) {
       log_msg("[RESUME] Reconstructed state already converged — skipping simulation, ",
@@ -1420,6 +1429,10 @@ run_MOSAIC <- function(config,
     unlink(parquet_files)
     log_msg("  Cleaned up %d individual simulation files", length(parquet_files))
   }
+
+  # The resume checkpoint is now stale (shards consolidated into samples.parquet).
+  # Remove it so the directory carries no dangling resume state.
+  unlink(checkpoint_file, force = TRUE)
 
   log_msg("  Combined simulations saved: %s", basename(simulations_file))
 

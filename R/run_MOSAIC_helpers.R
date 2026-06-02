@@ -659,7 +659,10 @@
     if (quarantine) {
       qdir <- file.path(dir_cal_samples, ".quarantine")
       dir.create(qdir, recursive = TRUE, showWarnings = FALSE)
-      file.rename(file.path(dir_cal_samples, bad), file.path(qdir, bad))
+      # Clear any prior-quarantine collisions so the rename can't silently fail.
+      targets <- file.path(qdir, bad)
+      unlink(targets[file.exists(targets)], force = TRUE)
+      file.rename(file.path(dir_cal_samples, bad), targets)
     }
     log_msg("[RESUME] Quarantined %d unreadable shard(s)", length(bad))
   }
@@ -752,14 +755,16 @@
     state$batch_success_rates <- ckpt$batch_success_rates %||% numeric()
     state$batch_sizes_used    <- ckpt$batch_sizes_used    %||% integer()
 
-    last_n <- if (length(state$ess_tracking))
+    # ess_tracking total_sims is a row COUNT, so compare against the shard
+    # count (not the max-id watermark, which would over-fire on failed-sim gaps).
+    last_count <- if (length(state$ess_tracking))
       tail(vapply(state$ess_tracking, `[[`, numeric(1), "total_sims"), 1) else 0
     log_msg("[RESUME] Restored checkpoint: %d sims, batch %d, phase '%s', converged=%s",
             state$total_sims_run, state$batch_number, state$phase, isTRUE(state$converged))
 
     # New shards beyond the last checkpoint (a partial batch wrote after the
     # last checkpoint) → refresh ESS/convergence over the full pool.
-    if (identical(state$mode, "auto") && !state$converged && scan$watermark > last_n) {
+    if (identical(state$mode, "auto") && !state$converged && scan$n > last_count) {
       state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
     }
 
@@ -767,8 +772,14 @@
     # ---- Lightweight bootstrap (no checkpoint; e.g. pre-feature run) --------
     bs <- control$calibration$batch_size_adaptive %||% 1000L
     state$batch_number <- max(1L, as.integer(ceiling(scan$watermark / max(bs, 1L))))
-    log_msg("[RESUME] No checkpoint; bootstrapping from %d shards (watermark %d, batch %d)",
-            scan$n, scan$watermark, state$batch_number)
+    # If the recovered pool already exhausted the adaptive batch budget, mark
+    # calibration done so resume proceeds to the predictive phase rather than
+    # re-running the full adaptive allotment from the resume point.
+    max_adaptive <- control$calibration$max_batches_adaptive %||% 8L
+    if (state$batch_number >= max_adaptive) state$calibration_done <- TRUE
+    log_msg("[RESUME] No checkpoint; bootstrapping from %d shards (watermark %d, batch %d%s)",
+            scan$n, scan$watermark, state$batch_number,
+            if (isTRUE(state$calibration_done)) ", calibration budget already met" else "")
     state <- .mosaic_ess_check_update_state(state, dirs, param_names_est, control)
 
   } else {
@@ -1753,7 +1764,7 @@
         iter_mats[[ji]] <- list(
           est_cases  = matrix(unlist(iter_list[[ji]]$reported_cases),
                               nrow = n_locs, byrow = TRUE),
-          est_deaths = matrix(unlist(iter_list[[ji]]$disease_deaths),
+          est_deaths = matrix(unlist(iter_list[[ji]]$reported_deaths),
                               nrow = n_locs, byrow = TRUE)
         )
       }
@@ -2002,7 +2013,7 @@
         iter_res   <- iter_list[[ji]]
         est_cases  <- matrix(unlist(iter_res$reported_cases),
                              nrow = n_locs, byrow = TRUE)
-        est_deaths <- matrix(unlist(iter_res$disease_deaths),
+        est_deaths <- matrix(unlist(iter_res$reported_deaths),
                              nrow = n_locs, byrow = TRUE)
 
         lls[ji] <- tryCatch(
@@ -2078,7 +2089,7 @@
           iter_res   <- res$iterations[[ji]]
           est_cases  <- matrix(unlist(iter_res$reported_cases),
                                nrow = n_locs, byrow = TRUE)
-          est_deaths <- matrix(unlist(iter_res$disease_deaths),
+          est_deaths <- matrix(unlist(iter_res$reported_deaths),
                                nrow = n_locs, byrow = TRUE)
           n_j_raw <- nrow(est_cases)
           n_t_raw <- ncol(est_cases)
@@ -2210,8 +2221,8 @@
           stoch_idx = meta$stoch_idx,
           reported_cases = matrix(unlist(r$reported_cases),
                                   nrow = length(r$reported_cases), byrow = TRUE),
-          disease_deaths = matrix(unlist(r$disease_deaths),
-                                  nrow = length(r$disease_deaths), byrow = TRUE),
+          reported_deaths = matrix(unlist(r$reported_deaths),
+                                  nrow = length(r$reported_deaths), byrow = TRUE),
           success = TRUE
         )
       } else {

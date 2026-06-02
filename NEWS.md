@@ -1,3 +1,14 @@
+# MOSAIC 0.31.0
+
+## Add `resume = TRUE` to `run_MOSAIC()` — continue an interrupted calibration
+
+`run_MOSAIC()` gains a `resume` argument (default `FALSE`). When `TRUE`, the run reconstructs calibration state from the per-sim shards already present in `<dir_output>/2_calibration/samples/` and continues from the next unused `sim_id` instead of restarting from scratch. Because each simulation's parameters are a deterministic function of `seed = sim_id`, a resumed run is bit-identical to an uninterrupted one.
+
+- The shards on disk are the source of truth. The next `sim_id` is always `max(id on disk) + 1`, so no draw is ever duplicated.
+- An internal `2_calibration/state/resume_checkpoint.rds` (written every batch) restores the adaptive ESS/phase state exactly; runs without a checkpoint bootstrap the state from the shards.
+- `resume = TRUE` is rejected with `clean_output = TRUE`, and the supplied `config`/`priors` must match those persisted in `1_inputs/` (a mismatch changes the target distribution and is a hard error).
+- `resume = FALSE` (the default) is byte-identical to prior behavior. The slim `run_state.json` monitoring file is unchanged.
+
 # MOSAIC 0.30.49
 
 ## Remove `config_default_MOZ` / `priors_default_MOZ` (BREAKING for direct users)

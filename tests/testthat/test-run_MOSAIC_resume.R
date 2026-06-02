@@ -169,6 +169,51 @@ test_that(".mosaic_reconstruct_state returns unchanged state when no shards (fre
   expect_equal(st$batch_number, 0L)
 })
 
+test_that(".mosaic_reconstruct_state bootstrap marks calibration done when budget met", {
+  dirs <- make_dirs()
+  for (id in 1:10) make_shard(dirs$cal_samples, id)  # < 50 → ESS check short-circuits
+  # batch_size 2 → ceiling(10/2) = 5 batches; max_batches_adaptive 4 → budget met.
+  control <- list(calibration = list(batch_size_adaptive = 2L, max_batches_adaptive = 4L),
+                  io = list(), targets = list())
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, c("a", "b"))
+  expect_equal(st$batch_number, 5L)
+  expect_true(st$calibration_done)   # avoids re-running the full adaptive allotment
+})
+
+test_that(".mosaic_reconstruct_state refreshes ESS over the full pool when shards exceed checkpoint", {
+  # Auto-mode continuation: a partial batch wrote shards after the last
+  # checkpoint, so reconstruct must re-run the ESS check over ALL shards and
+  # append a fresh tracking point. Uses real (engine-free) ESS computation.
+  skip_if_not_installed("arrow")
+  dirs <- make_dirs()
+  set.seed(42)
+  # Use real estimated-parameter names so calc_model_ess_parameter accepts them.
+  pnames <- head(MOSAIC::estimated_parameters$parameter_name, 2L)
+  n <- 55L  # > 50 so .mosaic_ess_check_update_state does not short-circuit
+  for (id in seq_len(n)) {
+    df <- data.frame(sim = id, iter = 1L, seed_sim = id, seed_iter = NA_real_,
+                     likelihood = -runif(1, 1, 100))
+    df[[pnames[1]]] <- runif(1)
+    df[[pnames[2]]] <- runif(1)
+    arrow::write_parquet(df, file.path(dirs$cal_samples, sprintf("sim_%07d.parquet", id)))
+  }
+
+  # Checkpoint: not converged, last tracking point at total_sims = 30 (< 55 on disk).
+  ck <- state_template()
+  ck$batch_number <- 1L; ck$converged <- FALSE
+  ck$ess_tracking <- list(list(batch = 1L, total_sims = 30L, threshold_ess = 10,
+                               min_ess = 5, median_ess = 12, max_ess = 20))
+  MOSAIC:::.mosaic_save_checkpoint(ck, file.path(dirs$cal_state, "resume_checkpoint.rds"))
+
+  control <- mosaic_control_defaults()
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, pnames)
+
+  expect_equal(st$total_sims_run, n)                # disk watermark
+  expect_gt(length(st$ess_tracking), 1L)            # refresh appended a point
+  newest <- st$ess_tracking[[length(st$ess_tracking)]]
+  expect_equal(newest$total_sims, n)                # computed over the FULL pool
+})
+
 # ---- input integrity check -------------------------------------------------
 
 test_that(".mosaic_resume_check_inputs passes on match, errors on drift", {
