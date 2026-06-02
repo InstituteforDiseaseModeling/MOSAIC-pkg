@@ -734,11 +734,24 @@ run_MOSAIC <- function(config,
   # WRITE SETUP FILES (with cluster metadata)
   # ===========================================================================
 
-  # On resume, verify the supplied config/priors match those persisted by the
-  # interrupted run BEFORE the setup files below overwrite them. A mismatch
-  # changes the sampling/likelihood target and is a hard error.
+  # On resume, verify the supplied config/priors/likelihood match those
+  # persisted by the interrupted run BEFORE the setup files below overwrite
+  # them. A mismatch changes the sampling/likelihood target and is a hard error.
   if (isTRUE(resume)) {
-    .mosaic_resume_check_inputs(dirs, config, priors)
+    .mosaic_resume_check_inputs(dirs, config, priors, control)
+
+    # Refuse to resume a run that already completed: its shards were consolidated
+    # into samples.parquet and deleted, so a resume would silently re-run the
+    # whole calibration from scratch and overwrite the finished posterior.
+    samples_file <- file.path(dirs$calibration, "samples.parquet")
+    n_shards <- length(list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$"))
+    if (file.exists(samples_file) && n_shards == 0L) {
+      stop("resume = TRUE but this run already completed: ",
+           file.path("2_calibration", "samples.parquet"),
+           " exists and there are no per-sim shards left to continue. ",
+           "Start a fresh run in a new directory, or remove samples.parquet to recompute.",
+           call. = FALSE)
+    }
   }
 
   # Capture full environment snapshot (versions, system, git, data)
