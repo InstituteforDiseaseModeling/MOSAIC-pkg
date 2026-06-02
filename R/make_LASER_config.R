@@ -915,8 +915,12 @@ make_LASER_config <- function(output_file_path = NULL,
           }
           unknown_iso <- setdiff(unique(epidemic_peaks$iso_code), location_name)
           if (length(unknown_iso) > 0) {
-               warning(sprintf("epidemic_peaks contains iso_code(s) not in location_name: %s",
-                               paste(unknown_iso, collapse = ", ")))
+               stop(sprintf(
+                    paste0("epidemic_peaks contains iso_code(s) not in location_name: %s. ",
+                           "laser-cholera v0.13+ asserts every iso_code in epidemic_peaks ",
+                           "appears in location_name. Pre-filter via ",
+                           "MOSAIC:::.filter_epidemic_peaks(peaks, date_start, date_stop, location_name)."),
+                    paste(unknown_iso, collapse = ", ")), call. = FALSE)
           }
           # Off-window peaks would silently snap to t=1 / t=N in the
           # peak-shape likelihood terms; warn the caller rather than

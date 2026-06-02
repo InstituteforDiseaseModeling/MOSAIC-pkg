@@ -46,7 +46,7 @@ est_initial_R <- function(
      t0 <- as.Date(t0)
 
      # Load WHO annual data
-     who_path <- file.path(PATHS$DATA_PROCESSED, "WHO/annual/who_afro_annual_1949_2024.csv")
+     who_path <- file.path(PATHS$DATA_PROCESSED, "WHO/annual/who_afro_annual.csv")
      if (!file.exists(who_path)) {
           stop("WHO annual data not found at: ", who_path)
      }

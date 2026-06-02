@@ -92,7 +92,7 @@ test_that("mosaic_ensemble object has expected structure", {
         param_idx = p,
         stoch_idx = s,
         reported_cases = matrix(rpois(n_locs * n_times, 10), nrow = n_locs),
-        disease_deaths = matrix(rpois(n_locs * n_times, 1), nrow = n_locs),
+        reported_deaths = matrix(rpois(n_locs * n_times, 1), nrow = n_locs),
         success = TRUE
       )
     }
@@ -159,7 +159,7 @@ test_that("uniform weights produce same result as unweighted mean", {
       param_idx = p,
       stoch_idx = 1L,
       reported_cases = matrix(p * (1:n_times), nrow = 1),
-      disease_deaths = matrix(p * rep(1, n_times), nrow = 1),
+      reported_deaths = matrix(p * rep(1, n_times), nrow = 1),
       success = TRUE
     )
   })
@@ -198,11 +198,11 @@ test_that("non-uniform weights produce different predictions than uniform", {
   # Deliberately different results per param
   precomputed <- list(
     list(param_idx = 1, stoch_idx = 1, reported_cases = matrix(rep(100, n_times), nrow = 1),
-         disease_deaths = matrix(rep(10, n_times), nrow = 1), success = TRUE),
+         reported_deaths = matrix(rep(10, n_times), nrow = 1), success = TRUE),
     list(param_idx = 2, stoch_idx = 1, reported_cases = matrix(rep(0, n_times), nrow = 1),
-         disease_deaths = matrix(rep(0, n_times), nrow = 1), success = TRUE),
+         reported_deaths = matrix(rep(0, n_times), nrow = 1), success = TRUE),
     list(param_idx = 3, stoch_idx = 1, reported_cases = matrix(rep(50, n_times), nrow = 1),
-         disease_deaths = matrix(rep(5, n_times), nrow = 1), success = TRUE)
+         reported_deaths = matrix(rep(5, n_times), nrow = 1), success = TRUE)
   )
 
   ens_uniform <- calc_model_ensemble(

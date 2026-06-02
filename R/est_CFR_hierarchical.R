@@ -78,8 +78,8 @@ est_CFR_hierarchical <- function(
         stop("Package 'mgcv' is required. Please install it using: install.packages('mgcv')")
     }
 
-    # Load WHO annual data
-    who_data_path <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2024.csv")
+    # Load WHO annual data (current canonical file written by process_WHO_annual_data)
+    who_data_path <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
     if (!file.exists(who_data_path)) {
         stop("WHO annual data not found. Please run process_WHO_annual_data(PATHS) first.")
     }
@@ -87,13 +87,22 @@ est_CFR_hierarchical <- function(
     if (verbose) message("Loading WHO annual cholera data...")
     who_data <- utils::read.csv(who_data_path, stringsAsFactors = FALSE)
 
+    # Back-compat: if older snapshots lack the coverage columns, fill them as
+    # full-year so downstream weighting/filters become no-ops.
+    if (!"coverage_days" %in% colnames(who_data)) who_data$coverage_days <- 365L
+    if (!"year_fraction" %in% colnames(who_data)) who_data$year_fraction <- 1.0
+
     # Data preparation
     if (verbose) message("Preparing data for hierarchical GAM...")
 
-    # Filter data - only use MOSAIC framework countries
+    # Filter data - only use MOSAIC framework countries.
+    # Partial-year observations (year_fraction < 1) are KEPT — the binomial
+    # likelihood already weights by cases_total, so partial-year rows with
+    # smaller case counts naturally receive less weight. The min_cases filter
+    # protects against extremely small-N high-variance years.
     model_data <- who_data[
         who_data$country != "AFRO Region" &
-        who_data$iso_code %in% MOSAIC::iso_codes_mosaic &  # Filter for MOSAIC countries only
+        who_data$iso_code %in% MOSAIC::iso_codes_mosaic &
         !is.na(who_data$cases_total) &
         !is.na(who_data$deaths_total) &
         who_data$cases_total >= min_cases,

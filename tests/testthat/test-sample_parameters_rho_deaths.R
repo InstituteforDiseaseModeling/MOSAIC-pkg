@@ -28,8 +28,9 @@ test_that("priors_default carries the Beta(36.95, 51.02) informative prior for r
   skip_if_no_rho_deaths_prior()
   # Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524]. Derived from
   # random-effects meta-analysis of three SSA studies (Routh 2017, Shikanga 2009,
-  # Bwire 2013); informative variant fit to the CI of the pooled mean.
-  # See MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md.
+  # Bwire 2013); informative variant fit to the pooled-mean CI for cleaner
+  # mu_j_baseline identifiability (SYNTHESIS_REPORT sec 3.3 + 3.4). The wider
+  # prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity.
   prior <- MOSAIC::priors_default$parameters_global$rho_deaths
   expect_equal(prior$distribution, "beta")
   expect_equal(prior$parameters$shape1, 36.95)
@@ -65,7 +66,8 @@ test_that("rho_deaths empirical draws match Beta(36.95, 51.02)", {
     sample_parameters(seed = s, verbose = FALSE)$rho_deaths
   }, numeric(1))
   expect_true(all(is.finite(draws)))
-  # Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524].
+  # Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524]. The informative
+  # variant is tight (sd ~0.052), so use a fairly narrow inner band.
   expect_gte(mean(draws > 0.20 & draws < 0.60), 0.95)
   expect_gt(mean(draws), 0.37)
   expect_lt(mean(draws), 0.47)

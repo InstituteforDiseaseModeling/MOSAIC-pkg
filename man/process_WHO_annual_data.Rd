@@ -7,33 +7,65 @@
 process_WHO_annual_data(PATHS)
 }
 \arguments{
-\item{PATHS}{A list containing the paths to raw and processed data directories. Typically generated from \code{get_paths()} and should include:
-\itemize{
-\item \strong{DATA_RAW}: Path to the directory containing raw WHO cholera data.
-\item \strong{DATA_WHO_ANNUAL}: Path to the directory where processed cholera data will be saved.
-}}
+\item{PATHS}{A list containing the paths to raw and processed data
+directories. Typically generated from \code{get_paths()}.}
 }
 \value{
-The function does not return a value but processes and saves the historical WHO cholera data into CSV files in the processed data directory.
+The function does not return a value but writes processed CSVs
+to \code{PATHS$DATA_WHO_ANNUAL}.
 }
 \description{
-This function compiles historical cholera data from the WHO for African countries (AFRO region) for the years 1949 to 2024. The data is processed and saved in the MOSAIC directory structure. It includes reported cholera cases, deaths, and case fatality ratios (CFR).
+Compiles cholera surveillance data from WHO for African countries (AFRO
+region) from 1949 onward. Data sources and the precise per-year coverage
+are tracked through the pipeline so partial-year snapshots (current year
+from the WHO Global Cholera & AWD dashboard) are usable downstream
+without being mislabeled as full-year totals.
 }
 \details{
-This function compiles cholera data for African countries (AFRO region) by processing historical data from 1949-2024. The data sources are as follows:
+Data sources:
 \itemize{
-\item \strong{1949-2021}: Data were compiled from WHO annual reports by \strong{Our World In Data}. See \url{https://ourworldindata.org}.
-\item \strong{2022}: Data were manually extracted from the WHO annual report.
-\item \strong{2023-2024}: Data are downloaded directly from the \strong{WHO AWD GIS dashboard}.
+\item \strong{1949-2021}: WHO annual reports compiled by Our World in
+Data. See \url{https://ourworldindata.org}.
+\item \strong{2022}: Manually transcribed from the WHO 2022 annual
+cholera report (PDF).
+\item \strong{2023+}: Downloaded from the
+\strong{WHO Global Cholera & AWD dashboard} via ArcGIS. Each
+download is archived to
+\code{raw/WHO/annual/who_global_dashboard/cholera_adm0_public_snapshot_YYYY-MM-DD.csv}
+and ALL files matching \code{cholera_adm0_public_*.csv} in the
+dashboard directory are ingested. Each row's actual coverage is
+derived from \code{first_epiwk} / \code{last_epiwk} (rolling
+snapshots cross calendar-year boundaries — see the year-labeling
+note below).
 }
-Additionally, the function calculates 95\% binomial confidence intervals for the CFR where applicable, and the data is saved as CSV files in the processed data directory.
+
+\strong{Year labeling}: The ArcGIS dashboard returns one row per country
+summing \code{case_total} / \code{death_total} between \code{first_epiwk}
+and \code{last_epiwk}. Each row is assigned to the calendar year that
+contains the majority of its days. \code{coverage_days} reports how many
+calendar days are covered, and \code{year_fraction = coverage_days/365.25}
+indicates whether the row is a full-year observation (~1.0) or a partial
+snapshot (<1.0). When multiple files have a row for the same
+\code{(iso_code, year)} combination, the row with the larger
+\code{coverage_days} is kept.
+
+\strong{To refresh through a given calendar year}: place a year-filtered
+CSV in \code{raw/WHO/annual/who_global_dashboard/} named
+\code{cholera_adm0_public_YYYY.csv} (downloaded from the WHO dashboard UI
+with the year filter applied). Re-run \code{process_WHO_annual_data()}.
+
+Outputs (in \code{PATHS$DATA_WHO_ANNUAL}):
+\itemize{
+\item \code{who_afro_annual.csv} — current full series, columns
+\code{country, iso_code, region, year, cases_total,
+        cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk,
+        last_epiwk, coverage_days, year_fraction, source}.
+\item Intermediate per-source slices for traceability.
+}
 }
 \examples{
 \dontrun{
-# Assuming PATHS is generated from get_paths()
 PATHS <- get_paths()
-
-# Download and process WHO annual cholera data
 process_WHO_annual_data(PATHS)
 }
 

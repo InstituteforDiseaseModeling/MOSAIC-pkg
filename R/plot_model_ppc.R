@@ -185,7 +185,7 @@ plot_model_ppc <- function(predictions_dir = NULL,
         obs_cases   <- model$params$reported_cases
         obs_deaths  <- model$params$reported_deaths
         pred_cases  <- model$results$reported_cases
-        pred_deaths <- model$results$disease_deaths
+        pred_deaths <- model$results$reported_deaths
 
         obs_cases_flat   <- as.vector(obs_cases)
         obs_deaths_flat  <- as.vector(obs_deaths)

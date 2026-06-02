@@ -23,10 +23,12 @@
 
 process_CFR_data <- function(PATHS, min_obs) {
      # Load cholera data
-     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2024.csv"), stringsAsFactors = FALSE)
+     cholera_data <- utils::read.csv(file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv"), stringsAsFactors = FALSE)
 
-     # Filter data for the period 2014-2024
-     cholera_data <- cholera_data[cholera_data$year >= 2014 & cholera_data$year <= 2024,]
+     # Filter to recent years (2014 onward); upper bound flexes with whatever
+     # data process_WHO_annual_data() ingested last.
+     max_year <- max(cholera_data$year, na.rm = TRUE)
+     cholera_data <- cholera_data[cholera_data$year >= 2014 & cholera_data$year <= max_year,]
 
      # Aggregate cases and deaths by country
      aggregated_data <- aggregate(cbind(cases_total, deaths_total) ~ country + iso_code, data = cholera_data, sum, na.rm = TRUE)

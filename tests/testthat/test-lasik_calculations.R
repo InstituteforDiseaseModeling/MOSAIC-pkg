@@ -1,6 +1,6 @@
 library(testthat)
 
-# Skip entire file if Python laser_cholera not available or required packages missing
+# Skip entire file if Python laser.cholera not available or required packages missing
 skip_if_not_installed("reticulate")
 skip_if_not_installed("reshape2")
 skip_if_not_installed("ggplot2")
@@ -9,10 +9,10 @@ skip_if_not_installed("gridExtra")
 
 skip_if_not(
     tryCatch({
-        reticulate::import("laser_cholera.metapop.model")
+        reticulate::import("laser.cholera.metapop.model")
         TRUE
     }, error = function(e) FALSE),
-    message = "Python laser_cholera package not available"
+    message = "Python laser.cholera package not available"
 )
 
 library(reticulate)
@@ -26,7 +26,7 @@ library(gridExtra)
 plot_diagnostics <- FALSE
 
 # Load default model and set baseline
-mpm      <- reticulate::import("laser_cholera.metapop.model")
+mpm      <- reticulate::import("laser.cholera.metapop.model")
 filename <- file.path(getwd(), "inst", "extdata", "config_default.json")
 
 skip_if_not(
@@ -402,9 +402,9 @@ testthat::test_that("log likelihood calculations match", {
 
      expected <- MOSAIC::calc_model_likelihood(
           obs_cases=baseline$reported_cases,
-          est_cases=model$results$incidence,
+          est_cases=model$results$reported_cases,
           obs_deaths=baseline$reported_deaths,
-          est_deaths=model$results$disease_deaths)
+          est_deaths=model$results$reported_deaths)
 
      diff <- abs((expected - model$log_likelihood) / expected)
      testthat::expect_lt(diff, 0.01)

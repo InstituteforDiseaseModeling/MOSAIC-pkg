@@ -68,7 +68,7 @@ plot_CFR_hierarchical <- function(
     estimates_file <- file.path(PATHS$MODEL_INPUT, "cfr_hierarchical_estimates.csv")
     trend_file <- file.path(PATHS$MODEL_INPUT, "cfr_temporal_trend.csv")
     effects_file <- file.path(PATHS$MODEL_INPUT, "cfr_country_effects.csv")
-    who_data_file <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2024.csv")
+    who_data_file <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
     
     if (!file.exists(estimates_file)) {
         stop("CFR model estimates not found. Please run est_CFR_hierarchical(PATHS) first.")

@@ -198,13 +198,17 @@ message("Toy LASER config written to:\n  - ", normalizePath(fp_json))
 identical(sim_config, MOSAIC::read_json_to_list(fp_json))
 
 
-mpm <- reticulate::import("laser_cholera.metapop.model")
+mpm <- reticulate::import("laser.cholera.metapop.model")
 sim <- mpm$run_model(paramfile = sim_config)
 
 
 
-exp_cases  <- sim$patches$expected_cases
-exp_deaths <- sim$patches$disease_deaths
+# laser-cholera v0.13+: patches.reported_cases is rho/chi-adjusted (matches
+# surveillance-comparable scale); patches.reported_deaths is rho_deaths-applied
+# with a delta_reporting_deaths-day lag. These populate config$reported_cases
+# and config$reported_deaths consumed downstream by calc_model_likelihood().
+exp_cases  <- sim$patches$reported_cases
+exp_deaths <- sim$patches$reported_deaths
 
 sim_config$reported_cases <- t(exp_cases[-1,])
 sim_config$reported_deaths <- t(exp_deaths[-1,])

@@ -165,19 +165,33 @@ if (file.exists(cfr_file)) {
      warning("param_mu_disease_mortality.csv not found. Using default CFR of 0.01")
 }
 
-# Extract mu_j_baseline from mu_jt (location-specific baseline CFR)
-# Use the mean value across time for each location
-mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
+# Extract mu_j_baseline from priors_default per-country Gamma means (v3.6+).
+#
+# Pre-v3.6 this used `rowMeans(mu_jt)` which fed RAW reported CFR into LASER
+# as a daily mortality hazard — wrong by a factor of ~rho/(rho_deaths*chi)
+# ~= 1.015. The make_priors_default.R derivation applies the v0.13+ identity
+# `mu_j_baseline = CFR * rho / (rho_deaths * chi)` and writes the result to
+# priors_default. Pulling the Gamma mean here keeps config_default and
+# priors_default in sync by construction — the consistency regression test
+# in tests/testthat/ asserts they match within 1% per country.
+#
+# Ordering dependency: make_priors_default.R must run BEFORE this script so
+# the package's priors_default data object reflects the current CFR estimates.
+mu_j_baseline <- vapply(
+     j,
+     function(iso) {
+          loc <- priors_default$parameters_location$mu_j_baseline$location[[iso]]
+          if (is.null(loc)) {
+               warning(sprintf("priors_default has no mu_j_baseline for %s; using fallback", iso))
+               return(0.0035 * 1.015)  # ~0.35% CFR × v0.13+ adjustment
+          }
+          p <- loc$parameters
+          if (loc$distribution != "gamma") stop("expected gamma prior for mu_j_baseline; got ", loc$distribution)
+          unname(p$shape / p$rate)   # gamma prior mean
+     },
+     numeric(1)
+)
 names(mu_j_baseline) <- j
-
-# ETH: source mu_j_baseline from its prior mean instead of mean(mu_jt). The prior
-# applies the reporting adjustment (mu = reported_CFR * rho / chi) that rowMeans(mu_jt)
-# omits; without it ETH deaths over-predict ~2x. The prior value is data-derived
-# (re-estimated from CFR each build), so this is not a hardcoded constant.
-# NOTE: the same mismatch likely inflates deaths for all countries -- reconciling the
-# global mu_jt -> mu_j_baseline derivation with the prior formula is a separate fix.
-.mu_eth <- priors_default$parameters_location$mu_j_baseline$location[["ETH"]]$parameters
-mu_j_baseline[["ETH"]] <- unname(.mu_eth$shape / .mu_eth$rate)   # gamma prior mean
 
 # Initialize mu_j_slope to 0 (no temporal trend by default).
 # Prior is Gamma centred on 0 for each iso; default of 0 (== prior mode) is fine.
@@ -536,7 +550,7 @@ config_default <- do.call(make_LASER_config, default_args)
 config_default$metadata <- list(
      version = "3.5",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.5 (2026-06-02): rho_deaths default changed from 0.6 to 0.42 (informative Beta(36.95, 51.02) mean) following the random-effects meta-analysis of three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); see claude/rho_deaths_research/SYNTHESIS_REPORT.md. v3.4 (2026-06-01): beta_j0_tot now sourced PER-COUNTRY from priors_default location medians (was a global 2e-5 constant); ETH resolves to its recentred 1.75e-6 median while all other countries are unchanged at 2e-5. Also ETH mu_j_baseline sourced from its prior mean (reporting-adjusted CFR) instead of mean(mu_jt), fixing a ~2x deaths over-prediction. With these, the fixed-ensemble ETH default fits observed cases at bias~1.05 (R2corr~0.50) and deaths at bias~0.9. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.6 (2026-06-02): mu_j_baseline per-country defaults now sourced UNIVERSALLY from priors_default Gamma means (was: rowMeans of raw CFR matrix with ETH-only hand-patch). priors_default v15.6+ applies the v0.13+ identity mu_j_baseline = CFR * rho / (rho_deaths * chi) so config_default and priors_default agree by construction. Ordering dependency: make_priors_default.R must be run before make_config_default.R. The MOSAIC-data WHO annual file was refreshed through 2025 calendar year (2024 + 2025 dashboard CSVs ingested, 2026 partial snapshot included). v3.5 (2026-06-02): rho_deaths default changed from 0.6 to 0.42 (informative Beta(36.95, 51.02) mean) following the random-effects meta-analysis of three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); see claude/rho_deaths_research/SYNTHESIS_REPORT.md. v3.4 (2026-06-01): beta_j0_tot now sourced PER-COUNTRY from priors_default location medians (was a global 2e-5 constant); ETH resolves to its recentred 1.75e-6 median while all other countries are unchanged at 2e-5. Also ETH mu_j_baseline sourced from its prior mean (reporting-adjusted CFR) instead of mean(mu_jt), fixing a ~2x deaths over-prediction. With these, the fixed-ensemble ETH default fits observed cases at bias~1.05 (R2corr~0.50) and deaths at bias~0.9. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships

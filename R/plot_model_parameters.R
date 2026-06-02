@@ -119,9 +119,14 @@ plot_model_parameters <- function(results,
      location_params_base <- c(
           "S_j_initial", "E_j_initial", "I_j_initial",
           "R_j_initial", "V1_j_initial", "V2_j_initial",  # Initial conditions
-          "beta_j0_env", "beta_j0_hum",                   # Transmission rates
+          "beta_j0_env", "beta_j0_hum", "beta_j0_tot",    # Transmission rates
           "tau_i", "theta_j",                             # Mobility rate
-          "a_1_j", "a_2_j", "b_1_j", "b_2_j"             # Seasonal parameters
+          "a_1_j", "a_2_j", "b_1_j", "b_2_j",            # Seasonal parameters
+          "mu_j_baseline",                                # Baseline mortality hazard (CFR)
+          "mu_j_slope",                                   # Temporal CFR trend
+          "mu_j_epidemic_factor",                         # Epidemic-period CFR multiplier
+          "epidemic_threshold",                           # Epidemic regime activation
+          "psi_star_a", "psi_star_b", "psi_star_z", "psi_star_k"  # psi_star calibration
      )
 
      # ============================================================================
