@@ -503,6 +503,8 @@ for _h in list(_root.handlers):
     date_stop     = config$date_stop,
     timestamp     = format(start_time, "%Y-%m-%dT%H:%M:%S%z"),
     mode          = if (!is.null(state$mode)) state$mode else NA_character_,
+    resumed       = isTRUE(state$resumed),
+    n_simulations_reused = if (!is.null(state$n_sims_reused)) as.integer(state$n_sims_reused) else 0L,
     # Run statistics
     wall_time_seconds          = round(wall_time, 1),
     n_batches                  = state$batch_number,

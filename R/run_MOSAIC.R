@@ -439,15 +439,31 @@
 #'   }
 #' @param resume Logical (default \code{FALSE}). When \code{TRUE}, the run
 #'   reconstructs calibration state from the per-sim shards already present in
-#'   \code{<dir_output>/2_calibration/samples/} and continues from the next
-#'   unused \code{sim_id} instead of starting fresh. The shards on disk are the
-#'   sole source of truth (an internal \code{resume_checkpoint.rds} restores the
-#'   adaptive ESS/phase state when present; otherwise it is reconstructed from
-#'   the shards). Requires \code{control$paths$clean_output = FALSE} and that the
-#'   supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Resume
-#'   is also rejected when the current \code{laser-cholera} engine version crosses
-#'   the v0.13 deaths-scale boundary relative to the original run. Has no effect
-#'   when no shards exist (equivalent to a fresh run).
+#'   \code{<dir_output>/2_calibration/samples/} and continues instead of starting
+#'   fresh. The shards on disk are the sole source of truth (an internal
+#'   \code{resume_checkpoint.rds} restores the adaptive ESS/phase state when
+#'   present, and is removed when the run completes; otherwise the state is
+#'   reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
+#'   the run continues from \code{max(sim_id)+1} and does \emph{not} backfill
+#'   interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
+#'   missing id within the target is re-run so the exact target is met.
+#'
+#'   Resume is \strong{rejected} (hard error) when:
+#'   \itemize{
+#'     \item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
+#'     \item the run already completed — a consolidated \code{2_calibration/samples.parquet}
+#'       exists that the on-disk shards would shrink (start fresh, or remove it to recompute);
+#'     \item the supplied \code{config}, \code{priors}, \code{control$likelihood},
+#'       \code{control$sampling}, \code{control$calibration$n_iterations}, or the
+#'       calibration mode (auto vs fixed) differ from those persisted in
+#'       \code{1_inputs/} (each changes the draws or likelihood, making the pool
+#'       incomparable);
+#'     \item the current \code{laser-cholera} engine version crosses the v0.13
+#'       deaths-scale boundary relative to the original run.
+#'   }
+#'   If the engine version cannot be determined (no record / Python not bound) the
+#'   deaths-scale check is skipped with a warning. Has no effect when no shards
+#'   exist (equivalent to a fresh run).
 #' @param cluster Optional pre-built R parallel cluster from
 #'   \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
 #'   When provided, skips cluster creation and teardown, reusing existing workers.
@@ -740,17 +756,27 @@ run_MOSAIC <- function(config,
   if (isTRUE(resume)) {
     .mosaic_resume_check_inputs(dirs, config, priors, control)
 
-    # Refuse to resume a run that already completed: its shards were consolidated
-    # into samples.parquet and deleted, so a resume would silently re-run the
-    # whole calibration from scratch and overwrite the finished posterior.
+    # Refuse to resume into an existing consolidated samples.parquet when the
+    # shards on disk would produce a SMALLER pool: combining + overwriting would
+    # silently shrink/destroy the finished posterior. This covers both a fully
+    # completed run (shards consolidated and deleted -> 0 shards) and the
+    # dangerous mixed case (a large samples.parquet plus a few stray shards). A
+    # crash mid-consolidation leaves the shards as a superset of samples.parquet,
+    # so re-consolidation is idempotent and is allowed.
     samples_file <- file.path(dirs$calibration, "samples.parquet")
-    n_shards <- length(list.files(dirs$cal_samples, pattern = "^sim_.*\\.parquet$"))
-    if (file.exists(samples_file) && n_shards == 0L) {
-      stop("resume = TRUE but this run already completed: ",
-           file.path("2_calibration", "samples.parquet"),
-           " exists and there are no per-sim shards left to continue. ",
-           "Start a fresh run in a new directory, or remove samples.parquet to recompute.",
-           call. = FALSE)
+    if (file.exists(samples_file)) {
+      n_consolidated <- tryCatch(arrow::open_dataset(samples_file)$num_rows,
+                                 error = function(e) NA_integer_)
+      n_valid_shards <- .mosaic_resume_scan(dirs$cal_samples)$n
+      if (!is.na(n_consolidated) && n_valid_shards < n_consolidated) {
+        stop(sprintf(paste0(
+          "resume = TRUE but %s already holds a consolidated posterior (%d rows) and only %d ",
+          "valid per-sim shard(s) remain. Resuming would overwrite it with a smaller pool and ",
+          "lose draws. Start a fresh run in a new directory, or remove samples.parquet to ",
+          "recompute from the shards."),
+          file.path("2_calibration", "samples.parquet"), n_consolidated, n_valid_shards),
+          call. = FALSE)
+      }
     }
   }
 
@@ -1115,15 +1141,27 @@ run_MOSAIC <- function(config,
   # byte-identical to a fresh calibration. Only auto mode reconstructs the
   # adaptive ESS/phase state here; fixed mode recovers purely from done_ids
   # below (a single directory scan), so it is left out to avoid scanning twice.
+  resumed_n_reused <- 0L
   if (isTRUE(resume) && identical(state$mode, "auto")) {
     state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled)
-    if (isTRUE(state$converged)) {
-      log_msg("[RESUME] Reconstructed state already converged — skipping simulation, ",
-              "proceeding to post-processing")
+    resumed_n_reused <- state$total_sims_run
+    if (resumed_n_reused > 0L) {
+      log_msg("[RESUME] Reusing %d existing simulation(s); continuing from sim_id %d in phase '%s' (batch %d)",
+              resumed_n_reused, resumed_n_reused + 1L, state$phase, state$batch_number)
     }
   }
+  # Record resume provenance for the end-of-run summary.
+  state$resumed       <- isTRUE(resume)
+  state$n_sims_reused <- if (isTRUE(resume)) resumed_n_reused else 0L
 
-  log_msg("Starting simulation (mode: %s)", state$mode)
+  if (isTRUE(resume) && identical(state$mode, "auto") && isTRUE(state$converged)) {
+    # Already converged on the reconstructed pool: skip simulation entirely and
+    # go straight to post-processing (the loop below breaks immediately).
+    log_msg("[RESUME] Reconstructed state already converged — skipping simulation, ",
+            "proceeding to post-processing")
+  } else {
+    log_msg("Starting simulation (mode: %s)", state$mode)
+  }
   start_time <- Sys.time()
 
   # Disk space check removed in v0.17.10 — fragile across platforms (macOS df
@@ -1149,10 +1187,24 @@ run_MOSAIC <- function(config,
     } else {
       integer()
     }
+    # Count already-complete shards toward the success tally so summary.json
+    # reflects the full pool, not just the sims re-run this session.
+    if (isTRUE(resume)) {
+      state$total_sims_successful <- length(done_ids)
+      state$n_sims_reused <- length(done_ids)
+      if (length(done_ids) == 0L) {
+        log_msg("[RESUME] No existing shards in target range — running all %d from scratch", target)
+      } else {
+        log_msg("[RESUME] Reusing %d of %d existing simulation(s); running the remaining %d",
+                length(done_ids), target, target - length(done_ids))
+      }
+    }
     sim_ids <- setdiff(all_ids, done_ids)
 
     if (length(sim_ids) == 0L) {
-      log_msg("Nothing to do: %d simulations already complete", length(done_ids))
+      log_msg("Nothing to do: all %d simulations already complete", length(done_ids))
+      # Reflect the complete on-disk pool in the run counters / summary.
+      state$total_sims_run <- length(all_ids)
     } else {
       log_msg("Running %d simulations (%d-%d)", length(sim_ids), min(sim_ids), max(sim_ids))
 
@@ -2639,6 +2691,10 @@ run_MOSAIC <- function(config,
   }
   log_msg("  Sims: %s total, %s retained, %s best subset",
           format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)
+  if (isTRUE(state$resumed)) {
+    log_msg("  Resumed: YES (%s sim(s) reused from a prior run)",
+            format(state$n_sims_reused %||% 0L, big.mark = ","))
+  }
   log_msg("===================")
 
   # Finalize run state (mark as completed)
@@ -2658,6 +2714,8 @@ run_MOSAIC <- function(config,
       sims_total = state$total_sims_run,
       sims_success = state$total_sims_successful,
       converged = isTRUE(state$converged),
+      resumed = isTRUE(state$resumed),
+      sims_reused = state$n_sims_reused %||% 0L,
       runtime_min = as.numeric(runtime)
     )
   ))

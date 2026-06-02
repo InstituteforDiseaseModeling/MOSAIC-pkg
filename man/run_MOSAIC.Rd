@@ -49,15 +49,31 @@ Key settings:
 
 \item{resume}{Logical (default \code{FALSE}). When \code{TRUE}, the run
 reconstructs calibration state from the per-sim shards already present in
-\code{<dir_output>/2_calibration/samples/} and continues from the next
-unused \code{sim_id} instead of starting fresh. The shards on disk are the
-sole source of truth (an internal \code{resume_checkpoint.rds} restores the
-adaptive ESS/phase state when present; otherwise it is reconstructed from
-the shards). Requires \code{control$paths$clean_output = FALSE} and that the
-supplied \code{config}/\code{priors} match those in \code{1_inputs/}. Resume
-is also rejected when the current \code{laser-cholera} engine version crosses
-the v0.13 deaths-scale boundary relative to the original run. Has no effect
-when no shards exist (equivalent to a fresh run).}
+\code{<dir_output>/2_calibration/samples/} and continues instead of starting
+fresh. The shards on disk are the sole source of truth (an internal
+\code{resume_checkpoint.rds} restores the adaptive ESS/phase state when
+present, and is removed when the run completes; otherwise the state is
+reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
+the run continues from \code{max(sim_id)+1} and does \emph{not} backfill
+interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
+missing id within the target is re-run so the exact target is met.
+
+Resume is \strong{rejected} (hard error) when:
+\itemize{
+\item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
+\item the run already completed — a consolidated \code{2_calibration/samples.parquet}
+exists that the on-disk shards would shrink (start fresh, or remove it to recompute);
+\item the supplied \code{config}, \code{priors}, \code{control$likelihood},
+\code{control$sampling}, \code{control$calibration$n_iterations}, or the
+calibration mode (auto vs fixed) differ from those persisted in
+\code{1_inputs/} (each changes the draws or likelihood, making the pool
+incomparable);
+\item the current \code{laser-cholera} engine version crosses the v0.13
+deaths-scale boundary relative to the original run.
+}
+If the engine version cannot be determined (no record / Python not bound) the
+deaths-scale check is skipped with a warning. Has no effect when no shards
+exist (equivalent to a fresh run).}
 
 \item{cluster}{Optional pre-built R parallel cluster from
 \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.

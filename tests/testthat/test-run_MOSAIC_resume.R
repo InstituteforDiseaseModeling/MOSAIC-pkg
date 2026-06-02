@@ -123,7 +123,7 @@ test_that(".mosaic_resume_check_inputs guards control$likelihood drift", {
   wj(list(control = control, timestamp = "t0"), file.path(inp, "control.json"))
 
   # identical likelihood → passes
-  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, control))
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, control)))
 
   # changed weight → hard error
   control2 <- list(likelihood = list(weight_cases = 1, weight_deaths = 2, weight_wis = 0))
@@ -131,7 +131,44 @@ test_that(".mosaic_resume_check_inputs guards control$likelihood drift", {
                "control\\$likelihood")
 
   # control omitted (back-compat) → likelihood check skipped, no error
-  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+  # suppressWarnings: no environment.json here, so the engine-version guard
+  # correctly emits a "guard SKIPPED" warning that is orthogonal to this test.
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+})
+
+test_that(".mosaic_resume_check_inputs guards sampling, n_iterations, and mode drift", {
+  base <- tempfile("ctl2_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+  priors <- list(a = 1); config <- list(location_name = "ETH")
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+  wj(priors, file.path(inp, "priors.json"))
+  wj(config, file.path(inp, "config.json"))
+
+  control <- list(
+    likelihood  = list(weight_cases = 1),
+    sampling    = list(sample_beta_j0_tot = TRUE, sample_tau_i = FALSE),
+    calibration = list(n_iterations = 3L, n_simulations = NULL)  # auto mode
+  )
+  wj(list(control = control, timestamp = "t0"), file.path(inp, "control.json"))
+
+  # identical → passes
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, control)))
+
+  # sampling flag flipped → error
+  c_samp <- control; c_samp$sampling$sample_tau_i <- TRUE
+  expect_error(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, c_samp)),
+               "control\\$sampling")
+
+  # n_iterations changed → error
+  c_iter <- control; c_iter$calibration$n_iterations <- 5L
+  expect_error(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, c_iter)),
+               "n_iterations")
+
+  # mode switch auto → fixed → error
+  c_mode <- control; c_mode$calibration$n_simulations <- 5000L
+  expect_error(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, c_mode)),
+               "mode changed")
 })
 
 # ---- checkpoint round-trip -------------------------------------------------
@@ -212,6 +249,22 @@ test_that(".mosaic_reconstruct_state bootstraps from shards without a checkpoint
   expect_false(st$converged)
 })
 
+test_that(".mosaic_reconstruct_state bootstrap batch_number uses shard COUNT, not watermark", {
+  # Gapped shard set: ids {1,2,3,50} -> watermark 50 but only 4 shards. The
+  # bootstrap batch estimate must use the count (ceiling(4/2)=2), not the
+  # watermark (ceiling(50/2)=25 would falsely exceed max_batches_adaptive).
+  dirs <- make_dirs()
+  for (id in c(1L, 2L, 3L, 50L)) make_shard(dirs$cal_samples, id)
+  control <- list(calibration = list(batch_size_adaptive = 2L, max_batches_adaptive = 4L),
+                  io = list(), targets = list())
+  st <- MOSAIC:::.mosaic_reconstruct_state(state_template(), dirs, control, c("a", "b"))
+
+  expect_equal(st$total_sims_run, 50L)     # frontier still uses the watermark
+  expect_equal(st$total_sims_successful, 4L)
+  expect_equal(st$batch_number, 2L)        # ceiling(count 4 / 2), NOT ceiling(50/2)
+  expect_false(st$calibration_done)        # 2 < max_batches_adaptive(4)
+})
+
 test_that(".mosaic_reconstruct_state returns unchanged state when no shards (fresh)", {
   dirs <- make_dirs()
   control <- list(calibration = list(batch_size_adaptive = 5L))
@@ -278,7 +331,9 @@ test_that(".mosaic_resume_check_inputs passes on match, errors on drift", {
   wj(priors, file.path(inp, "priors.json"))
   wj(config, file.path(inp, "config.json"))
 
-  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+  # suppressWarnings: no environment.json here, so the engine-version guard
+  # correctly emits a "guard SKIPPED" warning that is orthogonal to this test.
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 
   expect_error(
     MOSAIC:::.mosaic_resume_check_inputs(dirs, config, list(tau_i = list(shape = 20, rate = 1))),
@@ -295,7 +350,7 @@ test_that(".mosaic_resume_check_inputs is a no-op when inputs not yet persisted"
   dir.create(inp, recursive = TRUE)
   dirs <- list(inputs = inp)
   # No priors.json/config.json on disk (fresh resume) → must not error.
-  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, list(x = 1), list(y = 2)))
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, list(x = 1), list(y = 2))))
 })
 
 # ---- engine-version (deaths-scale) guard -----------------------------------
@@ -358,5 +413,7 @@ test_that(".mosaic_resume_check_inputs hard-errors across the v0.13 engine bound
 
   # persisted == current → compatible → no error
   wj(list(python = list(pkg_laser_cholera = current_lc)), file.path(inp, "environment.json"))
-  expect_true(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors))
+  # suppressWarnings: no environment.json here, so the engine-version guard
+  # correctly emits a "guard SKIPPED" warning that is orthogonal to this test.
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 })
