@@ -36,7 +36,9 @@ check_python_env <- function() {
 
      # Python is initialized - get current configuration
      config <- reticulate::py_config()
-     current_python <- normalizePath(config$python, winslash = "/", mustWork = FALSE)
+     # Do not normalizePath(): uv venvs symlink bin/python to a shared interpreter,
+     # and resolving the symlink would strip the "r-mosaic" venv identity used below.
+     current_python <- config$python
 
      # Display current Python info
      cli::cli_h2("Current Python Configuration")

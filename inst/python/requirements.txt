@@ -1,0 +1,25 @@
+# MOSAIC Python dependencies (installed into ~/.virtualenvs/r-mosaic via uv).
+#
+# This file is consumed by MOSAIC::install_dependencies() (which runs
+# `uv pip install -r requirements.txt`) and parsed by MOSAIC::check_dependencies()
+# to verify installed versions. The target Python version lives in
+# python_version.txt (provisioned by uv).
+#
+# Migrated from the former conda environment.yml: conda and pip dependencies are
+# now a single PyPI-resolved list.
+
+# pyarrow==14.0.1
+
+# LASER dependencies
+packaging==24.0
+
+# Suitability backend: 2.16+ required by keras3 R; <2.21 avoids protobuf segfault on macOS Tahoe
+tensorflow>=2.16.0,<2.21
+
+laser-core==1.0.2
+# laser-cholera: update the wheel filename (X.Y.Z) when upgrading
+https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.13.0/laser_cholera-0.13.0-py3-none-any.whl
+
+# Dask distributed computing and Coiled cloud orchestration (required by run_MOSAIC_dask())
+dask[distributed]
+coiled

@@ -10,7 +10,7 @@
      #   libiomp5  — Intel KMP OpenMP, loaded by numba (laser-cholera JIT)
      #   libgomp   — GNU OpenMP, loaded by scipy (laser-cholera >= 0.12.1)
      #
-     # pip, conda, and R package managers install these independently with no
+     # pip, uv, and R package managers install these independently with no
      # coordination. Having all three in the same process causes SIGSEGV crashes
      # at __kmp_suspend_initialize_thread when any runtime initialises threads
      # after another has already claimed shared data structures.
@@ -85,13 +85,16 @@
           if (file.exists(mosaic_python)) {
                Sys.setenv(RETICULATE_PYTHON = mosaic_python)
 
-               # CRITICAL FIX for GLIBCXX version errors on older Linux (e.g., Ubuntu 20.04)
+               # GLIBCXX version errors on older Linux (e.g., Ubuntu 20.04):
                # When R embeds Python via reticulate, Python C extensions (pyarrow, numba, etc.)
                # need libstdc++ with GLIBCXX_3.4.29+, but Ubuntu 20.04 only has 3.4.28.
                #
                # Setting LD_LIBRARY_PATH doesn't work because R has already loaded system libstdc++.
-               # Solution: Use dyn.load() to explicitly preload conda's libstdc++ BEFORE reticulate
-               # initializes Python. This way, Python extensions use the preloaded version.
+               # uv-managed standalone Python (python-build-standalone) generally bundles its own
+               # libstdc++ with the base interpreter, so this is usually unnecessary. As a guarded
+               # best-effort fallback, if a libstdc++ ships inside the venv lib dir, preload it with
+               # dyn.load() BEFORE reticulate initializes Python so extensions use the newer version.
+               # The file.exists() guard makes this a no-op when no such library is present.
                if (.Platform$OS.type == "unix") {
                     mosaic_libstdcxx <- file.path(mosaic_env_dir, "lib", "libstdc++.so.6")
                     if (file.exists(mosaic_libstdcxx)) {

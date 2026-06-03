@@ -1,14 +1,41 @@
 #' Install R and Python Dependencies for MOSAIC
 #'
 #' @description
-#' Sets up a conda environment for MOSAIC using the `environment.yml` file located in the package.
-#' The environment is stored in a fixed directory ("~/.virtualenvs/r-mosaic") and installs the LASER disease
-#' transmission model simulation tool. This function also installs the R packages `keras3` and `tensorflow`,
-#' and ensures that the Keras + TensorFlow Python backend is available for use in R.
+#' Provisions the MOSAIC Python environment using [uv](https://docs.astral.sh/uv/),
+#' the fast Python package manager that backs reticulate's default workflow. The
+#' environment is a standard virtual environment stored at `~/.virtualenvs/r-mosaic`
+#' (see [get_python_paths()]). uv supplies a standalone Python interpreter (the
+#' version is read from `inst/python/python_version.txt`) — no conda or Miniconda
+#' installation is required — and installs the packages declared in
+#' `inst/python/requirements.txt`, including the LASER disease transmission engine
+#' (`laser-cholera`).
 #'
-#' @param force Logical. If TRUE, deletes and recreates the conda environment from scratch. Default is FALSE.
+#' After provisioning, the environment is activated for the current R session via
+#' [reticulate::use_virtualenv()].
 #'
-#' @return No return value
+#' @param force Logical. If TRUE, deletes and recreates the virtual environment from
+#'   scratch. Default is FALSE.
+#'
+#' @details
+#' Requires the `uv` binary on the system `PATH` (or in a standard install location
+#' such as `~/.local/bin`). Install it once with:
+#'
+#' ```sh
+#' curl -LsSf https://astral.sh/uv/install.sh | sh
+#' ```
+#'
+#' @return No return value. Called for its side effect of provisioning and activating
+#'   the `r-mosaic` virtual environment.
+#'
+#' @section Errors:
+#' Aborts (via [cli::cli_abort()]) if the `uv` binary cannot be located, if
+#' `requirements.txt` is missing from the package, if `uv` fails to create the
+#' environment or install packages, or if reticulate cannot activate the resulting
+#' environment.
+#'
+#' @seealso [check_dependencies()] to verify the installed environment,
+#'   [remove_python_env()] to delete it.
+#'
 #' @export
 #'
 
@@ -18,7 +45,7 @@ install_dependencies <- function(force = FALSE) {
      Sys.unsetenv("RETICULATE_PYTHON")
 
      # -----------------------------------------------------------------------
-     # Ensure required R packages (reticulate and yaml) are available.
+     # Ensure required R package (reticulate) is available.
      # -----------------------------------------------------------------------
 
      if (!requireNamespace("reticulate", quietly = TRUE)) {
@@ -26,56 +53,34 @@ install_dependencies <- function(force = FALSE) {
           utils::install.packages("reticulate", dependencies = TRUE)
      }
 
-     if (!requireNamespace("yaml", quietly = TRUE)) {
-          cli::cli_alert_info("Installing R package: yaml")
-          utils::install.packages("yaml", dependencies = TRUE)
+
+     # -----------------------------------------------------------------------
+     # Locate the uv binary (reticulate's default Python provisioner).
+     # -----------------------------------------------------------------------
+
+     uv <- .mosaic_find_uv()
+     if (is.null(uv)) {
+          cli::cli_abort(c(
+               "Could not find the {.code uv} binary required to provision the Python environment.",
+               "i" = "Install uv with: {.code curl -LsSf https://astral.sh/uv/install.sh | sh}",
+               "i" = "Then restart R and run {.run MOSAIC::install_dependencies()} again."
+          ))
      }
-
-     reticulate <- getNamespace("reticulate")
+     cli::cli_alert_success("Found uv at: {uv}")
 
 
      # -----------------------------------------------------------------------
-     # Check for Conda availability.
+     # Locate the requirements file and target Python version in the package.
      # -----------------------------------------------------------------------
 
-     conda_path <- Sys.which("conda")
-     conda_path_reticulate <- reticulate::miniconda_path()
-
-     # Check if conda binary actually exists (not just if path is non-empty)
-     conda_binary_exists <- FALSE
-     if (nzchar(conda_path)) {
-          conda_binary_exists <- TRUE
-     } else if (nzchar(conda_path_reticulate)) {
-          # Check if conda binary exists in the miniconda path
-          potential_conda <- file.path(conda_path_reticulate, "bin", "conda")
-          if (file.exists(potential_conda)) {
-               conda_binary_exists <- TRUE
-          }
+     req_path <- system.file("python", "requirements.txt", package = "MOSAIC")
+     if (!nzchar(req_path) || !file.exists(req_path)) {
+          cli::cli_abort("requirements.txt not found in the MOSAIC package (inst/python/requirements.txt).")
      }
+     cli::cli_alert_info("Using requirements.txt at: {req_path}")
 
-     if (conda_binary_exists) {
-
-          cli::cli_alert_success("Conda is available at: {conda_path} {conda_path_reticulate}")
-
-     } else {
-
-          cli::cli_alert_warning("No conda installation found. Installing Miniconda...")
-          reticulate::install_miniconda(force = force)
-          new_conda_path <- reticulate::miniconda_path()
-          cli::cli_alert_success("Miniconda installed at: {new_conda_path}")
-     }
-
-     # Unset any forced Python settings.
-     Sys.unsetenv("RETICULATE_PYTHON")
-
-
-     # -----------------------------------------------------------------------
-     # Locate environment.yml in the package.
-     # -----------------------------------------------------------------------
-
-     env_yml_path <- system.file("python", "environment.yml", package = "MOSAIC")
-     if (!file.exists(env_yml_path)) cli::cli_abort("environment.yml not found at: {env_yml_path}")
-     cli::cli_alert_info("Using environment.yml at: {env_yml_path}")
+     py_version <- .mosaic_python_version()
+     cli::cli_alert_info("Target Python version: {py_version}")
 
 
      # -----------------------------------------------------------------------
@@ -86,81 +91,44 @@ install_dependencies <- function(force = FALSE) {
 
 
      # -----------------------------------------------------------------------
-     # Remove existing conda environment if force = TRUE.
+     # Remove the existing environment if force = TRUE.
      # -----------------------------------------------------------------------
 
      if (force && dir.exists(paths$env)) {
-
-          cli::cli_alert_info("Removing existing conda environment (force = TRUE) at: {paths$env}")
+          cli::cli_alert_info("Removing existing environment (force = TRUE) at: {paths$env}")
           unlink(paths$env, recursive = TRUE, force = TRUE)
-
-          system_cmd <- if (.Platform$OS.type == "windows") {
-               paste("rmdir /S /Q", shQuote(paths$env))
-          } else {
-               paste("rm -rf", shQuote(paths$env))
-          }
-
-          system(system_cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
      }
 
 
      # -----------------------------------------------------------------------
-     # Parse environment.yml and extract dependencies.
-     # -----------------------------------------------------------------------
-     env_specs <- yaml::read_yaml(env_yml_path)
-     deps <- env_specs$dependencies
-
-     conda_packages <- c()
-     pip_packages <- c()
-
-     for (dep in deps) {
-
-          if (is.character(dep)) {
-               conda_packages <- c(conda_packages, dep)
-          } else if (is.list(dep) && !is.null(dep$pip)) {
-               pip_packages <- c(pip_packages, dep$pip)
-          }
-     }
-
-     # Extract Python version if specified (e.g., "python=3.12").
-     py_version <- NULL
-     if (any(grepl("^python=", conda_packages))) {
-          py_version <- sub("^python=", "", conda_packages[grep("^python=", conda_packages)][1])
-          conda_packages <- conda_packages[!grepl("^python=", conda_packages)]
-     }
-
-
-     # -----------------------------------------------------------------------
-     # Create or update the conda environment.
+     # Create the virtual environment with uv (downloads a standalone Python of
+     # the requested version if one is not already managed by uv).
      # -----------------------------------------------------------------------
 
      if (!dir.exists(paths$env)) {
-
-          cli::cli_alert_info("Creating new conda environment at: {paths$env}")
-          reticulate::conda_create(envname = paths$env,
-                                   python_version = py_version,
-                                   packages = conda_packages)
-
-          if (length(pip_packages) > 0) {
-               reticulate::conda_install(envname = paths$env,
-                                         packages = pip_packages,
-                                         pip = TRUE)
+          cli::cli_alert_info("Creating virtual environment at: {paths$env}")
+          status <- system2(uv,
+                            args = c("venv", shQuote(paths$env),
+                                     "--python", py_version, "--seed"))
+          if (!identical(status, 0L)) {
+               cli::cli_abort("uv failed to create the virtual environment at {paths$env} (exit status {status}).")
           }
-
      } else {
+          cli::cli_alert_info("Virtual environment already exists at: {paths$env}. Updating dependencies...")
+     }
 
-          cli::cli_alert_info("Conda environment already exists at: {paths$env}. Updating dependencies...")
-          if (length(conda_packages) > 0) {
-               reticulate::conda_install(envname = paths$env,
-                                         packages = conda_packages,
-                                         pip = FALSE)
-          }
 
-          if (length(pip_packages) > 0) {
-               reticulate::conda_install(envname = paths$env,
-                                         packages = pip_packages,
-                                         pip = TRUE)
-          }
+     # -----------------------------------------------------------------------
+     # Install / update packages from requirements.txt into the environment.
+     # -----------------------------------------------------------------------
+
+     cli::cli_alert_info("Installing Python packages from requirements.txt...")
+     status <- system2(uv,
+                       args = c("pip", "install",
+                                "--python", shQuote(paths$exec),
+                                "-r", shQuote(req_path)))
+     if (!identical(status, 0L)) {
+          cli::cli_abort("uv failed to install Python packages from {req_path} (exit status {status}).")
      }
 
 
@@ -168,19 +136,22 @@ install_dependencies <- function(force = FALSE) {
      # Verify that the expected Python executable exists.
      # -----------------------------------------------------------------------
 
-     if (!file.exists(paths$exe)) cli::cli_abort("Python executable not found at {py_exe}. The conda environment may not have been created properly.")
+     if (!file.exists(paths$exec)) {
+          cli::cli_abort("Python executable not found at {paths$exec}. The virtual environment may not have been created properly.")
+     }
 
 
      # -----------------------------------------------------------------------
      # Activate the r-mosaic virtualenv for reticulate.
      # -----------------------------------------------------------------------
 
-     paths <- MOSAIC::get_python_paths()
-     Sys.setenv(RETICULATE_PYTHON = paths$norm)
-     reticulate::use_condaenv(paths$env, required = TRUE)
+     # Use the non-normalized venv exec path: uv venvs symlink bin/python to a
+     # shared managed interpreter, so normalizePath() would resolve away the venv.
+     Sys.setenv(RETICULATE_PYTHON = paths$exec)
+     reticulate::use_virtualenv(paths$env, required = TRUE)
      config <- reticulate::py_config()
 
-     if (grepl(paths$env, config$python)) {
+     if (grepl(paths$env, config$python, fixed = TRUE)) {
 
           cli::cli_alert_success("Reticulate has activated the r-mosaic virtualenv at '{paths$env}' for MOSAIC!")
           cli::cli_alert_info("Python configuration:")
@@ -190,10 +161,63 @@ install_dependencies <- function(force = FALSE) {
 
      } else {
 
-          cli::cli_abort("Failed to activate the conda environment at {paths$env}.\nActivated Python: {config$python}")
+          cli::cli_abort("Failed to activate the virtual environment at {paths$env}.\nActivated Python: {config$python}")
      }
 
-     cli::cli_text("To remove the current installation, run {.run MOSAIC::remove_MOSAIC_python_env()}.")
+     cli::cli_text("To remove the current installation, run {.run MOSAIC::remove_python_env()}.")
      cli::cli_text("To check setup, run {.run MOSAIC::check_dependencies()}.")
 
+}
+
+
+#' Locate the uv binary
+#'
+#' @description
+#' Internal helper that searches the system `PATH` and common per-user install
+#' locations for the `uv` binary used to provision the MOSAIC Python environment.
+#'
+#' @return Character path to the `uv` binary, or NULL if it cannot be found.
+#'
+#' @keywords internal
+#' @noRd
+.mosaic_find_uv <- function() {
+
+     on_path <- Sys.which("uv")
+     if (nzchar(on_path)) return(unname(on_path))
+
+     exe <- if (.Platform$OS.type == "windows") "uv.exe" else "uv"
+     candidates <- c(
+          file.path("~", ".local", "bin", exe),
+          file.path("~", ".cargo", "bin", exe)
+     )
+     candidates <- path.expand(candidates)
+
+     for (cand in candidates) {
+          if (file.exists(cand)) return(normalizePath(cand, winslash = "/", mustWork = FALSE))
+     }
+
+     NULL
+}
+
+
+#' Read the target Python version for the MOSAIC environment
+#'
+#' @description
+#' Internal helper that reads `inst/python/python_version.txt` from the installed
+#' MOSAIC package and returns the declared Python version (e.g. "3.12").
+#'
+#' @return Character scalar with the target Python version. Falls back to "3.12"
+#'   if the file cannot be located.
+#'
+#' @keywords internal
+#' @noRd
+.mosaic_python_version <- function() {
+
+     vpath <- system.file("python", "python_version.txt", package = "MOSAIC")
+     if (!nzchar(vpath) || !file.exists(vpath)) return("3.12")
+
+     ver <- readLines(vpath, warn = FALSE)
+     ver <- trimws(ver[nzchar(trimws(ver))])
+     if (length(ver) == 0L) return("3.12")
+     ver[1]
 }

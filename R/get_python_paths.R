@@ -10,7 +10,10 @@
 #'   \item{exec}{The expected path to the Python executable within that environment,
 #'   constructed using OS-specific conventions.}
 #'   \item{norm}{The normalized (canonical) absolute path of the Python executable with
-#'   symbolic links and/or relative components resolved.}
+#'   symbolic links and/or relative components resolved. Note: for uv-provisioned
+#'   virtual environments `bin/python` is a symlink to a shared managed interpreter,
+#'   so `norm` resolves to that base interpreter and loses the venv identity. Use
+#'   `exec` (not `norm`) when setting `RETICULATE_PYTHON` or matching the venv path.}
 #' }
 #'
 #' @export

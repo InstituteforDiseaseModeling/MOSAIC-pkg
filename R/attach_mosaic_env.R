@@ -66,13 +66,16 @@ attach_mosaic_env <- function(silent = FALSE) {
 
      if (!silent) cli::cli_alert_info("Attaching MOSAIC Python environment...")
 
-     # Set environment variable
-     Sys.setenv(RETICULATE_PYTHON = paths$norm)
+     # Set environment variable to the non-normalized venv exec: uv venvs symlink
+     # bin/python to a shared interpreter, so normalizePath() would resolve away the venv.
+     Sys.setenv(RETICULATE_PYTHON = paths$exec)
 
      # Check if Python is already initialized
      if (reticulate::py_available(initialize = FALSE)) {
           current_config <- reticulate::py_config()
-          current_python <- normalizePath(current_config$python, winslash = "/", mustWork = FALSE)
+          # Do not normalizePath(): it follows the venv's symlinked interpreter back to
+          # the shared base, which no longer carries the "r-mosaic" venv identity.
+          current_python <- current_config$python
 
           # Check if already using r-mosaic
           if (grepl("r-mosaic", current_python)) {
@@ -84,7 +87,7 @@ attach_mosaic_env <- function(silent = FALSE) {
                # Python initialized with different environment
                cli::cli_alert_danger("Python is already initialized with a different environment")
                cli::cli_text("Current: {current_python}")
-               cli::cli_text("Target: {paths$norm}")
+               cli::cli_text("Target: {paths$exec}")
                cli::cli_text("")
                cli::cli_text("Due to reticulate limitations, you must restart R to switch environments.")
                cli::cli_text("")
@@ -102,7 +105,7 @@ attach_mosaic_env <- function(silent = FALSE) {
      } else {
           # Python not initialized - initialize it now
           tryCatch({
-               reticulate::use_condaenv(paths$env, required = TRUE)
+               reticulate::use_virtualenv(paths$env, required = TRUE)
 
                # Verify it worked
                config <- reticulate::py_config()

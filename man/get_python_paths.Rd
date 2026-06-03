@@ -14,7 +14,10 @@ A list with the following named elements:
 \item{exec}{The expected path to the Python executable within that environment,
 constructed using OS-specific conventions.}
 \item{norm}{The normalized (canonical) absolute path of the Python executable with
-symbolic links and/or relative components resolved.}
+symbolic links and/or relative components resolved. Note: for uv-provisioned
+virtual environments \code{bin/python} is a symlink to a shared managed interpreter,
+so \code{norm} resolves to that base interpreter and loses the venv identity. Use
+\code{exec} (not \code{norm}) when setting \code{RETICULATE_PYTHON} or matching the venv path.}
 }
 }
 \description{

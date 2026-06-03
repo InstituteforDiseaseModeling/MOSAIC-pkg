@@ -13,6 +13,6 @@ remove_python_env(force = FALSE)
 No return value.
 }
 \description{
-This function checks whether the MOSAIC Python conda environment exists at "~/.MOSAIC_conda_env".
-If it exists, it unlinks it from \code{reticulate}, removes the directory, and resets the RETICULATE_PYTHON global variable.
+This function checks whether the MOSAIC Python virtual environment exists at "~/.virtualenvs/r-mosaic".
+If it exists, it removes the directory and resets the RETICULATE_PYTHON global variable.
 }

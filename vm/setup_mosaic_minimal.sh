@@ -86,6 +86,13 @@ Rscript -e "
                          lib = '~/R/library')
 "
 
+# Install uv (provisions the Python interpreter and packages; replaces Miniconda)
+echo "[3/4] Installing uv (Python provisioner)..."
+if ! command -v uv >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/uv" ]; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
 # Python dependencies
 echo "[3/4] Installing Python dependencies..."
 Rscript -e "

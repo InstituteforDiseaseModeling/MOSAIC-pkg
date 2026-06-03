@@ -7,14 +7,42 @@
 install_dependencies(force = FALSE)
 }
 \arguments{
-\item{force}{Logical. If TRUE, deletes and recreates the conda environment from scratch. Default is FALSE.}
+\item{force}{Logical. If TRUE, deletes and recreates the virtual environment from
+scratch. Default is FALSE.}
 }
 \value{
-No return value
+No return value. Called for its side effect of provisioning and activating
+the \code{r-mosaic} virtual environment.
 }
 \description{
-Sets up a conda environment for MOSAIC using the \code{environment.yml} file located in the package.
-The environment is stored in a fixed directory ("~/.virtualenvs/r-mosaic") and installs the LASER disease
-transmission model simulation tool. This function also installs the R packages \code{keras3} and \code{tensorflow},
-and ensures that the Keras + TensorFlow Python backend is available for use in R.
+Provisions the MOSAIC Python environment using \href{https://docs.astral.sh/uv/}{uv},
+the fast Python package manager that backs reticulate's default workflow. The
+environment is a standard virtual environment stored at \verb{~/.virtualenvs/r-mosaic}
+(see \code{\link[=get_python_paths]{get_python_paths()}}). uv supplies a standalone Python interpreter (the
+version is read from \code{inst/python/python_version.txt}) — no conda or Miniconda
+installation is required — and installs the packages declared in
+\code{inst/python/requirements.txt}, including the LASER disease transmission engine
+(\code{laser-cholera}).
+
+After provisioning, the environment is activated for the current R session via
+\code{\link[reticulate:use_python]{reticulate::use_virtualenv()}}.
+}
+\details{
+Requires the \code{uv} binary on the system \code{PATH} (or in a standard install location
+such as \verb{~/.local/bin}). Install it once with:
+
+\if{html}{\out{<div class="sourceCode sh">}}\preformatted{curl -LsSf https://astral.sh/uv/install.sh | sh
+}\if{html}{\out{</div>}}
+}
+\section{Errors}{
+
+Aborts (via \code{\link[cli:cli_abort]{cli::cli_abort()}}) if the \code{uv} binary cannot be located, if
+\code{requirements.txt} is missing from the package, if \code{uv} fails to create the
+environment or install packages, or if reticulate cannot activate the resulting
+environment.
+}
+
+\seealso{
+\code{\link[=check_dependencies]{check_dependencies()}} to verify the installed environment,
+\code{\link[=remove_python_env]{remove_python_env()}} to delete it.
 }

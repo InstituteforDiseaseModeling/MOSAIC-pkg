@@ -153,6 +153,13 @@ echo "[7/7] Installing MOSAIC R package..."
 sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
   remotes::install_github('InstituteforDiseaseModeling/MOSAIC-pkg', dependencies = TRUE, upgrade = 'never')"
 
+# Install uv (provisions the Python interpreter and packages; replaces Miniconda)
+echo "[7/7] Installing uv (Python provisioner)..."
+if ! command -v uv >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/uv" ]; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
 # Install Python dependencies (run as user, not root)
 echo "[7/7] Installing Python dependencies..."
 Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
@@ -182,8 +189,8 @@ if [ $? -eq 0 ]; then
   echo "  - R version: $(R --version | head -1)"
   echo "  - Python version: $(python3 --version)"
   echo "  - MOSAIC R package: $(Rscript -e "cat(as.character(packageVersion('MOSAIC')))" 2>/dev/null)"
-  echo "  - Python environment: ~/.virtualenvs/r-mosaic"
-  echo "  - Conda location: ~/.local/share/r-miniconda"
+  echo "  - Python environment: ~/.virtualenvs/r-mosaic (provisioned by uv)"
+  echo "  - uv location: $(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
   echo ""
   echo "Next steps:"
   echo "  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"

@@ -1,7 +1,7 @@
 #' Check Installed R and Python Dependencies for MOSAIC
 #'
 #' @description
-#' This function checks the MOSAIC Python conda environment, verifies that the expected Python
+#' This function checks the MOSAIC Python virtual environment, verifies that the expected Python
 #' packages are installed, and confirms that the R packages `keras3` and `tensorflow` are present and
 #' configured correctly. It prints the currently active Python configuration and confirms whether the
 #' backend is working.
@@ -28,12 +28,12 @@ check_dependencies <- function() {
      paths <- MOSAIC::get_python_paths()
 
      # Check that the desired environment exists.
-     if (!dir.exists(paths$env) || !file.exists(paths$exe)) {
-          cli::cli_alert_danger("Conda environment not found or incomplete at {paths$env}.")
+     if (!dir.exists(paths$env) || !file.exists(paths$exec)) {
+          cli::cli_alert_danger("Python virtual environment not found or incomplete at {paths$env}.")
           cli::cli_text("To finish setup, run {.run MOSAIC::install_dependencies()}. To re-install, run {.run MOSAIC::install_dependencies(force=T)}.")
           return(invisible(NULL))
      } else {
-          cli::cli_alert_success("Found Python conda environment at {paths$env}.")
+          cli::cli_alert_success("Found Python virtual environment at {paths$env}.")
      }
 
      # -----------------------------------------------------------------------
@@ -84,10 +84,10 @@ check_dependencies <- function() {
      }
 
      # -----------------------------------------------------------------------
-     # Check Python package versions based on environment.yml
+     # Check Python package versions based on requirements.txt
      # -----------------------------------------------------------------------
 
-     env_yml_path <- system.file("python", "environment.yml", package = pkgname)
+     req_path <- system.file("python", "requirements.txt", package = pkgname)
 
      # Track capabilities
      core_working <- TRUE
@@ -97,22 +97,14 @@ check_dependencies <- function() {
      core_packages <- c("laser.cholera", "laser.core", "numpy", "h5py", "pyarrow")
      suitability_packages <- c("tensorflow", "keras")
 
-     if (file.exists(env_yml_path)) {
+     if (file.exists(req_path)) {
 
-          env_specs <- yaml::read_yaml(env_yml_path)
-          deps <- env_specs$dependencies
-
-          pkg_names <- c()
-          for (dep in deps) {
-               if (is.character(dep)) {
-                    pkg_names <- c(pkg_names, dep)
-               } else if (is.list(dep) && !is.null(dep$pip)) {
-                    pkg_names <- c(pkg_names, unlist(dep$pip))
-               }
-          }
+          # Read requirements.txt: one pip spec per line; strip comments and blanks.
+          pkg_names <- readLines(req_path, warn = FALSE)
+          pkg_names <- trimws(sub("#.*$", "", pkg_names))
+          pkg_names <- pkg_names[nzchar(pkg_names)]
 
           pkg_names <- unique(pkg_names)
-          pkg_names <- pkg_names[!grepl("^python=", pkg_names)]
 
           sel <- grep("laser-cholera", pkg_names)
           if (length(sel) > 0) pkg_names[sel] <- "laser.cholera"
@@ -158,7 +150,7 @@ check_dependencies <- function() {
                if (pkg_import_name %in% c("tensorflow", "keras")) {
 
                     pip_info <- tryCatch(
-                         system2(paths$exe, c("-m", "pip", "show", pkg_import_name),
+                         system2(paths$exec, c("-m", "pip", "show", pkg_import_name),
                                  stdout = TRUE, stderr = FALSE),
                          error = function(e) character(0)
                     )
@@ -198,7 +190,7 @@ check_dependencies <- function() {
 
                          if (pkg_import_name == "laser.cholera") {
                               cli::cli_alert_info("LASER built with:")
-                              freeze <- system2(command = paths$exe, args = c("-m", "pip", "freeze"), stdout = TRUE)
+                              freeze <- system2(command = paths$exec, args = c("-m", "pip", "freeze"), stdout = TRUE)
                               laser_lines <- grep("laser", freeze, value = TRUE)
                               laser_lines <- paste0("   ", laser_lines)
                               cli::cli_text("{laser_lines}")
@@ -221,7 +213,7 @@ check_dependencies <- function() {
           }
 
      } else {
-          cli::cli_alert_danger("environment.yml not found in package.")
+          cli::cli_alert_danger("requirements.txt not found in package.")
      }
 
      # -----------------------------------------------------------------------
@@ -257,7 +249,7 @@ check_dependencies <- function() {
      # Confirm that reticulate is now pointing to the correct Python interpreter.
      if (grepl(paths$env, config$python)) {
 
-          cli::cli_alert_success("Reticulate has activated the conda environment at '{paths$env}' for MOSAIC!")
+          cli::cli_alert_success("Reticulate has activated the virtual environment at '{paths$env}' for MOSAIC!")
           cli::cli_alert_info("Python configuration:")
           print(config)
           cli::cli_text(paste0("RETICULATE_PYTHON: ", Sys.getenv('RETICULATE_PYTHON')))
@@ -291,7 +283,7 @@ check_dependencies <- function() {
 
      } else {
 
-          cli::cli_abort("Failed to activate the conda environment at {paths$env}.\nActivated Python: {config$python}")
+          cli::cli_abort("Failed to activate the virtual environment at {paths$env}.\nActivated Python: {config$python}")
      }
 
 

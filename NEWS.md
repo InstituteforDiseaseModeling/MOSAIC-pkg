@@ -1,3 +1,22 @@
+# MOSAIC 0.xx.y
+
+## Migrate Python provisioning from Miniconda to uv
+
+MOSAIC no longer uses conda/Miniconda to manage its Python environment. It now relies on [uv](https://docs.astral.sh/uv/) — the fast Python package manager that backs reticulate's default workflow — to provision a standalone Python interpreter and install dependencies into a standard virtual environment at `~/.virtualenvs/r-mosaic`. The environment location, the auto-attach behavior on package load, and the `attach`/`detach`/`lock`/`check`/`remove` lifecycle are all unchanged; only the provisioning backend changed.
+
+**Requirements:** the `uv` binary must be available on `PATH` (or in `~/.local/bin` / `~/.cargo/bin`). Install once with `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+
+**Changed:**
+
+- `install_dependencies()` now locates `uv`, creates the venv with `uv venv --python <ver> --seed` (uv downloads a standalone Python if needed), and installs packages with `uv pip install -r requirements.txt`. It then activates the env via `reticulate::use_virtualenv()`. Signature (`force`) is unchanged. Removed all `miniconda_path()` / `install_miniconda()` / `conda_create()` / `conda_install()` / `use_condaenv()` calls.
+- Python dependencies moved from `inst/python/environment.yml` (conda + pip split) to a single PyPI-resolved `inst/python/requirements.txt`; the target Python version lives in `inst/python/python_version.txt`. Direct dependencies: pyarrow 14.0.1, packaging 24.0, tensorflow >=2.16,<2.21, laser-core 1.0.2, laser-cholera 0.13.0, dask[distributed], coiled (numpy / numba / llvmlite resolve transitively from these).
+- `check_dependencies()` now parses `requirements.txt` instead of `environment.yml`. Fixed a latent bug at three sites: it referenced the non-existent `paths$exe` (the field is `paths$exec`), which had silently broken the existence check and the `pip show` / `pip freeze` calls.
+- Activation now uses the non-normalized venv exec path (`paths$exec`) for `RETICULATE_PYTHON`, and `r-mosaic` env-identity checks no longer `normalizePath()` the interpreter path. uv venvs symlink `bin/python` to a shared managed interpreter, so resolving the symlink pointed reticulate at the base interpreter (losing the venv's site-packages) and broke the `grepl("r-mosaic", ...)` checks. `get_python_paths()$norm` is documented as unsafe for this purpose.
+- `attach_mosaic_env()` and `lock_python_env()` now activate the env via `reticulate::use_virtualenv()` instead of `use_condaenv()`.
+- `DESCRIPTION`: `reticulate (>= 1.41.0)`; `uv` added to `SystemRequirements`.
+- `vm/setup_mosaic.sh` and `vm/setup_mosaic_minimal.sh` install uv before calling `install_dependencies()`.
+- conda-specific wording/comments updated across `check_python_env()`, `remove_python_env()`, and `zzz.R` (the libstdc++ preload is retained as a guarded best-effort fallback, now a no-op under uv standalone Python in the common case).
+
 # MOSAIC 0.36.12
 
 * Fixed a medioid-model mis-mapping: the medioid metric correctly selected the central ensemble member, but the seed it was mapped to came from a separate vector that could drift out of positional alignment with `cases_array`, so `config_medioid` was sampled from the wrong parameter set and its prediction could collapse to near-zero. `calc_model_ensemble()` now carries a per-member `seeds` vector aligned with `cases_array` (sourced from the parameter set that produced each member), `optimize_ensemble_subset()` propagates it through its sort/slice, and `run_MOSAIC()`'s medioid uses `ensemble$seeds[medioid_idx]`. Bit-identical for correctly-aligned runs (Tier-2 parity unchanged).
