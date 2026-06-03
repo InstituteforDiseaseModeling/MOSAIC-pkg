@@ -94,7 +94,7 @@ calc_model_ensemble(
 
   Optional list of pre-gathered LASER results (e.g. from Dask). Each
   element must have `$param_idx`, `$stoch_idx`, `$reported_cases`,
-  `$disease_deaths`, and `$success`.
+  `$reported_deaths`, and `$success`.
 
 - verbose:
 

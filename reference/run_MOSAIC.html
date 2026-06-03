@@ -35,7 +35,7 @@ Posterior predictive checks and uncertainty quantification
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.49</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,6 +86,7 @@ Posterior predictive checks and uncertainty quantification
 <span>  <span class="va">priors</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  resume <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  cluster <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
@@ -95,6 +96,7 @@ Posterior predictive checks and uncertainty quantification
 <span>  <span class="va">priors</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  resume <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  cluster <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -129,6 +131,37 @@ Key settings:</p><ul><li><p><code>calibration$n_simulations</code>: NULL for aut
 <li><p><code>sampling</code>: Which parameters to sample vs hold fixed</p></li>
 <li><p><code>parallel</code>: Cluster settings for parallel execution</p></li>
 </ul></dd>
+
+
+<dt id="arg-resume">resume<a class="anchor" aria-label="anchor" href="#arg-resume"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, the run
+reconstructs calibration state from the per-sim shards already present in
+<code>&lt;dir_output&gt;/2_calibration/samples/</code> and continues instead of starting
+fresh. The shards on disk are the sole source of truth (an internal
+<code>resume_checkpoint.rds</code> restores the adaptive ESS/phase state when
+present, and is removed when the run completes; otherwise the state is
+reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
+the run continues from <code>max(sim_id)+1</code> and does <em>not</em> backfill
+interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
+missing id within the target is re-run so the exact target is met.</p>
+<p>Resume is <strong>rejected</strong> (hard error) when:</p><ul><li><p><code>control$paths$clean_output = TRUE</code> (the wipe would delete the shards);</p></li>
+<li><p>the run already completed — a consolidated <code>2_calibration/samples.parquet</code>
+exists that the on-disk shards would shrink (start fresh, or remove it to recompute);</p></li>
+<li><p>the supplied <code>config</code>, <code>priors</code>, <code>control$likelihood</code>,
+<code>control$sampling</code>, <code>control$calibration$n_iterations</code>, or the
+calibration mode (auto vs fixed) differ from those persisted in
+<code>1_inputs/</code> (each changes the draws or likelihood, making the pool
+incomparable);</p></li>
+<li><p>the current <code>laser-cholera</code> engine version crosses the v0.13
+deaths-scale boundary relative to the original run;</p></li>
+<li><p>the likelihood-value provenance differs — i.e. the existing shards
+were scored by a different likelihood engine or implementation than the
+current session would produce (e.g. R <code>calc_model_likelihood</code> vs
+on-worker Python scoring, once Dask phase 3 lands, or an R likelihood
+code change that altered values).</p></li>
+</ul><p>If the engine version cannot be determined (no record / Python not bound) the
+deaths-scale check is skipped with a warning. Has no effect when no shards
+exist (equivalent to a fresh run).</p></dd>
 
 
 <dt id="arg-cluster">cluster<a class="anchor" aria-label="anchor" href="#arg-cluster"></a></dt>
@@ -265,6 +298,13 @@ When <code>NULL</code> (default) the local R parallel backend is used.</p></dd>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu">run_MOSAIC</span><span class="op">(</span><span class="va">custom_config</span>, <span class="va">custom_priors</span>, <span class="st">"./output"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># === RESUME AN INTERRUPTED RUN ===</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># If a calibration is killed mid-run, re-call with resume = TRUE and the same</span></span></span>
+<span class="r-in"><span><span class="co"># config/priors/output directory. Completed simulations on disk are reused and</span></span></span>
+<span class="r-in"><span><span class="co"># the run continues from the next sim_id (bit-identical to an uninterrupted run).</span></span></span>
+<span class="r-in"><span><span class="fu">run_MOSAIC</span><span class="op">(</span><span class="va">config</span>, <span class="va">priors</span>, <span class="st">"./output"</span>, resume <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

@@ -32,6 +32,7 @@ run_MOSAIC(
   priors,
   dir_output,
   control = NULL,
+  resume = FALSE,
   cluster = NULL,
   dask_spec = NULL
 )
@@ -41,6 +42,7 @@ run_mosaic(
   priors,
   dir_output,
   control = NULL,
+  resume = FALSE,
   cluster = NULL,
   dask_spec = NULL
 )
@@ -85,6 +87,48 @@ run_mosaic(
   - `sampling`: Which parameters to sample vs hold fixed
 
   - `parallel`: Cluster settings for parallel execution
+
+- resume:
+
+  Logical (default `FALSE`). When `TRUE`, the run reconstructs
+  calibration state from the per-sim shards already present in
+  `<dir_output>/2_calibration/samples/` and continues instead of
+  starting fresh. The shards on disk are the sole source of truth (an
+  internal `resume_checkpoint.rds` restores the adaptive ESS/phase state
+  when present, and is removed when the run completes; otherwise the
+  state is reconstructed from the shards). Behaviour by mode: in
+  adaptive (auto) mode the run continues from `max(sim_id)+1` and does
+  *not* backfill interior gaps (a lost/quarantined shard reduces the
+  pool); in fixed mode any missing id within the target is re-run so the
+  exact target is met.
+
+  Resume is **rejected** (hard error) when:
+
+  - `control$paths$clean_output = TRUE` (the wipe would delete the
+    shards);
+
+  - the run already completed — a consolidated
+    `2_calibration/samples.parquet` exists that the on-disk shards would
+    shrink (start fresh, or remove it to recompute);
+
+  - the supplied `config`, `priors`, `control$likelihood`,
+    `control$sampling`, `control$calibration$n_iterations`, or the
+    calibration mode (auto vs fixed) differ from those persisted in
+    `1_inputs/` (each changes the draws or likelihood, making the pool
+    incomparable);
+
+  - the current `laser-cholera` engine version crosses the v0.13
+    deaths-scale boundary relative to the original run;
+
+  - the likelihood-value provenance differs — i.e. the existing shards
+    were scored by a different likelihood engine or implementation than
+    the current session would produce (e.g. R `calc_model_likelihood` vs
+    on-worker Python scoring, once Dask phase 3 lands, or an R
+    likelihood code change that altered values).
+
+  If the engine version cannot be determined (no record / Python not
+  bound) the deaths-scale check is skipped with a warning. Has no effect
+  when no shards exist (equivalent to a fresh run).
 
 - cluster:
 
@@ -237,5 +281,12 @@ custom_priors <- list(
 )
 
 run_MOSAIC(custom_config, custom_priors, "./output")
+
+# === RESUME AN INTERRUPTED RUN ===
+
+# If a calibration is killed mid-run, re-call with resume = TRUE and the same
+# config/priors/output directory. Completed simulations on disk are reused and
+# the run continues from the next sim_id (bit-identical to an uninterrupted run).
+run_MOSAIC(config, priors, "./output", resume = TRUE)
 } # }
 ```

@@ -238,7 +238,7 @@ ctrl <- mosaic_control_defaults(
     sample_tau_i = TRUE,
     sample_mobility_gamma = FALSE,
     sample_mobility_omega = FALSE,
-    sample_mu_j = TRUE,
+    sample_mu_j_baseline = TRUE,
     sample_iota = FALSE,
     sample_gamma_2 = FALSE,
     sample_alpha_1 = FALSE
@@ -261,7 +261,7 @@ ctrl <- mosaic_control_defaults(
 # Full workflow configuration (demonstrates logical order)
 ctrl <- mosaic_control_defaults(
   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
-  sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
+  sampling = list(sample_tau_i = TRUE, sample_mu_j_baseline = TRUE), # What to sample
   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure

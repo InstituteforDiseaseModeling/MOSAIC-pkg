@@ -1,5 +1,217 @@
 # Changelog
 
+## MOSAIC 0.32.1
+
+### CFR pipeline reworked for v0.13+ schema; WHO data refreshed through 2025
+
+#### rho_deaths variant: production pin to informative Beta(36.95, 51.02)
+
+`rho_deaths` uses the **informative** variant Beta(36.95, 51.02) (mean
+0.42, sd 0.052, 95% CI \[0.32, 0.52\]) for production calibrations. This
+is the SYNTHESIS_REPORT §3.3 pooled-mean-CI fit. The wider
+prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity
+analysis only. **Rationale:** within a single country, the deaths
+likelihood identifies the product `mu_j_baseline * rho_deaths`, leaving
+a flat factorization direction. Pinning `rho_deaths` near 0.42 lets
+`mu_j_baseline` posteriors carry the cross-country CFR signal cleanly.
+All three meta-analysis anchor studies (Routh 2017, Shikanga 2009, Bwire
+2013) are SSA outbreak settings — the regime MOSAIC calibrates — so the
+pooled-mean precision is the operative target.
+
+#### CFR parameter tracking — closing the gaps
+
+Parameter tracking surfaces were updated for consistency with the v0.13+
+CFR pipeline:
+
+- `R/plot_model_parameters.R` location_params_base now includes
+  `mu_j_baseline`, `mu_j_slope`, `mu_j_epidemic_factor`,
+  `epidemic_threshold`, `beta_j0_tot`, `psi_star_*` — these were
+  silently dropped from posterior visualization despite being sampled
+  per-country.
+- `R/get_param_names.R` replaces the stale `mu_j` placeholder with the
+  actual sampled triple (`mu_j_baseline`, `mu_j_slope`,
+  `mu_j_epidemic_factor`) plus `epidemic_threshold` and the
+  `delta_reporting_*` integers.
+- `R/calc_model_ess_parameter.R` docstring example updated from `mu_j`
+  to `mu_j_baseline`.
+- `R/run_MOSAIC.R` docstring example flags updated from `sample_mu_j` to
+  `sample_mu_j_baseline`.
+
+The mu_j_baseline derivation in `data-raw/make_priors_default.R` is
+corrected for the laser-cholera v0.13+ schema. The conversion factor
+from observed reported CFR to the engine’s daily mortality hazard is now
+`rho / (rho_deaths * chi)` (~1.015) instead of `rho / chi` (~0.43).
+Per-country `mu_j_baseline` Gamma priors are ~2.36x their pre-v0.32.1
+values, which corrects the pre-v0.13 under-scaling where mu_j_baseline
+implicitly absorbed `1/rho_deaths`. The conversion factor is now derived
+inline from the actual `rho`, `rho_deaths`, `chi_endemic`,
+`chi_epidemic` Beta priors so it stays in sync if those upstream priors
+are updated.
+
+`make_config_default.R` now sources `mu_j_baseline` UNIVERSALLY from
+`priors_default` Gamma means (was: raw CFR `rowMeans(mu_jt)` with an
+ETH-only hand-patch). config_default and priors_default agree by
+construction; a new regression test (`test-cfr-pipeline-consistency.R`)
+asserts this invariant per country.
+
+**MOZ-specific overrides dropped.** The MOZ
+`mu_j_baseline = Gamma(2, 1176)` and
+`mu_j_epidemic_factor = Gamma(1.5, 0.5)` overrides were both calibrated
+under the pre-v0.13 misspecified likelihood. They are superseded by the
+universal data-driven prior derived from the corrected steady-state
+identity. MOZ now inherits `mu_j_baseline ≈ 0.0045` (from its observed
+~0.43% CFR × 1.015) and the global `mu_j_epidemic_factor ~ Gamma(1, 2)`
+default. If country-specific calibration evidence under the new schema
+warrants re-introducing an override, it should be derived from a v0.32+
+calibration.
+
+**WHO annual data refreshed through 2025.**
+`R/process_WHO_annual_data.R` was rewritten to (a) parse the actual
+`first_epiwk` / `last_epiwk` date ranges instead of hard-coding
+`year <- 2024`, (b) ingest ALL `cholera_adm0_public_*.csv` files in
+`raw/WHO/annual/who_global_dashboard/` and dedupe by `(iso, year)`
+keeping max coverage, (c) archive each ArcGIS dashboard download with a
+snapshot date instead of overwriting, and (d) add `coverage_days` and
+`year_fraction` columns so partial-year snapshots are clearly labeled.
+The 2024 and 2025 calendar-year CSVs (downloaded from the WHO Global
+Cholera & AWD Hub UI) are now in the pipeline alongside the rolling 2026
+partial-year snapshot. The output CSV is renamed from
+`who_afro_annual_1949_2024.csv` to `who_afro_annual.csv` (year-agnostic
+canonical name); 6 consumers updated.
+
+**MOSAIC-docs math spec updated.** `04-model-description.Rmd` describes
+the v0.13+ derivation identity, the sigma cancellation, and the
+reinterpretation of pre-v0.32.0 mu_j_baseline posteriors.
+
+## MOSAIC 0.32.0
+
+### Upgrade engine to laser-cholera v0.13.0 (deaths likelihood scale correction)
+
+The Python engine is bumped from v0.12.5 to v0.13.0
+(`inst/python/environment.yml`). The engine now emits a separate
+`model.results.reported_deaths` time series equal to
+`round(disease_deaths[t - delta_reporting_deaths] * rho_deaths)`, and
+MOSAIC scores observed surveillance `reported_deaths` against simulated
+`reported_deaths` — not against raw `disease_deaths`.
+
+**Behavior change (deaths likelihood scale).** Before v0.32.0 the deaths
+NB likelihood compared observed reported deaths to simulated raw disease
+deaths, so the simulated series was on a ~1/rho_deaths ≈ 2.4× higher
+scale than the observations. Calibration absorbed the missing factor by
+inflating `mu_j_baseline` posteriors. The new schema fixes the scale;
+deaths bias-ratio diagnostics should now centre on 1.0. Resume from a
+pre-v0.32 run on v0.32+ is **not** safe — the `deaths` column in parquet
+shards has flipped semantics.
+
+**Field rename surface.** Every R extraction of
+`model$results$disease_deaths` flipped to `reported_deaths`. The Dask
+worker dict (`inst/python/mosaic_dask_worker.py`) and the R-side
+gatherers now use `reported_deaths`. `plot_model_ppc`,
+`calc_model_ensemble`, the test fixtures, scenario scripts, and the
+vignette were updated in lockstep. The MOSAIC-Mozambique scenario
+scripts (peer repo) were updated too.
+
+**Schema changes consumed.**
+
+- v0.13.0 hard-asserts every `iso_code` in `epidemic_peaks` appears in
+  `location_name`.
+  [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md)
+  and the Dask injection (`.mosaic_inject_likelihood_settings()`) now
+  call `.filter_epidemic_peaks()` to drop foreign-iso and out-of-window
+  rows.
+  [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
+  promotes its stale warning to an error when foreign iso_codes are
+  present.
+- v0.13.0 auto-computes `epidemic_peaks$loc_idx` from `iso_code` at
+  config-load time; MOSAIC does not need to inject it.
+- HDF5 paramfile loading was removed in v0.13.0; MOSAIC has always
+  shipped JSON.
+- The Python namespace flipped from `laser_cholera.*` to
+  `laser.cholera.*` (this was actually pre-v0.13 but the test fixture
+  and three scenario scripts still pointed at the old name).
+
+**Prior updates.**
+
+- `priors_default` v15.4 → v15.5:
+  - `rho_deaths` switched from informative variant `Beta(36.95, 51.02)`
+    to recommended `Beta(6.30, 8.52)` per
+    `claude/rho_deaths_research/SYNTHESIS_REPORT.md` §3.4. Both share
+    mean ~0.42, but the recommended variant fits the 95% prediction
+    interval and accommodates between-study heterogeneity. The
+    informative variant remains documented for sensitivity analysis.
+  - `delta_reporting_deaths` description corrected: this parameter is
+    the **death-event-to-death-report** delay, not
+    symptom-onset-to-death-report. The symptom-onset-to-death interval
+    is implicit in the SEIR dynamics (γ₁⁻¹ ~ 5–7 days) and is NOT folded
+    into `delta_reporting_deaths`. Default 5 days, prior
+    Truncnorm(mean=4, sd=3) unchanged.
+
+**Resume guard.** The resume path compares the live `laser-cholera`
+version against the `python$pkg_laser_cholera` field already recorded in
+`1_inputs/environment.json` and **hard-errors when the persisted and
+current versions straddle the v0.12 → v0.13 deaths-scale boundary**
+(resuming would mix incompatible deaths scales in the on-disk shards).
+Two versions on the same side of the boundary warn but proceed.
+
+**Parity tests.** A new
+`tests/testthat/test-calc_model_likelihood_python_parity.R` (4 PASS)
+validates R↔︎Python likelihood parity on the core NB,
+cumulative-progression, and WIS paths. Four parity tests are SKIPped
+with documented Python-side divergences (peak-term scoring, NA-masking
+in WIS, zero-prediction penalty) — issues to file upstream against
+laser-cholera.
+
+**Known Python-side issues (filed for upstream fix):**
+
+1.  `np.round(disease_deaths * rho_deaths)` deterministic rounding
+    biases low-incidence patches toward zero (ETH smoke shows ratio 0.13
+    vs rho_deaths=0.46). Should use `prng.binomial`.
+2.  Peak-term scoring diverges ~22% on daily cadence and ~290% on weekly
+    cadence; only surfaces in tests when `loc_idx` is supplied (Python
+    silently drops peak rows missing it).
+3.  WIS-path NaN propagation when observations contain NAs (~0.5% LL
+    drift).
+4.  Zero-prediction penalty scaling differs ~1.78× between R and Python.
+
+## MOSAIC 0.31.0
+
+### Add `resume = TRUE` to `run_MOSAIC()` — continue an interrupted calibration
+
+[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+gains a `resume` argument (default `FALSE`). When `TRUE`, the run
+reconstructs calibration state from the per-sim shards already present
+in `<dir_output>/2_calibration/samples/` and continues from the next
+unused `sim_id` instead of restarting from scratch. Because each
+simulation’s parameters are a deterministic function of `seed = sim_id`,
+a resumed run is bit-identical to an uninterrupted one.
+
+- The shards on disk are the source of truth. The next `sim_id` is
+  always `max(id on disk) + 1`, so no draw is ever duplicated.
+- An internal `2_calibration/state/resume_checkpoint.rds` (written every
+  batch) restores the adaptive ESS/phase state exactly; runs without a
+  checkpoint bootstrap the state from the shards.
+- `resume = TRUE` is rejected with `clean_output = TRUE`; when the run
+  already completed (a consolidated `samples.parquet` the shards would
+  shrink); and when the supplied `config`, `priors`,
+  `control$likelihood`, `control$sampling`,
+  `control$calibration$n_iterations`, or the calibration mode (auto vs
+  fixed) differ from those persisted in `1_inputs/` (each changes the
+  draws or likelihood and would make the pooled shards incomparable — a
+  hard error). In adaptive mode resume continues from `max(sim_id)+1`
+  and does not backfill interior gaps; fixed mode re-runs any missing id
+  to hit the target. Corrupt/invalid shards are read-validated and
+  quarantined; resumed runs are recorded in `summary.json` (`resumed`,
+  `n_simulations_reused`). Each run also stamps a likelihood-value
+  provenance (`likelihood_provenance` in `environment.json`); resume
+  refuses to pool shards scored by a different likelihood
+  engine/implementation — a forward hook for the Dask/Coiled worker-side
+  scoring port (laser-cholera issue
+  [\#47](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/47)),
+  which flips the engine from R `calc_model_likelihood` to on-worker
+  Python.
+- `resume = FALSE` (the default) is byte-identical to prior behavior.
+  The slim `run_state.json` monitoring file is unchanged.
+
 ## MOSAIC 0.30.49
 
 ### Remove `config_default_MOZ` / `priors_default_MOZ` (BREAKING for direct users)

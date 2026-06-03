@@ -324,35 +324,43 @@ before starting work — they represent patterns to actively avoid.
     created with proper corr/SSE methods but all 16 call sites kept
     using inline `cor()^2` — function existed for months unused (v0.22.4
     fix)
+
 2.  [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
     rewritten to do single-config stochastic reruns instead of the
     intended weighted multi-config posterior ensemble — wrong
     methodology under the same name, plus the old
     `plot_model_fit_stochastic_param()` was kept running in parallel
     (v0.22.4-5 fix)
+
 3.  `est_transmission_spatial_structure()` contains
     `df_all <- df_config # placeholder merge` — function appears
     complete but produces wrong results due to missing covariate loading
     (#74)
+
 4.  WIS computation in
     [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
     was missing the 0.5 MAE coefficient per Bracher et al. 2021 — looked
     correct at a glance but was mathematically wrong (v0.22.0 fix)
+
 5.  Cumulative likelihood had a per-timepoint floor of -1e9 that, after
     T-normalization, produced -115 billion LL — a reasonable-looking
     constant became catastrophic after a scaling change (v0.21.x fix)
+
 6.  ~1,500 lines of orphaned code found across 8+ utility systems that
     were created but never wired into
     [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md):
     convergence (#72), results schema (#73), batch planning (#75), BFRS
     posterior (#76), model loss (#77), adaptive weights (#78)
+
 7.  `get_ENSO_forecast_from_json()` fallback created but only wired in
     for DMI, not ENSO — asymmetric implementation of the same pattern
     (#80)
+
 8.  Agent deleted `calc_model_convergence.R` (6 functions) as “orphaned”
     but 2 of the 6 (`calc_model_agreement_index`, `calc_model_cvw`) had
     active callers in `run_MOSAIC.R` — agent grep’d for the file’s main
     function but not all functions inside it (v0.22.12 fix)
+
 9.  Rewriting
     [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
     and
@@ -361,12 +369,14 @@ before starting work — they represent patterns to actively avoid.
     generated it via the old ensemble function, and the rewrite replaced
     that with the posterior ensemble plot without preserving the
     single-best-model plot (v0.22.15 fix)
+
 10. [`plot_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_likelihood.md)
     call was silently removed from
     [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
     during a refactor — the function still existed but the call site was
     dropped, so the likelihood curve diagnostic plot stopped being
     generated without any error or warning (v0.22.17 fix)
+
 11. v0.14.22 fixed the `expected_cases` → `reported_cases` field rename
     in three sibling plotting functions (`plot_model_ppc.R`,
     `plot_model_fit_stochastic.R`, `plot_model_fit_stochastic_param.R`)
@@ -389,3 +399,33 @@ before starting work — they represent patterns to actively avoid.
     parameterized
     [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
     for exactly this reason (v0.29.2 fix)
+
+12. The laser-cholera v0.13.0 upgrade (v0.32.0) flipped the
+    deaths-likelihood scale: observed surveillance `reported_deaths` was
+    previously compared to simulated raw `disease_deaths`, inflating
+    simulated deaths by ~1/rho_deaths ≈ 2.4× and forcing calibration to
+    absorb the missing factor in `mu_j_baseline`. The fix flips MOSAIC
+    to extract `model$results$reported_deaths` everywhere. Multiple
+    latent bugs were exposed only by the deep review pass: (a) the Dask
+    path’s `.mosaic_inject_likelihood_settings()` overwrote
+    [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md)‘s
+    filtered epidemic_peaks with the full unfiltered SSA dataset
+    (hard-asserts on v0.13); (b) the parity-test fixture didn’t supply
+    `loc_idx` to Python’s epidemic_peaks DataFrame, so Python silently
+    dropped every peak row and the test false-passed on a path Python
+    wasn’t actually scoring; (c) `delta_reporting_deaths` was
+    mislabelled as “symptom-onset-to-report” when v0.13’s engine
+    implements it as “death-event-to-report”; (d) per-country
+    `mu_j_baseline` priors in `make_priors_default.R` encode a pre-v0.13
+    derivation that omits the rho_deaths factor — 39 of 40 countries’
+    defaults still implicitly absorb 1/rho_deaths. Lessons: when an
+    engine upgrade changes the SEMANTICS of a field (not just its name),
+    audit every consumer including (i) post-calibration ensemble/plot
+    paths, (ii) Dask/remote worker paths separately from local PSOCK
+    paths (they often duplicate config injection), (iii) test fixtures
+    that mock the result schema (they can silently false-pass when the
+    consumer’s contract is loosened), (iv) prior derivations baked from
+    observation identities, and (v) prior label descriptions (the
+    literature anchor must match the engine implementation, not the
+    analyst’s intuition). Run the change through an independent
+    reviewer-pass before shipping (v0.32.0 fix)

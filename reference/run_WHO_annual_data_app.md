@@ -21,7 +21,7 @@ run_WHO_annual_data_app(PATHS)
   function and should include:
 
   - **DATA_WHO_ANNUAL**: Path to the directory containing the processed
-    cholera data file (e.g., `who_afro_annual_1949_2024.csv`).
+    cholera data file (`who_afro_annual.csv`).
 
 ## Details
 

@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.49</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -231,7 +231,7 @@ controls local parallel likelihood computation after simulations return.</p></li
 <span class="r-in"><span>    sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
 <span class="r-in"><span>    sample_mobility_gamma <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>    sample_mobility_omega <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
-<span class="r-in"><span>    sample_mu_j <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>    sample_mu_j_baseline <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
 <span class="r-in"><span>    sample_iota <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>    sample_gamma_2 <span class="op">=</span> <span class="cn">FALSE</span>,</span></span>
 <span class="r-in"><span>    sample_alpha_1 <span class="op">=</span> <span class="cn">FALSE</span></span></span>
@@ -254,7 +254,7 @@ controls local parallel likelihood computation after simulations return.</p></li
 <span class="r-in"><span><span class="co"># Full workflow configuration (demonstrates logical order)</span></span></span>
 <span class="r-in"><span><span class="va">ctrl</span> <span class="op">&lt;-</span> <span class="fu">mosaic_control_defaults</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  calibration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>n_simulations <span class="op">=</span> <span class="cn">NULL</span>, n_iterations <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,      <span class="co"># How to run</span></span></span>
-<span class="r-in"><span>  sampling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>, sample_mu_j <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,        <span class="co"># What to sample</span></span></span>
+<span class="r-in"><span>  sampling <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>sample_tau_i <span class="op">=</span> <span class="cn">TRUE</span>, sample_mu_j_baseline <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, <span class="co"># What to sample</span></span></span>
 <span class="r-in"><span>  likelihood <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>weight_wis <span class="op">=</span> <span class="fl">0.10</span>, weight_cases <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span>,        <span class="co"># How to score</span></span></span>
 <span class="r-in"><span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>ESS_param <span class="op">=</span> <span class="fl">100</span>, ESS_param_prop <span class="op">=</span> <span class="fl">0.95</span><span class="op">)</span>,          <span class="co"># When to stop</span></span></span>
 <span class="r-in"><span>  parallel <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>enable <span class="op">=</span> <span class="cn">TRUE</span>, n_cores <span class="op">=</span> <span class="fl">16</span><span class="op">)</span>,                    <span class="co"># Infrastructure</span></span></span>

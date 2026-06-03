@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.30.49</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -111,8 +111,8 @@ growth patterns typical of cholera epidemics.</p>
 <span><span class="va">model_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Extract time series results (convert Python objects to R matrices)</span></span>
-<span><span class="va">cases_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span></span>
-<span><span class="va">deaths_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span><span class="op">)</span></span>
+<span><span class="va">cases_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_cases</span><span class="op">)</span></span>
+<span><span class="va">deaths_epidemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_epidemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_deaths</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Get metadata</span></span>
 <span><span class="va">locations</span> <span class="op">&lt;-</span> <span class="va">config_simulation_epidemic</span><span class="op">$</span><span class="va">location_name</span></span>
@@ -136,11 +136,11 @@ growth patterns typical of cholera epidemics.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>mfrow <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">1</span><span class="op">)</span>, mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">4</span>, <span class="fl">3</span>, <span class="fl">1</span><span class="op">)</span>, oma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/matplot.html" class="external-link">matplot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">cases_epidemic</span><span class="op">)</span>, type <span class="op">=</span> <span class="st">"l"</span>, lty <span class="op">=</span> <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="va">colors</span>,</span>
-<span>        xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">"Expected Cases"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">"Reported Cases"</span>,</span>
 <span>        main <span class="op">=</span> <span class="st">"Epidemic Transmission Simulation"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/matplot.html" class="external-link">matplot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">deaths_epidemic</span><span class="op">)</span>, type <span class="op">=</span> <span class="st">"l"</span>, lty <span class="op">=</span> <span class="fl">1</span>, lwd <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="va">colors</span>,</span>
-<span>        xlab <span class="op">=</span> <span class="st">"Time step"</span>, ylab <span class="op">=</span> <span class="st">"Expected Deaths"</span>, main <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span>
+<span>        xlab <span class="op">=</span> <span class="st">"Time step"</span>, ylab <span class="op">=</span> <span class="st">"Reported Deaths"</span>, main <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>fig <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span>, oma <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>, mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>, new <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, type <span class="op">=</span> <span class="st">"n"</span>, bty <span class="op">=</span> <span class="st">"n"</span>, xaxt <span class="op">=</span> <span class="st">"n"</span>, yaxt <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span>
@@ -162,8 +162,8 @@ patterns with seasonal fluctuations.</p>
 <span><span class="va">model_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span>config <span class="op">=</span> <span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Extract time series results (convert Python objects to R matrices)</span></span>
-<span><span class="va">cases_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span></span>
-<span><span class="va">deaths_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">disease_deaths</span><span class="op">)</span></span>
+<span><span class="va">cases_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_cases</span><span class="op">)</span></span>
+<span><span class="va">deaths_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">model_endemic</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_deaths</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Calculate total burden</span></span>
 <span><span class="va">total_cases_endemic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">cases_endemic</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
@@ -208,8 +208,8 @@ patterns with seasonal fluctuations.</p>
 <span></span>
 <span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/run_LASER.html">run_LASER</a></span><span class="op">(</span><span class="va">config</span>, seed <span class="op">=</span> <span class="fl">123</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Extract expected cases</span></span>
-<span><span class="va">cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">expected_cases</span><span class="op">)</span></span>
+<span><span class="co"># Extract reported cases</span></span>
+<span><span class="va">cases</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">results</span><span class="op">$</span><span class="va">reported_cases</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Create grid plot showing each location separately</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/grDevices/png.html" class="external-link">png</a></span><span class="op">(</span><span class="st">"figures/multi_location_grid.png"</span>, width <span class="op">=</span> <span class="fl">1400</span>, height <span class="op">=</span> <span class="fl">1600</span>, res <span class="op">=</span> <span class="fl">130</span><span class="op">)</span></span>
@@ -238,7 +238,7 @@ patterns with seasonal fluctuations.</p>
 <ul>
 <li>
 <strong>Package documentation</strong>:
-<code><a href="https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference">help(package = "MOSAIC")</a></code>
+<code><a href="https://rdrr.io/pkg/MOSAIC/man" class="external-link">help(package = "MOSAIC")</a></code>
 </li>
 <li>
 <strong>Function help</strong>: <code><a href="../reference/run_LASER.html">?run_LASER</a></code>,
