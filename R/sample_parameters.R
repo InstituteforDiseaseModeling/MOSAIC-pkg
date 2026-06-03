@@ -801,31 +801,38 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
   sigma       <- config_sampled$sigma        # symptomatic fraction
   rho         <- config_sampled$rho          # care-seeking rate
   chi_endemic <- config_sampled$chi_endemic  # PPV among suspected cases
-  iota        <- config_sampled$iota         # incubation rate (E→I)
+  iota        <- config_sampled$iota         # incubation rate (E -> I)
+  gamma_1     <- config_sampled$gamma_1      # symptomatic recovery rate (Isym -> R)
 
-  # Find the first 7-day window with positive observed cases
-  obs_raw <- as.numeric(unlist(config_sampled$reported_cases))
-  positive_idx <- which(!is.na(obs_raw) & obs_raw > 0)
-
-  if (length(positive_idx) == 0) {
-    if (verbose) cat("  - ic_moment_match: no positive obs data found, using prior ICs\n")
+  # reported_cases is a matrix (n_locations x T). Compute the first-week
+  # window per location -- prior versions of this function unlist()ed the
+  # full matrix and used a single scalar obs_week1 for every country, which
+  # made the moment match location-invariant.
+  obs_mat <- config_sampled$reported_cases
+  if (is.null(obs_mat)) {
+    if (verbose) cat("  - ic_moment_match: no reported_cases in config, using prior ICs\n")
     return(sampled_props)
   }
-
-  # Use the first 7 days starting from the first positive observation
-  first_pos <- positive_idx[1]
-  window_end <- min(first_pos + 6, length(obs_raw))
-  obs_week1 <- mean(obs_raw[first_pos:window_end], na.rm = TRUE)
-
-  if (!is.finite(obs_week1) || obs_week1 <= 0) {
-    if (verbose) cat("  - ic_moment_match: no valid early obs data, using prior ICs\n")
-    return(sampled_props)
-  }
+  # Reshape vectors as a single-location row matrix (1 x T). The function
+  # indexes obs_mat[j, ] expecting each row to be a time series; the naive
+  # as.matrix(vec) returns a T x 1 column matrix and silently breaks the
+  # per-location lookup for single-location callers (e.g. unit tests).
+  if (!is.matrix(obs_mat)) obs_mat <- matrix(obs_mat, nrow = 1)
 
   # Guard: reporting chain product must be positive and non-trivial
   reporting_product <- sigma * rho  # cases = I * sigma * rho / chi_endemic
   if (!is.finite(reporting_product) || reporting_product < 1e-10) {
     if (verbose) cat("  - ic_moment_match: sigma*rho near zero, using prior ICs\n")
+    return(sampled_props)
+  }
+
+  # Guard: need positive gamma_1, sigma, iota for the steady-state E formula.
+  # isTRUE() coerces NA/NULL/non-logical to FALSE so the if() never sees NA
+  # (e.g. when a config omits gamma_1 entirely).
+  if (!isTRUE(is.finite(gamma_1) && gamma_1 > 0) ||
+      !isTRUE(is.finite(iota)    && iota    > 0) ||
+      !isTRUE(is.finite(sigma)   && sigma   > 0)) {
+    if (verbose) cat("  - ic_moment_match: gamma_1/sigma/iota non-positive, using prior ICs\n")
     return(sampled_props)
   }
 
@@ -836,8 +843,38 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
 
   for (j in seq_along(locations)) {
 
-    I_count <- obs_week1 * chi_endemic / reporting_product
-    E_count <- I_count * iota  # E scales with I via incubation rate
+    # Per-location first-week-of-positives window
+    obs_row <- as.numeric(obs_mat[j, ])
+    positive_idx_j <- which(!is.na(obs_row) & obs_row > 0)
+    if (length(positive_idx_j) == 0) {
+      if (verbose) cat(sprintf("  - ic_moment_match [%s]: no positive obs, using prior IC\n",
+                               locations[j]))
+      next
+    }
+    first_pos_j  <- positive_idx_j[1]
+    window_end_j <- min(first_pos_j + 6, length(obs_row))
+    obs_week1_j  <- mean(obs_row[first_pos_j:window_end_j], na.rm = TRUE)
+    if (!is.finite(obs_week1_j) || obs_week1_j <= 0) {
+      if (verbose) cat(sprintf("  - ic_moment_match [%s]: no valid early obs, using prior IC\n",
+                               locations[j]))
+      next
+    }
+
+    # I_count is an estimate of Isym (symptomatic-infectious compartment),
+    # since cases = Isym * rho * chi_endemic in the laser-cholera model.
+    # The earlier comment labelled this "I" but the reporting chain only
+    # observes Isym.
+    Isym_count <- obs_week1_j * chi_endemic / reporting_product
+    I_count    <- Isym_count   # kept for the verbose message + downstream prop_I
+
+    # Steady-state E:Isym balance for the laser-cholera SEIRVW engine:
+    #   inflow to Isym = sigma * iota * E
+    #   outflow        = gamma_1 * Isym
+    # so E = Isym * gamma_1 / (sigma * iota). The earlier
+    # E_count = I_count * iota was dimensionally wrong (count * 1/day) and
+    # over-seeded E by ~5x at prior medians.
+    E_count <- Isym_count * gamma_1 / (sigma * iota)
+    obs_week1 <- obs_week1_j  # for the verbose message below
 
     # Convert to proportions of population
     prop_I <- I_count / N_j[j]
@@ -896,40 +933,47 @@ props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
   n_locations <- length(locations)
   ic_compartments_all <- colnames(sampled_props)
 
-  # Convert proportions to integer counts
-  for (comp in ic_compartments_all) {
-    config_field <- paste0(comp, "_j_initial")
-    props <- sampled_props[, comp]
-    counts <- round(props * N_j)
-
-    # Ensure very small compartments aren't completely lost
-    small_nonzero <- (counts == 0) & (props > 0) & (props * N_j >= 0.5)
-    counts[small_nonzero] <- 1
-
-    config_sampled[[config_field]] <- as.integer(counts)
-  }
-
-  # Adjust for rounding errors to ensure sum equals N exactly
-  for (j in seq_along(locations)) {
-    compartment_fields <- c("S_j_initial", "V1_j_initial", "V2_j_initial",
-                           "E_j_initial", "I_j_initial", "R_j_initial")
-    counts <- sapply(compartment_fields, function(f) config_sampled[[f]][j])
-
-    diff <- N_j[j] - sum(counts)
-    if (diff != 0) {
-      # Adjust S compartment (calculated as residual) for rounding
-      config_sampled$S_j_initial[j] <- config_sampled$S_j_initial[j] + diff
-
-      # If S becomes negative, adjust largest compartment instead
-      if (config_sampled$S_j_initial[j] < 0) {
-        config_sampled$S_j_initial[j] <- config_sampled$S_j_initial[j] - diff
-        largest_idx <- which.max(counts)
-        config_sampled[[compartment_fields[largest_idx]]][j] <-
-          config_sampled[[compartment_fields[largest_idx]]][j] + diff
-      }
+  # Hamilton (largest-remainder) apportionment per location:
+  #   1. floor(props * N) for each compartment.
+  #   2. Distribute the residual deficit (N - sum of floors) to compartments
+  #      with the largest fractional parts, one unit at a time.
+  # Guarantees sum(counts) == N exactly and all counts >= 0, replacing the
+  # earlier per-compartment round() + residual-on-S fallback which could
+  # leave a compartment negative or sums off by 1 when S was already the
+  # largest compartment or when the recipient compartment was tiny.
+  counts_mat <- matrix(0L,
+                       nrow = n_locations,
+                       ncol = length(ic_compartments_all),
+                       dimnames = list(NULL, ic_compartments_all))
+  for (j in seq_len(n_locations)) {
+    target  <- sampled_props[j, ] * N_j[j]
+    base    <- floor(target)
+    rem     <- target - base
+    deficit <- as.integer(N_j[j] - sum(base))
+    if (deficit > 0) {
+      ord <- order(rem, decreasing = TRUE)
+      base[ord[seq_len(deficit)]] <- base[ord[seq_len(deficit)]] + 1
+    } else if (deficit < 0) {
+      # Only reachable when sampled_props[j, ] sums to > 1 due to numerical
+      # drift; shrink compartments with smallest remainders first.
+      ord <- order(rem, decreasing = FALSE)
+      take <- min(-deficit, length(ord))
+      base[ord[seq_len(take)]] <- base[ord[seq_len(take)]] - 1
     }
-
+    counts_mat[j, ] <- as.integer(base)
   }
+
+  for (comp in ic_compartments_all) {
+    # unname() strips the column-name attribute that R attaches when
+    # subsetting a 1-row matrix (counts_mat[, "S"] returns c(S = ...) for
+    # single-location configs). Keeping the name silently propagates through
+    # downstream sum() calls and makes name-sensitive tests fail.
+    config_sampled[[paste0(comp, "_j_initial")]] <- unname(counts_mat[, comp])
+  }
+
+  # Hard assertions: every cell non-negative and each row sums to its N_j.
+  stopifnot(all(counts_mat >= 0L))
+  stopifnot(all(rowSums(counts_mat) == N_j))
 
   if (verbose) {
     cat("  ✓ Initial conditions sampled and normalized\n")

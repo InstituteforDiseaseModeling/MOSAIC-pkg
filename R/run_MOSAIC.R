@@ -37,13 +37,19 @@
 
 #' Inject likelihood-control settings + epidemic_peaks into config (Dask path)
 #'
-#' Flattens the resolved \code{control$likelihood} settings, the
-#' \code{MOSAIC::epidemic_peaks} dataset (trimmed to \code{iso_code} /
-#' \code{peak_date}), and the \code{calc_likelihood = TRUE} toggle onto a copy
-#' of the config so they land on \code{model.params} for the laser-cholera
-#' analyzer to read on the worker. Used only on the Dask path; the local
-#' PSOCK/FORK path computes the likelihood in R after the LASER call and does
-#' not need these keys on the paramfile.
+#' Flattens the resolved \code{control$likelihood} settings and the
+#' \code{calc_likelihood = TRUE} toggle onto a copy of the config so they land
+#' on \code{model.params} for the laser-cholera analyzer to read on the worker.
+#' Used only on the Dask path; the local PSOCK/FORK path computes the
+#' likelihood in R after the LASER call and does not need these keys on the
+#' paramfile.
+#'
+#' \code{epidemic_peaks} is also overwritten here as a refresh against
+#' \code{MOSAIC::epidemic_peaks} (trimmed to \code{iso_code} / \code{peak_date}).
+#' As of config_default v3.2, the field is already shipped in \code{config_default}
+#' and surveys arriving via \code{make_LASER_config()}; the refresh guarantees
+#' worker-side peaks track the currently-installed package data even when the
+#' caller supplied an older serialised config.
 #'
 #' @param config The base config list.
 #' @param likelihood_settings Resolved \code{control$likelihood} list with

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# make_simulated_LASER_config_files.R
+# make_simulation_epidemic_LASER_config_files.R
 # ---------------------------------------------------------------------------
 # Generate a *toy* LASER parameter configuration for unit‑testing and examples.
 # The script is intentionally self‑contained: it does **not** rely on external
@@ -7,11 +7,10 @@
 # from a clean checkout of the MOSAIC package.
 #
 # Output
-#   inst/extdata/simulated_parameters.json
-#   inst/extdata/simulated_parameters.json.gz
+#   inst/extdata/config_simulation_epidemic.json
 #
 # Usage
-#   source("make_simulated_LASER_config_files.R")
+#   source("make_simulation_epidemic_LASER_config_files.R")
 # ---------------------------------------------------------------------------
 
 library(MOSAIC)
@@ -129,7 +128,7 @@ sim_args <- list(
      chi_epidemic     = 0.75,      # PPV during epidemic periods
      epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
      rho              = 0.52,
-     rho_deaths       = 0.6,       # Death detection rate (laser-cholera#49; mean of Beta(3, 2))
+     rho_deaths       = 0.42,      # Death detection rate (laser-cholera#49; mean of informative Beta(36.95, 51.02))
      sigma            = 0.24,
      delta_reporting_cases  = 0,   # Infection-to-case reporting delay (days)
      delta_reporting_deaths = 5,   # Infection-to-death reporting delay (days)
@@ -174,34 +173,29 @@ sim_config$zeta_ratio       <- .zeta_ratio_sim
 sim_config$decay_days_spread <- .decay_days_spread_sim
 
 # --------------------------- 9. Write to disk ----------------------------- #
+# Simulation configs are .json only (the gz peer is reserved for production
+# calibration configs that consumers may want compressed).
 
 out_dir <- file.path(getwd(), "inst", "extdata")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+fp_json <- file.path(out_dir, "config_simulation_epidemic.json")
 
-file_paths <- c(
-     file.path(out_dir, "simulated_parameters.json"),
-     file.path(out_dir, "simulated_parameters.json.gz")
-)
+args2 <- sim_config[!names(sim_config) %in% c("zeta_ratio", "decay_days_spread")]
+args2$output_file_path <- NULL  # return validated list instead of writing
+params_validated <- do.call(MOSAIC::make_LASER_config, args2)
+rm(args2)
 
-for (fp in file_paths) {
-     args2 <- sim_config[!names(sim_config) %in% c("zeta_ratio", "decay_days_spread")]
-     args2$output_file_path <- fp
-     do.call(MOSAIC::make_LASER_config, args2)
-}
+params_validated$zeta_ratio        <- .zeta_ratio_sim
+params_validated$decay_days_spread <- .decay_days_spread_sim
 
-# Patch written JSONs to include tracking fields
-json_fp <- file_paths[grepl("\\.json$", file_paths)]
-j_cfg <- jsonlite::fromJSON(json_fp)
-j_cfg$zeta_ratio       <- .zeta_ratio_sim
-j_cfg$decay_days_spread <- .decay_days_spread_sim
-jsonlite::write_json(j_cfg, json_fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+MOSAIC::write_json_or_gz(params_validated, fp_json,
+                         write_json = TRUE, write_gz = FALSE)
 
-message("Toy LASER config written to:\n",
-        paste("  •", normalizePath(file_paths), collapse = "\n"))
+message("Toy LASER config written to:\n  - ", normalizePath(fp_json))
 
 # --------------------------- 10. Sanity check ----------------------------- #
 
-identical(sim_config, jsonlite::fromJSON(file_paths[[1]]))
+identical(sim_config, MOSAIC::read_json_to_list(fp_json))
 
 
 mpm <- reticulate::import("laser_cholera.metapop.model")

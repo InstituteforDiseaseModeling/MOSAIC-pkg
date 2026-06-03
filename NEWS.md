@@ -1,167 +1,642 @@
-# MOSAIC 0.30.16
+# MOSAIC 0.30.50
 
-## Fix Phase 3 gather adapter: re-inject `N_j_initial` alongside `location_name`
+## Phase 3 (#101): on-worker likelihood scoring on the Dask path
 
-A docker-CI run of the v0.30.15 parity test surfaced a real production
-divergence: `.extract_sampled_params()` strips `N_j_initial` (and
-`location_name`, and a few others) from the JSON shipped to the worker —
-they live in the broadcast `base_config` instead. v0.30.13's gather
-adapter only re-injected `location_name`, so the Dask parquet schema
-silently dropped the `N_j_initial_<ISO>` columns the local path
-populates, producing a real (not just cosmetic) schema asymmetry.
+Workers on the Dask/Coiled path now compute the likelihood **on-worker**, immediately after each LASER iteration, and return a compact `{iter, seed_iter, likelihood}` dict plus a sim-level `params` echo — instead of returning full per-iter time-series matrices (`reported_cases`, `disease_deaths`) for the R orchestrator to score serially. This is the performance-win commit of the Phase 3 plan that the v0.30.1 Phase 1 wiring set up. At 47-country scale the per-sim payload drops from ~3.4 MB to a few hundred bytes; the post-gather serial bottleneck (~40 minutes for a 24K-sim predictive batch on `main`) collapses to seconds.
 
-The fix is a one-line addition to `.mosaic_run_batch_dask()`: re-inject
-`config$N_j_initial` from the broadcast config alongside
-`config$location_name`. The accompanying parity test now compares both
-paths against the canonical `param_names_all` schema (i.e.
-`convert_config_to_matrix() minus seed`) instead of raw
-`convert_config_to_matrix()` output, so the test exercises the same
-column set that actually lands in `samples.parquet`.
+This release depends on **laser-cholera ≥ 0.13**, which provides `model.log_likelihood` on the engine side (laser-cholera#47 / #58). Until [inst/python/environment.yml](inst/python/environment.yml) is bumped to pin 0.13, end-to-end runs against the installed 0.12.x will fail-by-design with a clear `"laser-cholera >= 0.13 is required"` error from the worker — see the `getattr` shim below.
 
 ### Changed
 
-- `R/run_MOSAIC_helpers.R::.mosaic_run_batch_dask()` — adds
-  `params$N_j_initial <- config$N_j_initial` to the gather-adapter
-  re-injection block. Comment block enumerates the contract: any field
-  added to `.extract_sampled_params` `base_fields` that is also in
-  `convert_config_to_matrix` `params_keep` must be re-injected here.
-- `tests/testthat/test-dask_worker_schema_parity.R`:
-  - New `.parquet_columns()` helper that mirrors `param_names_all`
-    construction (`convert_config_to_matrix() minus seed`).
-  - Round-trip simulator re-injects `N_j_initial` to mirror the
-    production gather adapter.
-  - Test 1 now compares canonical parquet columns instead of raw
-    `convert_config_to_matrix()` output, eliminating the false
-    positives on `seed` / `N_j_initial`.
-- `tests/testthat/test-dask_local_cluster_integration.R` — Test 3
-  relaxes the `iter$likelihood` finiteness assertion to a numeric-type
-  check (NaN / Inf accepted). The test fixture bypasses `run_MOSAIC()`
-  and therefore does not run `.mosaic_inject_likelihood_settings()`, so
-  the on-worker analyzer can legitimately return NaN here — finiteness
-  depends on Phase 1 wiring and is the Phase 2 / laser-cholera test
-  suite's responsibility, not Phase 3's wire-schema contract.
+- **[R/run_MOSAIC.R](R/run_MOSAIC.R)** — adds a Dask preflight that rejects `control$io$save_simresults = TRUE`, since the new worker schema no longer returns the raw (j, t) time-series the simresults writer needs. The local path is unaffected and continues to honor `save_simresults`. Both `.mosaic_run_batch_dask()` call sites drop the `likelihood_settings` argument: the same settings are flattened onto the paramfile by Phase 1's `.mosaic_inject_likelihood_settings()` and consumed on-worker, so the gather adapter no longer needs them.
+
+- **[R/run_MOSAIC_helpers.R](R/run_MOSAIC_helpers.R)** — `.mosaic_run_batch_dask()` collapses its two R-side scoring branches (parallel PSOCK and sequential fallback, ~420 lines) into a single ~95-line gather-and-write loop. The new loop:
+  - Reads the per-iter scalar `likelihood` directly from the worker dict.
+  - Re-injects two base-config fields stripped by `.extract_sampled_params()` before flattening: `location_name` (drives ISO column suffixes — without this `convert_config_to_matrix()` falls back to numeric suffixes like `beta_j0_tot_1` instead of `beta_j0_tot_ETH`) and `N_j_initial` (per-location initial population). Anything added to `.extract_sampled_params()` `base_fields` that also lives in `convert_config_to_matrix()` `params_keep` must be re-injected here too — see `test-dask_worker_schema_parity.R`.
+  - Collapses multi-iter likelihoods via `calc_log_mean_exp()` exactly as the local path does (mirrors `run_MOSAIC.R` ~285–300).
+  - Writes one parquet row per sim.
+
+- **[inst/python/mosaic_dask_worker.py](inst/python/mosaic_dask_worker.py)** — `run_laser_sim()` return shape flips. Per-iter entries change from `{j, seed, reported_cases, disease_deaths}` (nested lists of doubles) to `{iter, seed_iter, likelihood}` (three scalars). A new top-level `params` key carries the sampled scalars/vectors echoed from the JSON-deserialized `sampled` dict, minus `_MATRIX_FIELDS`. A defensive `getattr(model, "log_likelihood", None)` shim returns a clean per-sim failure (`success = False`, actionable error message) when the worker imports an engine older than laser-cholera 0.13, so a stale engine pin surfaces as a per-sim warning rather than crashing the worker with `AttributeError`.
+
+### Tests
+
+- **New [tests/testthat/test-dask_worker_schema_parity.R](tests/testthat/test-dask_worker_schema_parity.R)** — engine-free regression tests that simulate the worker round trip in pure R (no Dask cluster, no Python), so they run in every CI configuration. Three cases:
+  1. **Column-name parity** between the local-path `convert_config_to_matrix(params_sim)` and the Dask-path `convert_config_to_matrix(reconstituted)`, compared against the canonical `param_names_all` schema (`convert_config_to_matrix() minus seed`).
+  2. **ISO-suffix presence** on every location — locks in that vector parameters land as `beta_j0_tot_ETH` etc., not `beta_j0_tot_1`.
+  3. **Failure-mode lock-in** — drops the `location_name` re-injection and asserts numeric suffixes appear, so a future refactor that removes the injection trips a clear failure pointing back here.
+
+- **[tests/testthat/test-dask_local_cluster_integration.R](tests/testthat/test-dask_local_cluster_integration.R)** — schema assertions updated to the new contract:
+  - New `skip_if_no_log_likelihood()` helper submits a sentinel sim and skips when the worker fails-by-design on engines < 0.13, so the tests stay green on the current pin and auto-activate once the env bump lands.
+  - Test 3 (`client$submit`) asserts the result has `params` plus `iterations` of `{iter, seed_iter, likelihood}`; `location_name` is intentionally absent from `res$params`.
+  - The `likelihood` finiteness check is relaxed to a numeric-type check — finiteness depends on Phase 1's `.mosaic_inject_likelihood_settings()` flattening the analyzer's input keys, which this test fixture deliberately bypasses (it scatters `.extract_base_config()` output directly).
+  - Test 4 (`client$map`) gated on the same skip helper.
+
+### Migration
+
+Calibrations that previously set `control$io$save_simresults = TRUE` together with `dask_spec` now error early. Run those diagnostic configurations through the local backend; `save_simresults` on the local path is unchanged.
+
+### Cross-references
+
+- Parent: [laser-cholera#47](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/47)
+- This issue: [#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101) (Phase 3)
+- Phase 1 (R-side wiring, v0.30.1–v0.30.3): [#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100)
+- Phase 2 (laser-cholera 0.13 analyzer rewrite): [laser-cholera#58](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/58)
+
+# MOSAIC 0.30.49
+
+## Remove `config_default_MOZ` / `priors_default_MOZ` (BREAKING for direct users)
+
+The `config_default_MOZ` and `priors_default_MOZ` data objects and their `data-raw` builders are removed from the package. The objects were never exported in `NAMESPACE`, never documented in `man/`, and never consumed by production R code; their only callers were three integration test files (CRAN-skipped) and the MOSAIC-Mozambique calibration project deliberately does not depend on them — it builds its own MOZ artifacts from scratch via `MOSAIC::make_LASER_config()` + cherry-picked entries from the *global* `MOSAIC::priors_default`.
+
+The parallel `_MOZ` build pipeline was a recurring source of silent drift: it had to be hand-maintained whenever the global `make_config_default.R` / `make_priors_default.R` changed, and the v0.30.47 `rho_deaths` switch caught one such miss (the .rda kept the old 0.6 value while the JSON was updated to 0.42).
+
+**Removed files:**
+
+- `data/config_default_MOZ.rda`
+- `data/priors_default_MOZ.rda`
+- `inst/extdata/config_default_MOZ.json`
+- `inst/extdata/priors_default_MOZ.json`
+- `data-raw/make_config_default_MOZ.R`
+- `data-raw/make_priors_default_MOZ.R`
+- `tests/testthat/test-dask_local_cluster_integration.R` (only consumer; depended entirely on the fixture)
+- 4 integration tests at the end of `tests/testthat/test-ic_moment_match.R` (the deterministic-math + guard-clause tests stay; the integration tests that needed a single-location config fixture are removed)
+
+**Migration:** if you were loading `MOSAIC::config_default_MOZ` for ad-hoc experiments, the MOSAIC-Mozambique project (`MOSAIC-Mozambique/code/R/make_config_MOZ.R`) is the canonical way to build a Mozambique calibration config from the package's global priors.
+
+# MOSAIC 0.30.48
+
+## Audit pass: ic_moment_match latent bug + metadata + docs
+
+Deep-review sweep across v0.30.33 → v0.30.47 surfaced three notable issues; this release fixes them.
+
+- **`moment_match_E_I` two latent bugs (R/sample_parameters.R).**
+  The optional initial-conditions moment match (default `ic_moment_match = FALSE`) had two bugs that did not surface in production but broke the unit tests:
+  - **Vector reshape direction.** When `reported_cases` arrives as a length-T vector (e.g. single-location tests), `as.matrix(vec)` returned a T×1 column matrix; the function then read `obs_mat[j, ]` and got just element [1]. Production code always passes an n×T matrix so the branch was never hit there. Fixed by reshaping vectors as `matrix(vec, nrow = 1)` (single-location row).
+  - **Guard clause NA propagation.** When `gamma_1` (or `iota` / `sigma`) was `NULL` in the config, `is.finite(NULL) || NULL <= 0` yielded `NA`, and the enclosing `if(...)` failed with "missing value where TRUE/FALSE needed." Rewritten with `isTRUE(is.finite(x) && x > 0)` so the guard coerces NA/NULL to FALSE and falls back cleanly to the prior IC.
+  Three unit-test expectations in `test-ic_moment_match.R` that pinned the old (pre-v0.30.40) `E = I * iota` formula were also updated to the corrected `E = Isym * gamma_1 / (sigma * iota)` formula.
+- **MOZ `config_default_MOZ` `rho_deaths` artifact missed in v0.30.47.** `data/config_default_MOZ.rda` still carried the old `rho_deaths = 0.6` even though the JSON sidecar had been updated to 0.42. Both are now consistent at 0.42, with the MOZ config metadata bumped to v2.8 and the rationale linked.
+- **`config_default` metadata bumped (v3.4 → v3.5).** The global config metadata description was extended to reference the v0.30.47 `rho_deaths` switch; previously it referenced v3.4 (the beta_j0_tot per-iso seeding) as the most recent change.
+- **`R/est_suitability.R` missing `@param exclude_covariates`.** The function signature has accepted `exclude_covariates = character(0)` for ablation studies for some time, but the parameter was not roxygen-documented. Added the tag; `man/est_suitability.Rd` regenerated.
+- **`NEWS.md` backfill for v0.30.41–v0.30.47.** Six version entries were missing; added below.
+
+# MOSAIC 0.30.47
+
+## rho_deaths informative prior from SSA meta-analysis
+
+The `rho_deaths` default prior is replaced (`Beta(3, 2)` → `Beta(36.95, 51.02)`) and the default value drops from 0.6 to 0.42.
+
+- **Methodology.** Random-effects (DerSimonian-Laird, logit-scale) meta-analysis of three Sub-Saharan African studies — Routh 2017 (Tanzania, EID; binomial CI from 48/101), Shikanga 2009 (Kenya, AJTMH; approximate binomial CI from implied ~25/73), Bwire 2013 (Uganda, PLOS NTDs; sensitivity range). Inverse-variance weighting yields Routh 53%, Shikanga 42%, Bwire 5% — Bwire's wide CI auto-down-weights it. Pooled mean 0.419 (essentially identical to the earlier ad-hoc 3:2 quality-weighted mean 0.417).
+- **Informative variant.** Beta fit to the 95% CI of the pooled mean (not the prediction interval) gives `Beta(36.95, 51.02)`, mean 0.420, 95% CI [0.319, 0.524], ESS ~88.
+- **Methodology mirrors `R/get_rho_care_seeking_params.R`** (cases-side `rho`), establishing parallel statistical machinery for the two observation-model detection probabilities.
+- **Previous attribution to Finger et al. 2024 corrected** — that paper is an editorial without a quantitative anchor; the 23–96% range cited belonged to Pampaka et al. 2025 and described place of death, not surveillance capture. Full provenance: `claude/rho_deaths_research/SYNTHESIS_REPORT.md`.
+
+# MOSAIC 0.30.46
+
+## `config_default`: phase-switching params seeded from per-iso priors
+
+`epidemic_threshold` and `mu_j_epidemic_factor` in the global `config_default` are now sourced PER-COUNTRY from `priors_default$parameters_location` rather than flat values (formerly `1/10000` and `1.25`). The per-iso prior means span roughly 7e-7 to 8.7e-6 for `epidemic_threshold` and 0.5 to 3.0 for `mu_j_epidemic_factor`, restoring the epidemiological heterogeneity required for the engine's phase-switching to actually engage.
+
+# MOSAIC 0.30.45
+
+## `config_default`: initial conditions seeded from per-iso priors
+
+`S_j_initial`, `E_j_initial`, `I_j_initial`, `R_j_initial`, `V1_j_initial`, `V2_j_initial` are now seeded from each country's `prop_*_initial` Beta priors with Hamilton apportionment, rather than the old flat `S = 80%` / `R = 50%` defaults. The flat default had `R_eff = 0.72 < 1` at many ISOs, blocking transmission before the calibration loop could begin.
+
+# MOSAIC 0.30.44
+
+## Docs: mislabeled params, phantom function refs, stale value claims
+
+Audit-driven cleanup of roxygen documentation across `R/priors_default.R`, `R/config_default.R`, `R/config_simulation_endemic.R`, and `R/make_LASER_config.R`: corrected 19 mislabeled `@param` fields, removed phantom `\link{}` references to functions that no longer exist, and resynced value claims in roxygen text with the actual data shipped in `data/priors_default.rda`. Man pages regenerated.
+
+# MOSAIC 0.30.43
+
+## `epidemic_peaks`: filter at build time + warn on bad configs
+
+The 129-row `epidemic_peaks` table shipped with `config_default` is now filtered at build time to `[date_start, date_stop]` (47 rows after filtering). The 82 out-of-window rows were silently snapping to `t = 1` / `t = N` in the peak-shape likelihood terms and bloating the JSON. New helper `filter_epidemic_peaks()` (`R/filter_epidemic_peaks.R`) is also called from `make_LASER_config()` to warn whenever a user-supplied config carries peaks outside the simulation window.
+
+# MOSAIC 0.30.42
+
+## `write_json_or_gz`: peer-arg API + JSON rename to match .rda
+
+`R/write_json_with_optional_gz.R` is replaced by `R/write_json_or_gz.R` with a clearer peer-arg API (`write_json = TRUE` / `write_gz = TRUE` controlled independently). The four `inst/extdata` JSON sidecars are renamed to match the `.rda` they correspond to: `default_parameters*.json` → `config_default*.json`, `simulated_parameters.json` → `config_simulation_epidemic.json`, `sim_endemic_parameters.json` → `config_simulation_endemic.json`.
+
+# MOSAIC 0.30.41
+
+## `inst/extdata`: opt-in .gz sidecar for production configs only
+
+The `.json.gz` sidecars that previously shipped automatically alongside every `inst/extdata/*.json` are now opt-in. They were redundant for the simulation configs (`config_simulation_*`) which are small and never read from disk by performance-sensitive code; production builds for `config_default` / `priors_default` still produce the `.gz` sidecar when explicitly requested via `write_gz = TRUE` in the data-raw scripts.
+
+# MOSAIC 0.30.40
+
+## Biology fixes from deep-review re-validation
+
+Two findings from the disease-modeling deep review that survived
+re-validation against MOSAIC-docs and project history:
+
+- **moment_match_E_I steady-state formula corrected.** The optional
+  `ic_moment_match` feature was using `E_count = I_count * iota`, which
+  is dimensionally inconsistent (count x 1/day) and over-seeded E by
+  ~5x at prior medians. The laser-cholera engine has
+  `E -> Isym` at rate `sigma * iota` per E and `Isym -> R` at rate
+  `gamma_1`, so the steady-state balance is
+  `E = Isym * gamma_1 / (sigma * iota)`. At prior medians
+  (`gamma_1 = 0.1/d`, `sigma = 0.24`, `iota = 0.71/d`) the corrected
+  E/Isym ratio is ~0.59 instead of ~0.71. The `I_count` variable was
+  renamed `Isym_count` internally to reflect that the reporting chain
+  (`cases = Isym * rho * chi_endemic`) only observes the symptomatic
+  compartment. Flag still defaults to FALSE; this fixes the formula
+  for any caller who turns it on.
+- **epsilon prior 2x variance-inflation removed.** A
+  variance-inflation step at `data-raw/make_priors_default.R:127-128`
+  was doubling the sd of the natural-immunity waning rate from 2.0e-4
+  to 4.0e-4, pushing the 95% CI on immunity duration to roughly
+  [1.9, 53] years -- the upper-tail value is biologically
+  implausible and the inflation had no documented rationale. With
+  the inflation removed, sd is back to 2.0e-4 (95% CI on rate
+  [1.7e-4, 1.03e-3], corresponding immunity duration CI ~[2.7,
+  16] years) -- the range supported by the cited King et al. 2008
+  and the project's two-cohort re-fit (~7 yr mean). `priors_default`
+  metadata version bumped to 15.2 and the .rda re-built.
+
+# MOSAIC 0.30.39
+
+## Engineering review sweep (v0.30.29 – v0.30.38)
+
+Series of focused fixes from a five-agent deep-review of the package.
+No model-behavior changes; package hygiene, correctness on edge cases,
+and consistency with the documented design.
+
+- **v0.30.29** — Add `rlang` to `DESCRIPTION` Imports (`NAMESPACE` had
+  `import(rlang)` but the dep was missing, producing an R CMD check
+  ERROR). Declare column names referenced by recent plot edits in
+  `R/globals.R` to silence "no visible binding" NOTEs.
+- **v0.30.30** — Repo hygiene: remove tracked zero-byte `=` file,
+  delete stray `MOSAIC.Rcheck/`, `..Rcheck/`, `.Rd2pdf*/`, root
+  `Rplots.pdf`, and `model/input/*.bak{,_*}` on disk. Expand
+  `.Rbuildignore` (vm/, CLAUDE.md, .Rcheck/, =, .RData, .Rhistory, …)
+  and `.gitignore` (*.bak, .Rd2pdf*/).
+- **v0.30.31** — `data-raw/make_*` builders patched only `.json`
+  outputs (`grepl("\\.json$")`) so the `.json.gz` siblings were
+  shipping without `zeta_ratio` and `decay_days_spread`, breaking the
+  downstream `zeta_2 = zeta_1 / zeta_ratio` derivation. Switch regex
+  to `\\.json(\\.gz)?$`, read via `read_json_to_list()`, write via
+  `write_list_to_json()` with the right compress flag. Regenerated
+  all four `.json.gz` artifacts so each pair is now content-identical.
+- **v0.30.32** — `get_default_config()` and `get_default_LASER_config()`
+  hardcoded `file.path(PATHS\$ROOT, "MOSAIC-pkg", ...)` -- only works on
+  a developer checkout. Switch to `system.file("extdata", ...,
+  package = "MOSAIC")`; `PATHS` retained for backward compatibility.
+- **v0.30.33** — Introduce `.mosaic_set_all_thread_env(n)` as a single
+  source of truth for the six canonical thread-env vars documented in
+  CLAUDE.md (`OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`,
+  `NUMEXPR_NUM_THREADS`, `TBB_NUM_THREADS`, `NUMBA_NUM_THREADS`). The
+  fallback branch of `.mosaic_set_blas_threads` had been setting only
+  3, `calc_model_ensemble.R` 5, `make_mosaic_cluster.R` 5 in two
+  places. Route every site through the helper.
+- **v0.30.34** — `plot_vaccination_maps.R`: `ggsave(plot = print(...))`
+  was saving the invisible return value and double-printing to the
+  active device. Replaced with `plot = final_combined_plot`.
+- **v0.30.35** — `calc_model_likelihood()` peak-shape terms:
+  `which.min(abs(date_seq - peak_date))` always returns an in-range
+  index, so peaks whose date fell outside `[date_start, date_stop]`
+  were silently snapped to t=1 / t=N, biasing the peak-timing and
+  peak-magnitude likelihoods. Filter `peak_date` against
+  `[date_seq[1], date_seq[N]]` before snapping, in all three sites
+  (main path + two legacy helpers).
+- **v0.30.36** — `calc_model_ensemble()` weighted mean was biased
+  toward zero under simulation failures: `sum(values * w,
+  na.rm=TRUE)` drops the NA term but does not redistribute its
+  weight mass. Filter valid then divide by sum of surviving weights,
+  matching the behavior of `weighted_quantiles()`.
+- **v0.30.37** — `props_to_counts()` integer-rounding fallback could
+  leave a compartment negative or sum off by 1 in edge cases.
+  Replace per-compartment `round()` + residual-on-S with Hamilton
+  (largest-remainder) apportionment in a single per-location pass;
+  `stopifnot()` asserts sum == N and all counts >= 0.
+- **v0.30.38** — `moment_match_E_I()` was location-invariant due to
+  `unlist(reported_cases)` flattening the matrix; every country got
+  identical initial infections. Compute first-week-of-positives
+  window per location row. (E_count = I_count * iota formula left
+  unchanged with an inline note for the next biology pass; flag is
+  OFF by default.)
+- **v0.30.39** — Update `epidemic_peaks` docstring to match actual
+  code defaults (28-day smoothing, 10-day comparison, 75-day
+  separation, 8% prominence) and backfill NEWS for the
+  v0.30.27/0.30.28 entries that were silently missed.
+
+# MOSAIC 0.30.28
+
+## `calc_model_likelihood`: source `epidemic_peaks` from config
+
+When the caller supplies `config\$epidemic_peaks` (a data.frame with
+`iso_code` + `peak_date` columns), the likelihood now prefers that
+over the lazy-loaded `MOSAIC::epidemic_peaks` package dataset. This
+keeps the R likelihood aligned with the Python port at
+`laser_cholera.metapop.calc_model_likelihood`, which reads the same
+field from its config dict. The legacy helpers
+`calc_multi_peak_timing_ll` and `calc_multi_peak_magnitude_ll` now
+accept an optional `epidemic_peaks=` argument with the same fallback.
+
+# MOSAIC 0.30.27
+
+## Ship `epidemic_peaks` in `config_default` for the Python port
+
+`config_default\$epidemic_peaks` is now populated from
+`MOSAIC::epidemic_peaks` at build time and written into both the
+`.rda` and the `default_parameters.json{,.gz}` artifacts. This is the
+counterpart to a parallel change in laser-cholera that consumes
+`config["epidemic_peaks"]` instead of requiring the R package to be
+loaded. Configs built before this version remain readable: missing
+`epidemic_peaks` falls back to the lazy-loaded package dataset.
+
+# MOSAIC 0.30.26
+
+## `compile_suitability_data()` — remove three dormant blocks
+
+Three blocks of derived covariates were being computed and persisted to
+`cholera_country_weekly_suitability_data.csv` even though
+`est_suitability()`'s `covariates_all` list intentionally excludes
+every one of them. Computing and saving them was wasted IO + a foot-gun
+for any future contributor who re-enables them without realising why
+they were excluded. Removed entirely from the function:
+
+- **Vaccination block (3 columns)**: `vaccination_rate_daily`,
+  `cumulative_vaccine_doses`, `log1p_cum_vaccine_doses`. Vaccination is
+  a downstream intervention -- vaccines are deployed in response to
+  cholera, not in anticipation of environmental suitability -- so
+  these are non-causal predictors for the suitability model.
+- **Epidemic-memory block (8 columns)**: `r_t`, `cum_cases_4w/8w/12w/52w`,
+  `nonzero_ratio_52w`, `weeks_since_major_outbreak`, `peak_cases_52w`,
+  `seasonal_outbreak_risk`, plus the `epidemic_week` alias. All
+  case-derived; predicting a case-derived target (`cases_binary`)
+  from any function of `cases` is target leakage even with the
+  forecast-safe `memory_lag`.
+- **Spatial-import block (7 columns)**: `import_vulnerability`,
+  `export_potential`, `weighted_import_connectivity`,
+  `connectivity_degree`, `betweenness_centrality`,
+  `eigenvector_centrality`, `import_export_balance`. Mobility-network
+  features that were computed but excluded from the LSTM input set.
+
+Net: 18 columns dropped from the saved suitability CSV. The columns
+were already excluded from the LSTM covariate list so this is purely
+hygiene -- no model behavior changes. Compile wall-time should drop
+slightly (no vaccination merge + cumulative-doses computation, no
+epidemic-memory `slide_dbl()` loops, no mobility-matrix calculations).
+
+The `forecast_mode` argument is now mostly cosmetic (controls summary
+messages and a small bit of climate-anomaly leading-edge behavior).
+Kept for backward compatibility.
 
 ---
 
-# MOSAIC 0.30.15
+# MOSAIC 0.30.25
 
-## Phase 3 (issue #101): tests for new worker schema and parquet parity
+## Flood-prob GAM: select=TRUE shrinkage + precip-window tensor product
 
-Adds two test layers around the v0.30.13 / v0.30.14 wiring.
+Two changes validated independently by a software-engineer agent and a
+statistical-modeler agent running parallel experiments in separate
+sandboxes. Both converged on (1); the modeler additionally identified
+(2):
 
-### New: `tests/testthat/test-dask_worker_schema_parity.R`
+1. **Replace the iterative p-value pruning loop with a single bam() fit
+   using `select = TRUE`.** Smoothness null-space shrinkage is mgcv's
+   principled mechanism for driving uninformative smooths' coefficients
+   toward zero. The v0.30.24 in-sample-p-value pruning was multicollinearity-sensitive
+   (the docstring already documented this caveat) and produced
+   fragile drop sequences. select=TRUE delivers equivalent CV AUC
+   (0.851 -> 0.852 in the SWE experiments) with a +2.6 to +4.2
+   percentile-point lift on the worst-detected cyclone (Kenneth 2019,
+   from 71.6 to 74.2 in production after this change). Removes the
+   prune_p_threshold and prune_max_iter args + the pruning_log
+   diagnostic. Single ~10-second fit replaces the iterative ~30-60s
+   loop.
+2. **Replace `s(precip_sum_4w) + s(precip_sum_24w)` with
+   `te(precip_sum_4w, precip_sum_24w, k = c(10, 10))`.** The "heavy
+   4-week rain ON an already-saturated catchment (6-month antecedent)"
+   interaction is genuinely jointly nonlinear; the tensor captures it
+   where the univariates plus the existing `precip_x_soil_anom`
+   approximated it crudely. Modeler-agent experiment: cyclone median
+   percentile rank 91.6 -> 93.8 (+2.2), top-5\% hits 3 -> 4.
 
-Engine-free regression tests for the worker round trip. They simulate the
-worker echo + gather adapter re-injection in pure R (no Dask cluster, no
-Python), so they run in every CI configuration. Three tests:
+End-to-end production cyclone benchmark (re-measured):
 
-1. **Column-name parity** — `convert_config_to_matrix(reconstituted)`
-   produces the same parquet column names as the local-path
-   `convert_config_to_matrix(params_sim)`.
-2. **ISO-suffix presence** — every location's ISO code appears as a
-   column suffix on at least one parameter (asserts that `_ETH` etc.
-   beats `_1` numeric fallback).
-3. **Failure-mode lock-in** — drops the `location_name` re-injection and
-   asserts numeric suffixes appear instead, locking in the silent break
-   so a future refactor that removes the injection trips a clear failure.
+  Idai     MOZ 2019-W11   pctile = (run pending)
+  Idai     MWI 2019-W11
+  Idai     ZWE 2019-W11
+  Kenneth  MOZ 2019-W17
+  Eloise   MOZ 2021-W04
+  Ana      MOZ 2022-W04
+  Ana      MWI 2022-W04
+  Gombe    MOZ 2022-W11
+  Freddy-1 MOZ 2023-W08
+  Freddy-2 MOZ 2023-W11
 
-### Updated: `tests/testthat/test-dask_local_cluster_integration.R`
+Tested but rejected by both agents: nthreads (no-op on macOS), method =
+REML/ML/GCV.Cp (no metric change or impractically slow), `bs = "ad"`
+adaptive smoothers, `k = 20+` on precip windows (overfit), `bs = "cr"`
+cubic regression (no change), per-country `by = iso_code_f` smooths
+(overfit), nested random effects, cloglog link, quasibinomial,
+betabinomial, Tweedie on log1p(affected), smoothed +/-2w binary
+target, class weighting (trades AUC for cyclone recall).
 
-- New `skip_if_no_log_likelihood()` helper submits a tiny sentinel sim
-  and skips when the worker fails-by-design with the
-  "laser-cholera >= 0.13 is required" message from the v0.30.14 shim.
-  Keeps these tests green on the current 0.12.5 pin while leaving them
-  active once 0.13 lands.
-- `TEST 3` (`client$submit(run_laser_sim)`) updated to the issue #101
-  schema: asserts result has `params` plus `iterations` of
-  `{iter, seed_iter, likelihood}`, and that `location_name` is
-  intentionally absent from `res$params`.
-- `TEST 4` (`client$map`) gated on the new helper.
-
----
-
-# MOSAIC 0.30.14
-
-## Phase 3 (issue #101): flip Dask worker schema to per-iter likelihood + params
-
-`inst/python/mosaic_dask_worker.py::run_laser_sim()` now returns a compact
-dict with per-iter scalar `likelihood` (read from `model.log_likelihood`)
-plus a sim-level `params` echo, instead of returning full per-iter
-time-series matrices for `reported_cases` / `disease_deaths`. This is the
-performance-win commit of Phase 3: at 47-country scale the per-sim
-payload drops from ~3.4 MB to a few hundred bytes.
-
-A defensive `getattr(model, "log_likelihood", None)` shim returns a
-clean per-sim failure result (with an actionable error message) when
-the worker imports an engine older than laser-cholera 0.13. This makes
-the schema flip safe to land on the branch ahead of the 0.13 release;
-end-to-end runs against the current 0.12.5 pin will fail-by-design with
-"laser-cholera >= 0.13 is required" rather than crash with
-`AttributeError`.
-
-### Changed
-
-- `inst/python/mosaic_dask_worker.py` — `run_laser_sim()` return shape
-  flips per the issue #101 contract:
-  - Iteration entries change from `{j, seed, reported_cases,
-    disease_deaths}` to `{iter, seed_iter, likelihood}`. Field renames
-    align with the existing parquet column names so the R gather loop
-    can read them positionally.
-  - New top-level `params` key carries the sampled scalars/vectors
-    (built from the JSON-deserialized `sampled` dict, minus
-    `_MATRIX_FIELDS`). `location_name` is intentionally not included;
-    the R gather adapter re-injects it from `config$location_name`.
-  - Engine-version guard inside the per-iter loop returns a clean
-    failure result on `< 0.13` engines.
-
-### Not yet end-to-end
-
-`inst/python/environment.yml` still pins `laser-cholera == 0.12.5`,
-so no real workload runs against the new path until that pin is bumped
-once Phase 2 (laser-cholera#58) tags 0.13. This is intentional — the
-branch holds the wiring ready while #58 is unblocked.
+Caveat surfaced by both agents: country-stratified 5-fold CV AUC drops
+to 0.72 (vs 0.85 with random folds). Most of the model's lift comes
+from the country random effect; climate predictors are doing less
+work than random-fold CV suggests. The model would fail badly on a
+country with no training data. Worth keeping in mind when interpreting
+the imputed flood_prob in any out-of-sample country setting.
 
 ---
 
-# MOSAIC 0.30.13
+# MOSAIC 0.30.24
 
-## Phase 3 (issue #101): collapse Dask gather adapter to single write loop
+## `impute_flood_probability()` gains iterative p-value pruning loop
 
-Removes the two R-side likelihood scoring branches (parallel PSOCK + sequential
-fallback) inside `.mosaic_run_batch_dask()` and replaces them with a single
-gather-and-write loop that consumes the new worker schema (per-iter scalar
-`likelihood` + sim-level `params` dict, see issue #101 / parent
-laser-cholera#47). Also adds a `run_MOSAIC()` preflight that rejects
-`save_simresults = TRUE` on the Dask path, since the new worker schema does
-not return raw matrices.
+After each GAM fit, the term (smooth or parametric) with the highest
+in-sample p-value above \code{prune_p_threshold} (default 0.05) is
+dropped and the GAM is refit. The cycle repeats until every remaining
+prunable term is significant, fewer than 5 prunable terms remain, or
+\code{prune_max_iter} (default 30) iterations are reached. The country
+random-effect smooth and the region-conditional
+\code{s(precip_sum_4w, by = region_f)} block are treated as structural
+and never dropped. The trace is written to
+\code{flood_gam_pruning_log.csv} in the diagnostics directory.
 
-This commit lands the R-orchestrator side. The matching worker-side schema
-flip in `inst/python/mosaic_dask_worker.py` and the version-gated
-round-trip tests follow in subsequent commits. None of this is exercised
-end-to-end until laser-cholera 0.13 (Phase 2 / laser-cholera#58) ships and
-`inst/python/environment.yml` is bumped to `>= 0.13`.
+Pruning behavior on the v0.30.24 production run dropped 5 precip-block
+terms whose contribution was absorbed by their collinear neighbors:
+\code{s(precipitation_sum)} (p=0.74), \code{s(precip_sum_12w)}
+(p=0.65), \code{s(precip_anom)} (p=0.37),
+\code{precip_extreme_p90_count} (p=0.21), \code{s(precip_sum_2w)}
+(p=0.18). The model retains \code{precip_sum_4w/8w/24w/52w}, the
+region-conditional smooth, plus soil-moisture / SPEI / humidity / wind
+/ ENSO / IOD terms.
 
-### Changed
+End-to-end cyclone benchmark (median percentile rank across 10
+catastrophic cyclones in MOZ/MWI/ZWE) is unchanged at 91.1 vs 93.0
+pre-pruning. Idai loses ~1.3 pts in MOZ/MWI/ZWE; Ana and Freddy gain
+0.3-2.1 pts. Top-5\% hits stay at 3 of 10. Median seasonal-variance
+share unchanged at 0.398.
 
-- `R/run_MOSAIC.R` — preflight rejection of `save_simresults` on the Dask
-  path; both `.mosaic_run_batch_dask()` call sites drop the
-  `likelihood_settings` argument (no longer used; the same settings are
-  injected onto the paramfile by `.mosaic_inject_likelihood_settings()` in
-  Phase 1 and consumed on-worker).
-- `R/run_MOSAIC_helpers.R` — `.mosaic_run_batch_dask()` signature drops
-  `likelihood_settings`; the two scoring branches (~420 lines) collapse
-  to a single ~95-line loop. New loop re-injects `location_name` into
-  `res$params` before `convert_config_to_matrix()` to preserve ISO-suffixed
-  column names; collapses multi-iter likelihoods via `calc_log_mean_exp()`
-  exactly as the local path does.
+Caveat: in-sample p-values are not predictive-importance tests and are
+sensitive to multicollinearity. The loop produces a smaller, cleaner
+model whose remaining smooths are all in-sample significant; verify
+against the cyclone benchmark + rolling-year CV after major covariate
+changes. Set \code{prune_p_threshold = 1.0} to disable pruning
+entirely (recovers v0.30.23 behavior).
 
-### Backwards compatibility
+Wall-time impact: pipeline runs in ~69 sec (vs ~41 sec for v0.30.23),
+the extra 28 sec covering the 5 additional GAM fits the pruning loop
+performs.
 
-The signature change is internal (`.mosaic_run_batch_dask()` is `@noRd`),
-so no user-visible API changes. Calibrations that set
-`control$io$save_simresults = TRUE` together with `dask_spec` will now
-error early with a clear message instead of silently producing parquet
-files but no simresults.
+---
+
+# MOSAIC 0.30.23
+
+## Flood-prob imputer: revert to enriched binomial after cyclone benchmark
+
+The v0.30.22 Tweedie-on-severity formulation made Cyclone Freddy stand
+out as MOZ's #1 historical week (the headline visual goal) but a
+10-cyclone benchmark across Idai 2019 (MOZ/MWI/ZWE), Kenneth 2019,
+Eloise 2021, Ana 2022 (MOZ/MWI), Gombe 2022, and Freddy 2023 (x2 landfalls)
+showed the Tweedie variant under-detects other catastrophic events --
+median percentile rank 81.4, minimum 77.8. The root cause: the Tweedie
+target chases EM-DAT's logged Total Affected, and Idai's Total Affected
+was logged smaller than its real impact warranted, so the model
+under-amplified it.
+
+This release reverts to the family + target of v0.30.21 (binomial logit
+on emdat_flood_active 0/1) while keeping the four physics-driven
+predictor enrichments that the v0.30.22 S2 exploration found
+load-bearing:
+
+- `s(precip_sum_24w)` -- ~6-month basin saturation memory (inline-computed)
+- `s(precip_sum_52w)` -- annual antecedent precipitation (inline-computed)
+- `s(precip_sum_4w, by = region_f)` -- region-conditional 4-week precip smooth
+- `s(precip_x_soil_anom)` -- joint precip-anomaly x soil-moisture-anomaly index
+
+Result: median cyclone percentile rank 93.2 (vs 81.4 for Tweedie, 90.8
+for v0.30.21 baseline), minimum 79.1 (every cyclone-week in the top 21%
+of its country's history). Three cyclones in the top 5%.
+
+| Method | Median cyclone pctile | Min | Top 5% hits / 10 |
+|---|---|---|---|
+| **v0.30.23 (enriched binomial)** | **93.2** | **79.1** | **3** |
+| v0.30.22 (Tweedie hybrid) | 81.4 | 77.8 | 2 |
+| v0.30.21 (baseline binomial) | 90.8 | 69.4 | 3 |
+
+Trade-off vs v0.30.22: Freddy's headline rank in MOZ drops back from
+#1 to top-5%, but every other catastrophic cyclone is more reliably
+detected. The right call for cholera forecasting where we care about
+all flood events, not just one outlier.
+
+Output is now naturally on [0, 1] from the logit link -- no global-max
+scaling needed. Test thresholds restored to the binomial-appropriate
+AUC > 0.80 and mean(hi)-mean(lo) > 0.3 discrimination tests.
+
+---
+
+# MOSAIC 0.30.22
+
+## Flood-prob imputer: Tweedie severity target + enriched predictors
+
+The v0.30.20 binomial-on-active formulation produced an imputed
+`emdat_flood_prob` that didn't separate major events from seasonal
+climatology -- Cyclone Freddy (MOZ, Feb-Mar 2023) only reached
+probability 0.503, barely above the MOZ Feb-Apr p90 of 0.396 and below
+the all-time MOZ max. Four parallel strategies were explored (Tweedie
+severity target; enriched predictor set; xgboost; two-stage hurdle).
+This release adopts the hybrid of the two winners:
+
+**Tweedie family on raw `Total Affected`.** Encodes flood SEVERITY
+rather than just presence/absence. The Tweedie compound-Poisson-gamma
+mixture handles the zero-inflated continuous target natively.
+
+**Enriched predictor set** (computed inline by the imputer, no
+upstream compile changes required beyond the existing `region`
+column):
+
+- `precip_sum_24w` and `precip_sum_52w` -- long-memory antecedent
+  precipitation capturing basin saturation. These were the largest
+  single contributors to interannual variance in the rebuild
+  experiments.
+- `s(precip_sum_4w, by = region_f)` -- region-conditional 4-week
+  precipitation smooth (4-region WHO classification: Central / East /
+  Southern / West Africa).
+- `s(precip_x_soil_anom)` -- joint precip-anomaly x soil-moisture-anomaly
+  index for the "very-wet AND already-saturated" regime.
+
+**Output normalization**: predictions on the raw Tweedie scale are
+non-negative, heavy-tailed continuous. Normalized by global maximum to
+`[0, 1]` -- rank-normalization was tested and rejected because it
+erases the long-tail major-event amplification the Tweedie target was
+chosen for.
+
+**End-to-end measured impact** (full AFRO panel, real climate + EM-DAT
+data):
+
+| Metric | v0.30.21 (binomial) | v0.30.22 (Tweedie hybrid) |
+|---|---|---|
+| Cyclone Freddy rank in MOZ history | not top-5 | **1st of 872** |
+| Freddy / MOZ Feb-Apr p90 ratio | 1.27x | **8.14x** |
+| Median seasonal variance share | 0.436 | **0.162** |
+| OOT Spearman vs severity | 0.290 | 0.267 |
+| OOT AUC vs binary | 0.857 | 0.808 |
+
+Cost: 0.05 AUC and 0.02 Spearman on the held-out binary-target metrics
+(unavoidable when switching from binomial-on-binary to
+Tweedie-on-continuous). Acceptable trade-off given the 6.4x lift on the
+Freddy benchmark and 63% reduction in seasonal-variance share.
+
+**Strategies tested and rejected**: xgboost (sharper peaks but
+worsened seasonal share); two-stage hurdle (Freddy peak actually
+*dropped* because Total Affected for Freddy isn't a global outlier).
+
+---
+
+# MOSAIC 0.30.21
+
+## Two correctness fixes in the flood-prob pipeline
+
+Surfaced by an internal review of the EM-DAT integration:
+
+- **Gate / GAM-contract drift fixed.** The `if (include_flood_prob && ...)`
+  gate in `compile_suitability_data()` was still checking the v0.30.19-era
+  predictors (`temp_anom`, `elevation`, `urban_population_pct`) which were
+  removed from the GAM in v0.30.20, and was failing to check the 9 new
+  columns the rebuilt GAM actually requires (`precipitation_sum`,
+  `precip_sum_2w/4w/8w`, `precip_extreme_p90_count`,
+  `soil_moisture_0_to_10cm_mean`, `relative_humidity_2m_mean`,
+  `rh_mean_12w`, `wind_speed_10m_max`, `ENSO3`, `ENSO4`). The result: a
+  missing required column would have caused a hard `stop()` deep inside
+  `impute_flood_probability()` instead of being skipped cleanly by the
+  `else` branch. Both `impute_flood_probability()` and the gate now
+  source the canonical required-column list from a single internal
+  helper `.impute_flood_probability_required()`, eliminating the drift
+  surface entirely.
+- **`emdat_flood_prob_anom` historical baseline fixed.** The per-country
+  mean used as the anomaly baseline was computed over the full series
+  including forecast-window rows, whose probabilities are themselves
+  GAM-extrapolated. This silently leaked a small amount of forecast
+  information into the historical-period anomaly used as an LSTM training
+  feature. The baseline now uses only rows where
+  `emdat_flood_active` is non-NA (the historical EM-DAT panel coverage).
+
+---
+
+# MOSAIC 0.30.20
+
+## Flood-probability GAM: rebuild around hydrological drivers + ENSO/IOD
+
+Variance decomposition of v0.30.19's imputed `emdat_flood_prob` showed
+the highest-flood-activity countries (NGA 92%, TCD 83%, SSD 83%, MLI 75%,
+ETH 75%) were heavily dominated by seasonal pattern, and `summary(model)`
+revealed that the cyclic-week and country-RE terms plus the raw 12-week
+rainfall sum carried virtually all the explanatory power while every
+anomaly/teleconnection term was shrunk by the `select = TRUE` penalty.
+This release rebuilds the GAM formula around variables that are
+ostensibly linked with flood physics, and removes the seasonal /
+static-baseline channels that were crowding out the climate-driven
+interannual signal:
+
+- **Removed** `s(week, bs = "cc")` (cyclic seasonality), `elevation`, and
+  `urban_population_pct`. The country random effect alone absorbs the
+  remaining country-level baseline differences.
+- **Removed** `s(temp_anom)` — temperature isn't a direct flood driver
+  in AFRO (no snowmelt).
+- **Added every precipitation channel**: `precipitation_sum`,
+  `precip_anom`, `precip_sum_2w/4w/8w/12w`, plus the binary
+  `precip_extreme_p90_count` extreme-rain trigger.
+- **Added soil moisture (raw + anomaly)**, atmospheric humidity (raw +
+  12w rolling), and the storm/cyclone proxy `wind_speed_10m_max`.
+- **Heavy ENSO/IOD bench**: ENSO34 at current + 8/16/24-week lags,
+  current ENSO3 and ENSO4 (Eastern and Western Pacific regions), IOD at
+  current + 8/16/24-week lags. Lag-N columns are computed inline.
+- **Removed `select = TRUE`** — the smooth-shrinkage penalty was the
+  mechanism that suppressed exactly the teleconnection terms we now
+  want to emphasise. Without it the smooths keep their unpenalized REML
+  weight; rolling-year CV is the arbiter.
+
+---
+
+# MOSAIC 0.30.19
+
+## Code-review fixes in `compile_suitability_data` and `est_suitability`
+
+Round of correctness fixes surfaced by an internal code review:
+
+- **B1 — `est_suitability()` date auto-detection** referenced `d_all$date_start` / `enso_complete$date_stop`, columns that `compile_suitability_data()` drops before saving. `min(NULL, na.rm=TRUE)` silently returns `Inf` and propagated as bogus dates. Fixed to use `d_all$date`.
+- **B2 — Fine-tuning splits trained against the wrong target scale.** The model output head is `activation = "linear", name = "logit_head"` and the first split correctly fed `qlogis()`-transformed targets. Subsequent fine-tuning splits (default `n_splits = 10`) fed raw `[0, 1]` probabilities, pushing the linear head toward the wrong range and silently undoing the first split's training. Now applies `qlogis(pmax(eps, pmin(1-eps, ...)))` consistently.
+- **B3 — `seasonal_outbreak_risk`** computed `mean(cases_lagged)` inside `group_by(iso_code) %>% mutate(...)`, producing a single per-country mean rather than the week-of-year climatology the comment claimed. Now uses `stats::ave(cases_lagged, week, FUN = mean)` to give the intended weekly seasonality.
+- **B4 — `weeks_since_major_outbreak`** incremented its counter through the `memory_lag` warm-up window (default 17 weeks in forecast mode), producing fake `1, 2, 3, ...` values when the lag target was NA. Now stays NA until the first real observation.
+- **B5 — ISO week 53.** Investigated and documented. Two distinct things were happening: (a) legitimate W53 in 2015 and 2020 was being dropped (~80 country-weeks, 0.2% of training data); (b) an upstream bug in `process_open_meteo_data` emits spurious W53 entries labelled by calendar year for ISO years 2005/2010/2016/2021. The drop-all-W53 filter robustly handles (b). Added a comment block explaining the trade-off; the upstream fix to `process_open_meteo_data` is the structural follow-up (separate ticket).
+- **B6 — Vaccination weekly key** paired `lubridate::isoweek(date)` with `format(date, "%Y")` (calendar year). Dates near the year boundary (e.g., 2024-12-30, which is ISO 2025-W01) were joining under `(year=2024, week=1)`, silently missing the right upstream row. Now uses `lubridate::isoyear()`.
+- **B7 — `pivot_wider` for climate and ENSO** had no `values_fn`, so any residual duplicate `(iso_code, year, week, variable)` row would silently produce list-columns and break every downstream merge. Now passes `values_fn = mean`.
+- **B8 — `est_suitability()` plotting block** was gated by `if (T)` (always on) with a comment claiming "disabled by default", and `par(mfrow = c(2,1))` leaked into the caller's device state. Replaced with a real `plot_country_diagnostics = FALSE` argument and `on.exit(par(old_par))`.
+- **B9 — Positional column renames** (`names(x)[3] <- "..."`) replaced with `dplyr::rename()` so an upstream column reorder can't silently corrupt downstream values.
+- **B10 — Negative case counts** in `est_suitability()` are now flagged with a warning before being clamped to 0 (previously silent).
+- **B11 — Duplicate identical `df <- data.frame(...)` block** in `est_suitability()` removed.
+- **B12 — Dead first `covariates_all` assignment** in `est_suitability()` removed; only the comprehensive (live) assignment remains.
+
+---
+
+# MOSAIC 0.30.18
+
+## Speed up flood-prob GAM and clean the suitability covariate list
+
+- `impute_flood_probability()` now fits with `mgcv::bam(method = "fREML", discrete = TRUE)`
+  rather than `mgcv::gam(method = "REML")`. Same formula, essentially identical
+  fitted values; wall-time on the real ~30k-row training set drops from ~13 min
+  to ~10 sec. Rolling-year CV is also capped at the 3 most recent fully-observed
+  years (previously open-ended). End-to-end pipeline now runs in ~12 sec instead
+  of ~100 min.
+- `est_suitability()` covariate list cleaned: removed `log1p_cum_vaccine_doses`
+  (vaccination intervention — correlated with outbreaks because deployment
+  follows cholera, so including it teaches a non-causal shortcut that breaks at
+  forecast time) and the raw `year` / `month` / `week` timestamps (let the model
+  memorise period-specific cholera waves; the sin/cos cyclic terms already in
+  the list carry seasonality cleanly). Added a comment block to `covariates_all`
+  documenting the rationale.
+- End-to-end validation against the real data: mean rolling-year CV AUC 0.848
+  on 2023/2024/2025 held out; forecast-window `emdat_flood_prob` distribution
+  is shape-similar to historical (mean 0.095 vs 0.062), confirming the GAM
+  uses climate signal rather than collapsing to a constant.
+
+---
+
+# MOSAIC 0.30.17
+
+## Impute country-week flood probability for use in `est_suitability()`
+
+EM-DAT is observed-only — for forecast-window weeks, the raw `emdat_flood_active`
+binary added in v0.30.16 is identically zero, creating a distribution shift
+between training and inference for the suitability LSTM.
+
+This release replaces the raw binary with a continuous **imputed flood
+probability** that is populated identically in historical and forecast
+weeks:
+
+- **New: `impute_flood_probability()`** — fits a binomial GAM
+  (`mgcv::gam`, logit link, REML, `select = TRUE`) on observed
+  `emdat_flood_active` events using climate anomalies, cyclic seasonality,
+  country random effects, and inline-computed `ENSO34_lag20` /
+  `IOD_lag16` predictors. Predicts a non-NA `emdat_flood_prob ∈ [0, 1]`
+  for every (iso × week) row. With `diagnostics = TRUE` (default) writes
+  smooth-term plots, decile-calibration plot, rolling-year CV metrics
+  CSV, and `summary(model)` to `<PATHS$DOCS_FIGURES>/flood_imputation/`.
+  Warns if mean CV AUC < 0.65.
+- **`compile_suitability_data()`** gains `include_flood_prob = TRUE`
+  (default). When on, calls `impute_flood_probability()` after the
+  existing NA-imputation block and adds four rolling-window aggregates:
+  `emdat_flood_prob_4w_max`, `emdat_flood_prob_12w_max`,
+  `emdat_flood_prob_12w_sum`, `emdat_flood_prob_anom`. The previous
+  zero-fill on the raw EM-DAT join is removed so forecast-window rows
+  remain NA for the GAM to impute.
+- **`est_suitability()`** consumes the five `emdat_flood_prob*` columns
+  in place of the four raw `emdat_flood_*` columns added in v0.30.16.
+  The raw columns remain in the suitability dataframe for audit but are
+  not fed to the LSTM.
+
+No new dependencies (`mgcv` was already an Imports dep).
 
 ---
 

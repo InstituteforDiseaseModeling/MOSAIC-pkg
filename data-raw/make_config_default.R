@@ -22,32 +22,84 @@ names(N_j) <- tmp$j
 sel <- match(j, names(N_j))
 N_j <- as.integer(N_j[sel])
 
-# Get number of infected individuals in each location
-# New default: 100 infected per location for better epidemic seeding
-I_j <- rep(100, length(N_j))
-I_j <- as.integer(I_j)
+# -----------------------------------------------------------------------------
+# Initial conditions per location, seeded from per-iso priors.
+#
+# Earlier versions hard-coded `S/N = 0.50`, `R/N = 0.50` and pinned V1/V2/E to
+# zero across all 40 countries -- bypassing the per-iso `prop_*_initial`
+# Beta priors built by est_initial_S/V1_V2/E_I/R(). The flat 50/50 split was
+# the dominant defect behind ETH (and 39 other countries) failing to sustain
+# transmission in the default fit: with R0 ~ 1.44, R_eff(t=0) = 1.44 * 0.5
+# = 0.72, so the 100-case seed decays before it can grow. At the prior mean
+# S/N ~ 0.80, R_eff ~ 1.15 and outbreaks become possible.
+#
+# Seeding strategy: pull the mean of each per-iso prop_*_initial Beta prior,
+# normalise across the six compartments so each row sums to 1.0, then
+# Hamilton-apportion to integer counts that sum exactly to N_j.
+# -----------------------------------------------------------------------------
 
-# Get number of exposed individuals in each location
-# Set to zero for simple method compatibility
-E_j <- rep(0, length(N_j))
-E_j <- as.integer(E_j)
+.compartment_props <- c("S","V1","V2","E","I","R")
+.prop_means <- vapply(
+     j,
+     function(iso) {
+          vapply(
+               paste0("prop_", .compartment_props, "_initial"),
+               function(pname) {
+                    loc <- priors_default$parameters_location[[pname]]$location[[iso]]
+                    if (is.null(loc)) return(NA_real_)
+                    p <- loc$parameters
+                    if (loc$distribution == "beta") return(unname(p$shape1 / (p$shape1 + p$shape2)))
+                    if (loc$distribution == "truncnorm" || loc$distribution == "normal") return(unname(p$mean))
+                    NA_real_
+               },
+               numeric(1)
+          )
+     },
+     numeric(6)
+)
+# .prop_means is a 6 x length(j) matrix with rownames "prop_X_initial"
+rownames(.prop_means) <- .compartment_props
+.prop_means <- t(.prop_means)            # now length(j) x 6
+.prop_means[is.na(.prop_means)] <- 0     # any missing iso => 0 for that compartment
 
-# Get number of susceptible individuals in each location
-# Adjusted to account for 100 infected
-S_j <- N_j - as.integer(N_j * 0.5) - I_j
-S_j <- pmax(S_j, 1)  # Ensure at least 1 susceptible
+# Per-row normalisation so each iso sums to 1 (independent Beta priors do not
+# sum to 1 exactly; ETH typical row sum ~0.96-1.01).
+.row_sums <- rowSums(.prop_means)
+.prop_means <- .prop_means / .row_sums
 
-# Vaccination compartments - set to zero by default
-V1_j <- rep(0, length(N_j))
-V1_j <- as.integer(V1_j)
+# Hamilton (largest-remainder) apportionment to integer counts per iso.
+.counts_mat <- matrix(0L, nrow = length(j), ncol = 6,
+                      dimnames = list(j, .compartment_props))
+for (jj in seq_along(j)) {
+     target  <- .prop_means[jj, ] * N_j[jj]
+     base    <- floor(target)
+     rem     <- target - base
+     deficit <- as.integer(N_j[jj] - sum(base))
+     if (deficit > 0) {
+          ord <- order(rem, decreasing = TRUE)
+          base[ord[seq_len(deficit)]] <- base[ord[seq_len(deficit)]] + 1
+     } else if (deficit < 0) {
+          ord <- order(rem, decreasing = FALSE)
+          take <- min(-deficit, length(ord))
+          base[ord[seq_len(take)]] <- base[ord[seq_len(take)]] - 1
+     }
+     .counts_mat[jj, ] <- as.integer(base)
+}
+stopifnot(all(.counts_mat >= 0L))
+stopifnot(all(rowSums(.counts_mat) == N_j))
 
-V2_j <- rep(0, length(N_j))
-V2_j <- as.integer(V2_j)
-
-# Calculate recovered to balance the equation
-# R = N - (S + E + I + V1 + V2)
-R_j <- N_j - S_j - E_j - I_j - V1_j - V2_j
-R_j <- pmax(R_j, 0)  # Ensure non-negative
+S_j  <- .counts_mat[, "S"]
+V1_j <- .counts_mat[, "V1"]
+V2_j <- .counts_mat[, "V2"]
+E_j  <- .counts_mat[, "E"]
+I_j  <- .counts_mat[, "I"]
+R_j  <- .counts_mat[, "R"]
+prop_S_initial  <- .prop_means[, "S"]
+prop_V1_initial <- .prop_means[, "V1"]
+prop_V2_initial <- .prop_means[, "V2"]
+prop_E_initial  <- .prop_means[, "E"]
+prop_I_initial  <- .prop_means[, "I"]
+prop_R_initial  <- .prop_means[, "R"]
 
 message("Get birth rate of each location (b_j)")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_b_birth_rate.csv'))
@@ -118,12 +170,37 @@ if (file.exists(cfr_file)) {
 mu_j_baseline <- rowMeans(mu_jt, na.rm = TRUE)
 names(mu_j_baseline) <- j
 
-# Initialize mu_j_slope to 0 (no temporal trend by default)
+# ETH: source mu_j_baseline from its prior mean instead of mean(mu_jt). The prior
+# applies the reporting adjustment (mu = reported_CFR * rho / chi) that rowMeans(mu_jt)
+# omits; without it ETH deaths over-predict ~2x. The prior value is data-derived
+# (re-estimated from CFR each build), so this is not a hardcoded constant.
+# NOTE: the same mismatch likely inflates deaths for all countries -- reconciling the
+# global mu_jt -> mu_j_baseline derivation with the prior formula is a separate fix.
+.mu_eth <- priors_default$parameters_location$mu_j_baseline$location[["ETH"]]$parameters
+mu_j_baseline[["ETH"]] <- unname(.mu_eth$shape / .mu_eth$rate)   # gamma prior mean
+
+# Initialize mu_j_slope to 0 (no temporal trend by default).
+# Prior is Gamma centred on 0 for each iso; default of 0 (== prior mode) is fine.
 mu_j_slope <- rep(0, length(j))
 names(mu_j_slope) <- j
 
-# Initialize mu_j_epidemic_factor to 0.5 (50% increase during epidemics by default)
-mu_j_epidemic_factor <- rep(0, length(j))
+# Seed mu_j_epidemic_factor from per-iso prior means rather than zero.
+# Prior is Gamma per iso (most isos mean=0.5, MOZ mean=3.0). The previous
+# hardcoded 0 sat at the support boundary -- the epidemic-phase IFR
+# multiplier could never engage, so the death series LL was stuck at
+# baseline regardless of outbreak phase.
+mu_j_epidemic_factor <- vapply(
+     j,
+     function(iso) {
+          loc <- priors_default$parameters_location$mu_j_epidemic_factor$location[[iso]]
+          if (is.null(loc)) return(0.5)  # fallback if iso missing from prior
+          p <- loc$parameters
+          if (loc$distribution == "gamma") return(unname(p$shape / p$rate))
+          if (loc$distribution %in% c("truncnorm","normal")) return(unname(p$mean))
+          0.5
+     },
+     numeric(1)
+)
 names(mu_j_epidemic_factor) <- j
 
 message("Created mu_j_baseline, mu_j_slope, and mu_j_epidemic_factor parameters from mu_jt")
@@ -161,22 +238,22 @@ nu_2_jt[,] <- 0
 message("Add fourier params for seasonal force of infection")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, "param_seasonal_dynamics.csv"))
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'a1'
+sel <- tmp$response == 'cases' & tmp$parameter == 'a_1'
 a1 <- tmp$mean[sel]
 names(a1) <- tmp$country_iso_code[sel]
 a1 <- a1[match(j, names(a1))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'a2'
+sel <- tmp$response == 'cases' & tmp$parameter == 'a_2'
 a2 <- tmp$mean[sel]
 names(a2) <- tmp$country_iso_code[sel]
 a2 <- a2[match(j, names(a2))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'b1'
+sel <- tmp$response == 'cases' & tmp$parameter == 'b_1'
 b1 <- tmp$mean[sel]
 names(b1) <- tmp$country_iso_code[sel]
 b1 <- b1[match(j, names(b1))]
 
-sel <- tmp$response == 'cases' & tmp$parameter == 'b2'
+sel <- tmp$response == 'cases' & tmp$parameter == 'b_2'
 b2 <- tmp$mean[sel]
 names(b2) <- tmp$country_iso_code[sel]
 b2 <- b2[match(j, names(b2))]
@@ -215,12 +292,17 @@ names(theta_j) <- tmp$j[sel]
 message("Calculate transmission parameters from beta_j0_tot and p_beta")
 
 # Set default values for beta_j0_tot and p_beta
-# Updated to match prior medians (was 1e-6 which is 20x below posterior range 5e-6 to 2e-5)
-beta_j0_tot_default <- 2e-5  # Total transmission rate (prior median from Lognormal)
+# beta_j0_tot is sourced PER-COUNTRY from the priors_default location medians
+# (lognormal median = exp(meanlog)) rather than a single global constant, mirroring
+# how the initial conditions and mu_j_* defaults are sourced above. This lets
+# country-specific transmission defaults (e.g. ETH, recentred to 1.75e-6) flow
+# through automatically; every other country still resolves to its prior median (2e-5).
 p_beta_default <- 0.33        # Proportion human transmission (matching prior mode)
 
 # Create vectors for all locations
-beta_j0_tot <- rep(beta_j0_tot_default, length(j))
+beta_j0_tot <- vapply(j, function(iso) {
+     exp(priors_default$parameters_location$beta_j0_tot$location[[iso]]$parameters$meanlog)
+}, numeric(1))
 p_beta <- rep(p_beta_default, length(j))
 
 # Calculate derived parameters
@@ -234,7 +316,8 @@ names(beta_j0_hum) <- j
 names(beta_j0_env) <- j
 
 # Print summary for verification
-message(sprintf("  beta_j0_tot = %.2e (total transmission rate)", beta_j0_tot_default))
+message(sprintf("  beta_j0_tot = %.2e to %.2e (per-country prior medians; ETH = %.2e)",
+                min(beta_j0_tot), max(beta_j0_tot), beta_j0_tot[["ETH"]]))
 message(sprintf("  p_beta = %.2f (%.0f%% human, %.0f%% environmental)",
                 p_beta_default, p_beta_default * 100, (1 - p_beta_default) * 100))
 message(sprintf("  beta_j0_hum = %.2e (human component)", beta_j0_hum[1]))
@@ -333,10 +416,10 @@ default_args <- list(
      d_jt = d_jt,
      nu_1_jt = nu_1_jt,
      nu_2_jt = nu_2_jt,
-     phi_1 = 0.787,
-     phi_2 = 0.768,
-     omega_1 = 0.00073,
-     omega_2 = 0.000485,
+     phi_1 = 0.788,               # Mode of Beta(91.84, 25.49); Xu et al. 2024 fit
+     phi_2 = 0.788,               # Mode of Beta(206.96, 56.53); constrained phi_2 >= phi_1
+     omega_1 = 0.000705,          # Mode of Gamma(23.33, 31693.83); half-life ~2.7 years
+     omega_2 = 0.000358,          # Mode of Gamma(2.69, 4720.84); half-life ~5.3 years
      nu_jt_sources = c("S", "E", "Isym", "Iasym", "R"),
      iota = 1/1.4,
      gamma_1 = 0.1,       # Symptomatic recovery ~10 days (was 0.2 = 5 days; posteriors consistently 0.09-0.11)
@@ -349,10 +432,26 @@ default_args <- list(
      sigma = 0.25,
      # Case reporting parameters for calc_cases_from_infections()
      rho = 0.265,                 # Care-seeking rate (mean of Beta(6.8, 17.9) prior, GEMS + Wiens 2025)
-     rho_deaths = 0.6,            # Death detection rate: probability a true cholera death is captured by surveillance (mean of Beta(3, 2) prior; Finger et al. 2024)
+     rho_deaths = 0.42,           # Death detection rate: probability a true cholera death is captured by surveillance (mean of informative Beta(36.95, 51.02) prior; RE meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013 — see claude/rho_deaths_research/SYNTHESIS_REPORT.md)
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)
-     epidemic_threshold = rep(1/10000, length(j)),  # Per-location Isym/N threshold for PPV switching (1 per 10k)
+     # Per-iso Isym/N threshold for PPV / IFR phase switching. Seeded from
+     # the per-iso Truncnorm prior means (range ~7e-7 NGA to ~8.7e-6 COD;
+     # ETH 3.36e-6). The earlier flat 1/10000 default was 12-142x above the
+     # prior means and never let any country enter "epidemic" phase, so
+     # chi_epidemic and mu_j_epidemic_factor never engaged.
+     epidemic_threshold = vapply(
+          j,
+          function(iso) {
+               loc <- priors_default$parameters_location$epidemic_threshold$location[[iso]]
+               if (is.null(loc)) return(1e-5)
+               p <- loc$parameters
+               if (loc$distribution == "truncnorm") return(unname(p$mean))
+               if (loc$distribution == "gamma")     return(unname(p$shape / p$rate))
+               1e-5
+          },
+          numeric(1)
+     ),
      delta_reporting_cases = 0,   # Case reporting delay (was 2; posteriors collapse to 0 in every test, KL=14.2)
      delta_reporting_deaths = 5,  # Death reporting delay (was 7; posteriors consistently at 4-6 days)
      longitude         = longitude,
@@ -401,7 +500,28 @@ default_args <- list(
      decay_shape_1 = 5,
      decay_shape_2 = 2.5,
      reported_cases = mat_cases,
-     reported_deaths = mat_deaths
+     reported_deaths = mat_deaths,
+     # Observed epidemic peaks (iso_code, peak_date) shipped with the default config
+     # so the Python likelihood port (laser-cholera#47) can compute the peak-timing
+     # and peak-magnitude shape terms without an extra runtime injection. Slim
+     # 2-column form matches what calc_model_likelihood() consumes on both sides.
+     # Filtered to locations actually present in this config AND to the
+     # configured [date_start, date_stop] window — peaks outside this window
+     # would silently snap to t=1 or t=N in the peak-shape likelihood terms
+     # (see .filter_epidemic_peaks docstring).
+     epidemic_peaks = local({
+          ep <- MOSAIC:::.filter_epidemic_peaks(
+               MOSAIC::epidemic_peaks,
+               date_start     = date_start,
+               date_stop      = date_stop,
+               location_names = j
+          )
+          data.frame(
+               iso_code  = as.character(ep$iso_code),
+               peak_date = as.character(ep$peak_date),
+               stringsAsFactors = FALSE
+          )
+     })
 )
 
 config_default <- do.call(make_LASER_config, default_args)
@@ -414,9 +534,9 @@ config_default <- do.call(make_LASER_config, default_args)
 
 # Add metadata for provenance tracking
 config_default$metadata <- list(
-     version = "3.1",
+     version = "3.5",
      date = as.character(Sys.Date()),
-     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
+     description = "Default LASER configuration for MOSAIC cholera metapopulation model. v3.5 (2026-06-02): rho_deaths default changed from 0.6 to 0.42 (informative Beta(36.95, 51.02) mean) following the random-effects meta-analysis of three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); see claude/rho_deaths_research/SYNTHESIS_REPORT.md. v3.4 (2026-06-01): beta_j0_tot now sourced PER-COUNTRY from priors_default location medians (was a global 2e-5 constant); ETH resolves to its recentred 1.75e-6 median while all other countries are unchanged at 2e-5. Also ETH mu_j_baseline sourced from its prior mean (reporting-adjusted CFR) instead of mean(mu_jt), fixing a ~2x deaths over-prediction. With these, the fixed-ensemble ETH default fits observed cases at bias~1.05 (R2corr~0.50) and deaths at bias~0.9. v3.3 (2026-06-01): epidemic_peaks filtered to [date_start, date_stop] at build time -- the 82 rows outside the config window were silently snapping to t=1/t=N in the peak-shape likelihood terms and bloating the JSON (47 rows shipped, was 129). v3.2 (2026-05-28): epidemic_peaks (iso_code, peak_date) shipped in default config so the Python likelihood port (laser-cholera#47) can compute peak-timing / peak-magnitude shape terms without a runtime injection. v3.1 (2026-04-30): nu_jt_sources added explicitly (laser-cholera#102); eligible pool for first-dose OCV is [S, E, Isym, Iasym, R]. v3.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio placeholder defaults rescaled from Frame-B (70k / 300) to the biological scale (~2.1e11 / 4.5e4) implied by the literature meta-analysis in est_zeta_*_prior() (priors_default v15.0). v2.1: Refreshed psi_jt from LSTM refit on corrected ERA5 soil_moisture_0_to_10cm_mean (open-meteo-pipeline#5). v2.0: Updated defaults from MOZ calibration evidence (tests 19-28)."
 )
 
 # Validate transmission parameter relationships
@@ -437,42 +557,38 @@ message("Transmission parameter validation complete")
 
 
 
-# Define output file paths using PATHS
-# The inst/extdata directory is in the MOSAIC-pkg directory
+# --------------------------------------------------------------------------- #
+# Write the JSON artifact. Set write_gz = TRUE to also produce the .json.gz;
+# write_gz = FALSE is the default. When both flags are TRUE the .json and
+# .json.gz are byte-equal by construction (written from the same in-memory
+# JSON string -- no parallel serialisation).
+# --------------------------------------------------------------------------- #
+
 pkg_dir <- file.path(PATHS$ROOT, "MOSAIC-pkg")
-file_paths <- list(
-     file.path(pkg_dir, 'inst/extdata/default_parameters.json'),
-     file.path(pkg_dir, 'inst/extdata/default_parameters.json.gz')
+fp_json <- file.path(pkg_dir, 'inst/extdata/config_default.json')
+
+args <- config_default
+args$metadata <- NULL          # excluded from JSON; kept on the .rda below
+args$output_file_path <- NULL  # return the validated list instead of writing
+params_validated <- do.call(MOSAIC::make_LASER_config, args)
+rm(args)
+
+# Tracking fields that make_LASER_config rejects as unknown args
+params_validated$zeta_ratio       <- .zeta_ratio_default
+params_validated$decay_days_spread <- .decay_days_spread_default
+
+MOSAIC::write_json_or_gz(
+     params_validated,
+     fp_json,
+     write_json = TRUE,
+     write_gz   = FALSE
 )
 
-
-
-# Loop over the file paths and call make_LASER_config() for each
-for (fp in file_paths) {
-
-     args <- config_default
-     args$metadata <- NULL
-     args$output_file_path <- fp
-     do.call(MOSAIC::make_LASER_config, args)
-     rm(args)
-
-}
-
-# Patch written JSONs to include tracking fields not accepted by make_LASER_config
-for (fp in file_paths) {
-     if (!grepl("\\.json$", fp) || !file.exists(fp)) next
-     j <- jsonlite::fromJSON(fp)
-     j$zeta_ratio <- .zeta_ratio_default
-     j$decay_days_spread <- .decay_days_spread_default
-     jsonlite::write_json(j, fp, pretty = TRUE, auto_unbox = TRUE, digits = NA)
-}
-
-# Attach tracking fields to the rda-bound config_default
-config_default$zeta_ratio <- .zeta_ratio_default
+# Attach tracking fields to the rda-bound config_default and persist
+config_default$zeta_ratio        <- .zeta_ratio_default
 config_default$decay_days_spread <- .decay_days_spread_default
 
-tmp_config <- jsonlite::fromJSON(file_paths[[1]])
-
+tmp_config <- MOSAIC::read_json_to_list(fp_json)
 identical(config_default, tmp_config)
 all.equal(config_default, tmp_config)
 

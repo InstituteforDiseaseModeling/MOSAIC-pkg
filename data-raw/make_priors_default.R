@@ -30,9 +30,9 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "15.1",
+          version = "15.4",
           date = Sys.Date(),
-          description = "Default informative prior distributions for MOSAIC model parameters. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
+          description = "Default informative prior distributions for MOSAIC model parameters. v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
      ),
      parameters_global = list(),    # Single parameters used by all locations
      parameters_location = list()   # Location specific parameters
@@ -117,15 +117,15 @@ priors_default$parameters_global$decay_shape_2 <- list(
 )
 
 # epsilon - Natural immunity waning rate
+# sd = 2.0e-4 derived from the 95% CI [1.7e-4, 1.03e-3] reported in King et al.
+# 2008 and the project's own 2-cohort re-fit (~7 yr mean duration). A 2x
+# variance-inflation step previously applied here pushed the upper tail to
+# ~53 yr immunity duration with no documented rationale and has been removed.
 priors_default$parameters_global$epsilon <- list(
      description = "Natural immunity waning rate (per day)",
      distribution = "lognormal",
-     parameters = list(mean = 3.9e-4, sd = 2.0e-4)  # sd derived from 95% CI [1.7e-4, 1.03e-3]
+     parameters = list(mean = 3.9e-4, sd = 2.0e-4)
 )
-
-# Apply variance inflation to epsilon
-priors_default$parameters_global$epsilon$parameters$sd <-
-     priors_default$parameters_global$epsilon$parameters$sd * 2
 
 # gamma_1 - Symptomatic/severe shedding duration rate
 priors_default$parameters_global$gamma_1 <- list(
@@ -133,7 +133,7 @@ priors_default$parameters_global$gamma_1 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/10),  # log of median rate: 1/10 per day = 10 days shedding
-          sdlog = 0.5          # uncertainty allowing 7-14 day range
+          sdlog = 0.5           # 95% CI on shedding duration ~3.75-26.6 days
      )
 )
 
@@ -143,7 +143,7 @@ priors_default$parameters_global$gamma_2 <- list(
      distribution = "lognormal",
      parameters = list(
           meanlog = log(1/2),   # log of median rate: 1/2 per day = 2 days shedding
-          sdlog = 0.4           # uncertainty allowing 1-3 day range
+          sdlog = 0.4           # 95% CI on shedding duration ~0.91-4.39 days
      )
 )
 
@@ -464,16 +464,29 @@ priors_default$parameters_global$rho <- list(
      parameters = list(shape1 = rho_shape1, shape2 = rho_shape2)
 )
 
-# rho_deaths - Death detection rate (probability a true cholera death is captured by surveillance)
-# Beta(3, 2) gives mean ~0.6 reflecting that ~60% of true cholera deaths
-# enter the surveillance system. Finger et al. 2024 (Lancet ID;
-# https://doi.org/10.1016/S1473-3099(24)00237-8) document that 23-96%
-# of cholera deaths occur in the community (outside health facilities)
-# and are less likely to be captured by surveillance. See laser-cholera#49.
+# rho_deaths - Death detection rate (probability a true cholera death is captured
+# by surveillance). Beta(36.95, 51.02): mean 0.420, 95% CI [0.319, 0.524],
+# 50% CI [0.391, 0.450], effective sample size ~88.
+#
+# Derived from random-effects (DerSimonian-Laird) meta-analysis on the logit scale
+# of three Sub-Saharan African empirical studies:
+#   Routh 2017     (Tanzania, EID)       0.475 [0.376, 0.576]  - binomial CI 48/101
+#   Shikanga 2009  (Kenya, AJTMH)        0.342 [0.231, 0.452]  - approx binomial CI
+#   Bwire 2013     (Uganda, PLOS NTDs)   0.500 [0.330, 0.950]  - sensitivity range
+#
+# Pooled (logit-RE): mean 0.419, 95% CI of pool [0.320, 0.525], 95% prediction
+# interval [0.162, 0.728]; tau^2 = 0.046, I^2 = 32%. The informative variant
+# (this prior) fits Beta to the 5th/50th/95th of the pool's CI rather than the
+# prediction interval, encoding the precision of the pooled estimate.
+#
+# Methodology parallels R/get_rho_care_seeking_params.R (cases-side rho).
+# Full provenance: MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md.
+# Figure: MOSAIC-pkg/claude/rho_deaths_prior_comparison_v6.png.
+# See also laser-cholera#49 for the engine-side reported_deaths implementation.
 priors_default$parameters_global$rho_deaths <- list(
-     description = "Death detection rate: probability a true cholera death is captured by surveillance (Finger et al. 2024)",
+     description = "Death detection rate: probability a true cholera death is captured by surveillance (random-effects meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013; informative variant)",
      distribution = "beta",
-     parameters = list(shape1 = 3.0, shape2 = 2.0)
+     parameters = list(shape1 = 36.95, shape2 = 51.02)
 )
 
 # sigma - Proportion symptomatic
@@ -610,6 +623,16 @@ for (iso in j) {
           )
      )
 }
+
+# --- Per-country recentred transmission defaults ---------------------------
+# ETH: the global median (2e-5) over-predicts reported cholera ~8x for Ethiopia.
+# Recentred to median 1.75e-6 from fixed-ensemble fitting against current ETH
+# surveillance + raw LSTM suitability (see MOSAIC-pkg/local/collab_ETH_v2/).
+# NOTE: this median is conditional on the suitability-window mean (psi_bar), which
+# the LASER environmental term normalises by (beta_jt_env = beta_j0_env * psi_t/psi_bar).
+# If date_start/date_stop change materially the effective magnitude shifts, so
+# re-validate -- or, preferably, replace with a calibration-derived median.
+priors_default$parameters_location$beta_j0_tot$location[["ETH"]]$parameters$meanlog <- log(1.75e-6)
 
 
 # p_beta - Proportion of human-to-human vs environmental transmission
@@ -809,8 +832,8 @@ if (seasonal_params_exist) {
 }
 
 # Create priors for each seasonality parameter
-# Map R config keys (a_1_j etc.) to CSV parameter column values (a1 etc.)
-seasonality_csv_lookup <- c("a_1_j" = "a1", "a_2_j" = "a2", "b_1_j" = "b1", "b_2_j" = "b2")
+# Map R config keys (a_1_j etc.) to CSV parameter column values (a_1 etc.)
+seasonality_csv_lookup <- c("a_1_j" = "a_1", "a_2_j" = "a_2", "b_1_j" = "b_1", "b_2_j" = "b_2")
 
 for (param in names(seasonality_csv_lookup)) {
      param_name <- param  # Storage key in priors list

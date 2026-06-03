@@ -12,7 +12,8 @@ compile_suitability_data(
   date_stop = NULL,
   forecast_mode = TRUE,
   forecast_horizon = 3,
-  include_lags = FALSE
+  include_lags = FALSE,
+  include_flood_prob = TRUE
 )
 }
 \arguments{
@@ -39,26 +40,45 @@ from case data (one year prior to earliest case observation).}
 from latest ENSO data availability.}
 
 \item{forecast_mode}{Logical. If TRUE, only includes variables that can support forecasting
-at the specified horizon. Excludes case-dependent epidemic memory and spatial import
-pressure variables. Default TRUE.}
+at the specified horizon. (As of v0.30.26 the case-dependent epidemic memory and
+spatial-import blocks are removed entirely, so this flag now affects only the
+final summary-message text and the climate-anomaly leading-edge behavior.)
+Default TRUE.}
 
 \item{forecast_horizon}{Numeric. Forecasting horizon in months. Variables dependent on
 surveillance data beyond this horizon are excluded in forecast mode. Default 3 months.}
 
 \item{include_lags}{Logical. If TRUE, includes time-lagged climate variables with
 epidemiologically-informed lag periods specific to each variable. Default FALSE.}
+
+\item{include_flood_prob}{Logical. If TRUE (default), imputes a continuous
+\code{emdat_flood_prob} column for every (iso_code, year, week) row via a
+binomial GAM trained on observed \code{emdat_flood_active} events
+(see \code{\link{impute_flood_probability}}), and adds four rolling-window
+aggregates (\code{emdat_flood_prob_4w_max}, \code{emdat_flood_prob_12w_max},
+\code{emdat_flood_prob_12w_sum}, \code{emdat_flood_prob_anom}). The
+probability covariates are populated in both the historical training and
+the forecast windows, so the downstream LSTM consumes the same feature
+definition in both regimes.}
 }
 \value{
 This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
 }
 \description{
 Compiles multiple processed data sources (climate, ENSO, cholera surveillance,
-demographics, WASH, vaccination, mobility) into a single feature-engineered
-training dataset for environmental suitability modeling. Computes ~60 derived
-covariates including rolling windows, anomalies, interaction terms, and
-epidemic memory variables.
+demographics, WASH) into a single feature-engineered training dataset for
+environmental suitability modeling. Computes derived covariates including
+rolling windows, anomalies, and climate / WASH interaction terms.
 }
 \details{
+As of v0.30.26 the vaccination, epidemic-memory (cases-derived), and
+spatial-import (mobility-network) blocks are no longer computed. They were
+already excluded from \code{est_suitability()}'s LSTM covariate list -- the
+vaccination signal is a downstream intervention (deployed in response to
+cholera, not in anticipation of environmental suitability), and the
+case-derived epidemic-memory features are target leakage for a model whose
+response is itself a case-derived binary.
+
 The function performs the following key steps:
 \itemize{
 \item Loads and merges climate data (temperature, precipitation, etc.) from multiple countries

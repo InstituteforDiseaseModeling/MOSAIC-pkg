@@ -5,8 +5,8 @@
 \alias{config_default}
 \title{Default LASER Configuration}
 \format{
-A named \strong{list} created by \code{make_default_LASER_config()}, whose
-elements include:
+A named \strong{list} built by the \code{data-raw/make_config_default.R}
+script and persisted as \code{data/config_default.rda}. Elements include:
 \itemize{
 \item \strong{Metadata} – \code{metadata$version}, \code{metadata$date}, \code{metadata$description}
 for provenance tracking;
@@ -60,7 +60,9 @@ parameter sampling operations.
 }
 \seealso{
 \itemize{
-\item make_defaut_LASER_config() – function that creates this object.
+\item \code{data-raw/make_config_default.R} – the script that builds this object.
+\item \code{\link[=make_LASER_config]{make_LASER_config()}} – the validator/factory function used internally
+by the build script to validate every parameter.
 \item \link{config_simulation_epidemic} – one-year outbreak toy data set.
 \item \link{config_simulation_endemic} – 5-year endemic toy data set.
 }

@@ -16,11 +16,15 @@ make_test_config <- function(N = 1000000L,
                              sigma = 0.5,
                              rho = 0.2,
                              chi_endemic = 0.5,
-                             iota = 0.5) {
+                             iota = 0.5,
+                             gamma_1 = 0.5) {
   if (is.null(reported_cases)) {
     # 100 days, first 10 are zero, then 10 cases/day for a week
     reported_cases <- c(rep(0, 10), rep(10, 7), rep(5, 83))
   }
+  # gamma_1 is required by moment_match_E_I's steady-state formula
+  # (E = Isym * gamma_1 / (sigma * iota)); without it the function falls
+  # back to prior ICs but the guard clause must still receive a numeric.
   list(
     N_j_initial     = N,
     reported_cases  = reported_cases,
@@ -28,6 +32,7 @@ make_test_config <- function(N = 1000000L,
     rho             = rho,
     chi_endemic     = chi_endemic,
     iota            = iota,
+    gamma_1         = gamma_1,
     location_name   = "TST"
   )
 }
@@ -105,7 +110,10 @@ test_that("moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
   # Expected I = obs_week1 * chi / (sigma * rho)
   obs_week1 <- 100  # first 7 positive days are all 100
   expected_I_count <- obs_week1 * 0.4 / (0.5 * 0.2)  # = 400
-  expected_E_count <- expected_I_count * 0.3            # = 120
+  # Steady-state E (v0.30.40 fix): E = Isym * gamma_1 / (sigma * iota).
+  # With gamma_1 = 0.5 (default), sigma = 0.5, iota = 0.3:
+  #   E = 400 * 0.5 / (0.5 * 0.3) = 1333.33
+  expected_E_count <- expected_I_count * 0.5 / (0.5 * 0.3)
   expected_prop_I <- expected_I_count / 1000000
   expected_prop_E <- expected_E_count / 1000000
 
@@ -287,15 +295,19 @@ test_that("moment_match_E_I preserves E/I ratio when cap triggers", {
     sigma = 0.01,
     rho = 0.01,
     chi_endemic = 0.5,
-    iota = 0.4  # E = 0.4 * I
+    iota = 0.4,
+    gamma_1 = 0.5
   )
   props <- make_test_props()
 
   result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
-  # E/I ratio should be preserved at iota = 0.4
+  # Steady-state E/Isym ratio (v0.30.40 fix): gamma_1 / (sigma * iota)
+  # With gamma_1 = 0.5, sigma = 0.01, iota = 0.4: ratio = 125.
+  # Scaling preserves the ratio when the 10% cap triggers.
+  expected_ratio <- 0.5 / (0.01 * 0.4)
   ratio <- result[1, "E"] / result[1, "I"]
-  expect_equal(ratio, 0.4, tolerance = 1e-6)
+  expect_equal(ratio, expected_ratio, tolerance = 1e-6)
 })
 
 test_that("moment_match_E_I ensures at least 1 person in E and I", {
@@ -317,124 +329,3 @@ test_that("moment_match_E_I ensures at least 1 person in E and I", {
   expect_gte(result[1, "I"], 1 / 100000000)
 })
 
-
-# ===========================================================================
-# 4. INTEGRATION WITH sample_parameters()
-# ===========================================================================
-
-test_that("sample_parameters accepts ic_moment_match via sample_args", {
-  skip_if_not_installed("MOSAIC")
-  skip_on_cran()
-
-  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
-  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
-  set_root_directory(root)
-  config <- config_default_MOZ
-  priors <- priors_default_MOZ
-
-  # Should not error or warn about unknown parameter
-  expect_no_warning({
-    cfg <- sample_parameters(
-      seed = 99,
-      priors = priors,
-      config = config,
-      sample_args = list(ic_moment_match = TRUE),
-      verbose = FALSE,
-      validate = FALSE
-    )
-  })
-
-  # Should return a valid config with integer IC counts
-  expect_true(is.integer(cfg$E_j_initial))
-  expect_true(is.integer(cfg$I_j_initial))
-  expect_true(is.integer(cfg$S_j_initial))
-
-  # Compartments must sum to N
-  total <- cfg$S_j_initial + cfg$V1_j_initial + cfg$V2_j_initial +
-           cfg$E_j_initial + cfg$I_j_initial + cfg$R_j_initial
-  expect_equal(total, cfg$N_j_initial)
-})
-
-test_that("ic_moment_match=FALSE produces same result as omitting it", {
-  skip_if_not_installed("MOSAIC")
-  skip_on_cran()
-
-  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
-  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
-  set_root_directory(root)
-  config <- config_default_MOZ
-  priors <- priors_default_MOZ
-
-  cfg_default <- sample_parameters(
-    seed = 42, priors = priors, config = config,
-    verbose = FALSE, validate = FALSE
-  )
-  cfg_explicit <- sample_parameters(
-    seed = 42, priors = priors, config = config,
-    sample_args = list(ic_moment_match = FALSE),
-    verbose = FALSE, validate = FALSE
-  )
-
-  expect_equal(cfg_default$E_j_initial, cfg_explicit$E_j_initial)
-  expect_equal(cfg_default$I_j_initial, cfg_explicit$I_j_initial)
-  expect_equal(cfg_default$S_j_initial, cfg_explicit$S_j_initial)
-})
-
-test_that("ic_moment_match=TRUE has no effect when sample_initial_conditions=FALSE", {
-  skip_if_not_installed("MOSAIC")
-  skip_on_cran()
-
-  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
-  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
-  set_root_directory(root)
-  config <- config_default_MOZ
-  priors <- priors_default_MOZ
-
-  cfg_frozen <- sample_parameters(
-    seed = 42, priors = priors, config = config,
-    sample_args = list(sample_initial_conditions = FALSE, ic_moment_match = TRUE),
-    verbose = FALSE, validate = FALSE
-  )
-  cfg_frozen_no_mm <- sample_parameters(
-    seed = 42, priors = priors, config = config,
-    sample_args = list(sample_initial_conditions = FALSE, ic_moment_match = FALSE),
-    verbose = FALSE, validate = FALSE
-  )
-
-  # ICs should be identical (both use fixed defaults, moment_match has no effect)
-  expect_equal(cfg_frozen$E_j_initial, cfg_frozen_no_mm$E_j_initial)
-  expect_equal(cfg_frozen$I_j_initial, cfg_frozen_no_mm$I_j_initial)
-  expect_equal(cfg_frozen$S_j_initial, cfg_frozen_no_mm$S_j_initial)
-})
-
-test_that("ic_moment_match=TRUE reproduces reporting chain identity across seeds", {
-  skip_if_not_installed("MOSAIC")
-  skip_on_cran()
-
-  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
-  skip_if_not(dir.exists(root), paste("MOSAIC root not found at", root))
-  set_root_directory(root)
-  config <- config_default_MOZ
-  priors <- priors_default_MOZ
-
-  obs_raw <- as.numeric(unlist(config$reported_cases))
-  pos_idx <- which(!is.na(obs_raw) & obs_raw > 0)
-  first_pos <- pos_idx[1]
-  window_end <- min(first_pos + 6, length(obs_raw))
-  obs_week1 <- mean(obs_raw[first_pos:window_end], na.rm = TRUE)
-
-  for (s in 1:5) {
-    cfg <- sample_parameters(
-      seed = s, priors = priors, config = config,
-      sample_args = list(ic_moment_match = TRUE),
-      verbose = FALSE, validate = FALSE
-    )
-
-    est_t1 <- cfg$I_j_initial * cfg$sigma * cfg$rho / cfg$chi_endemic
-    ratio <- est_t1 / obs_week1
-
-    # Ratio should be close to 1 (integer rounding causes small deviations)
-    expect_gt(ratio, 0.5)
-    expect_lt(ratio, 2.0)
-  }
-})

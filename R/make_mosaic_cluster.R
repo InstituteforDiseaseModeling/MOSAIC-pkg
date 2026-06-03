@@ -61,14 +61,8 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
     stop("Root directory not set. Call set_root_directory() before make_mosaic_cluster().")
   }
 
-  # Set thread env vars in main process before spawning workers
-  Sys.setenv(
-    TBB_NUM_THREADS = "1",
-    NUMBA_NUM_THREADS = "1",
-    OMP_NUM_THREADS = "1",
-    MKL_NUM_THREADS = "1",
-    OPENBLAS_NUM_THREADS = "1"
-  )
+  # Set the canonical thread-env set in main process before spawning workers
+  MOSAIC:::.mosaic_set_all_thread_env(1L)
 
   message(sprintf("Creating %s cluster with %d cores...", type, n_cores))
   cl <- parallel::makeCluster(n_cores, type = type)
@@ -84,17 +78,9 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
     library(reticulate)
     library(arrow)
 
-    # Single-threaded BLAS per worker
+    # Single-threaded BLAS / Python / Numba per worker
+    # (.mosaic_set_blas_threads also calls .mosaic_set_all_thread_env)
     MOSAIC:::.mosaic_set_blas_threads(1L)
-
-    # Single-threaded Python/Numba per worker
-    Sys.setenv(
-      TBB_NUM_THREADS = "1",
-      NUMBA_NUM_THREADS = "1",
-      OMP_NUM_THREADS = "1",
-      MKL_NUM_THREADS = "1",
-      OPENBLAS_NUM_THREADS = "1"
-    )
 
     set_root_directory(.root_dir_val)
     PATHS <- get_paths()

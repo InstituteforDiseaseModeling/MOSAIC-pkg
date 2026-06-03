@@ -20,3 +20,8 @@ vignettes/articles/figures/
 model/scenarios/
 deprecated/
 Rplots.pdf
+*.bak
+*.bak_*
+.Rd2pdf*/
+MOSAIC.Rcheck/
+=

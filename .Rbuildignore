@@ -12,3 +12,15 @@ pkgdown/
 ^vignettes/articles/generate_running_mosaic_figures\.R$
 ^\.github$
 ^claude$
+^vm$
+^CLAUDE\.md$
+^MEMORY\.md$
+^.*\.Rcheck$
+^\.\.Rcheck$
+^\.Rd2pdf.*$
+^Rplots\.pdf$
+^=$
+^\.RData$
+^\.Rhistory$
+^.*\.DS_Store$
+^tests/testthat/Rplots\.pdf$

@@ -141,12 +141,34 @@
   FALSE
 }
 
+#' Set all thread-count environment variables for parallel workers
+#'
+#' Sets the canonical six variables documented in CLAUDE.md so that BLAS,
+#' OpenMP, MKL, NumExpr, Intel TBB, and Numba each spawn only `n` worker
+#' threads. Use everywhere a worker process is about to do CPU-bound work
+#' to prevent oversubscription / deadlock.
+#' @noRd
+.mosaic_set_all_thread_env <- function(n = 1L) {
+  n_chr <- as.character(n)
+  Sys.setenv(
+    OMP_NUM_THREADS      = n_chr,
+    MKL_NUM_THREADS      = n_chr,
+    OPENBLAS_NUM_THREADS = n_chr,
+    NUMEXPR_NUM_THREADS  = n_chr,
+    TBB_NUM_THREADS      = n_chr,
+    NUMBA_NUM_THREADS    = n_chr
+  )
+  invisible(NULL)
+}
+
 #' Set BLAS Threads to 1 (Critical for Parallel Workers)
 #' @noRd
 .mosaic_set_blas_threads <- function(n_threads = 1L) {
-  success <- FALSE
+  # Always set the full canonical thread-env set; RhpcBLASctl only controls
+  # BLAS, but NumExpr / TBB / Numba spawn their own pools regardless.
+  .mosaic_set_all_thread_env(n_threads)
 
-  # Try RhpcBLASctl
+  success <- FALSE
   if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
     tryCatch({
       RhpcBLASctl::blas_set_num_threads(n_threads)
@@ -154,13 +176,6 @@
     }, error = function(e) {
       warning("RhpcBLASctl failed: ", e$message, call. = FALSE)
     })
-  }
-
-  # Fallback: set environment variables
-  if (!success) {
-    Sys.setenv(OMP_NUM_THREADS = n_threads)
-    Sys.setenv(OPENBLAS_NUM_THREADS = n_threads)
-    Sys.setenv(MKL_NUM_THREADS = n_threads)
   }
 
   invisible(success)

@@ -268,9 +268,7 @@ calc_model_ensemble <- function(config,
     if (parallel) {
       n_cores_use <- if (is.null(n_cores)) max(1L, parallel::detectCores() - 1L) else n_cores
 
-      Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
-                 OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-                 OPENBLAS_NUM_THREADS = "1")
+      MOSAIC:::.mosaic_set_all_thread_env(1L)
 
       cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
       on.exit(parallel::stopCluster(cl), add = TRUE)
@@ -280,9 +278,6 @@ calc_model_ensemble <- function(config,
         library(MOSAIC)
         library(reticulate)
         MOSAIC:::.mosaic_set_blas_threads(1L)
-        Sys.setenv(TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
-                   OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-                   OPENBLAS_NUM_THREADS = "1")
         lc <- reticulate::import("laser.cholera.metapop.model")
         MOSAIC:::.mosaic_strip_laser_file_handler()
         assign("lc", lc, envir = .GlobalEnv)
@@ -370,7 +365,14 @@ calc_model_ensemble <- function(config,
     for (i in seq_len(n_locs)) {
       for (j in seq_len(n_times)) {
         values <- as.vector(data_array[i, j, , ])
-        stats_mean[i, j]   <- sum(values * sim_weights, na.rm = TRUE)
+        # Failed sims show up as NA. Drop them from the mean and
+        # renormalize the surviving weights so a 10% failure rate
+        # doesn't bias the ensemble mean toward zero. (The median
+        # path already filters and renormalizes inside
+        # weighted_quantiles, so the two stats stay consistent.)
+        valid <- is.finite(values) & is.finite(sim_weights) & sim_weights > 0
+        w_sum <- if (any(valid)) sum(sim_weights[valid]) else 0
+        stats_mean[i, j]   <- if (w_sum > 0) sum(values[valid] * sim_weights[valid]) / w_sum else NA_real_
         stats_median[i, j] <- weighted_quantiles(values, sim_weights, 0.5)
 
         all_q <- weighted_quantiles(values, sim_weights, envelope_quantiles)

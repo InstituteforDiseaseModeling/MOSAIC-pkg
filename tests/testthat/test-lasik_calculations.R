@@ -27,11 +27,11 @@ plot_diagnostics <- FALSE
 
 # Load default model and set baseline
 mpm      <- reticulate::import("laser_cholera.metapop.model")
-filename <- file.path(getwd(), "inst", "extdata", "default_parameters.json")
+filename <- file.path(getwd(), "inst", "extdata", "config_default.json")
 
 skip_if_not(
     file.exists(filename),
-    message = "default_parameters.json not found at expected path"
+    message = "config_default.json not found at expected path"
 )
 
 model    <- mpm$run_model(paramfile = filename)

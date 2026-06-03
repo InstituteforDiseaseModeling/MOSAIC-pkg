@@ -66,10 +66,15 @@
 #'        first doses proportionally from all listed compartments.
 #'
 #' ## Infection dynamics
-#' @param iota Incubation period (numeric > 0).
-#' @param gamma_1 Recovery rate for severe infection (numeric >= 0).
-#' @param gamma_2 Recovery rate for mild infection (numeric >= 0).
-#' @param epsilon Waning immunity rate (numeric >= 0).
+#' @param iota Incubation rate `E -> I` (numeric > 0, per day). Note this is
+#'        a *rate*, not a period -- prior median ~0.71/day. The engine uses
+#'        `iota * E` as the flow out of E.
+#' @param gamma_1 Symptomatic shedding-duration rate `I_sym -> R` (numeric
+#'        >= 0, per day; "severe / symptomatic" branch).
+#' @param gamma_2 Asymptomatic shedding-duration rate `I_asym -> R` (numeric
+#'        >= 0, per day; "mild / asymptomatic" branch).
+#' @param epsilon Natural-infection immunity waning rate `R -> S` (numeric
+#'        >= 0, per day). Distinct from vaccine waning (`omega_1`, `omega_2`).
 #' @param mu_jt A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 #'        length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.
 #'        If mu_j_baseline is provided with other IFR parameters, mu_jt can be generated using calc_deaths_from_infections().
@@ -81,15 +86,21 @@
 #'        Numeric vector of length(location_name). Must be >= 0.
 #'
 #' ## Observation Processes
-#' @param rho Proportion of true infections (numeric in \[0, 1\]).
-#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Optional; when NULL, laser-cholera 0.12.x ignores it and the deaths observation model uses raw simulated counts. Once laser-cholera#49 ships, the engine consumes this to produce reported_deaths.
-#' @param sigma Proportion of symptomatic infections (numeric in \[0, 1\]).
+#' @param rho Care-seeking rate: probability a symptomatic individual
+#'        presents to surveillance (numeric in \[0, 1\]). *Not* a reporting
+#'        fraction and *not* sigma -- this is the upstream care-seeking
+#'        step of the surveillance cascade.
+#' @param rho_deaths Death detection rate: probability a true cholera death is captured by surveillance (numeric in \[0, 1\] or NULL). Consumed by the engine from laser-cholera v0.13+ (laser-cholera#49) to produce reported_deaths; older engine versions ignore this and use raw simulated counts.
+#' @param sigma Proportion of infections that are symptomatic (numeric in \[0, 1\]).
 #' @param chi_endemic Positive predictive value among suspected cases during endemic periods (numeric in (0, 1]).
 #' @param chi_epidemic Positive predictive value among suspected cases during epidemic periods (numeric in (0, 1]).
 #' @param epidemic_threshold Isym/N point prevalence threshold for epidemic regime activation. Used for both
 #'        case reporting and IFR threshold models. Numeric scalar or length-n vector in \[0, 1\].
-#' @param delta_reporting_cases Infection-to-case reporting delay in days (non-negative integer).
-#' @param delta_reporting_deaths Infection-to-death reporting delay in days (non-negative integer).
+#' @param delta_reporting_cases Symptom-onset-to-surveillance reporting delay
+#'        in days (non-negative integer). *Not* infection-to-report --
+#'        incubation is handled separately by the E compartment and `iota`.
+#' @param delta_reporting_deaths Symptom-onset-to-death-report delay in days
+#'        (non-negative integer).
 #'
 #' ## Spatial model
 #' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
@@ -110,8 +121,12 @@
 #' @param b_1_j Vector of cosine amplitude coefficients (1st harmonic) for each location. Numeric, length = length(location_name).
 #' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.
-#' @param alpha_1 Transmission parameter for mixing (numeric in \[0, 1\]).
-#' @param alpha_2 Transmission parameter for density dependence (numeric in \[0, 1\]).
+#' @param alpha_1 FOI mixing exponent applied to the infectious term `(I/N)`
+#'        (numeric in \[0, 1\]; 1 = well-mixed contacts).
+#' @param alpha_2 Exponent on `N_jt` in the FOI denominator
+#'        (numeric in \[0, 1\]). `alpha_2 = 1` is frequency-dependent
+#'        transmission (FOI proportional to `I/N`); `alpha_2 = 0` is
+#'        density-dependent (FOI proportional to `I`).
 #'
 #' ## Force of Infection (environment-to-human)
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
@@ -144,6 +159,12 @@
 #'        nrow=length(location_name), ncol=length(t).
 #' @param reported_deaths Matrix of daily reported cholera deaths. Must be integer. NA allowed.
 #'        nrow=length(location_name), ncol=length(t).
+#' @param epidemic_peaks Optional data.frame of observed epidemic peaks consumed by the
+#'        peak-timing / peak-magnitude shape terms in \code{calc_model_likelihood()} (R and
+#'        the Python port in laser-cholera). Must contain two character columns:
+#'        \code{iso_code} (matching entries in \code{location_name}) and \code{peak_date}
+#'        (ISO \code{YYYY-MM-DD} strings parseable by \code{as.Date}). NULL allowed; when
+#'        NULL the peak shape terms contribute 0 to the likelihood.
 #'
 #'
 #' @param sigfigs Integer; number of significant figures to round all numeric values to. Default is 4.
@@ -305,6 +326,7 @@ make_LASER_config <- function(output_file_path = NULL,
                               ## Reported data
                               reported_cases = NULL,
                               reported_deaths = NULL,
+                              epidemic_peaks = NULL,
 
                               # Outputs
                               sigfigs = 8
@@ -395,7 +417,8 @@ make_LASER_config <- function(output_file_path = NULL,
           decay_shape_1     = decay_shape_1,
           decay_shape_2     = decay_shape_2,
           reported_cases    = reported_cases,
-          reported_deaths   = reported_deaths
+          reported_deaths   = reported_deaths,
+          epidemic_peaks    = epidemic_peaks
      )
 
      # Add optional parameters if they are not NULL
@@ -866,19 +889,71 @@ make_LASER_config <- function(output_file_path = NULL,
           stop("reported_deaths must be integer (NA allowed).")
      }
 
+     # epidemic_peaks: optional 2-column data.frame keyed on iso_code + peak_date.
+     # Consumed by the peak shape terms of calc_model_likelihood() (R + Python port,
+     # laser-cholera#47). Stored as character columns so the structure survives JSON
+     # round-tripping unchanged.
+     if (!is.null(epidemic_peaks)) {
+          if (!is.data.frame(epidemic_peaks)) {
+               stop("epidemic_peaks must be a data.frame with columns 'iso_code' and 'peak_date'.")
+          }
+          required_cols <- c("iso_code", "peak_date")
+          missing_cols  <- setdiff(required_cols, names(epidemic_peaks))
+          if (length(missing_cols) > 0) {
+               stop(sprintf("epidemic_peaks is missing required column(s): %s",
+                            paste(missing_cols, collapse = ", ")))
+          }
+          epidemic_peaks$iso_code  <- as.character(epidemic_peaks$iso_code)
+          epidemic_peaks$peak_date <- as.character(epidemic_peaks$peak_date)
+          # Use explicit format so non-matching strings become NA (rather than
+          # erroring as as.Date() does in current R versions). NA inputs stay NA.
+          parsed_dates <- as.Date(epidemic_peaks$peak_date, format = "%Y-%m-%d")
+          bad_dates <- is.na(parsed_dates) & !is.na(epidemic_peaks$peak_date)
+          if (any(bad_dates)) {
+               stop(sprintf("epidemic_peaks$peak_date contains %d unparseable date(s); expected 'YYYY-MM-DD'.",
+                            sum(bad_dates)))
+          }
+          unknown_iso <- setdiff(unique(epidemic_peaks$iso_code), location_name)
+          if (length(unknown_iso) > 0) {
+               warning(sprintf("epidemic_peaks contains iso_code(s) not in location_name: %s",
+                               paste(unknown_iso, collapse = ", ")))
+          }
+          # Off-window peaks would silently snap to t=1 / t=N in the
+          # peak-shape likelihood terms; warn the caller rather than
+          # erroring so older configs still load.
+          out_of_window <- !is.na(parsed_dates) &
+               (parsed_dates < as.Date(date_start) |
+                parsed_dates > as.Date(date_stop))
+          if (any(out_of_window)) {
+               warning(sprintf(
+                    paste0("epidemic_peaks contains %d row(s) with peak_date outside ",
+                           "[%s, %s]; these will not contribute to peak-shape likelihood ",
+                           "terms. Pre-filter via MOSAIC:::.filter_epidemic_peaks() at ",
+                           "build time."),
+                    sum(out_of_window), date_start, date_stop), call. = FALSE)
+          }
+          params$epidemic_peaks <- epidemic_peaks
+     }
+
      message("All parameters have passed config checks.")
 
      # Convert date objects to character in the final param list
      params$date_start <- as.character(date_start)
      params$date_stop  <- as.character(date_stop)
 
-     # Remove dimnames from all list objects
+     # Remove dimnames from all list objects (skip data.frames — they need their
+     # column names preserved for downstream JSON record-style serialisation, e.g.
+     # epidemic_peaks).
      message("Cleaning parameter list for output...")
      for (nm in names(params)) {
 
           val <- params[[nm]]
 
-          if (is.matrix(val) || length(dim(val)) > 1) {
+          if (is.data.frame(val)) {
+
+               next
+
+          } else if (is.matrix(val) || length(dim(val)) > 1) {
 
                dimnames(val) <- NULL
                params[[nm]] <- val

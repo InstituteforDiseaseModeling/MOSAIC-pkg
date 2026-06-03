@@ -366,13 +366,12 @@ plot_vaccination_maps <- function(PATHS, data_source = "WHO") {
           rel_heights = c(1, 0.05)
      )
 
-     # Display the final plot
-     print(final_combined_plot)
-
-
-     # Save the facet plot to the specified path
+     # Save the facet plot to the specified path.
+     # Height bumped from 7 to 11 inches so the country-name barplot labels
+     # (~40 countries stacked vertically per panel, two stacked panels) have
+     # enough vertical room to render without being squished together.
      plot_file <- file.path(PATHS$DOCS_FIGURES, glue::glue("vaccination_maps.png"))
-     ggplot2::ggsave(filename = plot_file, plot = print(final_combined_plot), width = 7.75, height = 7, units = "in", dpi = 300)
+     ggplot2::ggsave(filename = plot_file, plot = final_combined_plot, width = 7.75, height = 11, units = "in", dpi = 300)
      message(glue::glue("Vaccination maps saved to: {plot_file}"))
 
 

@@ -125,8 +125,11 @@ get_location_config <- function(iso, config = NULL) {
      }
 
 
+     # Match only true location x time matrices ending in "_jt" — anchored
+     # to exclude e.g. nu_jt_sources, a 1D character vector of compartment
+     # names that happens to contain the "_jt" substring.
      location_params <- c(
-          names(out)[grep( '_jt', names(out))],
+          names(out)[grep('_jt$', names(out))],
           "reported_cases", "reported_deaths"
      )
 
