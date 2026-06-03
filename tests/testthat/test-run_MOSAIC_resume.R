@@ -417,3 +417,38 @@ test_that(".mosaic_resume_check_inputs hard-errors across the v0.13 engine bound
   # correctly emits a "guard SKIPPED" warning that is orthogonal to this test.
   expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 })
+
+# ---- likelihood-value provenance guard (forward hook for Dask phase 3 / #47) ----
+
+test_that(".mosaic_likelihood_provenance reports R engine + impl version today", {
+  p  <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
+  pd <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = TRUE, lc_version = "0.13.0")
+  expect_equal(p$engine, "R")
+  expect_equal(pd$engine, "R")   # scoring is R-side on all paths until phase 3
+  expect_equal(p$impl_version, MOSAIC:::.mosaic_likelihood_impl_version())
+})
+
+test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance", {
+  base <- tempfile("prov_"); inp <- file.path(base, "1_inputs")
+  dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+  config <- list(location_name = "ETH"); priors <- list(a = 1)
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+
+  cur <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
+
+  # matching provenance -> passes (engine-version guard skip-warning is orthogonal)
+  wj(list(likelihood_provenance = cur), file.path(inp, "environment.json"))
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+
+  # different engine (e.g. Python worker-side scoring) -> hard error
+  wj(list(likelihood_provenance = list(engine = "python", impl_version = "0.14.0")),
+     file.path(inp, "environment.json"))
+  expect_error(
+    suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)),
+    "likelihood provenance differs")
+
+  # absent provenance (pre-feature run) -> skipped, no error
+  wj(list(python = list(pkg_laser_cholera = "0.13.0")), file.path(inp, "environment.json"))
+  expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
+})

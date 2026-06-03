@@ -459,7 +459,12 @@
 #'       \code{1_inputs/} (each changes the draws or likelihood, making the pool
 #'       incomparable);
 #'     \item the current \code{laser-cholera} engine version crosses the v0.13
-#'       deaths-scale boundary relative to the original run.
+#'       deaths-scale boundary relative to the original run;
+#'     \item the likelihood-value provenance differs — i.e. the existing shards
+#'       were scored by a different likelihood engine or implementation than the
+#'       current session would produce (e.g. R \code{calc_model_likelihood} vs
+#'       on-worker Python scoring, once Dask phase 3 lands, or an R likelihood
+#'       code change that altered values).
 #'   }
 #'   If the engine version cannot be determined (no record / Python not bound) the
 #'   deaths-scale check is skipped with a warning. Has no effect when no shards
@@ -754,7 +759,7 @@ run_MOSAIC <- function(config,
   # persisted by the interrupted run BEFORE the setup files below overwrite
   # them. A mismatch changes the sampling/likelihood target and is a hard error.
   if (isTRUE(resume)) {
-    .mosaic_resume_check_inputs(dirs, config, priors, control)
+    .mosaic_resume_check_inputs(dirs, config, priors, control, use_dask = use_dask)
 
     # Refuse to resume into an existing consolidated samples.parquet when the
     # shards on disk would produce a SMALLER pool: combining + overwriting would
@@ -783,6 +788,13 @@ run_MOSAIC <- function(config,
   # Capture full environment snapshot (versions, system, git, data)
   env_snapshot <- .mosaic_capture_environment(
     config = config, priors = priors, control = control
+  )
+  # Stamp the likelihood-value provenance (who/what scored the shards) so a later
+  # resume can refuse to pool incomparable likelihoods (R vs Python worker-side
+  # scoring once Dask phase 3 lands, or across an R likelihood-code change).
+  env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance(
+    use_dask   = use_dask,
+    lc_version = tryCatch(env_snapshot$python$pkg_laser_cholera, error = function(e) NA_character_)
   )
   .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
   log_msg("  Saved %s", "1_inputs/environment.json")
@@ -1495,6 +1507,18 @@ run_MOSAIC <- function(config,
   if (any(results$is_valid)) {
     results$is_best_model[which.max(results$likelihood)] <- TRUE
   }
+
+  # Add derived implied-CFR columns (cfr_baseline_<iso>, cfr_epidemic_<iso>)
+  # so they are persisted to samples.parquet alongside the sampled
+  # microparameters. Downstream posterior fitting / plotting picks them up
+  # automatically via calc_model_posterior_quantiles() and the location-scale
+  # disease-category entries in estimated_parameters.
+  log_msg("Adding implied-CFR derived columns to samples...")
+  results <- .mosaic_add_implied_cfr_columns(
+       results = results,
+       iso_codes = iso_code,
+       verbose = TRUE
+  )
 
   # Write combined simulations and clean up shards
   simulations_file <- file.path(dirs$calibration, "samples.parquet")
@@ -2507,6 +2531,41 @@ run_MOSAIC <- function(config,
             ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
             ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
 
+    # Period-weighted implied CFR per location (posterior distribution from
+    # ensemble members: sum simulated reported_deaths / sum simulated
+    # reported_cases over the calibration window, per (param_set, stoch)).
+    # Surfaces in summary.json:cfr_implied alongside the algebraic
+    # cfr_baseline_<iso>/cfr_epidemic_<iso> derived parameter posteriors
+    # in 2_calibration/posterior/posteriors.json.
+    cfr_implied <- tryCatch(
+         .mosaic_calc_cfr_period_implied(
+              cases_array     = ensemble$cases_array,
+              deaths_array    = ensemble$deaths_array,
+              obs_cases       = ensemble$obs_cases,
+              obs_deaths      = ensemble$obs_deaths,
+              location_names  = ensemble$location_names %||% iso_code,
+              envelope_quantiles = c(0.025, 0.5, 0.975)
+         ),
+         error = function(e) {
+              log_msg("Warning: implied-CFR computation failed: %s", e$message)
+              NULL
+         }
+    )
+
+    if (!is.null(cfr_implied)) {
+         for (iso in names(cfr_implied)) {
+              ci <- cfr_implied[[iso]]
+              if (is.finite(ci$predicted_median)) {
+                   log_msg("Implied CFR (%s): predicted = %.3f%% [%.3f%%, %.3f%%]; observed = %.3f%%",
+                           iso,
+                           100 * ci$predicted_median,
+                           100 * ci$predicted_ci_lo,
+                           100 * ci$predicted_ci_hi,
+                           if (is.finite(ci$observed)) 100 * ci$observed else NA_real_)
+              }
+         }
+    }
+
     # Windowed model fit metrics on the canonical ensemble
     n_ts      <- ensemble$n_time_points
     dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
@@ -2663,6 +2722,7 @@ run_MOSAIC <- function(config,
                                              bias_ratio_cases_ensemble_tier = bias_ratio_cases_ensemble_tier,
                                              bias_ratio_deaths_ensemble_tier = bias_ratio_deaths_ensemble_tier,
                                              n_ensemble_params_tier = n_ensemble_params_tier,
+                                             cfr_implied = if (exists("cfr_implied", inherits = FALSE)) cfr_implied else NULL,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 

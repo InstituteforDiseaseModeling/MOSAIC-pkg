@@ -69,7 +69,12 @@ calibration mode (auto vs fixed) differ from those persisted in
 \code{1_inputs/} (each changes the draws or likelihood, making the pool
 incomparable);
 \item the current \code{laser-cholera} engine version crosses the v0.13
-deaths-scale boundary relative to the original run.
+deaths-scale boundary relative to the original run;
+\item the likelihood-value provenance differs — i.e. the existing shards
+were scored by a different likelihood engine or implementation than the
+current session would produce (e.g. R \code{calc_model_likelihood} vs
+on-worker Python scoring, once Dask phase 3 lands, or an R likelihood
+code change that altered values).
 }
 If the engine version cannot be determined (no record / Python not bound) the
 deaths-scale check is skipped with a warning. Has no effect when no shards
