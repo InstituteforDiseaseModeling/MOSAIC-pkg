@@ -849,6 +849,44 @@
   "compatible"
 }
 
+#' R-side Likelihood Implementation Version
+#'
+#' Identifies the numeric behaviour of the R \code{calc_model_likelihood()}
+#' pipeline. Bump this string whenever a change alters the likelihood VALUES it
+#' produces (e.g. the v0.22.20-21 N_obs shape-term normalization) so that resume
+#' refuses to pool shards scored by an incompatible likelihood implementation.
+#' @noRd
+.mosaic_likelihood_impl_version <- function() "R/v0.22.21"
+
+#' Likelihood-Value Provenance Descriptor
+#'
+#' Captures WHO computed the likelihood stored in each shard, and the version of
+#' that implementation, so resume can refuse to pool incomparable likelihoods.
+#' TODAY the likelihood is always computed in R by \code{calc_model_likelihood()}
+#' on the orchestrator — on BOTH the local and the Dask paths — so
+#' \code{engine = "R"} and the version is the R implementation tag.
+#'
+#' Forward hook for Dask/Coiled phase 3 (laser-cholera issue #47): when
+#' worker-side Python scoring lands, set \code{engine = "python"} on that path so
+#' the version axis becomes the laser-cholera version. Resume then automatically
+#' refuses to pool R-scored and Python-scored shards (or shards from different
+#' engine versions), since the shard files themselves do not record provenance.
+#'
+#' @param use_dask Logical; whether the run uses the Dask backend (the hook phase
+#'   3 will branch on — unused today because scoring is R-side on all paths).
+#' @param lc_version Current laser-cholera version (used only when engine is
+#'   "python").
+#' @return list(engine, impl_version)
+#' @noRd
+.mosaic_likelihood_provenance <- function(use_dask = FALSE, lc_version = NA_character_) {
+  engine <- "R"   # phase 3 (#47): -> "python" on the worker-side-scoring Dask path
+  list(
+    engine       = engine,
+    impl_version = if (identical(engine, "python")) as.character(lc_version)
+                   else .mosaic_likelihood_impl_version()
+  )
+}
+
 #' Verify Resume Inputs Match the Interrupted Run
 #'
 #' On resume, the incoming config/priors must match those persisted in 1_inputs/.
@@ -865,7 +903,7 @@
 #' different target.
 #'
 #' @noRd
-.mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL) {
+.mosaic_resume_check_inputs <- function(dirs, config, priors, control = NULL, use_dask = FALSE) {
   serialize_obj <- function(obj) {
     tmp <- tempfile(fileext = ".json")
     on.exit(unlink(tmp), add = TRUE)
@@ -964,6 +1002,7 @@
   # reported_deaths). Resuming a pre-v0.13 run on v0.13+ silently mixes
   # incompatible scales in the on-disk shards.
   env_file <- file.path(dirs$inputs, "environment.json")
+  persisted_env <- NULL
   persisted_lc <- NA_character_
   if (file.exists(env_file)) {
     persisted_env <- tryCatch(
@@ -1022,6 +1061,27 @@
       "resume: the laser-cholera engine deaths-scale guard was SKIPPED (%s). If the engine ",
       "crossed the v0.13 boundary since this run started, the resumed posterior could mix ",
       "incompatible deaths scales."), reason), call. = FALSE)
+  }
+
+  # Likelihood-value provenance: refuse to pool shards scored by a different
+  # likelihood engine/implementation than the current session would produce
+  # (R vs Python worker-side scoring once Dask phase 3 / issue #47 lands, or an
+  # R likelihood-code change that altered values). The shard files do not record
+  # provenance, so this comparison against the persisted environment.json is the
+  # only line of defence. Absent on pre-feature runs (skipped, like above).
+  persisted_prov <- tryCatch(persisted_env$likelihood_provenance, error = function(e) NULL)
+  if (!is.null(persisted_prov)) {
+    cur_prov <- .mosaic_likelihood_provenance(use_dask, current_lc)
+    a <- serialize_obj(cur_prov); b <- serialize_obj(persisted_prov)
+    if (!is.na(a) && !is.na(b) && !identical(a, b)) {
+      stop(sprintf(paste0(
+        "resume: likelihood provenance differs (persisted engine '%s' / impl '%s' vs current ",
+        "engine '%s' / impl '%s'). The shards on disk were scored by a different likelihood ",
+        "engine or implementation, so pooling them with new draws would mix incomparable ",
+        "likelihoods. Start a fresh run in a new directory."),
+        persisted_prov$engine %||% "?", persisted_prov$impl_version %||% "?",
+        cur_prov$engine, cur_prov$impl_version), call. = FALSE)
+    }
   }
 
   invisible(TRUE)
