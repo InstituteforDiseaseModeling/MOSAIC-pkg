@@ -56,7 +56,7 @@ Must be even length to form lower/upper pairs. Default
 
 \item{precomputed_results}{Optional list of pre-gathered LASER results (e.g. from Dask).
 Each element must have \code{$param_idx}, \code{$stoch_idx},
-\code{$reported_cases}, \code{$disease_deaths}, and \code{$success}.}
+\code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }

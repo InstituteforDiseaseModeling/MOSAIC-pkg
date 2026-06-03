@@ -1,55 +1,88 @@
 #' Download, Process, and Save Historical Annual WHO Cholera Data for Africa
 #'
-#' This function compiles historical cholera data from the WHO for African countries (AFRO region) for the years 1949 to 2024. The data is processed and saved in the MOSAIC directory structure. It includes reported cholera cases, deaths, and case fatality ratios (CFR).
+#' Compiles cholera surveillance data from WHO for African countries (AFRO
+#' region) from 1949 onward. Data sources and the precise per-year coverage
+#' are tracked through the pipeline so partial-year snapshots (current year
+#' from the WHO Global Cholera & AWD dashboard) are usable downstream
+#' without being mislabeled as full-year totals.
 #'
-#' @param PATHS A list containing the paths to raw and processed data directories. Typically generated from `get_paths()` and should include:
-#' \itemize{
-#'   \item \strong{DATA_RAW}: Path to the directory containing raw WHO cholera data.
-#'   \item \strong{DATA_WHO_ANNUAL}: Path to the directory where processed cholera data will be saved.
-#' }
+#' @param PATHS A list containing the paths to raw and processed data
+#'   directories. Typically generated from `get_paths()`.
 #'
-#' @return The function does not return a value but processes and saves the historical WHO cholera data into CSV files in the processed data directory.
+#' @return The function does not return a value but writes processed CSVs
+#'   to `PATHS$DATA_WHO_ANNUAL`.
 #'
 #' @details
-#' This function compiles cholera data for African countries (AFRO region) by processing historical data from 1949-2024. The data sources are as follows:
+#' Data sources:
 #' \itemize{
-#'   \item \strong{1949-2021}: Data were compiled from WHO annual reports by **Our World In Data**. See \url{https://ourworldindata.org}.
-#'   \item \strong{2022}: Data were manually extracted from the WHO annual report.
-#'   \item \strong{2023-2024}: Data are downloaded directly from the **WHO AWD GIS dashboard**.
+#'   \item \strong{1949-2021}: WHO annual reports compiled by Our World in
+#'         Data. See \url{https://ourworldindata.org}.
+#'   \item \strong{2022}: Manually transcribed from the WHO 2022 annual
+#'         cholera report (PDF).
+#'   \item \strong{2023+}: Downloaded from the
+#'         \strong{WHO Global Cholera & AWD dashboard} via ArcGIS. Each
+#'         download is archived to
+#'         \code{raw/WHO/annual/who_global_dashboard/cholera_adm0_public_snapshot_YYYY-MM-DD.csv}
+#'         and ALL files matching \code{cholera_adm0_public_*.csv} in the
+#'         dashboard directory are ingested. Each row's actual coverage is
+#'         derived from \code{first_epiwk} / \code{last_epiwk} (rolling
+#'         snapshots cross calendar-year boundaries — see the year-labeling
+#'         note below).
 #' }
-#' Additionally, the function calculates 95% binomial confidence intervals for the CFR where applicable, and the data is saved as CSV files in the processed data directory.
+#'
+#' \strong{Year labeling}: The ArcGIS dashboard returns one row per country
+#' summing \code{case_total} / \code{death_total} between \code{first_epiwk}
+#' and \code{last_epiwk}. Each row is assigned to the calendar year that
+#' contains the majority of its days. \code{coverage_days} reports how many
+#' calendar days are covered, and \code{year_fraction = coverage_days/365.25}
+#' indicates whether the row is a full-year observation (~1.0) or a partial
+#' snapshot (<1.0). When multiple files have a row for the same
+#' \code{(iso_code, year)} combination, the row with the larger
+#' \code{coverage_days} is kept.
+#'
+#' \strong{To refresh through a given calendar year}: place a year-filtered
+#' CSV in \code{raw/WHO/annual/who_global_dashboard/} named
+#' \code{cholera_adm0_public_YYYY.csv} (downloaded from the WHO dashboard UI
+#' with the year filter applied). Re-run \code{process_WHO_annual_data()}.
+#'
+#' Outputs (in \code{PATHS$DATA_WHO_ANNUAL}):
+#' \itemize{
+#'   \item \code{who_afro_annual.csv} — current full series, columns
+#'         \code{country, iso_code, region, year, cases_total,
+#'         cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk,
+#'         last_epiwk, coverage_days, year_fraction, source}.
+#'   \item Intermediate per-source slices for traceability.
+#' }
 #'
 #' @importFrom utils read.csv write.csv download.file
 #' @importFrom stats binom.test
-#' @importFrom base tolower toupper paste
 #'
 #' @examples
 #' \dontrun{
-#' # Assuming PATHS is generated from get_paths()
 #' PATHS <- get_paths()
-#'
-#' # Download and process WHO annual cholera data
 #' process_WHO_annual_data(PATHS)
 #' }
 #'
 #' @export
-
-
 process_WHO_annual_data <- function(PATHS) {
 
      if (!dir.exists(PATHS$DATA_WHO_ANNUAL)) dir.create(PATHS$DATA_WHO_ANNUAL, recursive = TRUE)
 
      ################################################################################
-     # Process global annual cholera data from 1949 to 2021 (precollated by OWiD)
+     # 1. Annual data 1949-2021 (pre-compiled by Our World in Data)
      ################################################################################
 
-     message("Processing WHO cholera data from 1949 to 2021...")
+     message("Processing WHO cholera data from 1949 to 2021 (OWiD)...")
 
-     # Load historical cholera cases and deaths
-     cholera_cases <- utils::read.csv(file.path(PATHS$DATA_RAW, "WHO/annual/who_global_1949_2021/number-reported-cases-of-cholera.csv"), stringsAsFactors = FALSE)
-     cholera_deaths <- utils::read.csv(file.path(PATHS$DATA_RAW, "WHO/annual/who_global_1949_2021/number-of-reported-cholera-deaths.csv"), stringsAsFactors = FALSE)
+     cholera_cases <- utils::read.csv(
+          file.path(PATHS$DATA_RAW, "WHO/annual/who_global_1949_2021/number-reported-cases-of-cholera.csv"),
+          stringsAsFactors = FALSE
+     )
+     cholera_deaths <- utils::read.csv(
+          file.path(PATHS$DATA_RAW, "WHO/annual/who_global_1949_2021/number-of-reported-cholera-deaths.csv"),
+          stringsAsFactors = FALSE
+     )
 
-     # Filter for AFRO region data
      cholera_cases_afr <- cholera_cases[cholera_cases$Code %in% MOSAIC::iso_codes_who_afro, ]
      colnames(cholera_cases_afr)[colnames(cholera_cases_afr) == "Entity"] <- "country"
      colnames(cholera_cases_afr)[colnames(cholera_cases_afr) == "Code"] <- "iso_code"
@@ -57,7 +90,6 @@ process_WHO_annual_data <- function(PATHS) {
      colnames(cholera_cases_afr)[colnames(cholera_cases_afr) == "Reported.cholera.cases"] <- "cases_total"
      cholera_cases_afr$region <- "AFRO"
      cholera_cases_afr$cases_imported <- NA
-     cholera_cases_afr$cfr <- NA
 
      cholera_deaths_afr <- cholera_deaths[cholera_deaths$Code %in% MOSAIC::iso_codes_who_afro, ]
      colnames(cholera_deaths_afr)[colnames(cholera_deaths_afr) == "Entity"] <- "country"
@@ -65,160 +97,303 @@ process_WHO_annual_data <- function(PATHS) {
      colnames(cholera_deaths_afr)[colnames(cholera_deaths_afr) == "Year"] <- "year"
      colnames(cholera_deaths_afr)[colnames(cholera_deaths_afr) == "Reported.cholera.deaths"] <- "deaths_total"
 
-     cholera_data_1949_2021 <- merge(cholera_cases_afr, cholera_deaths_afr[, c("country", "year", "iso_code", "deaths_total")], by = c("country", "iso_code", "year"), all.x = TRUE)
-     cholera_data_1949_2021$cfr <- cholera_data_1949_2021$deaths_total / cholera_data_1949_2021$cases_total
-     cholera_data_1949_2021$cfr[is.nan(cholera_data_1949_2021$cfr)] <- NA
+     cholera_data_1949_2021 <- merge(
+          cholera_cases_afr,
+          cholera_deaths_afr[, c("country", "year", "iso_code", "deaths_total")],
+          by = c("country", "iso_code", "year"),
+          all.x = TRUE
+     )
 
-     utils::write.csv(cholera_data_1949_2021, file = file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2021.csv"), row.names = FALSE)
-     message("WHO cholera data (1949-2021) processed and saved to:", file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2021.csv"))
+     cholera_data_1949_2021$first_epiwk    <- as.Date(paste0(cholera_data_1949_2021$year, "-01-01"))
+     cholera_data_1949_2021$last_epiwk     <- as.Date(paste0(cholera_data_1949_2021$year, "-12-31"))
+     cholera_data_1949_2021$coverage_days  <- 365L
+     cholera_data_1949_2021$year_fraction  <- 1.0
+     cholera_data_1949_2021$source         <- "OWiD"
 
      ################################################################################
-     # Process cholera data for 2022
+     # 2. 2022 — manually transcribed from the WHO annual cholera PDF
      ################################################################################
 
-     message("Processing WHO cholera data from 2022...")
+     message("Processing WHO cholera data for 2022 (manual extraction)...")
 
      cholera_data_2022 <- data.frame(
           region = rep("AFRO", 17),
-          country = c("Benin", "Burkina Faso", "Burundi", "Cameroon", "Democratic Republic of Congo", "Ethiopia", "Kenya", "Liberia", "Malawi", "Mozambique", "Nigeria", "Rwanda", "Somalia", "South Africa", "South Sudan", "Zambia", "Zimbabwe"),
-          iso_code = c("BEN", "BFA", "BDI", "CMR", "COD", "ETH", "KEN", "LBR", "MWI", "MOZ", "NGA", "RWA", "SOM", "ZAF", "SSD", "ZMB", "ZWE"),
-          cases_total = c(433, 4, 25, 14431, 18961, 846, 3525, 367, 17488, 4378, 23839, 24, 15653, 1, 424, 34, 4),
+          country = c("Benin", "Burkina Faso", "Burundi", "Cameroon",
+                      "Democratic Republic of Congo", "Ethiopia", "Kenya",
+                      "Liberia", "Malawi", "Mozambique", "Nigeria", "Rwanda",
+                      "Somalia", "South Africa", "South Sudan", "Zambia",
+                      "Zimbabwe"),
+          iso_code = c("BEN", "BFA", "BDI", "CMR", "COD", "ETH", "KEN",
+                       "LBR", "MWI", "MOZ", "NGA", "RWA", "SOM", "ZAF",
+                       "SSD", "ZMB", "ZWE"),
+          cases_total = c(433, 4, 25, 14431, 18961, 846, 3525, 367, 17488,
+                          4378, 23839, 24, 15653, 1, 424, 34, 4),
           cases_imported = c(0, 0, 0, 15, 0, 0, 0, 0, 186, NA, 0, 0, 0, 0, 0, 0, 1),
-          deaths_total = c(2, 0, 0, 279, 298, 27, 64, 0, 576, 22, 597, 0, 88, 0, 1, 0, 1),
-          cfr = c(0.5, 0.0, 0.0, 1.9, 1.6, 3.2, 1.8, 0.0, 3.3, 0.5, 2.5, 0.0, 0.6, 0.0, 0.2, 0.0, 25.0),
+          deaths_total = c(2, 0, 0, 279, 298, 27, 64, 0, 576, 22, 597, 0,
+                           88, 0, 1, 0, 1),
           year = 2022,
+          first_epiwk = as.Date("2022-01-01"),
+          last_epiwk  = as.Date("2022-12-31"),
+          coverage_days = 365L,
+          year_fraction = 1.0,
+          source = "WHO_PDF_2022",
           stringsAsFactors = FALSE
      )
-     cholera_data_2022$cfr <- cholera_data_2022$cfr / 100
-
-     utils::write.csv(cholera_data_2022, file = file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_2022.csv"), row.names = FALSE)
-     message("WHO cholera data (2022) processed and saved to:", file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_2022.csv"))
-
-
 
      ################################################################################
-     # Process global annual cholera data from 2023 and 2024
+     # 3. 2023+ — WHO Global Cholera & AWD dashboard (ArcGIS)
      ################################################################################
 
-     # Message indicating start of processing for 2023-2024 data
-     message("Processing WHO cholera data for 2023 and 2024...")
+     message("Processing WHO cholera data from 2023 onward (dashboard)...")
 
-     # Download the most up-to-date 2024 data from WHO
-     url <- "https://who.maps.arcgis.com/sharing/rest/content/items/3aa7bfec5da047a7ba7d4f9bcebd0061/data"
-     path <- file.path(PATHS$DATA_RAW, "WHO/annual/who_global_2023_2024/cholera_adm0_public_2024.csv")
+     # Live dashboard URL (rolling — content changes over time as the dashboard
+     # updates). We archive each download by snapshot date so historical
+     # snapshots are preserved.
+     dashboard_url <- "https://who.maps.arcgis.com/sharing/rest/content/items/3aa7bfec5da047a7ba7d4f9bcebd0061/data"
 
-     # Try downloading the 2024 data, if download fails, load the previously downloaded file
+     dashboard_dir <- file.path(PATHS$DATA_RAW, "WHO/annual/who_global_dashboard")
+     if (!dir.exists(dashboard_dir)) dir.create(dashboard_dir, recursive = TRUE)
+
+     # Back-compat: if older files exist under the legacy directory, surface
+     # them so this function keeps ingesting them. Do not overwrite.
+     legacy_dir <- file.path(PATHS$DATA_RAW, "WHO/annual/who_global_2023_2024")
+     legacy_files <- if (dir.exists(legacy_dir)) {
+          list.files(legacy_dir, pattern = "^cholera_adm0_public_.*\\.csv$", full.names = TRUE)
+     } else character(0)
+
+     snapshot_path <- file.path(
+          dashboard_dir,
+          sprintf("cholera_adm0_public_snapshot_%s.csv", format(Sys.Date(), "%Y-%m-%d"))
+     )
      tryCatch({
-          message("Attempting to download the latest 2024 cholera data from WHO...")
-          utils::download.file(url, path, mode = "wb")
-          message("Successfully downloaded the 2024 cholera data.")
+          message("Attempting to fetch latest WHO dashboard snapshot...")
+          utils::download.file(dashboard_url, snapshot_path, mode = "wb", quiet = TRUE)
+          message(sprintf("  Saved snapshot: %s", basename(snapshot_path)))
      }, error = function(e) {
-          message("Download failed. Loading previously downloaded 2024 cholera data...")
+          message(sprintf("  Download failed: %s", conditionMessage(e)))
+          message("  Falling back to previously downloaded snapshots in raw dir.")
      })
 
-     # Load the 2023 and 2024 data
-     cholera_data_2023 <- utils::read.csv(file.path(PATHS$DATA_RAW, "WHO/annual/who_global_2023_2024/cholera_adm0_public_2023.csv"), stringsAsFactors = FALSE)
-     cholera_data_2024 <- utils::read.csv(file.path(PATHS$DATA_RAW, "WHO/annual/who_global_2023_2024/cholera_adm0_public_2024.csv"), stringsAsFactors = FALSE)
+     dashboard_files <- list.files(dashboard_dir, pattern = "^cholera_adm0_public_.*\\.csv$", full.names = TRUE)
+     all_dashboard_files <- unique(c(dashboard_files, legacy_files))
+     if (!length(all_dashboard_files)) {
+          stop("No dashboard files found in either ", dashboard_dir, " or ", legacy_dir)
+     }
 
-     # Add the year column to each dataset
-     cholera_data_2023$year <- 2023
-     cholera_data_2024$year <- 2024
+     # Ingest every file. Each row's actual year coverage is derived from
+     # first_epiwk / last_epiwk; rows are deduped by (iso_code, year) keeping
+     # the row with the largest coverage_days (= the most complete observation).
+     ingest_one <- function(path) {
+          df <- utils::read.csv(path, stringsAsFactors = FALSE)
+          required_cols <- c("adm0_name", "who_region", "iso_3_code",
+                             "first_epiwk", "last_epiwk", "case_total", "death_total")
+          missing_cols <- setdiff(required_cols, colnames(df))
+          if (length(missing_cols)) {
+               warning(sprintf("Skipping %s — missing columns: %s",
+                               basename(path), paste(missing_cols, collapse = ", ")))
+               return(NULL)
+          }
+          # Filter to AFRO; the dashboard uses two naming conventions across snapshots
+          df <- df[df$who_region %in% c("AFRO", "African Region"), , drop = FALSE]
+          if (!nrow(df)) return(NULL)
+          df$who_region <- "AFRO"
 
-     # Filter the datasets to include only AFRO region data
-     cholera_data_2023 <- cholera_data_2023[cholera_data_2023$who_region == "AFRO",]
-     cholera_data_2024 <- cholera_data_2024[cholera_data_2024$who_region == "African Region",]
-     cholera_data_2024$who_region <- "AFRO"
+          df$first_epiwk <- as.Date(df$first_epiwk)
+          df$last_epiwk  <- as.Date(df$last_epiwk)
 
-     # Combine the 2023 and 2024 data
-     cholera_data_2023_2024 <- rbind(cholera_data_2023, cholera_data_2024)
+          # Determine year + coverage from the actual date range
+          coverage <- .who_annual_year_coverage(df$first_epiwk, df$last_epiwk)
+          df$year          <- coverage$year
+          df$coverage_days <- coverage$coverage_days
+          df$year_fraction <- coverage$year_fraction
+          df$source        <- sprintf("dashboard:%s", basename(path))
+          df
+     }
 
-     # Rename columns to standardized names
-     colnames(cholera_data_2023_2024)[colnames(cholera_data_2023_2024) == "case_total"] <- "cases_total"
-     colnames(cholera_data_2023_2024)[colnames(cholera_data_2023_2024) == "death_total"] <- "deaths_total"
-     colnames(cholera_data_2023_2024)[colnames(cholera_data_2023_2024) == "who_region"] <- "region"
-     colnames(cholera_data_2023_2024)[colnames(cholera_data_2023_2024) == "iso_3_code"] <- "iso_code"
-     colnames(cholera_data_2023_2024)[colnames(cholera_data_2023_2024) == "adm0_name"] <- "country"
+     dashboard_rows <- do.call(rbind, lapply(all_dashboard_files, ingest_one))
+     dashboard_rows <- dashboard_rows[!is.na(dashboard_rows$year), , drop = FALSE]
 
-     # Add cases_imported and CFR columns
-     cholera_data_2023_2024$cases_imported <- NA
-     cholera_data_2023_2024$cfr <- cholera_data_2023_2024$deaths_total / cholera_data_2023_2024$cases_total
-     cholera_data_2023_2024$cfr[is.nan(cholera_data_2023_2024$cfr)] <- NA
+     # Dedupe by (iso, year): keep row with max coverage_days
+     dashboard_rows <- dashboard_rows[order(
+          dashboard_rows$iso_3_code, dashboard_rows$year, -dashboard_rows$coverage_days
+     ), ]
+     dashboard_rows <- dashboard_rows[
+          !duplicated(dashboard_rows[, c("iso_3_code", "year")]), ,
+          drop = FALSE
+     ]
 
-     # Remove unwanted columns such as "first_epiwk" and "last_epiwk"
-     cholera_data_2023_2024 <- cholera_data_2023_2024[, !(colnames(cholera_data_2023_2024) %in% c("first_epiwk", "last_epiwk"))]
+     # Standardize column names + values
+     colnames(dashboard_rows)[colnames(dashboard_rows) == "case_total"]   <- "cases_total"
+     colnames(dashboard_rows)[colnames(dashboard_rows) == "death_total"]  <- "deaths_total"
+     colnames(dashboard_rows)[colnames(dashboard_rows) == "who_region"]   <- "region"
+     colnames(dashboard_rows)[colnames(dashboard_rows) == "iso_3_code"]   <- "iso_code"
+     colnames(dashboard_rows)[colnames(dashboard_rows) == "adm0_name"]    <- "country"
 
-     # Standardize country names in the 2023-2024 data to match the 2022 data
+     dashboard_rows$cases_imported <- NA
+
+     # Country name harmonization with the 1949-2022 series
      country_names <- sort(unique(c(cholera_data_1949_2021$country, cholera_data_2022$country)))
-
      capitalize_words <- function(name) {
           s <- tolower(name)
           s <- strsplit(s, " ")[[1]]
-          s <- paste(toupper(substring(s, 1, 1)), substring(s, 2), sep = "", collapse = " ")
-          return(s)
+          paste(toupper(substring(s, 1, 1)), substring(s, 2), sep = "", collapse = " ")
+     }
+     dashboard_rows$country <- vapply(dashboard_rows$country, capitalize_words, character(1))
+     dashboard_rows$country[dashboard_rows$country == "Democratic Republic Of Congo"]      <- "Democratic Republic of Congo"
+     dashboard_rows$country[dashboard_rows$country == "Democratic Republic Of The Congo"]  <- "Democratic Republic of Congo"
+     dashboard_rows$country[dashboard_rows$country == "United Republic Of Tanzania"]       <- "Tanzania"
+     dashboard_rows$country[dashboard_rows$country == "Cote D'ivoire"]                     <- "Cote d'Ivoire"
+     dashboard_rows$country[dashboard_rows$country == "Eswatini"]                          <- "Eswatini"
+
+     mismatches <- setdiff(unique(dashboard_rows$country), country_names)
+     if (length(mismatches)) {
+          message("  Country names not in 1949-2022 series (kept as-is):")
+          for (m in mismatches) message("    ", m)
      }
 
-     cholera_data_2023_2024$country <- sapply(cholera_data_2023_2024$country, capitalize_words)
-
-     # Manually fix mismatches (e.g., "D.R. Congo" to "Democratic Republic of Congo")
-     cholera_data_2023_2024$country[cholera_data_2023_2024$country == "Democratic Republic Of Congo"] <- "Democratic Republic of Congo"
-     cholera_data_2023_2024$country[cholera_data_2023_2024$country == "Democratic Republic Of The Congo"] <- "Democratic Republic of Congo"
-     cholera_data_2023_2024$country[cholera_data_2023_2024$country == "United Republic Of Tanzania"] <- "Tanzania"
-
-     # Verify if all country names match
-     mismatches <- cholera_data_2023_2024$country[!(cholera_data_2023_2024$country %in% country_names)]
-     if (length(mismatches) == 0) {
-          message("All country names match the expected names.")
-     } else {
-          message("Mismatched country names:")
-          print(mismatches)
-     }
-
-     # Save the processed 2023-2024 data
-     utils::write.csv(cholera_data_2023_2024, file = file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_2023_2024.csv"), row.names = FALSE)
-     message("WHO cholera data (2023-2024) processed and saved to:", file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_2023_2024.csv"))
-
-
-
      ################################################################################
-     # Combine data from 1949-2024 and calculate totals for AFRO region
+     # 4. Combine all sources + summarize coverage
      ################################################################################
 
-     # Combine 1949-2024 data
-     combined_cholera_data <- rbind(cholera_data_1949_2021, cholera_data_2022, cholera_data_2023_2024)
-     combined_cholera_data$country[combined_cholera_data$country == "Democratic Republic of the Congo"] <- "Democratic Republic of Congo"
+     # Standardize columns across all blocks
+     keep_cols <- c("country", "iso_code", "region", "year",
+                    "cases_total", "cases_imported", "deaths_total",
+                    "first_epiwk", "last_epiwk", "coverage_days",
+                    "year_fraction", "source")
 
-     # Calculate AFRO region totals for each year
-     afro_totals <- aggregate(cbind(cases_total, deaths_total) ~ year, data = combined_cholera_data, sum, na.rm = TRUE)
-     afro_totals$region <- "AFRO"
-     afro_totals$country <- "AFRO Region"
-     afro_totals$iso_code <- "AFRO"
-     afro_totals$cases_imported <- NA
-     afro_totals$cfr <- afro_totals$deaths_total / afro_totals$cases_total
+     cholera_data_1949_2021$source <- "OWiD"
+     combined <- rbind(
+          cholera_data_1949_2021[, intersect(keep_cols, colnames(cholera_data_1949_2021))],
+          cholera_data_2022     [, intersect(keep_cols, colnames(cholera_data_2022))],
+          dashboard_rows        [, intersect(keep_cols, colnames(dashboard_rows))]
+     )
+     combined$country[combined$country == "Democratic Republic of the Congo"] <- "Democratic Republic of Congo"
 
-     # Combine AFRO region totals with the combined data
-     combined_cholera_data <- rbind(combined_cholera_data, afro_totals)
-
-     # Calculate 95% binomial confidence intervals for CFR
-     combined_cholera_data$cfr_lo <- combined_cholera_data$cfr_hi <- NA
-
-     for (i in seq_len(nrow(combined_cholera_data))) {
-          if (!is.na(combined_cholera_data$cases_total[i]) & !is.na(combined_cholera_data$deaths_total[i])) {
-               if (combined_cholera_data$cases_total[i] > 0) {
-                    conf_int <- stats::binom.test(x = combined_cholera_data$deaths_total[i], n = combined_cholera_data$cases_total[i])$conf.int
-                    combined_cholera_data$cfr_lo[i] <- conf_int[1]
-                    combined_cholera_data$cfr_hi[i] <- conf_int[2]
-               }
+     # CFR + 95% binomial CI per (country, year) row
+     combined$cfr    <- combined$deaths_total / combined$cases_total
+     combined$cfr[is.nan(combined$cfr)] <- NA
+     combined$cfr_lo <- NA_real_
+     combined$cfr_hi <- NA_real_
+     for (i in seq_len(nrow(combined))) {
+          if (!is.na(combined$cases_total[i]) && !is.na(combined$deaths_total[i]) &&
+              combined$cases_total[i] > 0) {
+               ci <- stats::binom.test(combined$deaths_total[i], combined$cases_total[i])$conf.int
+               combined$cfr_lo[i] <- ci[1]
+               combined$cfr_hi[i] <- ci[2]
           }
      }
 
-     # Save the combined 1949-2024 data
-     utils::write.csv(combined_cholera_data, file = file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2024.csv"), row.names = FALSE)
-     message("WHO cholera data (1949-2024) combined and saved to:", file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual_1949_2024.csv"))
+     # Data-quality validation: deaths must not exceed cases
+     bad <- which(!is.na(combined$deaths_total) & !is.na(combined$cases_total) &
+                  combined$deaths_total > combined$cases_total)
+     if (length(bad)) {
+          warning(sprintf("%d row(s) with deaths > cases (will be NA-ed):", length(bad)))
+          combined$deaths_total[bad] <- NA
+          combined$cfr[bad] <- combined$cfr_lo[bad] <- combined$cfr_hi[bad] <- NA
+     }
 
+     # AFRO regional totals (full-year only)
+     full_year <- combined[!is.na(combined$year_fraction) & combined$year_fraction >= 0.95, ]
+     afro_totals <- aggregate(
+          cbind(cases_total, deaths_total) ~ year,
+          data = full_year, sum, na.rm = TRUE
+     )
+     afro_totals$region         <- "AFRO"
+     afro_totals$country        <- "AFRO Region"
+     afro_totals$iso_code       <- "AFRO"
+     afro_totals$cases_imported <- NA
+     afro_totals$first_epiwk    <- as.Date(paste0(afro_totals$year, "-01-01"))
+     afro_totals$last_epiwk     <- as.Date(paste0(afro_totals$year, "-12-31"))
+     afro_totals$coverage_days  <- 365L
+     afro_totals$year_fraction  <- 1.0
+     afro_totals$source         <- "AFRO_aggregate"
+     afro_totals$cfr            <- afro_totals$deaths_total / afro_totals$cases_total
+     afro_totals$cfr_lo         <- NA_real_
+     afro_totals$cfr_hi         <- NA_real_
+     for (i in seq_len(nrow(afro_totals))) {
+          if (afro_totals$cases_total[i] > 0) {
+               ci <- stats::binom.test(afro_totals$deaths_total[i], afro_totals$cases_total[i])$conf.int
+               afro_totals$cfr_lo[i] <- ci[1]
+               afro_totals$cfr_hi[i] <- ci[2]
+          }
+     }
+
+     out <- rbind(combined, afro_totals[, colnames(combined)])
+
+     # Sort for human readability
+     out <- out[order(out$country, out$year), ]
+
+     # Write outputs
+     out_path <- file.path(PATHS$DATA_WHO_ANNUAL, "who_afro_annual.csv")
+     utils::write.csv(out, file = out_path, row.names = FALSE)
+     message(sprintf("Wrote %s (%d rows, year range %d-%d)",
+                     basename(out_path), nrow(out),
+                     min(out$year, na.rm = TRUE), max(out$year, na.rm = TRUE)))
+
+     # Coverage summary to stdout (one row per year showing how many countries
+     # contributed full vs partial data)
+     by_year <- combined[combined$iso_code %in% MOSAIC::iso_codes_who_afro, ]
+     cov_summary <- aggregate(
+          coverage_days ~ year,
+          data = by_year,
+          FUN = function(x) c(
+               n_countries     = length(x),
+               n_full_year     = sum(x >= 350),
+               n_partial       = sum(x < 350),
+               median_coverage = median(x)
+          )
+     )
+     message("Year coverage summary (last 5 years):")
+     tail_yrs <- tail(unique(by_year$year[order(by_year$year)]), 5)
+     for (y in tail_yrs) {
+          rows <- by_year[by_year$year == y, ]
+          message(sprintf("  %d: %d countries, %d full-year (>=350d), %d partial (<350d), median coverage %d days",
+                          y, nrow(rows), sum(rows$coverage_days >= 350),
+                          sum(rows$coverage_days < 350), median(rows$coverage_days)))
+     }
+
+     invisible(out)
 }
 
 
-
-
-
-
+#' Determine calendar year + coverage from epi-week date ranges
+#'
+#' Given vectors of `first_epiwk` and `last_epiwk` dates, returns the
+#' calendar year containing the majority of days in the range and the
+#' total days covered. Used by `process_WHO_annual_data()` so partial-year
+#' rolling snapshots from the WHO dashboard are labeled correctly.
+#'
+#' @param first A Date vector of range starts.
+#' @param last  A Date vector of range ends.
+#' @return A list with components `year`, `coverage_days`, `year_fraction`.
+#' @noRd
+.who_annual_year_coverage <- function(first, last) {
+     n <- length(first)
+     year_out <- integer(n)
+     days_out <- integer(n)
+     frac_out <- numeric(n)
+     for (i in seq_len(n)) {
+          if (is.na(first[i]) || is.na(last[i]) || last[i] < first[i]) {
+               year_out[i] <- NA_integer_
+               days_out[i] <- NA_integer_
+               frac_out[i] <- NA_real_
+               next
+          }
+          fy <- as.integer(format(first[i], "%Y"))
+          ly <- as.integer(format(last[i],  "%Y"))
+          if (fy == ly) {
+               year_out[i] <- fy
+               days_out[i] <- as.integer(last[i] - first[i]) + 1L
+          } else {
+               # Cross-year: assign to the year containing more days
+               end_of_fy <- as.Date(sprintf("%d-12-31", fy))
+               start_of_ly <- as.Date(sprintf("%d-01-01", ly))
+               days_first <- as.integer(end_of_fy - first[i]) + 1L
+               days_last  <- as.integer(last[i] - start_of_ly) + 1L
+               year_out[i] <- if (days_last >= days_first) ly else fy
+               days_out[i] <- days_first + days_last
+          }
+          frac_out[i] <- days_out[i] / 365.25
+     }
+     list(year = year_out, coverage_days = days_out, year_fraction = frac_out)
+}

@@ -29,13 +29,13 @@
 #' # Basic usage with simulation results
 #' ess_results <- calc_model_ess_parameter(
 #'   results = simulation_results,
-#'   param_names = c("tau_i", "mu_j", "gamma_2")
+#'   param_names = c("tau_i", "mu_j_baseline", "gamma_2")
 #' )
 #'
 #' # With custom likelihood column name
 #' ess_results <- calc_model_ess_parameter(
 #'   results = simulation_results,
-#'   param_names = c("tau_i", "mu_j", "gamma_2"),
+#'   param_names = c("tau_i", "mu_j_baseline", "gamma_2"),
 #'   likelihood_col = "log_lik"
 #' )
 #'

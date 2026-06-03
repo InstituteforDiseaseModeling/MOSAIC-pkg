@@ -458,6 +458,7 @@ for _h in list(_root.handlers):
                                        bias_ratio_cases_ensemble_tier = NA_real_,
                                        bias_ratio_deaths_ensemble_tier = NA_real_,
                                        n_ensemble_params_tier = NA_integer_,
+                                       cfr_implied = NULL,
                                        io) {
   # Read convergence diagnostics
   diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -503,6 +504,8 @@ for _h in list(_root.handlers):
     date_stop     = config$date_stop,
     timestamp     = format(start_time, "%Y-%m-%dT%H:%M:%S%z"),
     mode          = if (!is.null(state$mode)) state$mode else NA_character_,
+    resumed       = isTRUE(state$resumed),
+    n_simulations_reused = if (!is.null(state$n_sims_reused)) as.integer(state$n_sims_reused) else 0L,
     # Run statistics
     wall_time_seconds          = round(wall_time, 1),
     n_batches                  = state$batch_number,
@@ -537,7 +540,17 @@ for _h in list(_root.handlers):
     ess_pct_above_target = ess_stats$pct_above_target,
     ess_target          = ess_stats$target,
     ess_min             = ess_stats$min_ess,
-    ess_median          = ess_stats$median_ess
+    ess_median          = ess_stats$median_ess,
+    # Implied CFR per location (period-weighted from posterior ensemble
+    # predictions: sum simulated reported_deaths / sum simulated reported_cases
+    # over the calibration window, per ensemble member). Reports median +
+    # 95% CI across members, plus the observed period CFR for direct comparison.
+    # NA when ensemble was not computed (e.g., very small calibrations).
+    cfr_implied         = if (!is.null(cfr_implied)) {
+                              lapply(cfr_implied, function(x) lapply(x, function(v) {
+                                   if (is.numeric(v) && is.finite(v)) round(v, 6) else v
+                              }))
+                          } else NULL
   )
 
   summary_path <- file.path(dirs$results, "summary.json")

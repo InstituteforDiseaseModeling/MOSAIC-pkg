@@ -31,7 +31,7 @@
 #' @param root_dir Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
 #' @param precomputed_results Optional list of pre-gathered LASER results (e.g. from Dask).
 #'   Each element must have \code{$param_idx}, \code{$stoch_idx},
-#'   \code{$reported_cases}, \code{$disease_deaths}, and \code{$success}.
+#'   \code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return S3 object of class \code{"mosaic_ensemble"} containing:
@@ -224,10 +224,10 @@ calc_model_ensemble <- function(config,
         s <- result$stoch_idx
         if (is.matrix(result$reported_cases)) {
           cases_array[, , p, s]  <- result$reported_cases
-          deaths_array[, , p, s] <- result$disease_deaths
+          deaths_array[, , p, s] <- result$reported_deaths
         } else {
           cases_array[1L, , p, s]  <- result$reported_cases
-          deaths_array[1L, , p, s] <- result$disease_deaths
+          deaths_array[1L, , p, s] <- result$reported_deaths
         }
       }
     }
@@ -251,7 +251,7 @@ calc_model_ensemble <- function(config,
         )
         result <- list(param_idx = param_idx, stoch_idx = stoch_idx,
                        reported_cases = model$results$reported_cases,
-                       disease_deaths = model$results$disease_deaths,
+                       reported_deaths = model$results$reported_deaths,
                        success = TRUE)
         gc(verbose = FALSE)
         reticulate::import("gc")$collect()
@@ -320,10 +320,10 @@ calc_model_ensemble <- function(config,
         s <- result$stoch_idx
         if (is.matrix(result$reported_cases)) {
           cases_array[, , p, s]  <- result$reported_cases
-          deaths_array[, , p, s] <- result$disease_deaths
+          deaths_array[, , p, s] <- result$reported_deaths
         } else {
           cases_array[1L, , p, s]  <- result$reported_cases
-          deaths_array[1L, , p, s] <- result$disease_deaths
+          deaths_array[1L, , p, s] <- result$reported_deaths
         }
       }
     }

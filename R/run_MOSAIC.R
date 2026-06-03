@@ -78,10 +78,19 @@
   config$sigma_peak_time          <- likelihood_settings$sigma_peak_time
   config$sigma_peak_log           <- likelihood_settings$sigma_peak_log
   ep <- MOSAIC::epidemic_peaks
-  config$epidemic_peaks <- data.frame(
+  ep_df <- data.frame(
     iso_code  = as.character(ep$iso_code),
     peak_date = as.character(ep$peak_date),
     stringsAsFactors = FALSE
+  )
+  # laser-cholera v0.13+ asserts every iso_code in epidemic_peaks appears in
+  # location_name. Also drop peaks outside the simulation window so the
+  # peak-shape likelihood terms don't snap to t=1/t=N boundaries.
+  config$epidemic_peaks <- .filter_epidemic_peaks(
+    peaks          = ep_df,
+    date_start     = config$date_start,
+    date_stop      = config$date_stop,
+    location_names = config$location_name
   )
   config
 }
@@ -274,7 +283,7 @@
         obs_cases <- params_sim$reported_cases
         est_cases <- model$results$reported_cases  # v0.11.1: reported_cases = Isym*rho/chi (comparable to surveillance data)
         obs_deaths <- params_sim$reported_deaths
-        est_deaths <- model$results$disease_deaths
+        est_deaths <- model$results$reported_deaths  # v0.13.0: reported_deaths = round(disease_deaths * rho_deaths) (comparable to surveillance data)
 
         if (!is.null(obs_cases) && !is.null(est_cases) &&
             !is.null(obs_deaths) && !is.null(est_deaths)) {
@@ -312,7 +321,7 @@
       # Capture raw per-(j, t) output for validation simresults
       if (!is.null(simresults_raw)) {
         raw_cases  <- model$results$reported_cases
-        raw_deaths <- model$results$disease_deaths
+        raw_deaths <- model$results$reported_deaths
         if (!is.null(raw_cases) && !is.null(raw_deaths)) {
           if (!is.matrix(raw_cases))  raw_cases  <- matrix(raw_cases,  nrow = 1)
           if (!is.matrix(raw_deaths)) raw_deaths <- matrix(raw_deaths, nrow = 1)
@@ -428,6 +437,38 @@
 #'     \item \code{sampling}: Which parameters to sample vs hold fixed
 #'     \item \code{parallel}: Cluster settings for parallel execution
 #'   }
+#' @param resume Logical (default \code{FALSE}). When \code{TRUE}, the run
+#'   reconstructs calibration state from the per-sim shards already present in
+#'   \code{<dir_output>/2_calibration/samples/} and continues instead of starting
+#'   fresh. The shards on disk are the sole source of truth (an internal
+#'   \code{resume_checkpoint.rds} restores the adaptive ESS/phase state when
+#'   present, and is removed when the run completes; otherwise the state is
+#'   reconstructed from the shards). Behaviour by mode: in adaptive (auto) mode
+#'   the run continues from \code{max(sim_id)+1} and does \emph{not} backfill
+#'   interior gaps (a lost/quarantined shard reduces the pool); in fixed mode any
+#'   missing id within the target is re-run so the exact target is met.
+#'
+#'   Resume is \strong{rejected} (hard error) when:
+#'   \itemize{
+#'     \item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
+#'     \item the run already completed — a consolidated \code{2_calibration/samples.parquet}
+#'       exists that the on-disk shards would shrink (start fresh, or remove it to recompute);
+#'     \item the supplied \code{config}, \code{priors}, \code{control$likelihood},
+#'       \code{control$sampling}, \code{control$calibration$n_iterations}, or the
+#'       calibration mode (auto vs fixed) differ from those persisted in
+#'       \code{1_inputs/} (each changes the draws or likelihood, making the pool
+#'       incomparable);
+#'     \item the current \code{laser-cholera} engine version crosses the v0.13
+#'       deaths-scale boundary relative to the original run;
+#'     \item the likelihood-value provenance differs — i.e. the existing shards
+#'       were scored by a different likelihood engine or implementation than the
+#'       current session would produce (e.g. R \code{calc_model_likelihood} vs
+#'       on-worker Python scoring, once Dask phase 3 lands, or an R likelihood
+#'       code change that altered values).
+#'   }
+#'   If the engine version cannot be determined (no record / Python not bound) the
+#'   deaths-scale check is skipped with a warning. Has no effect when no shards
+#'   exist (equivalent to a fresh run).
 #' @param cluster Optional pre-built R parallel cluster from
 #'   \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
 #'   When provided, skips cluster creation and teardown, reusing existing workers.
@@ -532,6 +573,13 @@
 #' )
 #'
 #' run_MOSAIC(custom_config, custom_priors, "./output")
+#'
+#' # === RESUME AN INTERRUPTED RUN ===
+#'
+#' # If a calibration is killed mid-run, re-call with resume = TRUE and the same
+#' # config/priors/output directory. Completed simulations on disk are reused and
+#' # the run continues from the next sim_id (bit-identical to an uninterrupted run).
+#' run_MOSAIC(config, priors, "./output", resume = TRUE)
 #' }
 #'
 #' @seealso [mosaic_control_defaults()] for building control structures
@@ -540,6 +588,7 @@ run_MOSAIC <- function(config,
                        priors,
                        dir_output,
                        control   = NULL,
+                       resume    = FALSE,
                        cluster   = NULL,
                        dask_spec = NULL) {
 
@@ -553,7 +602,9 @@ run_MOSAIC <- function(config,
     "priors is required and must be a list" =
       !missing(priors) && is.list(priors) && length(priors) > 0,
     "dir_output is required and must be character string" =
-      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L
+      !missing(dir_output) && is.character(dir_output) && length(dir_output) == 1L,
+    "resume must be a single logical (TRUE/FALSE)" =
+      is.logical(resume) && length(resume) == 1L && !is.na(resume)
   )
 
   # Validate config structure
@@ -642,6 +693,14 @@ run_MOSAIC <- function(config,
   # Merge and validate control
   control <- .mosaic_validate_and_merge_control(control)
 
+  # Resume is incompatible with clean_output: the directory wipe would delete
+  # the very shards resume reads from. Fail fast before any heavy setup.
+  if (isTRUE(resume) && isTRUE(control$paths$clean_output)) {
+    stop("resume = TRUE is incompatible with control$paths$clean_output = TRUE: ",
+         "cleaning the output directory would delete the shards resume reads from.",
+         call. = FALSE)
+  }
+
   # Extract parameters from control structure
   n_iterations <- control$calibration$n_iterations
   n_simulations <- control$calibration$n_simulations
@@ -706,9 +765,46 @@ run_MOSAIC <- function(config,
   # WRITE SETUP FILES (with cluster metadata)
   # ===========================================================================
 
+  # On resume, verify the supplied config/priors/likelihood match those
+  # persisted by the interrupted run BEFORE the setup files below overwrite
+  # them. A mismatch changes the sampling/likelihood target and is a hard error.
+  if (isTRUE(resume)) {
+    .mosaic_resume_check_inputs(dirs, config, priors, control, use_dask = use_dask)
+
+    # Refuse to resume into an existing consolidated samples.parquet when the
+    # shards on disk would produce a SMALLER pool: combining + overwriting would
+    # silently shrink/destroy the finished posterior. This covers both a fully
+    # completed run (shards consolidated and deleted -> 0 shards) and the
+    # dangerous mixed case (a large samples.parquet plus a few stray shards). A
+    # crash mid-consolidation leaves the shards as a superset of samples.parquet,
+    # so re-consolidation is idempotent and is allowed.
+    samples_file <- file.path(dirs$calibration, "samples.parquet")
+    if (file.exists(samples_file)) {
+      n_consolidated <- tryCatch(arrow::open_dataset(samples_file)$num_rows,
+                                 error = function(e) NA_integer_)
+      n_valid_shards <- .mosaic_resume_scan(dirs$cal_samples)$n
+      if (!is.na(n_consolidated) && n_valid_shards < n_consolidated) {
+        stop(sprintf(paste0(
+          "resume = TRUE but %s already holds a consolidated posterior (%d rows) and only %d ",
+          "valid per-sim shard(s) remain. Resuming would overwrite it with a smaller pool and ",
+          "lose draws. Start a fresh run in a new directory, or remove samples.parquet to ",
+          "recompute from the shards."),
+          file.path("2_calibration", "samples.parquet"), n_consolidated, n_valid_shards),
+          call. = FALSE)
+      }
+    }
+  }
+
   # Capture full environment snapshot (versions, system, git, data)
   env_snapshot <- .mosaic_capture_environment(
     config = config, priors = priors, control = control
+  )
+  # Stamp the likelihood-value provenance (who/what scored the shards) so a later
+  # resume can refuse to pool incomparable likelihoods (R vs Python worker-side
+  # scoring once Dask phase 3 lands, or across an R likelihood-code change).
+  env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance(
+    use_dask   = use_dask,
+    lc_version = tryCatch(env_snapshot$python$pkg_laser_cholera, error = function(e) NA_character_)
   )
   .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
   log_msg("  Saved %s", "1_inputs/environment.json")
@@ -1058,10 +1154,36 @@ run_MOSAIC <- function(config,
 
   nspec <- .mosaic_normalize_n_sims(n_simulations)
   state_file <- file.path(dirs$cal_state, "run_state.json")
+  checkpoint_file <- file.path(dirs$cal_state, "resume_checkpoint.rds")
 
   state <- .mosaic_init_state(control, param_names_sampled, nspec)
 
-  log_msg("Starting simulation (mode: %s)", state$mode)
+  # Resume: overlay the fresh-init state with state reconstructed from the
+  # shards on disk. When resume = FALSE this branch is skipped and the run is
+  # byte-identical to a fresh calibration. Only auto mode reconstructs the
+  # adaptive ESS/phase state here; fixed mode recovers purely from done_ids
+  # below (a single directory scan), so it is left out to avoid scanning twice.
+  resumed_n_reused <- 0L
+  if (isTRUE(resume) && identical(state$mode, "auto")) {
+    state <- .mosaic_reconstruct_state(state, dirs, control, param_names_sampled)
+    resumed_n_reused <- state$total_sims_run
+    if (resumed_n_reused > 0L) {
+      log_msg("[RESUME] Reusing %d existing simulation(s); continuing from sim_id %d in phase '%s' (batch %d)",
+              resumed_n_reused, resumed_n_reused + 1L, state$phase, state$batch_number)
+    }
+  }
+  # Record resume provenance for the end-of-run summary.
+  state$resumed       <- isTRUE(resume)
+  state$n_sims_reused <- if (isTRUE(resume)) resumed_n_reused else 0L
+
+  if (isTRUE(resume) && identical(state$mode, "auto") && isTRUE(state$converged)) {
+    # Already converged on the reconstructed pool: skip simulation entirely and
+    # go straight to post-processing (the loop below breaks immediately).
+    log_msg("[RESUME] Reconstructed state already converged — skipping simulation, ",
+            "proceeding to post-processing")
+  } else {
+    log_msg("Starting simulation (mode: %s)", state$mode)
+  }
   start_time <- Sys.time()
 
   # Disk space check removed in v0.17.10 — fragile across platforms (macOS df
@@ -1079,11 +1201,32 @@ run_MOSAIC <- function(config,
     log_msg("[FIXED MODE] Running exactly %d simulations", target)
 
     all_ids <- seq_len(target)
-    done_ids <- integer()
+    # On resume, skip sim_ids whose shards already exist on disk. setdiff fills
+    # any gaps (a missing id is re-run, reproducing the same draw via its seed)
+    # so the fixed target is met exactly.
+    done_ids <- if (isTRUE(resume)) {
+      intersect(.mosaic_resume_scan(dirs$cal_samples)$ids, all_ids)
+    } else {
+      integer()
+    }
+    # Count already-complete shards toward the success tally so summary.json
+    # reflects the full pool, not just the sims re-run this session.
+    if (isTRUE(resume)) {
+      state$total_sims_successful <- length(done_ids)
+      state$n_sims_reused <- length(done_ids)
+      if (length(done_ids) == 0L) {
+        log_msg("[RESUME] No existing shards in target range — running all %d from scratch", target)
+      } else {
+        log_msg("[RESUME] Reusing %d of %d existing simulation(s); running the remaining %d",
+                length(done_ids), target, target - length(done_ids))
+      }
+    }
     sim_ids <- setdiff(all_ids, done_ids)
 
     if (length(sim_ids) == 0L) {
-      log_msg("Nothing to do: %d simulations already complete", length(done_ids))
+      log_msg("Nothing to do: all %d simulations already complete", length(done_ids))
+      # Reflect the complete on-disk pool in the run counters / summary.
+      state$total_sims_run <- length(all_ids)
     } else {
       log_msg("Running %d simulations (%d-%d)", length(sim_ids), min(sim_ids), max(sim_ids))
 
@@ -1149,6 +1292,7 @@ run_MOSAIC <- function(config,
               as.numeric(batch_runtime))
 
       .mosaic_save_state(state, state_file)
+      .mosaic_save_checkpoint(state, checkpoint_file)
     }
 
   # ===========================================================================
@@ -1190,6 +1334,7 @@ run_MOSAIC <- function(config,
       if (current_batch_size <= 0) {
         log_msg("No additional simulations needed (batch_size = 0)")
         .mosaic_save_state(state, state_file)
+        .mosaic_save_checkpoint(state, checkpoint_file)
         break
       }
 
@@ -1279,6 +1424,7 @@ run_MOSAIC <- function(config,
       # target was met on that last batch.
       state <- .mosaic_ess_check_update_state(state, dirs, param_names_sampled, control)
       .mosaic_save_state(state, state_file)
+      .mosaic_save_checkpoint(state, checkpoint_file)
 
       if (state$total_sims_run >= control$calibration$max_simulations_total && !state$converged) {
         log_msg("WARNING: Reached maximum simulations (%d) without convergence",
@@ -1370,6 +1516,22 @@ run_MOSAIC <- function(config,
     results$is_best_model[which.max(results$likelihood)] <- TRUE
   }
 
+  # Add derived implied-CFR columns to samples.parquet alongside the sampled
+  # microparameters. The helper adds up to 4 columns per location:
+  #   cfr_baseline_<iso>, cfr_epidemic_<iso>                   (surveillance CFR)
+  #   cfr_clinical_baseline_<iso>, cfr_clinical_epidemic_<iso> (per-episode lethality)
+  # Clinical variants are added when gamma_1 is in the samples (always true in
+  # production since gamma_1 is in convert_config_to_matrix's global-param list).
+  # Downstream posterior fitting / plotting picks them up automatically via
+  # calc_model_posterior_quantiles() and the location-scale disease-category
+  # entries in estimated_parameters.
+  log_msg("Adding implied-CFR derived columns to samples...")
+  results <- .mosaic_add_implied_cfr_columns(
+       results = results,
+       iso_codes = iso_code,
+       verbose = TRUE
+  )
+
   # Write combined simulations and clean up shards
   simulations_file <- file.path(dirs$calibration, "samples.parquet")
   .mosaic_write_parquet(results, simulations_file, control$io)
@@ -1379,6 +1541,10 @@ run_MOSAIC <- function(config,
     unlink(parquet_files)
     log_msg("  Cleaned up %d individual simulation files", length(parquet_files))
   }
+
+  # The resume checkpoint is now stale (shards consolidated into samples.parquet).
+  # Remove it so the directory carries no dangling resume state.
+  unlink(checkpoint_file, force = TRUE)
 
   log_msg("  Combined simulations saved: %s", basename(simulations_file))
 
@@ -2377,6 +2543,45 @@ run_MOSAIC <- function(config,
             ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
             ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
 
+    # Period-weighted implied CFR per location (posterior distribution from
+    # ensemble members: sum simulated reported_deaths / sum simulated
+    # reported_cases over the calibration window, per (param_set, stoch)).
+    # Surfaces in summary.json:cfr_implied alongside the algebraic
+    # cfr_baseline_<iso>/cfr_epidemic_<iso> derived parameter posteriors
+    # in 2_calibration/posterior/posteriors.json.
+    cfr_implied <- tryCatch(
+         .mosaic_calc_cfr_period_implied(
+              cases_array     = ensemble$cases_array,
+              deaths_array    = ensemble$deaths_array,
+              obs_cases       = ensemble$obs_cases,
+              obs_deaths      = ensemble$obs_deaths,
+              location_names  = ensemble$location_names %||% iso_code,
+              envelope_quantiles = c(0.025, 0.5, 0.975)
+         ),
+         error = function(e) {
+              log_msg("Warning: implied-CFR computation failed: %s", e$message)
+              NULL
+         }
+    )
+
+    if (!is.null(cfr_implied)) {
+         for (iso in names(cfr_implied)) {
+              ci <- cfr_implied[[iso]]
+              if (is.finite(ci$predicted_median)) {
+                   # CI fields are NA when n_members < MIN_MEMBERS_FOR_CI (=20).
+                   # Render NA cleanly as "NA" instead of " NA%" via sprintf.
+                   fmt_pct <- function(x) if (is.finite(x)) sprintf("%.3f%%", 100 * x) else "NA"
+                   log_msg("Implied CFR (%s): predicted = %s [%s, %s]; observed = %s  (members=%d)",
+                           iso,
+                           fmt_pct(ci$predicted_median),
+                           fmt_pct(ci$predicted_ci_lo),
+                           fmt_pct(ci$predicted_ci_hi),
+                           fmt_pct(ci$observed),
+                           ci$n_members)
+              }
+         }
+    }
+
     # Windowed model fit metrics on the canonical ensemble
     n_ts      <- ensemble$n_time_points
     dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
@@ -2533,6 +2738,7 @@ run_MOSAIC <- function(config,
                                              bias_ratio_cases_ensemble_tier = bias_ratio_cases_ensemble_tier,
                                              bias_ratio_deaths_ensemble_tier = bias_ratio_deaths_ensemble_tier,
                                              n_ensemble_params_tier = n_ensemble_params_tier,
+                                             cfr_implied = if (exists("cfr_implied", inherits = FALSE)) cfr_implied else NULL,
                                              io = control$io)
   log_msg("  Saved 3_results/summary.json")
 
@@ -2561,6 +2767,10 @@ run_MOSAIC <- function(config,
   }
   log_msg("  Sims: %s total, %s retained, %s best subset",
           format(summary_obj$n_simulations_total, big.mark = ","), ret_str, best_str)
+  if (isTRUE(state$resumed)) {
+    log_msg("  Resumed: YES (%s sim(s) reused from a prior run)",
+            format(state$n_sims_reused %||% 0L, big.mark = ","))
+  }
   log_msg("===================")
 
   # Finalize run state (mark as completed)
@@ -2580,6 +2790,8 @@ run_MOSAIC <- function(config,
       sims_total = state$total_sims_run,
       sims_success = state$total_sims_successful,
       converged = isTRUE(state$converged),
+      resumed = isTRUE(state$resumed),
+      sims_reused = state$n_sims_reused %||% 0L,
       runtime_min = as.numeric(runtime)
     )
   ))
@@ -2740,7 +2952,7 @@ run_mosaic <- run_MOSAIC
 #'     sample_tau_i = TRUE,
 #'     sample_mobility_gamma = FALSE,
 #'     sample_mobility_omega = FALSE,
-#'     sample_mu_j = TRUE,
+#'     sample_mu_j_baseline = TRUE,
 #'     sample_iota = FALSE,
 #'     sample_gamma_2 = FALSE,
 #'     sample_alpha_1 = FALSE
@@ -2763,7 +2975,7 @@ run_mosaic <- run_MOSAIC
 #' # Full workflow configuration (demonstrates logical order)
 #' ctrl <- mosaic_control_defaults(
 #'   calibration = list(n_simulations = NULL, n_iterations = 3),      # How to run
-#'   sampling = list(sample_tau_i = TRUE, sample_mu_j = TRUE),        # What to sample
+#'   sampling = list(sample_tau_i = TRUE, sample_mu_j_baseline = TRUE), # What to sample
 #'   likelihood = list(weight_wis = 0.10, weight_cases = 1.0),        # How to score
 #'   targets = list(ESS_param = 100, ESS_param_prop = 0.95),          # When to stop
 #'   parallel = list(enable = TRUE, n_cores = 16),                    # Infrastructure

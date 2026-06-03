@@ -2,7 +2,7 @@
 MOSAIC Dask Worker — Pure Python LASER simulation runner
 =========================================================
 Called by Dask workers to run individual LASER simulations.
-No R dependency — uses laser_cholera.metapop.model directly.
+No R dependency — uses laser.cholera.metapop.model directly.
 
 This module is uploaded to all workers via client.upload_file() from the R
 orchestrator (run_MOSAIC_dask), then imported on each worker with:
@@ -298,7 +298,7 @@ def run_laser_postca(task_id: int, seed: int,
 
     Returns
     -------
-    dict with keys: task_id, seed, success, reported_cases, disease_deaths
+    dict with keys: task_id, seed, success, reported_cases, reported_deaths
     """
     for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS",
                  "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
@@ -343,7 +343,7 @@ def run_laser_postca(task_id: int, seed: int,
             "seed": seed,
             "success": True,
             "reported_cases": np.array(model.results.reported_cases).tolist(),
-            "disease_deaths": np.array(model.results.disease_deaths).tolist(),
+            "reported_deaths": np.array(model.results.reported_deaths).tolist(),
         }
 
         del model
