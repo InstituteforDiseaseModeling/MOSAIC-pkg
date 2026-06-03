@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,16 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.32.5" id="mosaic-0325">MOSAIC 0.32.5<a class="anchor" aria-label="anchor" href="#mosaic-0325"></a></h2>
+<div class="section level3">
+<h3 id="laser-cholera-v0130--v0131-0-32-5">laser-cholera v0.13.0 → v0.13.1<a class="anchor" aria-label="anchor" href="#laser-cholera-v0130--v0131-0-32-5"></a></h3>
+<p><code>inst/python/environment.yml</code> wheel URL bumped to v0.13.1. The release’s only behavioral change is in the Python <code>calc_model_likelihood</code> module — peak rows whose <code>peak_date</code> falls outside <code>[date_start, date_stop]</code> are now dropped before index assignment instead of being clamped by <code>np.argmin</code> to t=0 or t=n-1. The Python port is now in alignment with the R-side in-window filter at <code>R/calc_model_likelihood.R:147-150, 423-426, 485-488</code>.</p>
+<p><strong>No MOSAIC production code change required.</strong> MOSAIC imports <code>laser.cholera.metapop.model</code> (the simulation engine) but never calls the Python likelihood in calibration or ensemble code paths — only in the parity test.</p>
+<p><strong>Parity test gains.</strong> The previously documented peak-term divergences in <code>tests/testthat/test-calc_model_likelihood_python_parity.R</code> are now closed: - Test <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/4" class="external-link">#4</a> (daily cadence, peak timing + magnitude): was R = -495 / Python = -606 (~22%); now both = -527.79 within <code>1e-4</code>. - Test <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/5" class="external-link">#5</a> (weekly cadence, peak timing): was R = -282 / Python = -1101 (~290%); now both = -282.32 within <code>1e-4</code>.</p>
+<p>The skips for these two tests are removed (parity-test PASS count: 4 → 6). The two remaining skips (test <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/6" class="external-link">#6</a> NA-masking in WIS, test <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/7" class="external-link">#7</a> zero-prediction penalty scaling) are unrelated to v0.13.1’s fix and remain pending an upstream port.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.32.1" id="mosaic-0321">MOSAIC 0.32.1<a class="anchor" aria-label="anchor" href="#mosaic-0321"></a></h2>
 <div class="section level3">

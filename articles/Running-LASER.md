@@ -173,7 +173,7 @@ cat("Saved: figures/multi_location_grid.png\n")
 ## Getting Help
 
 - **Package documentation**:
-  [`help(package = "MOSAIC")`](https://rdrr.io/pkg/MOSAIC/man)
+  [`help(package = "MOSAIC")`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference)
 - **Function help**:
   [`?run_LASER`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md),
   [`?make_LASER_config`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)

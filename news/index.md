@@ -1,5 +1,40 @@
 # Changelog
 
+## MOSAIC 0.32.5
+
+### laser-cholera v0.13.0 → v0.13.1
+
+`inst/python/environment.yml` wheel URL bumped to v0.13.1. The release’s
+only behavioral change is in the Python `calc_model_likelihood` module —
+peak rows whose `peak_date` falls outside `[date_start, date_stop]` are
+now dropped before index assignment instead of being clamped by
+`np.argmin` to t=0 or t=n-1. The Python port is now in alignment with
+the R-side in-window filter at
+`R/calc_model_likelihood.R:147-150, 423-426, 485-488`.
+
+**No MOSAIC production code change required.** MOSAIC imports
+`laser.cholera.metapop.model` (the simulation engine) but never calls
+the Python likelihood in calibration or ensemble code paths — only in
+the parity test.
+
+**Parity test gains.** The previously documented peak-term divergences
+in `tests/testthat/test-calc_model_likelihood_python_parity.R` are now
+closed: - Test
+[\#4](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/4)
+(daily cadence, peak timing + magnitude): was R = -495 / Python = -606
+(~22%); now both = -527.79 within `1e-4`. - Test
+[\#5](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/5)
+(weekly cadence, peak timing): was R = -282 / Python = -1101 (~290%);
+now both = -282.32 within `1e-4`.
+
+The skips for these two tests are removed (parity-test PASS count: 4 →
+6). The two remaining skips (test
+[\#6](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/6)
+NA-masking in WIS, test
+[\#7](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/7)
+zero-prediction penalty scaling) are unrelated to v0.13.1’s fix and
+remain pending an upstream port.
+
 ## MOSAIC 0.32.1
 
 ### CFR pipeline reworked for v0.13+ schema; WHO data refreshed through 2025
