@@ -449,35 +449,80 @@ spatial_params <- data.frame(
 )
 
 # Disease-specific parameters
+#
+# Includes 4 SAMPLED params (mu_j_baseline, mu_j_slope, mu_j_epidemic_factor,
+# epidemic_threshold) plus 4 DERIVED policy-relevant CFR transformations
+# (cfr_baseline, cfr_epidemic, cfr_clinical_baseline, cfr_clinical_epidemic).
+# The derived CFRs are computed per posterior sample by
+# .mosaic_add_implied_cfr_columns() inside run_MOSAIC() right before
+# samples.parquet is written, then their posteriors are fit at runtime from
+# the sample quantiles. Same pattern as decay_days_long / zeta_2 (DERIVED).
+#
+# Surveillance CFRs (cfr_baseline / cfr_epidemic) are deaths-among-
+# reported-cases under endemic vs epidemic regime — matches the WHO/IDSR
+# "annual CFR" definition. Clinical CFRs (cfr_clinical_*) are the
+# per-symptomatic-episode death probabilities (1 - exp(-mu_eff / gamma_1))
+# clinicians use against treatment-center benchmarks and the WHO 1%
+# outbreak-response threshold.
+#
+# All four are evaluated at simulation tick 0 (i.e. with the temporal
+# slope contribution at 1.0). Under the default Normal(0, 0.05) prior on
+# mu_j_slope the implied 95% multiplier range is [0.90, 1.10] at the
+# simulation midpoint, so the intercept CFRs are good proxies for the
+# average endemic / epidemic CFR over the calibration window. For
+# applications sensitive to slow CFR drift, recompute CFR per tick from
+# the predictions matrices instead.
+#
+# Inventory `order` is overwritten dynamically below at the .cur_order
+# accumulation step (see "REORGANIZE LOCATION-SPECIFIC PARAMETERS" section).
+# The static `order` values here are placeholders — keeping them only so
+# data.frame() has the right column type.
 disease_params <- data.frame(
-  parameter_name = c("mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor", "epidemic_threshold"),
+  parameter_name = c("mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor", "epidemic_threshold",
+                     "cfr_baseline", "cfr_epidemic",
+                     "cfr_clinical_baseline", "cfr_clinical_epidemic"),
   display_name = c(
     "Baseline IFR",
     "Temporal IFR Trend",
     "Epidemic IFR Multiplier",
-    "Epidemic Threshold"
+    "Epidemic Threshold",
+    "Implied Reported CFR (Endemic)",
+    "Implied Reported CFR (Epidemic)",
+    "Implied Per-Episode CFR (Endemic)",
+    "Implied Per-Episode CFR (Epidemic)"
   ),
   description = c(
     "Baseline location-specific infection fatality ratio",
     "Temporal trend in IFR (change per year)",
     "Multiplier applied to IFR during epidemic periods",
-    "Case incidence threshold for epidemic period classification"
+    "Case incidence threshold for epidemic period classification",
+    "DERIVED: Implied reported CFR under endemic regime, per posterior sample. cfr_baseline = mu_j_baseline * rho_deaths * chi_endemic / rho (laser-cholera v0.13+ steady-state identity, evaluated at slope=0).",
+    "DERIVED: Implied reported CFR under epidemic regime, per posterior sample. cfr_epidemic = mu_j_baseline * (1 + mu_j_epidemic_factor) * rho_deaths * chi_epidemic / rho.",
+    "DERIVED: Probability a symptomatic individual dies of cholera over their expected symptomatic period, under endemic regime. 1 - exp(-mu_j_baseline / gamma_1). Comparable to treatment-center per-case CFR and the WHO 1% outbreak-response threshold.",
+    "DERIVED: Per-symptomatic-episode death probability under epidemic regime. 1 - exp(-mu_j_baseline * (1 + mu_j_epidemic_factor) / gamma_1)."
   ),
-  units = c("proportion", "per year", "dimensionless", "cases/100k/week"),
+  units = c("proportion", "per year", "dimensionless", "cases/100k/week",
+            "proportion", "proportion", "proportion", "proportion"),
   # mu_j_epidemic_factor prior is Gamma(1,2) in make_priors_default.R — corrected from lognormal (v0.14.35)
   # epidemic_threshold: Truncnorm with per-location proportional bounds (v0.28.0, was Lognormal).
   #   Bounds a/b are read from the prior template per location at fit time
   #   (calc_model_posterior_distributions.R:398-411), so posterior_lower/upper stay NA.
-  distribution = c("gamma", "normal", "gamma", "truncnorm"),
-  posterior_distribution = c("gamma", "normal", "gamma", "truncnorm"),
-  posterior_lower = rep(NA_real_, 4),
-  posterior_upper = rep(NA_real_, 4),
+  # cfr_baseline / cfr_epidemic / cfr_clinical_*: DERIVED — no priors, posterior fit
+  #   as beta from sample quantiles (bounded [0,1] domain, right-skewed).
+  #   update_priors_from_posteriors will skip them during staged merges via the
+  #   "not in original priors" guard.
+  distribution = c("gamma", "normal", "gamma", "truncnorm",
+                   "beta", "beta", "beta", "beta"),
+  posterior_distribution = c("gamma", "normal", "gamma", "truncnorm",
+                             "beta", "beta", "beta", "beta"),
+  posterior_lower = rep(NA_real_, 8),
+  posterior_upper = rep(NA_real_, 8),
   scale = "location",
   category = "disease",
-  order = 39:42,
+  order = NA_integer_,           # OVERWRITTEN BELOW (.cur_order accumulator)
   order_scale = "02",
-  order_category = "06",
-  order_parameter = sprintf("%02d", 1:4),
+  order_category = "06",          # OVERWRITTEN BELOW
+  order_parameter = NA_character_, # OVERWRITTEN BELOW
   stringsAsFactors = FALSE
 )
 
@@ -517,34 +562,43 @@ calibration_params <- data.frame(
 
 # Combine location parameters in the requested order:
 # initial_conditions, transmission, seasonality, environmental, other (mobility, spatial, disease)
+#
+# All order ranges are computed dynamically from group sizes so adding /
+# removing rows from any group (e.g. rho_deaths, cfr_baseline / cfr_epidemic)
+# doesn't require updating downstream constants.
+.cur_order <- nrow(global_params)
 
-# Initial conditions — global_params now has 25 rows, so location params start at 26
-initial_params$order <- 26:31
+# Initial conditions
+initial_params$order <- (.cur_order + 1):(.cur_order + nrow(initial_params))
+.cur_order <- .cur_order + nrow(initial_params)
 # order_category = "01"
 
 # Transmission parameters (2 params: beta_j0_tot, p_beta)
-transmission_params$order <- 32:33
+transmission_params$order <- (.cur_order + 1):(.cur_order + nrow(transmission_params))
 transmission_params$order_category <- "02"
+.cur_order <- .cur_order + nrow(transmission_params)
 
 # Seasonality parameters
-seasonality_params$order <- 34:37
+seasonality_params$order <- (.cur_order + 1):(.cur_order + nrow(seasonality_params))
 seasonality_params$order_category <- "03"
+.cur_order <- .cur_order + nrow(seasonality_params)
 
 # Environmental parameters (psi_star calibration params)
-calibration_params$order <- 38:41
+calibration_params$order <- (.cur_order + 1):(.cur_order + nrow(calibration_params))
 calibration_params$order_category <- "04"
+.cur_order <- .cur_order + nrow(calibration_params)
 
-# Other parameters: disease (mu_j_*), mobility (tau_i), spatial (theta_j)
+# Other parameters: disease (mu_j_*, cfr_*), mobility (tau_i), spatial (theta_j)
 other_params <- rbind(
-  disease_params,    # mu_j_baseline, mu_j_slope, mu_j_epidemic_factor, epidemic_threshold
+  disease_params,    # mu_j_baseline, mu_j_slope, mu_j_epidemic_factor, epidemic_threshold, cfr_baseline, cfr_epidemic
   spatial_params     # tau_i, theta_j
 )
 n_disease <- nrow(disease_params)
 n_spatial <- nrow(spatial_params)
-other_params$order <- 42:(41 + n_disease + n_spatial)
+other_params$order <- (.cur_order + 1):(.cur_order + n_disease + n_spatial)
 other_params$order_category <- c(
   rep("05", n_disease),  # disease params
-  "05", "05"             # tau_i, theta_j
+  rep("05", n_spatial)   # tau_i, theta_j
 )
 other_params$order_parameter <- sprintf("%02d", seq_len(n_disease + n_spatial))
 

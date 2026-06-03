@@ -1508,11 +1508,15 @@ run_MOSAIC <- function(config,
     results$is_best_model[which.max(results$likelihood)] <- TRUE
   }
 
-  # Add derived implied-CFR columns (cfr_baseline_<iso>, cfr_epidemic_<iso>)
-  # so they are persisted to samples.parquet alongside the sampled
-  # microparameters. Downstream posterior fitting / plotting picks them up
-  # automatically via calc_model_posterior_quantiles() and the location-scale
-  # disease-category entries in estimated_parameters.
+  # Add derived implied-CFR columns to samples.parquet alongside the sampled
+  # microparameters. The helper adds up to 4 columns per location:
+  #   cfr_baseline_<iso>, cfr_epidemic_<iso>                   (surveillance CFR)
+  #   cfr_clinical_baseline_<iso>, cfr_clinical_epidemic_<iso> (per-episode lethality)
+  # Clinical variants are added when gamma_1 is in the samples (always true in
+  # production since gamma_1 is in convert_config_to_matrix's global-param list).
+  # Downstream posterior fitting / plotting picks them up automatically via
+  # calc_model_posterior_quantiles() and the location-scale disease-category
+  # entries in estimated_parameters.
   log_msg("Adding implied-CFR derived columns to samples...")
   results <- .mosaic_add_implied_cfr_columns(
        results = results,
@@ -2556,12 +2560,16 @@ run_MOSAIC <- function(config,
          for (iso in names(cfr_implied)) {
               ci <- cfr_implied[[iso]]
               if (is.finite(ci$predicted_median)) {
-                   log_msg("Implied CFR (%s): predicted = %.3f%% [%.3f%%, %.3f%%]; observed = %.3f%%",
+                   # CI fields are NA when n_members < MIN_MEMBERS_FOR_CI (=20).
+                   # Render NA cleanly as "NA" instead of " NA%" via sprintf.
+                   fmt_pct <- function(x) if (is.finite(x)) sprintf("%.3f%%", 100 * x) else "NA"
+                   log_msg("Implied CFR (%s): predicted = %s [%s, %s]; observed = %s  (members=%d)",
                            iso,
-                           100 * ci$predicted_median,
-                           100 * ci$predicted_ci_lo,
-                           100 * ci$predicted_ci_hi,
-                           if (is.finite(ci$observed)) 100 * ci$observed else NA_real_)
+                           fmt_pct(ci$predicted_median),
+                           fmt_pct(ci$predicted_ci_lo),
+                           fmt_pct(ci$predicted_ci_hi),
+                           fmt_pct(ci$observed),
+                           ci$n_members)
               }
          }
     }
