@@ -420,12 +420,19 @@ test_that(".mosaic_resume_check_inputs hard-errors across the v0.13 engine bound
 
 # ---- likelihood-value provenance guard (forward hook for Dask phase 3 / #47) ----
 
-test_that(".mosaic_likelihood_provenance reports R engine + impl version today", {
+test_that(".mosaic_likelihood_provenance: R on local path, Python on Dask path (phase 3 / #101)", {
   p  <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
   pd <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = TRUE, lc_version = "0.13.0")
+
+  # Local path: R-side scoring via MOSAIC::calc_model_likelihood().
   expect_equal(p$engine, "R")
-  expect_equal(pd$engine, "R")   # scoring is R-side on all paths until phase 3
   expect_equal(p$impl_version, MOSAIC:::.mosaic_likelihood_impl_version())
+
+  # Dask path: on-worker Python scoring per phase 3 (#101).  impl_version
+  # is the laser-cholera engine version passed by the caller (which holds
+  # the canonical Python `calc_model_likelihood` implementation).
+  expect_equal(pd$engine, "python")
+  expect_equal(pd$impl_version, "0.13.0")
 })
 
 test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance", {
@@ -435,20 +442,38 @@ test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance
   config <- list(location_name = "ETH"); priors <- list(a = 1)
   wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
 
+  # Pin the persisted laser-cholera version to whatever is *actually*
+  # installed so the deaths-scale engine-version guard does not fire and
+  # mask the likelihood-provenance behavior we are testing here. Without
+  # this, a docker image whose installed laser-cholera lags env.yml will
+  # trigger the engine-version error before this function gets a chance
+  # to evaluate the provenance dict.
+  live_lc <- tryCatch({
+    if (reticulate::py_available(initialize = FALSE)) {
+      importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
+      as.character(importlib$version("laser-cholera"))
+    } else NA_character_
+  }, error = function(e) NA_character_)
+  if (is.na(live_lc) || !nzchar(live_lc)) live_lc <- "0.13.0"  # safe fallback
+
   cur <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
 
   # matching provenance -> passes (engine-version guard skip-warning is orthogonal)
-  wj(list(likelihood_provenance = cur), file.path(inp, "environment.json"))
+  wj(list(likelihood_provenance = cur,
+          python = list(pkg_laser_cholera = live_lc)),
+     file.path(inp, "environment.json"))
   expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 
   # different engine (e.g. Python worker-side scoring) -> hard error
-  wj(list(likelihood_provenance = list(engine = "python", impl_version = "0.14.0")),
+  wj(list(likelihood_provenance = list(engine = "python", impl_version = "0.14.0"),
+          python = list(pkg_laser_cholera = live_lc)),
      file.path(inp, "environment.json"))
   expect_error(
     suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)),
     "likelihood provenance differs")
 
   # absent provenance (pre-feature run) -> skipped, no error
-  wj(list(python = list(pkg_laser_cholera = "0.13.0")), file.path(inp, "environment.json"))
+  wj(list(python = list(pkg_laser_cholera = live_lc)),
+     file.path(inp, "environment.json"))
   expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 })

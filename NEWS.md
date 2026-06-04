@@ -1,3 +1,41 @@
+# MOSAIC 0.32.6
+
+## Phase 3 (#101): test fixes for post-merge contract updates
+
+Three test failures surfaced by the first post-merge `devtools::test()`
+docker run, all from cross-PR-merge interactions rather than behavior
+regressions:
+
+- **`test-config_default.R::"make_LASER_config validation: unknown iso_code..."`** —
+  v0.32.0 promoted the warning to a hard error (per the v0.13+
+  `epidemic_peaks ⊆ location_name` assertion at
+  [R/make_LASER_config.R:918](R/make_LASER_config.R#L918)), but the test
+  was still asserting `expect_warning`. Switched to `expect_error` and
+  retitled the test to reflect the new contract.
+
+- **`test-run_MOSAIC_resume.R::".mosaic_likelihood_provenance reports R engine..."`** —
+  this is the test John wrote alongside the v0.32.4 forward hook
+  (`# scoring is R-side on all paths until phase 3`). v0.32.5 activated
+  the hook, so the assertion has to flip: `use_dask = TRUE` now returns
+  `engine = "python"` with `impl_version` carrying the laser-cholera
+  engine version. Test now asserts both branches of the helper
+  explicitly.
+
+- **`test-run_MOSAIC_resume.R::".mosaic_resume_check_inputs rejects a different likelihood provenance"`** —
+  the third sub-check wrote a hard-coded `pkg_laser_cholera = "0.13.0"`
+  into the fixture. On docker images whose installed laser-cholera lags
+  `inst/python/environment.yml` (e.g., a `:latest` tag that pre-dates
+  the v0.32.0 engine pin), the deaths-scale engine-version guard fires
+  before the likelihood-provenance check the test was trying to
+  exercise. Fixed by querying the live engine version via
+  `importlib.metadata.version("laser-cholera")` (the same call the
+  production guard uses at
+  [R/run_MOSAIC_helpers.R:1015-1020](R/run_MOSAIC_helpers.R#L1015-L1020))
+  and writing that into the fixture, so the engine guard is satisfied
+  regardless of which container the suite runs in.
+
+---
+
 # MOSAIC 0.32.5
 
 ## Phase 3 (#101): on-worker likelihood scoring on the Dask path
