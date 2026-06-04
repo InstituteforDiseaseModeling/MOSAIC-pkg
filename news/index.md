@@ -1,5 +1,276 @@
 # Changelog
 
+## MOSAIC 0.32.9
+
+### Phase 3 ([\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)): cast observed surveillance matrices to double before scatter
+
+End-to-end Dask smoke run surfaced a silent reticulate serialization bug
+that returned `-Inf` for every sim’s likelihood. Root cause:
+`get_location_config(iso = "ETH")` (and every other location’s config)
+ships `reported_cases` / `reported_deaths` as R **integer** matrices —
+counts are natively integer-valued — with `NA_integer_` for missing
+surveillance weeks. When
+[`reticulate::r_to_py()`](https://rstudio.github.io/reticulate/reference/r-py-conversion.html)
+serializes an integer matrix to numpy, `NA_integer_` becomes `INT32_MIN`
+(`-2147483648`) on the worker side, because numpy `int32` has no NaN
+representation. Those huge negative sentinels then evaluate as valid
+(extreme) counts in `calc_model_likelihood`’s NB term, returning `-Inf`
+for every sim.
+
+The smoke run’s parquet read `likelihood: -Inf` for all 5000 sims; the
+gather adapter’s multi-iter collapse then turned 5 copies of `-Inf` into
+`NA_real_` (no finite values to log-mean-exp), so `samples.parquet`
+showed `% finite: 0`.
+
+#### Fix
+
+`.mosaic_inject_likelihood_settings()` now casts `config$reported_cases`
+and `config$reported_deaths` to `storage.mode = "double"` before
+scatter. [`storage.mode()`](https://rdrr.io/r/base/mode.html) preserves
+matrix `dim` and only flips the underlying type; `NA_integer_` →
+`NA_real_` → `np.nan` via reticulate, which `calc_model_likelihood` then
+masks correctly via `np.isfinite()`.
+
+The cast lives in the Dask-path-specific helper so the local-path R-side
+`calc_model_likelihood` is unaffected — it handles `NA_integer_` and
+`NA_real_` identically via
+[`is.finite()`](https://rdrr.io/r/base/is.finite.html) masking.
+
+#### Validation
+
+1-sim ETH smoke against a Coiled cluster (1 D4s_v6 worker, freshly
+rebuilt v0.32.7 image with laser-cholera 0.13.1): - Before fix:
+`likelihood: -Inf, is finite: FALSE` - After fix:
+`likelihood: -17454.14, is finite: TRUE`
+
+The end-to-end on-worker scoring path is now confirmed functional.
+Production smoke (5K sims) and the 1K-sim performance benchmark remain
+to be re-run.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.32.8
+
+### Phase 3 ([\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)): swap removed MOZ fixtures for global `config_default` in parity test
+
+`tests/testthat/test-dask_worker_schema_parity.R` loaded
+`config_default_MOZ` and `priors_default_MOZ`, both removed in v0.30.49.
+All three parity tests were SKIPping with “config_default_MOZ /
+priors_default_MOZ not available” since the merge, leaving Phase 3’s
+worker-schema regression coverage inert.
+
+Switched the fixture loader (renamed `skip_if_no_moz_data()` →
+`skip_if_no_data()`) to use the global multi-country `config_default` /
+`priors_default`. Because the parity tests are R-side flattening only —
+no LASER simulation — the ~40-location config is cheap to exercise and
+gives strictly broader coverage of the ISO-suffix invariant than the
+single- country MOZ fixture would: TEST 2’s per-location loop now runs
+~40 assertions instead of 1, validating that every SSA ISO suffix
+survives the worker round trip. All three tests now PASS (was: 3 SKIPs).
+
+Docker post-fix: `test_file()` reports `[ FAIL 0 | SKIP 0 | PASS 42 ]`.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.32.7
+
+### azure/Dockerfile: harden Python-env build against silent failures
+
+The previous `:latest` push silently produced a broken image: the
+`r-mosaic` virtualenv was never created (only reticulate’s default
+`r-reticulate` conda env with just `numpy`), and `laser-cholera` wasn’t
+installed at all. Diagnosis revealed two latent bugs in
+[azure/Dockerfile](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/news/azure/Dockerfile)
+that combined to mask the failure:
+
+1.  **Failure-masking shell chain in the python-deps step.** The single
+    trailing semicolon (`; rm -rf ...`) before the final `echo`
+    short-circuited the `&&` chain — if
+    [`MOSAIC::install_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/install_dependencies.md)
+    or any chained pip command failed, the `rm -rf && echo "..."` tail
+    still exited 0, so the build looked green. **Fix**: all conjunctions
+    now `&&`; `conda clean` wrapped in `(... || true)` since its
+    `2>/dev/null` redirect intentionally ignores warnings but should not
+    fail the build.
+
+2.  **Verify step too lenient.**
+    [`MOSAIC::check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
+    prints warnings rather than erroring on missing modules, so a
+    half-installed venv (no laser-cholera) passed the previous
+    `tryCatch` guard. **Fix**: prepend three hard assertions before the
+    R-side check — `test -x /root/.virtualenvs/r-mosaic/bin/python`,
+    then a
+    `python -c "import laser.cholera; from laser.cholera import calc_model_likelihood"`
+    one-liner that fails the build if either import is missing. Confirms
+    the venv exists AND the v0.13+ analyzer submodule is reachable.
+
+3.  **`RETICULATE_PYTHON` pinned at image level.** The container only
+    had `ENV PATH=/root/.virtualenvs/r-mosaic/bin:$PATH`. reticulate’s
+    discovery doesn’t always honor PATH — `Rscript` started outside the
+    MOSAIC `.onLoad` hook fell back to a uv-bootstrapped ephemeral
+    Python at `/root/.cache/R/reticulate/uv/...`, completely bypassing
+    the installed venv. This caused `devtools::test()`’s
+    pre-[`library()`](https://rdrr.io/r/base/library.html) setup phase
+    to report laser-cholera as missing and SKIP 11 tests that depend on
+    the engine being importable. **Fix**: add
+    `ENV RETICULATE_PYTHON=/root/.virtualenvs/r-mosaic/bin/python` so
+    every R session in the image — MOSAIC-loaded or not — sees the right
+    Python.
+
+#### Migration
+
+Next image rebuild via `docker build -f azure/Dockerfile ...` (use
+`--no-cache` to evict the now-stale layers, or just retag the
+freshly-rebuilt image). Existing pulled images are unaffected until
+re-pull.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.32.6
+
+### Phase 3 ([\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)): test fixes for post-merge contract updates
+
+Three test failures surfaced by the first post-merge `devtools::test()`
+docker run, all from cross-PR-merge interactions rather than behavior
+regressions:
+
+- **`test-config_default.R::"make_LASER_config validation: unknown iso_code..."`**
+  — v0.32.0 promoted the warning to a hard error (per the v0.13+
+  `epidemic_peaks ⊆ location_name` assertion at
+  [R/make_LASER_config.R:918](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/news/R/make_LASER_config.R#L918)),
+  but the test was still asserting `expect_warning`. Switched to
+  `expect_error` and retitled the test to reflect the new contract.
+
+- **`test-run_MOSAIC_resume.R::".mosaic_likelihood_provenance reports R engine..."`**
+  — this is the test John wrote alongside the v0.32.4 forward hook
+  (`# scoring is R-side on all paths until phase 3`). v0.32.5 activated
+  the hook, so the assertion has to flip: `use_dask = TRUE` now returns
+  `engine = "python"` with `impl_version` carrying the laser-cholera
+  engine version. Test now asserts both branches of the helper
+  explicitly.
+
+- **`test-run_MOSAIC_resume.R::".mosaic_resume_check_inputs rejects a different likelihood provenance"`**
+  — the third sub-check wrote a hard-coded
+  `pkg_laser_cholera = "0.13.0"` into the fixture. On docker images
+  whose installed laser-cholera lags `inst/python/environment.yml`
+  (e.g., a `:latest` tag that pre-dates the v0.32.0 engine pin), the
+  deaths-scale engine-version guard fires before the
+  likelihood-provenance check the test was trying to exercise. Fixed by
+  querying the live engine version via
+  `importlib.metadata.version("laser-cholera")` (the same call the
+  production guard uses at
+  [R/run_MOSAIC_helpers.R:1015-1020](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/news/R/run_MOSAIC_helpers.R#L1015-L1020))
+  and writing that into the fixture, so the engine guard is satisfied
+  regardless of which container the suite runs in.
+
+------------------------------------------------------------------------
+
+## MOSAIC 0.32.5
+
+### Phase 3 ([\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)): on-worker likelihood scoring on the Dask path
+
+Workers on the Dask/Coiled path now compute the likelihood on-worker
+immediately after each LASER iteration and return a compact
+`{iter, seed_iter, likelihood}` dict plus a sim-level `params` echo,
+instead of returning full per-iter time-series matrices for the R
+orchestrator to score serially. The post-gather serial bottleneck (~40
+minutes on a 24K-sim predictive batch) collapses to seconds; at
+47-country scale the per-sim payload drops from ~3.4 MB to a few hundred
+bytes.
+
+This release activates the `.mosaic_likelihood_provenance()` forward
+hook introduced in v0.32.4: on the Dask path the helper now stamps
+`engine = "python"`, and the resume guard automatically rejects pooling
+Python-scored shards with R-scored shards from earlier runs. Depends on
+`laser-cholera >= 0.13` (pinned in v0.32.0).
+
+#### Changed
+
+- **`R/run_MOSAIC.R`** — adds a Dask preflight that rejects
+  `control$io$save_simresults = TRUE`. The new worker schema no longer
+  returns the raw (j, t) time-series the simresults writer needs. The
+  local path is unaffected.
+
+- **`R/run_MOSAIC_helpers.R`** — `.mosaic_run_batch_dask()` collapses
+  its two R-side scoring branches (parallel PSOCK + sequential fallback,
+  ~420 lines) into a single ~95-line gather-and-write loop. The new loop
+  reads the per-iter scalar `likelihood` directly from the worker dict
+  and re-injects two base-config fields stripped by
+  `.extract_sampled_params()` before flattening: `location_name` (drives
+  ISO column suffixes — without this
+  [`convert_config_to_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/convert_config_to_matrix.md)
+  falls back to numeric suffixes like `beta_j0_tot_1` instead of
+  `beta_j0_tot_ETH`) and `N_j_initial` (per-location initial
+  population). Multi-iter likelihoods collapse via
+  [`calc_log_mean_exp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_mean_exp.md)
+  exactly as the local path does (mirrors `run_MOSAIC.R` ~285-300).
+  `.mosaic_likelihood_provenance()` now returns `engine = "python"` when
+  `use_dask = TRUE`.
+
+- **`inst/python/mosaic_dask_worker.py`** — `run_laser_sim()` return
+  shape flips per the issue
+  [\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)
+  contract. Per-iter entries change from
+  `{j, seed, reported_cases, reported_deaths}` (nested lists of doubles)
+  to `{iter, seed_iter, likelihood}` (three scalars). A new top-level
+  `params` key carries the sampled scalars/vectors echoed from the
+  JSON-deserialized `sampled` dict, minus `_MATRIX_FIELDS`. A defensive
+  `getattr(model, "log_likelihood", None)` shim returns a clean per-sim
+  failure (`success = False`, actionable error message) when the worker
+  imports an engine older than laser-cholera 0.13. `run_laser_postca()`
+  is unchanged — the post-calibration ensemble path still needs
+  trajectories, not likelihoods.
+
+#### Tests
+
+- **New `tests/testthat/test-dask_worker_schema_parity.R`** —
+  engine-free regression tests that simulate the worker round trip in
+  pure R (no Dask cluster, no Python), so they run in every CI
+  configuration. Three cases:
+  1.  Column-name parity between the local-path
+      `convert_config_to_matrix(params_sim)` and the Dask-path
+      `convert_config_to_matrix(reconstituted)`, compared against the
+      canonical `param_names_all` schema
+      (`convert_config_to_matrix() minus seed`).
+  2.  ISO-suffix presence on every location — locks in that vector
+      parameters land as `beta_j0_tot_ETH`, not `beta_j0_tot_1`.
+  3.  Failure-mode lock-in — drops the `location_name` re-injection and
+      asserts numeric suffixes appear, so a future refactor that removes
+      the injection trips a clear failure pointing back here.
+- **`tests/testthat/test-dask_local_cluster_integration.R`** — schema
+  assertions updated to the new contract:
+  - New `skip_if_no_log_likelihood()` helper submits a sentinel sim and
+    skips when the worker fails-by-design on engines `< 0.13`.
+  - Test 3 (`client$submit`) asserts the result has `params` plus
+    `iterations` of `{iter, seed_iter, likelihood}`; `location_name` is
+    intentionally absent from `res$params`.
+  - The `likelihood` finiteness check is relaxed to a numeric-type check
+    — finiteness depends on Phase 1’s
+    `.mosaic_inject_likelihood_settings()` flattening the analyzer’s
+    input keys, which this fixture deliberately bypasses.
+  - Test 4 (`client$map`) gated on the same skip helper.
+
+#### Migration
+
+Calibrations that previously set `control$io$save_simresults = TRUE`
+together with `dask_spec` now error early. Use the local backend for
+diagnostic runs; `save_simresults` on the local path is unchanged.
+
+#### Cross-references
+
+- Parent:
+  [laser-cholera#47](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/47)
+- This issue:
+  [\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)
+- Phase 1 (v0.30.1–v0.30.3):
+  [\#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100)
+- Phase 2 / laser-cholera v0.13.0:
+  [laser-cholera#58](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/58)
+- Resume hand-off (v0.32.4): the provenance guard now flips
+  automatically on the Dask path with this release.
+
+------------------------------------------------------------------------
+
 ## MOSAIC 0.32.6
 
 ### rho (care-seeking) prior re-derived: Wiens 2-stratum RE pool
