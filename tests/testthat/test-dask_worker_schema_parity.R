@@ -17,23 +17,27 @@
 # Python) so it runs in every CI configuration.
 # =============================================================================
 
-skip_if_no_moz_data <- function() {
+skip_if_no_data <- function() {
   skip_if_not_installed("MOSAIC")
   env <- new.env()
   ok <- tryCatch({
-    utils::data("config_default_MOZ", package = "MOSAIC", envir = env)
-    utils::data("priors_default_MOZ", package = "MOSAIC", envir = env)
+    utils::data("config_default", package = "MOSAIC", envir = env)
+    utils::data("priors_default", package = "MOSAIC", envir = env)
     TRUE
   }, error = function(e) FALSE, warning = function(w) FALSE)
-  if (!ok || !exists("config_default_MOZ", envir = env)) {
-    skip("config_default_MOZ / priors_default_MOZ not available")
+  if (!ok || !exists("config_default", envir = env)) {
+    skip("config_default / priors_default not available")
   }
   root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
   if (!dir.exists(root)) {
     skip(paste("MOSAIC root not found at", root))
   }
   MOSAIC::set_root_directory(root)
-  list(config = env$config_default_MOZ, priors = env$priors_default_MOZ)
+  # config_default is the global (multi-location) sub-Saharan Africa config.
+  # The parity tests below are R-side flattening only — no LASER sims — so
+  # the ~40-location config is cheap to exercise and gives broader coverage
+  # of the ISO-suffix invariant than a single-country fixture would.
+  list(config = env$config_default, priors = env$priors_default)
 }
 
 # Mirrors inst/python/mosaic_dask_worker.py::_MATRIX_FIELDS. Kept as a local
@@ -73,7 +77,7 @@ skip_if_no_moz_data <- function() {
 # TEST 1: column-name parity between local path and Dask round trip
 # =============================================================================
 test_that("worker echo + base-field re-injection produces parquet column names matching the local path", {
-  fx <- skip_if_no_moz_data()
+  fx <- skip_if_no_data()
   cfg <- fx$config
 
   params_sim <- MOSAIC::sample_parameters(
@@ -105,7 +109,7 @@ test_that("worker echo + base-field re-injection produces parquet column names m
 # `beta_j0_tot_1`, `beta_j0_tot_2`, ... instead of the ISO-suffixed columns.
 # =============================================================================
 test_that("vector parameters carry ISO suffixes after worker round trip", {
-  fx <- skip_if_no_moz_data()
+  fx <- skip_if_no_data()
   cfg <- fx$config
 
   params_sim <- MOSAIC::sample_parameters(
@@ -137,7 +141,7 @@ test_that("vector parameters carry ISO suffixes after worker round trip", {
 # to this property.
 # =============================================================================
 test_that("regression: missing location_name injection yields numeric suffixes", {
-  fx <- skip_if_no_moz_data()
+  fx <- skip_if_no_data()
   cfg <- fx$config
   if (length(cfg$location_name) < 2L) {
     skip("multi-location fixture required to detect numeric suffix fallback")

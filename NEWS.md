@@ -1,3 +1,25 @@
+# MOSAIC 0.32.8
+
+## Phase 3 (#101): swap removed MOZ fixtures for global `config_default` in parity test
+
+`tests/testthat/test-dask_worker_schema_parity.R` loaded `config_default_MOZ`
+and `priors_default_MOZ`, both removed in v0.30.49. All three parity tests
+were SKIPping with "config_default_MOZ / priors_default_MOZ not available"
+since the merge, leaving Phase 3's worker-schema regression coverage inert.
+
+Switched the fixture loader (renamed `skip_if_no_moz_data()` →
+`skip_if_no_data()`) to use the global multi-country `config_default` /
+`priors_default`. Because the parity tests are R-side flattening only — no
+LASER simulation — the ~40-location config is cheap to exercise and gives
+strictly broader coverage of the ISO-suffix invariant than the single-
+country MOZ fixture would: TEST 2's per-location loop now runs ~40
+assertions instead of 1, validating that every SSA ISO suffix survives
+the worker round trip. All three tests now PASS (was: 3 SKIPs).
+
+Docker post-fix: `test_file()` reports `[ FAIL 0 | SKIP 0 | PASS 42 ]`.
+
+---
+
 # MOSAIC 0.32.7
 
 ## azure/Dockerfile: harden Python-env build against silent failures
