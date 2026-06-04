@@ -1,3 +1,102 @@
+# MOSAIC 0.32.5
+
+## Phase 3 (#101): on-worker likelihood scoring on the Dask path
+
+Workers on the Dask/Coiled path now compute the likelihood on-worker
+immediately after each LASER iteration and return a compact
+`{iter, seed_iter, likelihood}` dict plus a sim-level `params` echo,
+instead of returning full per-iter time-series matrices for the R
+orchestrator to score serially. The post-gather serial bottleneck
+(~40 minutes on a 24K-sim predictive batch) collapses to seconds; at
+47-country scale the per-sim payload drops from ~3.4 MB to a few
+hundred bytes.
+
+This release activates the `.mosaic_likelihood_provenance()` forward
+hook introduced in v0.32.4: on the Dask path the helper now stamps
+`engine = "python"`, and the resume guard automatically rejects pooling
+Python-scored shards with R-scored shards from earlier runs. Depends on
+`laser-cholera >= 0.13` (pinned in v0.32.0).
+
+### Changed
+
+- **`R/run_MOSAIC.R`** — adds a Dask preflight that rejects
+  `control$io$save_simresults = TRUE`. The new worker schema no
+  longer returns the raw (j, t) time-series the simresults writer
+  needs. The local path is unaffected.
+
+- **`R/run_MOSAIC_helpers.R`** — `.mosaic_run_batch_dask()` collapses
+  its two R-side scoring branches (parallel PSOCK + sequential
+  fallback, ~420 lines) into a single ~95-line gather-and-write
+  loop. The new loop reads the per-iter scalar `likelihood` directly
+  from the worker dict and re-injects two base-config fields stripped
+  by `.extract_sampled_params()` before flattening: `location_name`
+  (drives ISO column suffixes — without this `convert_config_to_matrix()`
+  falls back to numeric suffixes like `beta_j0_tot_1` instead of
+  `beta_j0_tot_ETH`) and `N_j_initial` (per-location initial
+  population). Multi-iter likelihoods collapse via `calc_log_mean_exp()`
+  exactly as the local path does (mirrors `run_MOSAIC.R` ~285-300).
+  `.mosaic_likelihood_provenance()` now returns `engine = "python"`
+  when `use_dask = TRUE`.
+
+- **`inst/python/mosaic_dask_worker.py`** — `run_laser_sim()` return
+  shape flips per the issue #101 contract. Per-iter entries change
+  from `{j, seed, reported_cases, reported_deaths}` (nested lists of
+  doubles) to `{iter, seed_iter, likelihood}` (three scalars). A new
+  top-level `params` key carries the sampled scalars/vectors echoed
+  from the JSON-deserialized `sampled` dict, minus `_MATRIX_FIELDS`.
+  A defensive `getattr(model, "log_likelihood", None)` shim returns a
+  clean per-sim failure (`success = False`, actionable error message)
+  when the worker imports an engine older than laser-cholera 0.13.
+  `run_laser_postca()` is unchanged — the post-calibration ensemble
+  path still needs trajectories, not likelihoods.
+
+### Tests
+
+- **New `tests/testthat/test-dask_worker_schema_parity.R`** —
+  engine-free regression tests that simulate the worker round trip
+  in pure R (no Dask cluster, no Python), so they run in every CI
+  configuration. Three cases:
+  1. Column-name parity between the local-path
+     `convert_config_to_matrix(params_sim)` and the Dask-path
+     `convert_config_to_matrix(reconstituted)`, compared against the
+     canonical `param_names_all` schema
+     (`convert_config_to_matrix() minus seed`).
+  2. ISO-suffix presence on every location — locks in that vector
+     parameters land as `beta_j0_tot_ETH`, not `beta_j0_tot_1`.
+  3. Failure-mode lock-in — drops the `location_name` re-injection
+     and asserts numeric suffixes appear, so a future refactor that
+     removes the injection trips a clear failure pointing back here.
+
+- **`tests/testthat/test-dask_local_cluster_integration.R`** —
+  schema assertions updated to the new contract:
+  - New `skip_if_no_log_likelihood()` helper submits a sentinel sim
+    and skips when the worker fails-by-design on engines `< 0.13`.
+  - Test 3 (`client$submit`) asserts the result has `params` plus
+    `iterations` of `{iter, seed_iter, likelihood}`; `location_name`
+    is intentionally absent from `res$params`.
+  - The `likelihood` finiteness check is relaxed to a numeric-type
+    check — finiteness depends on Phase 1's
+    `.mosaic_inject_likelihood_settings()` flattening the analyzer's
+    input keys, which this fixture deliberately bypasses.
+  - Test 4 (`client$map`) gated on the same skip helper.
+
+### Migration
+
+Calibrations that previously set `control$io$save_simresults = TRUE`
+together with `dask_spec` now error early. Use the local backend for
+diagnostic runs; `save_simresults` on the local path is unchanged.
+
+### Cross-references
+
+- Parent: [laser-cholera#47](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/47)
+- This issue: [#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)
+- Phase 1 (v0.30.1–v0.30.3): [#100](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/100)
+- Phase 2 / laser-cholera v0.13.0: [laser-cholera#58](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/58)
+- Resume hand-off (v0.32.4): the provenance guard now flips
+  automatically on the Dask path with this release.
+
+---
+
 # MOSAIC 0.32.1
 
 ## CFR pipeline reworked for v0.13+ schema; WHO data refreshed through 2025
