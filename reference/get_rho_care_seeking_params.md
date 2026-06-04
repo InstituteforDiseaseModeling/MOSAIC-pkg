@@ -1,26 +1,52 @@
 # Estimate Beta Prior for Rho (Care-Seeking Rate) and Save Parameter Data Frame
 
-Two data sources are combined:
+**Why pool the two Wiens strata?**
 
-**GEMS (Nasrin et al. 2013, PMC3748499):** The Global Enteric
-Multicenter Study measured the proportion of moderate-to-severe diarrhea
-(MSD) cases reaching sentinel health centres across four African sites
-(The Gambia, Mali, Mozambique, Kenya) by age stratum (0-11 mo, 12-23 mo,
-24-59 mo). These are the closest available SSA-specific empirical
-estimates of facility-based care-seeking for severe enteric disease.
+Symptomatic cholera in MOSAIC's setting spans the full severity spectrum
+(mild watery diarrhea to severe rapid dehydration). The two Wiens 2025
+meta-analytic strata bracket that spectrum:
 
-**Wiens et al. 2025 (PMC12013865):** A systematic review of 188 studies
-providing meta-analytic estimates of the proportion of diarrhea episodes
-reaching formal healthcare in LMICs. The severe diarrhea /
-cholera-specific estimate (58.6%, 95% CI 39.9-75.2%) is used here
-because it most closely matches the cholera clinical spectrum.
+- **General diarrhea** (3+ loose/liquid stools): 29.9\\ (95\\
+  care-seeking for the broader population of diarrheal episodes, which
+  is appropriate for the mild-to-moderate tail of symptomatic cholera
+  (the majority of cases by count).
 
-A weighted geometric mean of all stratum-level estimates is computed
-using inverse-variance weights derived from the 95% confidence
-intervals. The resulting 5th, 50th, and 95th percentile summary
-statistics are passed to
-[`propvacc::get_beta_params()`](https://rdrr.io/pkg/propvacc/man/get_beta_params.html)
-to fit the Beta(shape1, shape2) prior.
+- **Severe diarrhea + cholera**: 58.6\\ from 22 observations. Represents
+  care-seeking when symptoms are severe enough to be flagged as "severe"
+  or specifically cholera, which is appropriate for the severe tail of
+  symptomatic cholera.
+
+Anchoring on the severe+cholera stratum ALONE biases rho upward (it
+represents only the severe tail and is dominated by outbreak-response
+settings with enhanced care-seeking, e.g. the Haiti 2010-19 outbreak
+which contributes 50\\ ALONE biases rho downward (the broader category
+includes many mild, self-resolving episodes that don't reflect
+cholera-specific severity). Random-effects pooling of the two strata
+produces an estimate that honestly reflects the severity spectrum and
+its substantial heterogeneity.
+
+**Why not include GEMS Nasrin 2013 as a separate co-anchor?**
+
+Earlier versions (through v0.32.5) pooled GEMS pediatric
+moderate-to-severe diarrhea (4 SSA sites, 12 stratum-level estimates)
+WITH the Wiens severe+cholera pooled estimate. That pooling had three
+problems: (1) GEMS measures pediatric MSD care-seeking, a different
+population than MOSAIC's all-ages cholera; (2) 12 GEMS strata vs. 1
+Wiens meta-analytic summary was upside-down dimensionally; (3) Wiens
+2025 already includes GEMS-derived data (6 of its Study IDs are tagged
+GEMS/HUAS), so the direct GEMS entries partially double-counted the same
+source populations. Dropping GEMS and using Wiens's two strata directly
+resolves all three.
+
+**Methodology.** Random-effects meta-analysis on the logit scale
+(DerSimonian-Laird tau^2) with the two Wiens strata as the unit of
+pooling. The 95\\ pooled mean is then fit to a Beta distribution via
+[`get_beta_params`](https://rdrr.io/pkg/propvacc/man/get_beta_params.html).
+
+**Geographic provenance (severe+cholera stratum).** Of 23 underlying
+studies: 16 SSA, 3 Latin America/Caribbean (mostly Haiti 2010-19), 2
+Bangladesh, 1 MENA, 1 South Asia (non-BGD). Predominantly SSA + outbreak
+settings - the regime MOSAIC calibrates.
 
 ## Usage
 
@@ -46,7 +72,8 @@ rho Beta prior, invisibly. Also writes `param_rho_care_seeking.csv` to
 
 ## Details
 
-This function encodes empirical estimates of care-seeking rates for
-acute watery diarrhea / cholera in sub-Saharan Africa, pools them using
-inverse-variance weighting, and fits a Beta prior distribution via
-[`get_beta_params`](https://rdrr.io/pkg/propvacc/man/get_beta_params.html).
+This function encodes the prior on rho (the care-seeking rate:
+probability that a true symptomatic cholera infection presents to the
+surveillance pipeline as a suspected case) by random-effects pooling of
+the TWO case-definition strata reported by Wiens et al. 2025
+(PMC12013865): general diarrhea and severe-diarrhea + cholera.

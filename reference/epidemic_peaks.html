@@ -11,7 +11,7 @@ smoothing and prominence-based peak detection algorithms."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.10</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -123,17 +123,17 @@ for most countries; country-specific overrides below)</p></li>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     iso_code peak_start  peak_date  peak_stop reported_cases</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 118      AGO 2018-01-01 2018-01-04 2018-01-31             24</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1        AGO 2025-03-29 2025-04-28 2025-05-28            303</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2        AGO 2025-09-25 2025-10-13 2025-11-05            149</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3        AGO 2026-04-06 2026-04-20 2026-05-03            106</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 120      BDI 2016-08-01 2016-08-21 2016-10-31              9</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 119      BDI 2017-10-15 2017-10-17 2017-10-19              6</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 121      BDI 2023-04-06 2023-04-13 2023-04-30              8</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2        BDI 2023-09-03 2023-09-11 2023-09-19             13</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     outbreak_interval_days</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 118                     30</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1                       60</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2                       41</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3                       27</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 120                     91</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 119                      4</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 121                     24</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2                       16</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Countries with epidemic data</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">iso_code</span><span class="op">)</span></span></span>
@@ -145,8 +145,8 @@ for most countries; country-specific overrides below)</p></li>
 <span class="r-in"><span><span class="va">recent_peaks</span> <span class="op">&lt;-</span> <span class="va">epidemic_peaks</span><span class="op">[</span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">peak_date</span> <span class="op">&gt;=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2024-01-01"</span><span class="op">)</span>, <span class="op">]</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">recent_peaks</span><span class="op">$</span><span class="va">iso_code</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> AGO BDI COD COG ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TGO TZA UGA ZMB ZWE </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   1   2   1   1   2   1   3   2   1   2   1   4   2   2   1   3   3   2   2 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> AGO BDI COD COG ETH KEN MOZ NGA RWA SDN SOM SSD TGO TZA UGA ZMB ZWE </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   3   4   2   1   3   3   3   2   1   4   2   2   1   3   3   2   2 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Peak duration calculation</span></span></span>
 <span class="r-in"><span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">duration</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span></span></span>
@@ -154,7 +154,7 @@ for most countries; country-specific overrides below)</p></li>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">epidemic_peaks</span><span class="op">$</span><span class="va">duration</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    2.00   14.50   28.00   31.19   45.75  117.00 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    2.00   16.00   28.00   30.79   47.00  105.00 </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

@@ -115,17 +115,17 @@ head(epidemic_peaks)
 #>     iso_code peak_start  peak_date  peak_stop reported_cases
 #> 118      AGO 2018-01-01 2018-01-04 2018-01-31             24
 #> 1        AGO 2025-03-29 2025-04-28 2025-05-28            303
+#> 2        AGO 2025-09-25 2025-10-13 2025-11-05            149
+#> 3        AGO 2026-04-06 2026-04-20 2026-05-03            106
 #> 120      BDI 2016-08-01 2016-08-21 2016-10-31              9
 #> 119      BDI 2017-10-15 2017-10-17 2017-10-19              6
-#> 121      BDI 2023-04-06 2023-04-13 2023-04-30              8
-#> 2        BDI 2023-09-03 2023-09-11 2023-09-19             13
 #>     outbreak_interval_days
 #> 118                     30
 #> 1                       60
+#> 2                       41
+#> 3                       27
 #> 120                     91
 #> 119                      4
-#> 121                     24
-#> 2                       16
 
 # Countries with epidemic data
 unique(epidemic_peaks$iso_code)
@@ -137,8 +137,8 @@ unique(epidemic_peaks$iso_code)
 recent_peaks <- epidemic_peaks[epidemic_peaks$peak_date >= as.Date("2024-01-01"), ]
 table(recent_peaks$iso_code)
 #> 
-#> AGO BDI COD COG ETH GHA KEN MOZ NER NGA RWA SDN SOM SSD TGO TZA UGA ZMB ZWE 
-#>   1   2   1   1   2   1   3   2   1   2   1   4   2   2   1   3   3   2   2 
+#> AGO BDI COD COG ETH KEN MOZ NGA RWA SDN SOM SSD TGO TZA UGA ZMB ZWE 
+#>   3   4   2   1   3   3   3   2   1   4   2   2   1   3   3   2   2 
 
 # Peak duration calculation
 epidemic_peaks$duration <- as.numeric(
@@ -146,5 +146,5 @@ epidemic_peaks$duration <- as.numeric(
 )
 summary(epidemic_peaks$duration)
 #>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#>    2.00   14.50   28.00   31.19   45.75  117.00 
+#>    2.00   16.00   28.00   30.79   47.00  105.00 
 ```

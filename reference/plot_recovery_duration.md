@@ -67,5 +67,4 @@ plot will also be saved as a PNG in that directory as
 plot_recovery_duration()
 plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12),
                        symp_central = 5, asymp_central = 10)
-#> Error in plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8,     12), symp_central = 5, asymp_central = 10): unused arguments (symp_central = 5, asymp_central = 10)
 ```
