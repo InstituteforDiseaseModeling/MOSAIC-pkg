@@ -52,6 +52,8 @@ jobs:
 
       - name: Install system deps on macOS (SSL + UDUNITS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew update
           brew install \
@@ -69,8 +71,9 @@ jobs:
 
       - name: Install Python 3.12 (arm64) on macOS
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
-          brew update
           brew install python@3.12
           # ensure this python comes first
           echo "$(brew --prefix python@3.12)/bin" >> $GITHUB_PATH

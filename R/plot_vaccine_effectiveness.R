@@ -213,7 +213,11 @@ plot_vaccine_effectiveness <- function(PATHS) {
           scale_x_continuous(limits = c(0, 365 * 10), labels = 1:10, breaks = 365 * (1:10), expand = c(0, 0))
 
      # Plot E: Phi_2 prior
-     x_vals_phi_2 <- seq(0.60, 0.80, length.out = 1000)
+     # Use the same x-axis range as phi_1 (Plot B) so the two priors are visually
+     # comparable; under the phi_2 >= phi_1 monotonicity constraint this is the
+     # natural choice and prevents the phi_2 density from being pinned to one
+     # edge of a range scaled for the unconstrained (wider) prior.
+     x_vals_phi_2 <- seq(0.70, 0.85, length.out = 1000)
      dens_raw_phi_2 <- dbeta(x_vals_phi_2, shape1 = phi_2_shape1, shape2 = phi_2_shape2)
      df_phi_2 <- data.frame(x = x_vals_phi_2, density = dens_raw_phi_2/sum(dens_raw_phi_2))
 

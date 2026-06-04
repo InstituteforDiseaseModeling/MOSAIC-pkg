@@ -14,14 +14,15 @@ plot_rho_care_seeking_params(PATHS)
 }}
 }
 \description{
-Generates a two-panel figure summarising the empirical data and fitted Beta
+Generates a two-panel figure summarising the empirical anchors (Wiens et al.
+2025 general diarrhea + severe-diarrhea/cholera strata) and the fitted Beta
 prior for the rho parameter (care-seeking rate).
 }
 \details{
-Panel A — dot-range plot of all per-stratum GEMS estimates and the Wiens et al.
-2025 meta-analytic severe-diarrhea estimate, with points sized by relative
-inverse-variance weight.
+Panel A - dot-range plot of the two Wiens 2025 pooled estimates with their
+95\% CIs. Random-effects pooling combines them as described in
+\code{\link{get_rho_care_seeking_params}}.
 
-Panel B — fitted Beta density curve with the 5th, 50th, and 95th percentiles
-annotated.
+Panel B - fitted Beta density curve with the 2.5th, 50th, and 97.5th
+percentiles annotated.
 }

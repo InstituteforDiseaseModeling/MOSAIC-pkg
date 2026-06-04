@@ -160,6 +160,16 @@ plot_vaccination_data <- function(PATHS, data_source = "WHO") {
                        plot_data$date >= as.Date('2024-06-01') &
                        plot_data$date <= as.Date('2024-08-01'),]
 
+     # Identify the date of the largest shipment within the displayed window.
+     # The redistributed-doses bars are restricted to dates on or after this
+     # campaign-start date so the figure illustrates a SINGLE campaign's
+     # redistribution. Without this filter the aggregated daily redistribution
+     # (which sums across all shipments by iso_code + date) would show
+     # carry-over from earlier campaigns as light-green bars appearing BEFORE
+     # the dark-green shipment bar -- misleading because the redistribution
+     # loop only ever moves doses forward in time from the campaign date.
+     campaign_start_date <- tmp$date[which.max(tmp$doses_shipped)]
+
 
      doses_shipped_color <- "#2E7D32"
      doses_distributed_color <- "#A3D9A1"
@@ -183,8 +193,12 @@ plot_vaccination_data <- function(PATHS, data_source = "WHO") {
                    ggplot2::aes(x = date, y = doses_shipped, fill = "Raw Doses"),
                    stat = "identity", color = "black", width = 1) +
 
-          # Redistributed doses as purple bars (only show where doses_distributed > 0)
-          ggplot2::geom_bar(data = tmp[tmp$doses_distributed > 0, ],
+          # Redistributed doses as purple bars: restrict to dates on or after
+          # the displayed campaign-start so the figure tells the single-
+          # campaign story (the underlying redistribution loop only ever
+          # produces dates >= campaign_date; the prior data values come from
+          # earlier shipments aggregated into the same date bucket).
+          ggplot2::geom_bar(data = tmp[tmp$doses_distributed > 0 & tmp$date >= campaign_start_date, ],
                    ggplot2::aes(x = date, y = doses_distributed, fill = "Redistributed Doses"),
                    stat = "identity", color = "black", width = 1) +
 

@@ -417,8 +417,7 @@ make_LASER_config <- function(output_file_path = NULL,
           decay_shape_1     = decay_shape_1,
           decay_shape_2     = decay_shape_2,
           reported_cases    = reported_cases,
-          reported_deaths   = reported_deaths,
-          epidemic_peaks    = epidemic_peaks
+          reported_deaths   = reported_deaths
      )
 
      # Add optional parameters if they are not NULL
@@ -466,6 +465,14 @@ make_LASER_config <- function(output_file_path = NULL,
      }
      if (!is.null(delta_reporting_deaths)) {
           params$delta_reporting_deaths <- delta_reporting_deaths
+     }
+
+     # Optional epidemic peaks pass-through; NULL is allowed (see docstring +
+     # the !is.null guard in the validation block below). Insert conditionally
+     # so the generic NULL-sweep doesn't reject configs that legitimately omit
+     # surveillance peaks (e.g. synthetic simulation fixtures).
+     if (!is.null(epidemic_peaks)) {
+          params$epidemic_peaks <- epidemic_peaks
      }
 
      # Check for NULL values in required parameters

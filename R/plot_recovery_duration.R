@@ -7,8 +7,10 @@
 #' If a list `PATHS` is provided with a valid `DOCS_FIGURES` element, the plot will also be
 #' saved as a PNG in that directory as "recovery_rates.png".
 #'
-#' @param symp_range A numeric vector of length 2 indicating the minimum and maximum shedding duration (in days) for symptomatic infections. Default is c(3, 7).
-#' @param asymp_range A numeric vector of length 2 indicating the minimum and maximum shedding duration (in days) for asymptomatic infections. Default is c(7, 14).
+#' @param symp_range A numeric vector of length 2 indicating the lower and upper shedding-duration bound (in days) for symptomatic infections. Default is the 95% credible interval of the canonical lognormal prior gamma_1 ~ Lognormal(-2.303, 0.5), i.e. c(3.8, 26.6) days.
+#' @param asymp_range A numeric vector of length 2 indicating the lower and upper shedding-duration bound (in days) for asymptomatic infections. Default is the 95% credible interval of the canonical lognormal prior gamma_2 ~ Lognormal(-0.693, 0.4), i.e. c(0.9, 4.4) days.
+#' @param symp_central A single numeric giving the central duration (typically the median) for symptomatic infections. Default 10 days (median of gamma_1 prior). The vertical solid line in the plot is drawn here. If `NA`, falls back to the arithmetic midpoint of `symp_range`.
+#' @param asymp_central A single numeric giving the central duration (typically the median) for asymptomatic infections. Default 2 days (median of gamma_2 prior).
 #' @param PATHS Optional list containing output paths. If provided, must include `DOCS_FIGURES` where plot will be saved.
 #'
 #' @return Invisibly returns the ggplot object. If `PATHS` is supplied, also saves a PNG.
@@ -16,10 +18,15 @@
 #'
 #' @examples
 #' plot_recovery_duration()
-#' plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12))
+#' plot_recovery_duration(symp_range = c(4, 6), asymp_range = c(8, 12),
+#'                        symp_central = 5, asymp_central = 10)
 #'
 
-plot_recovery_duration <- function(PATHS = NULL, symp_range = c(3, 7), asymp_range = c(7, 14)) {
+plot_recovery_duration <- function(PATHS = NULL,
+                                   symp_range = c(3.8, 26.6),
+                                   asymp_range = c(0.9, 4.4),
+                                   symp_central = 10,
+                                   asymp_central = 2) {
 
      requireNamespace("ggplot2")
 
@@ -27,14 +34,24 @@ plot_recovery_duration <- function(PATHS = NULL, symp_range = c(3, 7), asymp_ran
      data <- data.frame(
           type = factor(c("Symptomatic", "Asymptomatic"), levels = c("Asymptomatic", "Symptomatic")),
           min_days = c(symp_range[1], asymp_range[1]),
-          max_days = c(symp_range[2], asymp_range[2])
+          max_days = c(symp_range[2], asymp_range[2]),
+          central_days = c(
+               if (is.na(symp_central))  (symp_range[1]  + symp_range[2])  / 2 else symp_central,
+               if (is.na(asymp_central)) (asymp_range[1] + asymp_range[2]) / 2 else asymp_central
+          )
      )
 
      # Compute additional values
-     data$mean_days <- (data$min_days + data$max_days) / 2
      data$y <- as.numeric(data$type)
      data$ymin <- data$y - 0.3
      data$ymax <- data$y + 0.3
+
+     # Dynamic x-axis: pad either side of the widest range by 5%
+     x_lo <- min(data$min_days, na.rm = TRUE) * 0.95
+     x_hi <- max(data$max_days, na.rm = TRUE) * 1.05
+     # Pick a break step that gives roughly 7-8 ticks
+     break_step <- pretty(c(x_lo, x_hi), n = 7)
+     break_step <- diff(break_step)[1]
 
      # Define manual colors
      color_values <- c("Symptomatic" = "#E41A1C", "Asymptomatic" = "#377EB8")
@@ -45,7 +62,7 @@ plot_recovery_duration <- function(PATHS = NULL, symp_range = c(3, 7), asymp_ran
                         ymin = ymin, ymax = ymax,
                         fill = type),
                     alpha = 0.4, color = NA) +
-          geom_segment(aes(x = mean_days, xend = mean_days,
+          geom_segment(aes(x = central_days, xend = central_days,
                            y = ymin, yend = ymax, color = type),
                        linewidth = 2) +
           scale_fill_manual(values = color_values) +
@@ -56,8 +73,8 @@ plot_recovery_duration <- function(PATHS = NULL, symp_range = c(3, 7), asymp_ran
           ) +
           scale_x_continuous(
                name = "Shedding Duration (days)",
-               limits = c(2, 15),
-               breaks = seq(2, 15, 2)
+               limits = c(max(0, x_lo), x_hi),
+               breaks = seq(0, ceiling(x_hi / break_step) * break_step, by = break_step)
           ) +
           theme_minimal(base_size = 14) +
           theme(

@@ -89,10 +89,12 @@ est_vaccine_effectiveness <- function(PATHS) {
      }
 
      # Function to fit exponential decay model with constraints
-     fit_vaccine_decay <- function(data, dose_name) {
+     fit_vaccine_decay <- function(data, dose_name, phi_lower = 0) {
 
           # Starting values for model parameters
-          start_values <- c(phi = 0.80, omega = 0.0005)
+          # If phi_lower is supplied, lift the starting value so it lies inside the feasible region
+          start_phi <- max(0.80, phi_lower + 1e-3)
+          start_values <- c(phi = start_phi, omega = 0.0005)
 
           # Objective function to minimize residuals
           objective_function <- function(par, x, y) {
@@ -102,10 +104,14 @@ est_vaccine_effectiveness <- function(PATHS) {
           }
 
           # Fit model for mean effectiveness
+          # Optional phi_lower enforces biological monotonicity across dose regimens
+          # (e.g. phi_2 >= phi_1 by passing phi_lower = fit_one_dose$mean['phi'])
           fit_mean <- nls.lm(par = start_values,
                              fn = objective_function,
                              x = data$days,
                              y = data$effectiveness,
+                             lower = c(phi_lower, 0),
+                             upper = c(1.0, Inf),
                              control = nls.lm.control(maxiter = 10000))
 
           # Fit model for upper CI
@@ -136,9 +142,18 @@ est_vaccine_effectiveness <- function(PATHS) {
           ))
      }
 
-     # Fit models for both dose regimens
+     # Fit models for both dose regimens.
+     # The two-dose fit is constrained so that its initial effectiveness
+     # phi_2 is at least the one-dose initial effectiveness phi_1. This
+     # enforces the biological monotonicity that two doses cannot reduce
+     # protection at the time of delivery. Without the constraint the
+     # backward extrapolation to t=0 from the later-starting two-dose
+     # follow-up window (12-48 mo) yields phi_2 ~ 0.769 < phi_1 ~ 0.788,
+     # which is an artefact of the independent NLS regressions rather
+     # than a feature of the underlying Xu et al. meta-regression.
      fit_one_dose <- fit_vaccine_decay(one_dose_data, "one_dose")
-     fit_two_dose <- fit_vaccine_decay(two_dose_data, "two_dose")
+     fit_two_dose <- fit_vaccine_decay(two_dose_data, "two_dose",
+                                       phi_lower = as.numeric(fit_one_dose$mean['phi']))
 
      # Create prediction data frames for both dose regimens
      days_predict <- seq(0, 365*10, by = 1)  # Predict up to 5 years

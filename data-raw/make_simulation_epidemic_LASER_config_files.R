@@ -63,6 +63,14 @@ baseline_beta <- c(0.3, 0.5, 0.4)
 amp_beta      <- 0.15
 phase_shift   <- runif(n_loc, 0, 2 * pi)
 
+# laser-cholera v0.13+ requires beta_j0_tot and p_beta. Derive beta_j0_hum and
+# beta_j0_env from them so make_LASER_config()'s tolerance check
+# (|beta_j0_hum - p_beta * beta_j0_tot| < 1e-10) passes.
+beta_j0_tot_sim <- baseline_beta * 1.5                  # hum + env
+p_beta_sim      <- rep(1/1.5, n_loc)                    # 2/3 human share
+beta_j0_hum_sim <- p_beta_sim * beta_j0_tot_sim         # equals baseline_beta
+beta_j0_env_sim <- (1 - p_beta_sim) * beta_j0_tot_sim   # equals baseline_beta * 0.5
+
 p <- 365                                        # season length (days)
 a_1_j <-  amp_beta * cos(phase_shift)
 a_2_j <- rep(0, n_loc)
@@ -124,6 +132,9 @@ sim_args <- list(
      gamma_2          = 0.1,
      epsilon          = 0.0003,
      mu_jt            = mu_jt,
+     mu_j_baseline        = setNames(rep(0.01, n_loc), j),  # aligned with mu_jt baseline
+     mu_j_slope           = setNames(rep(0,    n_loc), j),  # no temporal trend (toy)
+     mu_j_epidemic_factor = setNames(rep(0,    n_loc), j),  # no epidemic IFR bump (toy)
      chi_endemic      = 0.5,       # PPV during endemic periods
      chi_epidemic     = 0.75,      # PPV during epidemic periods
      epidemic_threshold = 0.0001,  # incidence threshold for epidemic definition
@@ -137,7 +148,9 @@ sim_args <- list(
      mobility_omega   = mobility_omega,
      mobility_gamma   = mobility_gamma,
      tau_i            = tau_i,
-     beta_j0_hum      = baseline_beta,
+     beta_j0_tot      = beta_j0_tot_sim,
+     p_beta           = p_beta_sim,
+     beta_j0_hum      = beta_j0_hum_sim,
      a_1_j            = a_1_j,
      a_2_j            = a_2_j,
      b_1_j            = b_1_j,
@@ -145,7 +158,7 @@ sim_args <- list(
      p                = p,
      alpha_1          = 0.95,
      alpha_2          = 0.95,
-     beta_j0_env      = baseline_beta * 0.5,
+     beta_j0_env      = beta_j0_env_sim,
      theta_j          = theta_j,
      psi_jt           = psi_jt,
      psi_star_a       = rep(1, n_loc),    # Identity gain (no calibration)

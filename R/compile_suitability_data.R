@@ -736,12 +736,42 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                # Soil moisture anomalies
                soilm_clim_mean = mean(soil_moisture_0_to_10cm_mean, na.rm = TRUE),
                soilm_clim_sd = sd(soil_moisture_0_to_10cm_mean, na.rm = TRUE),
-               soil_moisture_anom = (soil_moisture_0_to_10cm_mean - soilm_clim_mean) / 
-                                  ifelse(soilm_clim_sd > 0, soilm_clim_sd, 1)
+               soil_moisture_anom = (soil_moisture_0_to_10cm_mean - soilm_clim_mean) /
+                                  ifelse(soilm_clim_sd > 0, soilm_clim_sd, 1),
+
+               # Teleconnection anomalies (week-of-year deseasonalization)
+               # The raw ENSO/IOD indices are anomalies vs a 30-year climatology
+               # baseline but retain a residual annual cycle that produces
+               # spurious 30-78w correlations with cholera (seasonal aliasing).
+               # Subtracting the week-of-year climatology removes that cycle and
+               # isolates the non-seasonal teleconnection deviation.
+               IOD_clim_mean = mean(IOD, na.rm = TRUE),
+               IOD_clim_sd = sd(IOD, na.rm = TRUE),
+               IOD_anom = (IOD - IOD_clim_mean) /
+                          ifelse(IOD_clim_sd > 0, IOD_clim_sd, 1),
+
+               ENSO3_clim_mean = mean(ENSO3, na.rm = TRUE),
+               ENSO3_clim_sd = sd(ENSO3, na.rm = TRUE),
+               ENSO3_anom = (ENSO3 - ENSO3_clim_mean) /
+                            ifelse(ENSO3_clim_sd > 0, ENSO3_clim_sd, 1),
+
+               ENSO34_clim_mean = mean(ENSO34, na.rm = TRUE),
+               ENSO34_clim_sd = sd(ENSO34, na.rm = TRUE),
+               ENSO34_anom = (ENSO34 - ENSO34_clim_mean) /
+                             ifelse(ENSO34_clim_sd > 0, ENSO34_clim_sd, 1),
+
+               ENSO4_clim_mean = mean(ENSO4, na.rm = TRUE),
+               ENSO4_clim_sd = sd(ENSO4, na.rm = TRUE),
+               ENSO4_anom = (ENSO4 - ENSO4_clim_mean) /
+                            ifelse(ENSO4_clim_sd > 0, ENSO4_clim_sd, 1)
           ) %>%
           # Remove intermediate climatology columns
           dplyr::select(-precip_clim_mean, -precip_clim_sd, -temp_clim_mean, -temp_clim_sd,
-                       -vpd_clim_mean, -vpd_clim_sd, -soilm_clim_mean, -soilm_clim_sd) %>%
+                       -vpd_clim_mean, -vpd_clim_sd, -soilm_clim_mean, -soilm_clim_sd,
+                       -IOD_clim_mean, -IOD_clim_sd,
+                       -ENSO3_clim_mean, -ENSO3_clim_sd,
+                       -ENSO34_clim_mean, -ENSO34_clim_sd,
+                       -ENSO4_clim_mean, -ENSO4_clim_sd) %>%
           dplyr::ungroup()
 
      # 3. Climate extremes and spell indicators
@@ -797,12 +827,51 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      if (all(c("urban_population_pct", "precip_anom") %in% names(d))) {
           d$urban_precip_anom_interaction <- d$urban_population_pct * d$precip_anom
      }
-     
+
+     # WASH × climate / Vibrio-growth / drought-break interactions
+     # (added 2026-06; mechanism categories from cholera-environmental-suitability
+     # literature; included as engineered features because each product encodes a
+     # multiplicative AND-gate over slow/fast variables that the LSTM has limited
+     # capacity to discover from raw inputs alone.)
+     #
+     # Tier 1 — direct fecal-oral transmission (extreme rain / flood × poor sanitation):
+     if (all(c("Open_Defecation", "precip_extreme_p90_count") %in% names(d))) {
+          d$od_x_precip_extreme <- d$Open_Defecation * d$precip_extreme_p90_count
+     }
+     # NOTE: od_x_flood_4w and surface_water_x_flood_12w are computed LATER —
+     # after impute_flood_probability() materializes the emdat_flood_prob_*
+     # rolling aggregates further below in this function.
+     if (all(c("Open_Defecation", "soil_moisture_anom") %in% names(d))) {
+          d$od_x_soil_moisture_anom <- d$Open_Defecation * d$soil_moisture_anom
+     }
+     if (all(c("Piped_Water", "precip_extreme_p90_count") %in% names(d))) {
+          d$nonpiped_x_precip_extreme <- (1 - d$Piped_Water) * d$precip_extreme_p90_count
+     }
+
+     # Tier 2 — V. cholerae environmental growth niche (warm AND wet AND-gate):
+     if (all(c("soil_moisture_anom", "temperature_2m_mean") %in% names(d))) {
+          d$sm_anom_x_temp <- d$soil_moisture_anom * d$temperature_2m_mean
+     }
+     if (all(c("Surface_Water", "temperature_2m_mean") %in% names(d))) {
+          d$surface_water_x_temp <- d$Surface_Water * d$temperature_2m_mean
+     }
+     if (all(c("precip_anom", "temperature_2m_mean") %in% names(d))) {
+          d$precip_anom_x_temp <- d$precip_anom * d$temperature_2m_mean
+     }
+
+     # Tier 3 — drought-break / regime-transition flush events:
+     if (all(c("dry_spell_len", "precip_sum_2w") %in% names(d))) {
+          d$dryspell_x_precip_2w <- d$dry_spell_len * d$precip_sum_2w
+     }
+     if (all(c("spei_approx", "precip_anom") %in% names(d))) {
+          d$spei_x_precip_anom <- d$spei_approx * d$precip_anom
+     }
+
      # Nonlinear transforms for key variables
      if ("precip_anom" %in% names(d)) {
           d$precip_anom_sq <- d$precip_anom^2
      }
-     
+
      if ("temp_anom" %in% names(d)) {
           d$temp_anom_sq <- d$temp_anom^2
      }
@@ -815,97 +884,217 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                dplyr::group_by(iso_code) %>%
                dplyr::arrange(date, .by_group = TRUE) %>%
                dplyr::mutate(
-                    # Precipitation: 1,2,4,6,8 weeks (runoff/flooding → contamination)
+                    # ---- Climate raw: extended grid to lag 24w ------------
+                    # Precipitation: 1-8w short-window + 12,16,20,24w (ENSO-mediated rainfall response)
                     precipitation_sum_lag1 = dplyr::lag(precipitation_sum, 1),
                     precipitation_sum_lag2 = dplyr::lag(precipitation_sum, 2),
                     precipitation_sum_lag4 = dplyr::lag(precipitation_sum, 4),
-                    precipitation_sum_lag6 = dplyr::lag(precipitation_sum, 6),    # Optimal secondary period (r = 0.029)
+                    precipitation_sum_lag6 = dplyr::lag(precipitation_sum, 6),
                     precipitation_sum_lag8 = dplyr::lag(precipitation_sum, 8),
-                    
-                    # Temperature: 2,4,8 weeks (growth/survival of vibrios)
+                    precipitation_sum_lag12 = dplyr::lag(precipitation_sum, 12),
+                    precipitation_sum_lag16 = dplyr::lag(precipitation_sum, 16),
+                    precipitation_sum_lag20 = dplyr::lag(precipitation_sum, 20),
+                    precipitation_sum_lag24 = dplyr::lag(precipitation_sum, 24),
+
+                    # Temperature mean: 2-8w + extended 12,16,20,24w
                     temperature_2m_mean_lag2 = dplyr::lag(temperature_2m_mean, 2),
                     temperature_2m_mean_lag4 = dplyr::lag(temperature_2m_mean, 4),
                     temperature_2m_mean_lag8 = dplyr::lag(temperature_2m_mean, 8),
+                    temperature_2m_mean_lag12 = dplyr::lag(temperature_2m_mean, 12),
+                    temperature_2m_mean_lag16 = dplyr::lag(temperature_2m_mean, 16),
+                    temperature_2m_mean_lag20 = dplyr::lag(temperature_2m_mean, 20),
+                    temperature_2m_mean_lag24 = dplyr::lag(temperature_2m_mean, 24),
+
+                    # Temperature max: 2-8w + 12,16w
                     temperature_2m_max_lag2 = dplyr::lag(temperature_2m_max, 2),
                     temperature_2m_max_lag4 = dplyr::lag(temperature_2m_max, 4),
-                    temperature_2m_max_lag6 = dplyr::lag(temperature_2m_max, 6),    # Consistent negative correlation (r = -0.020)
+                    temperature_2m_max_lag6 = dplyr::lag(temperature_2m_max, 6),
                     temperature_2m_max_lag8 = dplyr::lag(temperature_2m_max, 8),
-                    
-                    # Relative humidity: 1,2,4 weeks (survival; interacts with heat)
+                    temperature_2m_max_lag12 = dplyr::lag(temperature_2m_max, 12),
+                    temperature_2m_max_lag16 = dplyr::lag(temperature_2m_max, 16),
+
+                    # Relative humidity: 1-4w + extended 8,12,16w
                     relative_humidity_2m_mean_lag1 = dplyr::lag(relative_humidity_2m_mean, 1),
                     relative_humidity_2m_mean_lag2 = dplyr::lag(relative_humidity_2m_mean, 2),
                     relative_humidity_2m_mean_lag4 = dplyr::lag(relative_humidity_2m_mean, 4),
-                    
-                    # VPD: 1,4,8 weeks (dryness preceding wet periods)
-                    # Only create meaningful lags if vpd exists and has valid data
+                    relative_humidity_2m_mean_lag8 = dplyr::lag(relative_humidity_2m_mean, 8),
+                    relative_humidity_2m_mean_lag12 = dplyr::lag(relative_humidity_2m_mean, 12),
+                    relative_humidity_2m_mean_lag16 = dplyr::lag(relative_humidity_2m_mean, 16),
+
+                    # VPD: 1-8w + 12,16w
                     vpd_lag1 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 1) else NA_real_,
                     vpd_lag4 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 4) else NA_real_,
                     vpd_lag8 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 8) else NA_real_,
-                    
-                    # Soil moisture: 1,2,4,6,8 weeks (environmental reservoir readiness)
+                    vpd_lag12 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 12) else NA_real_,
+                    vpd_lag16 = if("vpd" %in% names(.) && !all(is.na(vpd))) dplyr::lag(vpd, 16) else NA_real_,
+
+                    # Soil moisture: 1-8w + 12,16w
                     soil_moisture_0_to_10cm_mean_lag1 = dplyr::lag(soil_moisture_0_to_10cm_mean, 1),
-                    soil_moisture_0_to_10cm_mean_lag2 = dplyr::lag(soil_moisture_0_to_10cm_mean, 2),    # Optimal period (r = 0.043)
+                    soil_moisture_0_to_10cm_mean_lag2 = dplyr::lag(soil_moisture_0_to_10cm_mean, 2),
                     soil_moisture_0_to_10cm_mean_lag4 = dplyr::lag(soil_moisture_0_to_10cm_mean, 4),
-                    soil_moisture_0_to_10cm_mean_lag6 = dplyr::lag(soil_moisture_0_to_10cm_mean, 6),    # Secondary optimal (r = 0.037)
+                    soil_moisture_0_to_10cm_mean_lag6 = dplyr::lag(soil_moisture_0_to_10cm_mean, 6),
                     soil_moisture_0_to_10cm_mean_lag8 = dplyr::lag(soil_moisture_0_to_10cm_mean, 8),
-                    
-                    # SPEI: 4,8,12 weeks (integrated hydro-climate balance)
-                    # Only create meaningful lags if spei_approx exists and has valid data
+                    soil_moisture_0_to_10cm_mean_lag12 = dplyr::lag(soil_moisture_0_to_10cm_mean, 12),
+                    soil_moisture_0_to_10cm_mean_lag16 = dplyr::lag(soil_moisture_0_to_10cm_mean, 16),
+
+                    # SPEI (integrated hydro-climate balance): 4-24w
                     spei_approx_lag4 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 4) else NA_real_,
                     spei_approx_lag8 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 8) else NA_real_,
                     spei_approx_lag12 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 12) else NA_real_,
-                    
-                    # Evapotranspiration: 1,4,8 weeks
+                    spei_approx_lag16 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 16) else NA_real_,
+                    spei_approx_lag20 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 20) else NA_real_,
+                    spei_approx_lag24 = if("spei_approx" %in% names(.) && !all(is.na(spei_approx))) dplyr::lag(spei_approx, 24) else NA_real_,
+
+                    # Evapotranspiration: 1-8w + 12,16w
                     et0_fao_evapotranspiration_sum_lag1 = dplyr::lag(et0_fao_evapotranspiration_sum, 1),
                     et0_fao_evapotranspiration_sum_lag4 = dplyr::lag(et0_fao_evapotranspiration_sum, 4),
                     et0_fao_evapotranspiration_sum_lag8 = dplyr::lag(et0_fao_evapotranspiration_sum, 8),
-                    
-                    # Diurnal temperature range: 2,4 weeks
-                    # Only create meaningful lags if diurnal_temp_range exists and has valid data
+                    et0_fao_evapotranspiration_sum_lag12 = dplyr::lag(et0_fao_evapotranspiration_sum, 12),
+                    et0_fao_evapotranspiration_sum_lag16 = dplyr::lag(et0_fao_evapotranspiration_sum, 16),
+
+                    # Diurnal temperature range: 2,4 + 8w
                     diurnal_temp_range_lag2 = if("diurnal_temp_range" %in% names(.) && !all(is.na(diurnal_temp_range)))
                                                     dplyr::lag(diurnal_temp_range, 2) else NA_real_,
                     diurnal_temp_range_lag4 = if("diurnal_temp_range" %in% names(.) && !all(is.na(diurnal_temp_range)))
                                                     dplyr::lag(diurnal_temp_range, 4) else NA_real_,
-                    
-                    # Heat index: 2,4,8 weeks
-                    # Only create meaningful lags if heat_index exists and has valid data
+                    diurnal_temp_range_lag8 = if("diurnal_temp_range" %in% names(.) && !all(is.na(diurnal_temp_range)))
+                                                    dplyr::lag(diurnal_temp_range, 8) else NA_real_,
+
+                    # Heat index: 2-8w + 12,16w
                     heat_index_lag2 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 2) else NA_real_,
                     heat_index_lag4 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 4) else NA_real_,
                     heat_index_lag8 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 8) else NA_real_,
-                    
-                    # Cloud cover: 1,4 weeks
+                    heat_index_lag12 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 12) else NA_real_,
+                    heat_index_lag16 = if("heat_index" %in% names(.) && !all(is.na(heat_index))) dplyr::lag(heat_index, 16) else NA_real_,
+
+                    # Cloud cover: 1,4 + 8w
                     cloud_cover_mean_lag1 = dplyr::lag(cloud_cover_mean, 1),
                     cloud_cover_mean_lag4 = dplyr::lag(cloud_cover_mean, 4),
-                    
-                    # Wind speed: 1,2 weeks (often weak, try sparingly)
+                    cloud_cover_mean_lag8 = dplyr::lag(cloud_cover_mean, 8),
+
+                    # Wind speed: 1,2 + 4,8w
                     wind_speed_10m_mean_lag1 = dplyr::lag(wind_speed_10m_mean, 1),
                     wind_speed_10m_mean_lag2 = dplyr::lag(wind_speed_10m_mean, 2),
-                    
-                    # Large-scale modes: Evidence-based optimal lags from correlation analysis
-                    # ENSO3 (Eastern Pacific) - optimal at 4-6 months (16-24 weeks)
-                    ENSO3_lag4 = dplyr::lag(ENSO3, 4),      # 1 month - good performance
-                    ENSO3_lag16 = dplyr::lag(ENSO3, 16),    # 4 months - strong correlation
-                    ENSO3_lag20 = dplyr::lag(ENSO3, 20),    # 5 months - peak correlation (0.216)
-                    ENSO3_lag24 = dplyr::lag(ENSO3, 24),    # 6 months - optimal period (0.218)
+                    wind_speed_10m_mean_lag4 = dplyr::lag(wind_speed_10m_mean, 4),
+                    wind_speed_10m_mean_lag8 = dplyr::lag(wind_speed_10m_mean, 8),
 
-                    # ENSO34 (Central Pacific) - optimal at 6 and 11 months
-                    ENSO34_lag6 = dplyr::lag(ENSO34, 6),    # Early response
-                    ENSO34_lag24 = dplyr::lag(ENSO34, 24),  # 6 months - secondary peak (0.193)
-                    ENSO34_lag44 = dplyr::lag(ENSO34, 44),  # 11 months - optimal (0.203)
+                    # ---- Anomaly lags (mechanistically distinct from raw) ----
+                    # precip_anom: 4-20w
+                    precip_anom_lag4 = if("precip_anom" %in% names(.) && !all(is.na(precip_anom))) dplyr::lag(precip_anom, 4) else NA_real_,
+                    precip_anom_lag8 = if("precip_anom" %in% names(.) && !all(is.na(precip_anom))) dplyr::lag(precip_anom, 8) else NA_real_,
+                    precip_anom_lag12 = if("precip_anom" %in% names(.) && !all(is.na(precip_anom))) dplyr::lag(precip_anom, 12) else NA_real_,
+                    precip_anom_lag16 = if("precip_anom" %in% names(.) && !all(is.na(precip_anom))) dplyr::lag(precip_anom, 16) else NA_real_,
+                    precip_anom_lag20 = if("precip_anom" %in% names(.) && !all(is.na(precip_anom))) dplyr::lag(precip_anom, 20) else NA_real_,
 
-                    # ENSO4 (Western Pacific) - optimal at 10-11 months
-                    ENSO4_lag40 = dplyr::lag(ENSO4, 40),    # 10 months - near-optimal (0.226)
-                    ENSO4_lag44 = dplyr::lag(ENSO4, 44),    # 11 months - peak correlation (0.232)
+                    # temp_anom: 4-16w
+                    temp_anom_lag4 = if("temp_anom" %in% names(.) && !all(is.na(temp_anom))) dplyr::lag(temp_anom, 4) else NA_real_,
+                    temp_anom_lag8 = if("temp_anom" %in% names(.) && !all(is.na(temp_anom))) dplyr::lag(temp_anom, 8) else NA_real_,
+                    temp_anom_lag12 = if("temp_anom" %in% names(.) && !all(is.na(temp_anom))) dplyr::lag(temp_anom, 12) else NA_real_,
+                    temp_anom_lag16 = if("temp_anom" %in% names(.) && !all(is.na(temp_anom))) dplyr::lag(temp_anom, 16) else NA_real_,
 
-                    # IOD (Indian Ocean Dipole) - stable across 4-5 months, some immediate effects
-                    IOD_lag0 = IOD,                         # Immediate effects (strong in some countries)
-                    IOD_lag4 = dplyr::lag(IOD, 4),         # 1 month - stable period
-                    IOD_lag16 = dplyr::lag(IOD, 16),       # 4 months - good performance
-                    IOD_lag20 = dplyr::lag(IOD, 20)        # 5 months - optimal period (0.185)
+                    # soil_moisture_anom: 4-20w
+                    soil_moisture_anom_lag4 = if("soil_moisture_anom" %in% names(.) && !all(is.na(soil_moisture_anom))) dplyr::lag(soil_moisture_anom, 4) else NA_real_,
+                    soil_moisture_anom_lag8 = if("soil_moisture_anom" %in% names(.) && !all(is.na(soil_moisture_anom))) dplyr::lag(soil_moisture_anom, 8) else NA_real_,
+                    soil_moisture_anom_lag12 = if("soil_moisture_anom" %in% names(.) && !all(is.na(soil_moisture_anom))) dplyr::lag(soil_moisture_anom, 12) else NA_real_,
+                    soil_moisture_anom_lag16 = if("soil_moisture_anom" %in% names(.) && !all(is.na(soil_moisture_anom))) dplyr::lag(soil_moisture_anom, 16) else NA_real_,
+                    soil_moisture_anom_lag20 = if("soil_moisture_anom" %in% names(.) && !all(is.na(soil_moisture_anom))) dplyr::lag(soil_moisture_anom, 20) else NA_real_,
+
+                    # vpd_anom: 4-16w
+                    vpd_anom_lag4 = if("vpd_anom" %in% names(.) && !all(is.na(vpd_anom))) dplyr::lag(vpd_anom, 4) else NA_real_,
+                    vpd_anom_lag8 = if("vpd_anom" %in% names(.) && !all(is.na(vpd_anom))) dplyr::lag(vpd_anom, 8) else NA_real_,
+                    vpd_anom_lag12 = if("vpd_anom" %in% names(.) && !all(is.na(vpd_anom))) dplyr::lag(vpd_anom, 12) else NA_real_,
+                    vpd_anom_lag16 = if("vpd_anom" %in% names(.) && !all(is.na(vpd_anom))) dplyr::lag(vpd_anom, 16) else NA_real_,
+
+                    # Teleconnection anomaly lags 4-24w
+                    # (deseasonalized — these should give cleaner long-lead
+                    # signal than raw ENSO/IOD lags, which retain annual-cycle
+                    # aliasing.)
+                    IOD_anom_lag4 = dplyr::lag(IOD_anom, 4),
+                    IOD_anom_lag8 = dplyr::lag(IOD_anom, 8),
+                    IOD_anom_lag12 = dplyr::lag(IOD_anom, 12),
+                    IOD_anom_lag16 = dplyr::lag(IOD_anom, 16),
+                    IOD_anom_lag20 = dplyr::lag(IOD_anom, 20),
+                    IOD_anom_lag24 = dplyr::lag(IOD_anom, 24),
+
+                    ENSO3_anom_lag4 = dplyr::lag(ENSO3_anom, 4),
+                    ENSO3_anom_lag8 = dplyr::lag(ENSO3_anom, 8),
+                    ENSO3_anom_lag12 = dplyr::lag(ENSO3_anom, 12),
+                    ENSO3_anom_lag16 = dplyr::lag(ENSO3_anom, 16),
+                    ENSO3_anom_lag20 = dplyr::lag(ENSO3_anom, 20),
+                    ENSO3_anom_lag24 = dplyr::lag(ENSO3_anom, 24),
+
+                    ENSO34_anom_lag4 = dplyr::lag(ENSO34_anom, 4),
+                    ENSO34_anom_lag8 = dplyr::lag(ENSO34_anom, 8),
+                    ENSO34_anom_lag12 = dplyr::lag(ENSO34_anom, 12),
+                    ENSO34_anom_lag16 = dplyr::lag(ENSO34_anom, 16),
+                    ENSO34_anom_lag20 = dplyr::lag(ENSO34_anom, 20),
+                    ENSO34_anom_lag24 = dplyr::lag(ENSO34_anom, 24),
+
+                    ENSO4_anom_lag4 = dplyr::lag(ENSO4_anom, 4),
+                    ENSO4_anom_lag8 = dplyr::lag(ENSO4_anom, 8),
+                    ENSO4_anom_lag12 = dplyr::lag(ENSO4_anom, 12),
+                    ENSO4_anom_lag16 = dplyr::lag(ENSO4_anom, 16),
+                    ENSO4_anom_lag20 = dplyr::lag(ENSO4_anom, 20),
+                    ENSO4_anom_lag24 = dplyr::lag(ENSO4_anom, 24),
+
+                    # ---- ENSO/IOD: COMPLETE GRID 4-48w across all four indices ----
+                    # ENSO3 (Eastern Pacific)
+                    ENSO3_lag4  = dplyr::lag(ENSO3, 4),
+                    ENSO3_lag8  = dplyr::lag(ENSO3, 8),
+                    ENSO3_lag12 = dplyr::lag(ENSO3, 12),
+                    ENSO3_lag16 = dplyr::lag(ENSO3, 16),
+                    ENSO3_lag20 = dplyr::lag(ENSO3, 20),
+                    ENSO3_lag24 = dplyr::lag(ENSO3, 24),
+                    ENSO3_lag28 = dplyr::lag(ENSO3, 28),
+                    ENSO3_lag32 = dplyr::lag(ENSO3, 32),
+                    ENSO3_lag36 = dplyr::lag(ENSO3, 36),
+                    ENSO3_lag40 = dplyr::lag(ENSO3, 40),
+                    ENSO3_lag44 = dplyr::lag(ENSO3, 44),
+
+                    # ENSO34 (Central Pacific)
+                    ENSO34_lag4  = dplyr::lag(ENSO34, 4),
+                    ENSO34_lag8  = dplyr::lag(ENSO34, 8),
+                    ENSO34_lag12 = dplyr::lag(ENSO34, 12),
+                    ENSO34_lag16 = dplyr::lag(ENSO34, 16),
+                    ENSO34_lag20 = dplyr::lag(ENSO34, 20),
+                    ENSO34_lag24 = dplyr::lag(ENSO34, 24),
+                    ENSO34_lag28 = dplyr::lag(ENSO34, 28),
+                    ENSO34_lag32 = dplyr::lag(ENSO34, 32),
+                    ENSO34_lag36 = dplyr::lag(ENSO34, 36),
+                    ENSO34_lag40 = dplyr::lag(ENSO34, 40),
+                    ENSO34_lag44 = dplyr::lag(ENSO34, 44),
+                    ENSO34_lag48 = dplyr::lag(ENSO34, 48),
+
+                    # ENSO4 (Western Pacific) — was only lag40/lag44; fill short+medium
+                    ENSO4_lag4  = dplyr::lag(ENSO4, 4),
+                    ENSO4_lag8  = dplyr::lag(ENSO4, 8),
+                    ENSO4_lag12 = dplyr::lag(ENSO4, 12),
+                    ENSO4_lag16 = dplyr::lag(ENSO4, 16),
+                    ENSO4_lag20 = dplyr::lag(ENSO4, 20),
+                    ENSO4_lag24 = dplyr::lag(ENSO4, 24),
+                    ENSO4_lag28 = dplyr::lag(ENSO4, 28),
+                    ENSO4_lag32 = dplyr::lag(ENSO4, 32),
+                    ENSO4_lag36 = dplyr::lag(ENSO4, 36),
+                    ENSO4_lag40 = dplyr::lag(ENSO4, 40),
+                    ENSO4_lag44 = dplyr::lag(ENSO4, 44),
+
+                    # IOD (Indian Ocean Dipole) — complete grid 0-44w
+                    IOD_lag0  = IOD,
+                    IOD_lag4  = dplyr::lag(IOD, 4),
+                    IOD_lag8  = dplyr::lag(IOD, 8),
+                    IOD_lag12 = dplyr::lag(IOD, 12),
+                    IOD_lag16 = dplyr::lag(IOD, 16),
+                    IOD_lag20 = dplyr::lag(IOD, 20),
+                    IOD_lag24 = dplyr::lag(IOD, 24),
+                    IOD_lag28 = dplyr::lag(IOD, 28),
+                    IOD_lag32 = dplyr::lag(IOD, 32),
+                    IOD_lag36 = dplyr::lag(IOD, 36),
+                    IOD_lag40 = dplyr::lag(IOD, 40),
+                    IOD_lag44 = dplyr::lag(IOD, 44)
                ) %>%
                dplyr::ungroup()
-          
-          message(sprintf("    - Added %d time-lagged climate variables (including immediate effects)", 51))
+
+          message("    - Added climate/anomaly/ENSO/IOD time-lagged variables (extended grid)")
 
           # Remove any lag columns that are entirely NA (failed conditional creation)
           lag_columns <- names(d)[grepl("_lag\\d+$", names(d))]
@@ -969,6 +1158,34 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                          mean(emdat_flood_prob[!is.na(emdat_flood_active)], na.rm = TRUE)
                ) %>%
                dplyr::ungroup()
+
+          # Flood × WASH interactions — must happen AFTER impute_flood_probability
+          # materializes emdat_flood_prob_4w_max and emdat_flood_prob_12w_max.
+          if (all(c("Open_Defecation", "emdat_flood_prob_4w_max") %in% names(d))) {
+               d$od_x_flood_4w <- d$Open_Defecation * d$emdat_flood_prob_4w_max
+          }
+          if (all(c("Surface_Water", "emdat_flood_prob_12w_max") %in% names(d))) {
+               d$surface_water_x_flood_12w <-
+                    d$Surface_Water * d$emdat_flood_prob_12w_max
+          }
+
+          # Flood probability anomaly lags (4-20w window). These require
+          # emdat_flood_prob_anom which is materialized just above. Only
+          # compute when include_lags = TRUE (matches the gating logic for
+          # all other lag columns).
+          if (isTRUE(include_lags) && "emdat_flood_prob_anom" %in% names(d)) {
+               d <- d %>%
+                    dplyr::group_by(iso_code) %>%
+                    dplyr::arrange(date, .by_group = TRUE) %>%
+                    dplyr::mutate(
+                         emdat_flood_prob_anom_lag4  = dplyr::lag(emdat_flood_prob_anom, 4),
+                         emdat_flood_prob_anom_lag8  = dplyr::lag(emdat_flood_prob_anom, 8),
+                         emdat_flood_prob_anom_lag12 = dplyr::lag(emdat_flood_prob_anom, 12),
+                         emdat_flood_prob_anom_lag16 = dplyr::lag(emdat_flood_prob_anom, 16),
+                         emdat_flood_prob_anom_lag20 = dplyr::lag(emdat_flood_prob_anom, 20)
+                    ) %>%
+                    dplyr::ungroup()
+          }
      } else if (isTRUE(include_flood_prob)) {
           message("Skipping flood probability imputation; missing column(s): ",
                   paste(gam_missing, collapse = ", "))
@@ -1034,30 +1251,107 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                           "enso_precip_interaction", "iod_temp_interaction",
                           "elevation_temp_interaction", "moisture_temp_interaction")
      
-     # 14. Enhanced interaction terms (WASH × extremes, Urban × climate) 
-     enhanced_interaction_cols <- c("wash_precip_extreme_interaction", "urban_precip_anom_interaction")
+     # 14. Enhanced interaction terms (WASH × extremes, Urban × climate)
+     # Tier 1 (direct fecal-oral): od_x_*, surface_water_x_flood_12w, nonpiped_x_precip_extreme
+     # Tier 2 (Vc growth):         sm_anom_x_temp, surface_water_x_temp, precip_anom_x_temp
+     # Tier 3 (drought-break):     dryspell_x_precip_2w, spei_x_precip_anom
+     enhanced_interaction_cols <- c(
+          "wash_precip_extreme_interaction", "urban_precip_anom_interaction",
+          "od_x_precip_extreme", "od_x_flood_4w", "od_x_soil_moisture_anom",
+          "surface_water_x_flood_12w", "nonpiped_x_precip_extreme",
+          "sm_anom_x_temp", "surface_water_x_temp", "precip_anom_x_temp",
+          "dryspell_x_precip_2w", "spei_x_precip_anom"
+     )
      
      # 15. Nonlinear transforms
      nonlinear_cols <- c("precip_anom_sq", "temp_anom_sq")
      
-     # 16. Time-lagged climate variables (if included)
+     # 16. Time-lagged climate variables (if included). Extended grid to give
+     # the LSTM and downstream correlation analyses wide coverage of mechanism-
+     # plausible lag windows: short-window climate (1-8w), medium-window climate
+     # (12-24w), anomalies (4-20w), full ENSO/IOD grid (4-44/48w).
      if (include_lags) {
-          lag_cols <- c("precipitation_sum_lag1", "precipitation_sum_lag2", "precipitation_sum_lag4", "precipitation_sum_lag6", "precipitation_sum_lag8",
-                       "temperature_2m_mean_lag2", "temperature_2m_mean_lag4", "temperature_2m_mean_lag8",
-                       "temperature_2m_max_lag2", "temperature_2m_max_lag4", "temperature_2m_max_lag6", "temperature_2m_max_lag8",
-                       "relative_humidity_2m_mean_lag1", "relative_humidity_2m_mean_lag2", "relative_humidity_2m_mean_lag4",
-                       "vpd_lag1", "vpd_lag4", "vpd_lag8",
-                       "soil_moisture_0_to_10cm_mean_lag1", "soil_moisture_0_to_10cm_mean_lag2", "soil_moisture_0_to_10cm_mean_lag4", "soil_moisture_0_to_10cm_mean_lag6", "soil_moisture_0_to_10cm_mean_lag8",
-                       "spei_approx_lag4", "spei_approx_lag8", "spei_approx_lag12",
-                       "et0_fao_evapotranspiration_sum_lag1", "et0_fao_evapotranspiration_sum_lag4", "et0_fao_evapotranspiration_sum_lag8",
-                       "diurnal_temp_range_lag2", "diurnal_temp_range_lag4",
-                       "heat_index_lag2", "heat_index_lag4", "heat_index_lag8",
-                       "cloud_cover_mean_lag1", "cloud_cover_mean_lag4",
-                       "wind_speed_10m_mean_lag1", "wind_speed_10m_mean_lag2",
-                       "ENSO3_lag4", "ENSO3_lag16", "ENSO3_lag20", "ENSO3_lag24",
-                       "ENSO34_lag6", "ENSO34_lag24", "ENSO34_lag44",
-                       "ENSO4_lag40", "ENSO4_lag44",
-                       "IOD_lag0", "IOD_lag4", "IOD_lag16", "IOD_lag20")
+          lag_cols <- c(
+               # Precipitation (1-24w)
+               "precipitation_sum_lag1", "precipitation_sum_lag2", "precipitation_sum_lag4",
+               "precipitation_sum_lag6", "precipitation_sum_lag8",
+               "precipitation_sum_lag12", "precipitation_sum_lag16",
+               "precipitation_sum_lag20", "precipitation_sum_lag24",
+               # Temperature mean (2-24w)
+               "temperature_2m_mean_lag2", "temperature_2m_mean_lag4",
+               "temperature_2m_mean_lag8", "temperature_2m_mean_lag12",
+               "temperature_2m_mean_lag16", "temperature_2m_mean_lag20",
+               "temperature_2m_mean_lag24",
+               # Temperature max (2-16w)
+               "temperature_2m_max_lag2", "temperature_2m_max_lag4",
+               "temperature_2m_max_lag6", "temperature_2m_max_lag8",
+               "temperature_2m_max_lag12", "temperature_2m_max_lag16",
+               # Relative humidity (1-16w)
+               "relative_humidity_2m_mean_lag1", "relative_humidity_2m_mean_lag2",
+               "relative_humidity_2m_mean_lag4", "relative_humidity_2m_mean_lag8",
+               "relative_humidity_2m_mean_lag12", "relative_humidity_2m_mean_lag16",
+               # VPD (1-16w)
+               "vpd_lag1", "vpd_lag4", "vpd_lag8", "vpd_lag12", "vpd_lag16",
+               # Soil moisture (1-16w)
+               "soil_moisture_0_to_10cm_mean_lag1", "soil_moisture_0_to_10cm_mean_lag2",
+               "soil_moisture_0_to_10cm_mean_lag4", "soil_moisture_0_to_10cm_mean_lag6",
+               "soil_moisture_0_to_10cm_mean_lag8", "soil_moisture_0_to_10cm_mean_lag12",
+               "soil_moisture_0_to_10cm_mean_lag16",
+               # SPEI (4-24w)
+               "spei_approx_lag4", "spei_approx_lag8", "spei_approx_lag12",
+               "spei_approx_lag16", "spei_approx_lag20", "spei_approx_lag24",
+               # ET (1-16w)
+               "et0_fao_evapotranspiration_sum_lag1", "et0_fao_evapotranspiration_sum_lag4",
+               "et0_fao_evapotranspiration_sum_lag8", "et0_fao_evapotranspiration_sum_lag12",
+               "et0_fao_evapotranspiration_sum_lag16",
+               # Diurnal temp range (2-8w)
+               "diurnal_temp_range_lag2", "diurnal_temp_range_lag4", "diurnal_temp_range_lag8",
+               # Heat index (2-16w)
+               "heat_index_lag2", "heat_index_lag4", "heat_index_lag8",
+               "heat_index_lag12", "heat_index_lag16",
+               # Cloud cover (1-8w)
+               "cloud_cover_mean_lag1", "cloud_cover_mean_lag4", "cloud_cover_mean_lag8",
+               # Wind speed (1-8w)
+               "wind_speed_10m_mean_lag1", "wind_speed_10m_mean_lag2",
+               "wind_speed_10m_mean_lag4", "wind_speed_10m_mean_lag8",
+               # Anomaly lags (4-20w) — mechanistically distinct from raw
+               "precip_anom_lag4", "precip_anom_lag8", "precip_anom_lag12",
+               "precip_anom_lag16", "precip_anom_lag20",
+               "temp_anom_lag4", "temp_anom_lag8", "temp_anom_lag12", "temp_anom_lag16",
+               "soil_moisture_anom_lag4", "soil_moisture_anom_lag8",
+               "soil_moisture_anom_lag12", "soil_moisture_anom_lag16",
+               "soil_moisture_anom_lag20",
+               "vpd_anom_lag4", "vpd_anom_lag8", "vpd_anom_lag12", "vpd_anom_lag16",
+               # Teleconnection anomaly lags (4-24w; week-of-year deseasonalized)
+               "IOD_anom_lag4", "IOD_anom_lag8", "IOD_anom_lag12",
+               "IOD_anom_lag16", "IOD_anom_lag20", "IOD_anom_lag24",
+               "ENSO3_anom_lag4", "ENSO3_anom_lag8", "ENSO3_anom_lag12",
+               "ENSO3_anom_lag16", "ENSO3_anom_lag20", "ENSO3_anom_lag24",
+               "ENSO34_anom_lag4", "ENSO34_anom_lag8", "ENSO34_anom_lag12",
+               "ENSO34_anom_lag16", "ENSO34_anom_lag20", "ENSO34_anom_lag24",
+               "ENSO4_anom_lag4", "ENSO4_anom_lag8", "ENSO4_anom_lag12",
+               "ENSO4_anom_lag16", "ENSO4_anom_lag20", "ENSO4_anom_lag24",
+               # ENSO3 (4-44w)
+               "ENSO3_lag4", "ENSO3_lag8", "ENSO3_lag12", "ENSO3_lag16",
+               "ENSO3_lag20", "ENSO3_lag24", "ENSO3_lag28", "ENSO3_lag32",
+               "ENSO3_lag36", "ENSO3_lag40", "ENSO3_lag44",
+               # ENSO34 (4-48w)
+               "ENSO34_lag4", "ENSO34_lag8", "ENSO34_lag12", "ENSO34_lag16",
+               "ENSO34_lag20", "ENSO34_lag24", "ENSO34_lag28", "ENSO34_lag32",
+               "ENSO34_lag36", "ENSO34_lag40", "ENSO34_lag44", "ENSO34_lag48",
+               # ENSO4 (4-44w)
+               "ENSO4_lag4", "ENSO4_lag8", "ENSO4_lag12", "ENSO4_lag16",
+               "ENSO4_lag20", "ENSO4_lag24", "ENSO4_lag28", "ENSO4_lag32",
+               "ENSO4_lag36", "ENSO4_lag40", "ENSO4_lag44",
+               # IOD (0-44w)
+               "IOD_lag0", "IOD_lag4", "IOD_lag8", "IOD_lag12", "IOD_lag16",
+               "IOD_lag20", "IOD_lag24", "IOD_lag28", "IOD_lag32",
+               "IOD_lag36", "IOD_lag40", "IOD_lag44",
+               # Flood probability anomaly (4-20w; populated after impute block below)
+               "emdat_flood_prob_anom_lag4", "emdat_flood_prob_anom_lag8",
+               "emdat_flood_prob_anom_lag12", "emdat_flood_prob_anom_lag16",
+               "emdat_flood_prob_anom_lag20"
+          )
      } else {
           lag_cols <- c()
      }

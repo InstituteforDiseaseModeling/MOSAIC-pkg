@@ -112,10 +112,12 @@ plot_vibrio_decay_rate <- function(PATHS, decay_days_short = 3, decay_days_long 
           geom_hline(yintercept = decay_days_short, linetype = "dashed", color = "black") +
           geom_hline(yintercept = decay_days_long, linetype = "dashed", color = "black") +
           annotate("text", x = 0.7, y = decay_days_short,
-                   label = bquote(delta[max] == 1/.(round(1 / decay_days_short, 2)) ~ "=" ~ .(decay_days_short) ~ "days"),
+                   label = deparse(bquote(delta[max] == 1/.(round(1 / decay_days_short, 2)) ~ "=" ~ .(decay_days_short) ~ "days")),
+                   parse = TRUE,
                    color = "black", hjust = 0, vjust = -0.5, size = 4) +
           annotate("text", x = 0.3, y = decay_days_long,
-                   label = bquote(delta[min] == 1/.(round(1 / decay_days_long, 2)) ~ "=" ~ .(decay_days_long) ~ "days"),
+                   label = deparse(bquote(delta[min] == 1/.(round(1 / decay_days_long, 2)) ~ "=" ~ .(decay_days_long) ~ "days")),
+                   parse = TRUE,
                    color = "black", hjust = 1, vjust = 1.5, size = 4) +
           coord_cartesian(clip = "off")
 
