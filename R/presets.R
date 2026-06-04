@@ -54,17 +54,19 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 }
 
 
-#' Get an Optimal Dask/Coiled Cluster Spec for a Given Core Budget
+#' Get an Optimal Dask/Coiled Cluster Spec for a Given Worker Count
 #'
 #' @description
-#' Returns a \code{dask_spec} list for \code{\link{run_MOSAIC}} sized to
-#' any total core budget between 1 and 1,000 (the workspace cap on
-#' \code{idm-coiled-idmad-r2}). Routes to the fastest worker/scheduler
-#' configuration for LASER's single-threaded sim workload: every core
-#' becomes a concurrent LASER worker, capped at the workspace limit.
+#' Returns a \code{dask_spec} list for \code{\link{run_MOSAIC}} sized for
+#' a given number of LASER workers (1 to 500). Each worker is one D2s_v6
+#' VM running one cholera sim at a time, so \code{n_workers} is also the
+#' number of \strong{concurrent simulations} and the number of subnet
+#' IPs the cluster will consume. The workspace cap (1,000 total vCPUs at
+#' 2 per worker = 500 workers) sets the upper bound.
 #'
-#' @param cores Integer between 1 and 1,000 inclusive. The total core
-#'   budget for the cluster. Non-integer values are rounded.
+#' @param n_workers Integer between 1 and 500 inclusive. The number of
+#'   LASER worker VMs to provision. Each runs one cholera sim
+#'   concurrently. Non-integer values are rounded.
 #'
 #' @return Named list ready to pass as the \code{dask_spec} argument of
 #'   \code{\link{run_MOSAIC}}.
@@ -72,18 +74,14 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #' @details
 #' \strong{Routing rules:}
 #' \itemize{
-#'   \item \strong{Worker count} — \code{floor(cores / 2)}, with a
-#'     minimum of 1 worker. So \code{cores = 100} → 50 workers (100
-#'     cores), \code{cores = 99} → 49 workers (98 cores). A request of
-#'     \code{cores = 1} rounds up to 1 worker = 2 cores (the smallest
-#'     viable cluster).
-#'   \item \strong{Worker VM family} — three equivalent 2-vCPU x86
-#'     variants are passed to Coiled so it can grab whichever has
-#'     capacity in westus2: \code{Standard_D2s_v6} (Intel Emerald
+#'   \item \strong{Worker VM family} — always 2-vCPU x86 v6. Three
+#'     equivalent variants are passed to Coiled so it can grab whichever
+#'     has capacity in westus2: \code{Standard_D2s_v6} (Intel Emerald
 #'     Rapids), \code{Standard_D2ds_v6} (same Intel with local SSD),
 #'     \code{Standard_D2ads_v6} (AMD Genoa with local SSD). All 2 vCPU
-#'     / 8 GiB. Smallest VM = max workers per core = max concurrent
-#'     sims at \code{nthreads = 1}.
+#'     / 8 GiB. The cholera sim is single-threaded GIL-bound Python, so
+#'     larger VMs would idle cores; the second vCPU absorbs Dask
+#'     plumbing (network I/O, nanny, heartbeats).
 #'   \item \strong{Scheduler VM} — 5-tier graduation by worker count:
 #'     \tabular{ll}{
 #'       \code{n_workers <= 50}   \tab \code{Standard_D2s_v6}   (2 vCPU /   8 GiB) \cr
@@ -99,14 +97,13 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'     must be up before tasks dispatch. Equivalent to 80\% of the
 #'     pool at \code{n_workers <= 250}, 90\% above, floored at 1.
 #'     Passed as an integer (not a fraction) so Coiled has no
-#'     ambiguity to resolve at small \code{n_workers} (a fractional
-#'     \code{0.8 * 1 worker = 0.8} risks truncation to 0). Coiled's
+#'     ambiguity to resolve at small \code{n_workers}. Coiled's
 #'     fraction default of 0.3 is too aggressive for short-task
 #'     calibrations: first sims dispatch onto a partial pool, then
 #'     stall as remaining workers join.
 #'   \item \strong{timeout} — cluster-creation timeout in seconds.
 #'     Scales as \code{max(1800, 600 + 4 * n_workers)}. At
-#'     \code{cores = 1000} this is ~33 minutes, large enough for the
+#'     \code{n_workers = 500} this is ~43 minutes, large enough for the
 #'     long tail of Azure VM provisioning in westus2 (per-VM p99 ~7
 #'     min, parallelized but not free) plus the 90\% wait threshold.
 #'   \item \strong{workspace} — defaults to \code{"idm-coiled-idmad-r2"}.
@@ -114,28 +111,35 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'     \code{options(mosaic.coiled_workspace = "your-workspace")}.
 #' }
 #'
-#' \strong{Rough sizing guide} (~0.7 s per LASER iteration measured on
-#' ETH single-location):
+#' \strong{Sizing guide} (~0.7 s per LASER iteration measured on ETH
+#' single-location):
 #' \itemize{
-#'   \item \code{cores = 50-100}: smoke tests, 1-5K sims, day-to-day.
-#'   \item \code{cores = 250}: typical 10K-sim fixed-budget calibrations.
-#'   \item \code{cores = 500}: 24K-sim predictive batches.
-#'   \item \code{cores = 1000}: run_10-class jobs (60K+ sims). At the cap.
+#'   \item \code{n_workers = 25-50}: smoke tests, 1-5K sims, day-to-day.
+#'   \item \code{n_workers = 125}: typical 10K-sim fixed-budget calibrations.
+#'   \item \code{n_workers = 250}: 24K-sim predictive batches.
+#'   \item \code{n_workers = 500}: run_10-class jobs (60K+ sims). At the
+#'     workspace 1,000-core cap.
 #' }
 #'
 #' \strong{Notes:}
 #' \itemize{
+#'   \item Each worker consumes one Azure subnet IP. The
+#'     \code{idm-coiled-idmad-r2} workspace is on a \code{/23} subnet
+#'     (~507 usable IPs); under contention from other tenants, large
+#'     clusters can fail at provisioning with \code{SubnetIsFull}. If
+#'     that happens, drop \code{n_workers} or coordinate with the
+#'     workspace admin to expand the subnet.
 #'   \item 8 GiB RAM per worker is fine for ETH single-location and
 #'     similar small configs. For multi-country MOSAIC (>10 locations)
 #'     you may need more headroom — override \code{vm_types} to
-#'     \code{"Standard_D4s_v6"} (16 GiB), accepting that the worker count
-#'     halves for the same core budget.
+#'     \code{"Standard_D4s_v6"} (16 GiB), accepting that the cluster's
+#'     cost-per-sim doubles (idle cores) and the IP footprint is
+#'     unchanged.
 #'   \item Defaults to on-demand pricing. For spot/preemptible VMs
 #'     (~70\% cheaper, with eviction risk), layer
 #'     \code{spot_policy = "spot_with_fallback"} (NOT \code{"spot"}) so
 #'     the cluster falls back to on-demand if Azure spot capacity in
-#'     westus2 runs out. Most useful at \code{cores >= 500} where sim
-#'     wall-time absorbs the occasional eviction retry.
+#'     westus2 runs out.
 #' }
 #'
 #' @seealso \code{\link{mosaic_io_presets}} for I/O presets,
@@ -143,7 +147,7 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'
 #' @examples
 #' \dontrun{
-#' # 10K-sim calibration on a 250-core cluster
+#' # 10K-sim calibration on 125 workers
 #' result <- run_MOSAIC(
 #'   config     = get_location_config(iso = "ETH"),
 #'   priors     = get_location_priors(iso = "ETH"),
@@ -151,34 +155,30 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'   control    = mosaic_control_defaults(
 #'     calibration = list(n_simulations = 10000, n_iterations = 3)
 #'   ),
-#'   dask_spec  = mosaic_dask_presets(250)
+#'   dask_spec  = mosaic_dask_presets(n_workers = 125)
 #' )
 #'
 #' # Max cluster with spot VMs for a long adaptive run
-#' spec <- mosaic_dask_presets(1000)
+#' spec <- mosaic_dask_presets(500)
 #' spec$spot_policy <- "spot_with_fallback"
 #'
 #' # Multi-country: override to D4s_v6 for RAM headroom
-#' spec <- mosaic_dask_presets(500)
-#' spec$vm_types <- c("Standard_D4s_v6")  # halves to 125 workers, 16 GiB each
+#' spec <- mosaic_dask_presets(250)
+#' spec$vm_types <- c("Standard_D4s_v6")  # 16 GiB / worker, ~2x cost-per-sim
 #' }
 #'
 #' @export
-mosaic_dask_presets <- function(cores) {
-  if (missing(cores) || !is.numeric(cores) || length(cores) != 1L ||
-      is.na(cores) || !is.finite(cores)) {
-    stop("`cores` must be a single numeric value between 1 and 1000",
+mosaic_dask_presets <- function(n_workers) {
+  if (missing(n_workers) || !is.numeric(n_workers) || length(n_workers) != 1L ||
+      is.na(n_workers) || !is.finite(n_workers)) {
+    stop("`n_workers` must be a single numeric value between 1 and 500",
          call. = FALSE)
   }
-  cores <- as.integer(round(cores))
-  if (cores < 1L || cores > 1000L) {
-    stop(sprintf("`cores` must be in [1, 1000]; got %d", cores),
+  n_workers <- as.integer(round(n_workers))
+  if (n_workers < 1L || n_workers > 500L) {
+    stop(sprintf("`n_workers` must be in [1, 500]; got %d", n_workers),
          call. = FALSE)
   }
-
-  # n_workers = floor(cores / 2): smallest 2-vCPU VM = max workers per
-  # core = max concurrent sims at LASER's nthreads=1.
-  n_workers <- max(1L, cores %/% 2L)
 
   # 5-tier scheduler graduation. Scheduler is connection/task-graph
   # state, not CPU-bound — these sizes give RAM headroom for the
@@ -195,16 +195,15 @@ mosaic_dask_presets <- function(cores) {
   # dispatch onto a partial pool, then stall). Target 80% for typical
   # cluster sizes, 90% at the high end. Compute as an absolute integer
   # rather than a fraction so Coiled has no ambiguity to resolve when
-  # n_workers is small (a fraction of 0.8 * 1 worker = 0.8, which some
-  # Coiled paths can truncate to 0). Floored at 1.
+  # n_workers is small. Floored at 1.
   wait_frac        <- if (n_workers <= 250L) 0.8 else 0.9
   wait_for_workers <- max(1L, as.integer(ceiling(wait_frac * n_workers)))
 
   # timeout: cluster-creation timeout in seconds. Scales with n_workers
   # because Azure VM provisioning has a long tail in westus2 (p99 ~7
   # min/VM, parallelized but not free). 1800 s floor for the smallest
-  # clusters; ~4 s per worker added on top. At cores=1000 this is
-  # ~33 min, comfortable for the 450-worker wait at 90%.
+  # clusters; ~4 s per worker added on top. At n_workers=500 this is
+  # ~43 min, comfortable for the 450-worker wait at 90%.
   timeout <- max(1800L, as.integer(600 + 4 * n_workers))
 
   list(
