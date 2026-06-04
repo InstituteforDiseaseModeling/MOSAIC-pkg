@@ -445,7 +445,7 @@ default_args <- list(
      mu_j_epidemic_factor = mu_j_epidemic_factor,  # NEW: Epidemic increase factor
      sigma = 0.25,
      # Case reporting parameters for calc_cases_from_infections()
-     rho = 0.265,                 # Care-seeking rate (mean of Beta(6.8, 17.9) prior, GEMS + Wiens 2025)
+     rho = 0.423,                 # Care-seeking rate (mean of Beta(5.38, 7.10) prior, Wiens et al. 2025 RE pool of general + severe/cholera strata; see R/get_rho_care_seeking_params.R)
      rho_deaths = 0.42,           # Death detection rate: probability a true cholera death is captured by surveillance (mean of informative Beta(36.95, 51.02) prior; RE meta-analysis of Routh 2017, Shikanga 2009, Bwire 2013 — see claude/rho_deaths_research/SYNTHESIS_REPORT.md)
      chi_endemic = 0.50,          # PPV among suspected cases during endemic periods (50%)
      chi_epidemic = 0.75,         # PPV among suspected cases during epidemic periods (75%)

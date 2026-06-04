@@ -1,167 +1,148 @@
 #' Estimate Beta Prior for Rho (Care-Seeking Rate) and Save Parameter Data Frame
 #'
-#' This function encodes empirical estimates of care-seeking rates for acute
-#' watery diarrhea / cholera in sub-Saharan Africa, pools them using inverse-variance
-#' weighting, and fits a Beta prior distribution via
-#' \code{\link[propvacc]{get_beta_params}}.
+#' This function encodes the prior on rho (the care-seeking rate: probability
+#' that a true symptomatic cholera infection presents to the surveillance
+#' pipeline as a suspected case) by random-effects pooling of the TWO
+#' case-definition strata reported by Wiens et al. 2025 (PMC12013865):
+#' general diarrhea and severe-diarrhea + cholera.
 #'
 #' @description
-#' Two data sources are combined:
+#' \strong{Why pool the two Wiens strata?}
 #'
-#' \strong{GEMS (Nasrin et al. 2013, PMC3748499):}
-#' The Global Enteric Multicenter Study measured the proportion of moderate-to-severe
-#' diarrhea (MSD) cases reaching sentinel health centres across four African sites
-#' (The Gambia, Mali, Mozambique, Kenya) by age stratum (0-11 mo, 12-23 mo, 24-59 mo).
-#' These are the closest available SSA-specific empirical estimates of facility-based
-#' care-seeking for severe enteric disease.
+#' Symptomatic cholera in MOSAIC's setting spans the full severity spectrum
+#' (mild watery diarrhea to severe rapid dehydration). The two Wiens 2025
+#' meta-analytic strata bracket that spectrum:
 #'
-#' \strong{Wiens et al. 2025 (PMC12013865):}
-#' A systematic review of 188 studies providing meta-analytic estimates of the
-#' proportion of diarrhea episodes reaching formal healthcare in LMICs.
-#' The severe diarrhea / cholera-specific estimate (58.6%, 95% CI 39.9-75.2%)
-#' is used here because it most closely matches the cholera clinical spectrum.
+#' \itemize{
+#'   \item \strong{General diarrhea} (3+ loose/liquid stools): 29.9\%
+#'         (95\% CI [25.3, 35.1]) from 122 observations. Represents
+#'         care-seeking for the broader population of diarrheal episodes,
+#'         which is appropriate for the mild-to-moderate tail of
+#'         symptomatic cholera (the majority of cases by count).
+#'   \item \strong{Severe diarrhea + cholera}: 58.6\% (95\% CI [39.9, 75.2])
+#'         from 22 observations. Represents care-seeking when symptoms are
+#'         severe enough to be flagged as "severe" or specifically cholera,
+#'         which is appropriate for the severe tail of symptomatic cholera.
+#' }
 #'
-#' A weighted geometric mean of all stratum-level estimates is computed using
-#' inverse-variance weights derived from the 95% confidence intervals.  The
-#' resulting 5th, 50th, and 95th percentile summary statistics are passed to
-#' \code{propvacc::get_beta_params()} to fit the Beta(shape1, shape2) prior.
+#' Anchoring on the severe+cholera stratum ALONE biases rho upward (it
+#' represents only the severe tail and is dominated by outbreak-response
+#' settings with enhanced care-seeking, e.g. the Haiti 2010-19 outbreak
+#' which contributes 50\% of underlying rows). Anchoring on general diarrhea
+#' ALONE biases rho downward (the broader category includes many mild,
+#' self-resolving episodes that don't reflect cholera-specific severity).
+#' Random-effects pooling of the two strata produces an estimate that
+#' honestly reflects the severity spectrum and its substantial heterogeneity.
 #'
-#' @param PATHS A list containing paths for saving outputs.  Typically generated
+#' \strong{Why not include GEMS Nasrin 2013 as a separate co-anchor?}
+#'
+#' Earlier versions (through v0.32.5) pooled GEMS pediatric moderate-to-severe
+#' diarrhea (4 SSA sites, 12 stratum-level estimates) WITH the Wiens
+#' severe+cholera pooled estimate. That pooling had three problems:
+#' (1) GEMS measures pediatric MSD care-seeking, a different population than
+#' MOSAIC's all-ages cholera; (2) 12 GEMS strata vs. 1 Wiens meta-analytic
+#' summary was upside-down dimensionally; (3) Wiens 2025 already includes
+#' GEMS-derived data (6 of its Study IDs are tagged GEMS/HUAS), so the
+#' direct GEMS entries partially double-counted the same source populations.
+#' Dropping GEMS and using Wiens's two strata directly resolves all three.
+#'
+#' \strong{Methodology.}
+#' Random-effects meta-analysis on the logit scale (DerSimonian-Laird tau^2)
+#' with the two Wiens strata as the unit of pooling. The 95\% CI of the
+#' pooled mean is then fit to a Beta distribution via
+#' \code{\link[propvacc]{get_beta_params}}.
+#'
+#' \strong{Geographic provenance (severe+cholera stratum).} Of 23 underlying
+#' studies: 16 SSA, 3 Latin America/Caribbean (mostly Haiti 2010-19), 2
+#' Bangladesh, 1 MENA, 1 South Asia (non-BGD). Predominantly SSA + outbreak
+#' settings - the regime MOSAIC calibrates.
+#'
+#' @param PATHS A list containing paths for saving outputs. Typically generated
 #'   by \code{get_paths()} and must include:
 #' \itemize{
 #'   \item \strong{MODEL_INPUT}: Directory where the parameter CSV will be saved.
 #' }
 #' @return A data frame with one row per parameter (shape1, shape2, mean) for the
-#'   rho Beta prior, invisibly.  Also writes
+#'   rho Beta prior, invisibly. Also writes
 #'   \code{param_rho_care_seeking.csv} to \code{PATHS$MODEL_INPUT}.
 #' @export
 
 get_rho_care_seeking_params <- function(PATHS) {
 
      # -----------------------------------------------------------------------
-     # 1. GEMS data (Nasrin et al. 2013, Table 6, PMC3748499)
-     #    r = proportion of MSD episodes reaching a sentinel health centre
-     #    Columns: site, age_stratum, r (point estimate), ci_lower, ci_upper
+     # 1. Wiens 2025 stratum-level pooled estimates
+     #    Source: Wiens et al. 2025 (PMC12013865) - "Care-seeking for diarrhea
+     #    in low- and middle-income countries: a systematic review and
+     #    meta-analysis". The paper reports separate pooled estimates by
+     #    case-definition stratum; we use general diarrhea AND
+     #    severe-diarrhea + cholera to bracket the cholera severity spectrum.
      # -----------------------------------------------------------------------
-     gems <- data.frame(
-          site = c(
-               "The Gambia", "The Gambia", "The Gambia",
-               "Mali",       "Mali",       "Mali",
-               "Mozambique", "Mozambique", "Mozambique",
-               "Kenya",      "Kenya",      "Kenya"
-          ),
-          age_stratum = rep(c("0-11mo", "12-23mo", "24-59mo"), 4),
-          r      = c(0.35, 0.26, 0.22,
-                     0.22, 0.17, 0.09,
-                     0.56, 0.64, 0.33,
-                     0.20, 0.19, 0.16),
-          ci_lo  = c(0.28, 0.21, 0.16,
-                     0.16, 0.10, 0.03,
-                     0.39, 0.45, 0.11,
-                     0.18, 0.17, 0.14),
-          ci_hi  = c(0.42, 0.32, 0.30,
-                     0.30, 0.28, 0.28,
-                     0.76, 0.81, 0.75,
-                     0.23, 0.21, 0.18),
-          source = "GEMS (Nasrin et al. 2013)",
+     strata <- data.frame(
+          name   = c("general diarrhea", "severe diarrhea + cholera"),
+          r      = c(0.299, 0.586),
+          ci_lo  = c(0.253, 0.399),
+          ci_hi  = c(0.351, 0.752),
+          n_obs  = c(122L, 22L),
+          source = "Wiens et al. 2025 (PMC12013865)",
           stringsAsFactors = FALSE
      )
 
      # -----------------------------------------------------------------------
-     # 2. Wiens et al. 2025 systematic review (PMC12013865)
-     #    Severe diarrhea / cholera meta-analytic estimate
-     # -----------------------------------------------------------------------
-     wiens <- data.frame(
-          site        = "Meta-analysis (22 observations)",
-          age_stratum = "all ages",
-          r     = 0.586,
-          ci_lo = 0.399,
-          ci_hi = 0.752,
-          source = "Wiens et al. 2025",
-          stringsAsFactors = FALSE
-     )
-
-     all_data <- rbind(gems, wiens)
-
-     # -----------------------------------------------------------------------
-     # 3. Random-effects meta-analysis on the log-odds scale
-     #    (DerSimonian-Laird estimator)
-     #
-     #    Fixed-effects pooling would give Kenya's tight stratum-level CIs
-     #    disproportionate weight, producing an implausibly precise prior.
-     #    Random effects adds between-stratum heterogeneity variance (tau^2),
-     #    giving each observation roughly equal influence when heterogeneity
-     #    is large — appropriate for a prior that should span SSA settings.
+     # 2. Random-effects pool on the logit scale (DerSimonian-Laird)
      # -----------------------------------------------------------------------
      logit  <- function(p) log(p / (1 - p))
      ilogit <- function(x) 1 / (1 + exp(-x))
 
-     all_data$logit_r  <- logit(all_data$r)
-     all_data$logit_lo <- logit(all_data$ci_lo)
-     all_data$logit_hi <- logit(all_data$ci_hi)
-     all_data$se_logit <- (all_data$logit_hi - all_data$logit_lo) / (2 * 1.96)
-     all_data$vi       <- all_data$se_logit^2   # within-study variance
+     strata$logit_r  <- logit(strata$r)
+     strata$se_logit <- (logit(strata$ci_hi) - logit(strata$ci_lo)) / (2 * 1.96)
+     strata$vi       <- strata$se_logit^2
 
-     # Fixed-effects pooled estimate (step 1 of DL estimator)
-     wi_fe            <- 1 / all_data$vi
-     theta_fe         <- sum(wi_fe * all_data$logit_r) / sum(wi_fe)
-     k                <- nrow(all_data)
+     wi_fe    <- 1 / strata$vi
+     theta_fe <- sum(wi_fe * strata$logit_r) / sum(wi_fe)
+     Q        <- sum(wi_fe * (strata$logit_r - theta_fe)^2)
+     k        <- nrow(strata)
+     c_denom  <- sum(wi_fe) - sum(wi_fe^2) / sum(wi_fe)
+     tau2     <- max(0, (Q - (k - 1)) / c_denom)
 
-     # Cochran's Q and DerSimonian-Laird tau^2
-     Q       <- sum(wi_fe * (all_data$logit_r - theta_fe)^2)
-     c_denom <- sum(wi_fe) - sum(wi_fe^2) / sum(wi_fe)
-     tau2    <- max(0, (Q - (k - 1)) / c_denom)
-
-     # Random-effects weights
-     all_data$weight     <- 1 / (all_data$vi + tau2)
-     total_weight        <- sum(all_data$weight)
-     all_data$rel_weight <- all_data$weight / total_weight
-
-     pooled_logit  <- sum(all_data$weight * all_data$logit_r) / total_weight
-     pooled_se     <- sqrt(1 / total_weight)
-     pooled_mean   <- ilogit(pooled_logit)
-
-     # Use prediction interval (not confidence interval of the mean) as prior bounds.
-     # The prediction interval represents where rho would fall for a new SSA setting,
-     # which is the appropriate quantity to encode as a Bayesian prior.
-     #   PI = pooled_logit +/- t_{k-1, 0.95} * sqrt(tau^2 + pooled_se^2)
-     t_crit   <- qt(0.95, df = k - 1)
-     pred_se  <- sqrt(tau2 + pooled_se^2)
-     pooled_q05 <- ilogit(pooled_logit - t_crit * pred_se)
-     pooled_q50 <- ilogit(pooled_logit)
-     pooled_q95 <- ilogit(pooled_logit + t_crit * pred_se)
-
-     message(sprintf("Heterogeneity: Q=%.2f (df=%d), tau^2=%.4f, I^2=%.1f%%",
-                     Q, k - 1, tau2, 100 * (Q - (k - 1)) / Q))
+     w_re         <- 1 / (strata$vi + tau2)
+     pooled_logit <- sum(w_re * strata$logit_r) / sum(w_re)
+     pooled_se    <- sqrt(1 / sum(w_re))
+     pooled_mean  <- ilogit(pooled_logit)
+     pooled_ci_lo <- ilogit(pooled_logit - 1.96 * pooled_se)
+     pooled_ci_hi <- ilogit(pooled_logit + 1.96 * pooled_se)
 
      message(sprintf(
-          "Pooled rho estimate: mean=%.3f, 5th=%.3f, 95th=%.3f",
-          pooled_mean, pooled_q05, pooled_q95
+          "Wiens 2-stratum RE pool: Q=%.2f (df=%d), tau^2=%.3f, I^2=%.0f%%",
+          Q, k - 1, tau2, 100 * max(0, Q - (k - 1)) / max(Q, 1e-9)
+     ))
+     message(sprintf(
+          "Pooled rho: mean=%.3f, 95%% CI of pooled mean=[%.3f, %.3f]",
+          pooled_mean, pooled_ci_lo, pooled_ci_hi
      ))
 
      # -----------------------------------------------------------------------
-     # 4. Fit Beta prior via propvacc::get_beta_params()
+     # 3. Fit Beta prior to the 95% CI of the pooled mean
      # -----------------------------------------------------------------------
      prm <- propvacc::get_beta_params(
-          quantiles = c(0.05, 0.50, 0.95),
-          probs     = c(pooled_q05, pooled_q50, pooled_q95)
+          quantiles = c(0.025, 0.50, 0.975),
+          probs     = c(pooled_ci_lo, pooled_mean, pooled_ci_hi)
      )
+     fitted_mean <- prm$shape1 / (prm$shape1 + prm$shape2)
+     fitted_ess  <- prm$shape1 + prm$shape2
 
      message(sprintf(
-          "Fitted Beta prior for rho: shape1=%.4f, shape2=%.4f",
-          prm$shape1, prm$shape2
+          "Fitted Beta prior for rho: shape1=%.4f, shape2=%.4f (mean=%.3f, ESS=%.1f)",
+          prm$shape1, prm$shape2, fitted_mean, fitted_ess
      ))
 
      # -----------------------------------------------------------------------
-     # 5. Build and save parameter data frame
+     # 4. Build and save parameter data frame
      # -----------------------------------------------------------------------
+     desc <- "Care-seeking rate (rho): Wiens et al. 2025 random-effects pool of general diarrhea + severe-diarrhea/cholera strata"
+
      param_df <- make_param_df(
           variable_name = "rho",
-          variable_description = c(
-               "Care-seeking rate (rho): pooled point estimate (GEMS + Wiens 2025)",
-               "Care-seeking rate (rho): pooled point estimate (GEMS + Wiens 2025)",
-               "Care-seeking rate (rho): pooled point estimate (GEMS + Wiens 2025)"
-          ),
+          variable_description = c(desc, desc, desc),
           parameter_distribution = "beta",
           parameter_name  = c("shape1", "shape2", "mean"),
           parameter_value = c(prm$shape1, prm$shape2, pooled_mean)
@@ -171,11 +152,14 @@ get_rho_care_seeking_params <- function(PATHS) {
      utils::write.csv(param_df, param_path, row.names = FALSE)
      message(paste("Parameter data frame for rho saved to:", param_path))
 
-     # Return pooled data for downstream use (e.g. plotting)
+     # Return data for downstream use (e.g. plotting)
      invisible(list(
-          data       = all_data,
-          pooled     = list(mean = pooled_mean, q05 = pooled_q05, q50 = pooled_q50, q95 = pooled_q95),
+          strata     = strata,
+          pooled     = list(mean = pooled_mean, ci_lo = pooled_ci_lo, ci_hi = pooled_ci_hi,
+                            tau2 = tau2, Q = Q),
           beta_shape = list(shape1 = prm$shape1, shape2 = prm$shape2),
+          beta_mean  = fitted_mean,
+          beta_ess   = fitted_ess,
           param_df   = param_df
      ))
 }
