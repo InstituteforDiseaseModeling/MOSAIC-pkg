@@ -14,8 +14,9 @@
 #      core, cumulative, WIS, and the peak-timing/peak-magnitude path that
 #      requires location_name, date_start, date_stop, and epidemic_peaks.
 #
-# All tests skip cleanly when the Python port is not importable, so this file
-# is safe to merge before laser-cholera v0.13 lands.
+# All tests skip cleanly when the Python port is not importable. Requires
+# laser-cholera >= 0.13.1 for the peak-term tests to pass (v0.13.1 ported the
+# in-window peak filter from the R upstream).
 # =============================================================================
 
 PY_LIKELIHOOD_MODULE <- "laser.cholera.calc_model_likelihood"
@@ -28,7 +29,7 @@ skip_if_no_python_likelihood <- function() {
     skip("Python not available via reticulate")
   }
   if (!reticulate::py_module_available(PY_LIKELIHOOD_MODULE)) {
-    skip(sprintf("%s not installed (pre-laser-cholera 0.13)", PY_LIKELIHOOD_MODULE))
+    skip(sprintf("%s not installed (requires laser-cholera >= 0.13.1)", PY_LIKELIHOOD_MODULE))
   }
   invisible(TRUE)
 }
@@ -168,15 +169,10 @@ test_that("R and Python agree with WIS term enabled", {
 # -----------------------------------------------------------------------------
 test_that("R and Python agree with peak timing/magnitude enabled", {
   skip_if_no_python_likelihood()
-  # Known divergence vs laser-cholera v0.13.0: peak-term scoring diverges
-  # ~22% on daily cadence (R returns -495, Python -606 on the make_parity_inputs
-  # fixture with weight_peak_timing=weight_peak_magnitude=0.25). Previously
-  # this test false-passed because epidemic_peaks lacked loc_idx and Python
-  # silently dropped every row at calc_model_likelihood.py:638. After
-  # supplying loc_idx the real per-peak-term divergence surfaces.
-  # Likely sources: 14-day-window selection, Normal/log-Normal LL constants,
-  # or the N_peaks normalization. File upstream.
-  skip("known Python-side peak-term scoring divergence on daily cadence (laser-cholera v0.13.0)")
+  # Closed by laser-cholera v0.13.1: out-of-window peaks are now filtered
+  # (matching the R-side behavior at calc_model_likelihood.R:147-150),
+  # rather than being clamped by np.argmin to t=0 or t=n-1. The previously
+  # documented ~22% divergence (R -495 vs Python -606) is now zero.
 
   if (!reticulate::py_module_available("pandas")) {
     skip("pandas not available — required for epidemic_peaks DataFrame")
@@ -215,14 +211,11 @@ test_that("R and Python agree with peak timing/magnitude enabled", {
 # -----------------------------------------------------------------------------
 test_that("R and Python agree on weekly cadence with peak terms", {
   skip_if_no_python_likelihood()
-  # Known divergence vs laser-cholera v0.13.0: on a weekly-cadence series
-  # the peak-term divergence is much larger than the daily case (~290%:
-  # R returns -282, Python returns -1101). Likely the Python port's
-  # timestep_to_weeks=1 branch in calc_multi_peak_timing_ll has a
-  # date-sequence/cadence detection bug. Previously false-passed because
-  # epidemic_peaks lacked loc_idx (see daily-cadence test note). File
-  # upstream as the same issue as the daily-cadence divergence.
-  skip("known Python-side peak-term scoring divergence on weekly cadence (laser-cholera v0.13.0)")
+  # Closed by laser-cholera v0.13.1: same in-window filter fix as the
+  # daily-cadence test above. The previously documented ~290% divergence
+  # (R -282 vs Python -1101) is now zero. The earlier hypothesis of a
+  # weekly-cadence detection bug was incorrect — the root cause was
+  # out-of-window peaks being clamped instead of dropped.
 
   if (!reticulate::py_module_available("pandas")) skip("pandas not available")
   env <- new.env()
