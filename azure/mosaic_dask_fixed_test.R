@@ -29,15 +29,15 @@ priors <- get_location_priors(iso = "ETH")
 ctrl <- mosaic_control_defaults()
 
 # Calibration: fixed mode
-ctrl$calibration$n_simulations <- 5000
-ctrl$calibration$batch_size    <- 10000
-ctrl$calibration$n_iterations  <- 5
+ctrl$calibration$n_simulations        <- 5000
+ctrl$calibration$batch_size_adaptive  <- 10000   # was batch_size (renamed v0.22.16)
+ctrl$calibration$n_iterations         <- 5
 
 # Convergence targets
 ctrl$targets$ESS_param      <- 200
 ctrl$targets$ESS_param_prop <- 0.9
 ctrl$targets$ESS_best       <- 50
-ctrl$targets$ess_method      <- "perplexity"
+ctrl$targets$ESS_method     <- "perplexity"   # was ess_method (case-sensitive field)
 
 # Sampling flags (disable some for speed)
 ctrl$sampling$sample_tau_i            <- FALSE
@@ -51,9 +51,6 @@ ctrl$likelihood$weight_deaths <- 0.05
 # Predictions
 ctrl$predictions$n_iter_best     <- 30
 ctrl$predictions$n_iter_ensemble <- 5
-
-# NPE disabled
-ctrl$npe$enable <- FALSE
 
 # I/O
 ctrl$paths$clean_output <- TRUE

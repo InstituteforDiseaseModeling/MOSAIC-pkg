@@ -1,3 +1,48 @@
+# MOSAIC 0.32.9
+
+## Phase 3 (#101): cast observed surveillance matrices to double before scatter
+
+End-to-end Dask smoke run surfaced a silent reticulate serialization bug
+that returned `-Inf` for every sim's likelihood. Root cause:
+`get_location_config(iso = "ETH")` (and every other location's config)
+ships `reported_cases` / `reported_deaths` as R **integer** matrices —
+counts are natively integer-valued — with `NA_integer_` for missing
+surveillance weeks. When `reticulate::r_to_py()` serializes an integer
+matrix to numpy, `NA_integer_` becomes `INT32_MIN` (`-2147483648`) on
+the worker side, because numpy `int32` has no NaN representation. Those
+huge negative sentinels then evaluate as valid (extreme) counts in
+`calc_model_likelihood`'s NB term, returning `-Inf` for every sim.
+
+The smoke run's parquet read `likelihood: -Inf` for all 5000 sims; the
+gather adapter's multi-iter collapse then turned 5 copies of `-Inf`
+into `NA_real_` (no finite values to log-mean-exp), so `samples.parquet`
+showed `% finite: 0`.
+
+### Fix
+
+`.mosaic_inject_likelihood_settings()` now casts `config$reported_cases`
+and `config$reported_deaths` to `storage.mode = "double"` before scatter.
+`storage.mode()` preserves matrix `dim` and only flips the underlying
+type; `NA_integer_` → `NA_real_` → `np.nan` via reticulate, which
+`calc_model_likelihood` then masks correctly via `np.isfinite()`.
+
+The cast lives in the Dask-path-specific helper so the local-path
+R-side `calc_model_likelihood` is unaffected — it handles
+`NA_integer_` and `NA_real_` identically via `is.finite()` masking.
+
+### Validation
+
+1-sim ETH smoke against a Coiled cluster (1 D4s_v6 worker, freshly
+rebuilt v0.32.7 image with laser-cholera 0.13.1):
+- Before fix: `likelihood: -Inf, is finite: FALSE`
+- After fix: `likelihood: -17454.14, is finite: TRUE`
+
+The end-to-end on-worker scoring path is now confirmed functional.
+Production smoke (5K sims) and the 1K-sim performance benchmark
+remain to be re-run.
+
+---
+
 # MOSAIC 0.32.8
 
 ## Phase 3 (#101): swap removed MOZ fixtures for global `config_default` in parity test

@@ -64,6 +64,24 @@
 #'   \code{calc_likelihood = TRUE}.
 #' @noRd
 .mosaic_inject_likelihood_settings <- function(config, likelihood_settings) {
+  # Cast observed surveillance matrices to double so that NA_integer_ values
+  # (R's integer NA, sentinel = INT32_MIN) don't survive reticulate's int32
+  # serialization to workers as -2147483648 and poison the Python NB
+  # likelihood. Phase 1 / issue #101: ETH (and probably every) location's
+  # `reported_cases` / `reported_deaths` from get_location_config() store
+  # counts as integer-mode, with NA_integer_ for missing surveillance weeks.
+  # reticulate maps an R integer matrix to numpy int32, replacing NA with
+  # INT_MIN — those huge negatives then evaluate as valid (extreme) counts
+  # in calc_model_likelihood, returning -Inf. storage.mode() preserves the
+  # matrix dim attribute and only flips the underlying type; the local-path
+  # R-side calc_model_likelihood is unaffected because it handles NA_real_
+  # and NA_integer_ identically via is.finite() masking.
+  for (fld in c("reported_cases", "reported_deaths")) {
+    if (!is.null(config[[fld]]) && storage.mode(config[[fld]]) == "integer") {
+      storage.mode(config[[fld]]) <- "double"
+    }
+  }
+
   config$calc_likelihood          <- TRUE
   config$weight_cases             <- likelihood_settings$weight_cases
   config$weight_deaths            <- likelihood_settings$weight_deaths
