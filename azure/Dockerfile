@@ -124,12 +124,12 @@ RUN R -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 # 2. Strip TensorFlow (~2-3 GB, only needed for suitability modeling)
 # 3. Install dask/distributed/coiled for orchestration
 # 4. Clean conda and pip caches
-RUN R -e "MOSAIC::install_dependencies(force = TRUE)" && \
-    /root/.virtualenvs/r-mosaic/bin/pip uninstall -y tensorflow 2>/dev/null && \
-    /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir dask distributed coiled "bokeh>=3.1.0" && \
-    conda clean --all -y 2>/dev/null; \
-    rm -rf /root/.cache/pip /tmp/* && \
-    echo "✓ Python deps installed, TensorFlow stripped, caches cleaned"
+RUN R -e "MOSAIC::install_dependencies(force = TRUE)" \
+ && /root/.virtualenvs/r-mosaic/bin/pip uninstall -y tensorflow 2>/dev/null \
+ && /root/.virtualenvs/r-mosaic/bin/pip install --no-cache-dir dask distributed coiled "bokeh>=3.1.0" \
+ && (conda clean --all -y 2>/dev/null || true) \
+ && rm -rf /root/.cache/pip /tmp/* \
+ && echo "✓ Python deps installed, TensorFlow stripped, caches cleaned"
 
 # ============================================================
 # Fix OpenSSL version mismatch
@@ -169,17 +169,24 @@ RUN if [ -f /root/.virtualenvs/r-mosaic/lib/libexpat.so.1 ]; then \
 # ============================================================
 # Verify MOSAIC installation
 # ============================================================
-RUN R -e "library(MOSAIC); \
-    result <- tryCatch({ \
-        MOSAIC::check_dependencies(); \
-        cat('✓ MOSAIC installation verified successfully\n'); \
-        cat('✓ Version:', as.character(packageVersion('MOSAIC')), '\n'); \
-        TRUE \
-    }, error = function(e) { \
-        cat('ERROR:', e\$message, '\n'); \
-        FALSE \
-    }); \
-    if (!result) quit(status = 1)"
+# Strong assertions: the r-mosaic venv must exist with laser-cholera and
+# the v0.13+ calc_model_likelihood submodule importable. check_dependencies()
+# alone is too lenient — it prints warnings rather than erroring on missing
+# modules, so a half-installed venv (no laser-cholera, only numpy) sails
+# through. The three checks below fail-fast if anything is wrong, which is
+# what we want during a build.
+RUN test -x /root/.virtualenvs/r-mosaic/bin/python \
+ && /root/.virtualenvs/r-mosaic/bin/python -c "import laser.cholera; \
+        print('✓ laser-cholera', laser.cholera.__version__); \
+        from laser.cholera import calc_model_likelihood as _cml; \
+        print('✓ laser.cholera.calc_model_likelihood importable')" \
+ && R -e "library(MOSAIC); \
+        result <- tryCatch({ \
+            MOSAIC::check_dependencies(); \
+            cat('✓ MOSAIC version:', as.character(packageVersion('MOSAIC')), '\n'); \
+            TRUE \
+        }, error = function(e) { cat('ERROR:', e\$message, '\n'); FALSE }); \
+        if (!result) quit(status = 1)"
 
 # ============================================================
 # Clone MOSAIC-data repository
@@ -199,8 +206,15 @@ RUN mkdir -p /workspace/MOSAIC/MOSAIC-pkg/model/input && \
 # ============================================================
 # Setup for Coiled workers
 # ============================================================
-# Add r-mosaic conda environment to PATH so Coiled can find Python/dask
+# Add r-mosaic virtualenv to PATH so Coiled can find Python/dask, and
+# pin RETICULATE_PYTHON so non-MOSAIC R sessions (e.g. the testthat
+# setup phase before library(MOSAIC) loads) also route reticulate to
+# the venv instead of falling back to a uv-bootstrapped ephemeral
+# Python. Without this, devtools::test() can see "laser not installed"
+# even though the venv has it, because the test harness queries
+# reticulate before the package's .onLoad hook fires.
 ENV PATH=/root/.virtualenvs/r-mosaic/bin:$PATH
+ENV RETICULATE_PYTHON=/root/.virtualenvs/r-mosaic/bin/python
 
 WORKDIR /workspace
 

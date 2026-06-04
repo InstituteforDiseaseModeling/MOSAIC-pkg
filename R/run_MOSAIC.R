@@ -64,6 +64,24 @@
 #'   \code{calc_likelihood = TRUE}.
 #' @noRd
 .mosaic_inject_likelihood_settings <- function(config, likelihood_settings) {
+  # Cast observed surveillance matrices to double so that NA_integer_ values
+  # (R's integer NA, sentinel = INT32_MIN) don't survive reticulate's int32
+  # serialization to workers as -2147483648 and poison the Python NB
+  # likelihood. Phase 1 / issue #101: ETH (and probably every) location's
+  # `reported_cases` / `reported_deaths` from get_location_config() store
+  # counts as integer-mode, with NA_integer_ for missing surveillance weeks.
+  # reticulate maps an R integer matrix to numpy int32, replacing NA with
+  # INT_MIN — those huge negatives then evaluate as valid (extreme) counts
+  # in calc_model_likelihood, returning -Inf. storage.mode() preserves the
+  # matrix dim attribute and only flips the underlying type; the local-path
+  # R-side calc_model_likelihood is unaffected because it handles NA_real_
+  # and NA_integer_ identically via is.finite() masking.
+  for (fld in c("reported_cases", "reported_deaths")) {
+    if (!is.null(config[[fld]]) && storage.mode(config[[fld]]) == "integer") {
+      storage.mode(config[[fld]]) <- "double"
+    }
+  }
+
   config$calc_likelihood          <- TRUE
   config$weight_cases             <- likelihood_settings$weight_cases
   config$weight_deaths            <- likelihood_settings$weight_deaths
@@ -746,6 +764,16 @@ run_MOSAIC <- function(config,
 
   # Conditionally create simresults directory for validation output
   save_simresults <- isTRUE(control$io$save_simresults)
+
+  # Preflight: simresults capture is local-path only. Dask workers return
+  # per-iter scalar likelihoods (issue #101 worker schema) instead of full
+  # time-series matrices, so there is no raw (j, t) output to persist on the
+  # Dask path. Reject early rather than silently dropping diagnostics.
+  if (use_dask && save_simresults) {
+    stop("save_simresults is not supported on the Dask path; ",
+         "use the local backend for diagnostic runs.", call. = FALSE)
+  }
+
   if (save_simresults) {
     dirs$cal_simresults <- file.path(dir_output, "2_calibration/simulation_results")
     dir.create(dirs$cal_simresults, recursive = TRUE, showWarnings = FALSE)
@@ -1234,7 +1262,6 @@ run_MOSAIC <- function(config,
           dirs                = dirs,
           param_names_all     = param_names_all,
           control             = control,
-          likelihood_settings = likelihood_settings,
           client              = client,
           base_config_future  = base_config_future,
           mosaic_worker       = mosaic_worker
@@ -1359,7 +1386,6 @@ run_MOSAIC <- function(config,
           dirs                = dirs,
           param_names_all     = param_names_all,
           control             = control,
-          likelihood_settings = likelihood_settings,
           client              = client,
           base_config_future  = base_config_future,
           mosaic_worker       = mosaic_worker

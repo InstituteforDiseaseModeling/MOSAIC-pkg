@@ -61,10 +61,14 @@ test_that("make_LASER_config validation: malformed epidemic_peaks errors", {
   )
 })
 
-test_that("make_LASER_config validation: unknown iso_code triggers warning, not error", {
+test_that("make_LASER_config validation: unknown iso_code is a hard error (v0.32.0+)", {
   unknown <- data.frame(iso_code = "ZZZ", peak_date = "2024-01-01",
                         stringsAsFactors = FALSE)
-  expect_warning(
+  # v0.32.0 promoted the prior warning to a hard error: laser-cholera v0.13+
+  # asserts every iso_code in epidemic_peaks appears in location_name, so
+  # MOSAIC fails fast at config construction instead of letting the worker
+  # crash. See R/make_LASER_config.R::~918 and NEWS v0.32.0.
+  expect_error(
     .make_minimal_then_call(epidemic_peaks = unknown),
     "epidemic_peaks contains iso_code\\(s\\) not in location_name: ZZZ"
   )
