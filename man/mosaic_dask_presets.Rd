@@ -47,11 +47,23 @@ sims at \code{nthreads = 1}.
 Scheduler is mostly connection / task-graph state, not CPU-bound.
 Finer tiers avoid over-provisioning at low worker counts while
 keeping RAM headroom at high counts.
-\item \strong{wait_for_workers} — fraction of the worker pool that
-must be up before tasks dispatch. Coiled's default 0.3 is too
-aggressive for short-task calibrations (first sims would run on
-a partial pool, then stall as new workers join). Set to 0.8 for
-\code{n_workers <= 250} and 0.9 above.
+\item \strong{wait_for_workers} — absolute number of workers that
+must be up before tasks dispatch. Equivalent to 80\\% of the
+pool at \code{n_workers <= 250}, 90\\% above, floored at 1.
+Passed as an integer (not a fraction) so Coiled has no
+ambiguity to resolve at small \code{n_workers} (a fractional
+\code{0.8 * 1 worker = 0.8} risks truncation to 0). Coiled's
+fraction default of 0.3 is too aggressive for short-task
+calibrations: first sims dispatch onto a partial pool, then
+stall as remaining workers join.
+\item \strong{timeout} — cluster-creation timeout in seconds.
+Scales as \code{max(1800, 600 + 4 * n_workers)}. At
+\code{cores = 1000} this is ~33 minutes, large enough for the
+long tail of Azure VM provisioning in westus2 (per-VM p99 ~7
+min, parallelized but not free) plus the 90\\% wait threshold.
+\item \strong{workspace} — defaults to \code{"idm-coiled-idmad-r2"}.
+Override globally without forking the helper by setting
+\code{options(mosaic.coiled_workspace = "your-workspace")}.
 }
 
 \strong{Rough sizing guide} (~0.7 s per LASER iteration measured on

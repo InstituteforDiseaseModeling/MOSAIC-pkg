@@ -95,11 +95,23 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'     Scheduler is mostly connection / task-graph state, not CPU-bound.
 #'     Finer tiers avoid over-provisioning at low worker counts while
 #'     keeping RAM headroom at high counts.
-#'   \item \strong{wait_for_workers} — fraction of the worker pool that
-#'     must be up before tasks dispatch. Coiled's default 0.3 is too
-#'     aggressive for short-task calibrations (first sims would run on
-#'     a partial pool, then stall as new workers join). Set to 0.8 for
-#'     \code{n_workers <= 250} and 0.9 above.
+#'   \item \strong{wait_for_workers} — absolute number of workers that
+#'     must be up before tasks dispatch. Equivalent to 80\% of the
+#'     pool at \code{n_workers <= 250}, 90\% above, floored at 1.
+#'     Passed as an integer (not a fraction) so Coiled has no
+#'     ambiguity to resolve at small \code{n_workers} (a fractional
+#'     \code{0.8 * 1 worker = 0.8} risks truncation to 0). Coiled's
+#'     fraction default of 0.3 is too aggressive for short-task
+#'     calibrations: first sims dispatch onto a partial pool, then
+#'     stall as remaining workers join.
+#'   \item \strong{timeout} — cluster-creation timeout in seconds.
+#'     Scales as \code{max(1800, 600 + 4 * n_workers)}. At
+#'     \code{cores = 1000} this is ~33 minutes, large enough for the
+#'     long tail of Azure VM provisioning in westus2 (per-VM p99 ~7
+#'     min, parallelized but not free) plus the 90\% wait threshold.
+#'   \item \strong{workspace} — defaults to \code{"idm-coiled-idmad-r2"}.
+#'     Override globally without forking the helper by setting
+#'     \code{options(mosaic.coiled_workspace = "your-workspace")}.
 #' }
 #'
 #' \strong{Rough sizing guide} (~0.7 s per LASER iteration measured on
@@ -178,18 +190,34 @@ mosaic_dask_presets <- function(cores) {
     else if (n_workers <= 350L) "Standard_D16s_v6"  # 16 vCPU /  64 GiB
     else                        "Standard_D32s_v6"  # 32 vCPU / 128 GiB
 
-  # wait_for_workers: hold submission until this fraction of the worker
-  # pool is up. Coiled's 0.3 default penalizes short-task calibrations
-  # (under-utilized cluster on the first batch). Bump to 0.8/0.9.
-  wait_for <- if (n_workers <= 250L) 0.8 else 0.9
+  # wait_for_workers: hold submission until this many workers are up.
+  # Coiled's 0.3-default penalizes short-task calibrations (first sims
+  # dispatch onto a partial pool, then stall). Target 80% for typical
+  # cluster sizes, 90% at the high end. Compute as an absolute integer
+  # rather than a fraction so Coiled has no ambiguity to resolve when
+  # n_workers is small (a fraction of 0.8 * 1 worker = 0.8, which some
+  # Coiled paths can truncate to 0). Floored at 1.
+  wait_frac        <- if (n_workers <= 250L) 0.8 else 0.9
+  wait_for_workers <- max(1L, as.integer(ceiling(wait_frac * n_workers)))
+
+  # timeout: cluster-creation timeout in seconds. Scales with n_workers
+  # because Azure VM provisioning has a long tail in westus2 (p99 ~7
+  # min/VM, parallelized but not free). 1800 s floor for the smallest
+  # clusters; ~4 s per worker added on top. At cores=1000 this is
+  # ~33 min, comfortable for the 450-worker wait at 90%.
+  timeout <- max(1800L, as.integer(600 + 4 * n_workers))
 
   list(
     type               = "coiled",
-    workspace          = "idm-coiled-idmad-r2",
+    # Workspace override via R option lets users plug in a different
+    # Coiled workspace without forking this helper:
+    #   options(mosaic.coiled_workspace = "my-workspace")
+    workspace          = getOption("mosaic.coiled_workspace",
+                                   "idm-coiled-idmad-r2"),
     software           = "mosaic-acr-workers",
     region             = "westus2",
     idle_timeout       = "30 minutes",
-    timeout            = 1800,
+    timeout            = timeout,
     worker_options     = list(nthreads = 1L),
     n_workers          = n_workers,
     # Three equivalent 2-vCPU x86 variants. Coiled picks whichever has
@@ -201,6 +229,6 @@ mosaic_dask_presets <- function(cores) {
       "Standard_D2ads_v6"  # AMD Genoa w/ local SSD
     ),
     scheduler_vm_types = c(scheduler_vm),
-    wait_for_workers   = wait_for
+    wait_for_workers   = wait_for_workers
   )
 }
