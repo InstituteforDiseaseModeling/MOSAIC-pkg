@@ -989,7 +989,7 @@ run_MOSAIC <- function(config,
       # Pass through optional Coiled args from dask_spec
       for (opt in c("timeout", "environ", "scheduler_disk_size",
                     "worker_disk_size", "scheduler_options", "worker_options",
-                    "spot_policy", "host_setup_script")) {
+                    "spot_policy", "host_setup_script", "wait_for_workers")) {
         if (!is.null(dask_spec[[opt]])) {
           cluster_args[[opt]] <- dask_spec[[opt]]
           if (opt == "host_setup_script") log_msg("Using host_setup_script for worker VM init")

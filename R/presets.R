@@ -72,24 +72,38 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #' @details
 #' \strong{Routing rules:}
 #' \itemize{
-#'   \item \strong{Worker VM} — always \code{Standard_D2s_v6} (2 vCPU /
-#'     8 GiB RAM). LASER runs at \code{nthreads = 1}, so cores beyond 2
-#'     per worker idle. Smallest VM = maximum workers per core =
-#'     maximum concurrent sims.
 #'   \item \strong{Worker count} — \code{floor(cores / 2)}, with a
 #'     minimum of 1 worker. So \code{cores = 100} → 50 workers (100
 #'     cores), \code{cores = 99} → 49 workers (98 cores). A request of
 #'     \code{cores = 1} rounds up to 1 worker = 2 cores (the smallest
 #'     viable cluster).
-#'   \item \strong{Scheduler VM} — \code{Standard_D8s_v6} (8 vCPU /
-#'     32 GiB) for ≤ 200 workers, \code{Standard_D16s_v6} (16 vCPU /
-#'     64 GiB) for > 200 workers. The 200-worker threshold is where
-#'     scheduler task-throughput becomes the bottleneck on PR-#111's
-#'     scalar-payload gather path.
+#'   \item \strong{Worker VM family} — three equivalent 2-vCPU x86
+#'     variants are passed to Coiled so it can grab whichever has
+#'     capacity in westus2: \code{Standard_D2s_v6} (Intel Emerald
+#'     Rapids), \code{Standard_D2ds_v6} (same Intel with local SSD),
+#'     \code{Standard_D2ads_v6} (AMD Genoa with local SSD). All 2 vCPU
+#'     / 8 GiB. Smallest VM = max workers per core = max concurrent
+#'     sims at \code{nthreads = 1}.
+#'   \item \strong{Scheduler VM} — 5-tier graduation by worker count:
+#'     \tabular{ll}{
+#'       \code{n_workers <= 50}   \tab \code{Standard_D2s_v6}   (2 vCPU /   8 GiB) \cr
+#'       \code{n_workers <= 100}  \tab \code{Standard_D4s_v6}   (4 vCPU /  16 GiB) \cr
+#'       \code{n_workers <= 200}  \tab \code{Standard_D8s_v6}   (8 vCPU /  32 GiB) \cr
+#'       \code{n_workers <= 350}  \tab \code{Standard_D16s_v6} (16 vCPU /  64 GiB) \cr
+#'       \code{n_workers >  350}  \tab \code{Standard_D32s_v6} (32 vCPU / 128 GiB) \cr
+#'     }
+#'     Scheduler is mostly connection / task-graph state, not CPU-bound.
+#'     Finer tiers avoid over-provisioning at low worker counts while
+#'     keeping RAM headroom at high counts.
+#'   \item \strong{wait_for_workers} — fraction of the worker pool that
+#'     must be up before tasks dispatch. Coiled's default 0.3 is too
+#'     aggressive for short-task calibrations (first sims would run on
+#'     a partial pool, then stall as new workers join). Set to 0.8 for
+#'     \code{n_workers <= 250} and 0.9 above.
 #' }
 #'
 #' \strong{Rough sizing guide} (~0.7 s per LASER iteration measured on
-#' ETH single-location, D2s_v6 worker):
+#' ETH single-location):
 #' \itemize{
 #'   \item \code{cores = 50-100}: smoke tests, 1-5K sims, day-to-day.
 #'   \item \code{cores = 250}: typical 10K-sim fixed-budget calibrations.
@@ -99,15 +113,17 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'
 #' \strong{Notes:}
 #' \itemize{
-#'   \item D2s_v6 has 8 GiB RAM per worker. Fine for ETH single-location
-#'     and other small configs. For multi-country MOSAIC (>10 locations)
+#'   \item 8 GiB RAM per worker is fine for ETH single-location and
+#'     similar small configs. For multi-country MOSAIC (>10 locations)
 #'     you may need more headroom — override \code{vm_types} to
 #'     \code{"Standard_D4s_v6"} (16 GiB), accepting that the worker count
 #'     halves for the same core budget.
 #'   \item Defaults to on-demand pricing. For spot/preemptible VMs
 #'     (~70\% cheaper, with eviction risk), layer
-#'     \code{spot_policy = "spot"} onto the returned list — most useful
-#'     at \code{cores >= 500} where sim wall-time absorbs retries.
+#'     \code{spot_policy = "spot_with_fallback"} (NOT \code{"spot"}) so
+#'     the cluster falls back to on-demand if Azure spot capacity in
+#'     westus2 runs out. Most useful at \code{cores >= 500} where sim
+#'     wall-time absorbs the occasional eviction retry.
 #' }
 #'
 #' @seealso \code{\link{mosaic_io_presets}} for I/O presets,
@@ -128,7 +144,7 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'
 #' # Max cluster with spot VMs for a long adaptive run
 #' spec <- mosaic_dask_presets(1000)
-#' spec$spot_policy <- "spot"
+#' spec$spot_policy <- "spot_with_fallback"
 #'
 #' # Multi-country: override to D4s_v6 for RAM headroom
 #' spec <- mosaic_dask_presets(500)
@@ -148,10 +164,24 @@ mosaic_dask_presets <- function(cores) {
          call. = FALSE)
   }
 
-  # Optimal routing for LASER's nthreads=1 workload: max workers per core
-  # via D2s_v6 (2 cores each). Scheduler scales at the ~200-worker knee.
-  n_workers    <- max(1L, cores %/% 2L)
-  scheduler_vm <- if (n_workers <= 200L) "Standard_D8s_v6" else "Standard_D16s_v6"
+  # n_workers = floor(cores / 2): smallest 2-vCPU VM = max workers per
+  # core = max concurrent sims at LASER's nthreads=1.
+  n_workers <- max(1L, cores %/% 2L)
+
+  # 5-tier scheduler graduation. Scheduler is connection/task-graph
+  # state, not CPU-bound — these sizes give RAM headroom for the
+  # task graph (~5 KiB per task) without over-provisioning at low N.
+  scheduler_vm <-
+    if      (n_workers <=  50L) "Standard_D2s_v6"   #  2 vCPU /   8 GiB
+    else if (n_workers <= 100L) "Standard_D4s_v6"   #  4 vCPU /  16 GiB
+    else if (n_workers <= 200L) "Standard_D8s_v6"   #  8 vCPU /  32 GiB
+    else if (n_workers <= 350L) "Standard_D16s_v6"  # 16 vCPU /  64 GiB
+    else                        "Standard_D32s_v6"  # 32 vCPU / 128 GiB
+
+  # wait_for_workers: hold submission until this fraction of the worker
+  # pool is up. Coiled's 0.3 default penalizes short-task calibrations
+  # (under-utilized cluster on the first batch). Bump to 0.8/0.9.
+  wait_for <- if (n_workers <= 250L) 0.8 else 0.9
 
   list(
     type               = "coiled",
@@ -162,7 +192,15 @@ mosaic_dask_presets <- function(cores) {
     timeout            = 1800,
     worker_options     = list(nthreads = 1L),
     n_workers          = n_workers,
-    vm_types           = c("Standard_D2s_v6"),
-    scheduler_vm_types = c(scheduler_vm)
+    # Three equivalent 2-vCPU x86 variants. Coiled picks whichever has
+    # capacity in westus2 — materially speeds provision under regional
+    # contention (D2s_v6 is the most-requested 2-vCPU on Azure).
+    vm_types           = c(
+      "Standard_D2s_v6",   # Intel Emerald Rapids
+      "Standard_D2ds_v6",  # Intel Emerald Rapids w/ local SSD
+      "Standard_D2ads_v6"  # AMD Genoa w/ local SSD
+    ),
+    scheduler_vm_types = c(scheduler_vm),
+    wait_for_workers   = wait_for
   )
 }
