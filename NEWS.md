@@ -1,3 +1,51 @@
+# MOSAIC 0.32.7
+
+## azure/Dockerfile: harden Python-env build against silent failures
+
+The previous `:latest` push silently produced a broken image: the `r-mosaic`
+virtualenv was never created (only reticulate's default `r-reticulate`
+conda env with just `numpy`), and `laser-cholera` wasn't installed at all.
+Diagnosis revealed two latent bugs in [azure/Dockerfile](azure/Dockerfile)
+that combined to mask the failure:
+
+1. **Failure-masking shell chain in the python-deps step.** The single
+   trailing semicolon (`; rm -rf ...`) before the final `echo` short-circuited
+   the `&&` chain — if `MOSAIC::install_dependencies()` or any chained pip
+   command failed, the `rm -rf && echo "..."` tail still exited 0, so the
+   build looked green. **Fix**: all conjunctions now `&&`; `conda clean`
+   wrapped in `(... || true)` since its `2>/dev/null` redirect intentionally
+   ignores warnings but should not fail the build.
+
+2. **Verify step too lenient.** `MOSAIC::check_dependencies()` prints
+   warnings rather than erroring on missing modules, so a half-installed
+   venv (no laser-cholera) passed the previous `tryCatch` guard.
+   **Fix**: prepend three hard assertions before the R-side check —
+   `test -x /root/.virtualenvs/r-mosaic/bin/python`, then a `python -c
+   "import laser.cholera; from laser.cholera import calc_model_likelihood"`
+   one-liner that fails the build if either import is missing. Confirms
+   the venv exists AND the v0.13+ analyzer submodule is reachable.
+
+3. **`RETICULATE_PYTHON` pinned at image level.** The container only had
+   `ENV PATH=/root/.virtualenvs/r-mosaic/bin:$PATH`. reticulate's
+   discovery doesn't always honor PATH — `Rscript` started outside the
+   MOSAIC `.onLoad` hook fell back to a uv-bootstrapped ephemeral
+   Python at `/root/.cache/R/reticulate/uv/...`, completely bypassing
+   the installed venv. This caused `devtools::test()`'s pre-`library()`
+   setup phase to report laser-cholera as missing and SKIP 11 tests
+   that depend on the engine being importable. **Fix**: add
+   `ENV RETICULATE_PYTHON=/root/.virtualenvs/r-mosaic/bin/python` so
+   every R session in the image — MOSAIC-loaded or not — sees the
+   right Python.
+
+### Migration
+
+Next image rebuild via `docker build -f azure/Dockerfile ...`
+(use `--no-cache` to evict the now-stale layers, or just retag the
+freshly-rebuilt image). Existing pulled images are unaffected until
+re-pull.
+
+---
+
 # MOSAIC 0.32.6
 
 ## Phase 3 (#101): test fixes for post-merge contract updates
