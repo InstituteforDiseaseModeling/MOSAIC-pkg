@@ -260,6 +260,149 @@ test_that(".mosaic_write_one_shard_dask produces a valid parquet shard", {
 # nondeterminism: writing the same 4 mock results via serial lapply and
 # via mclapply must produce byte-identical parquet files.
 # =============================================================================
+test_that(".mosaic_sample_and_serialize captures errors instead of throwing", {
+  fx <- skip_if_no_data()
+
+  # Pass invalid priors to force an internal error inside the helper.
+  # The full-body tryCatch (v0.32.20) must convert the error into a
+  # structured return — NEVER let an exception escape, since under
+  # mclapply that would corrupt the chunk_results positional contract
+  # and crash the parent loop on the next $params/$json access.
+  bad_result <- MOSAIC:::.mosaic_sample_and_serialize(
+    sim_id        = 1L,
+    PATHS         = NULL,
+    priors        = "not a priors list",
+    config        = fx$config,
+    sampling_args = list()
+  )
+
+  expect_type(bad_result, "list")
+  expect_named(bad_result, c("params", "json", "error"))
+  expect_null(bad_result$params)
+  expect_null(bad_result$json)
+  expect_type(bad_result$error, "character")
+  expect_true(nzchar(bad_result$error))
+})
+
+
+test_that(".mosaic_write_one_shard_dask returns a character error instead of throwing", {
+  fx <- skip_if_no_data()
+  cfg <- fx$config
+
+  # res$success = FALSE → returns character error message, not TRUE
+  bad_res <- list(sim_id = 1L, success = FALSE,
+                  error = "synthetic worker failure")
+  tmp <- tempfile("write_err_"); dir.create(file.path(tmp, "samples"), recursive = TRUE)
+  out <- MOSAIC:::.mosaic_write_one_shard_dask(
+    sim_id          = 1L,
+    res             = bad_res,
+    n_iterations    = 3L,
+    param_names_all = c("a", "b"),
+    config          = cfg,
+    dirs            = list(cal_samples = file.path(tmp, "samples")),
+    control         = list(io = MOSAIC::mosaic_io_presets("default"))
+  )
+  expect_type(out, "character")
+  expect_match(out, "synthetic worker failure")
+  expect_false(isTRUE(out))
+
+  # res = NULL also returns a character message
+  out2 <- MOSAIC:::.mosaic_write_one_shard_dask(
+    sim_id          = 2L,
+    res             = NULL,
+    n_iterations    = 3L,
+    param_names_all = c("a", "b"),
+    config          = cfg,
+    dirs            = list(cal_samples = file.path(tmp, "samples")),
+    control         = list(io = MOSAIC::mosaic_io_presets("default"))
+  )
+  expect_type(out2, "character")
+  expect_false(isTRUE(out2))
+
+  # Missing iterations → returns character message
+  partial_res <- list(sim_id = 3L, success = TRUE,
+                      params = list(), iterations = list())
+  out3 <- MOSAIC:::.mosaic_write_one_shard_dask(
+    sim_id          = 3L,
+    res             = partial_res,
+    n_iterations    = 3L,
+    param_names_all = c("a", "b"),
+    config          = cfg,
+    dirs            = list(cal_samples = file.path(tmp, "samples")),
+    control         = list(io = MOSAIC::mosaic_io_presets("default"))
+  )
+  expect_type(out3, "character")
+  expect_match(out3, "no iterations|no params dict|failed on worker")
+
+  unlink(tmp, recursive = TRUE)
+})
+
+
+test_that("parallel write loop survives mixed success/failure without aborting", {
+  fx <- skip_if_no_data()
+  skip_if_not_installed("arrow")
+  skip_on_os("windows")  # mclapply is POSIX-only
+  cfg <- fx$config
+
+  params_sim <- MOSAIC::sample_parameters(
+    PATHS = NULL, priors = fx$priors, config = cfg,
+    seed = 1L, sample_args = list(),
+    verbose = FALSE, validate = FALSE
+  )
+  worker_params <- MOSAIC:::.extract_sampled_params(params_sim)
+  worker_params[.matrix_fields] <- NULL
+  pv <- MOSAIC::convert_config_to_matrix(params_sim)
+  if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+  param_names_all <- names(pv)
+
+  good_res <- function(sim_id) list(
+    sim_id     = as.integer(sim_id),
+    success    = TRUE,
+    params     = worker_params,
+    iterations = list(list(iter = 1L, seed_iter = sim_id * 10L, likelihood = -1234.5))
+  )
+  bad_res <- list(sim_id = 0L, success = FALSE,
+                  error = "synthetic worker failure")
+
+  # Mix: sim 1 ok, sim 2 bad, sim 3 ok, sim 4 bad
+  results_lookup <- list(
+    "1" = good_res(1), "2" = bad_res,
+    "3" = good_res(3), "4" = bad_res
+  )
+  sim_ids <- 1L:4L
+  tmp     <- tempfile("err_recovery_")
+  dir.create(file.path(tmp, "samples"), recursive = TRUE)
+  dirs    <- list(cal_samples = file.path(tmp, "samples"))
+
+  chunk_out <- parallel::mclapply(sim_ids, function(idx) {
+    sim_id <- sim_ids[[idx]]
+    MOSAIC:::.mosaic_write_one_shard_dask(
+      sim_id          = sim_id,
+      res             = results_lookup[[as.character(sim_id)]],
+      n_iterations    = 1L,
+      param_names_all = param_names_all,
+      config          = cfg,
+      dirs            = dirs,
+      control         = list(io = MOSAIC::mosaic_io_presets("default"))
+    )
+  }, mc.cores = 2L)
+
+  # Parent must have survived all 4 — none caused a propagated error
+  expect_length(chunk_out, 4L)
+
+  # isTRUE correctly distinguishes TRUE (success) from character (failure)
+  success <- vapply(chunk_out, isTRUE, logical(1))
+  expect_equal(success, c(TRUE, FALSE, TRUE, FALSE))
+
+  # Failed entries are character error messages — parent can surface them
+  expect_type(chunk_out[[2]], "character")
+  expect_match(chunk_out[[2]], "synthetic worker failure")
+  expect_type(chunk_out[[4]], "character")
+
+  unlink(tmp, recursive = TRUE)
+})
+
+
 test_that(".mosaic_sample_and_serialize is reproducible across parallel and serial paths", {
   fx <- skip_if_no_data()
   skip_on_os("windows")  # mclapply is POSIX-only

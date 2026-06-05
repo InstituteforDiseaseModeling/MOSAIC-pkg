@@ -1782,20 +1782,31 @@
 #'
 #' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
 #' submission sample-and-serialize loop can run in parallel via
-#' parallel::mclapply(). Returns a list with two fields:
-#'   $params : the full sampled-config list (or NULL on failure)
+#' parallel::mclapply(). Returns a list:
+#'   $params : the full sampled-config list (NULL on failure)
 #'   $json   : the per-sim JSON string ready for the Coiled worker
-#'             (or NULL on failure)
+#'             (NULL on failure)
+#'   $error  : NULL on success; a character message on failure
 #'
 #' Reproducibility: sample_parameters() takes `seed = sim_id` and is
 #' internally seeded, so each sim's output depends ONLY on (sim_id,
 #' priors, config, sampling_args). Parallel execution produces output
 #' identical to serial execution regardless of fork ordering.
+#'
+#' Error handling: the entire body is wrapped in tryCatch so any failure
+#' (in sample_parameters, in the guardrail clamps, in toJSON) is
+#' captured and returned as $error. Callers MUST NOT emit warnings
+#' inside this function — fork-side warnings with `immediate. = FALSE`
+#' are swallowed by mclapply. Surface $error in the parent instead.
+#'
+#' Constraint: do NOT touch the parent's reticulate/Coiled state from
+#' inside this function. The parent's `client` and `mosaic_worker`
+#' objects are inherited via fork but are not safe to use in children.
 #' @noRd
 .mosaic_sample_and_serialize <- function(sim_id, PATHS, priors, config,
                                          sampling_args) {
-  params <- tryCatch(
-    sample_parameters(
+  tryCatch({
+    params <- sample_parameters(
       PATHS       = PATHS,
       priors      = priors,
       config      = config,
@@ -1803,119 +1814,114 @@
       sample_args = sampling_args,
       verbose     = FALSE,
       validate    = FALSE
-    ),
-    error = function(e) {
-      warning("Param sampling failed for sim ", sim_id, ": ", e$message,
-              call. = FALSE, immediate. = FALSE)
-      NULL
-    }
-  )
+    )
 
-  if (is.null(params)) return(list(params = NULL, json = NULL))
+    # Guardrails: clamp transmission parameters into valid ranges.
+    if (!is.null(params$beta_j0_tot)) params$beta_j0_tot <- pmax(params$beta_j0_tot, 1e-10)
+    if (!is.null(params$beta_j0_hum)) params$beta_j0_hum <- pmax(params$beta_j0_hum, 0)
+    if (!is.null(params$beta_j0_env)) params$beta_j0_env <- pmax(params$beta_j0_env, 0)
+    if (!is.null(params$p_beta))      params$p_beta      <- pmin(pmax(params$p_beta, 1e-6), 1 - 1e-6)
+    if (!is.null(params$tau_i))       params$tau_i       <- pmin(pmax(params$tau_i, 0), 1)
 
-  # Guardrails: clamp transmission parameters into valid ranges.
-  if (!is.null(params$beta_j0_tot)) params$beta_j0_tot <- pmax(params$beta_j0_tot, 1e-10)
-  if (!is.null(params$beta_j0_hum)) params$beta_j0_hum <- pmax(params$beta_j0_hum, 0)
-  if (!is.null(params$beta_j0_env)) params$beta_j0_env <- pmax(params$beta_j0_env, 0)
-  if (!is.null(params$p_beta))      params$p_beta      <- pmin(pmax(params$p_beta, 1e-6), 1 - 1e-6)
-  if (!is.null(params$tau_i))       params$tau_i       <- pmin(pmax(params$tau_i, 0), 1)
+    # Serialize the sampled (non-base) fields for shipping to the Coiled worker.
+    json <- jsonlite::toJSON(
+      .extract_sampled_params(params),
+      auto_unbox = TRUE,
+      digits     = NA
+    )
 
-  # Serialize the sampled (non-base) fields for shipping to the Coiled worker.
-  json <- jsonlite::toJSON(
-    .extract_sampled_params(params),
-    auto_unbox = TRUE,
-    digits     = NA
-  )
-
-  list(params = params, json = as.character(json))
+    list(params = params, json = as.character(json), error = NULL)
+  }, error = function(e) {
+    list(params = NULL, json = NULL, error = conditionMessage(e))
+  })
 }
 
 
 #' Build and write a single Dask-path parquet shard.
 #'
 #' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
-#' write loop can run in parallel via parallel::mclapply(). Returns TRUE
-#' if the shard wrote successfully, FALSE otherwise. Side-effect: writes
-#' one parquet file at dirs$cal_samples/sim_NNNNNNN.parquet.
+#' write loop can run in parallel via parallel::mclapply(). Returns:
+#'   TRUE                   : shard wrote successfully
+#'   character message      : a failure reason for the parent to log
+#'
+#' This dual-type return lets the parent distinguish success from failure
+#' AND surface a diagnostic — `warning()` calls inside an mclapply fork
+#' with `immediate. = FALSE` are silently swallowed, so we propagate
+#' failure reasons through the return value instead.
+#'
+#' Side-effect: writes one parquet file at dirs$cal_samples/sim_NNNNNNN.parquet
+#' on success.
 #'
 #' Pure compute given (sim_id, res). No shared mutable state, no I/O
 #' beyond the single parquet write, no Python calls — safe to invoke in
 #' parallel from forked workers. The caller (parent process) is
 #' responsible for freeing result_lookup / params_list entries after
 #' each chunk completes.
+#'
+#' Constraint: do NOT touch the parent's reticulate/Coiled state from
+#' inside this function. The parent's `client` and `mosaic_worker`
+#' objects are inherited via fork but are not safe to use in children.
 #' @noRd
 .mosaic_write_one_shard_dask <- function(sim_id, res, n_iterations,
                                          param_names_all, config, dirs, control) {
-  # Skip if param sampling failed (no future submitted) or worker errored
-  if (is.null(res) || !isTRUE(res$success)) {
-    if (!is.null(res) && !isTRUE(res$success)) {
-      err_msg <- if (!is.null(res$error)) res$error else "unknown error"
-      warning("sim ", sim_id, " failed on worker: ", err_msg,
-              call. = FALSE, immediate. = FALSE)
+  tryCatch({
+    # Skip if param sampling failed (no future submitted) or worker errored
+    if (is.null(res) || !isTRUE(res$success)) {
+      err_msg <- if (!is.null(res) && !is.null(res$error)) res$error else "unknown error"
+      stop("failed on worker: ", err_msg)
     }
-    return(FALSE)
-  }
 
-  # Re-inject base_config fields stripped by .extract_sampled_params() but
-  # needed by convert_config_to_matrix() for ISO-suffixed columns. See
-  # test-dask_worker_schema_parity.R for the contract.
-  params <- res$params
-  if (is.null(params)) {
-    warning("sim ", sim_id, " worker returned no params dict (engine ",
-            "may be < 0.13)", call. = FALSE, immediate. = FALSE)
-    return(FALSE)
-  }
-  params$location_name <- config$location_name
-  params$N_j_initial   <- config$N_j_initial
+    # Re-inject base_config fields stripped by .extract_sampled_params() but
+    # needed by convert_config_to_matrix() for ISO-suffixed columns. See
+    # test-dask_worker_schema_parity.R for the contract.
+    params <- res$params
+    if (is.null(params)) {
+      stop("worker returned no params dict (engine may be < 0.13)")
+    }
+    params$location_name <- config$location_name
+    params$N_j_initial   <- config$N_j_initial
 
-  raw_params <- tryCatch({
     pv <- convert_config_to_matrix(params)
     if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
-    pv[param_names_all]
-  }, error = function(e) {
-    warning("sim ", sim_id, " param flattening failed: ", e$message,
-            call. = FALSE, immediate. = FALSE)
-    NULL
-  })
-  if (is.null(raw_params)) return(FALSE)
+    raw_params <- pv[param_names_all]
 
-  # Collapse multi-iter to a single row via log-mean-exp (matches the
-  # local path: see run_MOSAIC.R ~285-300).
-  iter_list  <- res$iterations
-  n_iter_got <- length(iter_list)
-  lls <- vapply(iter_list, function(it) {
-    v <- suppressWarnings(as.numeric(it$likelihood))
-    if (length(v) == 1L) v else NA_real_
-  }, numeric(1))
+    # Collapse multi-iter to a single row via log-mean-exp (matches the
+    # local path: see run_MOSAIC.R ~285-300).
+    iter_list  <- res$iterations
+    n_iter_got <- length(iter_list)
+    if (n_iter_got == 0L) stop("worker returned no iterations")
 
-  collapsed_ll <- if (n_iter_got > 1L) {
-    valid_lls <- lls[is.finite(lls)]
-    if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
-  } else if (n_iter_got == 1L) {
-    lls[1L]
-  } else {
-    warning("sim ", sim_id, " worker returned no iterations",
-            call. = FALSE, immediate. = FALSE)
-    return(FALSE)
-  }
+    lls <- vapply(iter_list, function(it) {
+      v <- suppressWarnings(as.numeric(it$likelihood))
+      if (length(v) == 1L) v else NA_real_
+    }, numeric(1))
 
-  seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
+    collapsed_ll <- if (n_iter_got > 1L) {
+      valid_lls <- lls[is.finite(lls)]
+      if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
+    } else {
+      lls[1L]
+    }
 
-  row_df <- data.frame(
-    sim        = as.integer(sim_id),
-    iter       = 1L,
-    seed_sim   = as.integer(sim_id),
-    seed_iter  = seed_iter_1,
-    likelihood = collapsed_ll
-  )
-  for (pname in param_names_all) {
-    row_df[[pname]] <- as.numeric(raw_params[pname])
-  }
+    seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
 
-  out_file <- file.path(dirs$cal_samples,
-                        sprintf("sim_%07d.parquet", sim_id))
-  .mosaic_write_parquet(row_df, out_file, control$io)
-  file.exists(out_file)
+    row_df <- data.frame(
+      sim        = as.integer(sim_id),
+      iter       = 1L,
+      seed_sim   = as.integer(sim_id),
+      seed_iter  = seed_iter_1,
+      likelihood = collapsed_ll
+    )
+    for (pname in param_names_all) {
+      row_df[[pname]] <- as.numeric(raw_params[pname])
+    }
+
+    out_file <- file.path(dirs$cal_samples,
+                          sprintf("sim_%07d.parquet", sim_id))
+    .mosaic_write_parquet(row_df, out_file, control$io)
+    if (!file.exists(out_file)) stop("parquet write succeeded but file not on disk")
+    TRUE
+  }, error = function(e) conditionMessage(e))
 }
 
 
@@ -1952,7 +1958,15 @@
   # this function. Both phases are pure CPU work on the orchestrator
   # host; the caller's control$parallel$n_cores already encodes the
   # right value for whichever machine the orchestrator runs on.
-  n_cores_parallel <- max(1L, as.integer(control$parallel$n_cores %||% 1L))
+  #
+  # NA-safe coercion: %||% only guards NULL, but `detectCores()` can
+  # return NA in restricted sandboxes (Docker without /proc/cpuinfo,
+  # certain CI VMs). Without this guard, NA propagates through `max()`
+  # and bricks `if (n_cores_parallel > 1L)` later with "missing value
+  # where TRUE/FALSE needed".
+  .raw_n_cores <- suppressWarnings(as.integer(control$parallel$n_cores %||% 1L))
+  if (length(.raw_n_cores) != 1L || is.na(.raw_n_cores)) .raw_n_cores <- 1L
+  n_cores_parallel <- max(1L, .raw_n_cores)
 
   log_msg("  Sampling + submitting %d simulations (%d chunks, parallel x %d cores)...",
           n_sims, n_chunks, n_cores_parallel)
@@ -2003,6 +2017,15 @@
 
     # Collect results in deterministic order (mclapply preserves order)
     # and build the client$map() submission arrays.
+    #
+    # Three failure shapes are possible per result entry:
+    #   1. `list(params = NULL, json = NULL, error = "...")`
+    #      — helper's tryCatch caught an in-fork exception
+    #   2. NULL — mclapply sibling-loss: with mc.preschedule = TRUE
+    #      (default), if one task in a fork's block crashes, ALL its
+    #      siblings in that block return as bare NULL
+    #   3. `try-error` — the fork crashed at the mclapply boundary
+    #      (rare; typically only if the fork itself segfaults)
     map_indices  <- integer(0)    # positions in params_list/futures
     map_sim_ids  <- integer(0)
     map_jsons    <- character(0)
@@ -2010,6 +2033,26 @@
     for (k in seq_along(chunk_indices)) {
       idx <- chunk_indices[k]
       r   <- chunk_results[[k]]
+
+      if (is.null(r)) {
+        warning("sim ", sim_ids[idx], " fork did not deliver a result ",
+                "(possibly sibling-loss from mclapply preschedule)",
+                call. = FALSE, immediate. = FALSE)
+        params_list[[idx]] <- NULL
+        next
+      }
+      if (inherits(r, "try-error")) {
+        warning("sim ", sim_ids[idx], " fork crashed: ",
+                as.character(attr(r, "condition")$message),
+                call. = FALSE, immediate. = FALSE)
+        params_list[[idx]] <- NULL
+        next
+      }
+      if (!is.null(r$error)) {
+        warning("Param sampling failed for sim ", sim_ids[idx], ": ",
+                r$error, call. = FALSE, immediate. = FALSE)
+      }
+
       params_list[[idx]] <- r$params
       if (is.null(r$params) || is.null(r$json)) next
 
@@ -2168,7 +2211,30 @@
       })
     }
 
+    # The helper returns TRUE on success, a character error message on
+    # failure, NULL on mclapply sibling-loss, or a try-error on fork
+    # crash. isTRUE() correctly maps all non-TRUE shapes to FALSE in
+    # success_indicators. After accounting for success/failure, surface
+    # the failure diagnostic (which would otherwise be lost — fork-side
+    # warnings with `immediate. = FALSE` are swallowed by mclapply).
     success_indicators[chunk_idxs] <- vapply(chunk_out, isTRUE, logical(1))
+
+    for (k in seq_along(chunk_idxs)) {
+      out <- chunk_out[[k]]
+      if (isTRUE(out)) next
+      sid <- sim_ids[[chunk_idxs[k]]]
+      msg <- if (is.null(out)) {
+        "fork did not deliver a result (possibly sibling-loss from mclapply preschedule)"
+      } else if (inherits(out, "try-error")) {
+        paste0("fork crashed: ", as.character(attr(out, "condition")$message))
+      } else if (is.character(out)) {
+        out
+      } else {
+        sprintf("unknown failure shape (%s)", paste(class(out), collapse = "/"))
+      }
+      warning("sim ", sid, " parquet write failed: ", msg,
+              call. = FALSE, immediate. = FALSE)
+    }
 
     # Free parent-side memory for the sims we just wrote
     for (idx in chunk_idxs) {
