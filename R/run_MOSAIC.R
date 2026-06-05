@@ -2426,54 +2426,79 @@ run_MOSAIC <- function(config,
   # ---------------------------------------------------------------------------
   # Dask dispatch for best + medioid stochastic ensembles
   # ---------------------------------------------------------------------------
-  # Batch both single-config stochastic ensembles into one .mosaic_postca_dask()
-  # call so they share scatter/gather overhead. Returned results carry
-  # param_idx=1 for best and param_idx=2 for medioid; split by param_idx and
-  # remap medioid to param_idx=1 so each standalone ensemble has n_param_sets=1.
-  # Cluster is closed here, after gather. The on.exit handler is a safety net.
+  # Dispatch best and medioid as TWO SEQUENTIAL .mosaic_postca_dask() calls,
+  # each with a single-element param_configs list. This keeps both standalone
+  # ensembles in the param_idx=1 seed namespace (seeds 1001..1000+N) — the
+  # SAME namespace used by the local PSOCK / sequential fallback path in
+  # calc_model_ensemble() (R/calc_model_ensemble.R:247). A single batched
+  # dispatch would put medioid under param_idx=2 (seeds 2001..2000+N), which
+  # silently breaks bit-level reproducibility against a local re-run.
+  #
+  # Defensive re-upload of mosaic_dask_worker.py before dispatch: workers may
+  # have restarted (preemption, OOM kill) during the long R-only window
+  # between the posterior-ensemble dispatch and now (optimize_subset,
+  # quantiles, distributions, sensitivity/correlation plots, config sampling).
+  # client$upload_file() registers the module with the scheduler so new
+  # workers receive it automatically, but the postca block re-uploads
+  # defensively for the same reason — matched here for symmetry.
+  #
+  # On any dispatch error, OR when zero sims succeeded, the precomputed list
+  # is forced to NULL so calc_model_ensemble() falls back to local execution
+  # rather than producing an all-NA ensemble.
+  # The on.exit handler at line ~1036 is a safety net if close() throws.
   best_precomputed    <- NULL
   medioid_precomputed <- NULL
+
+  .pruneOrNull <- function(results_list) {
+    if (is.null(results_list) || length(results_list) == 0) return(NULL)
+    n_ok <- sum(vapply(results_list, function(r) isTRUE(r$success), logical(1)))
+    if (n_ok == 0) NULL else results_list
+  }
 
   if (use_dask && !is.null(client)) {
     log_msg("Dispatching best%s stochastic ensembles on Dask (%d reruns each)...",
             if (!is.null(config_medioid)) " + medioid" else "",
             n_best_stochastic_per)
 
-    bm_configs <- list(config_best)
-    if (!is.null(config_medioid)) bm_configs[[2L]] <- config_medioid
-
     tryCatch({
-      bm_result <- .mosaic_postca_dask(
+      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+      if (nzchar(worker_py_path)) {
+        client$upload_file(worker_py_path)
+      }
+
+      best_result <- .mosaic_postca_dask(
         client           = client,
         mosaic_worker    = mosaic_worker,
-        param_configs    = bm_configs,
+        param_configs    = list(config_best),
         n_stochastic_per = n_best_stochastic_per,
         log_msg          = log_msg
       )
+      best_precomputed <- .pruneOrNull(best_result$stochastic_results)
 
-      if (!is.null(bm_result$stochastic_results)) {
-        best_precomputed <- Filter(
-          function(r) isTRUE(r$param_idx == 1L),
-          bm_result$stochastic_results
+      if (!is.null(config_medioid)) {
+        medioid_result <- .mosaic_postca_dask(
+          client           = client,
+          mosaic_worker    = mosaic_worker,
+          param_configs    = list(config_medioid),
+          n_stochastic_per = n_best_stochastic_per,
+          log_msg          = log_msg
         )
+        medioid_precomputed <- .pruneOrNull(medioid_result$stochastic_results)
+      }
 
-        if (!is.null(config_medioid)) {
-          medioid_precomputed <- Filter(
-            function(r) isTRUE(r$param_idx == 2L),
-            bm_result$stochastic_results
-          )
-          medioid_precomputed <- lapply(medioid_precomputed, function(r) {
-            r$param_idx <- 1L
-            r
-          })
-        }
-
-        log_msg("  Best precomputed: %d/%d sims; medioid precomputed: %d/%d sims",
+      log_msg("  Best precomputed: %d/%d sims; medioid precomputed: %d/%d sims",
+              if (is.null(best_precomputed)) 0L else
                 sum(vapply(best_precomputed, function(r) isTRUE(r$success), logical(1))),
-                length(best_precomputed),
-                if (is.null(medioid_precomputed)) 0L else
-                  sum(vapply(medioid_precomputed, function(r) isTRUE(r$success), logical(1))),
-                if (is.null(medioid_precomputed)) 0L else length(medioid_precomputed))
+              if (is.null(best_precomputed)) 0L else length(best_precomputed),
+              if (is.null(medioid_precomputed)) 0L else
+                sum(vapply(medioid_precomputed, function(r) isTRUE(r$success), logical(1))),
+              if (is.null(medioid_precomputed)) 0L else length(medioid_precomputed))
+
+      if (is.null(best_precomputed)) {
+        log_msg("  WARNING: best Dask dispatch returned 0 successful sims; falling back to local")
+      }
+      if (!is.null(config_medioid) && is.null(medioid_precomputed)) {
+        log_msg("  WARNING: medioid Dask dispatch returned 0 successful sims; falling back to local")
       }
     }, error = function(e) {
       log_msg("WARNING: best/medioid Dask dispatch failed: %s", e$message)
