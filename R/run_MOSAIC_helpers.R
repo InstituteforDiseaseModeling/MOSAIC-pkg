@@ -1778,6 +1778,59 @@
   params_sim[!names(params_sim) %in% base_fields]
 }
 
+#' Sample, clamp, and JSON-serialize one sim's parameters for the Dask path.
+#'
+#' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
+#' submission sample-and-serialize loop can run in parallel via
+#' parallel::mclapply(). Returns a list with two fields:
+#'   $params : the full sampled-config list (or NULL on failure)
+#'   $json   : the per-sim JSON string ready for the Coiled worker
+#'             (or NULL on failure)
+#'
+#' Reproducibility: sample_parameters() takes `seed = sim_id` and is
+#' internally seeded, so each sim's output depends ONLY on (sim_id,
+#' priors, config, sampling_args). Parallel execution produces output
+#' identical to serial execution regardless of fork ordering.
+#' @noRd
+.mosaic_sample_and_serialize <- function(sim_id, PATHS, priors, config,
+                                         sampling_args) {
+  params <- tryCatch(
+    sample_parameters(
+      PATHS       = PATHS,
+      priors      = priors,
+      config      = config,
+      seed        = sim_id,
+      sample_args = sampling_args,
+      verbose     = FALSE,
+      validate    = FALSE
+    ),
+    error = function(e) {
+      warning("Param sampling failed for sim ", sim_id, ": ", e$message,
+              call. = FALSE, immediate. = FALSE)
+      NULL
+    }
+  )
+
+  if (is.null(params)) return(list(params = NULL, json = NULL))
+
+  # Guardrails: clamp transmission parameters into valid ranges.
+  if (!is.null(params$beta_j0_tot)) params$beta_j0_tot <- pmax(params$beta_j0_tot, 1e-10)
+  if (!is.null(params$beta_j0_hum)) params$beta_j0_hum <- pmax(params$beta_j0_hum, 0)
+  if (!is.null(params$beta_j0_env)) params$beta_j0_env <- pmax(params$beta_j0_env, 0)
+  if (!is.null(params$p_beta))      params$p_beta      <- pmin(pmax(params$p_beta, 1e-6), 1 - 1e-6)
+  if (!is.null(params$tau_i))       params$tau_i       <- pmin(pmax(params$tau_i, 0), 1)
+
+  # Serialize the sampled (non-base) fields for shipping to the Coiled worker.
+  json <- jsonlite::toJSON(
+    .extract_sampled_params(params),
+    auto_unbox = TRUE,
+    digits     = NA
+  )
+
+  list(params = params, json = as.character(json))
+}
+
+
 #' Build and write a single Dask-path parquet shard.
 #'
 #' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
@@ -1893,8 +1946,16 @@
   # ---------------------------------------------------------------------------
   dask_chunk_size <- 1000L
   n_chunks <- ceiling(n_sims / dask_chunk_size)
-  log_msg("  Sampling + submitting %d simulations (%d chunks)...",
-          n_sims, n_chunks)
+
+  # R-side parallelism budget. Shared between the submission sample+
+  # serialize phase and the post-gather parquet write phase later in
+  # this function. Both phases are pure CPU work on the orchestrator
+  # host; the caller's control$parallel$n_cores already encodes the
+  # right value for whichever machine the orchestrator runs on.
+  n_cores_parallel <- max(1L, as.integer(control$parallel$n_cores %||% 1L))
+
+  log_msg("  Sampling + submitting %d simulations (%d chunks, parallel x %d cores)...",
+          n_sims, n_chunks, n_cores_parallel)
   params_list <- vector("list", n_sims)
   futures     <- vector("list", n_sims)
   submit_start <- Sys.time()
@@ -1909,56 +1970,57 @@
     idx_end   <- min(chunk_i * dask_chunk_size, n_sims)
     chunk_indices <- idx_start:idx_end
 
-    # Accumulators for this chunk's client$map() call
+    # Parallel sample + serialize for the chunk. sample_parameters() is
+    # deterministically seeded by sim_id, so parallel execution produces
+    # output identical to serial regardless of which fork processes each
+    # sim. mclapply is POSIX-only; on Windows it silently falls back to
+    # serial (safe default).
+    chunk_results <- if (n_cores_parallel > 1L) {
+      parallel::mclapply(
+        chunk_indices,
+        function(idx) {
+          .mosaic_sample_and_serialize(
+            sim_id        = sim_ids[idx],
+            PATHS         = PATHS,
+            priors        = priors,
+            config        = config,
+            sampling_args = sampling_args
+          )
+        },
+        mc.cores = n_cores_parallel
+      )
+    } else {
+      lapply(chunk_indices, function(idx) {
+        .mosaic_sample_and_serialize(
+          sim_id        = sim_ids[idx],
+          PATHS         = PATHS,
+          priors        = priors,
+          config        = config,
+          sampling_args = sampling_args
+        )
+      })
+    }
+
+    # Collect results in deterministic order (mclapply preserves order)
+    # and build the client$map() submission arrays.
     map_indices  <- integer(0)    # positions in params_list/futures
     map_sim_ids  <- integer(0)
     map_jsons    <- character(0)
 
-    for (idx in chunk_indices) {
-      sim_id <- sim_ids[idx]
-
-      # --- Sample parameters ---
-      params_list[[idx]] <- tryCatch(
-        sample_parameters(
-          PATHS      = PATHS,
-          priors     = priors,
-          config     = config,
-          seed       = sim_id,
-          sample_args = sampling_args,
-          verbose    = FALSE,
-          validate   = FALSE
-        ),
-        error = function(e) {
-          warning("Param sampling failed for sim ", sim_id, ": ", e$message,
-                  call. = FALSE, immediate. = FALSE)
-          NULL
-        }
-      )
-
-      if (is.null(params_list[[idx]])) next
-
-      # --- Guardrails: clamp transmission parameters ---
-      p <- params_list[[idx]]
-      if (!is.null(p$beta_j0_tot)) p$beta_j0_tot <- pmax(p$beta_j0_tot, 1e-10)
-      if (!is.null(p$beta_j0_hum)) p$beta_j0_hum <- pmax(p$beta_j0_hum, 0)
-      if (!is.null(p$beta_j0_env)) p$beta_j0_env <- pmax(p$beta_j0_env, 0)
-      if (!is.null(p$p_beta))      p$p_beta      <- pmin(pmax(p$p_beta, 1e-6), 1 - 1e-6)
-      if (!is.null(p$tau_i))       p$tau_i       <- pmin(pmax(p$tau_i, 0), 1)
-      params_list[[idx]] <- p
-
-      # --- Serialize per-sim params to JSON ---
-      sampled_json <- jsonlite::toJSON(
-        .extract_sampled_params(p),
-        auto_unbox = TRUE,
-        digits     = NA
-      )
+    for (k in seq_along(chunk_indices)) {
+      idx <- chunk_indices[k]
+      r   <- chunk_results[[k]]
+      params_list[[idx]] <- r$params
+      if (is.null(r$params) || is.null(r$json)) next
 
       map_indices <- c(map_indices, idx)
-      map_sim_ids <- c(map_sim_ids, as.integer(sim_id))
-      map_jsons   <- c(map_jsons, as.character(sampled_json))
+      map_sim_ids <- c(map_sim_ids, as.integer(sim_ids[idx]))
+      map_jsons   <- c(map_jsons, r$json)
     }
 
-    # --- Submit entire chunk via client$map() (single scheduler round-trip) ---
+    # --- Submit entire chunk via client$map() (single scheduler round-trip).
+    # The Coiled client lives in the parent process only; submission MUST
+    # stay outside the parallel block.
     if (length(map_sim_ids) > 0L) {
       chunk_futures <- client$map(
         mosaic_worker$run_laser_sim,
@@ -2066,17 +2128,10 @@
 
   # Parallel parquet write. Per-sim work is pure (no shared mutable state,
   # one file per sim) so it parallelizes cleanly via parallel::mclapply.
-  # We honor control$parallel$n_cores as-given — no internal cap. The
-  # right number of writers depends on the disk (local NVMe vs Azure
-  # premium SSD vs slower drives) and the host's overall core count,
-  # both of which the caller knows and we don't. Default control sets
-  # n_cores = parallel::detectCores() - 1 on the host running the
-  # orchestrator. mclapply is POSIX-only; on Windows it silently falls
-  # back to serial, which is the safe default.
-  n_cores_write <- max(1L, as.integer(control$parallel$n_cores %||% 1L))
-
+  # Re-uses the n_cores_parallel budget computed at the top of the
+  # function (same value used by the sample+serialize submission phase).
   log_msg("  Building parquet rows for %d sims (parallel x %d cores)...",
-          n_sims, n_cores_write)
+          n_sims, n_cores_parallel)
 
   # Process in chunks of 1000 (matches `dask_chunk_size` used for
   # submission earlier in the function) so progress, Dask scheduler
@@ -2089,7 +2144,7 @@
                   ceiling(seq_len(n_sims) / chunk_size))
 
   for (chunk_idxs in chunks) {
-    chunk_out <- if (n_cores_write > 1L) {
+    chunk_out <- if (n_cores_parallel > 1L) {
       parallel::mclapply(
         chunk_idxs,
         function(idx) {
@@ -2100,7 +2155,7 @@
             param_names_all, config, dirs, control
           )
         },
-        mc.cores = n_cores_write
+        mc.cores = n_cores_parallel
       )
     } else {
       lapply(chunk_idxs, function(idx) {

@@ -260,6 +260,41 @@ test_that(".mosaic_write_one_shard_dask produces a valid parquet shard", {
 # nondeterminism: writing the same 4 mock results via serial lapply and
 # via mclapply must produce byte-identical parquet files.
 # =============================================================================
+test_that(".mosaic_sample_and_serialize is reproducible across parallel and serial paths", {
+  fx <- skip_if_no_data()
+  skip_on_os("windows")  # mclapply is POSIX-only
+  cfg <- fx$config
+
+  # sample_parameters() is internally seeded by sim_id, so the per-sim
+  # output of .mosaic_sample_and_serialize() must depend only on sim_id —
+  # NOT on which fork (or serial) processed it. This is the load-bearing
+  # property for parallel sampling.
+  sim_ids <- 1L:8L
+
+  call_one <- function(sim_id) {
+    MOSAIC:::.mosaic_sample_and_serialize(
+      sim_id        = sim_id,
+      PATHS         = NULL,
+      priors        = fx$priors,
+      config        = cfg,
+      sampling_args = list()
+    )
+  }
+
+  serial_out   <- lapply(sim_ids, call_one)
+  parallel_out <- parallel::mclapply(sim_ids, call_one, mc.cores = 4L)
+
+  # Each entry is list(params = <config-shaped>, json = "...")
+  # Compare JSONs first (lighter check) then full params.
+  for (k in seq_along(sim_ids)) {
+    expect_equal(parallel_out[[k]]$json, serial_out[[k]]$json,
+                 info = sprintf("sim_id=%d JSON differs", sim_ids[k]))
+    expect_equal(parallel_out[[k]]$params, serial_out[[k]]$params,
+                 info = sprintf("sim_id=%d params differ", sim_ids[k]))
+  }
+})
+
+
 test_that("parallel mclapply produces identical shards to serial lapply", {
   fx <- skip_if_no_data()
   skip_if_not_installed("arrow")
