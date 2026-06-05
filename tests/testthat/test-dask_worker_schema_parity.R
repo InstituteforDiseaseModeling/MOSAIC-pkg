@@ -215,6 +215,8 @@ test_that(".mosaic_write_one_shard_dask produces a valid parquet shard", {
   pv <- MOSAIC::convert_config_to_matrix(params_sim)
   if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
   param_names_all <- names(pv)
+  param_lookup <- MOSAIC:::.mosaic_build_param_lookup(
+    param_names_all, cfg$location_name)
 
   temp_dir <- tempfile("shard_test_")
   dir.create(file.path(temp_dir, "samples"), recursive = TRUE)
@@ -225,6 +227,7 @@ test_that(".mosaic_write_one_shard_dask produces a valid parquet shard", {
     res             = mock_res,
     n_iterations    = 3L,
     param_names_all = param_names_all,
+    param_lookup    = param_lookup,
     config          = cfg,
     dirs            = dirs,
     control         = list(io = MOSAIC::mosaic_io_presets("default"))
@@ -298,6 +301,8 @@ test_that(".mosaic_write_one_shard_dask returns a character error instead of thr
     res             = bad_res,
     n_iterations    = 3L,
     param_names_all = c("a", "b"),
+    param_lookup    = list(list(key = "a", idx = NULL),
+                           list(key = "b", idx = NULL)),
     config          = cfg,
     dirs            = list(cal_samples = file.path(tmp, "samples")),
     control         = list(io = MOSAIC::mosaic_io_presets("default"))
@@ -312,6 +317,8 @@ test_that(".mosaic_write_one_shard_dask returns a character error instead of thr
     res             = NULL,
     n_iterations    = 3L,
     param_names_all = c("a", "b"),
+    param_lookup    = list(list(key = "a", idx = NULL),
+                           list(key = "b", idx = NULL)),
     config          = cfg,
     dirs            = list(cal_samples = file.path(tmp, "samples")),
     control         = list(io = MOSAIC::mosaic_io_presets("default"))
@@ -327,6 +334,8 @@ test_that(".mosaic_write_one_shard_dask returns a character error instead of thr
     res             = partial_res,
     n_iterations    = 3L,
     param_names_all = c("a", "b"),
+    param_lookup    = list(list(key = "a", idx = NULL),
+                           list(key = "b", idx = NULL)),
     config          = cfg,
     dirs            = list(cal_samples = file.path(tmp, "samples")),
     control         = list(io = MOSAIC::mosaic_io_presets("default"))
@@ -374,6 +383,9 @@ test_that("parallel write loop survives mixed success/failure without aborting",
   dir.create(file.path(tmp, "samples"), recursive = TRUE)
   dirs    <- list(cal_samples = file.path(tmp, "samples"))
 
+  param_lookup <- MOSAIC:::.mosaic_build_param_lookup(
+    param_names_all, cfg$location_name)
+
   chunk_out <- parallel::mclapply(sim_ids, function(idx) {
     sim_id <- sim_ids[[idx]]
     MOSAIC:::.mosaic_write_one_shard_dask(
@@ -381,6 +393,7 @@ test_that("parallel write loop survives mixed success/failure without aborting",
       res             = results_lookup[[as.character(sim_id)]],
       n_iterations    = 1L,
       param_names_all = param_names_all,
+      param_lookup    = param_lookup,
       config          = cfg,
       dirs            = dirs,
       control         = list(io = MOSAIC::mosaic_io_presets("default"))
