@@ -476,6 +476,8 @@ Helper and utility functions
   : Get WHO Region for ISO Country Codes
 - [`check_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.md)
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
+- [`check_coiled_workspace()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_coiled_workspace.md)
+  : Check Coiled Workspace Capacity and Activity
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
@@ -659,6 +661,8 @@ Other exported functions and internal helpers
   : Weighted mode estimation using kernel density
 - [`check_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.md)
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
+- [`check_coiled_workspace()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_coiled_workspace.md)
+  : Check Coiled Workspace Capacity and Activity
 - [`check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
