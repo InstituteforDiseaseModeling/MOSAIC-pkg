@@ -650,6 +650,16 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # List all numeric columns that might have NAs (exclude identifiers and dates)
      exclude_cols <- c("iso_code", "year", "week", "month", "date", "source",
                       "cases", "deaths", "cases_binary",
+                      # Surveillance quality/provenance + response variables: these
+                      # are TARGET-side, not features. Their NAs are meaningful
+                      # ("no observation that week") and MUST NOT be mean-imputed —
+                      # imputing them would fabricate confidence/rate/target values
+                      # for unobserved cells and defeat their NA-propagation contract.
+                      "confidence_weight", "disaggregation_method", "rate",
+                      "transmission_intensity",
+                      "target_A_count_global", "target_B_count_per_country",
+                      "target_C_rate_global", "target_D_rate_per_country_floored",
+                      "target_F_rank_per_country",
                       # Keep EM-DAT columns NA-aware: forecast-window rows must
                       # stay NA so impute_flood_probability() can replace them
                       # downstream with a GAM-imputed continuous probability.
