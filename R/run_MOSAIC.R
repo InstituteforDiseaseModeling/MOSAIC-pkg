@@ -1973,7 +1973,7 @@ run_MOSAIC <- function(config,
         }
       }
 
-      # Dispatch all post-cal sims
+      # Dispatch posterior-ensemble post-cal sims
       result <- .mosaic_postca_dask(
         client           = client,
         mosaic_worker    = mosaic_worker,
@@ -1982,14 +1982,11 @@ run_MOSAIC <- function(config,
         log_msg          = log_msg
       )
 
-      # Close for real now
-      log_msg("Closing Dask cluster (post-cal sims complete)")
-      tryCatch(client$close(), error = function(e) NULL)
-      client <- NULL
-      if (!is.null(dask_cluster)) {
-        tryCatch(dask_cluster$close(), error = function(e) NULL)
-        dask_cluster <- NULL
-      }
+      # NOTE: Do NOT close the cluster here. It is kept alive for the best and
+      # medioid stochastic-ensemble dispatch later (Option A — single second
+      # dispatch once the medioid seed is known). The cluster is closed after
+      # that dispatch, in the PRE-SAMPLE + DASK DISPATCH block before the
+      # posterior predictive checks (best single model) section.
 
       result
     }, error = function(e) {
@@ -2344,6 +2341,18 @@ run_MOSAIC <- function(config,
   # POSTERIOR PREDICTIVE CHECKS (best single model)
   # ===========================================================================
 
+  # ---------------------------------------------------------------------------
+  # Order of operations (Option A — dispatch best+medioid sims on the
+  # still-alive Dask cluster before closing it):
+  #   1. Sample config_best (early-return on failure) and config_medioid.
+  #   2. If a Dask cluster is alive, batch-dispatch best+medioid stochastic
+  #      sims on it in a single .mosaic_postca_dask() call, then close the
+  #      cluster. Otherwise leave precomputed = NULL and calc_model_ensemble()
+  #      falls back to its local PSOCK / sequential path.
+  #   3. Build best/medioid mosaic_ensemble objects (consuming precomputed
+  #      results when present), compute R²/bias, render plots.
+  # ---------------------------------------------------------------------------
+
   log_msg("Running posterior predictive checks")
   best_idx <- which.max(results$likelihood)
   best_seed_sim <- results$seed_sim[best_idx]
@@ -2365,8 +2374,16 @@ run_MOSAIC <- function(config,
   )
 
   if (is.null(config_best)) {
-    # Finalize state so the run is not left perpetually "running" in monitoring
+    # Finalize state so the run is not left perpetually "running" in monitoring.
+    # Also tear down any still-alive Dask cluster on this bail path so a Coiled
+    # cluster isn't left running until idle_timeout.
     .mosaic_finalize_state(state_file)
+    if (use_dask) {
+      tryCatch({ if (!is.null(client))       client$close()       }, error = function(e) NULL)
+      tryCatch({ if (!is.null(dask_cluster)) dask_cluster$close() }, error = function(e) NULL)
+      client       <- NULL
+      dask_cluster <- NULL
+    }
     return(invisible(list(
       dirs    = dirs,
       files   = list(),
@@ -2379,17 +2396,119 @@ run_MOSAIC <- function(config,
   jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved %s", config_best_file)
 
+  # Pre-sample the medioid config (when a medioid seed was identified). NULL
+  # skips the medioid build block below.
+  config_medioid <- NULL
+  if (!is.null(medioid_seed_sim)) {
+    config_medioid <- tryCatch(
+      sample_parameters(
+        PATHS       = PATHS,
+        priors      = priors,
+        config      = config,
+        seed        = medioid_seed_sim,
+        sample_args = sampling_args,
+        verbose     = FALSE
+      ),
+      error = function(e) {
+        log_msg("Warning: sample_parameters failed for medioid seed %d: %s",
+                medioid_seed_sim, e$message)
+        NULL
+      }
+    )
+    if (!is.null(config_medioid)) {
+      config_medioid_file <- file.path(dirs$cal_best_model, "config_medioid.json")
+      jsonlite::write_json(config_medioid, config_medioid_file,
+                           pretty = TRUE, auto_unbox = TRUE, digits = NA)
+      log_msg("Saved %s", config_medioid_file)
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # Dask dispatch for best + medioid stochastic ensembles
+  # ---------------------------------------------------------------------------
+  # Batch both single-config stochastic ensembles into one .mosaic_postca_dask()
+  # call so they share scatter/gather overhead. Returned results carry
+  # param_idx=1 for best and param_idx=2 for medioid; split by param_idx and
+  # remap medioid to param_idx=1 so each standalone ensemble has n_param_sets=1.
+  # Cluster is closed here, after gather. The on.exit handler is a safety net.
+  best_precomputed    <- NULL
+  medioid_precomputed <- NULL
+
+  if (use_dask && !is.null(client)) {
+    log_msg("Dispatching best%s stochastic ensembles on Dask (%d reruns each)...",
+            if (!is.null(config_medioid)) " + medioid" else "",
+            n_best_stochastic_per)
+
+    bm_configs <- list(config_best)
+    if (!is.null(config_medioid)) bm_configs[[2L]] <- config_medioid
+
+    tryCatch({
+      bm_result <- .mosaic_postca_dask(
+        client           = client,
+        mosaic_worker    = mosaic_worker,
+        param_configs    = bm_configs,
+        n_stochastic_per = n_best_stochastic_per,
+        log_msg          = log_msg
+      )
+
+      if (!is.null(bm_result$stochastic_results)) {
+        best_precomputed <- Filter(
+          function(r) isTRUE(r$param_idx == 1L),
+          bm_result$stochastic_results
+        )
+
+        if (!is.null(config_medioid)) {
+          medioid_precomputed <- Filter(
+            function(r) isTRUE(r$param_idx == 2L),
+            bm_result$stochastic_results
+          )
+          medioid_precomputed <- lapply(medioid_precomputed, function(r) {
+            r$param_idx <- 1L
+            r
+          })
+        }
+
+        log_msg("  Best precomputed: %d/%d sims; medioid precomputed: %d/%d sims",
+                sum(vapply(best_precomputed, function(r) isTRUE(r$success), logical(1))),
+                length(best_precomputed),
+                if (is.null(medioid_precomputed)) 0L else
+                  sum(vapply(medioid_precomputed, function(r) isTRUE(r$success), logical(1))),
+                if (is.null(medioid_precomputed)) 0L else length(medioid_precomputed))
+      }
+    }, error = function(e) {
+      log_msg("WARNING: best/medioid Dask dispatch failed: %s", e$message)
+      log_msg("  Falling back to local execution for best/medioid ensembles")
+      best_precomputed    <<- NULL
+      medioid_precomputed <<- NULL
+    })
+
+    log_msg("Closing Dask cluster (all post-cal sims complete)")
+    tryCatch(client$close(), error = function(e) NULL)
+    client <- NULL
+    if (!is.null(dask_cluster)) {
+      tryCatch(dask_cluster$close(), error = function(e) NULL)
+      dask_cluster <- NULL
+    }
+  }
+
+  # ===========================================================================
+  # BEST MODEL — build mosaic_ensemble, compute R²/bias, render plot
+  # ===========================================================================
   # Run N stochastic reruns of the best config. Produces the mosaic_ensemble
   # object used for both R²/bias (from the stochastic median) and the prediction
-  # plot, matching how the posterior ensemble reports its metrics. Replaces the
-  # earlier single-deterministic-run R²/bias which disagreed with the plot caption.
+  # plot, matching how the posterior ensemble reports its metrics. When
+  # best_precomputed is non-NULL, calc_model_ensemble() consumes Dask results
+  # and the parallel/n_cores args are ignored by its precomputed branch.
   r2_cases         <- NA_real_
   r2_deaths        <- NA_real_
   bias_ratio_cases <- NA_real_
   bias_ratio_deaths <- NA_real_
 
-  log_msg("Running best model stochastic ensemble (%d reruns, parallel=%s)...",
-          n_best_stochastic_per, isTRUE(control$parallel$enable))
+  log_msg("Building best model stochastic ensemble (%d reruns, source=%s)...",
+          n_best_stochastic_per,
+          if (!is.null(best_precomputed)) "dask-precomputed"
+          else if (isTRUE(control$parallel$enable)) "local-parallel"
+          else "local-sequential")
   best_ensemble <- tryCatch(
     calc_model_ensemble(
       config                   = config_best,
@@ -2399,6 +2518,7 @@ run_MOSAIC <- function(config,
       parallel                 = isTRUE(control$parallel$enable),
       n_cores                  = control$parallel$n_cores,
       root_dir                 = root_dir,
+      precomputed_results      = best_precomputed,
       verbose                  = control$logging$verbose
     ),
     error = function(e) {
@@ -2443,91 +2563,70 @@ run_MOSAIC <- function(config,
 
   # ===========================================================================
   # MEDIOID MODEL — ensemble member closest to ensemble median trajectory
-  # Runs after best model using the same pattern: config → LASER → R² → plot
-  # config_medioid.json and prediction plot saved alongside best model outputs
+  # Runs after best model using the same pattern: config → LASER → R² → plot.
+  # Consumes Dask precomputed_results when available; falls back to local.
   # ===========================================================================
 
   tryCatch({
-    if (!is.null(medioid_seed_sim)) {
+    if (!is.null(config_medioid)) {
 
-      config_medioid <- tryCatch(
-        sample_parameters(
-          PATHS       = PATHS,
-          priors      = priors,
-          config      = config,
-          seed        = medioid_seed_sim,
-          sample_args = sampling_args,
-          verbose     = FALSE
+      # Run N stochastic reruns of the medioid config. Same pattern as the
+      # best-model block: R²/bias and the prediction plot both derive from
+      # the stochastic median for consistency with the posterior ensemble.
+      log_msg("Building medioid model stochastic ensemble (%d reruns, source=%s)...",
+              n_best_stochastic_per,
+              if (!is.null(medioid_precomputed)) "dask-precomputed"
+              else if (isTRUE(control$parallel$enable)) "local-parallel"
+              else "local-sequential")
+      medioid_ensemble <- tryCatch(
+        calc_model_ensemble(
+          config                   = config_medioid,
+          configs                  = list(config_medioid),
+          n_simulations_per_config = n_best_stochastic_per,
+          envelope_quantiles       = c(0.025, 0.975),
+          parallel                 = isTRUE(control$parallel$enable),
+          n_cores                  = control$parallel$n_cores,
+          root_dir                 = root_dir,
+          precomputed_results      = medioid_precomputed,
+          verbose                  = control$logging$verbose
         ),
         error = function(e) {
-          log_msg("Warning: sample_parameters failed for medioid seed %d: %s",
-                  medioid_seed_sim, e$message)
+          log_msg("Warning: medioid model stochastic ensemble failed: %s", e$message)
           NULL
         }
       )
 
-      if (!is.null(config_medioid)) {
+      if (!is.null(medioid_ensemble)) {
+        med_c_flat <- as.numeric(medioid_ensemble$cases_median)
+        med_d_flat <- as.numeric(medioid_ensemble$deaths_median)
+        obs_c_flat <- as.numeric(medioid_ensemble$obs_cases)
+        obs_d_flat <- as.numeric(medioid_ensemble$obs_deaths)
 
-        # Save config
-        config_medioid_file <- file.path(dirs$cal_best_model, "config_medioid.json")
-        jsonlite::write_json(config_medioid, config_medioid_file,
-                             pretty = TRUE, auto_unbox = TRUE, digits = NA)
-        log_msg("Saved %s", config_medioid_file)
+        r2_cases_med   <- tryCatch(calc_model_R2(obs_c_flat, med_c_flat),  error = function(e) NA_real_)
+        r2_deaths_med  <- tryCatch(calc_model_R2(obs_d_flat, med_d_flat),  error = function(e) NA_real_)
+        bias_cases_med <- tryCatch(calc_bias_ratio(obs_c_flat, med_c_flat), error = function(e) NA_real_)
+        bias_deaths_med <- tryCatch(calc_bias_ratio(obs_d_flat, med_d_flat), error = function(e) NA_real_)
 
-        # Run N stochastic reruns of the medioid config. Same pattern as the
-        # best-model block: R²/bias and the prediction plot both derive from
-        # the stochastic median for consistency with the posterior ensemble.
-        log_msg("Running medioid model stochastic ensemble (%d reruns, parallel=%s)...",
-                n_best_stochastic_per, isTRUE(control$parallel$enable))
-        medioid_ensemble <- tryCatch(
-          calc_model_ensemble(
-            config                   = config_medioid,
-            configs                  = list(config_medioid),
-            n_simulations_per_config = n_best_stochastic_per,
-            envelope_quantiles       = c(0.025, 0.975),
-            parallel                 = isTRUE(control$parallel$enable),
-            n_cores                  = control$parallel$n_cores,
-            root_dir                 = root_dir,
-            verbose                  = control$logging$verbose
-          ),
-          error = function(e) {
-            log_msg("Warning: medioid model stochastic ensemble failed: %s", e$message)
-            NULL
-          }
-        )
+        log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+                n_best_stochastic_per,
+                ifelse(is.na(r2_cases_med),    0, r2_cases_med),
+                ifelse(is.na(bias_cases_med),  0, bias_cases_med),
+                ifelse(is.na(r2_deaths_med),   0, r2_deaths_med),
+                ifelse(is.na(bias_deaths_med), 0, bias_deaths_med))
 
-        if (!is.null(medioid_ensemble)) {
-          med_c_flat <- as.numeric(medioid_ensemble$cases_median)
-          med_d_flat <- as.numeric(medioid_ensemble$deaths_median)
-          obs_c_flat <- as.numeric(medioid_ensemble$obs_cases)
-          obs_d_flat <- as.numeric(medioid_ensemble$obs_deaths)
-
-          r2_cases_med   <- tryCatch(calc_model_R2(obs_c_flat, med_c_flat),  error = function(e) NA_real_)
-          r2_deaths_med  <- tryCatch(calc_model_R2(obs_d_flat, med_d_flat),  error = function(e) NA_real_)
-          bias_cases_med <- tryCatch(calc_bias_ratio(obs_c_flat, med_c_flat), error = function(e) NA_real_)
-          bias_deaths_med <- tryCatch(calc_bias_ratio(obs_d_flat, med_d_flat), error = function(e) NA_real_)
-
-          log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
-                  n_best_stochastic_per,
-                  ifelse(is.na(r2_cases_med),    0, r2_cases_med),
-                  ifelse(is.na(bias_cases_med),  0, bias_cases_med),
-                  ifelse(is.na(r2_deaths_med),   0, r2_deaths_med),
-                  ifelse(is.na(bias_deaths_med), 0, bias_deaths_med))
-
-          if (control$paths$plots) {
-            tryCatch(
-              plot_model_ensemble(
-                ensemble         = medioid_ensemble,
-                output_dir       = dirs$res_fig_pred,
-                data_dir         = dirs$res_predictions,
-                file_prefix      = "medioid",
-                title_label      = "Medioid Model",
-                save_predictions = TRUE,
-                verbose          = control$logging$verbose
-              ),
-              error = function(e) log_msg("Warning: medioid prediction plot failed: %s", e$message)
-            )
-          }
+        if (control$paths$plots) {
+          tryCatch(
+            plot_model_ensemble(
+              ensemble         = medioid_ensemble,
+              output_dir       = dirs$res_fig_pred,
+              data_dir         = dirs$res_predictions,
+              file_prefix      = "medioid",
+              title_label      = "Medioid Model",
+              save_predictions = TRUE,
+              verbose          = control$logging$verbose
+            ),
+            error = function(e) log_msg("Warning: medioid prediction plot failed: %s", e$message)
+          )
         }
       }
     }
