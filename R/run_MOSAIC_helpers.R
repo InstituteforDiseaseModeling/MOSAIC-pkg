@@ -90,10 +90,21 @@
     n_errored <- as.integer(counts[[2L]])
     n_pending <- total - n_done
     elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
-    n_workers <- tryCatch(
-      length(client$scheduler_info()$workers),
-      error = function(e) NA_integer_
-    )
+    # Count active workers via Python's len() on the workers dict. A bare
+    # length(client$scheduler_info()$workers) returns the wrong value on
+    # reticulated Python dicts (it counted 5 against a 100-worker cluster
+    # during a 5000-sim Coiled smoke test) because reticulate's auto-convert
+    # of a nested dict-of-dicts surfaces a structure whose R-side length is
+    # the per-worker field count, not the worker count. py_len() bypasses
+    # this by invoking Python's __len__ directly.
+    n_workers <- tryCatch({
+      workers <- client$scheduler_info()$workers
+      if (inherits(workers, "python.builtin.object")) {
+        as.integer(reticulate::py_len(workers))
+      } else {
+        length(workers)
+      }
+    }, error = function(e) NA_integer_)
 
     log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d sims_errored=%d elapsed_sec=%.0f workers=%s",
            phase, n_done, n_pending, n_errored, elapsed,
