@@ -774,6 +774,26 @@ run_MOSAIC <- function(config,
   on.exit(options(MOSAIC.log_file = .mosaic_prev_log_file), add = TRUE)
   log_msg("[LOG_DESTINATION] stdout=true file=%s", .mosaic_log_file)
 
+  # Run-completion flag for the on.exit [RUN_FATAL] sentinel below. Set TRUE
+  # at the bottom of run_MOSAIC after [RUN_SUMMARY] is emitted, and also at
+  # every early-return path that emits its own [RUN_FATAL]. If the function
+  # exits via an uncaught stop() (e.g. client$gather raises FutureCancelledError
+  # mid-calibration), the flag stays FALSE and on.exit emits a single
+  # grep-friendly [RUN_FATAL] line so a tailing AI agent has an unambiguous
+  # termination signal instead of a hanging tail with a stack trace at EOF.
+  run_completed       <- FALSE
+  run_fatal_start_time <- Sys.time()
+  on.exit({
+    if (!isTRUE(run_completed)) {
+      runtime_min <- as.numeric(difftime(Sys.time(), run_fatal_start_time,
+                                          units = "mins"))
+      log_msg(paste0(
+        "[RUN_FATAL] status=failed reason=runtime_error runtime_min=%.2f ",
+        "dir_output=%s"),
+        runtime_min, dir_output)
+    }
+  }, add = TRUE)
+
   # Conditionally create simresults directory for validation output
   save_simresults <- isTRUE(control$io$save_simresults)
 
@@ -2430,6 +2450,8 @@ run_MOSAIC <- function(config,
       runtime_bail,
       dir_output
     )
+    # Suppress the on.exit [RUN_FATAL] — we just emitted a more specific one.
+    run_completed <- TRUE
     return(invisible(list(
       dirs    = dirs,
       files   = list(),
@@ -3012,6 +3034,9 @@ run_MOSAIC <- function(config,
     if (isTRUE(state$resumed)) "YES" else "NO",
     dir_output
   )
+
+  # Reached normal end-of-run — suppress the on.exit [RUN_FATAL] sentinel.
+  run_completed <- TRUE
 
   # Finalize run state (mark as completed)
   .mosaic_finalize_state(state_file)

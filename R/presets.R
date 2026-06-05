@@ -225,13 +225,20 @@ mosaic_dask_presets <- function(n_workers) {
     timeout            = timeout,
     worker_options     = list(nthreads = 1L),
     n_workers          = n_workers,
-    # Three equivalent 2-vCPU x86 variants. Coiled picks whichever has
-    # capacity in westus2 — materially speeds provision under regional
-    # contention (D2s_v6 is the most-requested 2-vCPU on Azure).
+    # Three equivalent 2-vCPU x86 variants + one 4-vCPU fallback. Coiled
+    # picks the cheapest available, so the D2 variants are tried first (D2s_v6
+    # is the most-requested 2-vCPU on Azure and most likely to face
+    # regional-contention shortages); D4s_v6 (4 vCPU / 16 GB) is added as a
+    # last-resort backup when no D2 SKU is available in westus2. The 1
+    # thread/worker config (worker_options below) means the extra cores aren't
+    # used for parallelism — D4 is purely an availability hedge, not a
+    # capacity bump. If a run consistently OOMs on D2, set vm_types
+    # explicitly to the D4 list rather than relying on this fallback.
     vm_types           = c(
-      "Standard_D2s_v6",   # Intel Emerald Rapids
+      "Standard_D2s_v6",   # Intel Emerald Rapids               (cheapest)
       "Standard_D2ds_v6",  # Intel Emerald Rapids w/ local SSD
-      "Standard_D2ads_v6"  # AMD Genoa w/ local SSD
+      "Standard_D2ads_v6", # AMD Genoa w/ local SSD
+      "Standard_D4s_v6"    # Intel Emerald Rapids 4-vCPU/16 GB  (fallback)
     ),
     scheduler_vm_types = c(scheduler_vm),
     wait_for_workers   = wait_for_workers
