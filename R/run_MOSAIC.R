@@ -1043,7 +1043,12 @@ run_MOSAIC <- function(config,
       client <- dask_dist$Client(dask_spec$address)
     }
 
+    # Emit through both channels: cli::cli_alert_info() makes the URL a
+    # clickable hyperlink in interactive terminals, but bypasses log_msg and
+    # therefore never lands in run.log. Mirror via log_msg so a tailing
+    # operator (human or AI) can grep "Dask dashboard:" from the file.
     cli::cli_alert_info("Dask dashboard: {.url {client$dashboard_link}}")
+    log_msg("Dask dashboard: %s", client$dashboard_link)
 
     # Register cleanup (runs on normal exit OR error).
     # client/dask_cluster are set to NULL after graceful close before post-processing,

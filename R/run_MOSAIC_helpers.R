@@ -18,15 +18,23 @@
 
 #' Gather Dask futures while emitting periodic progress lines
 #'
-#' Wraps \code{client$gather(futures)} with a polling loop that uses
-#' \code{dask.distributed.wait(futures, timeout=interval_sec)} to wake up every
-#' \code{interval_sec} seconds, count completed vs pending futures, and emit a
-#' single structured \code{[PROGRESS]} log line per heartbeat. Eliminates the
+#' Wraps \code{client$gather(futures)} with a polling loop that wakes up every
+#' \code{interval_sec} seconds, counts completed vs pending futures via a
+#' single round-trip Python helper, and emits one structured
+#' \code{[PROGRESS]} log line per heartbeat. Eliminates the
 #' silent-during-gather window that otherwise leads a tailing operator (human
 #' or AI) to wrongly conclude the pipeline has hung.
 #'
-#' On wait/gather error, the helper does NOT swallow — it lets the caller's
-#' tryCatch handle diagnostics (e.g. first-future status inspection).
+#' Note: an earlier version used \code{dask.distributed.wait(timeout=...)} to
+#' wake on completion-or-timeout. That API raises \code{TimeoutError} on
+#' timeout (it does NOT return a \code{DoneAndNotDoneFutures} as the docs
+#' suggest at first read), which aborted the gather on the very first
+#' heartbeat. We now poll \code{future.status} from Python in a single batched
+#' call (cheap — the status is mirrored locally from scheduler push updates,
+#' no round-trip per future) and sleep between iterations.
+#'
+#' On gather error the helper does NOT swallow — it lets the caller's tryCatch
+#' handle diagnostics (first-future status inspection).
 #'
 #' @param client A reticulated \code{dask.distributed.Client} object.
 #' @param futures List of Dask future objects. Empty list returns empty list.
@@ -44,30 +52,48 @@
   total <- length(futures)
   if (total == 0L) return(list())
 
-  dd <- reticulate::import("dask.distributed")
-  start <- Sys.time()
+  # One-shot Python helper: count futures by terminal status in a single call.
+  # `future.status` is mirrored locally from scheduler push updates, so this
+  # does not produce N reticulate round-trips.
+  py_env <- reticulate::py_run_string(
+    paste0(
+      "def _mosaic_count_status(fs):\n",
+      "    done = 0\n",
+      "    errored = 0\n",
+      "    for f in fs:\n",
+      "        s = f.status\n",
+      "        if s == 'finished':\n",
+      "            done += 1\n",
+      "        elif s == 'error':\n",
+      "            done += 1\n",
+      "            errored += 1\n",
+      "    return (done, errored)\n"
+    ),
+    convert = TRUE
+  )
+  count_status <- py_env$"_mosaic_count_status"
 
+  start <- Sys.time()
   log_fn("[PROGRESS] phase=%s event=gather_start sims_total=%d interval_sec=%d",
          phase, total, as.integer(interval_sec))
 
   repeat {
-    res <- dd$wait(futures,
-                   timeout      = as.integer(interval_sec),
-                   return_when  = "ALL_COMPLETED")
-
-    n_done    <- reticulate::py_len(res$done)
-    n_pending <- reticulate::py_len(res$not_done)
+    counts    <- count_status(futures)
+    n_done    <- as.integer(counts[[1L]])
+    n_errored <- as.integer(counts[[2L]])
+    n_pending <- total - n_done
     elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
     n_workers <- tryCatch(
       length(client$scheduler_info()$workers),
       error = function(e) NA_integer_
     )
 
-    log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d elapsed_sec=%.0f workers=%s",
-           phase, n_done, n_pending, elapsed,
+    log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d sims_errored=%d elapsed_sec=%.0f workers=%s",
+           phase, n_done, n_pending, n_errored, elapsed,
            if (is.na(n_workers)) "?" else as.character(n_workers))
 
     if (n_pending == 0L) break
+    Sys.sleep(as.integer(interval_sec))
   }
 
   client$gather(futures)
