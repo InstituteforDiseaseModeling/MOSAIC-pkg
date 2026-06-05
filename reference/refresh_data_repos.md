@@ -1,6 +1,6 @@
 # Pull latest data from external scraper repos and report coverage
 
-Fast-forward `git pull`s each of the four external scraper repos that
+Fast-forward `git pull`s each of the five external scraper repos that
 MOSAIC depends on for raw data, then prints a per-repo summary of the
 latest commit and (for surveillance repos) the date range of the data
 file the `process_*()` functions read. Designed to be called at the top
@@ -26,7 +26,8 @@ refresh_data_repos(root = NULL, repos = NULL, stale_days = 14L, verbose = TRUE)
 
   Optional character vector restricting the refresh to a subset of
   repos. Valid names: `"ees-cholera-mapping"`, `"jhu_cholera_data"`,
-  `"enso-data"`, `"open-meteo-pipeline"`. Default refreshes all four.
+  `"ai-cholera-data-mining"`, `"enso-data"`, `"open-meteo-pipeline"`.
+  Default refreshes all five.
 
 - stale_days:
 

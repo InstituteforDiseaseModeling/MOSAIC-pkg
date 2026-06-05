@@ -273,6 +273,9 @@ Calculation functions
 
 Processing and downloading data
 
+- [`process_AI_cholera_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_AI_cholera_data.md)
+  : Process AI-mined Weekly Cholera Surveillance Data into the MOSAIC
+  Per-Source Schema
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)
@@ -1019,6 +1022,9 @@ Other exported functions and internal helpers
   : Print summary of location priors
 - [`priors_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/priors_default.md)
   : Default prior distributions for MOSAIC model parameters
+- [`process_AI_cholera_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_AI_cholera_data.md)
+  : Process AI-mined Weekly Cholera Surveillance Data into the MOSAIC
+  Per-Source Schema
 - [`process_CFR_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_CFR_data.md)
   : Process Cholera Data to Calculate Aggregated Case Fatality Ratios
   and Fit Beta Distributions (2014-2024)

@@ -13,7 +13,7 @@ with integer allocation.
 ## Usage
 
 ``` r
-process_cholera_surveillance_data(PATHS, keep_source = c("WHO", "JHU", "SUPP"))
+process_cholera_surveillance_data(PATHS, include_ai = FALSE)
 ```
 
 ## Arguments
@@ -38,11 +38,17 @@ process_cholera_surveillance_data(PATHS, keep_source = c("WHO", "JHU", "SUPP"))
   - **DATA_CHOLERA_DAILY**: Directory where the combined daily output
     will be saved.
 
-- keep_source:
+- include_ai:
 
-  Character; one of "WHO", "JHU", or "SUPP". When duplicate country–week
-  entries occur across sources, the entry from `keep_source` will be
-  used preferentially.
+  Logical (default `FALSE`). When `TRUE`, reads the AI-mined processed
+  file (`DATA_AI_WEEKLY/cholera_country_weekly_processed.csv`, produced
+  by
+  [`process_AI_cholera_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_AI_cholera_data.md))
+  as a fourth source and carries its `confidence_weight` and
+  `disaggregation_method` columns through to the combined weekly output.
+  If the file is missing/empty, a warning is emitted and the merge
+  proceeds with WHO/JHU/SUPP only. When `FALSE`, behavior is identical
+  to the three-source merge.
 
 ## Value
 
@@ -56,8 +62,8 @@ Invisibly returns `NULL`. Side effects:
   any column missing from a given source (so source-specific columns are
   never silently dropped).
 
-- Deduplicates by `iso_code`, `year`, `week`, choosing rows from
-  `keep_source`.
+- Deduplicates by `iso_code`, `year`, `week` using the fixed priority
+  WHO \> JHU \> AI \> SUPP (completeness tie-break).
 
 - Creates truly square data structure with all country-week combinations
   from min to max date (missing data = NA).
@@ -71,3 +77,10 @@ Invisibly returns `NULL`. Side effects:
 
 - Saves the combined daily data to
   `PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv`.
+
+## Details
+
+Duplicate country–week entries across sources are resolved by a fixed
+priority **WHO \> JHU \> AI \> SUPP**, with a completeness tie-break:
+within a key, rows with complete cases AND deaths are preferred before
+the source priority is applied.

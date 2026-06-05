@@ -15,7 +15,7 @@ using MOSAIC::downscale_weekly_values with integer allocation."><meta property="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.33</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.34</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,7 @@ using <code><a href="downscale_weekly_values.html">MOSAIC::downscale_weekly_valu
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">process_cholera_surveillance_data</span><span class="op">(</span><span class="va">PATHS</span>, keep_source <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"WHO"</span>, <span class="st">"JHU"</span>, <span class="st">"SUPP"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">process_cholera_surveillance_data</span><span class="op">(</span><span class="va">PATHS</span>, include_ai <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -73,9 +73,14 @@ using <code><a href="downscale_weekly_values.html">MOSAIC::downscale_weekly_valu
 </ul></dd>
 
 
-<dt id="arg-keep-source">keep_source<a class="anchor" aria-label="anchor" href="#arg-keep-source"></a></dt>
-<dd><p>Character; one of "WHO", "JHU", or "SUPP". When duplicate country–week entries
-occur across sources, the entry from <code>keep_source</code> will be used preferentially.</p></dd>
+<dt id="arg-include-ai">include_ai<a class="anchor" aria-label="anchor" href="#arg-include-ai"></a></dt>
+<dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, reads the
+AI-mined processed file (<code>DATA_AI_WEEKLY/cholera_country_weekly_processed.csv</code>,
+produced by <code><a href="process_AI_cholera_data.html">process_AI_cholera_data</a></code>) as a fourth source and
+carries its <code>confidence_weight</code> and <code>disaggregation_method</code> columns
+through to the combined weekly output. If the file is missing/empty, a warning
+is emitted and the merge proceeds with WHO/JHU/SUPP only. When <code>FALSE</code>,
+behavior is identical to the three-source merge.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -83,7 +88,7 @@ occur across sources, the entry from <code>keep_source</code> will be used prefe
     <p>Invisibly returns <code>NULL</code>. Side effects:</p><ul><li><p>Reads weekly CSVs from all three sources and adds a <code>source</code> column.</p></li>
 <li><p>Cleans rows with missing key grouping fields (iso_code, year, week).</p></li>
 <li><p>Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).</p></li>
-<li><p>Deduplicates by <code>iso_code</code>, <code>year</code>, <code>week</code>, choosing rows from <code>keep_source</code>.</p></li>
+<li><p>Deduplicates by <code>iso_code</code>, <code>year</code>, <code>week</code> using the fixed priority WHO &gt; JHU &gt; AI &gt; SUPP (completeness tie-break).</p></li>
 <li><p>Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).</p></li>
 <li><p>Saves the combined weekly data to
 <code>PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv</code>.</p></li>
@@ -92,6 +97,13 @@ preserving square structure (keeping days with NA), and carries over the <code>s
 <li><p>Saves the combined daily data to
 <code>PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv</code>.</p></li>
 </ul></div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Duplicate country–week entries across sources are resolved by a fixed
+priority <strong>WHO &gt; JHU &gt; AI &gt; SUPP</strong>, with a completeness tie-break: within
+a key, rows with complete cases AND deaths are preferred before the source
+priority is applied.</p>
+    </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
