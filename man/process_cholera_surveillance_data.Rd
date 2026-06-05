@@ -18,11 +18,18 @@ process_cholera_surveillance_data(PATHS, include_ai = FALSE)
 
 \item{include_ai}{Logical (default \code{FALSE}). When \code{TRUE}, reads the
 AI-mined processed file (\code{DATA_AI_WEEKLY/cholera_country_weekly_processed.csv},
-produced by \code{\link{process_AI_cholera_data}}) as a fourth source and
-carries its \code{confidence_weight} and \code{disaggregation_method} columns
-through to the combined weekly output. If the file is missing/empty, a warning
-is emitted and the merge proceeds with WHO/JHU/SUPP only. When \code{FALSE},
-behavior is identical to the three-source merge.}
+produced by \code{\link{process_AI_cholera_data}}) as a fourth source, using
+its per-row \code{confidence_weight} and \code{disaggregation_method}. When
+\code{FALSE}, only WHO/JHU/SUPP are merged. If \code{include_ai = TRUE} but the
+AI file is missing/empty, a warning is emitted and the merge proceeds with the
+three direct sources.
+
+The output always carries a \code{confidence_weight} and a
+\code{disaggregation_method} column (stable schema regardless of this flag):
+direct-source observations (WHO/JHU/SUPP) get \code{confidence_weight = 1.0}
+(fully trusted) and \code{disaggregation_method = NA}; AI rows keep their
+per-row values; and square-grid cells with no observation get
+\code{confidence_weight = NA}.}
 }
 \value{
 Invisibly returns \code{NULL}. Side effects:

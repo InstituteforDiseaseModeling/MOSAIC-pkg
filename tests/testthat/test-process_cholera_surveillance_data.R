@@ -46,14 +46,19 @@ read_combined <- function(P) {
                   stringsAsFactors = FALSE)
 }
 
-test_that("include_ai = FALSE reproduces 3-source behavior with no AI columns", {
+test_that("include_ai = FALSE merges 3 sources; confidence metadata defaults present", {
   fx <- make_fixture(); P <- fx$P
   suppressMessages(process_cholera_surveillance_data(P, include_ai = FALSE))
   out <- read_combined(P)
   obs <- out[!is.na(out$cases), ]
 
-  expect_false("confidence_weight" %in% names(out))
-  expect_false("disaggregation_method" %in% names(out))
+  # Columns are always present (stable schema); trusted observations are 1.0.
+  expect_true("confidence_weight" %in% names(out))
+  expect_true("disaggregation_method" %in% names(out))
+  expect_true(all(obs$confidence_weight == 1.0))              # WHO/JHU/SUPP trusted
+  expect_true(all(is.na(obs$disaggregation_method)))          # no AI -> NA method
+  expect_true(all(is.na(out$confidence_weight[is.na(out$cases)])))  # empty cells NA
+
   # wk2 WHO+JHU -> WHO; wk3 JHU only (AI excluded) -> JHU; wk4 has no data -> NA
   expect_equal(obs$source[obs$week == fx$weeks[2]], "WHO")
   expect_equal(obs$source[obs$week == fx$weeks[3]], "JHU")
@@ -78,10 +83,13 @@ test_that("include_ai = TRUE adds columns, respects priority, fills gaps", {
   expect_equal(obs$source[obs$week == fx$weeks[4]], "AI")
   expect_equal(obs$cases[obs$week == fx$weeks[4]], 50)
 
-  # confidence_weight: NA for WHO/JHU rows, populated for the AI gap-fill row
-  expect_true(is.na(obs$confidence_weight[obs$week == fx$weeks[2]]))
+  # confidence_weight: trusted WHO row = 1.0; AI gap-fill row keeps its 0.5
+  expect_equal(obs$confidence_weight[obs$week == fx$weeks[2]], 1.0)
+  expect_true(is.na(obs$disaggregation_method[obs$week == fx$weeks[2]]))  # WHO -> NA method
   expect_equal(obs$confidence_weight[obs$week == fx$weeks[4]], 0.5)
   expect_equal(obs$disaggregation_method[obs$week == fx$weeks[4]], "observed")
+  # empty grid cells stay NA = "no observation"
+  expect_true(all(is.na(out$confidence_weight[is.na(out$cases)])))
 })
 
 test_that("include_ai = TRUE warns and falls back when AI file is missing", {

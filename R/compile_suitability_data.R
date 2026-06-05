@@ -1303,7 +1303,14 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # Reorder columns thematically (matching the order of data assembly)
      # 1. Location/Time/Cases/Deaths
      base_cols <- c("iso_code", "year", "month", "week", "date", "cases", "cases_binary", "deaths")
-     
+
+     # 1b. Surveillance provenance / quality metadata (carried from the combined
+     # surveillance CSV). Listed explicitly so the confidence_weight column is
+     # preserved by design rather than only incidentally via remaining_cols.
+     # Absent columns are dropped by the final `%in% names(d)` filter, so this is
+     # a no-op when a column is not present.
+     surveillance_meta_cols <- c("source", "confidence_weight", "disaggregation_method")
+
      # 2. Temporal variables
      temporal_cols <- c("sin_annual", "cos_annual", "sin_biannual", "cos_biannual",
                        "sin_quarterly", "cos_quarterly", "sin_monthly", "cos_monthly",
@@ -1468,9 +1475,10 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      geo_cols <- c("elevation", "latitude", "longitude", "region")
      
      # Combine all organized columns
-     organized_cols <- c(base_cols, temporal_cols, demo_cols, health_cols, wash_cols,
+     organized_cols <- c(base_cols, surveillance_meta_cols, temporal_cols, demo_cols,
+                        health_cols, wash_cols,
                         enso_cols, basic_climate_cols, rolling_cols, anomaly_cols,
-                        extremes_cols, memory_cols, spatial_cols, interaction_cols, 
+                        extremes_cols, memory_cols, spatial_cols, interaction_cols,
                         enhanced_interaction_cols, nonlinear_cols, lag_cols, indices_cols, geo_cols)
      
      # Get any remaining columns not explicitly categorized
