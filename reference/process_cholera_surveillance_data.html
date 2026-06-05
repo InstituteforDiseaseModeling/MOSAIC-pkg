@@ -15,7 +15,7 @@ using MOSAIC::downscale_weekly_values with integer allocation."><meta property="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.35</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.36</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -76,11 +76,17 @@ using <code><a href="downscale_weekly_values.html">MOSAIC::downscale_weekly_valu
 <dt id="arg-include-ai">include_ai<a class="anchor" aria-label="anchor" href="#arg-include-ai"></a></dt>
 <dd><p>Logical (default <code>FALSE</code>). When <code>TRUE</code>, reads the
 AI-mined processed file (<code>DATA_AI_WEEKLY/cholera_country_weekly_processed.csv</code>,
-produced by <code><a href="process_AI_cholera_data.html">process_AI_cholera_data</a></code>) as a fourth source and
-carries its <code>confidence_weight</code> and <code>disaggregation_method</code> columns
-through to the combined weekly output. If the file is missing/empty, a warning
-is emitted and the merge proceeds with WHO/JHU/SUPP only. When <code>FALSE</code>,
-behavior is identical to the three-source merge.</p></dd>
+produced by <code><a href="process_AI_cholera_data.html">process_AI_cholera_data</a></code>) as a fourth source, using
+its per-row <code>confidence_weight</code> and <code>disaggregation_method</code>. When
+<code>FALSE</code>, only WHO/JHU/SUPP are merged. If <code>include_ai = TRUE</code> but the
+AI file is missing/empty, a warning is emitted and the merge proceeds with the
+three direct sources.</p>
+<p>The output always carries a <code>confidence_weight</code> and a
+<code>disaggregation_method</code> column (stable schema regardless of this flag):
+direct-source observations (WHO/JHU/SUPP) get <code>confidence_weight = 1.0</code>
+(fully trusted) and <code>disaggregation_method = NA</code>; AI rows keep their
+per-row values; and square-grid cells with no observation get
+<code>confidence_weight = NA</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

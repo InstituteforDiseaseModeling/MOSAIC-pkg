@@ -44,11 +44,17 @@ process_cholera_surveillance_data(PATHS, include_ai = FALSE)
   file (`DATA_AI_WEEKLY/cholera_country_weekly_processed.csv`, produced
   by
   [`process_AI_cholera_data`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_AI_cholera_data.md))
-  as a fourth source and carries its `confidence_weight` and
-  `disaggregation_method` columns through to the combined weekly output.
-  If the file is missing/empty, a warning is emitted and the merge
-  proceeds with WHO/JHU/SUPP only. When `FALSE`, behavior is identical
-  to the three-source merge.
+  as a fourth source, using its per-row `confidence_weight` and
+  `disaggregation_method`. When `FALSE`, only WHO/JHU/SUPP are merged.
+  If `include_ai = TRUE` but the AI file is missing/empty, a warning is
+  emitted and the merge proceeds with the three direct sources.
+
+  The output always carries a `confidence_weight` and a
+  `disaggregation_method` column (stable schema regardless of this
+  flag): direct-source observations (WHO/JHU/SUPP) get
+  `confidence_weight = 1.0` (fully trusted) and
+  `disaggregation_method = NA`; AI rows keep their per-row values; and
+  square-grid cells with no observation get `confidence_weight = NA`.
 
 ## Value
 
