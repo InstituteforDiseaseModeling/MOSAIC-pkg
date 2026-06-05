@@ -762,6 +762,18 @@ run_MOSAIC <- function(config,
     clean_output = isTRUE(control$paths$clean_output)
   )
 
+  # Direct every log_msg / log_info / log_warn / log_error / log_fatal call
+  # (including those from helpers whose frames don't carry a dir_output
+  # binding) to <dir_output>/run.log via a package-level option. Cleared on
+  # function exit so a subsequent unrelated log_msg() call doesn't tee to a
+  # stale file. Emit a single discoverability line so a tailing process can
+  # `grep -m1 '\[LOG_DESTINATION\]'` to locate the file.
+  .mosaic_log_file <- file.path(dir_output, "run.log")
+  .mosaic_prev_log_file <- getOption("MOSAIC.log_file", default = NULL)
+  options(MOSAIC.log_file = .mosaic_log_file)
+  on.exit(options(MOSAIC.log_file = .mosaic_prev_log_file), add = TRUE)
+  log_msg("[LOG_DESTINATION] stdout=true file=%s", .mosaic_log_file)
+
   # Conditionally create simresults directory for validation output
   save_simresults <- isTRUE(control$io$save_simresults)
 
@@ -770,6 +782,7 @@ run_MOSAIC <- function(config,
   # time-series matrices, so there is no raw (j, t) output to persist on the
   # Dask path. Reject early rather than silently dropping diagnostics.
   if (use_dask && save_simresults) {
+    log_fatal("save_simresults is not supported on the Dask path; use the local backend for diagnostic runs.")
     stop("save_simresults is not supported on the Dask path; ",
          "use the local backend for diagnostic runs.", call. = FALSE)
   }
@@ -1012,9 +1025,12 @@ run_MOSAIC <- function(config,
         }, error = function(e) {
           try({ if (!is.null(dask_cluster)) dask_cluster$close() }, silent = TRUE)
           dask_cluster <<- NULL
-          if (cluster_attempt >= max_cluster_attempts)
+          if (cluster_attempt >= max_cluster_attempts) {
+            log_fatal("Coiled cluster creation failed after %d attempts: %s",
+                      max_cluster_attempts, e$message)
             stop("Coiled cluster creation failed after ", max_cluster_attempts,
                  " attempts: ", e$message, call. = FALSE)
+          }
           wait_secs <- 30L * cluster_attempt
           log_msg("Cluster creation attempt %d/%d failed: %s",
                   cluster_attempt, max_cluster_attempts, e$message)
@@ -1044,6 +1060,7 @@ run_MOSAIC <- function(config,
     # Upload Python worker module to all workers
     worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
     if (!nzchar(worker_py_path) || !file.exists(worker_py_path)) {
+      log_fatal("Cannot find inst/python/mosaic_dask_worker.py — was the package reinstalled?")
       stop("Cannot find inst/python/mosaic_dask_worker.py — was the package reinstalled?",
            call. = FALSE)
     }
@@ -1199,8 +1216,7 @@ run_MOSAIC <- function(config,
   if (isTRUE(resume) && identical(state$mode, "auto") && isTRUE(state$converged)) {
     # Already converged on the reconstructed pool: skip simulation entirely and
     # go straight to post-processing (the loop below breaks immediately).
-    log_msg("[RESUME] Reconstructed state already converged — skipping simulation, ",
-            "proceeding to post-processing")
+    log_msg("[RESUME] Reconstructed state already converged — skipping simulation, proceeding to post-processing")
   } else {
     log_msg("Starting simulation (mode: %s)", state$mode)
   }
@@ -1449,7 +1465,7 @@ run_MOSAIC <- function(config,
       .mosaic_save_checkpoint(state, checkpoint_file)
 
       if (state$total_sims_run >= control$calibration$max_simulations_total && !state$converged) {
-        log_msg("WARNING: Reached maximum simulations (%d) without convergence",
+        log_warn("Reached maximum simulations (%d) without convergence",
                 control$calibration$max_simulations_total)
         break
       }
@@ -1676,7 +1692,7 @@ run_MOSAIC <- function(config,
 
   if (n_valid_final < 2) {
     # Insufficient data for metrics - set to NA
-    log_msg("\n⚠ WARNING: Insufficient valid simulations (%d) in final subset", n_valid_final)
+    log_warn("Insufficient valid simulations (%d) in final subset", n_valid_final)
     log_msg("  Cannot calculate convergence metrics. Setting to NA.")
 
     ESS_B_final <- NA_real_
@@ -1691,7 +1707,7 @@ run_MOSAIC <- function(config,
 
     if (!is.finite(best_aic_final)) {
       # All AIC values are non-finite
-      log_msg("\n⚠ WARNING: No finite AIC values in final subset")
+      log_warn("No finite AIC values in final subset")
       ESS_B_final <- NA_real_
       A_final <- NA_real_
       CVw_final <- NA_real_
@@ -1926,7 +1942,7 @@ run_MOSAIC <- function(config,
         verbose    = control$logging$verbose
       )
     }, error = function(e) {
-      log_msg("Warning: likelihood curve plot failed: %s", e$message)
+      log_warn("likelihood curve plot failed: %s", e$message)
     })
   }
 
@@ -1990,7 +2006,7 @@ run_MOSAIC <- function(config,
 
       result
     }, error = function(e) {
-      log_msg("WARNING: Post-cal Dask reconnect/dispatch failed: %s", e$message)
+      log_warn("Post-cal Dask reconnect/dispatch failed: %s", e$message)
       log_msg("  Falling back to local execution for ensemble/stochastic sims")
       tryCatch({ if (!is.null(client)) client$close() }, error = function(e2) NULL)
       client <<- NULL
@@ -2056,7 +2072,7 @@ run_MOSAIC <- function(config,
         verbose                  = control$logging$verbose
       ),
       error = function(e) {
-        log_msg("Warning: calc_model_ensemble failed: %s", e$message)
+        log_warn("calc_model_ensemble failed: %s", e$message)
         NULL
       }
     )
@@ -2067,7 +2083,7 @@ run_MOSAIC <- function(config,
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
     }
   } else {
-    log_msg("Warning: no best subset — skipping posterior ensemble")
+    log_warn("no best subset — skipping posterior ensemble")
   }
 
   # ===========================================================================
@@ -2102,7 +2118,7 @@ run_MOSAIC <- function(config,
         verbose     = control$logging$verbose
       ),
       error = function(e) {
-        log_msg("Warning: optimize_ensemble_subset failed: %s", e$message)
+        log_warn("optimize_ensemble_subset failed: %s", e$message)
         NULL
       }
     )
@@ -2150,7 +2166,7 @@ run_MOSAIC <- function(config,
               sum(results$is_best_subset_opt))
 
       if (subset_opt$optimal_n < 30L) {
-        log_msg("  WARNING: optimal_n = %d < 30; KDE-based posterior densities may be degenerate",
+        log_warn("optimal_n = %d < 30; KDE-based posterior densities may be degenerate",
                 subset_opt$optimal_n)
       }
 
@@ -2241,7 +2257,7 @@ run_MOSAIC <- function(config,
                 medioid_seed_sim, medioid_distances[medioid_idx])
       }
     }, error = function(e) {
-      log_msg("Warning: medioid computation failed: %s", e$message)
+      log_warn("medioid computation failed: %s", e$message)
     })
   }
 
@@ -2322,7 +2338,7 @@ run_MOSAIC <- function(config,
         subset_col = active_cols$subset_col,
         verbose = control$logging$verbose
       ),
-      error = function(e) log_msg("Warning: parameter sensitivity plot failed: %s", e$message)
+      error = function(e) log_warn("parameter sensitivity plot failed: %s", e$message)
     )
 
     tryCatch(
@@ -2333,7 +2349,7 @@ run_MOSAIC <- function(config,
         subset_col = active_cols$subset_col,
         verbose = control$logging$verbose
       ),
-      error = function(e) log_msg("Warning: parameter correlation plot failed: %s", e$message)
+      error = function(e) log_warn("parameter correlation plot failed: %s", e$message)
     )
   }
 
@@ -2367,7 +2383,7 @@ run_MOSAIC <- function(config,
       verbose     = FALSE
     ),
     error = function(e) {
-      log_msg("ERROR: sample_parameters failed for best seed %d: %s", best_seed_sim, e$message)
+      log_error("sample_parameters failed for best seed %d: %s", best_seed_sim, e$message)
       log_msg("  Post-processing (PPC, summary) will be skipped.")
       NULL
     }
@@ -2379,11 +2395,26 @@ run_MOSAIC <- function(config,
     # cluster isn't left running until idle_timeout.
     .mosaic_finalize_state(state_file)
     if (use_dask) {
-      tryCatch({ if (!is.null(client))       client$close()       }, error = function(e) NULL)
-      tryCatch({ if (!is.null(dask_cluster)) dask_cluster$close() }, error = function(e) NULL)
+      tryCatch(
+        { if (!is.null(client)) client$close() },
+        error = function(e) log_warn("cluster client close failed on bail path: %s", e$message)
+      )
+      tryCatch(
+        { if (!is.null(dask_cluster)) dask_cluster$close() },
+        error = function(e) log_warn("cluster close failed on bail path: %s", e$message)
+      )
       client       <- NULL
       dask_cluster <- NULL
     }
+    runtime_bail <- as.numeric(difftime(Sys.time(), start_time, units = "mins"))
+    log_fatal("sample_parameters failed for best seed; cannot proceed to post-processing")
+    log_msg(paste0(
+      "[RUN_FATAL] status=failed reason=best_seed_sample_failed ",
+      "converged=%s runtime_min=%.2f dir_output=%s"),
+      if (isTRUE(state$converged)) "YES" else "NO",
+      runtime_bail,
+      dir_output
+    )
     return(invisible(list(
       dirs    = dirs,
       files   = list(),
@@ -2410,7 +2441,7 @@ run_MOSAIC <- function(config,
         verbose     = FALSE
       ),
       error = function(e) {
-        log_msg("Warning: sample_parameters failed for medioid seed %d: %s",
+        log_warn("sample_parameters failed for medioid seed %d: %s",
                 medioid_seed_sim, e$message)
         NULL
       }
@@ -2495,13 +2526,13 @@ run_MOSAIC <- function(config,
               if (is.null(medioid_precomputed)) 0L else length(medioid_precomputed))
 
       if (is.null(best_precomputed)) {
-        log_msg("  WARNING: best Dask dispatch returned 0 successful sims; falling back to local")
+        log_warn("best Dask dispatch returned 0 successful sims; falling back to local")
       }
       if (!is.null(config_medioid) && is.null(medioid_precomputed)) {
-        log_msg("  WARNING: medioid Dask dispatch returned 0 successful sims; falling back to local")
+        log_warn("medioid Dask dispatch returned 0 successful sims; falling back to local")
       }
     }, error = function(e) {
-      log_msg("WARNING: best/medioid Dask dispatch failed: %s", e$message)
+      log_warn("best/medioid Dask dispatch failed: %s", e$message)
       log_msg("  Falling back to local execution for best/medioid ensembles")
       best_precomputed    <<- NULL
       medioid_precomputed <<- NULL
@@ -2547,7 +2578,7 @@ run_MOSAIC <- function(config,
       verbose                  = control$logging$verbose
     ),
     error = function(e) {
-      log_msg("Warning: best model stochastic ensemble failed: %s", e$message)
+      log_warn("best model stochastic ensemble failed: %s", e$message)
       NULL
     }
   )
@@ -2581,7 +2612,7 @@ run_MOSAIC <- function(config,
           save_predictions = TRUE,
           verbose          = control$logging$verbose
         ),
-        error = function(e) log_msg("Warning: best model plot failed: %s", e$message)
+        error = function(e) log_warn("best model plot failed: %s", e$message)
       )
     }
   }
@@ -2616,7 +2647,7 @@ run_MOSAIC <- function(config,
           verbose                  = control$logging$verbose
         ),
         error = function(e) {
-          log_msg("Warning: medioid model stochastic ensemble failed: %s", e$message)
+          log_warn("medioid model stochastic ensemble failed: %s", e$message)
           NULL
         }
       )
@@ -2650,13 +2681,13 @@ run_MOSAIC <- function(config,
               save_predictions = TRUE,
               verbose          = control$logging$verbose
             ),
-            error = function(e) log_msg("Warning: medioid prediction plot failed: %s", e$message)
+            error = function(e) log_warn("medioid prediction plot failed: %s", e$message)
           )
         }
       }
     }
   }, error = function(e) {
-    log_msg("Warning: medioid model block failed: %s", e$message)
+    log_warn("medioid model block failed: %s", e$message)
   })
 
   # ===========================================================================
@@ -2705,7 +2736,7 @@ run_MOSAIC <- function(config,
               envelope_quantiles = c(0.025, 0.5, 0.975)
          ),
          error = function(e) {
-              log_msg("Warning: implied-CFR computation failed: %s", e$message)
+              log_warn("implied-CFR computation failed: %s", e$message)
               NULL
          }
     )
@@ -2761,7 +2792,7 @@ run_MOSAIC <- function(config,
                                       location = paste(config$location_name, collapse = ", "))
         log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
       }, error = function(e) {
-        log_msg("Warning: windowed metrics plot failed: %s", e$message)
+        log_warn("windowed metrics plot failed: %s", e$message)
       })
     }
 
@@ -2779,7 +2810,7 @@ run_MOSAIC <- function(config,
     }
 
   } else {
-    log_msg("Warning: ensemble is NULL — skipping ensemble R\u00b2 and predictive plots")
+    log_warn("ensemble is NULL — skipping ensemble R\u00b2 and predictive plots")
   }
 
   # ===========================================================================
@@ -2805,7 +2836,7 @@ run_MOSAIC <- function(config,
         pred_list <- lapply(pred_csvs, utils::read.csv, stringsAsFactors = FALSE)
         do.call(rbind, pred_list)
       }, error = function(e) {
-        log_msg("Warning: Could not combine %s prediction CSVs: %s", pred_type, e$message)
+        log_warn("Could not combine %s prediction CSVs: %s", pred_type, e$message)
         NULL
       })
       if (!is.null(combined)) {
@@ -2832,7 +2863,7 @@ run_MOSAIC <- function(config,
       },
       error = function(e) {
         if (grepl("unused argument", e$message)) {
-          log_msg("Warning: plot_model_ppc using legacy signature (package may need reinstallation)")
+          log_warn("plot_model_ppc using legacy signature (package may need reinstallation)")
           NULL
         } else {
           stop(e)
@@ -2863,7 +2894,7 @@ run_MOSAIC <- function(config,
         location_names = location_names,
         verbose        = control$logging$verbose
       ),
-      error = function(e) log_msg("Warning: psi_star diagnostic plot failed: %s", e$message)
+      error = function(e) log_warn("psi_star diagnostic plot failed: %s", e$message)
     )
   }
 
@@ -2918,6 +2949,30 @@ run_MOSAIC <- function(config,
             format(state$n_sims_reused %||% 0L, big.mark = ","))
   }
   log_msg("===================")
+
+  # Single grep-friendly run-end sentinel. A tailing operator (human or AI
+  # monitoring the log) can latch on '\[RUN_SUMMARY\]' to know the pipeline
+  # finished AND extract headline metrics in one pass.
+  log_msg(paste0(
+    "[RUN_SUMMARY] status=%s converged=%s runtime_min=%.2f ",
+    "r2_cases_best=%s r2_deaths_best=%s ",
+    "r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
+    "sims_total=%s sims_retained=%s sims_best_subset=%s ",
+    "ess_pct_above_target=%s resumed=%s dir_output=%s"),
+    if (isTRUE(state$converged)) "success" else "completed_unconverged",
+    if (isTRUE(state$converged)) "YES" else "NO",
+    as.numeric(runtime),
+    if (is.na(summary_obj$r2_cases))           "NA" else sprintf("%.4f", summary_obj$r2_cases),
+    if (is.na(summary_obj$r2_deaths))          "NA" else sprintf("%.4f", summary_obj$r2_deaths),
+    if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble),
+    if (is.na(summary_obj$r2_deaths_ensemble)) "NA" else sprintf("%.4f", summary_obj$r2_deaths_ensemble),
+    as.integer(summary_obj$n_simulations_total %||% 0L),
+    if (is.na(summary_obj$n_retained))    "NA" else as.character(as.integer(summary_obj$n_retained)),
+    if (is.na(summary_obj$n_best_subset)) "NA" else as.character(as.integer(summary_obj$n_best_subset)),
+    if (is.na(summary_obj$ess_pct_above_target)) "NA" else sprintf("%.1f", summary_obj$ess_pct_above_target),
+    if (isTRUE(state$resumed)) "YES" else "NO",
+    dir_output
+  )
 
   # Finalize run state (mark as completed)
   .mosaic_finalize_state(state_file)

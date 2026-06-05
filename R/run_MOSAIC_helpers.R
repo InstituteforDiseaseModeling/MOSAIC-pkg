@@ -13,6 +13,67 @@
 .MOSAIC_MAX_SIMULATIONS <- 100000000L
 
 # =============================================================================
+# Dask gather with periodic heartbeat
+# =============================================================================
+
+#' Gather Dask futures while emitting periodic progress lines
+#'
+#' Wraps \code{client$gather(futures)} with a polling loop that uses
+#' \code{dask.distributed.wait(futures, timeout=interval_sec)} to wake up every
+#' \code{interval_sec} seconds, count completed vs pending futures, and emit a
+#' single structured \code{[PROGRESS]} log line per heartbeat. Eliminates the
+#' silent-during-gather window that otherwise leads a tailing operator (human
+#' or AI) to wrongly conclude the pipeline has hung.
+#'
+#' On wait/gather error, the helper does NOT swallow — it lets the caller's
+#' tryCatch handle diagnostics (e.g. first-future status inspection).
+#'
+#' @param client A reticulated \code{dask.distributed.Client} object.
+#' @param futures List of Dask future objects. Empty list returns empty list.
+#' @param log_fn Logging function compatible with \code{log_msg(msg, ...)}.
+#' @param phase Short slug for the \code{phase=} field of the progress line
+#'   (e.g. \code{"calibration_batch"}, \code{"postca_ensemble"}).
+#' @param interval_sec Heartbeat interval. Defaults to 30 s — long enough that
+#'   the log isn't spammed during fast gathers, short enough that a hung
+#'   gather is detected within a minute.
+#' @return The list returned by \code{client$gather(futures)}.
+#' @keywords internal
+.mosaic_gather_with_heartbeat <- function(client, futures, log_fn = log_msg,
+                                          phase = "gather",
+                                          interval_sec = 30L) {
+  total <- length(futures)
+  if (total == 0L) return(list())
+
+  dd <- reticulate::import("dask.distributed")
+  start <- Sys.time()
+
+  log_fn("[PROGRESS] phase=%s event=gather_start sims_total=%d interval_sec=%d",
+         phase, total, as.integer(interval_sec))
+
+  repeat {
+    res <- dd$wait(futures,
+                   timeout      = as.integer(interval_sec),
+                   return_when  = "ALL_COMPLETED")
+
+    n_done    <- reticulate::py_len(res$done)
+    n_pending <- reticulate::py_len(res$not_done)
+    elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
+    n_workers <- tryCatch(
+      length(client$scheduler_info()$workers),
+      error = function(e) NA_integer_
+    )
+
+    log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d elapsed_sec=%.0f workers=%s",
+           phase, n_done, n_pending, elapsed,
+           if (is.na(n_workers)) "?" else as.character(n_workers))
+
+    if (n_pending == 0L) break
+  }
+
+  client$gather(futures)
+}
+
+# =============================================================================
 # VALIDATION
 # =============================================================================
 
@@ -716,7 +777,7 @@
   tryCatch(
     .mosaic_atomic_write(ckpt, checkpoint_file, saveRDS),
     error = function(e)
-      log_msg("[RESUME] WARNING: failed to write resume checkpoint: %s", conditionMessage(e))
+      log_warn("[RESUME] failed to write resume checkpoint: %s", conditionMessage(e))
   )
   invisible(checkpoint_file)
 }
@@ -726,7 +787,7 @@
 .mosaic_load_checkpoint <- function(checkpoint_file) {
   if (is.null(checkpoint_file) || !file.exists(checkpoint_file)) return(NULL)
   tryCatch(readRDS(checkpoint_file), error = function(e) {
-    log_msg("[RESUME] WARNING: resume checkpoint unreadable (%s); reconstructing from shards",
+    log_warn("[RESUME] resume checkpoint unreadable (%s); reconstructing from shards",
             conditionMessage(e))
     NULL
   })
@@ -2125,9 +2186,14 @@
   log_msg("  Waiting for %d Dask futures...", length(valid_futures))
   gather_start <- Sys.time()
   gathered <- tryCatch(
-    client$gather(valid_futures),
+    .mosaic_gather_with_heartbeat(
+      client     = client,
+      futures    = valid_futures,
+      log_fn     = log_msg,
+      phase      = "calibration_batch"
+    ),
     error = function(e) {
-      log_msg("  ERROR in client$gather(): %s", conditionMessage(e))
+      log_msg("  [ERROR] client$gather() failed: %s", conditionMessage(e))
       # Try to retrieve first few future errors for diagnostics
       tryCatch({
         first_future <- valid_futures[[1L]]
@@ -2291,7 +2357,7 @@
     log_msg("    Parquet write progress: %d/%d (%.0fs elapsed)",
             written, n_sims, elapsed)
     tryCatch(client$scheduler_info(), error = function(e) {
-      log_msg("    WARNING: Dask scheduler ping failed at sim %d: %s",
+      log_warn("Dask scheduler ping failed at sim %d: %s",
               written, e$message)
     })
   }
@@ -2381,7 +2447,12 @@
       }
     }
 
-    raw <- client$gather(futures)
+    raw <- .mosaic_gather_with_heartbeat(
+      client     = client,
+      futures    = futures,
+      log_fn     = log_msg,
+      phase      = "postca_ensemble"
+    )
     log_msg("Gathered %d stochastic results", length(raw))
 
     # Convert to format expected by calc_model_ensemble

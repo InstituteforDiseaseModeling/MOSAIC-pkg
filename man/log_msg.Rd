@@ -7,51 +7,53 @@
 log_msg(msg, ...)
 }
 \arguments{
-\item{msg}{Character string. The message to log. Can include sprintf-style
-formatting placeholders (e.g., "\%d", "\%s", "\%.2f").}
+\item{msg}{Character string. The message to log. May include sprintf-style
+formatting placeholders (e.g., \code{"\%d"}, \code{"\%s"}, \code{"\%.2f"}).}
 
-\item{...}{Additional arguments passed to sprintf for message formatting.}
+\item{...}{Additional arguments passed to \code{sprintf} for message
+formatting.}
 }
 \value{
-Invisible NULL. Function is called for its side effects (logging).
+Invisible NULL. Function is called for its side effects.
 }
 \description{
-A utility function for logging messages with timestamps to both console and
-optional log files. Useful for tracking progress in long-running simulations
-and model calibration workflows.
+A utility function for logging messages with ISO 8601 timestamps to both
+the console and an optional log file. Used throughout
+\code{\link{run_MOSAIC}} and its helpers.
 }
 \details{
-The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS" format
-to each message. Messages are printed to the console and, if a 'dir_output'
-variable exists in the calling environment, also appended to a 'run.log' file
-in that directory (dir_output/run.log). If the directory does not exist, it
-will be created automatically.
+Timestamps are emitted in ISO 8601 format (e.g.
+\code{"2026-06-05T14:32:01-0700"}) so that a downstream consumer (a human
+tail, a monitoring AI agent, a log shipper) can parse elapsed time without
+ambiguity.
 
-This is particularly useful for:
-\itemize{
-\item Model calibration workflows (logs BFRS calibration sequence)
-\item Long-running simulations
-\item Parallel processing tasks
-\item Debugging and progress tracking
+Lines are written to stdout and, if a log file path is known, also
+appended to that file. The path is resolved in this order:
+\enumerate{
+\item \code{getOption("MOSAIC.log_file")} — preferred. Set this once at
+the start of a pipeline (\code{run_MOSAIC()} does this
+automatically) and every \code{log_msg} call — including those
+inside helper functions whose calling frame has no
+\code{dir_output} variable — will write to the same file.
+\item A \code{dir_output} binding in the calling frame (legacy
+fallback). The file path becomes \code{<dir_output>/run.log}. This
+preserves backward compatibility for callers that don't set the
+option.
 }
+
+If neither source resolves a path, lines go to stdout only.
 }
 \examples{
 \dontrun{
-# Simple message
+# Recommended: set the log file once at the start of a long-running
+# pipeline, then every helper's log_msg() call lands in the same file.
+options(MOSAIC.log_file = file.path(tempdir(), "run.log"))
+on.exit(options(MOSAIC.log_file = NULL), add = TRUE)
+
 log_msg("Starting analysis")
-
-# Formatted message
 log_msg("Processing \%d simulations with \%d cores", 100, 8)
-
-# With output directory for file logging
-dir_output <- tempdir()
-log_msg("Results saved to \%s", dir_output)
-
-# Check the log file
-log_file <- file.path(dir_output, "run.log")
-if (file.exists(log_file)) {
-  cat(readLines(log_file), sep = "\n")
-}
+log_warn("Worker \%d failed: \%s", 17L, "OOM")
+log_fatal("Aborting — convergence target unreachable")
 }
 
 }
