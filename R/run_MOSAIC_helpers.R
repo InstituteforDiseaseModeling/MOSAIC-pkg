@@ -1950,8 +1950,19 @@
   #      of waiting for all N samples. Chunked client$map() avoids overwhelming
   #      the Dask scheduler with rapid-fire individual submit() calls.
   # ---------------------------------------------------------------------------
-  dask_chunk_size <- 1000L
-  n_chunks <- ceiling(n_sims / dask_chunk_size)
+  # submit_chunk_size: number of sims per client$map() RPC to Coiled.
+  # Controls Dask scheduler load (one RPC per chunk vs. one RPC per sim),
+  # NOT local R-side parallelism — that's the inner mclapply over each
+  # chunk_indices block. 1000 sits inside Dask's documented sweet spot
+  # for client.map() batch sizing
+  # (https://docs.dask.org/en/stable/best-practices.html): individual
+  # submit() calls are discouraged due to per-call RPC overhead, and
+  # batches in the thousands amortize that overhead while keeping the
+  # first chunk's futures dispatchable within ~1 s of submission.
+  # Not a function of n_cores_parallel — RPC amortization is a network
+  # constant, not a CPU-amortization constant.
+  submit_chunk_size <- 1000L
+  n_chunks <- ceiling(n_sims / submit_chunk_size)
 
   # R-side parallelism budget. Shared between the submission sample+
   # serialize phase and the post-gather parquet write phase later in
@@ -1980,8 +1991,8 @@
   for (chunk_i in seq_len(n_chunks)) {
 
     # Determine indices for this chunk
-    idx_start <- (chunk_i - 1L) * dask_chunk_size + 1L
-    idx_end   <- min(chunk_i * dask_chunk_size, n_sims)
+    idx_start <- (chunk_i - 1L) * submit_chunk_size + 1L
+    idx_end   <- min(chunk_i * submit_chunk_size, n_sims)
     chunk_indices <- idx_start:idx_end
 
     # Parallel sample + serialize for the chunk. sample_parameters() is
@@ -2176,15 +2187,26 @@
   log_msg("  Building parquet rows for %d sims (parallel x %d cores)...",
           n_sims, n_cores_parallel)
 
-  # Process in chunks of 1000 (matches `dask_chunk_size` used for
-  # submission earlier in the function) so progress, Dask scheduler
-  # health checks, and parent-side memory frees all land at regular
-  # intervals. Forked workers inherit result_lookup via copy-on-write,
-  # so the parent's drop-as-you-go pattern only works at chunk
-  # boundaries since forks happen at mclapply entry.
-  chunk_size <- 1000L
+  # write_chunk_size: number of sims per inner mclapply() call in the
+  # write loop. Gates THREE things simultaneously:
+  #   1. mclapply fork batch — workers in one chunk share a single
+  #      fork round; smaller chunks mean more fork rounds.
+  #   2. Parent-side memory free cadence — result_lookup[key] entries
+  #      are nulled out only at chunk boundaries (forked workers
+  #      inherit the parent's snapshot via COW, so the parent's
+  #      drop-as-you-go pattern only works between mclapply calls).
+  #   3. Progress log + Dask scheduler health-check cadence — one
+  #      "X/N elapsed" line per chunk, one client$scheduler_info()
+  #      ping per chunk.
+  # Fixed at 1000 to match `submit_chunk_size` for log-line cadence
+  # consistency across the two phases. Unlike submit_chunk_size — which
+  # is governed by Dask RPC amortization — this one is a fork+progress
+  # constant; if it ever wants to diverge (e.g. scale with
+  # n_cores_parallel for tighter fork amortization, or with n_sims for
+  # progress-line cadence), the two are semantically independent.
+  write_chunk_size <- 1000L
   chunks <- split(seq_len(n_sims),
-                  ceiling(seq_len(n_sims) / chunk_size))
+                  ceiling(seq_len(n_sims) / write_chunk_size))
 
   for (chunk_idxs in chunks) {
     chunk_out <- if (n_cores_parallel > 1L) {
