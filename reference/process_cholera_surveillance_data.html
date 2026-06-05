@@ -15,7 +15,7 @@ using MOSAIC::downscale_weekly_values with integer allocation."><meta property="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.31</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.32</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -82,7 +82,7 @@ occur across sources, the entry from <code>keep_source</code> will be used prefe
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Invisibly returns <code>NULL</code>. Side effects:</p><ul><li><p>Reads weekly CSVs from all three sources and adds a <code>source</code> column.</p></li>
 <li><p>Cleans rows with missing key grouping fields (iso_code, year, week).</p></li>
-<li><p>Harmonizes columns by keeping only those present in all three dataframes.</p></li>
+<li><p>Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).</p></li>
 <li><p>Deduplicates by <code>iso_code</code>, <code>year</code>, <code>week</code>, choosing rows from <code>keep_source</code>.</p></li>
 <li><p>Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).</p></li>
 <li><p>Saves the combined weekly data to

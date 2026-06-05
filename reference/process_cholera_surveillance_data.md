@@ -52,8 +52,9 @@ Invisibly returns `NULL`. Side effects:
 
 - Cleans rows with missing key grouping fields (iso_code, year, week).
 
-- Harmonizes columns by keeping only those present in all three
-  dataframes.
+- Harmonizes columns by taking the union across all sources, NA-filling
+  any column missing from a given source (so source-specific columns are
+  never silently dropped).
 
 - Deduplicates by `iso_code`, `year`, `week`, choosing rows from
   `keep_source`.
