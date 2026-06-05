@@ -1108,6 +1108,11 @@ Other exported functions and internal helpers
   : MOSAIC Scenario Color/Fill Scales for ggplot2
 - [`set_root_directory()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/set_root_directory.md)
   : Set Root Directory
+- [`log_info()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/severity_logging.md)
+  [`log_warn()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/severity_logging.md)
+  [`log_error()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/severity_logging.md)
+  [`log_fatal()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/severity_logging.md)
+  : Severity-tagged logging helpers
 - [`store_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/store_sampling_metadata.md)
   : Store Sampling Metadata in Config
 - [`theme_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/theme_mosaic.md)

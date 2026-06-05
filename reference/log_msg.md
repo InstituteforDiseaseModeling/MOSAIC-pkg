@@ -1,8 +1,9 @@
 # Simple Logging Function with Timestamps
 
-A utility function for logging messages with timestamps to both console
-and optional log files. Useful for tracking progress in long-running
-simulations and model calibration workflows.
+A utility function for logging messages with ISO 8601 timestamps to both
+the console and an optional log file. Used throughout
+[`run_MOSAIC`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+and its helpers.
 
 ## Usage
 
@@ -14,53 +15,52 @@ log_msg(msg, ...)
 
 - msg:
 
-  Character string. The message to log. Can include sprintf-style
-  formatting placeholders (e.g., "%d", "%s", "%.2f").
+  Character string. The message to log. May include sprintf-style
+  formatting placeholders (e.g., `"%d"`, `"%s"`, `"%.2f"`).
 
 - ...:
 
-  Additional arguments passed to sprintf for message formatting.
+  Additional arguments passed to `sprintf` for message formatting.
 
 ## Value
 
-Invisible NULL. Function is called for its side effects (logging).
+Invisible NULL. Function is called for its side effects.
 
 ## Details
 
-The function automatically adds a timestamp in "YYYY-MM-DD HH:MM:SS"
-format to each message. Messages are printed to the console and, if a
-'dir_output' variable exists in the calling environment, also appended
-to a 'run.log' file in that directory (dir_output/run.log). If the
-directory does not exist, it will be created automatically.
+Timestamps are emitted in ISO 8601 format (e.g.
+`"2026-06-05T14:32:01-0700"`) so that a downstream consumer (a human
+tail, a monitoring AI agent, a log shipper) can parse elapsed time
+without ambiguity.
 
-This is particularly useful for:
+Lines are written to stdout and, if a log file path is known, also
+appended to that file. The path is resolved in this order:
 
-- Model calibration workflows (logs BFRS calibration sequence)
+1.  `getOption("MOSAIC.log_file")` — preferred. Set this once at the
+    start of a pipeline
+    ([`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    does this automatically) and every `log_msg` call — including those
+    inside helper functions whose calling frame has no `dir_output`
+    variable — will write to the same file.
 
-- Long-running simulations
+2.  A `dir_output` binding in the calling frame (legacy fallback). The
+    file path becomes `<dir_output>/run.log`. This preserves backward
+    compatibility for callers that don't set the option.
 
-- Parallel processing tasks
-
-- Debugging and progress tracking
+If neither source resolves a path, lines go to stdout only.
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-# Simple message
+# Recommended: set the log file once at the start of a long-running
+# pipeline, then every helper's log_msg() call lands in the same file.
+options(MOSAIC.log_file = file.path(tempdir(), "run.log"))
+on.exit(options(MOSAIC.log_file = NULL), add = TRUE)
+
 log_msg("Starting analysis")
-
-# Formatted message
 log_msg("Processing %d simulations with %d cores", 100, 8)
-
-# With output directory for file logging
-dir_output <- tempdir()
-log_msg("Results saved to %s", dir_output)
-
-# Check the log file
-log_file <- file.path(dir_output, "run.log")
-if (file.exists(log_file)) {
-  cat(readLines(log_file), sep = "\n")
-}
+log_warn("Worker %d failed: %s", 17L, "OOM")
+log_fatal("Aborting — convergence target unreachable")
 } # }
 ```
