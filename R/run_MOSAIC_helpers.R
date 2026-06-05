@@ -1932,10 +1932,21 @@
 #' plus a sim-level params dict; this function writes one parquet row per
 #' sim (likelihood collapsed across iterations via calc_log_mean_exp when
 #' n_iterations > 1, mirroring the local-path semantics in run_MOSAIC.R).
-#' Parquet shards are written in parallel via parallel::mclapply() in
-#' chunks of 500, with progress + Dask scheduler health checks emitted
-#' between chunks. Returns a logical vector of per-simulation success
-#' indicators (TRUE = parquet written successfully).
+#'
+#' Two R-side phases run in parallel via parallel::mclapply():
+#'
+#'   - Submission (sample_parameters + JSON serialize) — chunked in
+#'     batches of `submit_chunk_size` (default 1000) so that one
+#'     `client$map()` RPC handles each chunk's submissions to Coiled.
+#'   - Post-gather parquet write — chunked in batches of
+#'     `write_chunk_size` (default 1000) for fork amortization,
+#'     progress logging, parent-side memory frees, and Dask scheduler
+#'     health pings.
+#'
+#' Both phases honor `control$parallel$n_cores` for the parallelism
+#' budget; default falls back to serial. Returns a logical vector of
+#' per-simulation success indicators (TRUE = parquet written
+#' successfully).
 #' @noRd
 .mosaic_run_batch_dask <- function(sim_ids, n_iterations, priors, config, PATHS,
                                     sampling_args, dirs, param_names_all, control,
