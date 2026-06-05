@@ -122,9 +122,9 @@ run_mosaic(
 
   - the likelihood-value provenance differs — i.e. the existing shards
     were scored by a different likelihood engine or implementation than
-    the current session would produce (e.g. R `calc_model_likelihood` vs
-    on-worker Python scoring, once Dask phase 3 lands, or an R
-    likelihood code change that altered values).
+    the current session would produce (e.g. R `calc_model_likelihood` on
+    the local backend vs on-worker Python scoring on the Dask backend,
+    or an R likelihood-code change that altered values).
 
   If the engine version cannot be determined (no record / Python not
   bound) the deaths-scale check is skipped with a warning. Has no effect

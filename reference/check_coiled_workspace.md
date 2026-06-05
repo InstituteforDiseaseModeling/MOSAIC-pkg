@@ -9,7 +9,7 @@ cluster to confirm there's headroom.
 ## Usage
 
 ``` r
-check_coiled_workspace(workspace = NULL)
+check_coiled_workspace(workspace = NULL, subnet_ip_estimate = 507L)
 ```
 
 ## Arguments
@@ -19,19 +19,33 @@ check_coiled_workspace(workspace = NULL)
   Character. The Coiled workspace slug. Defaults to
   `getOption("mosaic.coiled_workspace", "idm-coiled-idmad-r2")`.
 
+- subnet_ip_estimate:
+
+  Integer. Estimated usable IP count for the workspace's Azure subnet.
+  Defaults to 507, the usable capacity of a `/23` subnet (the layout of
+  `idm-coiled-idmad-r2`'s `snet-coiled`). Used only to compute a
+  heuristic SubnetIsFull warning when active clusters' IP footprint
+  exceeds 50\\ Pass a different value for workspaces backed by a
+  different subnet size.
+
 ## Value
 
 Invisibly, a list with `workspace`, `core_limit`, `cores_used_account`,
-`cores_used_user`, `free_cores`, and `active_clusters` (a list with
-`id`, `name`, `state`, `n_workers` per cluster).
+`cores_used_user`, `free_cores`, `active_clusters` (a list with `id`,
+`name`, `state`, `n_workers` per cluster), `mosaic_ips_used` (IPs
+consumed by mosaic-dask clusters), `total_ips_used` (IPs consumed by all
+visible clusters), and `subnet_ip_estimate`.
 
 ## Details
 
 This shows the **Coiled-enforced** core limit and the clusters Coiled
-can see in your workspace. It does NOT show the underlying Azure subnet
-IP availability, which is the constraint that bites large clusters under
-shared-tenancy. For that, query Azure directly (requires Azure CLI +
-resource-group read access):
+can see in your workspace. The Azure subnet IP heuristic is a
+best-effort warning: Coiled's API doesn't expose subnet usage from OTHER
+tenants on the same VNet, so the IP count is a lower bound on actual
+consumption. A clean Coiled view here does NOT guarantee that the next
+large cluster will provision — a noisy tenant in the same subnet could
+still cause SubnetIsFull. For the authoritative view, query Azure
+directly (requires Azure CLI + resource-group read access):
 
 
     az network vnet subnet show \

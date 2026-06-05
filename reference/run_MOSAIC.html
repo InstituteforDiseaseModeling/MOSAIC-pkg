@@ -35,7 +35,7 @@ Posterior predictive checks and uncertainty quantification
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.22</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.25</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -156,9 +156,9 @@ incomparable);</p></li>
 deaths-scale boundary relative to the original run;</p></li>
 <li><p>the likelihood-value provenance differs — i.e. the existing shards
 were scored by a different likelihood engine or implementation than the
-current session would produce (e.g. R <code>calc_model_likelihood</code> vs
-on-worker Python scoring, once Dask phase 3 lands, or an R likelihood
-code change that altered values).</p></li>
+current session would produce (e.g. R <code>calc_model_likelihood</code> on
+the local backend vs on-worker Python scoring on the Dask backend, or
+an R likelihood-code change that altered values).</p></li>
 </ul><p>If the engine version cannot be determined (no record / Python not bound) the
 deaths-scale check is skipped with a warning. Has no effect when no shards
 exist (equivalent to a fresh run).</p></dd>
