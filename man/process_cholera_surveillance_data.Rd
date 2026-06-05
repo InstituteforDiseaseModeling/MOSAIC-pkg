@@ -24,7 +24,7 @@ Invisibly returns \code{NULL}. Side effects:
 \itemize{
 \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 \item Cleans rows with missing key grouping fields (iso_code, year, week).
-\item Harmonizes columns by keeping only those present in all three dataframes.
+\item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
 \item Deduplicates by \code{iso_code}, \code{year}, \code{week}, choosing rows from \code{keep_source}.
 \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to

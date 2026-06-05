@@ -21,7 +21,7 @@
 #' \itemize{
 #'   \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 #'   \item Cleans rows with missing key grouping fields (iso_code, year, week).
-#'   \item Harmonizes columns by keeping only those present in all three dataframes.
+#'   \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
 #'   \item Deduplicates by \code{iso_code}, \code{year}, \code{week}, choosing rows from \code{keep_source}.
 #'   \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 #'   \item Saves the combined weekly data to
@@ -45,11 +45,13 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
      dirs <- c(PATHS$DATA_CHOLERA_WEEKLY, PATHS$DATA_CHOLERA_DAILY)
      lapply(dirs, function(d) if (!dir.exists(d)) dir.create(d, recursive = TRUE))
 
-     # helper: read and clean a source
-     clean_in <- function(path, src) {
+     # helper: read and clean a source (union-safe; returns NULL if absent/empty)
+     read_source <- function(path, src) {
+          if (!file.exists(path)) return(NULL)
           df <- utils::read.csv(path, stringsAsFactors = FALSE)
           df <- df[rowSums(is.na(df)) < ncol(df), ]
           df <- subset(df, !is.na(iso_code) & !is.na(year) & !is.na(week))
+          if (nrow(df) == 0) return(NULL)
           df$source <- src
           df
      }
@@ -60,19 +62,24 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
      sup_path <- file.path(PATHS$DATA_SUPP_WEEKLY, "cholera_country_weekly_processed.csv")
 
      # read each
-     d_who <- clean_in(who_path, "WHO")
-     d_jhu <- clean_in(jhu_path, "JHU")
-     d_sup <- clean_in(sup_path, "SUPP")
+     d_who <- read_source(who_path, "WHO")
+     d_jhu <- read_source(jhu_path, "JHU")
+     d_sup <- read_source(sup_path, "SUPP")
 
-     # harmonize columns: keep only those common to all sources
-     common_cols <- Reduce(intersect, list(names(d_who), names(d_jhu), names(d_sup)))
-     if (length(common_cols) == 0) stop("No common columns across all sources.")
-     d_who <- d_who[common_cols]
-     d_jhu <- d_jhu[common_cols]
-     d_sup <- d_sup[common_cols]
+     sources <- Filter(Negate(is.null), list(d_who, d_jhu, d_sup))
+     if (length(sources) == 0) stop("No surveillance sources available.")
+
+     # UNION harmonization: take the union of all columns across sources, NA-fill
+     # missing ones. Replaces the previous Reduce(intersect, ...) which silently
+     # dropped any column not present in every source CSV.
+     all_cols <- unique(unlist(lapply(sources, names)))
+     sources <- lapply(sources, function(df) {
+          for (cc in setdiff(all_cols, names(df))) df[[cc]] <- NA
+          df[, all_cols]
+     })
 
      # combine and dedupe by iso_code/year/week
-     all_df <- rbind(d_who, d_jhu, d_sup)
+     all_df <- do.call(rbind, sources)
      n_before <- nrow(all_df)
      key_cols <- c("iso_code", "year", "week")
      

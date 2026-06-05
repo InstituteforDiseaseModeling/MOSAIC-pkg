@@ -273,14 +273,118 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
 
      # 1. Demographics (annual data, interpolated to weekly)
      message("  - Adding demographic variables...")
-     demog_path <- file.path(PATHS$DATA_PROCESSED, "demographics", "UN_world_population_prospects_annual.csv")
+     # Daily-interpolated UN file (smooth across year boundaries) replaces the
+     # annual file, which produced a ~1-2% stairstep discontinuity in
+     # total_population at each Dec 31 -> Jan 1. Joined on (iso_code, date).
+     demog_path <- file.path(PATHS$DATA_PROCESSED, "demographics", "UN_world_population_prospects_daily.csv")
      if (file.exists(demog_path)) {
           demog_data <- utils::read.csv(demog_path, stringsAsFactors = FALSE)
-          demog_data <- demog_data[, c("iso_code", "year", "total_population",
+          demog_data$date <- as.Date(demog_data$date)
+          demog_data <- demog_data[, c("iso_code", "date", "total_population",
                                        "births_per_1000", "deaths_per_1000")]
           # Filter to MOSAIC countries only
           demog_data <- demog_data[demog_data$iso_code %in% iso_codes_mosaic, ]
-          d <- merge(d, demog_data, by = c("iso_code", "year"), all.x = TRUE)
+          d$date <- as.Date(d$date)
+          d <- merge(d, demog_data, by = c("iso_code", "date"), all.x = TRUE)
+     }
+
+     # ========================================================================
+     # Per-capita rate + candidate response variables
+     # ------------------------------------------------------------------------
+     # Placed immediately after the demographics merge so total_population is in
+     # scope (and benefits from the smooth daily values). No row filtering occurs
+     # after this point, so the full-window p99 anchors below are computed over
+     # the same row set that is written to the final CSV.
+     #
+     # Leakage note: the global/per-country p99 anchors are full-window
+     # statistics. For retrospective rolling-CV validation this is leakage; for
+     # real-time forecasting there is no future to leak from. User has explicitly
+     # accepted this trade-off (see plan_data_pipeline_part_a.md).
+     # ========================================================================
+     message("  - Adding per-capita rate and candidate response variables...")
+
+     # Per-capita weekly case rate, cases per 100k.
+     # NA when cases is NA (no observation that week) OR population is bad.
+     d$rate <- d$cases / d$total_population * 1e5
+     bad_pop <- is.na(d$total_population) | d$total_population <= 0 | !is.finite(d$total_population)
+     d$rate[bad_pop] <- NA_real_
+     d$rate[is.na(d$cases) & !bad_pop] <- NA_real_
+     # d$rate is now NA iff cases is NA OR population is bad; otherwise the rate.
+
+     # ---- transmission_intensity: bit-identical reproduction of est_suitability() ----
+     # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
+     # log1p of the 99th percentile of cases (computed over MOSAIC countries only).
+     # Reproduced here so the stored column is bit-identical to current production
+     # values. est_suitability() and the LSTM sandbox still recompute their own
+     # target from `cases`, so this column is a back-compat / diagnostic alias and
+     # does NOT propagate NA (NA cases -> 0, matching production).
+     ti_cases <- d$cases
+     ti_cases[is.na(ti_cases)] <- 0
+     ti_cases[ti_cases < 0]    <- 0
+     ti_mosaic <- d$iso_code %in% iso_codes_mosaic
+     ti_p99 <- stats::quantile(ti_cases[ti_mosaic], 0.99, na.rm = TRUE)
+     d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
+
+     # ---- Candidate response variables (A/B/C/D/F) ----
+     # Unlike transmission_intensity, these propagate NA where cases (or rate) is
+     # NA, so downstream consumers can drop unobserved weeks during training.
+
+     # Global anchors (full-window).
+     global_p99_count <- stats::quantile(d$cases, 0.99, na.rm = TRUE)
+     if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
+     global_p99_rate <- stats::quantile(d$rate, 0.99, na.rm = TRUE)
+     if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
+
+     # A: count, global p99 (the plan's explicit-name target; distinct from the
+     #    back-compat transmission_intensity alias above, which uses the
+     #    production NA->0 / MOSAIC-only anchor).
+     d$target_A_count_global <- pmin(1, log1p(d$cases) / log1p(global_p99_count))
+
+     # C: per-capita rate, global p99
+     d$target_C_rate_global <- pmin(1, log1p(d$rate) / log1p(global_p99_rate))
+
+     # B, D, F: per-country variants
+     d$target_B_count_per_country        <- NA_real_
+     d$target_D_rate_per_country_floored <- NA_real_
+     d$target_F_rank_per_country         <- NA_real_
+
+     for (iso in unique(d$iso_code)) {
+          mask <- d$iso_code == iso
+          country_cases <- d$cases[mask]
+          country_rate  <- d$rate[mask]
+          # Population for this country (slow-varying — representative value)
+          country_pop <- stats::median(d$total_population[mask], na.rm = TRUE)
+
+          # cp99c: per-country case p99, floored at 1 (avoids div-by-zero for
+          # non-endemic countries).
+          cp99c <- max(stats::quantile(country_cases, 0.99, na.rm = TRUE), 1)
+          if (!is.finite(cp99c) || cp99c <= 0) cp99c <- 1
+
+          # cp99r: per-country rate p99, floored at the "5 cases/wk equivalent
+          # rate" (population-scaled). Keeps full per-country dynamic range even
+          # for low-incidence countries (e.g. TGO) without re-creating the
+          # flat-prediction problem a fixed 0.19/100k floor caused.
+          cases_eq_5 <- if (is.finite(country_pop) && country_pop > 0) {
+               5 / country_pop * 1e5
+          } else {
+               1e-3  # fallback if pop is bad — small floor to avoid log(0)
+          }
+          cp99r <- max(stats::quantile(country_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
+          if (!is.finite(cp99r) || cp99r <= 0) cp99r <- cases_eq_5
+
+          # B: per-country count
+          d$target_B_count_per_country[mask] <-
+               pmin(1, log1p(country_cases) / log1p(cp99c))
+
+          # D: per-country rate, floored
+          d$target_D_rate_per_country_floored[mask] <-
+               pmin(1, log1p(country_rate) / log1p(cp99r))
+
+          # F: per-country rank — divide by (n + 1) so max is < 1 (keeps
+          # qlogis(y) finite for any logit-domain downstream consumer).
+          d$target_F_rank_per_country[mask] <-
+               rank(country_cases, ties.method = "average", na.last = "keep") /
+                    (length(country_cases) + 1)
      }
 
      # 2. World Bank socioeconomic indicators (annual, forward-fill for future years)
@@ -1191,10 +1295,10 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                   paste(gam_missing, collapse = ", "))
      }
 
-     # Remove source column if it exists
-     if ("source" %in% names(d)) {
-          d <- d[, !names(d) %in% "source"]
-     }
+     # The `source` column is intentionally retained in the suitability CSV
+     # (previously dropped here). Useful for diagnostics — which weeks have WHO
+     # vs JHU vs SUPP backing — and a prerequisite for PART B's confidence_weight
+     # propagation. It flows through column reordering below via remaining_cols.
 
      # Reorder columns thematically (matching the order of data assembly)
      # 1. Location/Time/Cases/Deaths
