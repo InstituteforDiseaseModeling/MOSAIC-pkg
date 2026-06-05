@@ -4,17 +4,28 @@
 \alias{check_coiled_workspace}
 \title{Check Coiled Workspace Capacity and Activity}
 \usage{
-check_coiled_workspace(workspace = NULL)
+check_coiled_workspace(workspace = NULL, subnet_ip_estimate = 507L)
 }
 \arguments{
 \item{workspace}{Character. The Coiled workspace slug. Defaults to
 \code{getOption("mosaic.coiled_workspace", "idm-coiled-idmad-r2")}.}
+
+\item{subnet_ip_estimate}{Integer. Estimated usable IP count for the
+workspace's Azure subnet. Defaults to 507, the usable capacity of a
+\code{/23} subnet (the layout of \code{idm-coiled-idmad-r2}'s
+\code{snet-coiled}). Used only to compute a heuristic SubnetIsFull
+warning when active clusters' IP footprint exceeds 50\\% of this.
+Pass a different value for workspaces backed by a different subnet
+size.}
 }
 \value{
 Invisibly, a list with \code{workspace}, \code{core_limit},
 \code{cores_used_account}, \code{cores_used_user},
-\code{free_cores}, and \code{active_clusters} (a list with
-\code{id}, \code{name}, \code{state}, \code{n_workers} per cluster).
+\code{free_cores}, \code{active_clusters} (a list with \code{id},
+\code{name}, \code{state}, \code{n_workers} per cluster),
+\code{mosaic_ips_used} (IPs consumed by mosaic-dask clusters),
+\code{total_ips_used} (IPs consumed by all visible clusters), and
+\code{subnet_ip_estimate}.
 }
 \description{
 Prints a snapshot of a Coiled workspace's current resource usage:
@@ -24,10 +35,14 @@ any active clusters. Useful before launching a large
 }
 \details{
 This shows the \strong{Coiled-enforced} core limit and the clusters
-Coiled can see in your workspace. It does NOT show the underlying
-Azure subnet IP availability, which is the constraint that bites
-large clusters under shared-tenancy. For that, query Azure directly
-(requires Azure CLI + resource-group read access):
+Coiled can see in your workspace. The Azure subnet IP heuristic is
+a best-effort warning: Coiled's API doesn't expose subnet usage
+from OTHER tenants on the same VNet, so the IP count is a lower
+bound on actual consumption. A clean Coiled view here does NOT
+guarantee that the next large cluster will provision — a noisy
+tenant in the same subnet could still cause SubnetIsFull. For the
+authoritative view, query Azure directly (requires Azure CLI +
+resource-group read access):
 
 \preformatted{
 az network vnet subnet show \
