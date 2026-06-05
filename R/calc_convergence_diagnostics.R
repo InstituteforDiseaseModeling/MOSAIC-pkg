@@ -230,9 +230,20 @@ calc_convergence_diagnostics <- function(
         warn_threshold = 2.0
     )
 
-    # Percentile: Should be small (concentrated selection)
-    # Convert max_best_subset to percentile for validation
-    target_percentile_max_derived <- (target_max_best_subset / n_retained) * 100
+    # Percentile: Should be small (concentrated selection).
+    # Convert max_best_subset to a percentile of retained for validation.
+    # When the absolute cap exceeds retained sims (small calibration runs),
+    # the raw ratio can exceed 100% — clamp to 100% to keep the displayed
+    # target sensible. Also flag the situation so an operator knows the
+    # max_best_subset cap is effectively non-binding on this run.
+    target_percentile_max_raw <- (target_max_best_subset / n_retained) * 100
+    target_percentile_max_derived <- min(100, target_percentile_max_raw)
+    if (target_percentile_max_raw > 100) {
+        message(sprintf(
+            "  Note: target_max_best_subset (%d) exceeds n_retained (%d); ",
+            as.integer(target_max_best_subset), as.integer(n_retained)),
+            "clamped derived target percentile to 100% (cap is non-binding).")
+    }
     status_percentile <- .calc_percentile_status(
         percentile_val = percentile_used,
         target_max = target_percentile_max_derived

@@ -509,10 +509,28 @@ for _h in list(_root.handlers):
     # Run statistics
     wall_time_seconds          = round(wall_time, 1),
     n_batches                  = state$batch_number,
-    n_simulations_total        = state$total_sims_run,
+    # n_simulations_total reports the count of usable shards in samples.parquet
+    # (= nrow(results)), matching the denominator used by n_retained and the
+    # implied success rate. n_sim_id_frontier preserves the prior
+    # state$total_sims_run semantic (max sim_id ever attempted, includes
+    # failed-and-skipped sim ids); the two differ exactly by the failed-sim
+    # count after resume-with-gaps or on any partial worker failure.
+    n_simulations_total        = if (!is.null(diag$summary$total_simulations_original)) {
+                                   as.integer(diag$summary$total_simulations_original)
+                                 } else as.integer(state$total_sims_run),
+    n_sim_id_frontier          = as.integer(state$total_sims_run),
     n_simulations_successful   = state$total_sims_successful,
     n_retained                 = if (!is.null(diag$summary$retained_simulations)) diag$summary$retained_simulations else NA_integer_,
-    n_best_subset              = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
+    # n_best_subset reflects the subset that r2_*_ensemble was actually
+    # computed against — the optimizer-refined one when optimize_subset = TRUE
+    # and the optimizer landed a refined subset, otherwise the tier subset.
+    # n_best_subset_tier preserves the pre-opt size for provenance.
+    n_best_subset              = if (!is.null(diag$summary$n_best_subset_optimized)) {
+                                   as.integer(diag$summary$n_best_subset_optimized)
+                                 } else if (!is.null(diag$metrics$B_size$value)) {
+                                   as.integer(diag$metrics$B_size$value)
+                                 } else NA_integer_,
+    n_best_subset_tier         = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
     # Convergence and model fit
     # best = single best parameter set; ensemble = weighted median of posterior ensemble
     converged     = isTRUE(state$converged),
@@ -658,7 +676,11 @@ for _h in list(_root.handlers):
     idx_c <- if (length(valid_idx_c) >= w) tail(valid_idx_c, w) else integer(0)
     idx_d <- if (length(valid_idx_d) >= w) tail(valid_idx_d, w) else integer(0)
     if (length(idx_c) == 0 && length(idx_d) == 0) next
-    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w), idx_c, idx_d)
+    # The window measures "last w VALID OBSERVATIONS" (timepoints with finite
+    # cases/deaths), not last w calendar days. For weekly-reporting countries
+    # the temporal span can be ~7x the day count. Label as "last_<w>obs" so
+    # an operator (or AI tail) doesn't mistake it for a day window.
+    rows[[length(rows) + 1]] <- compute_row(paste0("last_", w, "obs"), idx_c, idx_d)
   }
 
   do.call(rbind, rows)
@@ -680,7 +702,10 @@ for _h in list(_root.handlers):
 
   # Ordered factor for x-axis
   window_labels <- metrics_df$window
-  window_display <- gsub("^last_", "", window_labels)
+  # Strip the "last_" prefix AND the trailing "obs" so the plot axis still
+  # reads as 30/60/90/etc. (the "obs" unit is implicit on a plot — it is
+  # made explicit in the CSV column and log line).
+  window_display <- gsub("obs$", "", gsub("^last_", "", window_labels))
   window_display[window_display == "full"] <- "Full"
   window_display[window_display != "Full"] <- paste0(window_display[window_display != "Full"], "d")
   # Add observation counts

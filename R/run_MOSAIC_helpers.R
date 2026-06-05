@@ -55,6 +55,13 @@
   # One-shot Python helper: count futures by terminal status in a single call.
   # `future.status` is mirrored locally from scheduler push updates, so this
   # does not produce N reticulate round-trips.
+  #
+  # Terminal statuses Dask exposes: 'finished', 'error', 'cancelled', 'lost'
+  # (worker died holding the future). All four must count toward "done",
+  # otherwise the `if (n_pending == 0L) break` below never fires and the
+  # heartbeat loop polls forever while the eventual client$gather() raises.
+  # 'cancelled' and 'lost' are also surfaced as errored so the [PROGRESS]
+  # line distinguishes "completed successfully" from "completed in failure".
   py_env <- reticulate::py_run_string(
     paste0(
       "def _mosaic_count_status(fs):\n",
@@ -64,7 +71,7 @@
       "        s = f.status\n",
       "        if s == 'finished':\n",
       "            done += 1\n",
-      "        elif s == 'error':\n",
+      "        elif s in ('error', 'cancelled', 'lost'):\n",
       "            done += 1\n",
       "            errored += 1\n",
       "    return (done, errored)\n"

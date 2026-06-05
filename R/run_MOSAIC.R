@@ -2023,6 +2023,16 @@ run_MOSAIC <- function(config,
     })
   }
 
+  # Format a number-or-NA as a log-line-safe string. Replaces the prior
+  # `ifelse(is.na(x), 0, x)` pattern which silently substituted 0 for NA in
+  # the prose log lines (best / medioid / ensemble R² + bias), making
+  # "computation failed" indistinguishable from "model fit is awful but
+  # ran". The [RUN_SUMMARY] sentinel already emits literal NA; the prose
+  # lines now do too.
+  .fmt_num <- function(x, digits = 4L) {
+    if (!is.finite(x)) "NA" else sprintf(paste0("%.", as.integer(digits), "f"), x)
+  }
+
   # Initialize metric variables (populated after ensemble is built/resolved)
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
@@ -2522,20 +2532,28 @@ run_MOSAIC <- function(config,
         medioid_precomputed <- .pruneOrNull(medioid_result$stochastic_results)
       }
 
-      log_msg("  Best precomputed: %d/%d sims; medioid precomputed: %d/%d sims",
-              if (is.null(best_precomputed)) 0L else
-                sum(vapply(best_precomputed, function(r) isTRUE(r$success), logical(1))),
-              if (is.null(best_precomputed)) 0L else length(best_precomputed),
-              if (is.null(medioid_precomputed)) 0L else
-                sum(vapply(medioid_precomputed, function(r) isTRUE(r$success), logical(1))),
-              if (is.null(medioid_precomputed)) 0L else length(medioid_precomputed))
-
-      if (is.null(best_precomputed)) {
-        log_warn("best Dask dispatch returned 0 successful sims; falling back to local")
+      # Report per-role counts and (separately) flag fallbacks. The two roles
+      # are independent — best can be dask-precomputed while medioid falls
+      # back to local. Emit one line per role so an operator reading the log
+      # can disambiguate "Dask returned nothing" from "role not applicable
+      # this run" (e.g. medioid skipped because medioid_seed_sim was NULL).
+      describe_role <- function(role_name, results_list, applicable) {
+        if (!applicable) {
+          log_msg("  %s precomputed: n/a (skipped this run)", role_name)
+          return(invisible())
+        }
+        if (is.null(results_list)) {
+          log_warn("%s Dask dispatch returned 0 successful sims; falling back to local",
+                   role_name)
+          return(invisible())
+        }
+        n_ok    <- sum(vapply(results_list, function(r) isTRUE(r$success), logical(1)))
+        n_total <- length(results_list)
+        log_msg("  %s precomputed: %d/%d sims succeeded on Dask",
+                role_name, n_ok, n_total)
       }
-      if (!is.null(config_medioid) && is.null(medioid_precomputed)) {
-        log_warn("medioid Dask dispatch returned 0 successful sims; falling back to local")
-      }
+      describe_role("Best",    best_precomputed,    TRUE)
+      describe_role("Medioid", medioid_precomputed, !is.null(config_medioid))
     }, error = function(e) {
       log_warn("best/medioid Dask dispatch failed: %s", e$message)
       log_msg("  Falling back to local execution for best/medioid ensembles")
@@ -2599,12 +2617,10 @@ run_MOSAIC <- function(config,
     bias_ratio_cases  <- tryCatch(calc_bias_ratio(obs_c_flat, best_c_flat), error = function(e) NA_real_)
     bias_ratio_deaths <- tryCatch(calc_bias_ratio(obs_d_flat, best_d_flat), error = function(e) NA_real_)
 
-    log_msg("Best model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+    log_msg("Best model R\u00b2 (1 params x %d stoch): cases = %s (bias=%s), deaths = %s (bias=%s)",
             n_best_stochastic_per,
-            ifelse(is.na(r2_cases),          0, r2_cases),
-            ifelse(is.na(bias_ratio_cases),  0, bias_ratio_cases),
-            ifelse(is.na(r2_deaths),         0, r2_deaths),
-            ifelse(is.na(bias_ratio_deaths), 0, bias_ratio_deaths))
+            .fmt_num(r2_cases,          4L), .fmt_num(bias_ratio_cases,  2L),
+            .fmt_num(r2_deaths,         4L), .fmt_num(bias_ratio_deaths, 2L))
 
     if (control$paths$plots) {
       tryCatch(
@@ -2668,12 +2684,10 @@ run_MOSAIC <- function(config,
         bias_cases_med <- tryCatch(calc_bias_ratio(obs_c_flat, med_c_flat), error = function(e) NA_real_)
         bias_deaths_med <- tryCatch(calc_bias_ratio(obs_d_flat, med_d_flat), error = function(e) NA_real_)
 
-        log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+        log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %s (bias=%s), deaths = %s (bias=%s)",
                 n_best_stochastic_per,
-                ifelse(is.na(r2_cases_med),    0, r2_cases_med),
-                ifelse(is.na(bias_cases_med),  0, bias_cases_med),
-                ifelse(is.na(r2_deaths_med),   0, r2_deaths_med),
-                ifelse(is.na(bias_deaths_med), 0, bias_deaths_med))
+                .fmt_num(r2_cases_med,    4L), .fmt_num(bias_cases_med,  2L),
+                .fmt_num(r2_deaths_med,   4L), .fmt_num(bias_deaths_med, 2L))
 
         if (control$paths$plots) {
           tryCatch(
@@ -2718,12 +2732,10 @@ run_MOSAIC <- function(config,
     bias_ratio_deaths_ensemble <- tryCatch(
       calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
 
-    log_msg("Ensemble R\u00b2 (%d params x %d stoch, source=%s): cases = %.4f (bias=%.2f), deaths = %.4f (bias=%.2f)",
+    log_msg("Ensemble R\u00b2 (%d params x %d stoch, source=%s): cases = %s (bias=%s), deaths = %s (bias=%s)",
             n_ensemble_params, n_ensemble_stochastic_per, active_cols$source,
-            ifelse(is.na(r2_cases_ensemble),          0, r2_cases_ensemble),
-            ifelse(is.na(bias_ratio_cases_ensemble),  0, bias_ratio_cases_ensemble),
-            ifelse(is.na(r2_deaths_ensemble),         0, r2_deaths_ensemble),
-            ifelse(is.na(bias_ratio_deaths_ensemble), 0, bias_ratio_deaths_ensemble))
+            .fmt_num(r2_cases_ensemble,          4L), .fmt_num(bias_ratio_cases_ensemble,  2L),
+            .fmt_num(r2_deaths_ensemble,         4L), .fmt_num(bias_ratio_deaths_ensemble, 2L))
 
     # Period-weighted implied CFR per location (posterior distribution from
     # ensemble members: sum simulated reported_deaths / sum simulated
@@ -2958,22 +2970,44 @@ run_MOSAIC <- function(config,
   # Single grep-friendly run-end sentinel. A tailing operator (human or AI
   # monitoring the log) can latch on '\[RUN_SUMMARY\]' to know the pipeline
   # finished AND extract headline metrics in one pass.
+  #
+  # Status decision tree (don't conflate "calibration converged" with
+  # "end-to-end run succeeded"):
+  #   - "completed_unconverged": calibration ESS criterion not met
+  #   - "success_partial":       converged BUT key output metrics are NA
+  #                              (best-model or posterior-ensemble block
+  #                              failed and never populated r2_*)
+  #   - "success":               converged AND r2_cases AND r2_cases_ensemble
+  #                              both populated
+  outputs_ok <- !is.na(summary_obj$r2_cases) &&
+                !is.na(summary_obj$r2_cases_ensemble)
+  status_str <- if (!isTRUE(state$converged)) {
+    "completed_unconverged"
+  } else if (!outputs_ok) {
+    "success_partial"
+  } else {
+    "success"
+  }
+
   log_msg(paste0(
-    "[RUN_SUMMARY] status=%s converged=%s runtime_min=%.2f ",
+    "[RUN_SUMMARY] status=%s converged=%s outputs_ok=%s runtime_min=%.2f ",
     "r2_cases_best=%s r2_deaths_best=%s ",
     "r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
-    "sims_total=%s sims_retained=%s sims_best_subset=%s ",
+    "sims_total=%s sims_retained=%s sims_best_subset=%s sims_best_subset_tier=%s ",
     "ess_pct_above_target=%s resumed=%s dir_output=%s"),
-    if (isTRUE(state$converged)) "success" else "completed_unconverged",
+    status_str,
     if (isTRUE(state$converged)) "YES" else "NO",
+    if (outputs_ok) "YES" else "NO",
     as.numeric(runtime),
     if (is.na(summary_obj$r2_cases))           "NA" else sprintf("%.4f", summary_obj$r2_cases),
     if (is.na(summary_obj$r2_deaths))          "NA" else sprintf("%.4f", summary_obj$r2_deaths),
     if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble),
     if (is.na(summary_obj$r2_deaths_ensemble)) "NA" else sprintf("%.4f", summary_obj$r2_deaths_ensemble),
-    as.integer(summary_obj$n_simulations_total %||% 0L),
+    if (is.na(summary_obj$n_simulations_total)) "NA" else as.character(as.integer(summary_obj$n_simulations_total)),
     if (is.na(summary_obj$n_retained))    "NA" else as.character(as.integer(summary_obj$n_retained)),
     if (is.na(summary_obj$n_best_subset)) "NA" else as.character(as.integer(summary_obj$n_best_subset)),
+    if (is.null(summary_obj$n_best_subset_tier) || is.na(summary_obj$n_best_subset_tier)) "NA"
+      else as.character(as.integer(summary_obj$n_best_subset_tier)),
     if (is.na(summary_obj$ess_pct_above_target)) "NA" else sprintf("%.1f", summary_obj$ess_pct_above_target),
     if (isTRUE(state$resumed)) "YES" else "NO",
     dir_output
@@ -3067,7 +3101,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
 #'     \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
 
-#'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
+#'     \item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
 #'   }
 #'
 #' @param predictions List of prediction generation settings. Default is:
