@@ -4,7 +4,7 @@
 \alias{process_cholera_surveillance_data}
 \title{Process Combined Weekly and Daily Cholera Surveillance Data with Truly Square Data Structure}
 \usage{
-process_cholera_surveillance_data(PATHS, keep_source = c("WHO", "JHU", "SUPP"))
+process_cholera_surveillance_data(PATHS, include_ai = FALSE)
 }
 \arguments{
 \item{PATHS}{A list of file paths. Must include:
@@ -16,8 +16,13 @@ process_cholera_surveillance_data(PATHS, keep_source = c("WHO", "JHU", "SUPP"))
 \item \strong{DATA_CHOLERA_DAILY}: Directory where the combined daily output will be saved.
 }}
 
-\item{keep_source}{Character; one of "WHO", "JHU", or "SUPP". When duplicate country–week entries
-occur across sources, the entry from \code{keep_source} will be used preferentially.}
+\item{include_ai}{Logical (default \code{FALSE}). When \code{TRUE}, reads the
+AI-mined processed file (\code{DATA_AI_WEEKLY/cholera_country_weekly_processed.csv},
+produced by \code{\link{process_AI_cholera_data}}) as a fourth source and
+carries its \code{confidence_weight} and \code{disaggregation_method} columns
+through to the combined weekly output. If the file is missing/empty, a warning
+is emitted and the merge proceeds with WHO/JHU/SUPP only. When \code{FALSE},
+behavior is identical to the three-source merge.}
 }
 \value{
 Invisibly returns \code{NULL}. Side effects:
@@ -25,7 +30,7 @@ Invisibly returns \code{NULL}. Side effects:
 \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 \item Cleans rows with missing key grouping fields (iso_code, year, week).
 \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-\item Deduplicates by \code{iso_code}, \code{year}, \code{week}, choosing rows from \code{keep_source}.
+\item Deduplicates by \code{iso_code}, \code{year}, \code{week} using the fixed priority WHO > JHU > AI > SUPP (completeness tie-break).
 \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
@@ -41,4 +46,10 @@ labels each record by its source, combines them (removing duplicate country–we
 the specified source preference), creates a truly square data structure with all country-week combinations
 from min to max date across the entire dataset, and downscales the combined weekly totals to a daily time series
 using \code{MOSAIC::downscale_weekly_values} with integer allocation.
+}
+\details{
+Duplicate country–week entries across sources are resolved by a fixed
+priority \strong{WHO > JHU > AI > SUPP}, with a completeness tie-break: within
+a key, rows with complete cases AND deaths are preferred before the source
+priority is applied.
 }

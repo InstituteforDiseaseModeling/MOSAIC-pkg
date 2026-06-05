@@ -14,15 +14,24 @@
 #'   \item \strong{DATA_CHOLERA_WEEKLY}: Directory where the combined weekly output will be saved.
 #'   \item \strong{DATA_CHOLERA_DAILY}: Directory where the combined daily output will be saved.
 #' }
-#' @param keep_source Character; one of "WHO", "JHU", or "SUPP". When duplicate country–week entries
-#'   occur across sources, the entry from \code{keep_source} will be used preferentially.
+#' @details Duplicate country–week entries across sources are resolved by a fixed
+#'   priority \strong{WHO > JHU > AI > SUPP}, with a completeness tie-break: within
+#'   a key, rows with complete cases AND deaths are preferred before the source
+#'   priority is applied.
+#' @param include_ai Logical (default \code{FALSE}). When \code{TRUE}, reads the
+#'   AI-mined processed file (\code{DATA_AI_WEEKLY/cholera_country_weekly_processed.csv},
+#'   produced by \code{\link{process_AI_cholera_data}}) as a fourth source and
+#'   carries its \code{confidence_weight} and \code{disaggregation_method} columns
+#'   through to the combined weekly output. If the file is missing/empty, a warning
+#'   is emitted and the merge proceeds with WHO/JHU/SUPP only. When \code{FALSE},
+#'   behavior is identical to the three-source merge.
 #'
 #' @return Invisibly returns \code{NULL}. Side effects:
 #' \itemize{
 #'   \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 #'   \item Cleans rows with missing key grouping fields (iso_code, year, week).
 #'   \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-#'   \item Deduplicates by \code{iso_code}, \code{year}, \code{week}, choosing rows from \code{keep_source}.
+#'   \item Deduplicates by \code{iso_code}, \code{year}, \code{week} using the fixed priority WHO > JHU > AI > SUPP (completeness tie-break).
 #'   \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 #'   \item Saves the combined weekly data to
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
@@ -37,9 +46,7 @@
 #' @export
 #'
 
-process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU", "SUPP")) {
-
-     keep_source <- match.arg(keep_source)
+process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 
      # create output dirs
      dirs <- c(PATHS$DATA_CHOLERA_WEEKLY, PATHS$DATA_CHOLERA_DAILY)
@@ -60,13 +67,24 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
      who_path <- file.path(PATHS$DATA_WHO_WEEKLY, "cholera_country_weekly_processed.csv")
      jhu_path <- file.path(PATHS$DATA_JHU_WEEKLY, "cholera_country_weekly_processed.csv")
      sup_path <- file.path(PATHS$DATA_SUPP_WEEKLY, "cholera_country_weekly_processed.csv")
+     ai_path  <- file.path(PATHS$DATA_AI_WEEKLY,  "cholera_country_weekly_processed.csv")
 
      # read each
      d_who <- read_source(who_path, "WHO")
      d_jhu <- read_source(jhu_path, "JHU")
      d_sup <- read_source(sup_path, "SUPP")
+     d_ai  <- if (isTRUE(include_ai)) read_source(ai_path, "AI") else NULL
 
-     sources <- Filter(Negate(is.null), list(d_who, d_jhu, d_sup))
+     if (isTRUE(include_ai) && is.null(d_ai)) {
+          warning(sprintf(
+               "include_ai=TRUE but no usable AI data at %s; proceeding with WHO/JHU/SUPP only.",
+               ai_path), immediate. = TRUE)
+     }
+
+     # List order sets the rbind order; AI is placed before SUPP to match the
+     # WHO > JHU > AI > SUPP priority. When include_ai=FALSE, d_ai is NULL and
+     # this is byte-identical to the previous 3-source behavior.
+     sources <- Filter(Negate(is.null), list(d_who, d_jhu, d_ai, d_sup))
      if (length(sources) == 0) stop("No surveillance sources available.")
 
      # UNION harmonization: take the union of all columns across sources, NA-fill
@@ -87,36 +105,27 @@ process_cholera_surveillance_data <- function(PATHS, keep_source = c("WHO", "JHU
      all_df <- all_df[complete.cases(all_df[, key_cols]), ]
      message(sprintf("Removed %d rows with missing key fields (iso_code, year, week)", n_before - nrow(all_df)))
      
-     # Improved deduplication using aggregate approach instead of problematic split/rbind
      all_df$key <- paste(all_df$iso_code, all_df$year, all_df$week, sep = "_")
-     
-     # For each unique key, select best record based on source preference
-     dedup_list <- lapply(split(all_df, all_df$key), function(gr) {
-          if (nrow(gr) > 1) {
-               # First priority: preferred source with complete cases/deaths
-               pref <- subset(gr, source == keep_source & !is.na(cases) & !is.na(deaths))
-               if (nrow(pref) > 0) return(pref[1, ])
-               
-               # Second priority: any source with complete cases/deaths
-               complete <- subset(gr, !is.na(cases) & !is.na(deaths))
-               if (nrow(complete) > 0) return(complete[1, ])
-               
-               # Third priority: preferred source regardless of completeness
-               pref_any <- subset(gr, source == keep_source)
-               if (nrow(pref_any) > 0) return(pref_any[1, ])
-               
-               # Final fallback: first record
-               return(gr[1, ])
-          }
-          return(gr[1, ])
-     })
-     
-     # Combine deduplicated records
-     dedup <- do.call(rbind, dedup_list)
-     dedup$key <- NULL  # Remove temporary key column
+
+     # Deduplicate by (iso_code, year, week) via a fixed source priority with a
+     # completeness tie-break. Priority WHO > JHU > AI > SUPP. For each key we
+     # prefer, in order: (1) rows with complete cases AND deaths, then
+     # (2) higher-priority source. This reproduces the previous split()-based
+     # logic for the 3-source case (WHO-complete > any-complete > WHO-any > first)
+     # and extends it to AI as a fourth source. Vectorized: O(n log n).
+     PRIORITY <- c(WHO = 1L, JHU = 2L, AI = 3L, SUPP = 4L)
+
+     all_df$.priority <- PRIORITY[all_df$source]
+     all_df$.complete <- !is.na(all_df$cases) & !is.na(all_df$deaths)
+     all_df <- all_df[order(all_df$iso_code, all_df$year, all_df$week,
+                            -all_df$.complete, all_df$.priority), ]
+     dedup <- all_df[!duplicated(all_df$key), ]
+     dedup$key <- NULL
+     dedup$.priority <- NULL
+     dedup$.complete <- NULL
      
      removed <- n_before - nrow(dedup)
-     message(if (removed > 0) sprintf("Removed %d duplicate weekly entries, kept %s", removed, keep_source)
+     message(if (removed > 0) sprintf("Removed %d duplicate weekly entries (priority WHO>JHU>AI>SUPP)", removed)
              else "No duplicate weekly entries found")
      
      # Create square data structure by filling missing country-week combinations

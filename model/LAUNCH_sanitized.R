@@ -108,7 +108,7 @@ process_WHO_weekly_data(PATHS)
 process_JHU_weekly_data(PATHS)
 process_SUPP_weekly_data(PATHS)
 downscale_weekly_cholera_data(PATHS)
-process_cholera_surveillance_data(PATHS, keep_source = "WHO")
+process_cholera_surveillance_data(PATHS)
 
 
 #--- 2B. Case fatality rate: hierarchical Bayesian model ----------------------#

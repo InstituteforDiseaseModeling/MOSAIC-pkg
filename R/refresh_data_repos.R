@@ -1,6 +1,6 @@
 #' Pull latest data from external scraper repos and report coverage
 #'
-#' Fast-forward \code{git pull}s each of the four external scraper repos that
+#' Fast-forward \code{git pull}s each of the five external scraper repos that
 #' MOSAIC depends on for raw data, then prints a per-repo summary of the latest
 #' commit and (for surveillance repos) the date range of the data file the
 #' \code{process_*()} functions read. Designed to be called at the top of
@@ -11,8 +11,9 @@
 #'   \code{set_root_directory()} was last called with.
 #' @param repos Optional character vector restricting the refresh to a subset
 #'   of repos. Valid names: \code{"ees-cholera-mapping"},
-#'   \code{"jhu_cholera_data"}, \code{"enso-data"},
-#'   \code{"open-meteo-pipeline"}. Default refreshes all four.
+#'   \code{"jhu_cholera_data"}, \code{"ai-cholera-data-mining"},
+#'   \code{"enso-data"}, \code{"open-meteo-pipeline"}. Default refreshes all
+#'   five.
 #' @param stale_days Threshold (days since last commit) for the \code{STALE}
 #'   flag in the printed summary. Default 14.
 #' @param verbose If \code{TRUE} (default), print a formatted summary to the
@@ -70,10 +71,11 @@ refresh_data_repos <- function(root       = NULL,
      }
 
      repo_meta <- list(
-          "ees-cholera-mapping" = "WHO surveillance (AWD weekly + GHO annual + GTFCC)",
-          "jhu_cholera_data"    = "JHU public cholera surveillance dataset",
-          "enso-data"           = "ENSO/IOD: NOAA historical + BOM observed + BOM forecast",
-          "open-meteo-pipeline" = "Climate: ERA5 historical + MRI projections"
+          "ees-cholera-mapping"    = "WHO surveillance (AWD weekly + GHO annual + GTFCC)",
+          "jhu_cholera_data"       = "JHU public cholera surveillance dataset",
+          "ai-cholera-data-mining" = "AI-mined gap-filling cholera observations (historic, no cron)",
+          "enso-data"              = "ENSO/IOD: NOAA historical + BOM observed + BOM forecast",
+          "open-meteo-pipeline"    = "Climate: ERA5 historical + MRI projections"
      )
 
      if (is.null(repos)) repos <- names(repo_meta)

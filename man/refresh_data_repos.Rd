@@ -13,8 +13,9 @@ repos). Defaults to \code{get_paths()$ROOT}, i.e. whatever
 
 \item{repos}{Optional character vector restricting the refresh to a subset
 of repos. Valid names: \code{"ees-cholera-mapping"},
-\code{"jhu_cholera_data"}, \code{"enso-data"},
-\code{"open-meteo-pipeline"}. Default refreshes all four.}
+\code{"jhu_cholera_data"}, \code{"ai-cholera-data-mining"},
+\code{"enso-data"}, \code{"open-meteo-pipeline"}. Default refreshes all
+five.}
 
 \item{stale_days}{Threshold (days since last commit) for the \code{STALE}
 flag in the printed summary. Default 14.}
@@ -30,7 +31,7 @@ coverage stats for surveillance repos; \code{NULL} otherwise), and
 \code{pull_output}.
 }
 \description{
-Fast-forward \code{git pull}s each of the four external scraper repos that
+Fast-forward \code{git pull}s each of the five external scraper repos that
 MOSAIC depends on for raw data, then prints a per-repo summary of the latest
 commit and (for surveillance repos) the date range of the data file the
 \code{process_*()} functions read. Designed to be called at the top of
