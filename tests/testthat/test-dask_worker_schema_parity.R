@@ -173,3 +173,154 @@ test_that("regression: missing location_name injection yields numeric suffixes",
     info = "without location_name injection we expect numeric suffixes (_1, _2, ...) — the property test above guards against re-introducing this path"
   )
 })
+
+
+# =============================================================================
+# TEST 4: .mosaic_write_one_shard_dask writes a valid parquet shard
+#
+# Engine-free test of the per-sim helper extracted in v0.32.17 so the Dask
+# write loop can run in parallel via mclapply. Builds a mock worker result
+# in pure R, calls the helper, and verifies the on-disk parquet matches
+# the expected schema.
+# =============================================================================
+test_that(".mosaic_write_one_shard_dask produces a valid parquet shard", {
+  fx <- skip_if_no_data()
+  skip_if_not_installed("arrow")
+  cfg <- fx$config
+
+  params_sim <- MOSAIC::sample_parameters(
+    PATHS = NULL, priors = fx$priors, config = cfg,
+    seed = 1L, sample_args = list(),
+    verbose = FALSE, validate = FALSE
+  )
+
+  # Build the params dict the worker would echo back: sampled minus matrix
+  # fields (the worker filter), MINUS the base fields .extract_sampled_params
+  # strips (location_name, N_j_initial, etc.). The helper re-injects those.
+  worker_params <- MOSAIC:::.extract_sampled_params(params_sim)
+  worker_params[.matrix_fields] <- NULL
+
+  mock_res <- list(
+    sim_id     = 42L,
+    success    = TRUE,
+    params     = worker_params,
+    iterations = list(
+      list(iter = 1L, seed_iter = 100L, likelihood = -1234.5),
+      list(iter = 2L, seed_iter = 101L, likelihood = -1233.0),
+      list(iter = 3L, seed_iter = 102L, likelihood = -1234.8)
+    )
+  )
+
+  # Compute param_names_all the way run_MOSAIC does.
+  pv <- MOSAIC::convert_config_to_matrix(params_sim)
+  if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+  param_names_all <- names(pv)
+
+  temp_dir <- tempfile("shard_test_")
+  dir.create(file.path(temp_dir, "samples"), recursive = TRUE)
+  dirs <- list(cal_samples = file.path(temp_dir, "samples"))
+
+  result <- MOSAIC:::.mosaic_write_one_shard_dask(
+    sim_id          = 42L,
+    res             = mock_res,
+    n_iterations    = 3L,
+    param_names_all = param_names_all,
+    config          = cfg,
+    dirs            = dirs,
+    control         = list(io = MOSAIC::mosaic_io_presets("default"))
+  )
+
+  expect_true(result)
+
+  out_file <- file.path(dirs$cal_samples, "sim_0000042.parquet")
+  expect_true(file.exists(out_file))
+
+  df <- arrow::read_parquet(out_file)
+  expect_equal(nrow(df), 1L)
+  expect_equal(df$sim, 42L)
+  expect_equal(df$iter, 1L)
+  expect_equal(df$seed_sim, 42L)
+  expect_equal(df$seed_iter, as.integer((42L - 1L) * 3L + 1L))
+  expect_true(is.finite(df$likelihood))
+  # Likelihood is the log-mean-exp of the 3 iter likelihoods, which lies
+  # between the min and max iter LL.
+  expect_gte(df$likelihood, -1234.8)
+  expect_lte(df$likelihood, -1233.0)
+  expect_true(all(param_names_all %in% names(df)))
+
+  # Cleanup
+  unlink(temp_dir, recursive = TRUE)
+})
+
+
+# =============================================================================
+# TEST 5: serial and parallel shard writes produce identical output
+#
+# Verifies the parallel-write refactor (v0.32.17) hasn't introduced any
+# nondeterminism: writing the same 4 mock results via serial lapply and
+# via mclapply must produce byte-identical parquet files.
+# =============================================================================
+test_that("parallel mclapply produces identical shards to serial lapply", {
+  fx <- skip_if_no_data()
+  skip_if_not_installed("arrow")
+  skip_on_os("windows")  # mclapply is POSIX-only
+  cfg <- fx$config
+
+  params_sim <- MOSAIC::sample_parameters(
+    PATHS = NULL, priors = fx$priors, config = cfg,
+    seed = 1L, sample_args = list(),
+    verbose = FALSE, validate = FALSE
+  )
+  worker_params <- MOSAIC:::.extract_sampled_params(params_sim)
+  worker_params[.matrix_fields] <- NULL
+
+  pv <- MOSAIC::convert_config_to_matrix(params_sim)
+  if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+  param_names_all <- names(pv)
+
+  make_res <- function(sim_id) {
+    list(
+      sim_id     = as.integer(sim_id),
+      success    = TRUE,
+      params     = worker_params,
+      iterations = list(
+        list(iter = 1L, seed_iter = sim_id * 10L,     likelihood = -1000 - sim_id),
+        list(iter = 2L, seed_iter = sim_id * 10L + 1, likelihood = -1001 - sim_id),
+        list(iter = 3L, seed_iter = sim_id * 10L + 2, likelihood = -999  - sim_id)
+      )
+    )
+  }
+  sim_ids <- 1L:4L
+  results_lookup <- setNames(lapply(sim_ids, make_res), as.character(sim_ids))
+
+  run_one_path <- function(parallel) {
+    tmp  <- tempfile("shard_parity_")
+    dir.create(file.path(tmp, "samples"), recursive = TRUE)
+    dirs <- list(cal_samples = file.path(tmp, "samples"))
+    worker <- function(sim_id) {
+      MOSAIC:::.mosaic_write_one_shard_dask(
+        sim_id          = sim_id,
+        res             = results_lookup[[as.character(sim_id)]],
+        n_iterations    = 3L,
+        param_names_all = param_names_all,
+        config          = cfg,
+        dirs            = dirs,
+        control         = list(io = MOSAIC::mosaic_io_presets("default"))
+      )
+    }
+    if (parallel) {
+      parallel::mclapply(sim_ids, worker, mc.cores = 2L)
+    } else {
+      lapply(sim_ids, worker)
+    }
+    files <- sort(list.files(dirs$cal_samples, full.names = TRUE))
+    out   <- lapply(files, function(f) arrow::read_parquet(f))
+    unlink(tmp, recursive = TRUE)
+    do.call(rbind, out)
+  }
+
+  serial_df   <- run_one_path(parallel = FALSE)
+  parallel_df <- run_one_path(parallel = TRUE)
+
+  expect_equal(parallel_df, serial_df)
+})

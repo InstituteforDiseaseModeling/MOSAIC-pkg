@@ -1778,6 +1778,94 @@
   params_sim[!names(params_sim) %in% base_fields]
 }
 
+#' Build and write a single Dask-path parquet shard.
+#'
+#' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
+#' write loop can run in parallel via parallel::mclapply(). Returns TRUE
+#' if the shard wrote successfully, FALSE otherwise. Side-effect: writes
+#' one parquet file at dirs$cal_samples/sim_NNNNNNN.parquet.
+#'
+#' Pure compute given (sim_id, res). No shared mutable state, no I/O
+#' beyond the single parquet write, no Python calls — safe to invoke in
+#' parallel from forked workers. The caller (parent process) is
+#' responsible for freeing result_lookup / params_list entries after
+#' each chunk completes.
+#' @noRd
+.mosaic_write_one_shard_dask <- function(sim_id, res, n_iterations,
+                                         param_names_all, config, dirs, control) {
+  # Skip if param sampling failed (no future submitted) or worker errored
+  if (is.null(res) || !isTRUE(res$success)) {
+    if (!is.null(res) && !isTRUE(res$success)) {
+      err_msg <- if (!is.null(res$error)) res$error else "unknown error"
+      warning("sim ", sim_id, " failed on worker: ", err_msg,
+              call. = FALSE, immediate. = FALSE)
+    }
+    return(FALSE)
+  }
+
+  # Re-inject base_config fields stripped by .extract_sampled_params() but
+  # needed by convert_config_to_matrix() for ISO-suffixed columns. See
+  # test-dask_worker_schema_parity.R for the contract.
+  params <- res$params
+  if (is.null(params)) {
+    warning("sim ", sim_id, " worker returned no params dict (engine ",
+            "may be < 0.13)", call. = FALSE, immediate. = FALSE)
+    return(FALSE)
+  }
+  params$location_name <- config$location_name
+  params$N_j_initial   <- config$N_j_initial
+
+  raw_params <- tryCatch({
+    pv <- convert_config_to_matrix(params)
+    if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
+    pv[param_names_all]
+  }, error = function(e) {
+    warning("sim ", sim_id, " param flattening failed: ", e$message,
+            call. = FALSE, immediate. = FALSE)
+    NULL
+  })
+  if (is.null(raw_params)) return(FALSE)
+
+  # Collapse multi-iter to a single row via log-mean-exp (matches the
+  # local path: see run_MOSAIC.R ~285-300).
+  iter_list  <- res$iterations
+  n_iter_got <- length(iter_list)
+  lls <- vapply(iter_list, function(it) {
+    v <- suppressWarnings(as.numeric(it$likelihood))
+    if (length(v) == 1L) v else NA_real_
+  }, numeric(1))
+
+  collapsed_ll <- if (n_iter_got > 1L) {
+    valid_lls <- lls[is.finite(lls)]
+    if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
+  } else if (n_iter_got == 1L) {
+    lls[1L]
+  } else {
+    warning("sim ", sim_id, " worker returned no iterations",
+            call. = FALSE, immediate. = FALSE)
+    return(FALSE)
+  }
+
+  seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
+
+  row_df <- data.frame(
+    sim        = as.integer(sim_id),
+    iter       = 1L,
+    seed_sim   = as.integer(sim_id),
+    seed_iter  = seed_iter_1,
+    likelihood = collapsed_ll
+  )
+  for (pname in param_names_all) {
+    row_df[[pname]] <- as.numeric(raw_params[pname])
+  }
+
+  out_file <- file.path(dirs$cal_samples,
+                        sprintf("sim_%07d.parquet", sim_id))
+  .mosaic_write_parquet(row_df, out_file, control$io)
+  file.exists(out_file)
+}
+
+
 #' Run One Dask Batch (sample → submit → gather → write parquets)
 #'
 #' Replaces .mosaic_run_batch() for Dask execution. Workers compute the
@@ -1785,8 +1873,10 @@
 #' plus a sim-level params dict; this function writes one parquet row per
 #' sim (likelihood collapsed across iterations via calc_log_mean_exp when
 #' n_iterations > 1, mirroring the local-path semantics in run_MOSAIC.R).
-#' Returns a logical vector of per-simulation success indicators
-#' (TRUE = parquet written successfully).
+#' Parquet shards are written in parallel via parallel::mclapply() in
+#' chunks of 500, with progress + Dask scheduler health checks emitted
+#' between chunks. Returns a logical vector of per-simulation success
+#' indicators (TRUE = parquet written successfully).
 #' @noRd
 .mosaic_run_batch_dask <- function(sim_ids, n_iterations, priors, config, PATHS,
                                     sampling_args, dirs, param_names_all, control,
@@ -1974,112 +2064,70 @@
   write_start <- Sys.time()
   success_indicators <- logical(n_sims)
 
-  log_msg("  Building parquet rows for %d sims...", n_sims)
+  # Parallel parquet write. Per-sim work is pure (no shared mutable state,
+  # one file per sim) so it parallelizes cleanly via parallel::mclapply.
+  # Cap at 8 cores — the marginal benefit drops off fast above that
+  # because disk I/O contention becomes the bottleneck, not CPU.
+  # mclapply is POSIX-only; on Windows it silently falls back to
+  # serial, which is the safe default.
+  n_cores_write <- max(1L, min(8L,
+    as.integer(control$parallel$n_cores %||% 1L)))
 
-  for (idx in seq_len(n_sims)) {
-    sim_id <- sim_ids[[idx]]
-    key    <- as.character(sim_id)
-    res    <- result_lookup[[key]]
+  log_msg("  Building parquet rows for %d sims (parallel x %d cores)...",
+          n_sims, n_cores_write)
 
-    # Skip if param sampling failed (no future submitted) or worker errored
-    if (is.null(res) || !isTRUE(res$success)) {
-      if (!is.null(res) && !isTRUE(res$success)) {
-        err_msg <- if (!is.null(res$error)) res$error else "unknown error"
-        warning("sim ", sim_id, " failed on worker: ", err_msg,
-                call. = FALSE, immediate. = FALSE)
-      }
-      success_indicators[idx] <- FALSE
-      next
-    }
+  # Process in chunks of 500 so progress and Dask scheduler health checks
+  # land at regular intervals, and memory is freed in the parent between
+  # chunks (forked workers inherit result_lookup via copy-on-write; the
+  # parent's drop-as-you-go pattern only works at chunk boundaries since
+  # forks happen at mclapply entry).
+  chunk_size <- 500L
+  chunks <- split(seq_len(n_sims),
+                  ceiling(seq_len(n_sims) / chunk_size))
 
-    # Re-inject base_config fields that .extract_sampled_params() strips but
-    # convert_config_to_matrix() needs for parquet column parity with the
-    # local path. These are constant across sims (live in the broadcast
-    # base_config), so the worker doesn't echo them; the gather adapter
-    # pulls them off `config` instead.
-    #
-    # Currently: location_name (drives ISO column suffixes) and N_j_initial
-    # (per-location initial population). Anything added to `.extract_sampled_params`
-    # base_fields that is also in `convert_config_to_matrix` params_keep
-    # must be re-injected here too — see test-dask_worker_schema_parity.R.
-    params <- res$params
-    if (is.null(params)) {
-      warning("sim ", sim_id, " worker returned no params dict (engine ",
-              "may be < 0.13)", call. = FALSE, immediate. = FALSE)
-      success_indicators[idx] <- FALSE
-      next
-    }
-    params$location_name <- config$location_name
-    params$N_j_initial   <- config$N_j_initial
-
-    raw_params <- tryCatch({
-      pv <- convert_config_to_matrix(params)
-      if ("seed" %in% names(pv)) pv <- pv[names(pv) != "seed"]
-      pv[param_names_all]
-    }, error = function(e) {
-      warning("sim ", sim_id, " param flattening failed: ", e$message,
-              call. = FALSE, immediate. = FALSE)
-      NULL
-    })
-
-    if (is.null(raw_params)) {
-      success_indicators[idx] <- FALSE
-      next
-    }
-
-    # Collapse multi-iter to a single row via log-mean-exp (matches the
-    # local path: see run_MOSAIC.R ~285-300).
-    iter_list  <- res$iterations
-    n_iter_got <- length(iter_list)
-    lls <- vapply(iter_list, function(it) {
-      v <- suppressWarnings(as.numeric(it$likelihood))
-      if (length(v) == 1L) v else NA_real_
-    }, numeric(1))
-
-    if (n_iter_got > 1L) {
-      valid_lls <- lls[is.finite(lls)]
-      collapsed_ll <- if (length(valid_lls)) calc_log_mean_exp(valid_lls) else NA_real_
-    } else if (n_iter_got == 1L) {
-      collapsed_ll <- lls[1L]
+  for (chunk_idxs in chunks) {
+    chunk_out <- if (n_cores_write > 1L) {
+      parallel::mclapply(
+        chunk_idxs,
+        function(idx) {
+          sim_id <- sim_ids[[idx]]
+          key    <- as.character(sim_id)
+          .mosaic_write_one_shard_dask(
+            sim_id, result_lookup[[key]], n_iterations,
+            param_names_all, config, dirs, control
+          )
+        },
+        mc.cores = n_cores_write
+      )
     } else {
-      warning("sim ", sim_id, " worker returned no iterations",
-              call. = FALSE, immediate. = FALSE)
-      success_indicators[idx] <- FALSE
-      next
-    }
-
-    seed_iter_1 <- as.integer((sim_id - 1L) * n_iterations + 1L)
-
-    row_df <- data.frame(
-      sim       = as.integer(sim_id),
-      iter      = 1L,
-      seed_sim  = as.integer(sim_id),
-      seed_iter = seed_iter_1,
-      likelihood = collapsed_ll
-    )
-    for (pname in param_names_all) {
-      row_df[[pname]] <- as.numeric(raw_params[pname])
-    }
-
-    out_file <- file.path(dirs$cal_samples,
-                          sprintf("sim_%07d.parquet", sim_id))
-    .mosaic_write_parquet(row_df, out_file, control$io)
-    success_indicators[idx] <- file.exists(out_file)
-
-    # Free this sim's data as we go
-    result_lookup[key] <- list(NULL)
-    params_list[idx]   <- list(NULL)
-
-    # Periodic progress + Dask scheduler health check
-    if (idx %% 500L == 0L) {
-      elapsed <- as.numeric(difftime(Sys.time(), write_start, units = "secs"))
-      log_msg("    Parquet write progress: %d/%d (%.0fs elapsed)",
-              idx, n_sims, elapsed)
-      tryCatch(client$scheduler_info(), error = function(e) {
-        log_msg("    WARNING: Dask scheduler ping failed at sim %d: %s",
-                idx, e$message)
+      lapply(chunk_idxs, function(idx) {
+        sim_id <- sim_ids[[idx]]
+        key    <- as.character(sim_id)
+        .mosaic_write_one_shard_dask(
+          sim_id, result_lookup[[key]], n_iterations,
+          param_names_all, config, dirs, control
+        )
       })
     }
+
+    success_indicators[chunk_idxs] <- vapply(chunk_out, isTRUE, logical(1))
+
+    # Free parent-side memory for the sims we just wrote
+    for (idx in chunk_idxs) {
+      key <- as.character(sim_ids[[idx]])
+      result_lookup[key] <- list(NULL)
+      params_list[idx]   <- list(NULL)
+    }
+
+    # Progress + Dask scheduler health check
+    written <- max(chunk_idxs)
+    elapsed <- as.numeric(difftime(Sys.time(), write_start, units = "secs"))
+    log_msg("    Parquet write progress: %d/%d (%.0fs elapsed)",
+            written, n_sims, elapsed)
+    tryCatch(client$scheduler_info(), error = function(e) {
+      log_msg("    WARNING: Dask scheduler ping failed at sim %d: %s",
+              written, e$message)
+    })
   }
 
   rm(result_lookup, params_list, futures)
