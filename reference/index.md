@@ -848,7 +848,7 @@ Other exported functions and internal helpers
 - [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
   : Build Complete MOSAIC Control Structure
 - [`mosaic_dask_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_dask_presets.md)
-  : Get an Optimal Dask/Coiled Cluster Spec for a Given Core Budget
+  : Get an Optimal Dask/Coiled Cluster Spec for a Given Worker Count
 - [`mosaic_io_presets()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_io_presets.md)
   : Get Pre-configured I/O Settings
 - [`mosaic_pal_countries()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_pal_countries.md)
