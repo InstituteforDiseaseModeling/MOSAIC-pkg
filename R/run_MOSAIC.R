@@ -480,9 +480,9 @@
 #'       deaths-scale boundary relative to the original run;
 #'     \item the likelihood-value provenance differs — i.e. the existing shards
 #'       were scored by a different likelihood engine or implementation than the
-#'       current session would produce (e.g. R \code{calc_model_likelihood} vs
-#'       on-worker Python scoring, once Dask phase 3 lands, or an R likelihood
-#'       code change that altered values).
+#'       current session would produce (e.g. R \code{calc_model_likelihood} on
+#'       the local backend vs on-worker Python scoring on the Dask backend, or
+#'       an R likelihood-code change that altered values).
 #'   }
 #'   If the engine version cannot be determined (no record / Python not bound) the
 #'   deaths-scale check is skipped with a warning. Has no effect when no shards
@@ -818,8 +818,9 @@ run_MOSAIC <- function(config,
     config = config, priors = priors, control = control
   )
   # Stamp the likelihood-value provenance (who/what scored the shards) so a later
-  # resume can refuse to pool incomparable likelihoods (R vs Python worker-side
-  # scoring once Dask phase 3 lands, or across an R likelihood-code change).
+  # resume can refuse to pool incomparable likelihoods (R on the local backend
+  # vs on-worker Python scoring on the Dask backend, or across an R
+  # likelihood-code change that altered values).
   env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance(
     use_dask   = use_dask,
     lc_version = tryCatch(env_snapshot$python$pkg_laser_cholera, error = function(e) NA_character_)
@@ -959,8 +960,9 @@ run_MOSAIC <- function(config,
     dask_dist <- reticulate::import("dask.distributed")
 
     # Raise the large-graph warning threshold: chunked client$map() batches
-    # ~500 per-sim JSON param strings per call (~29 MiB), which is expected
-    # and unavoidable since per-sim params must be sent to workers.
+    # ~1000 per-sim JSON param strings per call (~60 MiB at ETH scale, more
+    # at multi-country scale), which is expected and unavoidable since
+    # per-sim params must be sent to workers.
     dask_mod <- reticulate::import("dask")
     dask_mod$config$set(list("distributed.admin.large-graph-warning-threshold" = "100 MiB"))
 

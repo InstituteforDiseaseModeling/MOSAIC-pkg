@@ -862,20 +862,22 @@
 #'
 #' Captures WHO computed the likelihood stored in each shard, and the version of
 #' that implementation, so resume can refuse to pool incomparable likelihoods.
-#' TODAY the likelihood is always computed in R by \code{calc_model_likelihood()}
-#' on the orchestrator — on BOTH the local and the Dask paths — so
+#' On the local backend the likelihood is computed in R by
+#' \code{calc_model_likelihood()} on the orchestrator, so
 #' \code{engine = "R"} and the version is the R implementation tag.
+#' On the Dask backend (Phase 3 / PR #111) the likelihood is computed
+#' on-worker by laser-cholera's ported \code{calc_model_likelihood} module,
+#' so \code{engine = "python"} and the version is the laser-cholera engine
+#' version passed in via \code{lc_version}.
 #'
-#' Forward hook for Dask/Coiled phase 3 (laser-cholera issue #47): when
-#' worker-side Python scoring lands, set \code{engine = "python"} on that path so
-#' the version axis becomes the laser-cholera version. Resume then automatically
-#' refuses to pool R-scored and Python-scored shards (or shards from different
-#' engine versions), since the shard files themselves do not record provenance.
+#' Resume then automatically refuses to pool R-scored and Python-scored
+#' shards (or shards from different engine versions) since the shard files
+#' themselves do not record provenance.
 #'
-#' @param use_dask Logical; whether the run uses the Dask backend (the hook phase
-#'   3 will branch on — unused today because scoring is R-side on all paths).
-#' @param lc_version Current laser-cholera version (used only when engine is
-#'   "python").
+#' @param use_dask Logical; TRUE if the run uses the Dask backend
+#'   (engine = "python"), FALSE for the local backend (engine = "R").
+#' @param lc_version Current laser-cholera version. Used as the impl_version
+#'   when engine is "python"; ignored when engine is "R".
 #' @return list(engine, impl_version)
 #' @noRd
 .mosaic_likelihood_provenance <- function(use_dask = FALSE, lc_version = NA_character_) {
@@ -1065,10 +1067,10 @@
 
   # Likelihood-value provenance: refuse to pool shards scored by a different
   # likelihood engine/implementation than the current session would produce
-  # (R vs Python worker-side scoring once Dask phase 3 / issue #47 lands, or an
-  # R likelihood-code change that altered values). The shard files do not record
-  # provenance, so this comparison against the persisted environment.json is the
-  # only line of defence. Absent on pre-feature runs (skipped, like above).
+  # (R vs on-worker Python scoring on the Dask backend, or an R likelihood-code
+  # change that altered values). The shard files do not record provenance, so
+  # this comparison against the persisted environment.json is the only line
+  # of defence. Absent on pre-feature runs (skipped, like above).
   persisted_prov <- tryCatch(persisted_env$likelihood_provenance, error = function(e) NULL)
   if (!is.null(persisted_prov)) {
     cur_prov <- .mosaic_likelihood_provenance(use_dask, current_lc)
