@@ -2066,22 +2066,25 @@
 
   # Parallel parquet write. Per-sim work is pure (no shared mutable state,
   # one file per sim) so it parallelizes cleanly via parallel::mclapply.
-  # Cap at 8 cores — the marginal benefit drops off fast above that
-  # because disk I/O contention becomes the bottleneck, not CPU.
-  # mclapply is POSIX-only; on Windows it silently falls back to
-  # serial, which is the safe default.
-  n_cores_write <- max(1L, min(8L,
-    as.integer(control$parallel$n_cores %||% 1L)))
+  # We honor control$parallel$n_cores as-given — no internal cap. The
+  # right number of writers depends on the disk (local NVMe vs Azure
+  # premium SSD vs slower drives) and the host's overall core count,
+  # both of which the caller knows and we don't. Default control sets
+  # n_cores = parallel::detectCores() - 1 on the host running the
+  # orchestrator. mclapply is POSIX-only; on Windows it silently falls
+  # back to serial, which is the safe default.
+  n_cores_write <- max(1L, as.integer(control$parallel$n_cores %||% 1L))
 
   log_msg("  Building parquet rows for %d sims (parallel x %d cores)...",
           n_sims, n_cores_write)
 
-  # Process in chunks of 500 so progress and Dask scheduler health checks
-  # land at regular intervals, and memory is freed in the parent between
-  # chunks (forked workers inherit result_lookup via copy-on-write; the
-  # parent's drop-as-you-go pattern only works at chunk boundaries since
-  # forks happen at mclapply entry).
-  chunk_size <- 500L
+  # Process in chunks of 1000 (matches `dask_chunk_size` used for
+  # submission earlier in the function) so progress, Dask scheduler
+  # health checks, and parent-side memory frees all land at regular
+  # intervals. Forked workers inherit result_lookup via copy-on-write,
+  # so the parent's drop-as-you-go pattern only works at chunk
+  # boundaries since forks happen at mclapply entry.
+  chunk_size <- 1000L
   chunks <- split(seq_len(n_sims),
                   ceiling(seq_len(n_sims) / chunk_size))
 
