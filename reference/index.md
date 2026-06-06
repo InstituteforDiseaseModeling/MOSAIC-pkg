@@ -45,6 +45,8 @@ Functions starting with run\_, make\_, or create\_
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
+- [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
 - [`make_lagged_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_lagged_data.md)
@@ -619,6 +621,8 @@ Other exported functions and internal helpers
   : Convert array-wrapped JSON to clean format
 - [`combine_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/combine_vaccination_data.md)
   : Combine WHO and GTFCC Vaccination Data
+- [`compile_rolling_cv_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md)
+  : Rebuild the rolling-CV predictions table from run directories
 - [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
   : Compile Environmental Suitability Data for Cholera Transmission
 - [`config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md)
@@ -1033,6 +1037,8 @@ Other exported functions and internal helpers
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
+- [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
 - [`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md)
   : Sample from Prior Distribution (Simplified)
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
