@@ -35,7 +35,15 @@ est_seasonal_dynamics <- function(PATHS,
      # Read weekly cholera case data from combined surveillance data.
      iso_codes <- MOSAIC::iso_codes_mosaic
      cholera_data <- utils::read.csv(file.path(PATHS$DATA_CHOLERA_WEEKLY, "cholera_surveillance_weekly_combined.csv"), stringsAsFactors = FALSE)
-     
+
+     # Exclude AI-mined rows: seasonal forcing must be estimated from direct
+     # surveillance, not synthetic/reconstructed AI gap-fills (which would inject a
+     # manufactured seasonal template). The AI signal is confined to the
+     # suitability/LSTM path.
+     if ("source" %in% names(cholera_data)) {
+          cholera_data <- cholera_data[is.na(cholera_data$source) | cholera_data$source != "AI", ]
+     }
+
      # Filter by data sources if specified
      if (!is.null(data_sources) && length(data_sources) > 0) {
           # Include rows where source is in data_sources OR source is NA (for missing data rows)

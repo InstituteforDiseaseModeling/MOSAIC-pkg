@@ -26,10 +26,13 @@
 #'   est_epidemic_peaks() to define environmental suitability using exact peak_start
 #'   to peak_stop dates. Provides deterministic outbreak detection without any
 #'   modifications or lead-up periods. Default FALSE for backwards compatibility.
-#' @param date_start Optional start year for data filtering. If NULL, automatically determined
-#'   from case data (one year prior to earliest case observation).
-#' @param date_stop Optional end year for data filtering. If NULL, automatically determined
-#'   from latest ENSO data availability.
+#' @param date_start Start of the data window. Accepts a year (e.g. \code{2000}) or a
+#'   date string (e.g. \code{"2000-01-01"}); only the year is used for filtering. Default
+#'   \code{"2000-01-01"}. This caps how far back the panel extends (important when the
+#'   AI source supplies pre-2000 reconstructions). Pass \code{NULL} to auto-detect the
+#'   start from case data (one year prior to the earliest case observation).
+#' @param date_stop End of the data window (year or date string). If NULL (default),
+#'   auto-detected from the latest raw ENSO data availability.
 #' @param forecast_mode Logical. If TRUE, only includes variables that can support forecasting
 #'   at the specified horizon. (As of v0.30.26 the case-dependent epidemic memory and
 #'   spatial-import blocks are removed entirely, so this flag now affects only the
@@ -84,7 +87,7 @@
 #'
 #' @export
 compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
-                                    date_start = NULL, date_stop = NULL,
+                                    date_start = "2000-01-01", date_stop = NULL,
                                     forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE,
                                     include_flood_prob = TRUE) {
 
@@ -142,17 +145,26 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                message("  - No case observations found, using fallback start year")
           }
      } else {
-          start_year <- date_start
-          message(sprintf("  - Using provided start year: %d", start_year))
+          # Accept either a year (e.g. 2000) or a date string (e.g. "2000-01-01").
+          start_year <- suppressWarnings(as.integer(substr(as.character(date_start), 1, 4)))
+          if (is.na(start_year)) {
+               stop("date_start must be a year (e.g. 2000) or a date string like '2000-01-01'.")
+          }
+          message(sprintf("  - Using start year: %d (from date_start = %s)",
+                          start_year, as.character(date_start)))
      }
-     
+
      if (is.null(date_stop)) {
           # Find the actual end date of raw ENSO data (not interpolated/forecasted)
           end_year <- max(enso_data$year, na.rm = TRUE)
           message(sprintf("  - Latest ENSO data: %d (using max date from raw ENSO dataset)", end_year))
      } else {
-          end_year <- date_stop
-          message(sprintf("  - Using provided end year: %d", end_year))
+          end_year <- suppressWarnings(as.integer(substr(as.character(date_stop), 1, 4)))
+          if (is.na(end_year)) {
+               stop("date_stop must be a year (e.g. 2026) or a date string like '2026-12-31'.")
+          }
+          message(sprintf("  - Using end year: %d (from date_stop = %s)",
+                          end_year, as.character(date_stop)))
      }
      
      message(sprintf("  - Final date range: %d-%d", start_year, end_year))
@@ -303,6 +315,17 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # ========================================================================
      message("  - Adding per-capita rate and candidate response variables...")
 
+     # Negative case counts are an upstream data error; clamp to 0 (with a warning)
+     # so the log1p targets and `rate` cannot produce NaN/-Inf. Mirrors the guard in
+     # est_suitability().
+     n_neg <- sum(d$cases < 0, na.rm = TRUE)
+     if (n_neg > 0) {
+          warning(sprintf(
+               "compile_suitability_data: %d row(s) had negative case counts; clamping to 0. Investigate the upstream surveillance merge.",
+               n_neg))
+          d$cases[!is.na(d$cases) & d$cases < 0] <- 0
+     }
+
      # Per-capita weekly case rate, cases per 100k.
      # NA when cases is NA (no observation that week) OR population is bad.
      d$rate <- d$cases / d$total_population * 1e5
@@ -311,35 +334,40 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      d$rate[is.na(d$cases) & !bad_pop] <- NA_real_
      # d$rate is now NA iff cases is NA OR population is bad; otherwise the rate.
 
-     # ---- transmission_intensity: bit-identical reproduction of est_suitability() ----
+     # ANCHOR INVARIANCE: every normalization anchor below is computed over TRUSTED
+     # direct-source rows only (WHO/JHU/SUPP), excluding AI gap-fill rows. This makes
+     # the anchors — and therefore the target values for trusted rows — INVARIANT to
+     # whether AI rows are present (include_ai). AI rows still receive target values,
+     # scored on the trusted-source scale. `source` is NA only for empty grid cells.
+     is_ai <- if ("source" %in% names(d)) (!is.na(d$source) & d$source == "AI") else rep(FALSE, nrow(d))
+
+     # ---- transmission_intensity: reproduction of est_suitability() ----
      # est_suitability() sets NA cases to 0 and negatives to 0, then normalizes by
-     # log1p of the 99th percentile of cases (computed over MOSAIC countries only).
-     # Reproduced here so the stored column is bit-identical to current production
-     # values. est_suitability() and the LSTM sandbox still recompute their own
-     # target from `cases`, so this column is a back-compat / diagnostic alias and
-     # does NOT propagate NA (NA cases -> 0, matching production).
+     # log1p of the 99th percentile of cases over MOSAIC countries. Reproduced here
+     # over TRUSTED MOSAIC rows so the column is invariant to include_ai AND remains
+     # bit-identical to production when include_ai = FALSE (all rows trusted).
+     # est_suitability()/the LSTM sandbox recompute their own target from `cases`, so
+     # this column is a diagnostic/back-compat alias and does NOT propagate NA.
      ti_cases <- d$cases
      ti_cases[is.na(ti_cases)] <- 0
      ti_cases[ti_cases < 0]    <- 0
-     ti_mosaic <- d$iso_code %in% iso_codes_mosaic
-     ti_p99 <- stats::quantile(ti_cases[ti_mosaic], 0.99, na.rm = TRUE)
+     ti_anchor_mask <- (d$iso_code %in% iso_codes_mosaic) & !is_ai
+     ti_p99 <- stats::quantile(ti_cases[ti_anchor_mask], 0.99, na.rm = TRUE)
+     if (!is.finite(ti_p99) || ti_p99 <= 0) ti_p99 <- 1
      d$transmission_intensity <- pmin(1.0, log1p(ti_cases) / log1p(ti_p99))
 
      # ---- Candidate response variables (A/B/C/D/F) ----
-     # Unlike transmission_intensity, these propagate NA where cases (or rate) is
-     # NA, so downstream consumers can drop unobserved weeks during training.
+     # These propagate NA where cases (or rate) is NA, so downstream consumers can
+     # drop unobserved weeks during training. Anchors use trusted rows only.
 
-     # Global anchors (full-window).
-     global_p99_count <- stats::quantile(d$cases, 0.99, na.rm = TRUE)
+     # Global anchors (trusted rows, full-window).
+     global_p99_count <- stats::quantile(d$cases[!is_ai], 0.99, na.rm = TRUE)
      if (!is.finite(global_p99_count) || global_p99_count <= 0) global_p99_count <- 1
-     global_p99_rate <- stats::quantile(d$rate, 0.99, na.rm = TRUE)
+     global_p99_rate <- stats::quantile(d$rate[!is_ai], 0.99, na.rm = TRUE)
      if (!is.finite(global_p99_rate) || global_p99_rate <= 0) global_p99_rate <- 1e-3
 
-     # A: count, global p99 (the plan's explicit-name target; distinct from the
-     #    back-compat transmission_intensity alias above, which uses the
-     #    production NA->0 / MOSAIC-only anchor).
+     # A: count, global p99
      d$target_A_count_global <- pmin(1, log1p(d$cases) / log1p(global_p99_count))
-
      # C: per-capita rate, global p99
      d$target_C_rate_global <- pmin(1, log1p(d$rate) / log1p(global_p99_rate))
 
@@ -349,15 +377,19 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      d$target_F_rank_per_country         <- NA_real_
 
      for (iso in unique(d$iso_code)) {
-          mask <- d$iso_code == iso
+          mask         <- d$iso_code == iso
+          trusted_mask <- mask & !is_ai          # trusted (non-AI) rows for this country
           country_cases <- d$cases[mask]
           country_rate  <- d$rate[mask]
-          # Population for this country (slow-varying — representative value)
-          country_pop <- stats::median(d$total_population[mask], na.rm = TRUE)
+          # Anchors from trusted rows only (invariant to AI volume). Population is
+          # source-independent; use trusted rows for the same invariance.
+          anchor_cases <- d$cases[trusted_mask]
+          anchor_rate  <- d$rate[trusted_mask]
+          country_pop  <- stats::median(d$total_population[trusted_mask], na.rm = TRUE)
 
           # cp99c: per-country case p99, floored at 1 (avoids div-by-zero for
           # non-endemic countries).
-          cp99c <- max(stats::quantile(country_cases, 0.99, na.rm = TRUE), 1)
+          cp99c <- max(stats::quantile(anchor_cases, 0.99, na.rm = TRUE), 1)
           if (!is.finite(cp99c) || cp99c <= 0) cp99c <- 1
 
           # cp99r: per-country rate p99, floored at the "5 cases/wk equivalent
@@ -369,22 +401,22 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           } else {
                1e-3  # fallback if pop is bad — small floor to avoid log(0)
           }
-          cp99r <- max(stats::quantile(country_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
+          cp99r <- max(stats::quantile(anchor_rate, 0.99, na.rm = TRUE), cases_eq_5, na.rm = TRUE)
           if (!is.finite(cp99r) || cp99r <= 0) cp99r <- cases_eq_5
 
-          # B: per-country count
+          # B/D applied to ALL rows in the country (incl AI), scored on the trusted anchor.
           d$target_B_count_per_country[mask] <-
                pmin(1, log1p(country_cases) / log1p(cp99c))
-
-          # D: per-country rate, floored
           d$target_D_rate_per_country_floored[mask] <-
                pmin(1, log1p(country_rate) / log1p(cp99r))
 
-          # F: per-country rank — divide by (n + 1) so max is < 1 (keeps
-          # qlogis(y) finite for any logit-domain downstream consumer).
-          d$target_F_rank_per_country[mask] <-
-               rank(country_cases, ties.method = "average", na.last = "keep") /
-                    (length(country_cases) + 1)
+          # F: per-country rank over TRUSTED rows only — divide by (n_trusted + 1) so
+          # max < 1. Ranking AI gap-fills against the trusted distribution is not
+          # meaningful and zero-heavy AI rows make the rank degenerate, so AI rows are
+          # left NA for F.
+          d$target_F_rank_per_country[trusted_mask] <-
+               rank(d$cases[trusted_mask], ties.method = "average", na.last = "keep") /
+                    (sum(trusted_mask) + 1)
      }
 
      # 2. World Bank socioeconomic indicators (annual, forward-fill for future years)

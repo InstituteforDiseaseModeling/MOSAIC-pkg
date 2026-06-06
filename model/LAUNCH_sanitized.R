@@ -234,7 +234,7 @@ est_epidemic_peaks(PATHS)
 compile_suitability_data(PATHS,
                          cutoff = NULL,
                          use_epidemic_peaks = TRUE,
-                         date_start = NULL,
+                         date_start = "2000-01-01",
                          date_stop = NULL,
                          forecast_mode = TRUE,
                          forecast_horizon = 9,

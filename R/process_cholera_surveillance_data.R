@@ -88,6 +88,20 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
                ai_path), immediate. = TRUE)
      }
 
+     # Interlock: AI rows carry confidence_weight, but downstream consumers
+     # (LSTM loss, calibration likelihood) do NOT yet multiply by it. Until that
+     # lands, AI rows — including synthetic fourier reconstructions — would train
+     # at parity with direct observations in the suitability/LSTM path. Warn loudly.
+     if (isTRUE(include_ai) && !is.null(d_ai)) {
+          warning(sprintf(
+               paste0("include_ai=TRUE: %d AI rows merged with confidence_weight metadata. ",
+                      "Downstream LSTM/likelihood do NOT yet consume confidence_weight, so AI rows ",
+                      "(incl. synthetic fourier reconstructions) enter the suitability/LSTM path at ",
+                      "parity with direct observations. Implement confidence_weight consumption before ",
+                      "relying on AI-augmented results."),
+               nrow(d_ai)), immediate. = TRUE)
+     }
+
      # List order sets the rbind order; AI is placed before SUPP to match the
      # WHO > JHU > AI > SUPP priority. When include_ai=FALSE, d_ai is NULL and
      # this is byte-identical to the previous 3-source behavior.
@@ -225,6 +239,15 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # downscale to daily
      daily_list <- lapply(split(wk, wk$iso_code), function(df_iso) {
           df_iso$date_start <- as.Date(df_iso$date_start)
+          # Calibration consumers read this daily file (est_epidemic_peaks ->
+          # calc_model_likelihood peak terms, est_initial_E_I, plotting). Exclude
+          # AI gap-fill rows so synthetic/reconstructed cases never reach the
+          # transmission-model likelihood; the AI signal lives only in the
+          # weekly -> suitability (LSTM) path. Setting cases/deaths to NA keeps the
+          # square daily structure (these become no-observation days).
+          ai_rows <- !is.na(df_iso$source) & df_iso$source == "AI"
+          df_iso$cases[ai_rows]  <- NA
+          df_iso$deaths[ai_rows] <- NA
           dc <- MOSAIC::downscale_weekly_values(df_iso$date_start, df_iso$cases, integer = TRUE)
           names(dc)[2] <- "cases"
           dd <- MOSAIC::downscale_weekly_values(df_iso$date_start, df_iso$deaths, integer = TRUE)

@@ -68,7 +68,11 @@ test_that("include_ai = FALSE merges 3 sources; confidence metadata defaults pre
 
 test_that("include_ai = TRUE adds columns, respects priority, fills gaps", {
   fx <- make_fixture(); P <- fx$P
-  suppressMessages(process_cholera_surveillance_data(P, include_ai = TRUE))
+  # Fix #3 interlock: a loud warning fires because confidence_weight is not yet consumed.
+  expect_warning(
+    suppressMessages(process_cholera_surveillance_data(P, include_ai = TRUE)),
+    "do NOT yet consume confidence_weight"
+  )
   out <- read_combined(P)
   obs <- out[!is.na(out$cases), ]
 
@@ -90,6 +94,13 @@ test_that("include_ai = TRUE adds columns, respects priority, fills gaps", {
   expect_equal(obs$disaggregation_method[obs$week == fx$weeks[4]], "observed")
   # empty grid cells stay NA = "no observation"
   expect_true(all(is.na(out$confidence_weight[is.na(out$cases)])))
+
+  # Fix #2: AI rows are EXCLUDED from the daily (calibration) file. Trusted weekly
+  # cases sum to 100+200+300 = 600 (wk2 WHO, wk3 JHU); the AI gap-fill wk4 (50) must
+  # not appear in the daily downscale.
+  daily <- utils::read.csv(file.path(P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"),
+                           stringsAsFactors = FALSE)
+  expect_equal(sum(daily$cases, na.rm = TRUE), 600)
 })
 
 test_that("include_ai = TRUE warns and falls back when AI file is missing", {

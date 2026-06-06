@@ -8,7 +8,7 @@ compile_suitability_data(
   PATHS,
   cutoff,
   use_epidemic_peaks = FALSE,
-  date_start = NULL,
+  date_start = "2000-01-01",
   date_stop = NULL,
   forecast_mode = TRUE,
   forecast_horizon = 3,
@@ -33,11 +33,14 @@ est_epidemic_peaks() to define environmental suitability using exact peak_start
 to peak_stop dates. Provides deterministic outbreak detection without any
 modifications or lead-up periods. Default FALSE for backwards compatibility.}
 
-\item{date_start}{Optional start year for data filtering. If NULL, automatically determined
-from case data (one year prior to earliest case observation).}
+\item{date_start}{Start of the data window. Accepts a year (e.g. \code{2000}) or a
+date string (e.g. \code{"2000-01-01"}); only the year is used for filtering. Default
+\code{"2000-01-01"}. This caps how far back the panel extends (important when the
+AI source supplies pre-2000 reconstructions). Pass \code{NULL} to auto-detect the
+start from case data (one year prior to the earliest case observation).}
 
-\item{date_stop}{Optional end year for data filtering. If NULL, automatically determined
-from latest ENSO data availability.}
+\item{date_stop}{End of the data window (year or date string). If NULL (default),
+auto-detected from the latest raw ENSO data availability.}
 
 \item{forecast_mode}{Logical. If TRUE, only includes variables that can support forecasting
 at the specified horizon. (As of v0.30.26 the case-dependent epidemic memory and
