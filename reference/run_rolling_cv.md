@@ -24,7 +24,6 @@ run_rolling_cv(
   est_suitability_spec = list(),
   dask_spec = NULL,
   dir_output,
-  refit_psi = TRUE,
   verbose = TRUE
 )
 ```
@@ -94,12 +93,6 @@ run_rolling_cv(
 - dir_output:
 
   Directory for the experiment artifact (created if needed).
-
-- refit_psi:
-
-  Logical (default TRUE); re-fit psi per cutoff. If FALSE, reuse the
-  existing `pred_psi_suitability_day.csv` (NOT leakage-clean — for
-  plumbing/benchmark only).
 
 - verbose:
 

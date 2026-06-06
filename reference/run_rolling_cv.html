@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,7 +71,6 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
-<span>  refit_psi <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -138,12 +137,6 @@ through to <code><a href="est_suitability.html">est_suitability</a></code> (e.g.
 
 <dt id="arg-dir-output">dir_output<a class="anchor" aria-label="anchor" href="#arg-dir-output"></a></dt>
 <dd><p>Directory for the experiment artifact (created if needed).</p></dd>
-
-
-<dt id="arg-refit-psi">refit_psi<a class="anchor" aria-label="anchor" href="#arg-refit-psi"></a></dt>
-<dd><p>Logical (default TRUE); re-fit psi per cutoff. If FALSE, reuse
-the existing <code>pred_psi_suitability_day.csv</code> (NOT leakage-clean — for
-plumbing/benchmark only).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
