@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.40</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,10 @@ suitability (psi) based on the climate covariates.</p>
 <span>  split_method <span class="op">=</span> <span class="st">"random"</span>,</span>
 <span>  train_prop <span class="op">=</span> <span class="fl">0.6</span>,</span>
 <span>  plot_country_diagnostics <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  exclude_covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
+<span>  feature_set <span class="op">=</span> <span class="st">"v7.3"</span>,</span>
+<span>  exclude_covariates <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  response_var <span class="op">=</span> <span class="st">"target_C_rate_global"</span>,</span>
+<span>  calibrate <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -128,8 +131,20 @@ which better tests spatial-temporal generalization by preventing data leakage wi
 <dd><p>Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.</p></dd>
 
 
+<dt id="arg-feature-set">feature_set<a class="anchor" aria-label="anchor" href="#arg-feature-set"></a></dt>
+<dd><p>Named covariate set: <code>"v7.3"</code> (default; the 38 screening-informed features, see <code><a href="MINFEAT_V7_3_FEATURE_SET.html">MINFEAT_V7_3_FEATURE_SET</a></code>) or <code>"default"</code> (full production candidate set). Ignored when <code>exclude_covariates</code> is non-NULL. Errors if a <code>"v7.3"</code> feature is absent from the suitability CSV (schema-drift guard).</p></dd>
+
+
 <dt id="arg-exclude-covariates">exclude_covariates<a class="anchor" aria-label="anchor" href="#arg-exclude-covariates"></a></dt>
-<dd><p>Character vector of column names to drop from the LSTM input set before fitting. Default <code>character(0)</code> (no exclusions). Used for ablation and leave-one-out covariate comparisons; names that are not present in the covariate set are silently ignored after a warning.</p></dd>
+<dd><p>Character vector of column names to drop from the LSTM input set, or <code>NULL</code> (default). <code>NULL</code> =&gt; derived from <code>feature_set</code>. A non-NULL value is used as-is (legacy ablation / leave-one-out path) and takes precedence over <code>feature_set</code>.</p></dd>
+
+
+<dt id="arg-response-var">response_var<a class="anchor" aria-label="anchor" href="#arg-response-var"></a></dt>
+<dd><p>Training target column (default <code>"target_C_rate_global"</code>, per-capita rate with a global anchor). Use <code>"transmission_intensity"</code> for the legacy <code>log1p(cases)/log1p(cases_99th)</code> target, or another pre-computed <code>[0,1]</code> <code>target_*</code> column present in the suitability CSV.</p></dd>
+
+
+<dt id="arg-calibrate">calibrate<a class="anchor" aria-label="anchor" href="#arg-calibrate"></a></dt>
+<dd><p>Logical (default <code>TRUE</code>). Apply a per-country affine bias calibration (<code><a href="calibrate_psi_predictions.html">calibrate_psi_predictions</a></code>), fit on the training window and applied to all predictions; adds a <code>pred_calibrated</code> column to the prediction CSVs. Set <code>FALSE</code> for legacy (uncalibrated) output.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -157,6 +172,19 @@ specified directory.</p>
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
     <p>The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
 a CSV file and a plot showing the model fit (MAE and loss) is generated.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="migration-reproduce-pre-v-behavior-">Migration (reproduce pre-v0.33 behavior)<a class="anchor" aria-label="anchor" href="#migration-reproduce-pre-v-behavior-"></a></h2>
+
+
+<p>The v0.33.0 defaults changed to the ablation-recommended spec (AI data +
+<code>feature_set="v7.3"</code> + <code>response_var="target_C_rate_global"</code> + calibration).
+<code>feature_set</code> and <code>response_var</code> are coupled — <code>target_C</code> helps only with v7.3
+and hurts with the full feature set; change them together. To reproduce the
+prior production behavior:</p><div class="sourceCode"><pre><code><span></span>
+<span><span class="fu"><a href="../reference/est_suitability.html">est_suitability</a></span><span class="op">(</span><span class="va">PATHS</span>, feature_set <span class="op">=</span> <span class="st">"default"</span>,</span>
+<span>                response_var <span class="op">=</span> <span class="st">"transmission_intensity"</span>, calibrate <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -24,7 +24,10 @@ est_suitability(
   split_method = "random",
   train_prop = 0.6,
   plot_country_diagnostics = FALSE,
-  exclude_covariates = character(0)
+  feature_set = "v7.3",
+  exclude_covariates = NULL,
+  response_var = "target_C_rate_global",
+  calibrate = TRUE
 )
 ```
 
@@ -102,12 +105,36 @@ est_suitability(
   Numeric. Proportion of data for training in initial split (default
   0.6). Used for both splitting methods.
 
+- feature_set:
+
+  Named covariate set: `"v7.3"` (default; the 38 screening-informed
+  features, see
+  [`MINFEAT_V7_3_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_3_FEATURE_SET.md))
+  or `"default"` (full production candidate set). Ignored when
+  `exclude_covariates` is non-NULL. Errors if a `"v7.3"` feature is
+  absent from the suitability CSV (schema-drift guard).
+
 - exclude_covariates:
 
-  Character vector of column names to drop from the LSTM input set
-  before fitting. Default `character(0)` (no exclusions). Used for
-  ablation and leave-one-out covariate comparisons; names that are not
-  present in the covariate set are silently ignored after a warning.
+  Character vector of column names to drop from the LSTM input set, or
+  `NULL` (default). `NULL` =\> derived from `feature_set`. A non-NULL
+  value is used as-is (legacy ablation / leave-one-out path) and takes
+  precedence over `feature_set`.
+
+- response_var:
+
+  Training target column (default `"target_C_rate_global"`, per-capita
+  rate with a global anchor). Use `"transmission_intensity"` for the
+  legacy `log1p(cases)/log1p(cases_99th)` target, or another
+  pre-computed `[0,1]` `target_*` column present in the suitability CSV.
+
+- calibrate:
+
+  Logical (default `TRUE`). Apply a per-country affine bias calibration
+  ([`calibrate_psi_predictions`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calibrate_psi_predictions.md)),
+  fit on the training window and applied to all predictions; adds a
+  `pred_calibrated` column to the prediction CSVs. Set `FALSE` for
+  legacy (uncalibrated) output.
 
 ## Value
 
@@ -155,6 +182,18 @@ The function performs the following steps:
 The LSTM model uses climate variables to predict cholera suitability.
 The model's predictions are saved as a CSV file and a plot showing the
 model fit (MAE and loss) is generated.
+
+## Migration (reproduce pre-v0.33 behavior)
+
+The v0.33.0 defaults changed to the ablation-recommended spec (AI data +
+`feature_set="v7.3"` + `response_var="target_C_rate_global"` +
+calibration). `feature_set` and `response_var` are coupled — `target_C`
+helps only with v7.3 and hurts with the full feature set; change them
+together. To reproduce the prior production behavior:
+
+
+    est_suitability(PATHS, feature_set = "default",
+                    response_var = "transmission_intensity", calibrate = FALSE)
 
 ## See also
 

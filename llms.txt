@@ -445,6 +445,8 @@ Helper and utility functions
 - [`get_elevation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_elevation.md)
   : Get Mean or Median Elevation from Downloaded DEM Data Using Country
   Boundaries
+- [`get_feature_set()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_feature_set.md)
+  : Resolve a named feature set to a covariate vector
 - [`get_generation_time_distribution()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_generation_time_distribution.md)
   : Estimate the Generation Time Distribution for Days and Weeks
 - [`get_ggplot_legend()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_ggplot_legend.md)
@@ -589,6 +591,8 @@ Built-in datasets
 
 Other exported functions and internal helpers
 
+- [`MINFEAT_V7_3_FEATURE_SET`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/MINFEAT_V7_3_FEATURE_SET.md)
+  : Named LSTM covariate feature sets for est_suitability()
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
   : Attach MOSAIC Python Environment
 - [`batch_clean_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/batch_clean_json.md)
@@ -664,6 +668,8 @@ Other exported functions and internal helpers
   : Calculate spatial importation hazard
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
   : Weighted mode estimation using kernel density
+- [`calibrate_psi_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calibrate_psi_predictions.md)
+  : Per-country affine bias-calibration of suitability (psi) predictions
 - [`check_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.md)
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
 - [`check_coiled_workspace()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_coiled_workspace.md)
@@ -831,6 +837,8 @@ Other exported functions and internal helpers
 - [`get_elevation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_elevation.md)
   : Get Mean or Median Elevation from Downloaded DEM Data Using Country
   Boundaries
+- [`get_feature_set()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_feature_set.md)
+  : Resolve a named feature set to a covariate vector
 - [`get_generation_time_distribution()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_generation_time_distribution.md)
   : Estimate the Generation Time Distribution for Days and Weeks
 - [`get_ggplot_legend()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_ggplot_legend.md)
