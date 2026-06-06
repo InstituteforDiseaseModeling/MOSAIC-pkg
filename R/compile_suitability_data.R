@@ -410,13 +410,17 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
           d$target_D_rate_per_country_floored[mask] <-
                pmin(1, log1p(country_rate) / log1p(cp99r))
 
-          # F: per-country rank over TRUSTED rows only — divide by (n_trusted + 1) so
-          # max < 1. Ranking AI gap-fills against the trusted distribution is not
-          # meaningful and zero-heavy AI rows make the rank degenerate, so AI rows are
-          # left NA for F.
-          d$target_F_rank_per_country[trusted_mask] <-
-               rank(d$cases[trusted_mask], ties.method = "average", na.last = "keep") /
-                    (sum(trusted_mask) + 1)
+          # F: per-country rank over ALL observed weeks (trusted AND AI), so AI
+          # observations receive a rank value like targets A-D. na.last="keep" leaves
+          # empty grid cells NA; divide by (n_obs + 1) so the max is < 1 (keeps
+          # qlogis() finite for any logit-domain consumer).
+          # NOTE: unlike A-D (which anchor on trusted rows and are therefore invariant
+          # to include_ai), F co-ranks the AI rows, so its values reflect the AI weeks
+          # present in the build.
+          n_obs_iso <- sum(!is.na(country_cases))
+          d$target_F_rank_per_country[mask] <-
+               rank(country_cases, ties.method = "average", na.last = "keep") /
+                    (n_obs_iso + 1)
      }
 
      # 2. World Bank socioeconomic indicators (annual, forward-fill for future years)
