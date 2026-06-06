@@ -13,7 +13,7 @@ compile_suitability_data(
   PATHS,
   cutoff,
   use_epidemic_peaks = FALSE,
-  date_start = NULL,
+  date_start = "2000-01-01",
   date_stop = NULL,
   forecast_mode = TRUE,
   forecast_horizon = 3,
@@ -56,14 +56,17 @@ compile_suitability_data(
 
 - date_start:
 
-  Optional start year for data filtering. If NULL, automatically
-  determined from case data (one year prior to earliest case
-  observation).
+  Start of the data window. Accepts a year (e.g. `2000`) or a date
+  string (e.g. `"2000-01-01"`); only the year is used for filtering.
+  Default `"2000-01-01"`. This caps how far back the panel extends
+  (important when the AI source supplies pre-2000 reconstructions). Pass
+  `NULL` to auto-detect the start from case data (one year prior to the
+  earliest case observation).
 
 - date_stop:
 
-  Optional end year for data filtering. If NULL, automatically
-  determined from latest ENSO data availability.
+  End of the data window (year or date string). If NULL (default),
+  auto-detected from the latest raw ENSO data availability.
 
 - forecast_mode:
 

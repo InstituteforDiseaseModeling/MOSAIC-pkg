@@ -13,7 +13,7 @@ rolling windows, anomalies, and climate / WASH interaction terms."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.37</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.32.38</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@ rolling windows, anomalies, and climate / WASH interaction terms.</p>
 <span>  <span class="va">PATHS</span>,</span>
 <span>  <span class="va">cutoff</span>,</span>
 <span>  use_epidemic_peaks <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  date_start <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  date_start <span class="op">=</span> <span class="st">"2000-01-01"</span>,</span>
 <span>  date_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  forecast_mode <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  forecast_horizon <span class="op">=</span> <span class="fl">3</span>,</span>
@@ -92,13 +92,16 @@ modifications or lead-up periods. Default FALSE for backwards compatibility.</p>
 
 
 <dt id="arg-date-start">date_start<a class="anchor" aria-label="anchor" href="#arg-date-start"></a></dt>
-<dd><p>Optional start year for data filtering. If NULL, automatically determined
-from case data (one year prior to earliest case observation).</p></dd>
+<dd><p>Start of the data window. Accepts a year (e.g. <code>2000</code>) or a
+date string (e.g. <code>"2000-01-01"</code>); only the year is used for filtering. Default
+<code>"2000-01-01"</code>. This caps how far back the panel extends (important when the
+AI source supplies pre-2000 reconstructions). Pass <code>NULL</code> to auto-detect the
+start from case data (one year prior to the earliest case observation).</p></dd>
 
 
 <dt id="arg-date-stop">date_stop<a class="anchor" aria-label="anchor" href="#arg-date-stop"></a></dt>
-<dd><p>Optional end year for data filtering. If NULL, automatically determined
-from latest ENSO data availability.</p></dd>
+<dd><p>End of the data window (year or date string). If NULL (default),
+auto-detected from the latest raw ENSO data availability.</p></dd>
 
 
 <dt id="arg-forecast-mode">forecast_mode<a class="anchor" aria-label="anchor" href="#arg-forecast-mode"></a></dt>
