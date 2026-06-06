@@ -67,9 +67,6 @@
 #'   \code{exclude_covariates}). Date arguments are ignored (harness-owned).
 #' @param dask_spec Optional Dask/Coiled spec passed to \code{run_MOSAIC}.
 #' @param dir_output Directory for the experiment artifact (created if needed).
-#' @param refit_psi Logical (default TRUE); re-fit psi per cutoff. If FALSE, reuse
-#'   the existing \code{pred_psi_suitability_day.csv} (NOT leakage-clean — for
-#'   plumbing/benchmark only).
 #' @param verbose Logical (default TRUE).
 #'
 #' @return Invisibly, the manifest list. Side effects: writes
@@ -94,7 +91,6 @@ run_rolling_cv <- function(PATHS,
                            est_suitability_spec = list(),
                            dask_spec            = NULL,
                            dir_output,
-                           refit_psi            = TRUE,
                            verbose              = TRUE) {
 
      stopifnot(is.character(iso), length(iso) >= 1L)
@@ -147,15 +143,16 @@ run_rolling_cv <- function(PATHS,
                       dir = file.path("runs", run_id), status = "pending")
 
           res <- tryCatch({
-               # 1. psi <= T (leakage-clean): harness owns the date args
-               if (isTRUE(refit_psi)) {
-                    es_args <- .rcv_merge_est_args(est_suitability_spec, list(
-                         PATHS          = PATHS,
-                         fit_date_stop  = T_k,
-                         pred_date_start= cfg_start,
-                         pred_date_stop = cfg_stop))
-                    do.call(MOSAIC::est_suitability, es_args)
-               }
+               # 1. Re-fit psi on data <= T (leakage-clean) — done EVERY cutoff;
+               #    this per-cutoff refit is the point of the rolling-CV test. The
+               #    harness owns the date args; est_suitability_spec controls only
+               #    modeling knobs (e.g. n_splits, feature set) and run speed.
+               es_args <- .rcv_merge_est_args(est_suitability_spec, list(
+                    PATHS          = PATHS,
+                    fit_date_stop  = T_k,
+                    pred_date_start= cfg_start,
+                    pred_date_stop = cfg_stop))
+               do.call(MOSAIC::est_suitability, es_args)
                psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
 
                # 2. build cutoff config: subset loc, swap psi, mask obs > T
@@ -220,8 +217,7 @@ run_rolling_cv <- function(PATHS,
                n_cutoffs        = length(cutoffs),
                latest_cutoff    = as.character(max(cutoffs)),
                iso              = iso,
-               est_suitability_spec = est_suitability_spec,
-               refit_psi        = isTRUE(refit_psi)),
+               est_suitability_spec = est_suitability_spec),
           runs = run_records)
      .rcv_write_json(manifest, file.path(dir_output, "manifest.json"))
      .rcv_write_readme(dir_output)

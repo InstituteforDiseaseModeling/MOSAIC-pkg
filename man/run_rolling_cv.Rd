@@ -18,7 +18,6 @@ run_rolling_cv(
   est_suitability_spec = list(),
   dask_spec = NULL,
   dir_output,
-  refit_psi = TRUE,
   verbose = TRUE
 )
 }
@@ -56,10 +55,6 @@ through to \code{\link{est_suitability}} (e.g. \code{n_splits},
 \item{dask_spec}{Optional Dask/Coiled spec passed to \code{run_MOSAIC}.}
 
 \item{dir_output}{Directory for the experiment artifact (created if needed).}
-
-\item{refit_psi}{Logical (default TRUE); re-fit psi per cutoff. If FALSE, reuse
-the existing \code{pred_psi_suitability_day.csv} (NOT leakage-clean — for
-plumbing/benchmark only).}
 
 \item{verbose}{Logical (default TRUE).}
 }
