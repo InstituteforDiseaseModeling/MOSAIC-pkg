@@ -17,7 +17,10 @@ est_suitability(
   split_method = "random",
   train_prop = 0.6,
   plot_country_diagnostics = FALSE,
-  exclude_covariates = character(0)
+  feature_set = "v7.3",
+  exclude_covariates = NULL,
+  response_var = "target_C_rate_global",
+  calibrate = TRUE
 )
 }
 \arguments{
@@ -51,7 +54,13 @@ which better tests spatial-temporal generalization by preventing data leakage wi
 
 \item{train_prop}{Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.}
 
-\item{exclude_covariates}{Character vector of column names to drop from the LSTM input set before fitting. Default \code{character(0)} (no exclusions). Used for ablation and leave-one-out covariate comparisons; names that are not present in the covariate set are silently ignored after a warning.}
+\item{feature_set}{Named covariate set: \code{"v7.3"} (default; the 38 screening-informed features, see \code{\link{MINFEAT_V7_3_FEATURE_SET}}) or \code{"default"} (full production candidate set). Ignored when \code{exclude_covariates} is non-NULL. Errors if a \code{"v7.3"} feature is absent from the suitability CSV (schema-drift guard).}
+
+\item{exclude_covariates}{Character vector of column names to drop from the LSTM input set, or \code{NULL} (default). \code{NULL} => derived from \code{feature_set}. A non-NULL value is used as-is (legacy ablation / leave-one-out path) and takes precedence over \code{feature_set}.}
+
+\item{response_var}{Training target column (default \code{"target_C_rate_global"}, per-capita rate with a global anchor). Use \code{"transmission_intensity"} for the legacy \code{log1p(cases)/log1p(cases_99th)} target, or another pre-computed \verb{[0,1]} \verb{target_*} column present in the suitability CSV.}
+
+\item{calibrate}{Logical (default \code{TRUE}). Apply a per-country affine bias calibration (\code{\link{calibrate_psi_predictions}}), fit on the training window and applied to all predictions; adds a \code{pred_calibrated} column to the prediction CSVs. Set \code{FALSE} for legacy (uncalibrated) output.}
 }
 \value{
 This function processes climate and cholera case data, fits an LSTM model, makes predictions on
@@ -86,6 +95,19 @@ The function performs the following steps:
 The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
 a CSV file and a plot showing the model fit (MAE and loss) is generated.
 }
+\section{Migration (reproduce pre-v0.33 behavior)}{
+
+The v0.33.0 defaults changed to the ablation-recommended spec (AI data +
+\code{feature_set="v7.3"} + \code{response_var="target_C_rate_global"} + calibration).
+\code{feature_set} and \code{response_var} are coupled — \code{target_C} helps only with v7.3
+and hurts with the full feature set; change them together. To reproduce the
+prior production behavior:
+\preformatted{
+est_suitability(PATHS, feature_set = "default",
+                response_var = "transmission_intensity", calibrate = FALSE)
+}
+}
+
 \examples{
 \dontrun{
 # Set up paths

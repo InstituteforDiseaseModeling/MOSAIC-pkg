@@ -25,7 +25,21 @@
 #'   The "location_month_block" method groups sequences by country-month and randomly assigns entire blocks,
 #'   which better tests spatial-temporal generalization by preventing data leakage within location-months.
 #' @param train_prop Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.
-#' @param exclude_covariates Character vector of column names to drop from the LSTM input set before fitting. Default `character(0)` (no exclusions). Used for ablation and leave-one-out covariate comparisons; names that are not present in the covariate set are silently ignored after a warning.
+#' @param feature_set Named covariate set: `"v7.3"` (default; the 38 screening-informed features, see \code{\link{MINFEAT_V7_3_FEATURE_SET}}) or `"default"` (full production candidate set). Ignored when `exclude_covariates` is non-NULL. Errors if a `"v7.3"` feature is absent from the suitability CSV (schema-drift guard).
+#' @param exclude_covariates Character vector of column names to drop from the LSTM input set, or `NULL` (default). `NULL` => derived from `feature_set`. A non-NULL value is used as-is (legacy ablation / leave-one-out path) and takes precedence over `feature_set`.
+#' @param response_var Training target column (default `"target_C_rate_global"`, per-capita rate with a global anchor). Use `"transmission_intensity"` for the legacy `log1p(cases)/log1p(cases_99th)` target, or another pre-computed `[0,1]` `target_*` column present in the suitability CSV.
+#' @param calibrate Logical (default `TRUE`). Apply a per-country affine bias calibration (\code{\link{calibrate_psi_predictions}}), fit on the training window and applied to all predictions; adds a `pred_calibrated` column to the prediction CSVs. Set `FALSE` for legacy (uncalibrated) output.
+#'
+#' @section Migration (reproduce pre-v0.33 behavior):
+#' The v0.33.0 defaults changed to the ablation-recommended spec (AI data +
+#' `feature_set="v7.3"` + `response_var="target_C_rate_global"` + calibration).
+#' `feature_set` and `response_var` are coupled — `target_C` helps only with v7.3
+#' and hurts with the full feature set; change them together. To reproduce the
+#' prior production behavior:
+#' \preformatted{
+#' est_suitability(PATHS, feature_set = "default",
+#'                 response_var = "transmission_intensity", calibrate = FALSE)
+#' }
 #'
 #' @return This function processes climate and cholera case data, fits an LSTM model, makes predictions on
 #'         environmental suitability (psi), and saves both the predictions and covariate data. It also
@@ -132,7 +146,10 @@ est_suitability <- function(PATHS,
                             split_method = "random", # Split method: "random" or "location_month_block"
                             train_prop = 0.6, # Proportion for training in initial split
                             plot_country_diagnostics = FALSE, # Per-country base-R diagnostic plots during smoothing loop
-                            exclude_covariates = character(0) # Column names to drop from the LSTM input set (for ablation / leave-one-out comparisons)
+                            feature_set = "v7.3", # Named covariate set: "v7.3" (38 screening-informed features, default) or "default" (full production candidate set). Ignored when exclude_covariates is non-NULL.
+                            exclude_covariates = NULL, # Column names to drop from the LSTM input set. NULL (default) => derived from feature_set. Non-NULL => used as-is (legacy ablation / leave-one-out path).
+                            response_var = "target_C_rate_global", # Training target column (default: per-capita rate, global anchor). "transmission_intensity" = legacy log1p(cases)/log1p(cases_99th); or another pre-computed [0,1] target_* column in the suitability CSV.
+                            calibrate = TRUE # Apply per-country affine bias calibration (fit on the training window) to the predictions; adds a `pred_calibrated` column to the prediction CSVs.
 ) {
 
      # All required packages loaded via NAMESPACE
@@ -170,18 +187,58 @@ est_suitability <- function(PATHS,
      cases_99th <- quantile(d_all$cases, 0.99, na.rm = TRUE)
      message(sprintf("Cases 99th percentile: %.1f", cases_99th))
 
-     # Create transmission intensity using log1p transformation
-     # This preserves epidemic curve shapes while normalizing scale to [0,1]
-     d_all$transmission_intensity <- pmin(1.0, log1p(d_all$cases) / log1p(cases_99th))
+     # ----------------------------------------------------------------------
+     # Response variable selection
+     #
+     # The training target is stored in d_all$transmission_intensity downstream
+     # (y_train extraction at the train/val split). When `response_var ==
+     # "transmission_intensity"` (default, production behavior), compute it from
+     # cases as log1p(cases) / log1p(cases_99th). When `response_var` names a
+     # pre-computed [0,1] column already present in the suitability CSV (e.g.,
+     # `target_C_rate_global`, `target_A_count_global`, `target_F_rank_per_country`
+     # — set by compile_suitability_data() with anchors on trusted/non-AI rows),
+     # use that column directly and skip the cases-based recomputation. In both
+     # cases the final column is named `transmission_intensity` for downstream
+     # compatibility.
+     # ----------------------------------------------------------------------
+     if (identical(response_var, "transmission_intensity")) {
+          message("Creating transmission_intensity from cases (log1p anchor at cases_99th)")
+          # Create transmission intensity using log1p transformation
+          # This preserves epidemic curve shapes while normalizing scale to [0,1]
+          d_all$transmission_intensity <- pmin(1.0, log1p(d_all$cases) / log1p(cases_99th))
+     } else {
+          if (!response_var %in% colnames(d_all)) {
+               stop(sprintf(
+                    "est_suitability: response_var '%s' not found in suitability CSV columns. Available pre-computed targets: %s",
+                    response_var,
+                    paste(intersect(c("target_A_count_global", "target_B_count_per_country",
+                                       "target_C_rate_global", "target_D_rate_per_country_floored",
+                                       "target_F_rank_per_country"),
+                                     colnames(d_all)), collapse = ", ")))
+          }
+          message(sprintf("Using response_var='%s' (pre-computed [0,1] target from suitability CSV)", response_var))
+          d_all$transmission_intensity <- d_all[[response_var]]
+          # Clamp into [0,1] defensively (compile_suitability_data should already
+          # ensure this, but a stray NaN or out-of-range value would corrupt the
+          # logit transform downstream).
+          y_min <- min(d_all$transmission_intensity, na.rm = TRUE)
+          y_max <- max(d_all$transmission_intensity, na.rm = TRUE)
+          if (is.finite(y_min) && is.finite(y_max) && (y_min < 0 || y_max > 1)) {
+               warning(sprintf(
+                    "response_var '%s' had values outside [0,1] (range %.3g–%.3g); clamping",
+                    response_var, y_min, y_max))
+               d_all$transmission_intensity <- pmax(0, pmin(1, d_all$transmission_intensity))
+          }
+     }
 
      # Report transformation statistics
      intensity_stats <- summary(d_all$transmission_intensity)
-     message("Transmission intensity distribution:")
+     message(sprintf("Response variable (%s) distribution:", response_var))
      print(intensity_stats)
 
      # Check for any remaining issues
      if(any(is.na(d_all$transmission_intensity))) {
-          warning("NA values detected in transmission_intensity")
+          warning("NA values detected in transmission_intensity (response column)")
      }
 
      message("Determining date ranges for fitting and prediction...")
@@ -301,6 +358,34 @@ est_suitability <- function(PATHS,
           "emdat_flood_prob_anom",
           colnames(d_all)[grep('_lag', colnames(d_all))]
      )
+
+     # ---- Resolve feature_set -> exclude_covariates -------------------------
+     # When exclude_covariates is NULL (default) derive it from the named
+     # feature_set: "v7.3" keeps only the 38 screening-informed features (by
+     # excluding everything else in covariates_all); "default" keeps the full
+     # candidate set. A non-NULL exclude_covariates (legacy ablation path)
+     # overrides this entirely.
+     if (is.null(exclude_covariates)) {
+          exclude_covariates <- switch(
+               feature_set,
+               "v7.3" = {
+                    v73 <- get_feature_set("v7.3")
+                    missing_v73 <- setdiff(v73, colnames(d_all))
+                    if (length(missing_v73) > 0) {
+                         stop(sprintf(
+                              "est_suitability: feature_set='v7.3' needs %d feature(s) absent from the suitability CSV: %s.\n  Recompile the suitability data, or use feature_set='default'.",
+                              length(missing_v73), paste(missing_v73, collapse = ", ")),
+                              call. = FALSE)
+                    }
+                    setdiff(covariates_all, v73)
+               },
+               "default" = character(0),
+               stop(sprintf("est_suitability: unknown feature_set '%s' (expected 'v7.3' or 'default').",
+                            feature_set), call. = FALSE)
+          )
+          message(sprintf("feature_set='%s': retaining %d covariate(s)", feature_set,
+                          length(setdiff(intersect(covariates_all, colnames(d_all)), exclude_covariates))))
+     }
 
      # Note: Previously problematic lag variables have been fixed in compile_suitability_data()
      # by using proper conditional logic that only creates lags when base variables exist
@@ -1012,6 +1097,23 @@ est_suitability <- function(PATHS,
 
 
 
+
+     # ---- Per-country bias calibration (fit on the training window only) ----
+     # Right-shape / wrong-scale correction: a per-ISO affine map estimated on
+     # date <= fit_date_stop, applied to all predictions and clipped to [0,1].
+     # Adds a `pred_calibrated` column; the raw `pred`/`pred_smooth` are kept.
+     if (isTRUE(calibrate)) {
+          obs_cal <- d_all[, c("iso_code", "date", "transmission_intensity")]
+          pcol_d  <- if ("pred_smooth" %in% names(d_pred_daily)) "pred_smooth" else "pred"
+          d_pred_daily <- calibrate_psi_predictions(
+               d_pred_daily, obs_cal, fit_date_stop, pred_col = pcol_d)
+          if (exists("d_pred_weekly") && is.data.frame(d_pred_weekly)) {
+               pcol_w <- if ("pred_smooth" %in% names(d_pred_weekly)) "pred_smooth" else "pred"
+               d_pred_weekly <- calibrate_psi_predictions(
+                    d_pred_weekly, obs_cal, fit_date_stop, pred_col = pcol_w)
+          }
+          message("Applied per-country bias calibration (added 'pred_calibrated' column).")
+     }
 
      # Save predictions to CSV
      path <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_week.csv")
