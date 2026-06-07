@@ -52,18 +52,24 @@ evaluate_rolling_cv(
 
   RNG seed for the bootstrap (default 1).
 
+  When the predictions carry a `model` column (`ensemble`,
+  `ensemble_opt`, `best`, `medioid`), every metric is computed and
+  reported **per model**; absent that column all rows are treated as a
+  single `"ensemble"` model (back-compatible).
+
 ## Value
 
 A list with:
 
 - cells:
 
-  Per (cutoff x iso x metric x window) metrics + per-baseline skill.
+  Per (cutoff x model x iso x metric x window) metrics + per-baseline
+  skill.
 
 - summary:
 
-  Aggregated across cells per (metric x window): cell count, mean/median
-  of each metric, and mean baseline skill with bootstrap CI.
+  Aggregated across cells per (model x metric x window): cell count,
+  mean/median of each metric, and mean baseline skill with bootstrap CI.
 
 ## Details
 

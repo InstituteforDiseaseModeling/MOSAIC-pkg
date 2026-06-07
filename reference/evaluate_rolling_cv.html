@@ -15,7 +15,7 @@ baselines, aggregated across cutoffs and countries with bootstrap CIs."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,17 +98,21 @@ baselines, aggregated across cutoffs and countries with bootstrap CIs.</p>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>RNG seed for the bootstrap (default 1).</p></dd>
+<dd><p>RNG seed for the bootstrap (default 1).</p>
+<p>When the predictions carry a <code>model</code> column (<code>ensemble</code>,
+<code>ensemble_opt</code>, <code>best</code>, <code>medioid</code>), every metric is computed and
+reported <strong>per model</strong>; absent that column all rows are treated as a
+single <code>"ensemble"</code> model (back-compatible).</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with:</p><dl><dt>cells</dt>
-<dd><p>Per (cutoff x iso x metric x window) metrics + per-baseline skill.</p></dd>
+<dd><p>Per (cutoff x model x iso x metric x window) metrics + per-baseline skill.</p></dd>
 
 <dt>summary</dt>
-<dd><p>Aggregated across cells per (metric x window): cell count,
-mean/median of each metric, and mean baseline skill with bootstrap CI.</p></dd>
+<dd><p>Aggregated across cells per (model x metric x window): cell
+count, mean/median of each metric, and mean baseline skill with bootstrap CI.</p></dd>
 
 
 </dl></div>

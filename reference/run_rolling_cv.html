@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,6 +69,8 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  priors <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="priors_default.html">priors_default</a></span>,</span>
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  optimize_subset <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ensemble"</span>, <span class="st">"ensemble_opt"</span>, <span class="st">"best"</span>, <span class="st">"medioid"</span><span class="op">)</span>,</span>
+<span>  n_reps_best_medioid <span class="op">=</span> <span class="fl">50L</span>,</span>
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
@@ -134,6 +136,26 @@ sets this on the resolved control for every cutoff, so the ensemble is
 re-scored against the training-window observed series and the posterior is
 driven by the optimizer-selected subset. Set <code>FALSE</code> to use the raw
 candidate ensemble.</p></dd>
+
+
+<dt id="arg-models">models<a class="anchor" aria-label="anchor" href="#arg-models"></a></dt>
+<dd><p>Character vector of model types to score and carry in
+<code>predictions.parquet</code> (default all four:
+<code>c("ensemble","ensemble_opt","best","medioid")</code>). <code>"ensemble"</code>
+(posterior-weighted candidate) is always included. <code>"ensemble_opt"</code> is
+the optimizer-selected subset (only emitted when <code>optimize_subset =
+  TRUE</code> and <code>ensemble_optimized.rds</code> exists). <code>"best"</code> and
+<code>"medioid"</code> are re-simulated from their saved configs (see
+<code>n_reps_best_medioid</code>). Each model appears as a value of the
+<code>model</code> column.</p></dd>
+
+
+<dt id="arg-n-reps-best-medioid">n_reps_best_medioid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medioid"></a></dt>
+<dd><p>Integer (default 50); number of stochastic LASER
+reruns used to build the predictive median + intervals for the <code>best</code>
+and <code>medioid</code> configs. These reruns execute locally in the calling R
+process (not on Dask), so cost scales with this value times the number of
+cutoffs and locations.</p></dd>
 
 
 <dt id="arg-est-suitability-spec">est_suitability_spec<a class="anchor" aria-label="anchor" href="#arg-est-suitability-spec"></a></dt>

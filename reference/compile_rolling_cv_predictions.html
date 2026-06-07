@@ -11,7 +11,7 @@ cutoff or to add quantile columns), without recalibrating."><meta property="og:i
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,6 +54,8 @@ cutoff or to add quantile columns), without recalibrating.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">compile_rolling_cv_predictions</span><span class="op">(</span></span>
 <span>  <span class="va">dir_output</span>,</span>
 <span>  base_config <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="config_default.html">config_default</a></span>,</span>
+<span>  models <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n_reps_best_medioid <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  write <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>

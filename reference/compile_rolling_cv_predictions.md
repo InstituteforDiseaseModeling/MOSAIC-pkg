@@ -12,6 +12,8 @@ without recalibrating.
 compile_rolling_cv_predictions(
   dir_output,
   base_config = MOSAIC::config_default,
+  models = NULL,
+  n_reps_best_medioid = NULL,
   write = TRUE
 )
 ```
