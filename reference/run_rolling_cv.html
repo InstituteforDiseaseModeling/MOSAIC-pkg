@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,6 +68,7 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  base_config <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="config_default.html">config_default</a></span>,</span>
 <span>  priors <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="priors_default.html">priors_default</a></span>,</span>
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  optimize_subset <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
@@ -123,6 +124,16 @@ window defines the anchor and projection span.</p></dd>
 <dd><p><code>run_MOSAIC</code> control list, or NULL for an experiment-grade
 cheap default (fixed <code>n_simulations</code>, plots off). See
 <code><a href="mosaic_control_defaults.html">mosaic_control_defaults</a></code>.</p></dd>
+
+
+<dt id="arg-optimize-subset">optimize_subset<a class="anchor" aria-label="anchor" href="#arg-optimize-subset"></a></dt>
+<dd><p>Logical (default <code>TRUE</code>); enable
+<code>run_MOSAIC</code>'s post-ensemble best-subset optimizer
+(<code>control$predictions$optimize_subset</code>). When <code>TRUE</code> the harness
+sets this on the resolved control for every cutoff, so the ensemble is
+re-scored against the training-window observed series and the posterior is
+driven by the optimizer-selected subset. Set <code>FALSE</code> to use the raw
+candidate ensemble.</p></dd>
 
 
 <dt id="arg-est-suitability-spec">est_suitability_spec<a class="anchor" aria-label="anchor" href="#arg-est-suitability-spec"></a></dt>
