@@ -781,6 +781,8 @@ Other exported functions and internal helpers
   zeta_1 / zeta_2)
 - [`estimated_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/estimated_parameters.md)
   : Estimated Parameters Inventory
+- [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)
+  : Post-hoc evaluation of a rolling-window forecast-validation artifact
 - [`extract_sampling_metadata()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/extract_sampling_metadata.md)
   : Extract Sampling Metadata from Config
 - [`fit_beta_from_ci()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/fit_beta_from_ci.md)
