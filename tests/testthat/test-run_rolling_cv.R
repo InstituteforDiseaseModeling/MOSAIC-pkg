@@ -91,12 +91,15 @@ test_that(".rolling_cv_compile_run assembles a labeled long table from an ensemb
   out <- MOSAIC:::.rolling_cv_compile_run(
     ensemble = ens, run_id = "cutoff_2025-04-15", cutoff = as.Date("2025-04-15"),
     anchor = as.Date("2023-02-01"), embargo_days = 7L, horizons_months = c(1, 3, 5),
-    obs_cases = oc, obs_deaths = od, obs_dates = obs_dates, location_names = "MOZ")
+    obs_cases = oc, obs_deaths = od, obs_dates = obs_dates, location_names = "MOZ",
+    model = "best")
 
   # two metrics x n_t rows
   expect_equal(nrow(out), 2L * n_t)
   expect_setequal(unique(out$metric), c("cases", "deaths"))
-  expect_true(all(c("run_id","iso_code","date","segment","weeks_ahead",
+  expect_true("model" %in% names(out))
+  expect_setequal(unique(out$model), "best")          # model tag carried through
+  expect_true(all(c("run_id","model","iso_code","date","segment","weeks_ahead",
                     "horizon_bucket","observed","pred_median",
                     "pi95_lo","pi95_hi","pi50_lo","pi50_hi") %in% names(out)))
   # segments present and observed carried from held-out matrix

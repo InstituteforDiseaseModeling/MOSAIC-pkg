@@ -33,11 +33,16 @@
 #' @param n_boot Bootstrap resamples over cells for the skill CI (default 1000).
 #' @param seed RNG seed for the bootstrap (default 1).
 #'
+#' When the predictions carry a \code{model} column (\code{ensemble},
+#' \code{ensemble_opt}, \code{best}, \code{medioid}), every metric is computed and
+#' reported \strong{per model}; absent that column all rows are treated as a
+#' single \code{"ensemble"} model (back-compatible).
+#'
 #' @return A list with:
 #' \describe{
-#'   \item{cells}{Per (cutoff x iso x metric x window) metrics + per-baseline skill.}
-#'   \item{summary}{Aggregated across cells per (metric x window): cell count,
-#'     mean/median of each metric, and mean baseline skill with bootstrap CI.}
+#'   \item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline skill.}
+#'   \item{summary}{Aggregated across cells per (model x metric x window): cell
+#'     count, mean/median of each metric, and mean baseline skill with bootstrap CI.}
 #' }
 #' @seealso \code{\link{run_rolling_cv}}, \code{\link{calc_model_R2}}, \code{\link{calc_bias_ratio}}
 #' @importFrom stats median quantile
@@ -58,25 +63,27 @@ evaluate_rolling_cv <- function(predictions,
      d$date        <- as.Date(d$date)
      d$cutoff_date <- as.Date(d$cutoff_date)
      if (!"run_id" %in% names(d)) d$run_id <- paste0("cutoff_", d$cutoff_date)
+     if (!"model"  %in% names(d)) d$model  <- "ensemble"   # back-compat: single series
      if (trusted_only && "observed_source" %in% names(d))
           d <- d[is.na(d$observed_source) | d$observed_source != "AI", ]
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      baselines <- match.arg(baselines, several.ok = TRUE)
 
      cell_rows <- list()
-     cells <- unique(d[, c("run_id", "iso_code", "metric")])
+     cells <- unique(d[, c("run_id", "model", "iso_code", "metric")])
      cells <- cells[cells$metric %in% metrics, , drop = FALSE]
 
      for (r in seq_len(nrow(cells))) {
-          cd <- d[d$run_id == cells$run_id[r] & d$iso_code == cells$iso_code[r] &
-                  d$metric == cells$metric[r], ]
+          cd <- d[d$run_id == cells$run_id[r] & d$model == cells$model[r] &
+                  d$iso_code == cells$iso_code[r] & d$metric == cells$metric[r], ]
           cutoff <- cd$cutoff_date[1]
           is_df  <- cd[cd$segment == "IS"  & is.finite(cd$observed) & is.finite(cd$pred_median), ]
           oos_df <- cd[cd$segment == "OOS" & is.finite(cd$observed) & is.finite(cd$pred_median), ]
           oos0   <- if (nrow(oos_df)) min(oos_df$date) else cutoff
 
-          base_meta <- list(run_id = cells$run_id[r], iso_code = cells$iso_code[r],
-                            metric = cells$metric[r], cutoff_date = as.character(cutoff))
+          base_meta <- list(run_id = cells$run_id[r], model = cells$model[r],
+                            iso_code = cells$iso_code[r], metric = cells$metric[r],
+                            cutoff_date = as.character(cutoff))
 
           # IS window (fit) — no baselines/skill
           if (nrow(is_df) >= 3L)
@@ -97,15 +104,17 @@ evaluate_rolling_cv <- function(predictions,
      }
      cells_df <- do.call(rbind, cell_rows)
 
-     # ---- aggregate across cells per (metric, window) ----
-     agg_keys <- unique(cells_df[, c("metric", "window")])
+     # ---- aggregate across cells per (model, metric, window) ----
+     agg_keys <- unique(cells_df[, c("model", "metric", "window")])
      summ <- list()
      skill_cols <- grep("^skill_", names(cells_df), value = TRUE)
      for (i in seq_len(nrow(agg_keys))) {
-          sub <- cells_df[cells_df$metric == agg_keys$metric[i] &
+          sub <- cells_df[cells_df$model == agg_keys$model[i] &
+                          cells_df$metric == agg_keys$metric[i] &
                           cells_df$window == agg_keys$window[i], ]
           row <- data.frame(
-               metric = agg_keys$metric[i], window = agg_keys$window[i],
+               model = agg_keys$model[i], metric = agg_keys$metric[i],
+               window = agg_keys$window[i],
                n_cells = nrow(sub),
                R2_corr_med = round(stats::median(sub$R2_corr, na.rm = TRUE), 3),
                R2_sse_med  = round(stats::median(sub$R2_sse,  na.rm = TRUE), 3),
@@ -123,7 +132,7 @@ evaluate_rolling_cv <- function(predictions,
           summ[[length(summ) + 1L]] <- row
      }
      summary_df <- do.call(rbind, summ)
-     summary_df <- summary_df[order(summary_df$metric, summary_df$window), ]
+     summary_df <- summary_df[order(summary_df$model, summary_df$metric, summary_df$window), ]
 
      list(cells = cells_df, summary = summary_df)
 }

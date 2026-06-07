@@ -52,6 +52,26 @@ test_that("evaluate_rolling_cv reports baseline skill columns + summary", {
   expect_true(all(c("metric","window","n_cells","wis_mean") %in% names(ev$summary)))
 })
 
+test_that("evaluate_rolling_cv breaks out metrics per model when a model column is present", {
+  # two models: a perfect ensemble (pred==obs) and a 2x over-predicting best
+  p <- make_pred(); p$model <- "ensemble"
+  best <- p
+  best$model <- "best"
+  best$pred_median <- 2 * best$observed                      # OOS+IS both 2x
+  best$pi50_lo <- best$pred_median * 0.5; best$pi50_hi <- best$pred_median * 1.5
+  best$pi95_lo <- best$pred_median * 0.05; best$pi95_hi <- best$pred_median * 3
+  ev <- evaluate_rolling_cv(rbind(p, best), n_boot = 20L)
+
+  expect_true("model" %in% names(ev$cells))
+  expect_setequal(unique(ev$cells$model), c("ensemble", "best"))
+  expect_true("model" %in% names(ev$summary))
+
+  is_ens  <- ev$cells[ev$cells$model == "ensemble" & ev$cells$window == "IS", ]
+  is_best <- ev$cells[ev$cells$model == "best"     & ev$cells$window == "IS", ]
+  expect_equal(is_ens$bias_ratio, 1, tolerance = 1e-6)       # ensemble perfect
+  expect_equal(is_best$bias_ratio, 2, tolerance = 1e-6)      # best 2x high
+})
+
 test_that("evaluate_rolling_cv drops AI-sourced observations when trusted_only", {
   p <- make_pred()
   # inject an AI-sourced OOS row with absurd observed; trusted_only should drop it

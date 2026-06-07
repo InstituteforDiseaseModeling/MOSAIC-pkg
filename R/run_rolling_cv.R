@@ -69,6 +69,20 @@
 #'   re-scored against the training-window observed series and the posterior is
 #'   driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
 #'   candidate ensemble.
+#' @param models Character vector of model types to score and carry in
+#'   \code{predictions.parquet} (default all four:
+#'   \code{c("ensemble","ensemble_opt","best","medioid")}). \code{"ensemble"}
+#'   (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
+#'   the optimizer-selected subset (only emitted when \code{optimize_subset =
+#'   TRUE} and \code{ensemble_optimized.rds} exists). \code{"best"} and
+#'   \code{"medioid"} are re-simulated from their saved configs (see
+#'   \code{n_reps_best_medioid}). Each model appears as a value of the
+#'   \code{model} column.
+#' @param n_reps_best_medioid Integer (default 50); number of stochastic LASER
+#'   reruns used to build the predictive median + intervals for the \code{best}
+#'   and \code{medioid} configs. These reruns execute locally in the calling R
+#'   process (not on Dask), so cost scales with this value times the number of
+#'   cutoffs and locations.
 #' @param est_suitability_spec Named list of \emph{modeling} arguments passed
 #'   through to \code{\link{est_suitability}} (e.g. \code{n_splits},
 #'   \code{exclude_covariates}). Date arguments are ignored (harness-owned).
@@ -96,6 +110,8 @@ run_rolling_cv <- function(PATHS,
                            priors               = MOSAIC::priors_default,
                            control              = NULL,
                            optimize_subset      = TRUE,
+                           models               = c("ensemble", "ensemble_opt", "best", "medioid"),
+                           n_reps_best_medioid  = 50L,
                            est_suitability_spec = list(),
                            dask_spec            = NULL,
                            dir_output,
@@ -103,6 +119,10 @@ run_rolling_cv <- function(PATHS,
 
      stopifnot(is.character(iso), length(iso) >= 1L)
      if (missing(dir_output) || is.null(dir_output)) stop("dir_output is required.")
+     models <- match.arg(models, c("ensemble", "ensemble_opt", "best", "medioid"),
+                         several.ok = TRUE)
+     models <- union("ensemble", models)              # candidate ensemble always emitted
+     n_reps_best_medioid <- as.integer(n_reps_best_medioid)
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      max_h_days      <- ceiling(max(horizons_months) * 30.4375)
      embargo_days    <- as.integer(embargo_weeks) * 7L
@@ -183,12 +203,11 @@ run_rolling_cv <- function(PATHS,
                MOSAIC::run_MOSAIC(config = cfg, priors = priors, dir_output = dir_k,
                                   control = control, dask_spec = dask_spec)
 
-               # 4. compile predictions from the ensemble (predicted) + held-out obs
-               ens_path <- file.path(dir_k, "2_calibration", "ensemble_candidate.rds")
-               if (!file.exists(ens_path)) stop("ensemble_candidate.rds not found at ", ens_path)
-               ens <- readRDS(ens_path)
-               pred_tables[[k]] <- .rolling_cv_compile_run(
-                    ensemble       = ens,
+               # 4. compile predictions for every requested model type
+               #    (ensemble candidate / optimizer subset / best / medioid)
+               #    against the held-out trusted observed series.
+               pred_tables[[k]] <- .rcv_compile_all_models(
+                    run_dir        = dir_k,
                     run_id         = run_id,
                     cutoff         = T_k,
                     anchor         = cfg_start,
@@ -197,7 +216,9 @@ run_rolling_cv <- function(PATHS,
                     obs_cases      = obs_cases_full,     # unmasked, trusted
                     obs_deaths     = obs_deaths_full,
                     obs_dates      = cfg_dates,
-                    location_names = loc_cfg_full$location_name)
+                    location_names = loc_cfg_full$location_name,
+                    models         = models,
+                    n_reps         = n_reps_best_medioid)
                "success"
           }, error = function(e) {
                if (verbose) message("  FAILED: ", conditionMessage(e))
@@ -232,6 +253,8 @@ run_rolling_cv <- function(PATHS,
                latest_cutoff    = as.character(max(cutoffs)),
                iso              = iso,
                optimize_subset  = isTRUE(optimize_subset),
+               models           = models,
+               n_reps_best_medioid = n_reps_best_medioid,
                est_suitability_spec = est_suitability_spec),
           runs = run_records)
      .rcv_write_json(manifest, file.path(dir_output, "manifest.json"))
@@ -340,6 +363,8 @@ run_rolling_cv <- function(PATHS,
 #' @export
 compile_rolling_cv_predictions <- function(dir_output,
                                            base_config = MOSAIC::config_default,
+                                           models = NULL,
+                                           n_reps_best_medioid = NULL,
                                            write = TRUE) {
      mpath <- file.path(dir_output, "manifest.json")
      if (!file.exists(mpath)) stop("manifest.json not found in ", dir_output)
@@ -348,6 +373,11 @@ compile_rolling_cv_predictions <- function(dir_output,
      anchor <- as.Date(man$spec$anchor_date)
      horizons <- as.numeric(unlist(man$spec$horizons_months))
      embargo_days <- as.integer(man$spec$embargo_weeks) * 7L
+     # default model set / rep count from the manifest (fall back to all four / 50)
+     if (is.null(models))
+          models <- unlist(man$spec$models) %||% c("ensemble", "ensemble_opt", "best", "medioid")
+     if (is.null(n_reps_best_medioid))
+          n_reps_best_medioid <- as.integer(man$spec$n_reps_best_medioid %||% 50L)
 
      cfg_dates <- seq.Date(as.Date(base_config$date_start),
                            as.Date(base_config$date_stop), by = "day")
@@ -360,14 +390,15 @@ compile_rolling_cv_predictions <- function(dir_output,
      tabs <- list()
      for (r in seq_len(nrow(runs))) {
           if (!identical(runs$status[r], "success")) next
-          ens_path <- file.path(dir_output, runs$dir[r], "2_calibration", "ensemble_candidate.rds")
-          if (!file.exists(ens_path)) next
-          tabs[[length(tabs) + 1L]] <- .rolling_cv_compile_run(
-               ensemble = readRDS(ens_path), run_id = runs$run_id[r],
+          run_dir <- file.path(dir_output, runs$dir[r])
+          if (!file.exists(file.path(run_dir, "2_calibration", "ensemble_candidate.rds"))) next
+          tabs[[length(tabs) + 1L]] <- .rcv_compile_all_models(
+               run_dir = run_dir, run_id = runs$run_id[r],
                cutoff = as.Date(runs$cutoff_date[r]), anchor = anchor,
                embargo_days = embargo_days, horizons_months = horizons,
                obs_cases = oc, obs_deaths = od, obs_dates = cfg_dates,
-               location_names = loc$location_name)
+               location_names = loc$location_name,
+               models = models, n_reps = n_reps_best_medioid)
      }
      predictions <- if (length(tabs)) do.call(rbind, tabs) else NULL
      if (write && !is.null(predictions))
@@ -380,7 +411,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' @noRd
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
-                                    location_names) {
+                                    location_names, model = "ensemble") {
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
      edates <- seq(ds, de, length.out = n_t)
@@ -402,7 +433,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                obs_src <- if (metric == "cases") obs_cases else obs_deaths
                observed <- if (!is.na(oi)) getrow(obs_src, oi)[obs_idx] else rep(NA_real_, n_t)
                df <- data.frame(
-                    run_id = run_id, iso_code = locs[i],
+                    run_id = run_id, model = model, iso_code = locs[i],
                     anchor_date = as.character(anchor), cutoff_date = as.character(cutoff),
                     date = as.Date(edates), metric = metric,
                     segment = lab$segment, weeks_ahead = lab$weeks_ahead,
@@ -447,6 +478,107 @@ compile_rolling_cv_predictions <- function(dir_output,
 }
 
 #' Experiment-grade cheap calibration control
+#' Compile every requested model type for one cutoff into one long table
+#'
+#' Reads the candidate ensemble (always), the optimizer-selected ensemble (when
+#' present), and re-simulates the best / medioid configs, emitting one
+#' \code{model}-tagged block per type and row-binding them.
+#' @keywords internal
+#' @noRd
+.rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
+                                    horizons_months, obs_cases, obs_deaths, obs_dates,
+                                    location_names, models, n_reps) {
+     cal      <- file.path(run_dir, "2_calibration")
+     ens_path <- file.path(cal, "ensemble_candidate.rds")
+     if (!file.exists(ens_path)) stop("ensemble_candidate.rds not found at ", ens_path)
+     ens <- readRDS(ens_path)
+
+     emit <- function(predobj, model) {
+          if (is.null(predobj)) return(NULL)
+          .rolling_cv_compile_run(
+               ensemble = predobj, run_id = run_id, cutoff = cutoff, anchor = anchor,
+               embargo_days = embargo_days, horizons_months = horizons_months,
+               obs_cases = obs_cases, obs_deaths = obs_deaths, obs_dates = obs_dates,
+               location_names = location_names, model = model)
+     }
+
+     parts <- list(emit(ens, "ensemble"))
+     if ("ensemble_opt" %in% models) {
+          opt_path <- file.path(cal, "ensemble_optimized.rds")
+          if (file.exists(opt_path))
+               parts[[length(parts) + 1L]] <- emit(readRDS(opt_path), "ensemble_opt")
+     }
+     bm <- file.path(cal, "best_model")
+     if ("best" %in% models)
+          parts[[length(parts) + 1L]] <- emit(
+               .rcv_simulate_config(file.path(bm, "config_best.json"), ens, n_reps), "best")
+     if ("medioid" %in% models)
+          parts[[length(parts) + 1L]] <- emit(
+               .rcv_simulate_config(file.path(bm, "config_medioid.json"), ens, n_reps), "medioid")
+
+     parts <- Filter(Negate(is.null), parts)
+     if (!length(parts)) return(NULL)
+     do.call(rbind, parts)
+}
+
+#' Re-simulate a single config to a prediction object matching the ensemble shape
+#'
+#' Runs \code{n_reps} stochastic LASER reruns of the saved config and reduces them
+#' to a predictive median + interval bounds on the template ensemble's date grid,
+#' so the result can be emitted by \code{.rolling_cv_compile_run}. Returns NULL if
+#' the config is absent.
+#' @keywords internal
+#' @noRd
+.rcv_simulate_config <- function(config_path, template, n_reps) {
+     if (!file.exists(config_path)) return(NULL)
+     cfg       <- jsonlite::fromJSON(config_path, simplifyVector = TRUE, simplifyMatrix = TRUE)
+     sim_dates <- seq.Date(as.Date(cfg$date_start), as.Date(cfg$date_stop), by = "day")
+     edates    <- seq(as.Date(template$date_start), as.Date(template$date_stop),
+                      length.out = template$n_time_points)
+     col_idx   <- match(as.character(as.Date(edates)), as.character(sim_dates))
+     if (anyNA(col_idx))
+          stop("config window does not cover the ensemble date grid in ", config_path)
+     locs  <- template$location_names
+     nloc  <- length(locs); nt <- length(edates)
+     eq    <- template$envelope_quantiles
+     seeds <- seq_len(max(1L, as.integer(n_reps)))
+
+     cas <- array(NA_real_, c(length(seeds), nloc, nt))
+     dea <- array(NA_real_, c(length(seeds), nloc, nt))
+     for (s in seq_along(seeds)) {
+          r  <- MOSAIC::run_LASER(cfg, seed = seeds[s], quiet = TRUE)
+          rc <- reticulate::py_to_r(r$results$reported_cases)
+          rd <- reticulate::py_to_r(r$results$reported_deaths)
+          if (!is.matrix(rc)) rc <- matrix(rc, nrow = 1L)
+          if (!is.matrix(rd)) rd <- matrix(rd, nrow = 1L)
+          cas[s, , ] <- rc[, col_idx, drop = FALSE]
+          dea[s, , ] <- rd[, col_idx, drop = FALSE]
+     }
+
+     reduce <- function(arr) {
+          med    <- apply(arr, c(2L, 3L), stats::median, na.rm = TRUE)
+          n_pair <- length(eq) / 2L
+          ci <- vector("list", n_pair)
+          for (p in seq_len(n_pair)) {
+               lo_q <- eq[p]; hi_q <- eq[length(eq) - p + 1L]
+               ci[[p]] <- list(
+                    lower = apply(arr, c(2L, 3L), stats::quantile, probs = lo_q, na.rm = TRUE),
+                    upper = apply(arr, c(2L, 3L), stats::quantile, probs = hi_q, na.rm = TRUE))
+          }
+          list(median = med, ci = ci)
+     }
+     qc <- reduce(cas); qd <- reduce(dea)
+     list(
+          n_time_points      = nt,
+          date_start         = as.character(template$date_start),
+          date_stop          = as.character(template$date_stop),
+          location_names     = locs,
+          envelope_quantiles = eq,
+          cases_median       = qc$median,
+          deaths_median      = qd$median,
+          ci_bounds          = list(cases = qc$ci, deaths = qd$ci))
+}
+
 #' @keywords internal
 #' @noRd
 .rcv_cheap_control <- function() {
@@ -483,7 +615,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           "| item | description |",
           "|---|---|",
           "| `manifest.json` | settings + per-run index (status, ranges, runtime) |",
-          "| `predictions.parquet` | compiled long table: 1 row per cutoff x location x date x metric (IS/embargo/OOS labeled; observed + predicted median + CIs) |",
+          "| `predictions.parquet` | compiled long table: 1 row per cutoff x model x location x date x metric. `model` in {ensemble, ensemble_opt, best, medioid}. IS/embargo/OOS labeled; observed + predicted median + CIs |",
           "| `runs/cutoff_<T>/` | native run_MOSAIC output per cutoff |",
           "",
           "`predictions.parquet` is a derived view (rebuildable from `runs/`).",

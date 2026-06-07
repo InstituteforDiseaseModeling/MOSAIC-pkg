@@ -16,6 +16,8 @@ run_rolling_cv(
   priors = MOSAIC::priors_default,
   control = NULL,
   optimize_subset = TRUE,
+  models = c("ensemble", "ensemble_opt", "best", "medioid"),
+  n_reps_best_medioid = 50L,
   est_suitability_spec = list(),
   dask_spec = NULL,
   dir_output,
@@ -56,6 +58,22 @@ sets this on the resolved control for every cutoff, so the ensemble is
 re-scored against the training-window observed series and the posterior is
 driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
 candidate ensemble.}
+
+\item{models}{Character vector of model types to score and carry in
+\code{predictions.parquet} (default all four:
+\code{c("ensemble","ensemble_opt","best","medioid")}). \code{"ensemble"}
+(posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
+the optimizer-selected subset (only emitted when \code{optimize_subset =
+  TRUE} and \code{ensemble_optimized.rds} exists). \code{"best"} and
+\code{"medioid"} are re-simulated from their saved configs (see
+\code{n_reps_best_medioid}). Each model appears as a value of the
+\code{model} column.}
+
+\item{n_reps_best_medioid}{Integer (default 50); number of stochastic LASER
+reruns used to build the predictive median + intervals for the \code{best}
+and \code{medioid} configs. These reruns execute locally in the calling R
+process (not on Dask), so cost scales with this value times the number of
+cutoffs and locations.}
 
 \item{est_suitability_spec}{Named list of \emph{modeling} arguments passed
 through to \code{\link{est_suitability}} (e.g. \code{n_splits},

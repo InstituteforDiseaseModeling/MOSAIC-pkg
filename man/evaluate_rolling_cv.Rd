@@ -28,14 +28,19 @@ evaluate_rolling_cv(
 
 \item{n_boot}{Bootstrap resamples over cells for the skill CI (default 1000).}
 
-\item{seed}{RNG seed for the bootstrap (default 1).}
+\item{seed}{RNG seed for the bootstrap (default 1).
+
+When the predictions carry a \code{model} column (\code{ensemble},
+\code{ensemble_opt}, \code{best}, \code{medioid}), every metric is computed and
+reported \strong{per model}; absent that column all rows are treated as a
+single \code{"ensemble"} model (back-compatible).}
 }
 \value{
 A list with:
 \describe{
-\item{cells}{Per (cutoff x iso x metric x window) metrics + per-baseline skill.}
-\item{summary}{Aggregated across cells per (metric x window): cell count,
-mean/median of each metric, and mean baseline skill with bootstrap CI.}
+\item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline skill.}
+\item{summary}{Aggregated across cells per (model x metric x window): cell
+count, mean/median of each metric, and mean baseline skill with bootstrap CI.}
 }
 }
 \description{
