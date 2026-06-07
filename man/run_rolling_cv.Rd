@@ -15,6 +15,7 @@ run_rolling_cv(
   base_config = MOSAIC::config_default,
   priors = MOSAIC::priors_default,
   control = NULL,
+  optimize_subset = TRUE,
   est_suitability_spec = list(),
   dask_spec = NULL,
   dir_output,
@@ -47,6 +48,14 @@ window defines the anchor and projection span.}
 \item{control}{\code{run_MOSAIC} control list, or NULL for an experiment-grade
 cheap default (fixed \code{n_simulations}, plots off). See
 \code{\link{mosaic_control_defaults}}.}
+
+\item{optimize_subset}{Logical (default \code{TRUE}); enable
+\code{run_MOSAIC}'s post-ensemble best-subset optimizer
+(\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
+sets this on the resolved control for every cutoff, so the ensemble is
+re-scored against the training-window observed series and the posterior is
+driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
+candidate ensemble.}
 
 \item{est_suitability_spec}{Named list of \emph{modeling} arguments passed
 through to \code{\link{est_suitability}} (e.g. \code{n_splits},

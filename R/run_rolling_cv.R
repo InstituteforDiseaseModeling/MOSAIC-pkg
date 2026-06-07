@@ -62,6 +62,13 @@
 #' @param control \code{run_MOSAIC} control list, or NULL for an experiment-grade
 #'   cheap default (fixed \code{n_simulations}, plots off). See
 #'   \code{\link{mosaic_control_defaults}}.
+#' @param optimize_subset Logical (default \code{TRUE}); enable
+#'   \code{run_MOSAIC}'s post-ensemble best-subset optimizer
+#'   (\code{control$predictions$optimize_subset}). When \code{TRUE} the harness
+#'   sets this on the resolved control for every cutoff, so the ensemble is
+#'   re-scored against the training-window observed series and the posterior is
+#'   driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
+#'   candidate ensemble.
 #' @param est_suitability_spec Named list of \emph{modeling} arguments passed
 #'   through to \code{\link{est_suitability}} (e.g. \code{n_splits},
 #'   \code{exclude_covariates}). Date arguments are ignored (harness-owned).
@@ -88,6 +95,7 @@ run_rolling_cv <- function(PATHS,
                            base_config          = MOSAIC::config_default,
                            priors               = MOSAIC::priors_default,
                            control              = NULL,
+                           optimize_subset      = TRUE,
                            est_suitability_spec = list(),
                            dask_spec            = NULL,
                            dir_output,
@@ -119,6 +127,12 @@ run_rolling_cv <- function(PATHS,
      if (length(cutoffs) == 0L) stop("No valid cutoffs (check window vs anchor).")
 
      if (is.null(control)) control <- .rcv_cheap_control()
+     # Harness owns the best-subset optimizer toggle: rescore the ensemble against
+     # the (training-window) observed series and drive the posterior from the
+     # optimizer-selected subset. Forced onto the resolved control so it applies
+     # whether `control` is the cheap default or user-supplied.
+     if (is.null(control$predictions)) control$predictions <- list()
+     control$predictions$optimize_subset <- isTRUE(optimize_subset)
 
      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
      runs_dir <- file.path(dir_output, "runs")
@@ -217,6 +231,7 @@ run_rolling_cv <- function(PATHS,
                n_cutoffs        = length(cutoffs),
                latest_cutoff    = as.character(max(cutoffs)),
                iso              = iso,
+               optimize_subset  = isTRUE(optimize_subset),
                est_suitability_spec = est_suitability_spec),
           runs = run_records)
      .rcv_write_json(manifest, file.path(dir_output, "manifest.json"))
@@ -440,6 +455,8 @@ compile_rolling_cv_predictions <- function(dir_output,
                                            list(n_simulations = 2000L, n_iterations = 3L))
      ctrl$targets <- utils::modifyList(ctrl$targets %||% list(), list(ESS_param = 100L))
      ctrl$paths   <- utils::modifyList(ctrl$paths   %||% list(), list(plots = FALSE))
+     ctrl$predictions <- utils::modifyList(ctrl$predictions %||% list(),
+                                           list(optimize_subset = TRUE))
      ctrl
 }
 
