@@ -365,7 +365,9 @@ tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'pred_psi_suitability_day.csv'))
 tmp$date <- as.Date(tmp$date)
 tmp <- tmp[tmp$iso_code %in% j,]
 tmp <- tmp[tmp$date >= date_start & tmp$date <= date_stop,]
-psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "pred_smooth", fun.aggregate = mean)
+if (!"psi" %in% names(tmp))
+     stop("pred_psi_suitability_day.csv lacks the canonical `psi` column; regenerate it with est_suitability() v0.34+ BEFORE rebuilding config_default (Option A output schema).")
+psi_jt <- reshape2::acast(tmp, iso_code ~ date, value.var = "psi", fun.aggregate = mean)
 sel <- match(j, row.names(psi_jt))
 psi_jt <- psi_jt[sel,]
 

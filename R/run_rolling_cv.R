@@ -84,8 +84,12 @@
 #'   process (not on Dask), so cost scales with this value times the number of
 #'   cutoffs and locations.
 #' @param est_suitability_spec Named list of \emph{modeling} arguments passed
-#'   through to \code{\link{est_suitability}} (e.g. \code{n_splits},
-#'   \code{exclude_covariates}). Date arguments are ignored (harness-owned).
+#'   through to \code{\link{est_suitability}} (e.g. \code{architecture},
+#'   \code{feature_set}, \code{response_var}, \code{bias_correct}, and the
+#'   lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
+#'   Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
+#'   accepted but ignored with a per-cutoff deprecation message — prefer
+#'   \code{arch_control} for lstm_v2 knobs.
 #' @param dask_spec Optional Dask/Coiled spec passed to \code{run_MOSAIC}.
 #' @param dir_output Directory for the experiment artifact (created if needed).
 #' @param verbose Logical (default TRUE).
@@ -180,7 +184,7 @@ run_rolling_cv <- function(PATHS,
                # 1. Re-fit psi on data <= T (leakage-clean) — done EVERY cutoff;
                #    this per-cutoff refit is the point of the rolling-CV test. The
                #    harness owns the date args; est_suitability_spec controls only
-               #    modeling knobs (e.g. n_splits, feature set) and run speed.
+               #    modeling knobs (e.g. architecture, feature_set, arch_control).
                es_args <- .rcv_merge_est_args(est_suitability_spec, list(
                     PATHS          = PATHS,
                     fit_date_stop  = T_k,
@@ -326,6 +330,12 @@ run_rolling_cv <- function(PATHS,
 .rolling_cv_psi_matrix <- function(psi_csv, location_names, dates) {
      if (!file.exists(psi_csv)) stop("psi prediction file not found: ", psi_csv)
      tmp <- utils::read.csv(psi_csv, stringsAsFactors = FALSE)
+     # Option A (v0.34): consume the canonical `psi` column (smoothed +
+     # bias-corrected). Fail loudly on a stale pre-v0.34 CSV rather than silently
+     # falling back to the pre-bias-correction `pred_smooth` (the latent no-op bug).
+     if (!"psi" %in% names(tmp))
+          stop("psi prediction file lacks the canonical `psi` column (", psi_csv,
+               "); regenerate it with est_suitability() v0.34+.")
      tmp$date <- as.Date(tmp$date)
      tmp <- tmp[tmp$iso_code %in% location_names &
                 tmp$date >= min(dates) & tmp$date <= max(dates), ]
@@ -335,11 +345,11 @@ run_rolling_cv <- function(PATHS,
      full <- matrix(NA_real_, nrow = length(location_names), ncol = length(dates),
                     dimnames = list(location_names, date_chr))
      tmp$dchr <- as.character(tmp$date)
-     agg <- stats::aggregate(pred_smooth ~ iso_code + dchr, data = tmp, FUN = mean)
+     agg <- stats::aggregate(psi ~ iso_code + dchr, data = tmp, FUN = mean)
      ir <- match(agg$iso_code, location_names)
      ic <- match(agg$dchr, date_chr)
      ok <- !is.na(ir) & !is.na(ic)
-     full[cbind(ir[ok], ic[ok])] <- agg$pred_smooth[ok]
+     full[cbind(ir[ok], ic[ok])] <- agg$psi[ok]
      # carry forward/back to fill any interpolation gaps (psi is smooth)
      for (i in seq_len(nrow(full))) {
           full[i, ] <- zoo::na.locf(zoo::na.locf(full[i, ], na.rm = FALSE),

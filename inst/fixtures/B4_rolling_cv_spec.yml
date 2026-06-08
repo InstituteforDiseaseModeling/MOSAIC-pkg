@@ -1,0 +1,107 @@
+# =============================================================================
+# B4_rolling_cv_spec.yml
+#
+# Single source of truth for the B4 "lstm_v2_hierarchical_film" specification
+# (the new v0.34 default architecture for est_suitability()). Loaded by
+# est_suitability() when arch_control = NULL, and by the reproduction test.
+#
+# This fixture pins B4's ACTUAL run values so that loading it verbatim
+# reproduces B4's sandbox result (median Pearson ~0.224). The production
+# defaults differ from this fixture in EXACTLY TWO sanctioned ways, applied as
+# code-level overrides in est_suitability() (NOT stored here):
+#
+#   (1) n_seeds     : fixture = 3  (B4's actual); production default = 5
+#   (2) region_map  : fixture = "csv" (B4's actual, 4 admin WHO regions);
+#                     production default = "snf_k5"
+#
+# To reproduce B4 exactly, pass arch_control = list(n_seeds = 3L,
+# region_map = "csv") so the production overrides are reverted back to the
+# fixture values. NOTE: B4's sandbox metric (median Pearson ~0.224) was scored on
+# the UNCORRECTED prediction, so score the `pred_smooth` diagnostic column (or
+# also pass bias_correct = FALSE) — the default `psi` column is bias-corrected
+# (psi = pred_bias_corrected) and is NOT the B4-comparable series.
+#
+# Provenance — this file merges three sources that were previously split
+# (plan_v034_RECOMMENDED.md §6.2):
+#   (a) Orchestrator/CSV  : sweep_round2_v7_primary.csv row B4
+#   (b) Architecture      : MOSAIC-Mozambique .../archs/arch_lstm.R modifyList defaults
+#   (c) Loss              : MOSAIC-Mozambique .../lstm_sandbox/loss.R defaults
+#   (d) Ensemble/sequence : run_seed_ensemble() + build_sequences() + rolling_cv.R
+#
+# Seeds are DERIVED, never pinned as a literal:
+#   seeds = seq.int(seed_base, by = seed_step, length.out = n_seeds)
+#   n_seeds=3 -> {11, 22, 33}; n_seeds=5 -> {11, 22, 33, 44, 55} (3 is a prefix of 5).
+#
+# Integer-typed fields are coerced with as.integer() after YAML read
+# (keras constructors and length.out= require integers). See
+# .suitability_coerce_arch_control().
+# =============================================================================
+
+# ---- (a) Orchestrator / CSV (B4 row) ----------------------------------------
+arch_kind:            "hierarchical"      # gauge_A trunk + dual FiLM
+hier_mode:            "film"              # multiplicative FiLM (not concat)
+country_pool:         "all_mosaic"        # all 40 MOSAIC countries
+split_type:           "rolling_cv"        # expanding-window rolling-origin CV
+timesteps:            13                  # weekly input window (~3 months)
+n_seeds:              3                   # B4 actual (production override -> 5)
+loss_kind:            "bce"               # sigmoid head + binary crossentropy
+response_var:         "intensity"         # sandbox name; public maps transmission_intensity -> intensity
+use_confidence_weight: true               # down-weight AI-mined rows by confidence_weight
+region_map:           "csv"               # B4 actual: CSV `region` col, 4 WHO regions (production override -> snf_k5)
+country_balance:      false               # no per-country aggregate-loss balancing
+partial_pool_lambda:  0.1                 # L2 on country-deviation embedding (CSV override of arch default 0.0)
+sample_weights:       "balanced_uniform"  # equalise zero/nonzero aggregate loss (balance_R below)
+gamma_activation:     "tanh"              # (1 + gamma) in [0,2]; identity at init
+patience:             10                  # early-stopping patience (CSV override of arch default 20)
+
+# ---- rolling-CV grid (rolling_cv.R / split_params) --------------------------
+rw_step_months:       1                   # RW stride
+rw_test_months:       5                   # forward test window (matches deployment horizon)
+rw_subsample:         6                   # take every 6th RW step
+rw_gap_weeks:         4                   # train_end -> test_start embargo (independent of timesteps)
+
+# ---- (b) Architecture internals (arch_lstm.R modifyList defaults) -----------
+units_1:              128                 # LSTM stack widths
+units_2:              64
+units_3:              32                  # shared climate-response latent dim (= film_dim)
+dropout:              0.3                 # inter-layer dropout
+rec_dropout:          0.10                # recurrent dropout (stochastic LSTM kernel)
+l2:                   0.0005              # L2 on every LSTM kernel (5e-4)
+country_dim:          16                  # country & region embedding width
+region_l2:            0.0001              # L2 on region embedding (1e-4)
+batch_size:           128
+epochs:               200                 # max epochs (early stopping cuts short on RW steps)
+lr:                   0.001               # Adam learning rate
+rlr_factor:           0.5                 # ReduceLROnPlateau factor
+rlr_patience:         8                   # ReduceLROnPlateau patience
+min_lr:               0.000001            # ReduceLROnPlateau floor (1e-6)
+restore_best_weights: true                # defines what best_epoch means for the median(best_epoch) refit
+
+# ---- (c) Loss internals (loss.R defaults; passive under balanced_uniform+bce
+#          but pinned for reproducibility) ------------------------------------
+balance_R:            1.0                 # equal aggregate loss from zero vs nonzero rows
+sw_offset:            0.1                 # linear sample-weight offset (unused under balanced_uniform)
+sw_min:               0.1                 # linear sample-weight floor (unused)
+sw_offset_quad:       0.05                # quadratic sample-weight offset (unused)
+sw_min_quad:          0.05                # quadratic sample-weight floor (unused)
+loss_logit_eps:       0.000001            # logit clamp in mse_logit target build (1e-6); DISTINCT from ensemble_logit_eps
+logit_clip:           6                   # logit clip in mse_logit inference squash (unused under bce)
+
+# ---- (d) Ensemble + sequence builder (run_seed_ensemble / build_sequences) --
+# NOTE: ensemble_logit_eps (0.01) is DISTINCT from loss_logit_eps (1e-6).
+# ensemble_logit_eps bounds predictions before logit-scale smoothing/aggregation;
+# loss_logit_eps bounds the target inside the mse_logit loss. Both pinned separately.
+smooth_span:          0.025               # LOESS span (logit-scale daily smoothing)
+ensemble_logit_eps:   0.01                # prediction clamp before logit smoothing/quantiles
+loess_surface:        "direct"            # loess.control(surface=)
+loess_degree:         2                   # loess degree
+max_gap_days:         14                  # max within-sequence date gap (controls which sequences build)
+
+# ---- seed derivation --------------------------------------------------------
+seed_base:            11                  # seeds = seq.int(seed_base, by=seed_step, length.out=n_seeds)
+seed_step:            11
+
+# ---- date anchor ------------------------------------------------------------
+# Sets the RW midpoint/grid. The est_suitability() fit_date_start=NULL default
+# resolves to this. min_test_days is DERIVED (timesteps*7 + 7), not pinned.
+fit_date_start:       "2015-01-01"

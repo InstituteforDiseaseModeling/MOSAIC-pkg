@@ -42,11 +42,12 @@ test_that(".rcv_add_months clamps month arithmetic", {
 test_that(".rolling_cv_psi_matrix builds locations x dates and fills gaps", {
   dates <- seq(as.Date("2025-01-01"), as.Date("2025-01-31"), by = "day")
   csv <- tempfile(fileext = ".csv")
+  # Option A (v0.34): the matrix builder consumes the canonical `psi` column.
   df <- rbind(
     data.frame(iso_code = "MOZ", date = as.character(dates[c(1, 10, 20, 31)]),
-               pred_smooth = c(0.1, 0.4, 0.6, 0.9)),
+               psi = c(0.1, 0.4, 0.6, 0.9)),
     data.frame(iso_code = "KEN", date = as.character(dates[c(1, 31)]),
-               pred_smooth = c(0.2, 0.3)))
+               psi = c(0.2, 0.3)))
   write.csv(df, csv, row.names = FALSE)
 
   m <- MOSAIC:::.rolling_cv_psi_matrix(csv, c("MOZ", "KEN"), dates)

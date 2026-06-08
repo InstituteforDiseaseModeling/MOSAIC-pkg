@@ -76,8 +76,12 @@ process (not on Dask), so cost scales with this value times the number of
 cutoffs and locations.}
 
 \item{est_suitability_spec}{Named list of \emph{modeling} arguments passed
-through to \code{\link{est_suitability}} (e.g. \code{n_splits},
-\code{exclude_covariates}). Date arguments are ignored (harness-owned).}
+through to \code{\link{est_suitability}} (e.g. \code{architecture},
+\code{feature_set}, \code{response_var}, \code{bias_correct}, and the
+lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
+Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
+accepted but ignored with a per-cutoff deprecation message — prefer
+\code{arch_control} for lstm_v2 knobs.}
 
 \item{dask_spec}{Optional Dask/Coiled spec passed to \code{run_MOSAIC}.}
 

@@ -17,28 +17,100 @@
 #' @param fit_date_stop Date string or NULL. End date for model fitting period. If NULL, auto-detects from last date with both cholera cases and complete ENSO data.
 #' @param pred_date_start Date string or NULL. Start date for prediction period. If NULL, uses fit_date_start.
 #' @param pred_date_stop Date string or NULL. End date for prediction period. If NULL, auto-detects from last date with complete ENSO data.
-#' @param n_splits Integer. Number of sequential random train/test splits for transfer learning. Default 1 (no fine-tuning).
-#' @param seed_base Integer. Base seed for reproducible random splits. Each split uses seed_base + split_number.
-#' @param fine_tune_epochs Integer. Number of epochs for fine-tuning on additional splits. Default 10.
-#' @param fine_tune_lr Numeric. Lower learning rate for fine-tuning additional splits. Default 0.00001.
-#' @param split_method Character. Method for train/validation splitting: "random" (default) or "location_month_block".
-#'   The "location_month_block" method groups sequences by country-month and randomly assigns entire blocks,
-#'   which better tests spatial-temporal generalization by preventing data leakage within location-months.
-#' @param train_prop Numeric. Proportion of data for training in initial split (default 0.6). Used for both splitting methods.
-#' @param feature_set Named covariate set: `"v7.3"` (default; the 38 screening-informed features, see \code{\link{MINFEAT_V7_3_FEATURE_SET}}) or `"default"` (full production candidate set). Ignored when `exclude_covariates` is non-NULL. Errors if a `"v7.3"` feature is absent from the suitability CSV (schema-drift guard).
-#' @param exclude_covariates Character vector of column names to drop from the LSTM input set, or `NULL` (default). `NULL` => derived from `feature_set`. A non-NULL value is used as-is (legacy ablation / leave-one-out path) and takes precedence over `feature_set`.
-#' @param response_var Training target column (default `"target_C_rate_global"`, per-capita rate with a global anchor). Use `"transmission_intensity"` for the legacy `log1p(cases)/log1p(cases_99th)` target, or another pre-computed `[0,1]` `target_*` column present in the suitability CSV.
-#' @param calibrate Logical (default `TRUE`). Apply a per-country affine bias calibration (\code{\link{calibrate_psi_predictions}}), fit on the training window and applied to all predictions; adds a `pred_calibrated` column to the prediction CSVs. Set `FALSE` for legacy (uncalibrated) output.
+#' @param feature_set Named covariate set, shared by both architectures: `"v7.3"`
+#'   (default; the 38 screening-informed features, see \code{\link{MINFEAT_V7_3_FEATURE_SET}})
+#'   or `"default"` (full production candidate set). This is the SOLE public,
+#'   schema-guarded feature selector. Errors if a `"v7.3"` feature is absent from
+#'   the suitability CSV (schema-drift guard).
+#' @param response_var Training target column, shared by both architectures
+#'   (default `"transmission_intensity"`, the v0.34 default). For the lstm_v2 path
+#'   this maps internally to the sandbox `"intensity"` recipe
+#'   (`log1p(cases)/log1p(cases_99th)` with a TRAIN-ONLY `cases_99th` anchor).
+#'   Alternatively name a pre-computed `[0,1]` `target_*` column present in the
+#'   suitability CSV (e.g. `"target_C_rate_global"`).
+#' @param bias_correct Logical (default `TRUE`), shared by both architectures.
+#'   Apply a post-hoc per-country affine bias correction
+#'   (\code{\link{calibrate_psi_predictions}}), fit on the training window and
+#'   applied to all predictions; populates the diagnostic `pred_bias_corrected`
+#'   column and feeds the canonical `psi` column. (Renamed from the v0.33
+#'   `calibrate`; the old name is accepted via `...` with a deprecation message.)
+#'   This is NOT the `run_MOSAIC()` Bayesian calibration.
+#' @param architecture One of `"lstm_v2_hierarchical_film"` (default, v0.34) or
+#'   `"lstm_v1_legacy"` (frozen v0.33 path). Validated with \code{match.arg}. See
+#'   the \strong{Architectures} section.
+#' @param arch_control `NULL` (default) or a named list of lstm_v2 hyperparameter
+#'   overrides. `NULL` loads the checked-in fixture
+#'   \code{inst/fixtures/B4_rolling_cv_spec.yml} and applies the two production
+#'   defaults (`n_seeds = 5`, `region_map = "snf_k5"`). A supplied list is merged
+#'   via \code{modifyList} (overrides only the keys provided). Key fields:
+#'   \code{n_seeds} (ensemble size; production 5, fixture 3),
+#'   \code{region_map} (one of `"snf_k5"` (default), `"csv"`, `"seasonal_v1"`,
+#'   `"hydro_v1"`, `"snf_k4"`), \code{use_confidence_weight}, \code{timesteps},
+#'   \code{partial_pool_lambda}, \code{exclude_covariates} (lstm_v2 ablation
+#'   override), and the execution knob \code{parallel_seeds} (integer, default
+#'   `1L` = serial; not a model parameter). Ignored by the legacy path.
+#' @param plot_country_diagnostics Logical (default `FALSE`). Per-country base-R
+#'   diagnostic plots during the smoothing loop (legacy path only).
+#' @param ... Absorbs deprecated v0.33 arguments for backward compatibility:
+#'   `calibrate` (mapped to `bias_correct`), and the frozen legacy knobs
+#'   `n_splits`, `seed_base`, `fine_tune_epochs`, `fine_tune_lr`, `split_method`,
+#'   `train_prop`, `exclude_covariates` (ignored with a deprecation message).
 #'
-#' @section Migration (reproduce pre-v0.33 behavior):
-#' The v0.33.0 defaults changed to the ablation-recommended spec (AI data +
-#' `feature_set="v7.3"` + `response_var="target_C_rate_global"` + calibration).
-#' `feature_set` and `response_var` are coupled — `target_C` helps only with v7.3
-#' and hurts with the full feature set; change them together. To reproduce the
-#' prior production behavior:
+#' @section Architectures:
+#' \strong{`lstm_v2_hierarchical_film` (default, v0.34) — hierarchical-FiLM LSTM,
+#' rolling-origin CV.} A 3-stack LSTM trunk (128->64->32 units, recurrent dropout)
+#' maps the weekly covariate window (`timesteps=13`) to a shared climate-response
+#' latent `z`. Country/region identity modulates `z` via hierarchical FiLM: a
+#' region embedding produces `(gamma_r, beta_r)` and a zero-initialized country
+#' \emph{deviation} embedding produces `(gamma_c, beta_c)`, applied as
+#' `z_r = (1+gamma_r) * z + beta_r` then `z_c = (1+gamma_c) * z_r + beta_c`. The
+#' `gamma` use \code{tanh} (gain in `[0,2]`, identity at init); an L2 partial-pool
+#' penalty shrinks data-sparse countries toward their region. A sigmoid head
+#' outputs psi in `[0,1]`. Trained with BCE loss under `balanced_uniform` sample
+#' weights (correcting the zero-week imbalance — ~72% of all-MOSAIC training
+#' weeks are zero, higher per high-incidence country) plus an optional per-row
+#' confidence-weight overlay. Training uses expanding-window rolling-origin CV
+#' (each step validates strictly forward in time with a 4-week embargo,
+#' early-stopping records `best_epoch`); the model is then refit on the full
+#' in-sample data at `median(best_epoch)`. `n_seeds` fits are averaged on the
+#' logit scale to yield the prediction (canonical `psi` column), plus
+#' seed-dispersion quantiles (diagnostic only, NOT predictive intervals). This
+#' regime fixes the v0.33 random-split temporal leak that collapsed out-of-sample
+#' forecasts. Defaults are pinned to the B4 fixture; override via `arch_control`.
+#'
+#' \emph{Honest framing.} lstm_v2 converts a structurally-collapsed flat psi
+#' (Pearson ~0.09, ~3\% of observed amplitude) into a weak-but-real, better-phased
+#' directional signal (median cross-country Pearson ~0.22, but a wide per-cell
+#' range with a large anti-correlated minority — psi can be worse than climatology
+#' for some countries). It strictly dominates the incumbent on shape; it is NOT a
+#' decision-grade forecaster. psi reaches the downstream LASER engine through TWO
+#' channels — a fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and
+#' the absolute level (environmental-reservoir decay) — so the response anchor and
+#' `bias_correct` can move outbreak magnitude, not just timing. Report the
+#' per-country spread, not just the median. The v0.34.0 defaults
+#' (`response_var="transmission_intensity"`, `region_map="snf_k5"`,
+#' `bias_correct=TRUE`) are \strong{provisional}, gated by a post-merge
+#' psi->LASER case-skill experiment; `snf_k5` ships unvalidated as a FiLM region
+#' map and reverts to `"csv"` if it does not beat it.
+#'
+#' \strong{`lstm_v1_legacy` (v0.33, frozen) — shared LSTM, random split +
+#' sequential fine-tuning.} A single 3-stack LSTM (128->64->32) with no
+#' country/region identity (one shared model for all countries). Trained on a
+#' random 60/40 split across all weeks with MSE on the logit-transformed target,
+#' followed by sequential fine-tuning. Frozen at the canonical v0.33 settings (not
+#' tunable; legacy knobs are hard-coded internally). \strong{Retained only for
+#' reproducibility/rollback.} Known limitation: the random split places
+#' temporally-adjacent weeks on both sides of the train/val boundary, so the
+#' out-of-sample forecast collapses in amplitude — the failure lstm_v2 fixes.
+#'
+#' @section Migration (reproduce v0.33 production behavior):
+#' The v0.34 defaults flip `response_var` to `"transmission_intensity"` and
+#' `architecture` to `"lstm_v2_hierarchical_film"`. To run the frozen v0.33
+#' shared-LSTM path:
 #' \preformatted{
-#' est_suitability(PATHS, feature_set = "default",
-#'                 response_var = "transmission_intensity", calibrate = FALSE)
+#' est_suitability(PATHS, architecture = "lstm_v1_legacy",
+#'                 feature_set = "v7.3", response_var = "target_C_rate_global",
+#'                 bias_correct = TRUE)
 #' }
 #'
 #' @return This function processes climate and cholera case data, fits an LSTM model, makes predictions on
@@ -51,7 +123,7 @@
 #' # Set up paths
 #' PATHS <- get_paths()
 #'
-#' # Basic usage with default settings
+#' # Basic usage with default settings (lstm_v2 hierarchical-FiLM, rolling-CV)
 #' est_suitability(PATHS)
 #'
 #' # Custom date ranges for fitting and prediction
@@ -61,24 +133,14 @@
 #'                pred_date_start = "2020-01-01",
 #'                pred_date_stop = "2025-12-31")
 #'
-#' # Transfer learning with sequential fine-tuning on 3 random splits
-#' est_suitability(PATHS,
-#'                n_splits = 3,
-#'                seed_base = 123,
-#'                fine_tune_epochs = 15,
-#'                fine_tune_lr = 0.00003)
+#' # Reproduce B4 exactly (revert the two production overrides)
+#' est_suitability(PATHS, arch_control = list(n_seeds = 3L, region_map = "csv"))
 #'
-#' # Use location-month blocking for better spatial-temporal generalization
-#' est_suitability(PATHS,
-#'                split_method = "location_month_block",
-#'                train_prop = 0.7)
+#' # Larger seed ensemble; alternate region map
+#' est_suitability(PATHS, arch_control = list(n_seeds = 7L, region_map = "snf_k4"))
 #'
-#' # Location-month blocking with transfer learning
-#' est_suitability(PATHS,
-#'                split_method = "location_month_block",
-#'                n_splits = 5,
-#'                train_prop = 0.6,
-#'                seed_base = 42)
+#' # Frozen v0.33 shared-LSTM path (reproducibility / rollback)
+#' est_suitability(PATHS, architecture = "lstm_v1_legacy")
 #' }
 #'
 #' @details
@@ -135,22 +197,117 @@
 #'
 
 est_suitability <- function(PATHS,
-                            fit_date_start = NULL, # Fitting period (training data)
+                            fit_date_start = NULL,
                             fit_date_stop = NULL,
-                            pred_date_start = NULL, # Prediction period (inference)
+                            pred_date_start = NULL,
                             pred_date_stop = NULL,
-                            n_splits = 10, # Number of sequential random train/test splits for transfer learning
-                            seed_base = 99, # Base seed for reproducible random splits
-                            fine_tune_epochs = 12, # Epochs for fine-tuning on additional splits
-                            fine_tune_lr = 0.001, # Lower learning rate for fine-tuning
-                            split_method = "random", # Split method: "random" or "location_month_block"
-                            train_prop = 0.6, # Proportion for training in initial split
-                            plot_country_diagnostics = FALSE, # Per-country base-R diagnostic plots during smoothing loop
-                            feature_set = "v7.3", # Named covariate set: "v7.3" (38 screening-informed features, default) or "default" (full production candidate set). Ignored when exclude_covariates is non-NULL.
-                            exclude_covariates = NULL, # Column names to drop from the LSTM input set. NULL (default) => derived from feature_set. Non-NULL => used as-is (legacy ablation / leave-one-out path).
-                            response_var = "target_C_rate_global", # Training target column (default: per-capita rate, global anchor). "transmission_intensity" = legacy log1p(cases)/log1p(cases_99th); or another pre-computed [0,1] target_* column in the suitability CSV.
-                            calibrate = TRUE # Apply per-country affine bias calibration (fit on the training window) to the predictions; adds a `pred_calibrated` column to the prediction CSVs.
-) {
+                            feature_set  = "v7.3",
+                            response_var = "transmission_intensity",
+                            bias_correct = TRUE,
+                            architecture = c("lstm_v2_hierarchical_film",
+                                             "lstm_v1_legacy"),
+                            arch_control = NULL,
+                            plot_country_diagnostics = FALSE,
+                            ...) {
+
+     architecture <- match.arg(architecture)
+     dots <- list(...)
+
+     # ---- Deprecation handling for ...-absorbed legacy arguments ----------
+     # `calibrate` -> `bias_correct` rename. Map BEFORE bias_correct defaults
+     # (detect explicit supply via missing()); error if both are supplied.
+     calibrate_supplied    <- "calibrate" %in% names(dots)
+     bias_correct_supplied <- !missing(bias_correct)
+     if (calibrate_supplied && bias_correct_supplied) {
+          stop("est_suitability: supply only one of `bias_correct` or the deprecated `calibrate` (they are the same control).",
+               call. = FALSE)
+     }
+     if (calibrate_supplied && !bias_correct_supplied) {
+          bias_correct <- isTRUE(dots$calibrate)
+          message("est_suitability: `calibrate` is deprecated and was mapped to `bias_correct`.")
+     }
+
+     # The six frozen v0.33 process knobs + `exclude_covariates` are absorbed by
+     # `...` and IGNORED with a one-time deprecation message. The legacy path is
+     # frozen at v0.33 settings (constants inside .est_suitability_legacy()); it
+     # is not tunable. lstm_v2 ablations route through `arch_control` instead.
+     frozen_legacy_args <- c("n_splits", "seed_base", "fine_tune_epochs",
+                             "fine_tune_lr", "split_method", "train_prop",
+                             "exclude_covariates")
+     ignored <- intersect(names(dots), frozen_legacy_args)
+     if (length(ignored) > 0) {
+          message(sprintf(
+               "est_suitability: argument(s) %s are ignored. The legacy path is frozen at v0.33 settings; lstm_v2 knobs live in `arch_control`.",
+               paste(sprintf("`%s`", ignored), collapse = ", ")))
+     }
+     unknown <- setdiff(names(dots), c("calibrate", frozen_legacy_args))
+     if (length(unknown) > 0) {
+          warning(sprintf("est_suitability: ignoring unrecognized argument(s): %s",
+                          paste(sprintf("`%s`", unknown), collapse = ", ")),
+                  call. = FALSE)
+     }
+
+     # ---- Dispatch on architecture ----------------------------------------
+     if (identical(architecture, "lstm_v1_legacy")) {
+          return(.est_suitability_legacy(
+               PATHS            = PATHS,
+               fit_date_start   = fit_date_start,
+               fit_date_stop    = fit_date_stop,
+               pred_date_start  = pred_date_start,
+               pred_date_stop   = pred_date_stop,
+               feature_set      = feature_set,
+               response_var     = response_var,
+               bias_correct     = bias_correct,
+               plot_country_diagnostics = plot_country_diagnostics))
+     }
+
+     # architecture == "lstm_v2_hierarchical_film" (v0.34 default)
+     .est_suitability_lstm_v2(
+          PATHS            = PATHS,
+          fit_date_start   = fit_date_start,
+          fit_date_stop    = fit_date_stop,
+          pred_date_start  = pred_date_start,
+          pred_date_stop   = pred_date_stop,
+          feature_set      = feature_set,
+          response_var     = response_var,
+          bias_correct     = bias_correct,
+          arch_control     = arch_control,
+          plot_country_diagnostics = plot_country_diagnostics)
+}
+
+
+# =============================================================================
+# .est_suitability_legacy() — frozen v0.33 shared-LSTM path.
+#
+# This is a VERBATIM cut of the v0.33 est_suitability() body. The six v0.33
+# process knobs are hard-coded as local constants below (the legacy path is not
+# tunable); `bias_correct` drives the v0.33 `calibrate` switch, and
+# `exclude_covariates` is fixed at NULL (its v0.33 default: derived from
+# feature_set). Everything from "# All required packages loaded via NAMESPACE"
+# onward is unchanged v0.33 source — see the legacy-parity test.
+# =============================================================================
+
+#' @keywords internal
+#' @noRd
+.est_suitability_legacy <- function(PATHS,
+                                    fit_date_start = NULL,
+                                    fit_date_stop = NULL,
+                                    pred_date_start = NULL,
+                                    pred_date_stop = NULL,
+                                    feature_set = "v7.3",
+                                    response_var = "transmission_intensity",
+                                    bias_correct = TRUE,
+                                    plot_country_diagnostics = FALSE) {
+
+     # ---- Frozen v0.33 process knobs (legacy path is NOT tunable) ---------
+     n_splits           <- 10L
+     seed_base          <- 99L
+     fine_tune_epochs   <- 12L
+     fine_tune_lr       <- 0.001
+     split_method       <- "random"
+     train_prop         <- 0.6
+     exclude_covariates <- NULL               # v0.33 default: derived from feature_set
+     calibrate          <- isTRUE(bias_correct)  # bias_correct drives the v0.33 `calibrate`
 
      # All required packages loaded via NAMESPACE
 
@@ -1098,10 +1255,12 @@ est_suitability <- function(PATHS,
 
 
 
-     # ---- Per-country bias calibration (fit on the training window only) ----
-     # Right-shape / wrong-scale correction: a per-ISO affine map estimated on
-     # date <= fit_date_stop, applied to all predictions and clipped to [0,1].
-     # Adds a `pred_calibrated` column; the raw `pred`/`pred_smooth` are kept.
+     # ---- Per-country bias correction (fit on the training window only) ----
+     # Shared v0.34 correction (see calibrate_psi_predictions): a per-ISO
+     # logit-scale affine estimated on date <= fit_date_stop using OUTBREAK
+     # (non-zero observed) weeks only, applied to all predictions via the inverse
+     # logit (monotone, no hard [0,1] clip). Adds a `pred_bias_corrected` column;
+     # the raw `pred`/`pred_smooth` are kept. obs_col is passed explicitly.
      if (isTRUE(calibrate)) {
           obs_cal <- d_all[, c("iso_code", "date", "transmission_intensity")]
           pcol_d  <- if ("pred_smooth" %in% names(d_pred_daily)) "pred_smooth" else "pred"
@@ -1112,7 +1271,21 @@ est_suitability <- function(PATHS,
                d_pred_weekly <- calibrate_psi_predictions(
                     d_pred_weekly, obs_cal, fit_date_stop, pred_col = pcol_w)
           }
-          message("Applied per-country bias calibration (added 'pred_calibrated' column).")
+          message("Applied per-country logit-scale bias correction (added 'pred_bias_corrected' column).")
+     }
+
+     # Canonical `psi` column (Option A output schema, v0.34): the single
+     # load-bearing prediction consumed by the psi->psi_jt readers. Equals the
+     # bias-corrected series when bias_correct/calibrate is on, else the smoothed
+     # series. Both architectures emit `psi`; the diagnostics (pred/pred_smooth/
+     # pred_bias_corrected) are retained for transparency.
+     pcol_d <- if ("pred_smooth" %in% names(d_pred_daily)) "pred_smooth" else "pred"
+     d_pred_daily$psi <- if (isTRUE(calibrate) && "pred_bias_corrected" %in% names(d_pred_daily))
+          d_pred_daily$pred_bias_corrected else d_pred_daily[[pcol_d]]
+     if (exists("d_pred_weekly") && is.data.frame(d_pred_weekly)) {
+          pcol_w <- if ("pred_smooth" %in% names(d_pred_weekly)) "pred_smooth" else "pred"
+          d_pred_weekly$psi <- if (isTRUE(calibrate) && "pred_bias_corrected" %in% names(d_pred_weekly))
+               d_pred_weekly$pred_bias_corrected else d_pred_weekly[[pcol_w]]
      }
 
      # Save predictions to CSV

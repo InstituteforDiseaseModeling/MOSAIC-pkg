@@ -1,42 +1,58 @@
-#' Per-country affine bias-calibration of suitability (psi) predictions
+#' Per-country logit-scale bias-correction of suitability (psi) predictions
 #'
-#' Fits a per-country linear recalibration \eqn{obs \approx a_i \cdot pred + b_i}
-#' on the \strong{training window only} and applies it to all predictions, clipped
-#' to \eqn{[0, 1]}. Addresses the systematic negative bias (right shape, wrong
-#' scale) of the suitability LSTM without altering its training.
+#' Fits a per-country affine recalibration on the \strong{logit scale},
+#' \eqn{logit(obs) \approx a \cdot logit(pred) + b}, using \strong{outbreak
+#' (non-zero observed) weeks within the training window only}, and applies it to
+#' all predictions via the inverse logit. Addresses the systematic
+#' negative/midrange bias (right shape, wrong scale) of the suitability LSTM
+#' without altering its training, and feeds the canonical \code{psi} column.
 #'
 #' @details
-#' For each \code{iso_code}, the affine coefficients are estimated by OLS on the
-#' merged (prediction, observed) pairs with \code{date <= fit_date_stop} — i.e.
-#' the training period only, so the calibration is leakage-clean with respect to
-#' the out-of-sample window. Countries with fewer than \code{min_train} usable
-#' training points (or zero predictor variance) fall back to the identity
-#' transform with a warning.
+#' The fit is on \code{logit(obs) ~ logit(pred)} (v0.34; the v0.33 method was a
+#' raw-scale \code{lm(obs ~ pred)} with a hard \eqn{[0,1]} clip). Two changes
+#' matter:
+#' \itemize{
+#'   \item \strong{Outbreak-weeks-only fit.} Zero observed weeks carry no
+#'     \emph{level} information for a scale/offset correction and would make
+#'     \code{logit(obs = 0)} degenerate for the zero-week majority, so the fit
+#'     uses only weeks with \code{date <= fit_date_stop} and \code{obs > 0}.
+#'   \item \strong{Logit-scale, monotone, no hard clip.} The fit is applied to
+#'     all weeks and mapped back with \code{plogis}, which is monotone and
+#'     bounded in \eqn{(0,1)} by construction — so low predictions map near 0
+#'     without the hard-\eqn{[0,1]}-clip truncation that distorted the
+#'     \code{psi_bar}-relative deviation feeding LASER.
+#' }
+#' A country with fewer than \code{min_train} outbreak weeks (this includes
+#' zero-history countries, which have none) or no logit-pred variance falls back
+#' to the \strong{identity} transform (output = input prediction) with a warning.
+#' This is the defined behavior for low-incidence / zero-history countries: their
+#' psi is the uncorrected (region-FiLM-modulated) model output.
 #'
 #' @param pred_df Data frame of predictions with at least \code{iso_code},
 #'   \code{date}, and \code{pred_col}.
 #' @param obs_df Data frame of observed targets with \code{iso_code},
-#'   \code{date}, and \code{obs_col}.
-#' @param fit_date_stop Date (or coercible); calibration is fit on
-#'   \code{date <= fit_date_stop}.
-#' @param pred_col Prediction column to calibrate (default \code{"pred_smooth"}).
+#'   \code{date}, and \code{obs_col} (in \eqn{[0,1]}).
+#' @param fit_date_stop Date (or coercible); the fit uses \code{date <= fit_date_stop}.
+#' @param pred_col Prediction column to correct (default \code{"pred_smooth"}).
 #' @param obs_col Observed-target column (default \code{"transmission_intensity"}).
-#' @param out_col Name of the calibrated output column (default
-#'   \code{"pred_calibrated"}).
-#' @param min_train Minimum training points per country to fit; otherwise identity
-#'   (default 8).
+#' @param out_col Name of the corrected output column (default
+#'   \code{"pred_bias_corrected"}; renamed from the v0.33 \code{"pred_calibrated"}).
+#' @param min_train Minimum outbreak (non-zero observed) weeks per country to fit;
+#'   otherwise identity (default 8).
+#' @param eps Clamp applied to predictions and observations before \code{qlogis}
+#'   to keep the logit transform finite (default 1e-6).
 #'
-#' @return \code{pred_df} with an added \code{out_col} (calibrated, clipped to
-#'   \eqn{[0,1]}).
+#' @return \code{pred_df} with an added \code{out_col} in \eqn{(0,1)}.
 #'
 #' @seealso \code{\link{est_suitability}}
-#' @importFrom stats lm predict reformulate sd
+#' @importFrom stats lm predict sd qlogis plogis
 #' @export
 calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
                                       pred_col = "pred_smooth",
                                       obs_col  = "transmission_intensity",
-                                      out_col  = "pred_calibrated",
-                                      min_train = 8L) {
+                                      out_col  = "pred_bias_corrected",
+                                      min_train = 8L,
+                                      eps = 1e-6) {
 
      stopifnot(all(c("iso_code", "date") %in% names(pred_df)),
                pred_col %in% names(pred_df),
@@ -47,29 +63,41 @@ calibrate_psi_predictions <- function(pred_df, obs_df, fit_date_stop,
      obs_df$date   <- as.Date(obs_df$date)
      fit_date_stop <- as.Date(fit_date_stop)
 
+     clamp_logit <- function(p) stats::qlogis(pmax(eps, pmin(1 - eps, p)))
+
      m <- merge(pred_df[, c("iso_code", "date", pred_col)],
                 obs_df[,  c("iso_code", "date", obs_col)],
                 by = c("iso_code", "date"))
+     # Fit window: training period AND outbreak (non-zero observed) weeks only.
      m <- m[m$date <= fit_date_stop &
-            is.finite(m[[pred_col]]) & is.finite(m[[obs_col]]), , drop = FALSE]
+            is.finite(m[[pred_col]]) & is.finite(m[[obs_col]]) &
+            m[[obs_col]] > 0, , drop = FALSE]
 
      pred_df[[out_col]] <- NA_real_
      n_identity <- 0L
      for (iso in unique(pred_df$iso_code)) {
-          sel <- pred_df$iso_code == iso
-          tr  <- m[m$iso_code == iso, , drop = FALSE]
-          if (nrow(tr) >= min_train && stats::sd(tr[[pred_col]], na.rm = TRUE) > 0) {
-               fit  <- stats::lm(stats::reformulate(pred_col, obs_col), data = tr)
-               yhat <- stats::predict(fit, newdata = pred_df[sel, , drop = FALSE])
+          sel  <- pred_df$iso_code == iso
+          tr   <- m[m$iso_code == iso, , drop = FALSE]
+          xall <- clamp_logit(pred_df[[pred_col]][sel])
+          if (nrow(tr) >= min_train) {
+               xl <- clamp_logit(tr[[pred_col]])
+               yl <- clamp_logit(tr[[obs_col]])
+               if (stats::sd(xl) > 0) {
+                    fit  <- stats::lm(yl ~ xl)
+                    yhat <- stats::predict(fit, newdata = data.frame(xl = xall))
+                    pred_df[[out_col]][sel] <- stats::plogis(yhat)
+               } else {
+                    pred_df[[out_col]][sel] <- pred_df[[pred_col]][sel]  # identity
+                    n_identity <- n_identity + 1L
+               }
           } else {
-               yhat <- pred_df[[pred_col]][sel]   # identity fallback
+               pred_df[[out_col]][sel] <- pred_df[[pred_col]][sel]       # identity
                n_identity <- n_identity + 1L
           }
-          pred_df[[out_col]][sel] <- pmax(0, pmin(1, yhat))
      }
      if (n_identity > 0L) {
           warning(sprintf(
-               "calibrate_psi_predictions: %d country/countries had < %d training points (or no predictor variance); used identity calibration for those.",
+               "calibrate_psi_predictions: %d country/countries had < %d outbreak (non-zero observed) week(s) within the training window (or no logit-pred variance); used identity correction for those.",
                n_identity, min_train), call. = FALSE)
      }
      pred_df

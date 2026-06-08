@@ -1,45 +1,74 @@
-test_that("calibrate_psi_predictions fits per-ISO affine on the training window only and clips [0,1]", {
+# calibrate_psi_predictions(): v0.34 logit-scale, outbreak-weeks-only bias
+# correction. (Rewritten from the v0.33 raw-scale lm(obs~pred) tests — the
+# method legitimately changed per plan_v034_RECOMMENDED §9.4.)
+
+test_that("logit-scale affine is recovered from outbreak weeks in the train window only", {
   dates    <- seq(as.Date("2024-01-01"), by = "week", length.out = 40)
   fit_stop <- dates[30]
-  predA <- seq(0, 1, length.out = 40); obsA <- 0.5 * predA + 0.1
-  predB <- rev(seq(0, 1, length.out = 40)); obsB <- 0.8 * predB + 0.05
-  pred_df <- rbind(data.frame(iso_code = "A", date = dates, pred_smooth = predA),
-                   data.frame(iso_code = "B", date = dates, pred_smooth = predB))
-  obs_df  <- rbind(data.frame(iso_code = "A", date = dates, transmission_intensity = obsA),
-                   data.frame(iso_code = "B", date = dates, transmission_intensity = obsB))
-  # Corrupt OOS observations: if they leaked into the fit, the recovered map would break.
-  obs_df$transmission_intensity[obs_df$date > fit_stop] <- 99
+  a <- 1.5; b <- -0.5
+  pred <- seq(0.05, 0.95, length.out = 40)
+  obs  <- stats::plogis(a * stats::qlogis(pred) + b)   # logit(obs) = a*logit(pred)+b
+  pred_df <- data.frame(iso_code = "A", date = dates, pred_smooth = pred)
+  obs_df  <- data.frame(iso_code = "A", date = dates, transmission_intensity = obs)
+  # Corrupt OOS observations: if they leaked into the fit the map would break.
+  obs_df$transmission_intensity[obs_df$date > fit_stop] <- 0.99
 
   out <- calibrate_psi_predictions(pred_df, obs_df, fit_stop)
 
-  expect_true("pred_calibrated" %in% names(out))
-  expect_true(all(out$pred_calibrated >= 0 & out$pred_calibrated <= 1))
-
-  ca <- out[out$iso_code == "A", ]
-  # pred=0 -> intercept 0.1 (recovered from TRAIN only, not corrupted by OOS 99s)
-  expect_equal(ca$pred_calibrated[1], 0.1, tolerance = 1e-3)
-  # a training point matches the affine map a*pred+b
-  expect_equal(ca$pred_calibrated[5], 0.5 * predA[5] + 0.1, tolerance = 1e-6)
-  # ISO B slope/intercept recovered
-  cb <- out[out$iso_code == "B", ]
-  expect_equal(cb$pred_calibrated[which.min(predB)], 0.05, tolerance = 1e-3)  # pred=0 -> 0.05
+  expect_true("pred_bias_corrected" %in% names(out))
+  # bounded in (0,1) with no hard clip (monotone inverse-logit)
+  expect_true(all(out$pred_bias_corrected > 0 & out$pred_bias_corrected < 1))
+  # a training point is mapped back onto its (uncorrupted) observed value
+  expect_equal(out$pred_bias_corrected[5], obs[5], tolerance = 1e-6)
+  # the recovered map equals plogis(a*logit(pred)+b) everywhere (incl. OOS rows)
+  expect_equal(out$pred_bias_corrected,
+               stats::plogis(a * stats::qlogis(pred) + b), tolerance = 1e-5)
 })
 
-test_that("calibrate_psi_predictions falls back to identity for sparse ISOs (warns)", {
+test_that("zero observed weeks are excluded from the fit (only outbreak weeks count)", {
+  dates    <- seq(as.Date("2024-01-01"), by = "week", length.out = 40)
+  fit_stop <- dates[40]
+  a <- 1.2; b <- 0.3
+  pred <- seq(0.05, 0.95, length.out = 40)
+  obs  <- stats::plogis(a * stats::qlogis(pred) + b)
+  # Zero out half the observed weeks: they carry no level info and must be
+  # dropped from the fit; the recovered affine must be unchanged.
+  obs[seq(2, 40, by = 2)] <- 0
+  pred_df <- data.frame(iso_code = "A", date = dates, pred_smooth = pred)
+  obs_df  <- data.frame(iso_code = "A", date = dates, transmission_intensity = obs)
+
+  out <- calibrate_psi_predictions(pred_df, obs_df, fit_stop)
+  # Recovered from the surviving outbreak weeks; equals the true map everywhere.
+  expect_equal(out$pred_bias_corrected,
+               stats::plogis(a * stats::qlogis(pred) + b), tolerance = 1e-5)
+})
+
+test_that("sparse ISOs (< min_train outbreak weeks) fall back to identity and warn", {
   dates   <- seq(as.Date("2024-01-01"), by = "week", length.out = 10)
-  pred_df <- data.frame(iso_code = "C", date = dates, pred_smooth = seq(0, 0.9, length.out = 10))
+  pred_df <- data.frame(iso_code = "C", date = dates, pred_smooth = seq(0.05, 0.9, length.out = 10))
+  # only 3 outbreak weeks -> below min_train (8)
   obs_df  <- data.frame(iso_code = "C", date = dates[1:3],
-                        transmission_intensity = c(0.2, 0.3, 0.4))  # 3 train pts < min_train (8)
+                        transmission_intensity = c(0.2, 0.3, 0.4))
   expect_warning(out <- calibrate_psi_predictions(pred_df, obs_df, max(dates)), "identity")
-  expect_equal(out$pred_calibrated, pmax(0, pmin(1, pred_df$pred_smooth)))
+  expect_equal(out$pred_bias_corrected, pred_df$pred_smooth)   # identity = uncorrected
 })
 
-test_that("calibrate_psi_predictions clips out-of-range affine outputs to [0,1]", {
+test_that("zero-history ISOs (no outbreak weeks at all) fall back to identity", {
+  dates   <- seq(as.Date("2024-01-01"), by = "week", length.out = 30)
+  pred_df <- data.frame(iso_code = "Z", date = dates, pred_smooth = seq(0.05, 0.5, length.out = 30))
+  obs_df  <- data.frame(iso_code = "Z", date = dates,
+                        transmission_intensity = rep(0, 30))   # never any cases
+  expect_warning(out <- calibrate_psi_predictions(pred_df, obs_df, max(dates)), "identity")
+  expect_equal(out$pred_bias_corrected, pred_df$pred_smooth)
+})
+
+test_that("output is in (0,1) even when the affine projects predictions far out", {
   dates    <- seq(as.Date("2024-01-01"), by = "week", length.out = 20)
-  # obs >> pred so the affine map projects some predictions above 1
-  pred_df <- data.frame(iso_code = "D", date = dates, pred_smooth = seq(0.1, 0.5, length.out = 20))
-  obs_df  <- data.frame(iso_code = "D", date = dates,
-                        transmission_intensity = seq(0.5, 1.0, length.out = 20) * 3)  # forces slope>1, intercept
+  a <- 4.0; b <- 6.0   # steep map that would exceed 1 on a raw scale
+  pred <- seq(0.1, 0.5, length.out = 20)
+  obs  <- stats::plogis(a * stats::qlogis(pred) + b)
+  pred_df <- data.frame(iso_code = "D", date = dates, pred_smooth = pred)
+  obs_df  <- data.frame(iso_code = "D", date = dates, transmission_intensity = obs)
   out <- calibrate_psi_predictions(pred_df, obs_df, max(dates))
-  expect_true(all(out$pred_calibrated >= 0 & out$pred_calibrated <= 1))
+  expect_true(all(out$pred_bias_corrected > 0 & out$pred_bias_corrected < 1))
 })

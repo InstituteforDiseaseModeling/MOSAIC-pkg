@@ -73,6 +73,13 @@ plot_psi_star_diagnostic <- function(dirs,
   config     <- jsonlite::fromJSON(config_json, simplifyVector = TRUE)
   psi_raw_all <- read.csv(psi_csv, stringsAsFactors = FALSE)
 
+  # Visualize the SAME series that feeds psi_jt -> LASER: the canonical `psi`
+  # column (smoothed + bias-corrected). Fall back to `pred_smooth` only for a
+  # stale pre-v0.34 CSV so the diagnostic degrades gracefully rather than erroring.
+  psi_col <- if ("psi" %in% names(psi_raw_all)) "psi" else "pred_smooth"
+  if (psi_col != "psi" && verbose)
+    message("plot_psi_star_diagnostic: `psi` column absent; using pre-correction `pred_smooth` (regenerate psi CSV with est_suitability v0.34+).")
+
   date_start <- as.Date(config$date_start)
   date_stop  <- as.Date(config$date_stop)
 
@@ -117,7 +124,7 @@ plot_psi_star_diagnostic <- function(dirs,
 
       # Apply full psi_star transformation via package function
       psi_star_series <- calc_psi_star(
-        psi             = psi_cal$pred_smooth,
+        psi             = psi_cal[[psi_col]],
         a               = psi_a,
         b               = psi_b,
         z               = psi_z,
@@ -128,7 +135,7 @@ plot_psi_star_diagnostic <- function(dirs,
       # Build data frame and summary stats
       df <- data.frame(
         date     = psi_cal$date,
-        raw      = psi_cal$pred_smooth,
+        raw      = psi_cal[[psi_col]],
         psi_star = psi_star_series
       )
 
