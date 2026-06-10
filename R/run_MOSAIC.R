@@ -227,22 +227,9 @@
   if (is.null(params_sim)) return(FALSE)
 
   # Guardrails: clamp transmission parameters to prevent laser-cholera ValueError
-  # (GitHub #24: p = -np.expm1(-rate) produces p > 1 when rate < 0)
-  if (!is.null(params_sim$beta_j0_tot)) {
-    params_sim$beta_j0_tot <- pmax(params_sim$beta_j0_tot, 1e-10)
-  }
-  if (!is.null(params_sim$beta_j0_hum)) {
-    params_sim$beta_j0_hum <- pmax(params_sim$beta_j0_hum, 0)
-  }
-  if (!is.null(params_sim$beta_j0_env)) {
-    params_sim$beta_j0_env <- pmax(params_sim$beta_j0_env, 0)
-  }
-  if (!is.null(params_sim$p_beta)) {
-    params_sim$p_beta <- pmin(pmax(params_sim$p_beta, 1e-6), 1 - 1e-6)
-  }
-  if (!is.null(params_sim$tau_i)) {
-    params_sim$tau_i <- pmin(pmax(params_sim$tau_i, 0), 1)
-  }
+  # (GitHub #24: p = -np.expm1(-rate) produces p > 1 when rate < 0). Single
+  # source of truth so re-sampled best/medioid/ensemble configs clamp identically.
+  params_sim <- .mosaic_clamp_transmission_params(params_sim)
 
   # Defensive guard (issue #100): ensure local-path workers never trigger the
   # Python analyzer. The analyzer requires likelihood-control keys that are
@@ -2035,14 +2022,29 @@ run_MOSAIC <- function(config,
         stoch_param_weights <- best_subset_results$weight_best[nonzero]
 
         if (length(stoch_param_weights) > 0) {
-          stoch_param_configs <- lapply(stoch_param_seeds, function(seed_i) {
+          raw_configs <- lapply(stoch_param_seeds, function(seed_i) {
             tryCatch(
-              sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                                seed = seed_i, sample_args = sampling_args, verbose = FALSE),
+              .mosaic_clamp_transmission_params(
+                sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                                  seed = seed_i, sample_args = sampling_args, verbose = FALSE)),
               error = function(e) NULL
             )
           })
-          stoch_param_configs <- Filter(Negate(is.null), stoch_param_configs)
+          # Drop failed re-samples from configs AND their seeds/weights in
+          # lockstep. .mosaic_postca_dask() labels each task's param_idx by its
+          # position in this kept list, and those slices are paired with the
+          # weights handed to calc_model_ensemble() below. An unkeyed Filter()
+          # would shift every later config onto the wrong weight and leave a
+          # trailing all-NA slice — a silent posterior-ensemble error (the
+          # v0.35.1 weight-misalignment class).
+          keep <- !vapply(raw_configs, is.null, logical(1))
+          if (any(!keep)) {
+            log_warn("post-cal ensemble: %d of %d best-subset seeds failed to re-sample; dropping in lockstep",
+                     sum(!keep), length(keep))
+          }
+          stoch_param_configs <- raw_configs[keep]
+          stoch_param_seeds   <- stoch_param_seeds[keep]
+          stoch_param_weights <- stoch_param_weights[keep]
         }
       }
 
@@ -2108,10 +2110,19 @@ run_MOSAIC <- function(config,
   param_seeds <- NULL   # initialised here; assigned inside block below if best subset exists
 
   if (sum(results$is_best_subset) > 0) {
-    best_subset_results <- results[results$is_best_subset == TRUE, ]
-    nonzero <- best_subset_results$weight_best > 0
-    param_seeds   <- best_subset_results$seed_sim[nonzero]
-    param_weights <- best_subset_results$weight_best[nonzero]
+    if (!is.null(postca_dask)) {
+      # Dask precomputed path: reuse the SAME seeds/weights that were dispatched
+      # (already compacted in lockstep with any dropped re-samples above), so the
+      # weights align 1:1 with the precomputed param_idx slices. Re-deriving from
+      # the unfiltered nonzero mask here is what caused the misalignment.
+      param_seeds   <- stoch_param_seeds
+      param_weights <- stoch_param_weights
+    } else {
+      best_subset_results <- results[results$is_best_subset == TRUE, ]
+      nonzero <- best_subset_results$weight_best > 0
+      param_seeds   <- best_subset_results$seed_sim[nonzero]
+      param_weights <- best_subset_results$weight_best[nonzero]
+    }
 
     if (length(param_weights) > 0) {
       param_weights <- param_weights / sum(param_weights)
@@ -2441,14 +2452,14 @@ run_MOSAIC <- function(config,
   best_seed_sim <- results$seed_sim[best_idx]
 
   config_best <- tryCatch(
-    sample_parameters(
+    .mosaic_clamp_transmission_params(sample_parameters(
       PATHS       = PATHS,
       priors      = priors,
       config      = config,
       seed        = best_seed_sim,
       sample_args = sampling_args,
       verbose     = FALSE
-    ),
+    )),
     error = function(e) {
       log_error("sample_parameters failed for best seed %d: %s", best_seed_sim, e$message)
       log_msg("  Post-processing (PPC, summary) will be skipped.")
@@ -2501,14 +2512,14 @@ run_MOSAIC <- function(config,
   config_medioid <- NULL
   if (!is.null(medioid_seed_sim)) {
     config_medioid <- tryCatch(
-      sample_parameters(
+      .mosaic_clamp_transmission_params(sample_parameters(
         PATHS       = PATHS,
         priors      = priors,
         config      = config,
         seed        = medioid_seed_sim,
         sample_args = sampling_args,
         verbose     = FALSE
-      ),
+      )),
       error = function(e) {
         log_warn("sample_parameters failed for medioid seed %d: %s",
                 medioid_seed_sim, e$message)

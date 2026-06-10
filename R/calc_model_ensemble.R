@@ -114,6 +114,27 @@ calc_model_ensemble <- function(config,
       }
       param_configs <- list(config)
 
+      # Defensive guard: each precomputed result is tagged with the param_idx
+      # slice it fills; those slices must densely cover 1:n_param_sets so every
+      # prediction pairs with its OWN parameter weight. A gap means configs were
+      # dropped upstream while weights were not (the v0.35.1 misalignment class)
+      # — warn loudly. Overflow is an outright contract violation (error).
+      pidx <- vapply(precomputed_results, function(r) {
+        if (is.null(r$param_idx)) NA_integer_ else as.integer(r$param_idx)
+      }, integer(1))
+      pidx <- pidx[is.finite(pidx)]
+      if (length(pidx) > 0L) {
+        if (max(pidx) > n_param_sets)
+          stop(sprintf(paste0("precomputed_results param_idx max (%d) exceeds n_param_sets (%d): ",
+                              "predictions and parameter weights are misaligned"),
+                       max(pidx), n_param_sets))
+        missing_p <- setdiff(seq_len(n_param_sets), unique(pidx))
+        if (length(missing_p) > 0L)
+          warning(sprintf(paste0("calc_model_ensemble: %d of %d parameter slices have no precomputed ",
+                                "predictions (param_idx %s); their weights are redistributed"),
+                          length(missing_p), n_param_sets, paste(missing_p, collapse = ",")))
+      }
+
     } else {
       # Full sampling mode: generate configs from seeds for simulation
       if (is.null(priors)) stop("priors required when using parameter_seeds")
@@ -132,9 +153,10 @@ calc_model_ensemble <- function(config,
       for (i in seq_along(parameter_seeds)) {
         if (verbose) utils::setTxtProgressBar(pb, i)
         param_configs[[i]] <- tryCatch(
-          sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                            seed = parameter_seeds[i], sample_args = sampling_args,
-                            verbose = FALSE),
+          .mosaic_clamp_transmission_params(
+            sample_parameters(PATHS = PATHS, priors = priors, config = config,
+                              seed = parameter_seeds[i], sample_args = sampling_args,
+                              verbose = FALSE)),
           error = function(e) {
             warning("Failed to sample parameters with seed ", parameter_seeds[i],
                     ": ", e$message)
@@ -144,13 +166,21 @@ calc_model_ensemble <- function(config,
       }
       if (verbose) close(pb)
 
-      param_configs <- Filter(Negate(is.null), param_configs)
+      # Drop failed re-samples AND their seeds/weights in lockstep, then let the
+      # validation block below renormalize. Degrades gracefully to the survivors
+      # instead of erroring on the length mismatch — one transient sampling
+      # failure must not discard the entire posterior ensemble.
+      keep <- !vapply(param_configs, is.null, logical(1))
+      param_configs <- param_configs[keep]
       n_param_sets <- length(param_configs)
       if (n_param_sets == 0) stop("All parameter sampling attempts failed")
 
-      if (n_param_sets < length(parameter_seeds) && verbose) {
-        message("Warning: ", length(parameter_seeds) - n_param_sets,
-                " parameter sets failed to sample")
+      if (any(!keep)) {
+        parameter_seeds <- parameter_seeds[keep]
+        if (!is.null(parameter_weights)) parameter_weights <- parameter_weights[keep]
+        warning(sprintf(
+          "calc_model_ensemble: %d of %d parameter sets failed to sample; proceeding on the %d that succeeded",
+          sum(!keep), length(keep), n_param_sets))
       }
     }
 

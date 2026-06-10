@@ -272,3 +272,69 @@ test_that("ensemble weighting pairs each (param,stoch) prediction with its OWN p
     weighted_quantiles(flat_vals, misaligned_w, 0.5)
   )))
 })
+
+# --- R-1: precomputed param_idx <-> weight alignment guard (v0.36.2) ----------
+# On the Dask post-cal path, configs were compacted (dropped failed re-samples)
+# while weights were derived from the uncompacted mask, so a dropped config
+# shifted every later prediction onto the wrong weight and left a trailing all-NA
+# slice — a silent wrong ensemble. The producer fix compacts seeds+weights in
+# lockstep; this consumer-side guard makes any future mispairing fail loud.
+
+test_that("calc_model_ensemble (precomputed) errors when param_idx overflows n_param_sets (R-1)", {
+  mock_config <- list(
+    reported_cases = matrix(0, 1, 1), reported_deaths = matrix(0, 1, 1),
+    location_name = "A", date_start = "2023-01-01", date_stop = "2023-01-01"
+  )
+  precomputed <- list(
+    list(param_idx = 1L, stoch_idx = 1L, reported_cases = matrix(10, 1, 1),
+         reported_deaths = matrix(1, 1, 1), success = TRUE),
+    list(param_idx = 4L, stoch_idx = 1L, reported_cases = matrix(10, 1, 1),
+         reported_deaths = matrix(1, 1, 1), success = TRUE)   # 4 > n_param_sets (3)
+  )
+  expect_error(
+    calc_model_ensemble(config = mock_config, parameter_seeds = c(1L, 2L, 3L),
+                        parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 1L,
+                        precomputed_results = precomputed, verbose = FALSE),
+    "misaligned"
+  )
+})
+
+test_that("calc_model_ensemble (precomputed) warns when a param slice has no predictions (R-1)", {
+  mock_config <- list(
+    reported_cases = matrix(0, 1, 1), reported_deaths = matrix(0, 1, 1),
+    location_name = "A", date_start = "2023-01-01", date_stop = "2023-01-01"
+  )
+  # param_idx covers {1,2} but there are 3 parameter sets => the dropped-config gap
+  precomputed <- list(
+    list(param_idx = 1L, stoch_idx = 1L, reported_cases = matrix(10, 1, 1),
+         reported_deaths = matrix(1, 1, 1), success = TRUE),
+    list(param_idx = 2L, stoch_idx = 1L, reported_cases = matrix(20, 1, 1),
+         reported_deaths = matrix(2, 1, 1), success = TRUE)
+  )
+  expect_warning(
+    calc_model_ensemble(config = mock_config, parameter_seeds = c(1L, 2L, 3L),
+                        parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 1L,
+                        precomputed_results = precomputed, verbose = FALSE),
+    "no precomputed predictions"
+  )
+})
+
+test_that("calc_model_ensemble (precomputed) pairs dense param_idx with the right weight (R-1)", {
+  # The fixed production path: seeds/weights compacted in lockstep so param_idx
+  # densely covers 1:n_param_sets. No warning, and the weighted mean attaches
+  # each prediction to its OWN parameter weight.
+  mock_config <- list(
+    reported_cases = matrix(0, 1, 1), reported_deaths = matrix(0, 1, 1),
+    location_name = "A", date_start = "2023-01-01", date_stop = "2023-01-01"
+  )
+  vals <- c(10, 20, 30)
+  pw   <- c(0.7, 0.2, 0.1)
+  precomputed <- lapply(seq_len(3), function(p) list(
+    param_idx = p, stoch_idx = 1L,
+    reported_cases = matrix(vals[p], 1, 1), reported_deaths = matrix(vals[p], 1, 1),
+    success = TRUE))
+  ens <- calc_model_ensemble(config = mock_config, parameter_seeds = c(1L, 2L, 3L),
+                             parameter_weights = pw, n_simulations_per_config = 1L,
+                             precomputed_results = precomputed, verbose = FALSE)
+  expect_equal(as.numeric(ens$cases_mean), weighted.mean(vals, pw))
+})

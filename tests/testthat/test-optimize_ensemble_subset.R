@@ -341,3 +341,51 @@ test_that(".compute_wis_from_quantiles is zero for perfect forecasts", {
 
   expect_equal(wis, 0)
 })
+
+
+# ===========================================================================
+# R-5: weighted-mean renormalization over surviving sims (v0.36.2)
+# ===========================================================================
+
+test_that("optimize_ensemble_subset renormalizes the weighted mean over surviving sims", {
+  # One param's predictions are NA (a failed sim). The optimized-ensemble MEAN
+  # must drop that term AND renormalize the surviving weights, not divide by the
+  # full weight (which biased the mean toward 0). The median path already did
+  # this via weighted_quantiles, so the two stats are now consistent.
+  n_locs <- 1L; n_times <- 5L; n_params <- 4L; n_stoch <- 1L
+  obs_cases  <- matrix(c(50, 60, 70, 80, 90), n_locs, n_times)
+  obs_deaths <- matrix(c(5, 6, 7, 8, 9),     n_locs, n_times)
+
+  cases_array  <- array(NA_real_, dim = c(n_locs, n_times, n_params, n_stoch))
+  deaths_array <- array(NA_real_, dim = c(n_locs, n_times, n_params, n_stoch))
+  for (p in c(1L, 2L, 4L)) {              # param 3 left all-NA (simulated failure)
+    cases_array[1, , p, 1]  <- as.numeric(obs_cases)
+    deaths_array[1, , p, 1] <- as.numeric(obs_deaths)
+  }
+
+  ens <- structure(list(
+    cases_array = cases_array, deaths_array = deaths_array,
+    cases_mean = obs_cases, cases_median = obs_cases,
+    deaths_mean = obs_deaths, deaths_median = obs_deaths,
+    ci_bounds = list(
+      cases  = list(list(lower = obs_cases * 0.8,  upper = obs_cases * 1.2)),
+      deaths = list(list(lower = obs_deaths * 0.8, upper = obs_deaths * 1.2))
+    ),
+    obs_cases = obs_cases, obs_deaths = obs_deaths,
+    parameter_weights = rep(1 / n_params, n_params),
+    n_param_sets = n_params, n_simulations_per_config = n_stoch,
+    n_successful = as.integer(n_params * n_stoch),
+    location_names = "LOC_A", n_locations = n_locs, n_time_points = n_times,
+    date_start = "2023-01-01", date_stop = "2023-01-05",
+    envelope_quantiles = c(0.025, 0.975)
+  ), class = "mosaic_ensemble")
+
+  # Equal likelihoods => uniform optimal weights; min_n = n_params => use all 4.
+  result <- optimize_ensemble_subset(ens, likelihoods = rep(-100, n_params),
+                                     min_n = n_params, objective = "mae", verbose = FALSE)
+
+  # Renormalized (correct): mean == obs. The pre-fix divide-by-full-weight would
+  # have produced 0.75 * obs (one of four equal weights lost to the NA).
+  expect_equal(as.numeric(result$ensemble_optimized$cases_mean),  as.numeric(obs_cases))
+  expect_equal(as.numeric(result$ensemble_optimized$deaths_mean), as.numeric(obs_deaths))
+})

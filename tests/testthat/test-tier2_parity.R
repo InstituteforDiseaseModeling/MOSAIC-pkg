@@ -2,6 +2,13 @@
 # merge-0.5, sort-once-per-cell). Each asserts BIT-IDENTICAL output vs the
 # post-alignment-fix reference. The golden fixture (fixtures/parity_tier2.rds)
 # was captured from the fixed-but-pre-refactor code (claude/capture_parity_tier2.R).
+#
+# v0.36.2 (R-5): the optimized-ensemble MEAN fields were refreshed (only those
+# two fields, verified-surgical via claude/update_parity_tier2_means.R) when
+# optimize_ensemble_subset() began renormalizing the weighted mean over surviving
+# sims to match calc_model_ensemble(). The fixture has no failed sims, so the
+# refresh was a machine-eps (~1e-14) divide-by-sum(w) consistency change; the
+# behavioral change under NA is covered by test-optimize_ensemble_subset.R.
 
 test_that("#2a: weighted_quantiles_presorted == weighted_quantiles on sorted input", {
   set.seed(99)

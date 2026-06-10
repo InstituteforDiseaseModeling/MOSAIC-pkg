@@ -13,6 +13,33 @@
 .MOSAIC_MAX_SIMULATIONS <- 100000000L
 
 # =============================================================================
+# Transmission-parameter guardrail
+# =============================================================================
+
+#' Clamp transmission parameters into laser-cholera-valid ranges
+#'
+#' Applied to every sampled parameter set before it is simulated, so that
+#' calibration scoring and post-calibration prediction (best / medioid /
+#' posterior ensemble) use IDENTICAL clamped values. Prevents the laser-cholera
+#' ValueError where \code{p = -expm1(-rate) > 1} when \code{rate < 0}
+#' (GitHub #24) and keeps probabilities in [0, 1]. Idempotent — clamping an
+#' already-clamped config is a no-op — so it is safe to apply at every sampling
+#' site without changing values that are already in range.
+#'
+#' @param params A config/parameter list from \code{sample_parameters()} (or NULL).
+#' @return \code{params} with transmission fields clamped (NULL passed through).
+#' @noRd
+.mosaic_clamp_transmission_params <- function(params) {
+  if (is.null(params)) return(params)
+  if (!is.null(params$beta_j0_tot)) params$beta_j0_tot <- pmax(params$beta_j0_tot, 1e-10)
+  if (!is.null(params$beta_j0_hum)) params$beta_j0_hum <- pmax(params$beta_j0_hum, 0)
+  if (!is.null(params$beta_j0_env)) params$beta_j0_env <- pmax(params$beta_j0_env, 0)
+  if (!is.null(params$p_beta))      params$p_beta      <- pmin(pmax(params$p_beta, 1e-6), 1 - 1e-6)
+  if (!is.null(params$tau_i))       params$tau_i       <- pmin(pmax(params$tau_i, 0), 1)
+  params
+}
+
+# =============================================================================
 # Dask worker count
 # =============================================================================
 
@@ -1983,12 +2010,8 @@
       validate    = FALSE
     )
 
-    # Guardrails: clamp transmission parameters into valid ranges.
-    if (!is.null(params$beta_j0_tot)) params$beta_j0_tot <- pmax(params$beta_j0_tot, 1e-10)
-    if (!is.null(params$beta_j0_hum)) params$beta_j0_hum <- pmax(params$beta_j0_hum, 0)
-    if (!is.null(params$beta_j0_env)) params$beta_j0_env <- pmax(params$beta_j0_env, 0)
-    if (!is.null(params$p_beta))      params$p_beta      <- pmin(pmax(params$p_beta, 1e-6), 1 - 1e-6)
-    if (!is.null(params$tau_i))       params$tau_i       <- pmin(pmax(params$tau_i, 0), 1)
+    # Guardrails: clamp transmission parameters into valid ranges (shared helper).
+    params <- .mosaic_clamp_transmission_params(params)
 
     # Serialize the sampled (non-base) fields for shipping to the Coiled worker.
     json <- jsonlite::toJSON(

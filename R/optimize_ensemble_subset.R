@@ -342,8 +342,16 @@ optimize_ensemble_subset <- function(ensemble,
       vals_c <- as.vector(opt_cases[i, j, , ])
       vals_d <- as.vector(opt_deaths[i, j, , ])
 
-      cases_mean_m[i, j]    <- sum(vals_c * sim_weights_opt, na.rm = TRUE)
-      deaths_mean_m[i, j]   <- sum(vals_d * sim_weights_opt, na.rm = TRUE)
+      # Renormalize over surviving (non-NA) sims so a failed cell doesn't bias
+      # the mean toward 0. Matches calc_model_ensemble()'s mean handling and the
+      # weighted-median path (which renormalizes inside weighted_quantiles), so
+      # the two stats stay consistent. No-op when no sim failed (weights sum to 1).
+      valid_c <- is.finite(vals_c) & is.finite(sim_weights_opt) & sim_weights_opt > 0
+      wsum_c  <- if (any(valid_c)) sum(sim_weights_opt[valid_c]) else 0
+      cases_mean_m[i, j]    <- if (wsum_c > 0) sum(vals_c[valid_c] * sim_weights_opt[valid_c]) / wsum_c else NA_real_
+      valid_d <- is.finite(vals_d) & is.finite(sim_weights_opt) & sim_weights_opt > 0
+      wsum_d  <- if (any(valid_d)) sum(sim_weights_opt[valid_d]) else 0
+      deaths_mean_m[i, j]   <- if (wsum_d > 0) sum(vals_d[valid_d] * sim_weights_opt[valid_d]) / wsum_d else NA_real_
 
       # One weighted_quantiles call per metric for median + envelope (single sort)
       qc <- weighted_quantiles(vals_c, sim_weights_opt, c(0.5, envelope_quantiles))
