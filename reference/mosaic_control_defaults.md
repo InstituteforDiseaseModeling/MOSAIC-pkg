@@ -127,7 +127,7 @@ mosaic_control_defaults(
     (default: 0.001)
 
   - `ESS_method`: ESS calculation method, "kish" or "perplexity"
-    (default: "kish")
+    (default: "perplexity")
 
 - predictions:
 
@@ -171,9 +171,11 @@ mosaic_control_defaults(
 
   - `enable`: Enable parallel execution (default: FALSE)
 
-  - `n_cores`: Number of cores to use (default: 1L). In Dask mode, also
-    controls local parallel likelihood computation after simulations
-    return.
+  - `n_cores`: Number of LOCAL cores (default: 1L). Governs
+    local-machine parallelism only: the LASER worker count on the
+    non-Dask path, and the orchestrator's sampling/parquet PSOCK worker
+    count on the Dask path. It never sets the remote Dask/Coiled worker
+    count (that is `dask_spec$n_workers`).
 
   - `type`: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 

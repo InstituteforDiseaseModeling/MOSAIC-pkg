@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,20 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.34.0" id="mosaic-0340">MOSAIC 0.34.0<a class="anchor" aria-label="anchor" href="#mosaic-0340"></a></h2>
+<div class="section level3">
+<h3 id="est_suitability-new-default-lstm_v2-hierarchical-film-architecture-rolling-origin-cv-0-34-0">est_suitability(): new default lstm_v2 hierarchical-FiLM architecture (rolling-origin CV)<a class="anchor" aria-label="anchor" href="#est_suitability-new-default-lstm_v2-hierarchical-film-architecture-rolling-origin-cv-0-34-0"></a></h3>
+<p><code><a href="../reference/est_suitability.html">est_suitability()</a></code> is now an architecture dispatcher. The v0.34 default, <code>architecture = "lstm_v2_hierarchical_film"</code> (“gauge_A”/“B4”), replaces the v0.33 shared LSTM with a hierarchical-FiLM model trained under expanding-window rolling-origin cross-validation — fixing the v0.33 random-split temporal leak that collapsed out-of-sample forecasts to a near-flat line.</p>
+<p><strong>Architecture.</strong> A 3-stack LSTM trunk (128-&gt;64-&gt;32, recurrent dropout) maps the 13-week covariate window to a shared climate-response latent <code>z</code>; a region embedding and a zero-initialized country <em>deviation</em> embedding modulate <code>z</code> via two FiLM stages (<code>tanh</code> gains in <code>[0,2]</code>, identity at init), with an L2 partial-pool penalty shrinking data-sparse countries toward their region. BCE loss under <code>balanced_uniform</code> sample weights (correcting the zero-week imbalance) plus an optional per-row confidence-weight overlay that down-weights AI-mined surveillance rows. Each step validates strictly forward in time (4-week embargo); the model refits on full in-sample data at <code>median(best_epoch)</code>; <code>n_seeds</code> fits are combined on the logit scale.</p>
+<p><strong>Output schema (Option A).</strong> The prediction CSVs now carry a single canonical <code>psi</code> column (smoothed; bias-corrected when <code>bias_correct = TRUE</code>) consumed by every psi-&gt;<code>psi_jt</code> reader, plus transparent diagnostics (<code>pred_raw</code>, <code>pred_smooth</code>, <code>pred_bias_corrected</code>, and seed-dispersion quantiles <code>q025/q25/q75/q975</code> — diagnostic, NOT predictive intervals). The latent v0.33 no-op (bias correction wrote <code>pred_calibrated</code> while readers used <code>pred_smooth</code>) is fixed.</p>
+<p><strong>Signature.</strong> New shared toggles <code>feature_set</code> (default <code>"v7.3"</code>), <code>response_var</code> (default <code>"transmission_intensity"</code>), <code>bias_correct</code> (renamed from <code>calibrate</code>), <code>architecture</code>, and a single <code>arch_control</code> list holding all lstm_v2 hyperparameters (loaded from <code>inst/fixtures/B4_rolling_cv_spec.yml</code>). The v0.33 process knobs (<code>n_splits</code>, <code>seed_base</code>, …) and <code>exclude_covariates</code> are frozen inside the legacy path and absorbed via <code>...</code> with a deprecation message; <code>calibrate</code> is mapped to <code>bias_correct</code>.</p>
+<p><strong>Bias correction.</strong> <code><a href="../reference/calibrate_psi_predictions.html">calibrate_psi_predictions()</a></code> rewritten to a per-country logit-scale affine fit on outbreak (non-zero observed) weeks only, applied via the monotone inverse logit (no hard <code>[0,1]</code> clip). Zero-history / low-incidence countries fall back to identity (uncorrected, region-FiLM-modulated psi).</p>
+<p><strong>Region maps.</strong> <code>arch_control$region_map</code> selects one of <code>snf_k5</code> (production default; Similarity Network Fusion 4-view clustering), <code>csv</code> (4 WHO admin regions; the B4 reproduction baseline), <code>seasonal_v1</code>, <code>hydro_v1</code>, or <code>snf_k4</code>.</p>
+<p><strong>Provisional defaults.</strong> The v0.34.0 defaults (<code>response_var = "transmission_intensity"</code>, <code>region_map = "snf_k5"</code>, <code>bias_correct = TRUE</code>) are provisional, gated by a post-merge psi-&gt;LASER case-skill experiment; <code>snf_k5</code> reverts to <code>csv</code> if it does not beat it, and <code>bias_correct</code> to <code>FALSE</code> if it worsens downstream case-skill.</p>
+<p><strong>Legacy.</strong> <code>architecture = "lstm_v1_legacy"</code> preserves the frozen v0.33 shared-LSTM path (random split + sequential fine-tuning) for reproducibility/rollback.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.32.9" id="mosaic-0329">MOSAIC 0.32.9<a class="anchor" aria-label="anchor" href="#mosaic-0329"></a></h2>
 <div class="section level3">

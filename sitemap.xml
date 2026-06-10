@@ -71,6 +71,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dgompertz.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/disagg_annual_cases_to_daily.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-infer_posterior_family_uniform.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_count_dask_workers.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_dist_core_fields.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_gather_with_heartbeat.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/dot-mosaic_postca_dask.html</loc></url>
@@ -208,6 +209,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_psi_star_diagnostic.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rho_care_seeking_params.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rolling_cv.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission_example.html</loc></url>
@@ -271,6 +273,7 @@
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/validate_priors_json.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/validate_sampled_config.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles.html</loc></url>
+<url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles_presorted.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_var.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_json_or_gz.html</loc></url>
 <url><loc>https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_list_to_hdf5.html</loc></url>

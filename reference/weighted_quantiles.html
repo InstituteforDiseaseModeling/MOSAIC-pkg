@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,8 +70,10 @@
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Sorts values and weights, calculates cumulative weight distribution,
-and uses linear interpolation to estimate quantiles at specified probability levels.</p>
+    <p>Drops non-finite values and non-positive weights, sorts the survivors by
+value, then delegates to <code><a href="weighted_quantiles_presorted.html">weighted_quantiles_presorted</a></code> for the
+cumulative-weight interpolation. (Splitting out the sorted core lets hot
+callers sort once and reuse the order; the public behaviour is unchanged.)</p>
     </div>
 
     <div class="section level2">

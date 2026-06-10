@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -136,7 +136,7 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>A_best</code>: Target agreement index (default: 0.70). Lower values allow top sims to dominate.</p></li>
 <li><p><code>CVw_best</code>: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.</p></li>
 <li><p><code>percentile_min</code>: Minimum percentile for best subset search (default: 0.001)</p></li>
-<li><p><code>ESS_method</code>: ESS calculation method, "kish" or "perplexity" (default: "kish")</p></li>
+<li><p><code>ESS_method</code>: ESS calculation method, "kish" or "perplexity" (default: "perplexity")</p></li>
 </ul></dd>
 
 
@@ -171,8 +171,10 @@ degeneracy in <code>posteriors.json</code>).</p></li>
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
 <dd><p>List of parallelization settings (infrastructure). Default is:</p><ul><li><p><code>enable</code>: Enable parallel execution (default: FALSE)</p></li>
-<li><p><code>n_cores</code>: Number of cores to use (default: 1L). In Dask mode, also
-controls local parallel likelihood computation after simulations return.</p></li>
+<li><p><code>n_cores</code>: Number of LOCAL cores (default: 1L). Governs local-machine
+parallelism only: the LASER worker count on the non-Dask path, and the
+orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
+remote Dask/Coiled worker count (that is <code>dask_spec$n_workers</code>).</p></li>
 <li><p><code>type</code>: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")</p></li>
 <li><p><code>progress</code>: Show progress bar (default: TRUE)</p></li>
 </ul></dd>

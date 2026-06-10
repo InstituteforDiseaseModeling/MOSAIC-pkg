@@ -1,5 +1,70 @@
 # Changelog
 
+## MOSAIC 0.34.0
+
+### est_suitability(): new default lstm_v2 hierarchical-FiLM architecture (rolling-origin CV)
+
+[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+is now an architecture dispatcher. The v0.34 default,
+`architecture = "lstm_v2_hierarchical_film"` (“gauge_A”/“B4”), replaces
+the v0.33 shared LSTM with a hierarchical-FiLM model trained under
+expanding-window rolling-origin cross-validation — fixing the v0.33
+random-split temporal leak that collapsed out-of-sample forecasts to a
+near-flat line.
+
+**Architecture.** A 3-stack LSTM trunk (128-\>64-\>32, recurrent
+dropout) maps the 13-week covariate window to a shared climate-response
+latent `z`; a region embedding and a zero-initialized country
+*deviation* embedding modulate `z` via two FiLM stages (`tanh` gains in
+`[0,2]`, identity at init), with an L2 partial-pool penalty shrinking
+data-sparse countries toward their region. BCE loss under
+`balanced_uniform` sample weights (correcting the zero-week imbalance)
+plus an optional per-row confidence-weight overlay that down-weights
+AI-mined surveillance rows. Each step validates strictly forward in time
+(4-week embargo); the model refits on full in-sample data at
+`median(best_epoch)`; `n_seeds` fits are combined on the logit scale.
+
+**Output schema (Option A).** The prediction CSVs now carry a single
+canonical `psi` column (smoothed; bias-corrected when
+`bias_correct = TRUE`) consumed by every psi-\>`psi_jt` reader, plus
+transparent diagnostics (`pred_raw`, `pred_smooth`,
+`pred_bias_corrected`, and seed-dispersion quantiles `q025/q25/q75/q975`
+— diagnostic, NOT predictive intervals). The latent v0.33 no-op (bias
+correction wrote `pred_calibrated` while readers used `pred_smooth`) is
+fixed.
+
+**Signature.** New shared toggles `feature_set` (default `"v7.3"`),
+`response_var` (default `"transmission_intensity"`), `bias_correct`
+(renamed from `calibrate`), `architecture`, and a single `arch_control`
+list holding all lstm_v2 hyperparameters (loaded from
+`inst/fixtures/B4_rolling_cv_spec.yml`). The v0.33 process knobs
+(`n_splits`, `seed_base`, …) and `exclude_covariates` are frozen inside
+the legacy path and absorbed via `...` with a deprecation message;
+`calibrate` is mapped to `bias_correct`.
+
+**Bias correction.**
+[`calibrate_psi_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calibrate_psi_predictions.md)
+rewritten to a per-country logit-scale affine fit on outbreak (non-zero
+observed) weeks only, applied via the monotone inverse logit (no hard
+`[0,1]` clip). Zero-history / low-incidence countries fall back to
+identity (uncorrected, region-FiLM-modulated psi).
+
+**Region maps.** `arch_control$region_map` selects one of `snf_k5`
+(production default; Similarity Network Fusion 4-view clustering), `csv`
+(4 WHO admin regions; the B4 reproduction baseline), `seasonal_v1`,
+`hydro_v1`, or `snf_k4`.
+
+**Provisional defaults.** The v0.34.0 defaults
+(`response_var = "transmission_intensity"`, `region_map = "snf_k5"`,
+`bias_correct = TRUE`) are provisional, gated by a post-merge
+psi-\>LASER case-skill experiment; `snf_k5` reverts to `csv` if it does
+not beat it, and `bias_correct` to `FALSE` if it worsens downstream
+case-skill.
+
+**Legacy.** `architecture = "lstm_v1_legacy"` preserves the frozen v0.33
+shared-LSTM path (random split + sequential fine-tuning) for
+reproducibility/rollback.
+
 ## MOSAIC 0.32.9
 
 ### Phase 3 ([\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101)): cast observed surveillance matrices to double before scatter

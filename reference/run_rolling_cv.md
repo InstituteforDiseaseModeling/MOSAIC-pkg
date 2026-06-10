@@ -115,8 +115,11 @@ run_rolling_cv(
 
   Named list of *modeling* arguments passed through to
   [`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
-  (e.g. `n_splits`, `exclude_covariates`). Date arguments are ignored
-  (harness-owned).
+  (e.g. `architecture`, `feature_set`, `response_var`, `bias_correct`,
+  and the lstm_v2 `arch_control` list). Date arguments are ignored
+  (harness-owned). Deprecated v0.33 keys (`n_splits`,
+  `exclude_covariates`) are accepted but ignored with a per-cutoff
+  deprecation message — prefer `arch_control` for lstm_v2 knobs.
 
 - dask_spec:
 

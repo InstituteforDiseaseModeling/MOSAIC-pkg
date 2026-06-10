@@ -1,11 +1,11 @@
 # Gather Dask futures while emitting periodic progress lines
 
-Wraps `client$gather(futures)` with a polling loop that uses
-`dask.distributed.wait(futures, timeout=interval_sec)` to wake up every
-`interval_sec` seconds, count completed vs pending futures, and emit a
-single structured `[PROGRESS]` log line per heartbeat. Eliminates the
-silent-during-gather window that otherwise leads a tailing operator
-(human or AI) to wrongly conclude the pipeline has hung.
+Wraps `client$gather(futures)` with a polling loop that wakes up every
+`interval_sec` seconds, counts completed vs pending futures via a single
+round-trip Python helper, and emits one structured `[PROGRESS]` log line
+per heartbeat. Eliminates the silent-during-gather window that otherwise
+leads a tailing operator (human or AI) to wrongly conclude the pipeline
+has hung.
 
 ## Usage
 
@@ -50,5 +50,13 @@ The list returned by `client$gather(futures)`.
 
 ## Details
 
-On wait/gather error, the helper does NOT swallow — it lets the caller's
-tryCatch handle diagnostics (e.g. first-future status inspection).
+Note: an earlier version used `dask.distributed.wait(timeout=...)` to
+wake on completion-or-timeout. That API raises `TimeoutError` on timeout
+(it does NOT return a `DoneAndNotDoneFutures` as the docs suggest at
+first read), which aborted the gather on the very first heartbeat. We
+now poll `future.status` from Python in a single batched call (cheap —
+the status is mirrored locally from scheduler push updates, no
+round-trip per future) and sleep between iterations.
+
+On gather error the helper does NOT swallow — it lets the caller's
+tryCatch handle diagnostics (first-future status inspection).

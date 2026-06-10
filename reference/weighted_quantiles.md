@@ -29,9 +29,12 @@ Vector of weighted quantiles
 
 ## Details
 
-Sorts values and weights, calculates cumulative weight distribution, and
-uses linear interpolation to estimate quantiles at specified probability
-levels.
+Drops non-finite values and non-positive weights, sorts the survivors by
+value, then delegates to
+[`weighted_quantiles_presorted`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles_presorted.md)
+for the cumulative-weight interpolation. (Splitting out the sorted core
+lets hot callers sort once and reuse the order; the public behaviour is
+unchanged.)
 
 ## Examples
 

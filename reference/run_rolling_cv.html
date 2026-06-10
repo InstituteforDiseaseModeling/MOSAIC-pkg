@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.33.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -160,8 +160,12 @@ cutoffs and locations.</p></dd>
 
 <dt id="arg-est-suitability-spec">est_suitability_spec<a class="anchor" aria-label="anchor" href="#arg-est-suitability-spec"></a></dt>
 <dd><p>Named list of <em>modeling</em> arguments passed
-through to <code><a href="est_suitability.html">est_suitability</a></code> (e.g. <code>n_splits</code>,
-<code>exclude_covariates</code>). Date arguments are ignored (harness-owned).</p></dd>
+through to <code><a href="est_suitability.html">est_suitability</a></code> (e.g. <code>architecture</code>,
+<code>feature_set</code>, <code>response_var</code>, <code>bias_correct</code>, and the
+lstm_v2 <code>arch_control</code> list). Date arguments are ignored (harness-owned).
+Deprecated v0.33 keys (<code>n_splits</code>, <code>exclude_covariates</code>) are
+accepted but ignored with a per-cutoff deprecation message — prefer
+<code>arch_control</code> for lstm_v2 knobs.</p></dd>
 
 
 <dt id="arg-dask-spec">dask_spec<a class="anchor" aria-label="anchor" href="#arg-dask-spec"></a></dt>

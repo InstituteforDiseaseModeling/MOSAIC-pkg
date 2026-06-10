@@ -387,6 +387,9 @@ Plotting functions
   infections
 - [`plot_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rho_care_seeking_params.md)
   : Plot Rho (Care-Seeking Rate) Prior Estimation
+- [`plot_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rolling_cv.md)
+  : Presentation-quality plot of a rolling-origin forecast-validation
+  artifact
 - [`plot_seasonal_clustering()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.md)
   : Plot Clustering of Countries Based on Seasonal Dynamics
 - [`plot_seasonal_transmission()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.md)
@@ -669,7 +672,8 @@ Other exported functions and internal helpers
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
   : Weighted mode estimation using kernel density
 - [`calibrate_psi_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calibrate_psi_predictions.md)
-  : Per-country affine bias-calibration of suitability (psi) predictions
+  : Per-country logit-scale bias-correction of suitability (psi)
+  predictions
 - [`check_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_affine_normalization.md)
   : Check Affine Normalization (Zero-Centered Min-Max Scaling)
 - [`check_coiled_workspace()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_coiled_workspace.md)
@@ -1003,6 +1007,9 @@ Other exported functions and internal helpers
   infections
 - [`plot_rho_care_seeking_params()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rho_care_seeking_params.md)
   : Plot Rho (Care-Seeking Rate) Prior Estimation
+- [`plot_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rolling_cv.md)
+  : Presentation-quality plot of a rolling-origin forecast-validation
+  artifact
 - [`plot_seasonal_clustering()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_clustering.md)
   : Plot Clustering of Countries Based on Seasonal Dynamics
 - [`plot_seasonal_transmission()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_seasonal_transmission.md)
@@ -1149,6 +1156,8 @@ Other exported functions and internal helpers
   : Validate Sampled Config
 - [`weighted_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles.md)
   : Weighted quantiles
+- [`weighted_quantiles_presorted()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles_presorted.md)
+  : Weighted quantiles from already-sorted, pre-filtered inputs
 - [`weighted_var()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_var.md)
   : Weighted Statistical Functions for Posterior Analysis
 - [`write_json_or_gz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/write_json_or_gz.md)
