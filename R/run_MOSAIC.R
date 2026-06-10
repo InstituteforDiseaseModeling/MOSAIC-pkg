@@ -999,8 +999,8 @@ run_MOSAIC <- function(config,
 
     # --- Dask / Coiled cluster ---
 
-    # Force LOCAL sequential if parallel is disabled. Sets the orchestrator fork
-    # width only; does NOT affect dask_spec$n_workers (the remote cluster size).
+    # Force LOCAL sequential if parallel is disabled. Sets the orchestrator-local
+    # worker count only; does NOT affect dask_spec$n_workers (the remote cluster size).
     if (!isTRUE(control$parallel$enable)) {
       control$parallel$n_cores <- 1L
     }
@@ -1144,12 +1144,12 @@ run_MOSAIC <- function(config,
     base_config_future <- client$scatter(base_config_py, broadcast = TRUE)
     log_msg("  Base config broadcast complete")
 
-    # Orchestrator-local thread hygiene: the sampling + parquet-write loops run
-    # locally (mclapply forks when control$parallel$n_cores > 1). Pin every local
-    # thread pool to 1 so N forks cannot oversubscribe the orchestrator host
-    # (arrow's CPU pool and OpenBLAS are otherwise uncapped here); forks inherit
-    # this via copy-on-write. Remote Coiled workers set their own nthreads=1 and
-    # are unaffected.
+    # Orchestrator-local thread hygiene: pin every thread pool on THIS
+    # (orchestrator) process to 1 so arrow's CPU/IO pools and OpenBLAS don't
+    # oversubscribe the host (they are otherwise uncapped here). The PSOCK
+    # workers that run the sampling + parquet-write loops are pinned separately
+    # on each worker (they are fresh processes and do NOT inherit this pin).
+    # Remote Coiled workers set their own nthreads=1 and are unaffected.
     .mosaic_set_all_thread_env(1L)
     try(arrow::set_cpu_count(1L), silent = TRUE)
     try(arrow::set_io_thread_count(1L), silent = TRUE)
@@ -3196,7 +3196,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{enable}: Enable parallel execution (default: FALSE)
 #'     \item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
 #'       parallelism only: the LASER worker count on the non-Dask path, and the
-#'       orchestrator's sampling/parquet fork width on the Dask path. It never sets the
+#'       orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
 #'       remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 #'     \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 #'     \item \code{progress}: Show progress bar (default: TRUE)

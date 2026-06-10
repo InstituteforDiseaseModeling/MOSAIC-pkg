@@ -1919,8 +1919,8 @@
 #' Sample, clamp, and JSON-serialize one sim's parameters for the Dask path.
 #'
 #' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
-#' submission sample-and-serialize loop can run in parallel via
-#' parallel::mclapply(). Returns a list:
+#' submission sample-and-serialize loop can run in parallel on a PSOCK
+#' parallel::parLapply() cluster. Returns a list:
 #'   $params : the full sampled-config list (NULL on failure)
 #'   $json   : the per-sim JSON string ready for the Coiled worker
 #'             (NULL on failure)
@@ -1929,17 +1929,18 @@
 #' Reproducibility: sample_parameters() takes `seed = sim_id` and is
 #' internally seeded, so each sim's output depends ONLY on (sim_id,
 #' priors, config, sampling_args). Parallel execution produces output
-#' identical to serial execution regardless of fork ordering.
+#' identical to serial execution regardless of which worker runs it.
 #'
 #' Error handling: the entire body is wrapped in tryCatch so any failure
 #' (in sample_parameters, in the guardrail clamps, in toJSON) is
 #' captured and returned as $error. Callers MUST NOT emit warnings
-#' inside this function — fork-side warnings with `immediate. = FALSE`
-#' are swallowed by mclapply. Surface $error in the parent instead.
+#' inside this function — a warning raised on a PSOCK worker never
+#' reaches the parent. Surface $error in the parent instead.
 #'
 #' Constraint: do NOT touch the parent's reticulate/Coiled state from
 #' inside this function. The parent's `client` and `mosaic_worker`
-#' objects are inherited via fork but are not safe to use in children.
+#' objects live only in the parent — they are never exported to the
+#' PSOCK workers, which must stay reticulate-free.
 #' @noRd
 .mosaic_sample_and_serialize <- function(sim_id, PATHS, priors, config,
                                          sampling_args) {
@@ -1978,27 +1979,29 @@
 #' Build and write a single Dask-path parquet shard.
 #'
 #' Per-sim worker function extracted from .mosaic_run_batch_dask() so the
-#' write loop can run in parallel via parallel::mclapply(). Returns:
+#' write loop can run in parallel on a PSOCK parallel::parLapply() cluster.
+#' Returns:
 #'   TRUE                   : shard wrote successfully
 #'   character message      : a failure reason for the parent to log
 #'
 #' This dual-type return lets the parent distinguish success from failure
-#' AND surface a diagnostic — `warning()` calls inside an mclapply fork
-#' with `immediate. = FALSE` are silently swallowed, so we propagate
-#' failure reasons through the return value instead.
+#' AND surface a diagnostic — `warning()` calls on a PSOCK worker never
+#' reach the parent, so we propagate failure reasons through the return
+#' value instead.
 #'
 #' Side-effect: writes one parquet file at dirs$cal_samples/sim_NNNNNNN.parquet
 #' on success.
 #'
 #' Pure compute given (sim_id, res). No shared mutable state, no I/O
 #' beyond the single parquet write, no Python calls — safe to invoke in
-#' parallel from forked workers. The caller (parent process) is
+#' parallel on PSOCK workers. The caller (parent process) is
 #' responsible for freeing result_lookup / params_list entries after
 #' each chunk completes.
 #'
 #' Constraint: do NOT touch the parent's reticulate/Coiled state from
 #' inside this function. The parent's `client` and `mosaic_worker`
-#' objects are inherited via fork but are not safe to use in children.
+#' objects live only in the parent — they are never exported to the
+#' PSOCK workers, which must stay reticulate-free.
 #' @noRd
 .mosaic_write_one_shard_dask <- function(sim_id, res, n_iterations,
                                          param_names_all, param_lookup,
@@ -2077,13 +2080,15 @@
 #' sim (likelihood collapsed across iterations via calc_log_mean_exp when
 #' n_iterations > 1, mirroring the local-path semantics in run_MOSAIC.R).
 #'
-#' Two R-side phases run in parallel via parallel::mclapply():
+#' Two R-side phases run in parallel on a PSOCK cluster (fresh R
+#' processes — never fork — so a worker cannot inherit the parent's
+#' reticulate interpreter or live Dask sockets and deadlock the client):
 #'
 #'   - Submission (sample_parameters + JSON serialize) — chunked in
 #'     batches of `submit_chunk_size` (default 1000) so that one
 #'     `client$map()` RPC handles each chunk's submissions to Coiled.
 #'   - Post-gather parquet write — chunked in batches of
-#'     `write_chunk_size` (default 1000) for fork amortization,
+#'     `write_chunk_size` (default 1000) for dispatch amortization,
 #'     progress logging, parent-side memory frees, and Dask scheduler
 #'     health pings.
 #'
@@ -2100,6 +2105,13 @@
 
   n_sims <- length(sim_ids)
 
+  # PSOCK workers compute paths from their own fresh session. A resolved PATHS
+  # MUST be passed so workers and parent agree: a NULL PATHS would make each
+  # worker's sample_parameters() fall back to get_paths() against an unset root
+  # and silently diverge from the parent. Fail loud instead.
+  if (is.null(PATHS))
+    stop(".mosaic_run_batch_dask(): PATHS must be resolved (non-NULL).", call. = FALSE)
+
   # ---------------------------------------------------------------------------
   # 1-3. Sample parameters, serialize, and submit futures (chunked)
   #      Workers start receiving tasks after the first chunk (~seconds) instead
@@ -2108,8 +2120,8 @@
   # ---------------------------------------------------------------------------
   # submit_chunk_size: number of sims per client$map() RPC to Coiled.
   # Controls Dask scheduler load (one RPC per chunk vs. one RPC per sim),
-  # NOT local R-side parallelism — that's the inner mclapply over each
-  # chunk_indices block. 1000 sits inside Dask's documented sweet spot
+  # NOT local R-side parallelism — that's the inner PSOCK parLapply over
+  # each chunk_indices block. 1000 sits inside Dask's documented sweet spot
   # for client.map() batch sizing
   # (https://docs.dask.org/en/stable/best-practices.html): individual
   # submit() calls are discouraged due to per-call RPC overhead, and
@@ -2133,14 +2145,80 @@
   # where TRUE/FALSE needed".
   .raw_n_cores <- suppressWarnings(as.integer(control$parallel$n_cores %||% 1L))
   if (length(.raw_n_cores) != 1L || is.na(.raw_n_cores)) .raw_n_cores <- 1L
-  # Cap to LOCAL hardware: this is the orchestrator fork width, never the remote
-  # worker count (that is dask_spec$n_workers).
+  # Cap to LOCAL hardware: this is the orchestrator-local worker count, never the
+  # remote worker count (that is dask_spec$n_workers).
   .local_cores <- tryCatch(parallel::detectCores(), error = function(e) NA_integer_)
   if (is.na(.local_cores) || .local_cores < 1L) .local_cores <- .raw_n_cores
   n_cores_parallel <- max(1L, min(.raw_n_cores, .local_cores))
 
-  log_msg("  Sampling + submitting %d simulations (%d chunks, parallel x %d cores)...",
-          n_sims, n_chunks, n_cores_parallel)
+  # ---------------------------------------------------------------------------
+  # Orchestrator-local parallelism via PSOCK (NOT fork).
+  #
+  # The sample+serialize and parquet-write phases below are pure-R CPU work on
+  # the orchestrator host. They run on a PSOCK cluster of fresh R processes that
+  # inherit NEITHER the parent's reticulate interpreter NOR its live Dask
+  # scheduler sockets -- so a worker can never deadlock against, or corrupt, the
+  # Dask client. (mclapply/fork here can hang: a fork taken while the client's
+  # comm thread holds a lock inherits that locked mutex.) client$map()/gather()
+  # stay in the parent; workers never import reticulate. One cluster per batch,
+  # reused for both phases; read-only inputs are exported once.
+  # ---------------------------------------------------------------------------
+  psock_cl <- NULL
+  if (n_cores_parallel > 1L) {
+    psock_cl <- tryCatch(
+      parallel::makeCluster(n_cores_parallel, type = "PSOCK"),
+      error = function(e) {
+        log_msg("  [WARN] PSOCK cluster init failed (%s); falling back to serial",
+                conditionMessage(e)); NULL
+      })
+  }
+  use_psock <- !is.null(psock_cl)
+  if (use_psock) {
+    on.exit(try(parallel::stopCluster(psock_cl), silent = TRUE), add = TRUE)
+    # Load the package + pin all thread pools on each worker (single-threaded).
+    parallel::clusterEvalQ(psock_cl, {
+      suppressMessages(library(MOSAIC))
+      Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+                 OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1",
+                 TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1",
+                 ARROW_NUM_THREADS = "1")
+      # Both Arrow pools: library(MOSAIC) loads arrow and initializes its IO pool
+      # before ARROW_NUM_THREADS is read, so the env var alone leaves IO at its
+      # 8-thread default — set both pools explicitly (mirrors the parent pin).
+      try(arrow::set_cpu_count(1L), silent = TRUE)
+      try(arrow::set_io_thread_count(1L), silent = TRUE)
+      NULL
+    })
+    # Export read-only inputs + the (internal) worker fns to each worker's
+    # global env. Deliberately NOT exported: client, mosaic_worker,
+    # base_config_future (reticulate objects — they stay in the parent).
+    parallel::clusterExport(
+      psock_cl,
+      varlist = c("sim_ids", "PATHS", "priors", "config", "sampling_args",
+                  "n_iterations", "param_names_all", "param_lookup", "dirs", "control",
+                  ".mosaic_sample_and_serialize", ".mosaic_write_one_shard_dask"),
+      envir = environment())
+  }
+
+  # Worker closures bound to globalenv so they look up the exported inputs on the
+  # worker (and don't drag the large parent frame into each parLapply payload).
+  # Used only on the PSOCK path; the serial path uses inline closures below.
+  .psock_sample_fun <- function(idx) {
+    .mosaic_sample_and_serialize(sim_id = sim_ids[idx], PATHS = PATHS,
+      priors = priors, config = config, sampling_args = sampling_args)
+  }
+  .psock_write_fun <- function(pair) {
+    .mosaic_write_one_shard_dask(pair$sim_id, pair$res, n_iterations,
+      param_names_all, param_lookup, config, dirs, control)
+  }
+  if (use_psock) {
+    environment(.psock_sample_fun) <- globalenv()
+    environment(.psock_write_fun)  <- globalenv()
+  }
+
+  par_label <- if (use_psock) sprintf("PSOCK x %d cores", n_cores_parallel) else "serial"
+  log_msg("  Sampling + submitting %d simulations (%d chunks, %s)...",
+          n_sims, n_chunks, par_label)
   params_list <- vector("list", n_sims)
   futures     <- vector("list", n_sims)
   submit_start <- Sys.time()
@@ -2157,23 +2235,11 @@
 
     # Parallel sample + serialize for the chunk. sample_parameters() is
     # deterministically seeded by sim_id, so parallel execution produces
-    # output identical to serial regardless of which fork processes each
-    # sim. mclapply is POSIX-only; on Windows it silently falls back to
-    # serial (safe default).
-    chunk_results <- if (n_cores_parallel > 1L) {
-      parallel::mclapply(
-        chunk_indices,
-        function(idx) {
-          .mosaic_sample_and_serialize(
-            sim_id        = sim_ids[idx],
-            PATHS         = PATHS,
-            priors        = priors,
-            config        = config,
-            sampling_args = sampling_args
-          )
-        },
-        mc.cores = n_cores_parallel
-      )
+    # output identical to serial regardless of which worker processes each
+    # sim (PSOCK works on all platforms; we fall back to serial lapply when
+    # n_cores == 1 or the cluster failed to start).
+    chunk_results <- if (use_psock) {
+      parallel::parLapply(psock_cl, chunk_indices, .psock_sample_fun)
     } else {
       lapply(chunk_indices, function(idx) {
         .mosaic_sample_and_serialize(
@@ -2186,17 +2252,17 @@
       })
     }
 
-    # Collect results in deterministic order (mclapply preserves order)
-    # and build the client$map() submission arrays.
+    # Collect results in deterministic order (parLapply and lapply both
+    # preserve order) and build the client$map() submission arrays.
     #
-    # Three failure shapes are possible per result entry:
+    # Under PSOCK the live failure shape is (1); (2) and (3) are kept as
+    # defensive guards:
     #   1. `list(params = NULL, json = NULL, error = "...")`
-    #      — helper's tryCatch caught an in-fork exception
-    #   2. NULL — mclapply sibling-loss: with mc.preschedule = TRUE
-    #      (default), if one task in a fork's block crashes, ALL its
-    #      siblings in that block return as bare NULL
-    #   3. `try-error` — the fork crashed at the mclapply boundary
-    #      (rare; typically only if the fork itself segfaults)
+    #      — the worker fn's own tryCatch caught an exception (never throws)
+    #   2. NULL — a worker returned no result (defensive; should not occur
+    #      now that the worker fn always returns the list in (1))
+    #   3. `try-error` — defensive; a dead PSOCK worker process normally
+    #      makes parLapply raise a cluster error rather than per-item errors
     map_indices  <- integer(0)    # positions in params_list/futures
     map_sim_ids  <- integer(0)
     map_jsons    <- character(0)
@@ -2206,14 +2272,13 @@
       r   <- chunk_results[[k]]
 
       if (is.null(r)) {
-        warning("sim ", sim_ids[idx], " fork did not deliver a result ",
-                "(possibly sibling-loss from mclapply preschedule)",
+        warning("sim ", sim_ids[idx], " worker did not deliver a result",
                 call. = FALSE, immediate. = FALSE)
         params_list[[idx]] <- NULL
         next
       }
       if (inherits(r, "try-error")) {
-        warning("sim ", sim_ids[idx], " fork crashed: ",
+        warning("sim ", sim_ids[idx], " worker crashed: ",
                 as.character(attr(r, "condition")$message),
                 call. = FALSE, immediate. = FALSE)
         params_list[[idx]] <- NULL
@@ -2345,48 +2410,42 @@
   write_start <- Sys.time()
   success_indicators <- logical(n_sims)
 
-  # Parallel parquet write. Per-sim work is pure (no shared mutable state,
-  # one file per sim) so it parallelizes cleanly via parallel::mclapply.
-  # Re-uses the n_cores_parallel budget computed at the top of the
-  # function (same value used by the sample+serialize submission phase).
-  log_msg("  Building parquet rows for %d sims (parallel x %d cores)...",
-          n_sims, n_cores_parallel)
+  # Parallel parquet write on the same PSOCK cluster. Per-sim work is pure (no
+  # shared mutable state, one file per sim). Each chunk's gathered results are
+  # sent as the task payload — PSOCK workers can't COW the parent's
+  # result_lookup the way fork did, so we hand them their slice explicitly.
+  log_msg("  Building parquet rows for %d sims (%s)...", n_sims, par_label)
 
-  # write_chunk_size: number of sims per inner mclapply() call in the
+  # write_chunk_size: number of sims per inner parLapply() call in the
   # write loop. Gates THREE things simultaneously:
-  #   1. mclapply fork batch — workers in one chunk share a single
-  #      fork round; smaller chunks mean more fork rounds.
+  #   1. PSOCK task batch — one chunk is dispatched per parLapply round;
+  #      smaller chunks mean more dispatch rounds.
   #   2. Parent-side memory free cadence — result_lookup[key] entries
-  #      are nulled out only at chunk boundaries (forked workers
-  #      inherit the parent's snapshot via COW, so the parent's
-  #      drop-as-you-go pattern only works between mclapply calls).
+  #      are nulled out only at chunk boundaries (each chunk's results are
+  #      copied into the parLapply payload, so the parent can only drop
+  #      them safely once that chunk has returned).
   #   3. Progress log + Dask scheduler health-check cadence — one
   #      "X/N elapsed" line per chunk, one client$scheduler_info()
   #      ping per chunk.
   # Fixed at 1000 to match `submit_chunk_size` for log-line cadence
   # consistency across the two phases. Unlike submit_chunk_size — which
-  # is governed by Dask RPC amortization — this one is a fork+progress
+  # is governed by Dask RPC amortization — this one is a dispatch+progress
   # constant; if it ever wants to diverge (e.g. scale with
-  # n_cores_parallel for tighter fork amortization, or with n_sims for
+  # n_cores_parallel for tighter dispatch amortization, or with n_sims for
   # progress-line cadence), the two are semantically independent.
   write_chunk_size <- 1000L
   chunks <- split(seq_len(n_sims),
                   ceiling(seq_len(n_sims) / write_chunk_size))
 
   for (chunk_idxs in chunks) {
-    chunk_out <- if (n_cores_parallel > 1L) {
-      parallel::mclapply(
-        chunk_idxs,
-        function(idx) {
-          sim_id <- sim_ids[[idx]]
-          key    <- as.character(sim_id)
-          .mosaic_write_one_shard_dask(
-            sim_id, result_lookup[[key]], n_iterations,
-            param_names_all, param_lookup, config, dirs, control
-          )
-        },
-        mc.cores = n_cores_parallel
-      )
+    chunk_out <- if (use_psock) {
+      # PSOCK workers can't COW result_lookup; send each chunk's results as the
+      # task payload (bounded: one chunk of small per-sim result dicts).
+      chunk_pairs <- lapply(chunk_idxs, function(idx) {
+        sid <- sim_ids[[idx]]
+        list(sim_id = sid, res = result_lookup[[as.character(sid)]])
+      })
+      parallel::parLapply(psock_cl, chunk_pairs, .psock_write_fun)
     } else {
       lapply(chunk_idxs, function(idx) {
         sim_id <- sim_ids[[idx]]
@@ -2398,12 +2457,13 @@
       })
     }
 
-    # The helper returns TRUE on success, a character error message on
-    # failure, NULL on mclapply sibling-loss, or a try-error on fork
-    # crash. isTRUE() correctly maps all non-TRUE shapes to FALSE in
-    # success_indicators. After accounting for success/failure, surface
-    # the failure diagnostic (which would otherwise be lost — fork-side
-    # warnings with `immediate. = FALSE` are swallowed by mclapply).
+    # The helper returns TRUE on success or a character error message on
+    # failure; NULL and try-error are defensive (a dead PSOCK worker makes
+    # parLapply raise a cluster error rather than per-item shapes). isTRUE()
+    # correctly maps all non-TRUE shapes to FALSE in success_indicators.
+    # After accounting for success/failure, surface the failure diagnostic
+    # (which would otherwise be lost — a warning raised on a PSOCK worker
+    # never reaches the parent).
     success_indicators[chunk_idxs] <- vapply(chunk_out, isTRUE, logical(1))
 
     for (k in seq_along(chunk_idxs)) {
@@ -2411,9 +2471,9 @@
       if (isTRUE(out)) next
       sid <- sim_ids[[chunk_idxs[k]]]
       msg <- if (is.null(out)) {
-        "fork did not deliver a result (possibly sibling-loss from mclapply preschedule)"
+        "worker did not deliver a result"
       } else if (inherits(out, "try-error")) {
-        paste0("fork crashed: ", as.character(attr(out, "condition")$message))
+        paste0("worker crashed: ", as.character(attr(out, "condition")$message))
       } else if (is.character(out)) {
         out
       } else {

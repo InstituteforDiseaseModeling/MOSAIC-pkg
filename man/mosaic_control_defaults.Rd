@@ -97,7 +97,7 @@ The number of parameter sets in the ensemble is determined by the best subset
 \item \code{enable}: Enable parallel execution (default: FALSE)
 \item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
 parallelism only: the LASER worker count on the non-Dask path, and the
-orchestrator's sampling/parquet fork width on the Dask path. It never sets the
+orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
 remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 \item \code{progress}: Show progress bar (default: TRUE)
