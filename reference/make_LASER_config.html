@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -158,6 +158,8 @@ If NULL, no file is written and the parameters are returned.</p></dd>
 <h3 id="initialization">Initialization<a class="anchor" aria-label="anchor" href="#initialization"></a></h3>
 
 
+<p>Parameters defining the simulation window and the initial compartment sizes
+(and optional proportions) for each location.</p>
 </div></dd>
 
 
@@ -243,6 +245,7 @@ of individuals in vaccine compartment V2 for each location. Values must be in <c
 <h3 id="demographics">Demographics<a class="anchor" aria-label="anchor" href="#demographics"></a></h3>
 
 
+<p>Time-varying birth and mortality rate matrices.</p>
 </div></dd>
 
 
@@ -257,6 +260,8 @@ sequence from date_start to date_stop.</p><div class="section">
 <h3 id="vaccination">Vaccination<a class="anchor" aria-label="anchor" href="#vaccination"></a></h3>
 
 
+<p>OCV dosing schedules, dose effectiveness, waning rates, and eligible
+source compartments.</p>
 </div></dd>
 
 
@@ -292,6 +297,8 @@ first doses proportionally from all listed compartments.</p><div class="section"
 <h3 id="infection-dynamics">Infection dynamics<a class="anchor" aria-label="anchor" href="#infection-dynamics"></a></h3>
 
 
+<p>Transition rates between SEIR compartments and the infection-fatality-ratio
+model parameters.</p>
 </div></dd>
 
 
@@ -338,6 +345,8 @@ Numeric vector of length(location_name). Must be &gt;= 0.</p><div class="section
 <h3 id="observation-processes">Observation Processes<a class="anchor" aria-label="anchor" href="#observation-processes"></a></h3>
 
 
+<p>Surveillance-cascade parameters mapping true infections and deaths to
+reported counts.</p>
 </div></dd>
 
 
@@ -381,6 +390,8 @@ incubation is handled separately by the E compartment and <code>iota</code>.</p>
 <h3 id="spatial-model">Spatial model<a class="anchor" aria-label="anchor" href="#spatial-model"></a></h3>
 
 
+<p>Location coordinates and the gravity-model mobility parameters governing
+between-location movement.</p>
 </div></dd>
 
 
@@ -405,6 +416,8 @@ incubation is handled separately by the E compartment and <code>iota</code>.</p>
 <h3 id="force-of-infection-human-to-human-">Force of Infection (human-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-human-to-human-"></a></h3>
 
 
+<p>Baseline transmission rates, seasonal forcing harmonics, and FOI mixing
+exponents for direct human-to-human transmission.</p>
 </div></dd>
 
 
@@ -456,6 +469,8 @@ density-dependent (FOI proportional to <code>I</code>).</p><div class="section">
 <h3 id="force-of-infection-environment-to-human-">Force of Infection (environment-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-environment-to-human-"></a></h3>
 
 
+<p>Environmental suitability, its calibration parameters, shedding rates, and
+<em>V. cholerae</em> decay parameters for environment-to-human transmission.</p>
 </div></dd>
 
 
@@ -526,6 +541,8 @@ the decay rate of <em>V. cholerae</em> in the environment. Must be numeric &gt; 
 <h3 id="reported-data">Reported data<a class="anchor" aria-label="anchor" href="#reported-data"></a></h3>
 
 
+<p>Observed surveillance series and epidemic-peak metadata used by the
+likelihood.</p>
 </div></dd>
 
 

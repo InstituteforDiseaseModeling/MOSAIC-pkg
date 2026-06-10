@@ -15,7 +15,7 @@ model/LAUNCH.R so a refresh run starts from a known-current snapshot."><meta pro
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,7 +103,7 @@ local branch will fail loudly rather than auto-merge. Uncommitted local
 changes will also block the pull and surface in <code>pull_output</code>.</p>
 <p>For <code>ees-cholera-mapping</code> and <code>jhu_cholera_data</code>, the function
 additionally peeks at the canonical surveillance file (the one the
-<code><a href="process_WHO_weekly_data.html">process_WHO_weekly_data()</a></code> / <code>process_JHU_data()</code> functions read)
+<code><a href="process_WHO_weekly_data.html">process_WHO_weekly_data()</a></code> / <code><a href="process_JHU_weekly_data.html">process_JHU_weekly_data()</a></code> functions read)
 and reports record count, date range, and country count. ENSO and
 open-meteo coverage stats are not extracted because their data is spread
 across many per-country / per-source files; commit date is the practical

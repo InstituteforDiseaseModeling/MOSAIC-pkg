@@ -22,8 +22,10 @@ get_lstm_sequence_splits(
 
 - train_sequences:
 
-  List containing LSTM sequences with X, y, countries, and dates (output
-  from create_lstm_sequences function)
+  List containing LSTM sequences with components `X`, `y`, `countries`,
+  and `dates` (the sequence structure built internally by the legacy
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  path).
 
 - split_method:
 
@@ -89,8 +91,8 @@ The location-month blocking approach is particularly valuable for:
 
 ``` r
 if (FALSE) { # \dontrun{
-# After creating LSTM sequences
-train_sequences <- create_lstm_sequences(...)
+# train_sequences is a list with X, y, countries, and dates components
+# (built internally by the legacy est_suitability() path).
 
 # Random splitting (existing method)
 splits_random <- get_lstm_sequence_splits(

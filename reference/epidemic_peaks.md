@@ -12,7 +12,7 @@ epidemic_peaks
 
 ## Format
 
-A data frame with 5 variables:
+A data frame with 6 variables:
 
 - iso_code:
 
@@ -33,6 +33,10 @@ A data frame with 5 variables:
 - reported_cases:
 
   Number of reported cholera cases at peak (numeric)
+
+- outbreak_interval_days:
+
+  Number of days since the previous peak for the same country (numeric)
 
 ## Source
 

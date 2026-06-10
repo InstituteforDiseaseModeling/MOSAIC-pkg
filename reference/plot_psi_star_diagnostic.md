@@ -1,10 +1,10 @@
-# Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ\*)
+# Plot Raw vs Calibrated Environmental Suitability (psi vs psi\*)
 
 The psi_star parameters recalibrate the LSTM suitability signal on the
 logit scale before it enters the transmission model. Without this plot
 there is no routine way to see how much the calibration suppresses or
 reshapes the LSTM output. The subtitle reports the mean suppression
-percentage, making it immediately clear whether ψ is acting as a
+percentage, making it immediately clear whether psi is acting as a
 meaningful seasonal driver or being effectively disabled.
 
 ## Usage
@@ -47,9 +47,9 @@ Saves PNG files to `dirs$res_fig_diag` with filenames
 ## Details
 
 Creates a time-series plot comparing the raw LSTM-predicted
-environmental suitability ψ with the calibrated ψ\* after applying the
-posterior psi_star parameters (`psi_star_a`, `psi_star_b`, `psi_star_z`,
-`psi_star_k`) via
+environmental suitability psi with the calibrated psi\* after applying
+the posterior psi_star parameters (`psi_star_a`, `psi_star_b`,
+`psi_star_z`, `psi_star_k`) via
 [`calc_psi_star`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_psi_star.md).
 
 The plot is skipped gracefully (with a warning) for any location where:

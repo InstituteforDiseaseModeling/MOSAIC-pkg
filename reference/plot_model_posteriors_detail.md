@@ -71,7 +71,7 @@ List of plot filenames created (invisible)
 
 ``` r
 if (FALSE) { # \dontrun{
-plot_model_posteriors(
+plot_model_posteriors_detail(
   quantiles_file = "./results/posterior_quantiles.csv",
   results_file = "./results/samples.parquet",
   priors_file = "./priors.json",

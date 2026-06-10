@@ -17,7 +17,7 @@ or AI) to wrongly conclude the pipeline has hung."><meta property="og:image" con
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -91,7 +91,7 @@ or AI) to wrongly conclude the pipeline has hung.</p>
 
 
 <dt id="arg-interval-sec">interval_sec<a class="anchor" aria-label="anchor" href="#arg-interval-sec"></a></dt>
-<dd><p>Heartbeat interval. Defaults to 30 s — long enough that
+<dd><p>Heartbeat interval. Defaults to 30 s – long enough that
 the log isn't spammed during fast gathers, short enough that a hung
 gather is detected within a minute.</p></dd>
 
@@ -107,9 +107,9 @@ wake on completion-or-timeout. That API raises <code>TimeoutError</code> on
 timeout (it does NOT return a <code>DoneAndNotDoneFutures</code> as the docs
 suggest at first read), which aborted the gather on the very first
 heartbeat. We now poll <code>future.status</code> from Python in a single batched
-call (cheap — the status is mirrored locally from scheduler push updates,
+call (cheap – the status is mirrored locally from scheduler push updates,
 no round-trip per future) and sleep between iterations.</p>
-<p>On gather error the helper does NOT swallow — it lets the caller's tryCatch
+<p>On gather error the helper does NOT swallow – it lets the caller's tryCatch
 handle diagnostics (first-future status inspection).</p>
     </div>
 

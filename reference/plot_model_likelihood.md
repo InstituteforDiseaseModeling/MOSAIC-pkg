@@ -62,7 +62,7 @@ The plot helps visualize:
 ``` r
 if (FALSE) { # \dontrun{
 # Run calibration and collect results
-results <- run_calibration()
+results <- run_MOSAIC()
 
 # Create likelihood curve plot
 p_likelihood <- plot_model_likelihood(

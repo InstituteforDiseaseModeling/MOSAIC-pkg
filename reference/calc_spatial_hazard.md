@@ -73,15 +73,23 @@ calc_spatial_hazard(
 
   Numeric **T × J** matrix of fully susceptible individuals \\S\_{jt}\\.
 
-- V1_sus, :
+- V1_sus:
 
-  V2_sus Numeric **T × J** matrices of vaccine‑derived susceptibles
-  after one and two doses, respectively.
+  Numeric **T × J** matrix of vaccine‑derived susceptibles after one
+  dose.
 
-- I1, :
+- V2_sus:
 
-  I2 Numeric **T × J** matrices of symptomatic and asymptomatic
-  infectives.
+  Numeric **T × J** matrix of vaccine‑derived susceptibles after two
+  doses.
+
+- I1:
+
+  Numeric **T × J** matrix of symptomatic infectives.
+
+- I2:
+
+  Numeric **T × J** matrix of asymptomatic infectives.
 
 - time_names:
 

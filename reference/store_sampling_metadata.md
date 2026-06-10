@@ -22,7 +22,7 @@ store_sampling_metadata(config, ...)
 
 ## Value
 
-Config object with sampling metadata stored in \\**sampling_metadata**
+Config object with sampling metadata stored in `$__sampling_metadata__`
 
 ## Details
 

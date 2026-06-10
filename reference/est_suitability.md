@@ -141,36 +141,30 @@ to a specified directory.
 
 ## Details
 
-The function performs the following steps:
+Common to all architectures, the function:
 
 - Loads processed climate and cholera data.
 
 - Determines appropriate date ranges for fitting and prediction based on
   data availability.
 
-- Validates data completeness within specified date ranges.
+- Validates data completeness within the specified date ranges.
 
-- Scales the climate covariates using training data statistics.
+- Scales the climate covariates using training-data statistics.
 
-- Splits the training data into training and validation sets using
-  either random sampling or location-month blocking.
-
-- Creates temporal LSTM sequences respecting country boundaries and
+- Builds temporal LSTM sequences respecting country boundaries and
   temporal gaps.
 
-- Builds an LSTM-based recurrent neural network (RNN) model for
-  predicting cholera outbreaks.
+- Trains an LSTM model, predicts environmental suitability (psi) over
+  the full prediction period, and writes the predictions and covariate
+  data.
 
-- Trains the model on the training set and evaluates performance on the
-  validation set.
-
-- Makes predictions on the full prediction period dataset.
-
-- Applies temporal smoothing to predictions and saves results to
-  specified directories.
-
-- Optional: Performs sequential fine-tuning on additional random splits
-  for transfer learning.
+The training/validation regime differs by architecture: the default
+`lstm_v2_hierarchical_film` uses expanding-window rolling-origin
+cross-validation (no random split) with a hierarchical-FiLM trunk, while
+the frozen `lstm_v1_legacy` path uses a random 60/40 split with
+sequential fine-tuning. See the **Architectures** section above for the
+full description of each path.
 
 ## Note
 
@@ -180,7 +174,7 @@ model fit (MAE and loss) is generated.
 
 ## Architectures
 
-**`lstm_v2_hierarchical_film` (default, v0.34) — hierarchical-FiLM LSTM,
+**`lstm_v2_hierarchical_film` (default, v0.34) – hierarchical-FiLM LSTM,
 rolling-origin CV.** A 3-stack LSTM trunk (128-\>64-\>32 units,
 recurrent dropout) maps the weekly covariate window (`timesteps=13`) to
 a shared climate-response latent `z`. Country/region identity modulates
@@ -192,7 +186,7 @@ produces `(gamma_c, beta_c)`, applied as
 `[0,2]`, identity at init); an L2 partial-pool penalty shrinks
 data-sparse countries toward their region. A sigmoid head outputs psi in
 `[0,1]`. Trained with BCE loss under `balanced_uniform` sample weights
-(correcting the zero-week imbalance — ~72% of all-MOSAIC training weeks
+(correcting the zero-week imbalance – ~72% of all-MOSAIC training weeks
 are zero, higher per high-incidence country) plus an optional per-row
 confidence-weight overlay. Training uses expanding-window rolling-origin
 CV (each step validates strictly forward in time with a 4-week embargo,
@@ -206,12 +200,12 @@ fixture; override via `arch_control`.
 
 *Honest framing.* lstm_v2 converts a structurally-collapsed flat psi
 (Pearson ~0.09, ~3\\ directional signal (median cross-country Pearson
-~0.22, but a wide per-cell range with a large anti-correlated minority —
+~0.22, but a wide per-cell range with a large anti-correlated minority –
 psi can be worse than climatology for some countries). It strictly
 dominates the incumbent on shape; it is NOT a decision-grade forecaster.
-psi reaches the downstream LASER engine through TWO channels — a
+psi reaches the downstream LASER engine through TWO channels – a
 fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and the
-absolute level (environmental-reservoir decay) — so the response anchor
+absolute level (environmental-reservoir decay) – so the response anchor
 and `bias_correct` can move outbreak magnitude, not just timing. Report
 the per-country spread, not just the median. The v0.34.0 defaults
 (`response_var="transmission_intensity"`, `region_map="snf_k5"`,
@@ -219,7 +213,7 @@ the per-country spread, not just the median. The v0.34.0 defaults
 psi-\>LASER case-skill experiment; `snf_k5` ships unvalidated as a FiLM
 region map and reverts to `"csv"` if it does not beat it.
 
-**`lstm_v1_legacy` (v0.33, frozen) — shared LSTM, random split +
+**`lstm_v1_legacy` (v0.33, frozen) – shared LSTM, random split +
 sequential fine-tuning.** A single 3-stack LSTM (128-\>64-\>32) with no
 country/region identity (one shared model for all countries). Trained on
 a random 60/40 split across all weeks with MSE on the logit-transformed
@@ -228,7 +222,7 @@ v0.33 settings (not tunable; legacy knobs are hard-coded internally).
 **Retained only for reproducibility/rollback.** Known limitation: the
 random split places temporally-adjacent weeks on both sides of the
 train/val boundary, so the out-of-sample forecast collapses in amplitude
-— the failure lstm_v2 fixes.
+– the failure lstm_v2 fixes.
 
 ## Migration (reproduce v0.33 production behavior)
 
@@ -243,7 +237,8 @@ shared-LSTM path:
 
 ## See also
 
-`layer_lstm`, `fit`,
+[`layer_lstm`](https://keras3.posit.co/reference/layer_lstm.html),
+[`fit.keras.src.models.model.Model`](https://keras3.posit.co/reference/fit.keras.src.models.model.Model.html),
 [`ggplot`](https://ggplot2.tidyverse.org/reference/ggplot.html)
 
 ## Examples
@@ -271,18 +266,5 @@ est_suitability(PATHS, arch_control = list(n_seeds = 7L, region_map = "snf_k4"))
 
 # Frozen v0.33 shared-LSTM path (reproducibility / rollback)
 est_suitability(PATHS, architecture = "lstm_v1_legacy")
-} # }
-
-if (FALSE) { # \dontrun{
-# Basic usage with auto-detected date ranges
-est_suitability(PATHS)
-
-# Historical validation: fit on 2010-2020, predict on 2021-2023
-est_suitability(PATHS,
-                fit_date_start = "2010-01-01",
-                fit_date_stop = "2020-12-31",
-                pred_date_start = "2021-01-01",
-                pred_date_stop = "2023-12-31")
-
 } # }
 ```

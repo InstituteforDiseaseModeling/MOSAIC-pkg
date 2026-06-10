@@ -37,6 +37,11 @@ plot_model_distributions(
   Optional named vector of colors for each method (e.g., c("Prior" =
   "#4a4a4a", "BFRS" = "#1f77b4"))
 
+- verbose:
+
+  Logical; if `TRUE`, print per-parameter diagnostic messages while
+  building the plots (default `FALSE`).
+
 ## Value
 
 Invisibly returns a list of generated plot objects

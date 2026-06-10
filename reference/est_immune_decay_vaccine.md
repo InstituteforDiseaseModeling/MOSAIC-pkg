@@ -39,6 +39,6 @@ https://doi.org/10.1101/2024.08.13.24311930v2
 if (FALSE) { # \dontrun{
 # Assuming PATHS is generated from get_paths()
 PATHS <- get_paths()
-est_vaccine_immune_decay(PATHS)
+est_immune_decay_vaccine(PATHS)
 } # }
 ```

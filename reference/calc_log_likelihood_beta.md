@@ -1,7 +1,7 @@
 # Calculate log-likelihood for Beta-distributed proportions
 
 Computes the total log-likelihood for proportion data under the Beta
-distribution. Supports either the mean–precision parameterization
+distribution. Supports either the mean-precision parameterization
 (default) or the standard shape parameterization. In both cases, a
 single global set of shape parameters is estimated from the data using
 the method of moments. Each observation can be weighted via `weights`.
@@ -30,7 +30,7 @@ calc_log_likelihood_beta(
 
 - mean_precision:
 
-  Logical; if `TRUE` (default), use mean–precision parameterization. If
+  Logical; if `TRUE` (default), use mean-precision parameterization. If
   `FALSE`, estimate shape parameters directly from the observed vector.
 
 - weights:

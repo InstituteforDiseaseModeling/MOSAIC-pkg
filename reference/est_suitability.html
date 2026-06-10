@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -169,18 +169,20 @@ specified directory.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function performs the following steps:</p><ul><li><p>Loads processed climate and cholera data.</p></li>
+    <p>Common to all architectures, the function:</p><ul><li><p>Loads processed climate and cholera data.</p></li>
 <li><p>Determines appropriate date ranges for fitting and prediction based on data availability.</p></li>
-<li><p>Validates data completeness within specified date ranges.</p></li>
-<li><p>Scales the climate covariates using training data statistics.</p></li>
-<li><p>Splits the training data into training and validation sets using either random sampling or location-month blocking.</p></li>
-<li><p>Creates temporal LSTM sequences respecting country boundaries and temporal gaps.</p></li>
-<li><p>Builds an LSTM-based recurrent neural network (RNN) model for predicting cholera outbreaks.</p></li>
-<li><p>Trains the model on the training set and evaluates performance on the validation set.</p></li>
-<li><p>Makes predictions on the full prediction period dataset.</p></li>
-<li><p>Applies temporal smoothing to predictions and saves results to specified directories.</p></li>
-<li><p>Optional: Performs sequential fine-tuning on additional random splits for transfer learning.</p></li>
-</ul></div>
+<li><p>Validates data completeness within the specified date ranges.</p></li>
+<li><p>Scales the climate covariates using training-data statistics.</p></li>
+<li><p>Builds temporal LSTM sequences respecting country boundaries and temporal gaps.</p></li>
+<li><p>Trains an LSTM model, predicts environmental suitability (psi) over the
+full prediction period, and writes the predictions and covariate data.</p></li>
+</ul><p>The training/validation regime differs by architecture: the default
+<code>lstm_v2_hierarchical_film</code> uses expanding-window rolling-origin
+cross-validation (no random split) with a hierarchical-FiLM trunk, while the
+frozen <code>lstm_v1_legacy</code> path uses a random 60/40 split with sequential
+fine-tuning. See the <strong>Architectures</strong> section above for the full
+description of each path.</p>
+    </div>
     <div class="section level2">
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
     <p>The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
@@ -190,7 +192,7 @@ a CSV file and a plot showing the model fit (MAE and loss) is generated.</p>
     <h2 id="architectures">Architectures<a class="anchor" aria-label="anchor" href="#architectures"></a></h2>
 
 
-<p><strong><code>lstm_v2_hierarchical_film</code> (default, v0.34) — hierarchical-FiLM LSTM,
+<p><strong><code>lstm_v2_hierarchical_film</code> (default, v0.34) – hierarchical-FiLM LSTM,
 rolling-origin CV.</strong> A 3-stack LSTM trunk (128-&gt;64-&gt;32 units, recurrent dropout)
 maps the weekly covariate window (<code>timesteps=13</code>) to a shared climate-response
 latent <code>z</code>. Country/region identity modulates <code>z</code> via hierarchical FiLM: a
@@ -200,7 +202,7 @@ region embedding produces <code>(gamma_r, beta_r)</code> and a zero-initialized 
 <code>gamma</code> use <code>tanh</code> (gain in <code>[0,2]</code>, identity at init); an L2 partial-pool
 penalty shrinks data-sparse countries toward their region. A sigmoid head
 outputs psi in <code>[0,1]</code>. Trained with BCE loss under <code>balanced_uniform</code> sample
-weights (correcting the zero-week imbalance — ~72% of all-MOSAIC training
+weights (correcting the zero-week imbalance – ~72% of all-MOSAIC training
 weeks are zero, higher per high-incidence country) plus an optional per-row
 confidence-weight overlay. Training uses expanding-window rolling-origin CV
 (each step validates strictly forward in time with a 4-week embargo,
@@ -213,18 +215,18 @@ forecasts. Defaults are pinned to the B4 fixture; override via <code>arch_contro
 <p><em>Honest framing.</em> lstm_v2 converts a structurally-collapsed flat psi
 (Pearson ~0.09, ~3\<!-- % of observed amplitude) into a weak-but-real, better-phased -->
 directional signal (median cross-country Pearson ~0.22, but a wide per-cell
-range with a large anti-correlated minority — psi can be worse than climatology
+range with a large anti-correlated minority – psi can be worse than climatology
 for some countries). It strictly dominates the incumbent on shape; it is NOT a
 decision-grade forecaster. psi reaches the downstream LASER engine through TWO
-channels — a fractional deviation <code>(psi - psi_bar)/psi_bar</code> (timing/shape) and
-the absolute level (environmental-reservoir decay) — so the response anchor and
+channels – a fractional deviation <code>(psi - psi_bar)/psi_bar</code> (timing/shape) and
+the absolute level (environmental-reservoir decay) – so the response anchor and
 <code>bias_correct</code> can move outbreak magnitude, not just timing. Report the
 per-country spread, not just the median. The v0.34.0 defaults
 (<code>response_var="transmission_intensity"</code>, <code>region_map="snf_k5"</code>,
 <code>bias_correct=TRUE</code>) are <strong>provisional</strong>, gated by a post-merge
 psi-&gt;LASER case-skill experiment; <code>snf_k5</code> ships unvalidated as a FiLM region
 map and reverts to <code>"csv"</code> if it does not beat it.</p>
-<p><strong><code>lstm_v1_legacy</code> (v0.33, frozen) — shared LSTM, random split +
+<p><strong><code>lstm_v1_legacy</code> (v0.33, frozen) – shared LSTM, random split +
 sequential fine-tuning.</strong> A single 3-stack LSTM (128-&gt;64-&gt;32) with no
 country/region identity (one shared model for all countries). Trained on a
 random 60/40 split across all weeks with MSE on the logit-transformed target,
@@ -232,7 +234,7 @@ followed by sequential fine-tuning. Frozen at the canonical v0.33 settings (not
 tunable; legacy knobs are hard-coded internally). <strong>Retained only for
 reproducibility/rollback.</strong> Known limitation: the random split places
 temporally-adjacent weeks on both sides of the train/val boundary, so the
-out-of-sample forecast collapses in amplitude — the failure lstm_v2 fixes.</p>
+out-of-sample forecast collapses in amplitude – the failure lstm_v2 fixes.</p>
     </div>
     <div class="section level2">
     <h2 id="migration-reproduce-v-production-behavior-">Migration (reproduce v0.33 production behavior)<a class="anchor" aria-label="anchor" href="#migration-reproduce-v-production-behavior-"></a></h2>
@@ -248,7 +250,7 @@ shared-LSTM path:</p><div class="sourceCode"><pre><code><span></span>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code>layer_lstm</code>, <code>fit</code>, <code><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></code></p></div>
+    <div class="dont-index"><p><code><a href="https://keras3.posit.co/reference/layer_lstm.html" class="external-link">layer_lstm</a></code>, <code><a href="https://keras3.posit.co/reference/fit.keras.src.models.model.Model.html" class="external-link">fit.keras.src.models.model.Model</a></code>, <code><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></code></p></div>
     </div>
 
     <div class="section level2">
@@ -275,19 +277,6 @@ shared-LSTM path:</p><div class="sourceCode"><pre><code><span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Frozen v0.33 shared-LSTM path (reproducibility / rollback)</span></span></span>
 <span class="r-in"><span><span class="fu">est_suitability</span><span class="op">(</span><span class="va">PATHS</span>, architecture <span class="op">=</span> <span class="st">"lstm_v1_legacy"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># Basic usage with auto-detected date ranges</span></span></span>
-<span class="r-in"><span><span class="fu">est_suitability</span><span class="op">(</span><span class="va">PATHS</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Historical validation: fit on 2010-2020, predict on 2021-2023</span></span></span>
-<span class="r-in"><span><span class="fu">est_suitability</span><span class="op">(</span><span class="va">PATHS</span>,</span></span>
-<span class="r-in"><span>                fit_date_start <span class="op">=</span> <span class="st">"2010-01-01"</span>,</span></span>
-<span class="r-in"><span>                fit_date_stop <span class="op">=</span> <span class="st">"2020-12-31"</span>,</span></span>
-<span class="r-in"><span>                pred_date_start <span class="op">=</span> <span class="st">"2021-01-01"</span>,</span></span>
-<span class="r-in"><span>                pred_date_stop <span class="op">=</span> <span class="st">"2023-12-31"</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

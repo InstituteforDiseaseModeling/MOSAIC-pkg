@@ -40,7 +40,7 @@ has hung.
 
 - interval_sec:
 
-  Heartbeat interval. Defaults to 30 s — long enough that the log isn't
+  Heartbeat interval. Defaults to 30 s – long enough that the log isn't
   spammed during fast gathers, short enough that a hung gather is
   detected within a minute.
 
@@ -54,9 +54,9 @@ Note: an earlier version used `dask.distributed.wait(timeout=...)` to
 wake on completion-or-timeout. That API raises `TimeoutError` on timeout
 (it does NOT return a `DoneAndNotDoneFutures` as the docs suggest at
 first read), which aborted the gather on the very first heartbeat. We
-now poll `future.status` from Python in a single batched call (cheap —
+now poll `future.status` from Python in a single batched call (cheap –
 the status is mirrored locally from scheduler push updates, no
 round-trip per future) and sleep between iterations.
 
-On gather error the helper does NOT swallow — it lets the caller's
+On gather error the helper does NOT swallow – it lets the caller's
 tryCatch handle diagnostics (first-future status inspection).

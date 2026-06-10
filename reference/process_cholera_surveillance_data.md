@@ -2,7 +2,7 @@
 
 This function reads the processed weekly cholera data from WHO, JHU, and
 supplemental (SUPP) sources, labels each record by its source, combines
-them (removing duplicate country–week entries according to the specified
+them (removing duplicate country-week entries according to the specified
 source preference), creates a truly square data structure with all
 country-week combinations from min to max date across the entire
 dataset, and downscales the combined weekly totals to a daily time
@@ -86,7 +86,7 @@ Invisibly returns `NULL`. Side effects:
 
 ## Details
 
-Duplicate country–week entries across sources are resolved by a fixed
+Duplicate country-week entries across sources are resolved by a fixed
 priority **WHO \> JHU \> AI \> SUPP**, with a completeness tie-break:
 within a key, rows with complete cases AND deaths are preferred before
 the source priority is applied.

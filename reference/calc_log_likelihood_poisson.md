@@ -48,8 +48,8 @@ A scalar representing the total log-likelihood (numeric).
 
 ## Details
 
-The Poisson distribution assumes that the variance equals the mean, \\
-\textVar(Y) = \mu \\. Weighted log-likelihood is summed across
+The Poisson distribution assumes that the variance equals the mean,
+\\\mathrm{Var}(Y) = \mu\\. Weighted log-likelihood is summed across
 observations. If the variance/mean ratio is \> 1.5, a warning about
 possible overdispersion is issued.
 

@@ -143,7 +143,7 @@ mosaic_control_defaults(
     `parallel$enable = TRUE`.
 
   - `optimize_subset`: Logical; when `TRUE`, the post-ensemble optimizer
-    (MAE / WIS / R²+bias) refines the best subset used for
+    (MAE / WIS / R^2+bias) refines the best subset used for
     `posteriors.json`, `posterior_quantiles.csv`, and the ensemble
     object driving all downstream plots and metrics. The tier-selected
     subset is preserved in the `is_best_subset` / `weight_best` columns
@@ -152,7 +152,7 @@ mosaic_control_defaults(
     When `FALSE` (default), the tier-selected subset is canonical and no
     `_opt` columns are written. **Statistical note:** enabling this flag
     yields a posterior conditioned on ensemble predictive performance
-    (MAE / WIS / R²+bias on the training data) rather than a pure
+    (MAE / WIS / R^2+bias on the training data) rather than a pure
     likelihood-weighted posterior.
 
   - `optimize_min_n`: Minimum subset size the optimizer may select
@@ -164,6 +164,15 @@ mosaic_control_defaults(
 
   The number of parameter sets in the ensemble is determined by the best
   subset (all sims with non-zero importance weights).
+
+- weights:
+
+  List of importance-weight settings. Default is:
+
+  - `floor`: Minimum weight to prevent underflow (default: 1e-15).
+
+  - `iqr_multiplier`: Tukey IQR outlier-detection multiplier (default:
+    1.5; use 3.0 for extreme outliers only).
 
 - parallel:
 
@@ -198,6 +207,13 @@ mosaic_control_defaults(
   - `clean_output`: Remove output directory if exists (default: FALSE)
 
   - `plots`: Generate diagnostic plots (default: TRUE)
+
+- logging:
+
+  List of logging settings. Default is:
+
+  - `verbose`: Enable detailed progress messages in sub-functions
+    (default: FALSE).
 
 ## Value
 

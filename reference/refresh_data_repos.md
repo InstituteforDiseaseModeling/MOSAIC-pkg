@@ -54,10 +54,12 @@ changes will also block the pull and surface in `pull_output`.
 For `ees-cholera-mapping` and `jhu_cholera_data`, the function
 additionally peeks at the canonical surveillance file (the one the
 [`process_WHO_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_WHO_weekly_data.md)
-/ `process_JHU_data()` functions read) and reports record count, date
-range, and country count. ENSO and open-meteo coverage stats are not
-extracted because their data is spread across many per-country /
-per-source files; commit date is the practical freshness signal.
+/
+[`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
+functions read) and reports record count, date range, and country count.
+ENSO and open-meteo coverage stats are not extracted because their data
+is spread across many per-country / per-source files; commit date is the
+practical freshness signal.
 
 ## Examples
 

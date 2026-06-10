@@ -27,6 +27,11 @@ plot_ENSO_data(PATHS, frequency)
   - **DOCS_FIGURES**: Path to the directory where the output figure will
     be saved.
 
+- frequency:
+
+  Character; temporal resolution of the ENSO/IOD series to plot. One of
+  `"daily"`, `"weekly"`, or `"monthly"`.
+
 ## Value
 
 A ggplot facet plot showing the time series of IOD, ENSO3, ENSO34, and

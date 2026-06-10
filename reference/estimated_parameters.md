@@ -14,7 +14,7 @@ estimated_parameters
 
 ## Format
 
-A data frame with 43 rows and 11 columns:
+A data frame with 54 rows and 14 columns:
 
 - parameter_name:
 
@@ -51,7 +51,7 @@ A data frame with 43 rows and 11 columns:
 
 - order:
 
-  Integer. Overall ordering for systematic presentation (1-43)
+  Integer. Overall ordering for systematic presentation
 
 - order_scale:
 
@@ -64,6 +64,21 @@ A data frame with 43 rows and 11 columns:
 - order_parameter:
 
   Character. Parameter-based ordering within each category
+
+- posterior_distribution:
+
+  Character. Fitted posterior distribution type for each parameter (NA
+  when not yet estimated)
+
+- posterior_lower:
+
+  Numeric. Lower bound of the fitted posterior support (NA when not yet
+  estimated)
+
+- posterior_upper:
+
+  Numeric. Upper bound of the fitted posterior support (NA when not yet
+  estimated)
 
 ## Source
 

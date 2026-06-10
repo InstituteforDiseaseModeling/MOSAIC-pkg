@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -149,7 +149,7 @@ prediction plots (default: 100L). Applied identically to both models.
 These runs execute on an internal PSOCK cluster when
 <code>parallel$enable = TRUE</code>.</p></li>
 <li><p><code>optimize_subset</code>: Logical; when <code>TRUE</code>, the post-ensemble
-optimizer (MAE / WIS / R²+bias) refines the best subset used for
+optimizer (MAE / WIS / R^2+bias) refines the best subset used for
 <code>posteriors.json</code>, <code>posterior_quantiles.csv</code>, and the ensemble
 object driving all downstream plots and metrics. The tier-selected subset
 is preserved in the <code>is_best_subset</code> / <code>weight_best</code> columns of
@@ -158,7 +158,7 @@ to new <code>is_best_subset_opt</code> / <code>weight_best_opt</code> columns. W
 <code>FALSE</code> (default), the tier-selected subset is canonical and no
 <code>_opt</code> columns are written. <strong>Statistical note:</strong> enabling this
 flag yields a posterior conditioned on ensemble predictive performance
-(MAE / WIS / R²+bias on the training data) rather than a pure
+(MAE / WIS / R^2+bias on the training data) rather than a pure
 likelihood-weighted posterior.</p></li>
 <li><p><code>optimize_min_n</code>: Minimum subset size the optimizer may select
 (default <code>30L</code>, raised from <code>4L</code> to guard against KDE
@@ -167,6 +167,13 @@ degeneracy in <code>posteriors.json</code>).</p></li>
 <code>"r2_bias"</code>, or <code>"wis"</code>.</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset
 (all sims with non-zero importance weights).</p></dd>
+
+
+<dt id="arg-weights">weights<a class="anchor" aria-label="anchor" href="#arg-weights"></a></dt>
+<dd><p>List of importance-weight settings. Default is:</p><ul><li><p><code>floor</code>: Minimum weight to prevent underflow (default: 1e-15).</p></li>
+<li><p><code>iqr_multiplier</code>: Tukey IQR outlier-detection multiplier
+(default: 1.5; use 3.0 for extreme outliers only).</p></li>
+</ul></dd>
 
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
@@ -190,6 +197,12 @@ remote Dask/Coiled worker count (that is <code>dask_spec$n_workers</code>).</p><
 <dt id="arg-paths">paths<a class="anchor" aria-label="anchor" href="#arg-paths"></a></dt>
 <dd><p>List of path and output settings (file management). Default is:</p><ul><li><p><code>clean_output</code>: Remove output directory if exists (default: FALSE)</p></li>
 <li><p><code>plots</code>: Generate diagnostic plots (default: TRUE)</p></li>
+</ul></dd>
+
+
+<dt id="arg-logging">logging<a class="anchor" aria-label="anchor" href="#arg-logging"></a></dt>
+<dd><p>List of logging settings. Default is:</p><ul><li><p><code>verbose</code>: Enable detailed progress messages in sub-functions
+(default: FALSE).</p></li>
 </ul></dd>
 
 </dl></div>

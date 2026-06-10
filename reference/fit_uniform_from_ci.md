@@ -69,7 +69,8 @@ For a uniform distribution U(min, max):
 
 - Variance = (max - min)² / 12
 
-- Mode is undefined (any value in \code\[min, max\] is equally likely)
+- Mode is undefined (any value in \\\[\mathrm{min}, \mathrm{max}\]\\ is
+  equally likely)
 
 - 95% CI covers central 95% of the range
 

@@ -1,5 +1,42 @@
 # Changelog
 
+## MOSAIC 0.36.4
+
+- Test integrity: replaced the two false-green parity-test `skip()`s
+  with active divergence monitors so the R/Python likelihood-drift suite
+  no longer reports green over known disagreements (review B2-6).
+
+## MOSAIC 0.36.3
+
+- Hygiene: declared previously-undeclared package dependencies, fixed
+  markdown-link Rd errors, and updated `.Rbuildignore` (Batch 5a).
+
+## MOSAIC 0.36.2
+
+- Fixed Dask ensemble weight misalignment plus guardrail/renormalization
+  correctness in the posterior-weighted ensemble (deep-review Batch 1).
+
+## MOSAIC 0.36.1
+
+- Fixed Dask worker-count staleness; added
+  [`plot_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rolling_cv.md)
+  and lstm_v2 model artifacts.
+
+## MOSAIC 0.36.0
+
+- Run the orchestrator sampling/parquet-write loops on PSOCK rather than
+  fork for cross-platform stability (B2).
+
+## MOSAIC 0.35.2
+
+- Separated local (`n_cores`) from remote (`dask_spec`) parallelism and
+  fixed the Dask worker-count derivation.
+
+## MOSAIC 0.35.1
+
+- Fixed ensemble weight misalignment and applied a bit-identical Tier-2
+  performance refactor (guarded by parity fixtures).
+
 ## MOSAIC 0.34.0
 
 ### est_suitability(): new default lstm_v2 hierarchical-FiLM architecture (rolling-origin CV)
@@ -64,6 +101,35 @@ case-skill.
 **Legacy.** `architecture = "lstm_v1_legacy"` preserves the frozen v0.33
 shared-LSTM path (random split + sequential fine-tuning) for
 reproducibility/rollback.
+
+## MOSAIC 0.33.4
+
+- [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  now scores all four model types (ensemble, optimized, best, medioid);
+  added `models` and `n_reps_best_medioid` knobs to
+  [`compile_rolling_cv_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md).
+
+## MOSAIC 0.33.3
+
+- [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md):
+  enabled the `run_MOSAIC` best-subset optimizer per cutoff.
+
+## MOSAIC 0.33.2
+
+- Added
+  [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md)
+  for post-hoc out-of-sample forecast scoring.
+
+## MOSAIC 0.33.1
+
+- [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md):
+  always refit psi per cutoff — removed the `refit_psi` flag.
+
+## MOSAIC 0.33.0
+
+- [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  v0.33 AI-data production spec: v7.3 feature set, `target_C` response,
+  and per-country calibration.
 
 ## MOSAIC 0.32.9
 
@@ -228,6 +294,61 @@ regressions:
   and writing that into the fixture, so the engine guard is satisfied
   regardless of which container the suite runs in.
 
+### rho (care-seeking) prior re-derived: Wiens 2-stratum RE pool
+
+`R/get_rho_care_seeking_params.R` now anchors the rho prior on a
+random-effects meta-analytic pool of **both** Wiens et al. 2025
+case-definition strata, replacing the prior pool of 12 GEMS Nasrin 2013
+pediatric MSD strata + 1 Wiens severe/cholera summary.
+
+**Anchors (Wiens et al. 2025, PMC12013865):** - General diarrhea: 29.9%
+\[25.3, 35.1\] from 122 observations - Severe diarrhea + cholera: 58.6%
+\[39.9, 75.2\] from 22 observations
+
+**Pooled prior:** `Beta(5.38, 7.10)`, mean **0.423**, 95% CI \[0.21,
+0.65\], ESS ≈ 12.5 (was: `Beta(6.81, 17.89)`, mean 0.276, 95% CI \[0.12,
+0.46\], ESS ≈ 25).
+
+**Why this change:** 1. **Severity match.** Symptomatic cholera spans
+the full mild-to-severe spectrum. Anchoring on the severe-only stratum
+biases rho upward (severe-only is dominated by outbreak-response
+settings); anchoring on general diarrhea alone biases rho downward
+(includes many self-resolving mild episodes). Pooling both honestly
+reflects the severity distribution. 2. **GEMS already included via
+Wiens.** The Wiens 2025 dataset includes 6 GEMS-derived Study IDs
+covering all 7 GEMS sites. The prior GEMS+Wiens pool double-counted the
+same source populations. 3. **Dimensional fix.** The prior pool weighted
+12 GEMS stratum-level observations against 1 Wiens meta-analytic summary
+— upside-down vs Wiens’s 23-study underlying meta-analysis. The new pool
+treats each Wiens stratum (122 + 22 obs) as one observation in the
+meta-analysis. 4. **Cascading mu_j_baseline update.** The steady-state
+CFR identity `mu_j_baseline = CFR × rho / (rho_deaths × chi)` propagates
+the rho change: per-country `mu_j_baseline` values rescale by ~1.5×
+(0.423 / 0.276). Implied per-symptomatic-episode CFRs for high-N test
+countries remain within the \[0.5%, 15%\] plausibility range: MOZ 3.5%,
+ETH 9.3%, KEN 10.1%, COD 14.9%.
+
+**Files updated:** - `R/get_rho_care_seeking_params.R` — new derivation
+with RE pool of two Wiens strata - `R/plot_rho_care_seeking_params.R` —
+diagnostic figure updated to show both strata -
+`model/input/param_rho_care_seeking.csv` — regenerated Beta parameters -
+`data/priors_default.rda` + `inst/extdata/priors_default.json` — v15.8
+(rho + all per-country mu_j_baseline cascaded through the CFR
+identity) - `data/config_default.rda` +
+`inst/extdata/config_default.json` — v3.8 (rho + per-country
+mu_j_baseline updated surgically; full make_config_default.R build
+deferred due to pre-existing unrelated psi_jt validation issue) -
+`data-raw/make_priors_default.R`, `data-raw/make_config_default.R` —
+header comments and hardcoded values updated
+
+**Geographic note:** the Wiens severe+cholera stratum draws from 23
+underlying studies (16 SSA + 3 LAC + 2 Bangladesh + 1 MENA + 1 South
+Asia non-BGD); 70% SSA-dominant. Wiens’s geographic provenance was
+validated against the raw extractions at
+github.com/wienslab/diarrhea-careseeking.
+
+**Test suite:** 1881 PASS / 0 FAIL / 6 SKIP (unchanged from v0.32.5).
+
 ------------------------------------------------------------------------
 
 ## MOSAIC 0.32.5
@@ -333,67 +454,6 @@ diagnostic runs; `save_simresults` on the local path is unchanged.
   [laser-cholera#58](https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/58)
 - Resume hand-off (v0.32.4): the provenance guard now flips
   automatically on the Dask path with this release.
-
-------------------------------------------------------------------------
-
-## MOSAIC 0.32.6
-
-### rho (care-seeking) prior re-derived: Wiens 2-stratum RE pool
-
-`R/get_rho_care_seeking_params.R` now anchors the rho prior on a
-random-effects meta-analytic pool of **both** Wiens et al. 2025
-case-definition strata, replacing the prior pool of 12 GEMS Nasrin 2013
-pediatric MSD strata + 1 Wiens severe/cholera summary.
-
-**Anchors (Wiens et al. 2025, PMC12013865):** - General diarrhea: 29.9%
-\[25.3, 35.1\] from 122 observations - Severe diarrhea + cholera: 58.6%
-\[39.9, 75.2\] from 22 observations
-
-**Pooled prior:** `Beta(5.38, 7.10)`, mean **0.423**, 95% CI \[0.21,
-0.65\], ESS ≈ 12.5 (was: `Beta(6.81, 17.89)`, mean 0.276, 95% CI \[0.12,
-0.46\], ESS ≈ 25).
-
-**Why this change:** 1. **Severity match.** Symptomatic cholera spans
-the full mild-to-severe spectrum. Anchoring on the severe-only stratum
-biases rho upward (severe-only is dominated by outbreak-response
-settings); anchoring on general diarrhea alone biases rho downward
-(includes many self-resolving mild episodes). Pooling both honestly
-reflects the severity distribution. 2. **GEMS already included via
-Wiens.** The Wiens 2025 dataset includes 6 GEMS-derived Study IDs
-covering all 7 GEMS sites. The prior GEMS+Wiens pool double-counted the
-same source populations. 3. **Dimensional fix.** The prior pool weighted
-12 GEMS stratum-level observations against 1 Wiens meta-analytic summary
-— upside-down vs Wiens’s 23-study underlying meta-analysis. The new pool
-treats each Wiens stratum (122 + 22 obs) as one observation in the
-meta-analysis. 4. **Cascading mu_j_baseline update.** The steady-state
-CFR identity `mu_j_baseline = CFR × rho / (rho_deaths × chi)` propagates
-the rho change: per-country `mu_j_baseline` values rescale by ~1.5×
-(0.423 / 0.276). Implied per-symptomatic-episode CFRs for high-N test
-countries remain within the \[0.5%, 15%\] plausibility range: MOZ 3.5%,
-ETH 9.3%, KEN 10.1%, COD 14.9%.
-
-**Files updated:** - `R/get_rho_care_seeking_params.R` — new derivation
-with RE pool of two Wiens strata - `R/plot_rho_care_seeking_params.R` —
-diagnostic figure updated to show both strata -
-`model/input/param_rho_care_seeking.csv` — regenerated Beta parameters -
-`data/priors_default.rda` + `inst/extdata/priors_default.json` — v15.8
-(rho + all per-country mu_j_baseline cascaded through the CFR
-identity) - `data/config_default.rda` +
-`inst/extdata/config_default.json` — v3.8 (rho + per-country
-mu_j_baseline updated surgically; full make_config_default.R build
-deferred due to pre-existing unrelated psi_jt validation issue) -
-`data-raw/make_priors_default.R`, `data-raw/make_config_default.R` —
-header comments and hardcoded values updated
-
-**Geographic note:** the Wiens severe+cholera stratum draws from 23
-underlying studies (16 SSA + 3 LAC + 2 Bangladesh + 1 MENA + 1 South
-Asia non-BGD); 70% SSA-dominant. Wiens’s geographic provenance was
-validated against the raw extractions at
-github.com/wienslab/diarrhea-careseeking.
-
-**Test suite:** 1881 PASS / 0 FAIL / 6 SKIP (unchanged from v0.32.5).
-
-## MOSAIC 0.32.5
 
 ### laser-cholera v0.13.0 → v0.13.1
 
@@ -2852,7 +2912,7 @@ fallback behavior.
     function access
   - All 70 tests now pass
 
-## MOSAIC (development version)
+## MOSAIC 0.8.0
 
 ### New Features
 

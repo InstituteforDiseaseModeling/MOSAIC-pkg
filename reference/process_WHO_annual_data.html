@@ -15,7 +15,7 @@ without being mislabeled as full-year totals."><meta property="og:image" content
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,7 +87,7 @@ download is archived to
 and ALL files matching <code>cholera_adm0_public_*.csv</code> in the
 dashboard directory are ingested. Each row's actual coverage is
 derived from <code>first_epiwk</code> / <code>last_epiwk</code> (rolling
-snapshots cross calendar-year boundaries — see the year-labeling
+snapshots cross calendar-year boundaries – see the year-labeling
 note below).</p></li>
 </ul><p><strong>Year labeling</strong>: The ArcGIS dashboard returns one row per country
 summing <code>case_total</code> / <code>death_total</code> between <code>first_epiwk</code>
@@ -102,7 +102,7 @@ snapshot (&lt;1.0). When multiple files have a row for the same
 CSV in <code>raw/WHO/annual/who_global_dashboard/</code> named
 <code>cholera_adm0_public_YYYY.csv</code> (downloaded from the WHO dashboard UI
 with the year filter applied). Re-run <code>process_WHO_annual_data()</code>.</p>
-<p>Outputs (in <code>PATHS$DATA_WHO_ANNUAL</code>):</p><ul><li><p><code>who_afro_annual.csv</code> — current full series, columns
+<p>Outputs (in <code>PATHS$DATA_WHO_ANNUAL</code>):</p><ul><li><p><code>who_afro_annual.csv</code> – current full series, columns
 <code>country, iso_code, region, year, cases_total,
         cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk,
         last_epiwk, coverage_days, year_fraction, source</code>.</p></li>

@@ -11,7 +11,7 @@ smoothing and prominence-based peak detection algorithms."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,7 +56,7 @@ smoothing and prominence-based peak detection algorithms.</p>
 
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
-    <p>A data frame with 5 variables:</p><dl><dt>iso_code</dt>
+    <p>A data frame with 6 variables:</p><dl><dt>iso_code</dt>
 <dd><p>ISO 3166-1 alpha-3 country code</p></dd>
 
 <dt>peak_start</dt>
@@ -70,6 +70,10 @@ smoothing and prominence-based peak detection algorithms.</p>
 
 <dt>reported_cases</dt>
 <dd><p>Number of reported cholera cases at peak (numeric)</p></dd>
+
+<dt>outbreak_interval_days</dt>
+<dd><p>Number of days since the previous peak for
+the same country (numeric)</p></dd>
 
 
 </dl></div>

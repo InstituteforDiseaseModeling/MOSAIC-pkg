@@ -265,7 +265,7 @@ Calculation functions
 - [`calc_spatial_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation.md)
   : Calculate spatial correlation between two locations
 - [`calc_spatial_correlation_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation_matrix.md)
-  : Build the full spatial–correlation matrix across all locations
+  : Build the full spatial-correlation matrix across all locations
 - [`calc_spatial_hazard()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_hazard.md)
   : Calculate spatial importation hazard
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
@@ -381,7 +381,7 @@ Plotting functions
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
   : Display a Color Palette as Swatches
 - [`plot_psi_star_diagnostic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_psi_star_diagnostic.md)
-  : Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ\*)
+  : Plot Raw vs Calibrated Environmental Suitability (psi vs psi\*)
 - [`plot_recovery_duration()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.md)
   : Plot recovery durations and rates for symptomatic and asymptomatic
   infections
@@ -462,9 +462,6 @@ Helper and utility functions
   : Get Location-Specific Configuration
 - [`get_location_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_priors.md)
   : Get Location-Specific Priors
-- [`get_lstm_cv_folds()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_lstm_cv_folds.md)
-  : Generate Cross-Validation Split for LSTM Environmental Suitability
-  Models
 - [`get_lstm_sequence_splits()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_lstm_sequence_splits.md)
   : Create Train/Validation Splits for LSTM Sequences
 - [`get_param_names()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_param_names.md)
@@ -666,7 +663,7 @@ Other exported functions and internal helpers
 - [`calc_spatial_correlation()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation.md)
   : Calculate spatial correlation between two locations
 - [`calc_spatial_correlation_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_correlation_matrix.md)
-  : Build the full spatial–correlation matrix across all locations
+  : Build the full spatial-correlation matrix across all locations
 - [`calc_spatial_hazard()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_hazard.md)
   : Calculate spatial importation hazard
 - [`calc_weighted_mode()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_weighted_mode.md)
@@ -857,9 +854,6 @@ Other exported functions and internal helpers
   : Get Location-Specific Configuration
 - [`get_location_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_priors.md)
   : Get Location-Specific Priors
-- [`get_lstm_cv_folds()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_lstm_cv_folds.md)
-  : Generate Cross-Validation Split for LSTM Environmental Suitability
-  Models
 - [`get_lstm_sequence_splits()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_lstm_sequence_splits.md)
   : Create Train/Validation Splits for LSTM Sequences
 - [`get_param_names()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_param_names.md)
@@ -1001,7 +995,7 @@ Other exported functions and internal helpers
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
   : Display a Color Palette as Swatches
 - [`plot_psi_star_diagnostic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_psi_star_diagnostic.md)
-  : Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ\*)
+  : Plot Raw vs Calibrated Environmental Suitability (psi vs psi\*)
 - [`plot_recovery_duration()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_recovery_duration.md)
   : Plot recovery durations and rates for symptomatic and asymptomatic
   infections

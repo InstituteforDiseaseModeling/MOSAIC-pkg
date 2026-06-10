@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,6 +39,34 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.36.4" id="mosaic-0364">MOSAIC 0.36.4<a class="anchor" aria-label="anchor" href="#mosaic-0364"></a></h2>
+<ul><li>Test integrity: replaced the two false-green parity-test <code>skip()</code>s with active divergence monitors so the R/Python likelihood-drift suite no longer reports green over known disagreements (review B2-6).</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.36.3" id="mosaic-0363">MOSAIC 0.36.3<a class="anchor" aria-label="anchor" href="#mosaic-0363"></a></h2>
+<ul><li>Hygiene: declared previously-undeclared package dependencies, fixed markdown-link Rd errors, and updated <code>.Rbuildignore</code> (Batch 5a).</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.36.2" id="mosaic-0362">MOSAIC 0.36.2<a class="anchor" aria-label="anchor" href="#mosaic-0362"></a></h2>
+<ul><li>Fixed Dask ensemble weight misalignment plus guardrail/renormalization correctness in the posterior-weighted ensemble (deep-review Batch 1).</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.36.1" id="mosaic-0361">MOSAIC 0.36.1<a class="anchor" aria-label="anchor" href="#mosaic-0361"></a></h2>
+<ul><li>Fixed Dask worker-count staleness; added <code><a href="../reference/plot_rolling_cv.html">plot_rolling_cv()</a></code> and lstm_v2 model artifacts.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.36.0" id="mosaic-0360">MOSAIC 0.36.0<a class="anchor" aria-label="anchor" href="#mosaic-0360"></a></h2>
+<ul><li>Run the orchestrator sampling/parquet-write loops on PSOCK rather than fork for cross-platform stability (B2).</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.35.2" id="mosaic-0352">MOSAIC 0.35.2<a class="anchor" aria-label="anchor" href="#mosaic-0352"></a></h2>
+<ul><li>Separated local (<code>n_cores</code>) from remote (<code>dask_spec</code>) parallelism and fixed the Dask worker-count derivation.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.35.1" id="mosaic-0351">MOSAIC 0.35.1<a class="anchor" aria-label="anchor" href="#mosaic-0351"></a></h2>
+<ul><li>Fixed ensemble weight misalignment and applied a bit-identical Tier-2 performance refactor (guarded by parity fixtures).</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.34.0" id="mosaic-0340">MOSAIC 0.34.0<a class="anchor" aria-label="anchor" href="#mosaic-0340"></a></h2>
 <div class="section level3">
 <h3 id="est_suitability-new-default-lstm_v2-hierarchical-film-architecture-rolling-origin-cv-0-34-0">est_suitability(): new default lstm_v2 hierarchical-FiLM architecture (rolling-origin CV)<a class="anchor" aria-label="anchor" href="#est_suitability-new-default-lstm_v2-hierarchical-film-architecture-rolling-origin-cv-0-34-0"></a></h3>
@@ -52,6 +80,30 @@
 <p><strong>Legacy.</strong> <code>architecture = "lstm_v1_legacy"</code> preserves the frozen v0.33 shared-LSTM path (random split + sequential fine-tuning) for reproducibility/rollback.</p>
 </div>
 </div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.33.4" id="mosaic-0334">MOSAIC 0.33.4<a class="anchor" aria-label="anchor" href="#mosaic-0334"></a></h2>
+<ul><li>
+<code><a href="../reference/run_rolling_cv.html">run_rolling_cv()</a></code> now scores all four model types (ensemble, optimized, best, medioid); added <code>models</code> and <code>n_reps_best_medioid</code> knobs to <code><a href="../reference/compile_rolling_cv_predictions.html">compile_rolling_cv_predictions()</a></code>.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.33.3" id="mosaic-0333">MOSAIC 0.33.3<a class="anchor" aria-label="anchor" href="#mosaic-0333"></a></h2>
+<ul><li>
+<code><a href="../reference/run_rolling_cv.html">run_rolling_cv()</a></code>: enabled the <code>run_MOSAIC</code> best-subset optimizer per cutoff.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.33.2" id="mosaic-0332">MOSAIC 0.33.2<a class="anchor" aria-label="anchor" href="#mosaic-0332"></a></h2>
+<ul><li>Added <code><a href="../reference/evaluate_rolling_cv.html">evaluate_rolling_cv()</a></code> for post-hoc out-of-sample forecast scoring.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.33.1" id="mosaic-0331">MOSAIC 0.33.1<a class="anchor" aria-label="anchor" href="#mosaic-0331"></a></h2>
+<ul><li>
+<code><a href="../reference/run_rolling_cv.html">run_rolling_cv()</a></code>: always refit psi per cutoff — removed the <code>refit_psi</code> flag.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.33.0" id="mosaic-0330">MOSAIC 0.33.0<a class="anchor" aria-label="anchor" href="#mosaic-0330"></a></h2>
+<ul><li>
+<code><a href="../reference/est_suitability.html">est_suitability()</a></code> v0.33 AI-data production spec: v7.3 feature set, <code>target_C</code> response, and per-country calibration.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.32.9" id="mosaic-0329">MOSAIC 0.32.9<a class="anchor" aria-label="anchor" href="#mosaic-0329"></a></h2>
 <div class="section level3">
@@ -101,7 +153,17 @@
 <ul><li><p><strong><code>test-config_default.R::"make_LASER_config validation: unknown iso_code..."</code></strong> — v0.32.0 promoted the warning to a hard error (per the v0.13+ <code>epidemic_peaks ⊆ location_name</code> assertion at <a href="R/make_LASER_config.R#L918">R/make_LASER_config.R:918</a>), but the test was still asserting <code>expect_warning</code>. Switched to <code>expect_error</code> and retitled the test to reflect the new contract.</p></li>
 <li><p><strong><code>test-run_MOSAIC_resume.R::".mosaic_likelihood_provenance reports R engine..."</code></strong> — this is the test John wrote alongside the v0.32.4 forward hook (<code># scoring is R-side on all paths until phase 3</code>). v0.32.5 activated the hook, so the assertion has to flip: <code>use_dask = TRUE</code> now returns <code>engine = "python"</code> with <code>impl_version</code> carrying the laser-cholera engine version. Test now asserts both branches of the helper explicitly.</p></li>
 <li><p><strong><code>test-run_MOSAIC_resume.R::".mosaic_resume_check_inputs rejects a different likelihood provenance"</code></strong> — the third sub-check wrote a hard-coded <code>pkg_laser_cholera = "0.13.0"</code> into the fixture. On docker images whose installed laser-cholera lags <code>inst/python/environment.yml</code> (e.g., a <code>:latest</code> tag that pre-dates the v0.32.0 engine pin), the deaths-scale engine-version guard fires before the likelihood-provenance check the test was trying to exercise. Fixed by querying the live engine version via <code>importlib.metadata.version("laser-cholera")</code> (the same call the production guard uses at <a href="R/run_MOSAIC_helpers.R#L1015-L1020">R/run_MOSAIC_helpers.R:1015-1020</a>) and writing that into the fixture, so the engine guard is satisfied regardless of which container the suite runs in.</p></li>
-</ul><hr></div>
+</ul></div>
+<div class="section level3">
+<h3 id="rho-care-seeking-prior-re-derived-wiens-stratum-re-pool-0-32-6">rho (care-seeking) prior re-derived: Wiens 2-stratum RE pool<a class="anchor" aria-label="anchor" href="#rho-care-seeking-prior-re-derived-wiens-stratum-re-pool-0-32-6"></a></h3>
+<p><code>R/get_rho_care_seeking_params.R</code> now anchors the rho prior on a random-effects meta-analytic pool of <strong>both</strong> Wiens et al. 2025 case-definition strata, replacing the prior pool of 12 GEMS Nasrin 2013 pediatric MSD strata + 1 Wiens severe/cholera summary.</p>
+<p><strong>Anchors (Wiens et al. 2025, PMC12013865):</strong> - General diarrhea: 29.9% [25.3, 35.1] from 122 observations - Severe diarrhea + cholera: 58.6% [39.9, 75.2] from 22 observations</p>
+<p><strong>Pooled prior:</strong> <code>Beta(5.38, 7.10)</code>, mean <strong>0.423</strong>, 95% CI [0.21, 0.65], ESS ≈ 12.5 (was: <code>Beta(6.81, 17.89)</code>, mean 0.276, 95% CI [0.12, 0.46], ESS ≈ 25).</p>
+<p><strong>Why this change:</strong> 1. <strong>Severity match.</strong> Symptomatic cholera spans the full mild-to-severe spectrum. Anchoring on the severe-only stratum biases rho upward (severe-only is dominated by outbreak-response settings); anchoring on general diarrhea alone biases rho downward (includes many self-resolving mild episodes). Pooling both honestly reflects the severity distribution. 2. <strong>GEMS already included via Wiens.</strong> The Wiens 2025 dataset includes 6 GEMS-derived Study IDs covering all 7 GEMS sites. The prior GEMS+Wiens pool double-counted the same source populations. 3. <strong>Dimensional fix.</strong> The prior pool weighted 12 GEMS stratum-level observations against 1 Wiens meta-analytic summary — upside-down vs Wiens’s 23-study underlying meta-analysis. The new pool treats each Wiens stratum (122 + 22 obs) as one observation in the meta-analysis. 4. <strong>Cascading mu_j_baseline update.</strong> The steady-state CFR identity <code>mu_j_baseline = CFR × rho / (rho_deaths × chi)</code> propagates the rho change: per-country <code>mu_j_baseline</code> values rescale by ~1.5× (0.423 / 0.276). Implied per-symptomatic-episode CFRs for high-N test countries remain within the [0.5%, 15%] plausibility range: MOZ 3.5%, ETH 9.3%, KEN 10.1%, COD 14.9%.</p>
+<p><strong>Files updated:</strong> - <code>R/get_rho_care_seeking_params.R</code> — new derivation with RE pool of two Wiens strata - <code>R/plot_rho_care_seeking_params.R</code> — diagnostic figure updated to show both strata - <code>model/input/param_rho_care_seeking.csv</code> — regenerated Beta parameters - <code>data/priors_default.rda</code> + <code>inst/extdata/priors_default.json</code> — v15.8 (rho + all per-country mu_j_baseline cascaded through the CFR identity) - <code>data/config_default.rda</code> + <code>inst/extdata/config_default.json</code> — v3.8 (rho + per-country mu_j_baseline updated surgically; full make_config_default.R build deferred due to pre-existing unrelated psi_jt validation issue) - <code>data-raw/make_priors_default.R</code>, <code>data-raw/make_config_default.R</code> — header comments and hardcoded values updated</p>
+<p><strong>Geographic note:</strong> the Wiens severe+cholera stratum draws from 23 underlying studies (16 SSA + 3 LAC + 2 Bangladesh + 1 MENA + 1 South Asia non-BGD); 70% SSA-dominant. Wiens’s geographic provenance was validated against the raw extractions at github.com/wienslab/diarrhea-careseeking.</p>
+<p><strong>Test suite:</strong> 1881 PASS / 0 FAIL / 6 SKIP (unchanged from v0.32.5).</p>
+<hr></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.32.5" id="mosaic-0325">MOSAIC 0.32.5<a class="anchor" aria-label="anchor" href="#mosaic-0325"></a></h2>
@@ -146,24 +208,8 @@
 <li>Phase 2 / laser-cholera v0.13.0: <a href="https://github.com/InstituteforDiseaseModeling/laser-cholera/issues/58" class="external-link">laser-cholera#58</a>
 </li>
 <li>Resume hand-off (v0.32.4): the provenance guard now flips automatically on the Dask path with this release.</li>
-</ul><hr></div>
+</ul></div>
 </div>
-</div>
-    <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.32.6" id="mosaic-0326-1">MOSAIC 0.32.6<a class="anchor" aria-label="anchor" href="#mosaic-0326-1"></a></h2>
-<div class="section level3">
-<h3 id="rho-care-seeking-prior-re-derived-wiens-stratum-re-pool-0-32-6">rho (care-seeking) prior re-derived: Wiens 2-stratum RE pool<a class="anchor" aria-label="anchor" href="#rho-care-seeking-prior-re-derived-wiens-stratum-re-pool-0-32-6"></a></h3>
-<p><code>R/get_rho_care_seeking_params.R</code> now anchors the rho prior on a random-effects meta-analytic pool of <strong>both</strong> Wiens et al. 2025 case-definition strata, replacing the prior pool of 12 GEMS Nasrin 2013 pediatric MSD strata + 1 Wiens severe/cholera summary.</p>
-<p><strong>Anchors (Wiens et al. 2025, PMC12013865):</strong> - General diarrhea: 29.9% [25.3, 35.1] from 122 observations - Severe diarrhea + cholera: 58.6% [39.9, 75.2] from 22 observations</p>
-<p><strong>Pooled prior:</strong> <code>Beta(5.38, 7.10)</code>, mean <strong>0.423</strong>, 95% CI [0.21, 0.65], ESS ≈ 12.5 (was: <code>Beta(6.81, 17.89)</code>, mean 0.276, 95% CI [0.12, 0.46], ESS ≈ 25).</p>
-<p><strong>Why this change:</strong> 1. <strong>Severity match.</strong> Symptomatic cholera spans the full mild-to-severe spectrum. Anchoring on the severe-only stratum biases rho upward (severe-only is dominated by outbreak-response settings); anchoring on general diarrhea alone biases rho downward (includes many self-resolving mild episodes). Pooling both honestly reflects the severity distribution. 2. <strong>GEMS already included via Wiens.</strong> The Wiens 2025 dataset includes 6 GEMS-derived Study IDs covering all 7 GEMS sites. The prior GEMS+Wiens pool double-counted the same source populations. 3. <strong>Dimensional fix.</strong> The prior pool weighted 12 GEMS stratum-level observations against 1 Wiens meta-analytic summary — upside-down vs Wiens’s 23-study underlying meta-analysis. The new pool treats each Wiens stratum (122 + 22 obs) as one observation in the meta-analysis. 4. <strong>Cascading mu_j_baseline update.</strong> The steady-state CFR identity <code>mu_j_baseline = CFR × rho / (rho_deaths × chi)</code> propagates the rho change: per-country <code>mu_j_baseline</code> values rescale by ~1.5× (0.423 / 0.276). Implied per-symptomatic-episode CFRs for high-N test countries remain within the [0.5%, 15%] plausibility range: MOZ 3.5%, ETH 9.3%, KEN 10.1%, COD 14.9%.</p>
-<p><strong>Files updated:</strong> - <code>R/get_rho_care_seeking_params.R</code> — new derivation with RE pool of two Wiens strata - <code>R/plot_rho_care_seeking_params.R</code> — diagnostic figure updated to show both strata - <code>model/input/param_rho_care_seeking.csv</code> — regenerated Beta parameters - <code>data/priors_default.rda</code> + <code>inst/extdata/priors_default.json</code> — v15.8 (rho + all per-country mu_j_baseline cascaded through the CFR identity) - <code>data/config_default.rda</code> + <code>inst/extdata/config_default.json</code> — v3.8 (rho + per-country mu_j_baseline updated surgically; full make_config_default.R build deferred due to pre-existing unrelated psi_jt validation issue) - <code>data-raw/make_priors_default.R</code>, <code>data-raw/make_config_default.R</code> — header comments and hardcoded values updated</p>
-<p><strong>Geographic note:</strong> the Wiens severe+cholera stratum draws from 23 underlying studies (16 SSA + 3 LAC + 2 Bangladesh + 1 MENA + 1 South Asia non-BGD); 70% SSA-dominant. Wiens’s geographic provenance was validated against the raw extractions at github.com/wienslab/diarrhea-careseeking.</p>
-<p><strong>Test suite:</strong> 1881 PASS / 0 FAIL / 6 SKIP (unchanged from v0.32.5).</p>
-</div>
-</div>
-    <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.32.5" id="mosaic-0325-1">MOSAIC 0.32.5<a class="anchor" aria-label="anchor" href="#mosaic-0325-1"></a></h2>
 <div class="section level3">
 <h3 id="laser-cholera-v0130--v0131-0-32-5">laser-cholera v0.13.0 → v0.13.1<a class="anchor" aria-label="anchor" href="#laser-cholera-v0130--v0131-0-32-5"></a></h3>
 <p><code>inst/python/environment.yml</code> wheel URL bumped to v0.13.1. The release’s only behavioral change is in the Python <code>calc_model_likelihood</code> module — peak rows whose <code>peak_date</code> falls outside <code>[date_start, date_stop]</code> are now dropped before index assignment instead of being clamped by <code>np.argmin</code> to t=0 or t=n-1. The Python port is now in alignment with the R-side in-window filter at <code>R/calc_model_likelihood.R:147-150, 423-426, 485-488</code>.</p>
@@ -1622,11 +1668,11 @@
 </ul></div>
 </div>
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="mosaic-development-version">MOSAIC (development version)<a class="anchor" aria-label="anchor" href="#mosaic-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.8.0" id="mosaic-080">MOSAIC 0.8.0<a class="anchor" aria-label="anchor" href="#mosaic-080"></a></h2>
 <div class="section level3">
-<h3 id="new-features-development-version">New Features<a class="anchor" aria-label="anchor" href="#new-features-development-version"></a></h3>
+<h3 id="new-features-0-8-0">New Features<a class="anchor" aria-label="anchor" href="#new-features-0-8-0"></a></h3>
 <div class="section level4">
-<h4 id="initial-conditions-sampling-development-version">Initial Conditions Sampling<a class="anchor" aria-label="anchor" href="#initial-conditions-sampling-development-version"></a></h4>
+<h4 id="initial-conditions-sampling-0-8-0">Initial Conditions Sampling<a class="anchor" aria-label="anchor" href="#initial-conditions-sampling-0-8-0"></a></h4>
 <ul><li>Added biologically plausible Beta priors for initial condition compartments (S, V1, V2, E, I, R)
 <ul><li>
 <code>prop_S_initial</code>: Beta(30, 7.5) - mean 80% susceptible</li>
@@ -1654,20 +1700,20 @@
 </ul></div>
 </div>
 <div class="section level3">
-<h3 id="data-updates-development-version">Data Updates<a class="anchor" aria-label="anchor" href="#data-updates-development-version"></a></h3>
+<h3 id="data-updates-0-8-0">Data Updates<a class="anchor" aria-label="anchor" href="#data-updates-0-8-0"></a></h3>
 <ul><li>Renamed <code>priors</code> data object to <code>priors_default</code> to match naming convention with <code>config_default</code>
 </li>
 <li>Updated <code>priors_default</code> data object to include initial condition priors for all 40 African countries</li>
 <li>Priors now available in both R data format (<code>data/priors_default.rda</code>) and JSON (<code>inst/extdata/priors.json</code>)</li>
 </ul></div>
 <div class="section level3">
-<h3 id="documentation-development-version">Documentation<a class="anchor" aria-label="anchor" href="#documentation-development-version"></a></h3>
+<h3 id="documentation-0-8-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-8-0"></a></h3>
 <ul><li>Added comprehensive documentation for the <code>priors_default</code> data object</li>
 <li>Updated <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code> documentation to reflect IC sampling capability</li>
 <li>Added examples demonstrating initial conditions sampling workflow</li>
 </ul></div>
 <div class="section level3">
-<h3 id="internal-changes-development-version">Internal Changes<a class="anchor" aria-label="anchor" href="#internal-changes-development-version"></a></h3>
+<h3 id="internal-changes-0-8-0">Internal Changes<a class="anchor" aria-label="anchor" href="#internal-changes-0-8-0"></a></h3>
 <ul><li>Added <code>sample_initial_conditions_impl()</code> internal function for IC sampling logic</li>
 <li>Updated NAMESPACE to import required stats functions (rbeta, rgamma, rlnorm, rnorm, runif)</li>
 </ul></div>

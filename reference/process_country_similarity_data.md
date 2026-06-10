@@ -40,7 +40,7 @@ This function performs the following steps:
 1.  Loads a global similarity distance matrix from a CSV file.
 
 2.  Normalizes country names to title case and replaces non-standard
-    names like "Ivory Coast" with "Côte d'Ivoire" to match ISO3 country
+    names like "Ivory Coast" with "Cote d'Ivoire" to match ISO3 country
     standards.
 
 3.  Subsets the matrix to only include African countries, based on ISO3

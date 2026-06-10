@@ -12,13 +12,12 @@ process_UNICEF_malnutrition_data(PATHS)
 
 ## Arguments
 
-- paths:
+- PATHS:
 
-  A named list of file paths with components:
-
-  - raw\$malnutrition_data: path to the raw Excel file
-
-  - processed\$malnutrition_data: path to write the processed CSV
+  A named list of file paths from
+  [`get_paths`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md),
+  providing `DATA_RAW` (root of the raw UNICEF Excel file) and
+  `DATA_PROCESSED` (destination for the processed CSV).
 
 ## Value
 

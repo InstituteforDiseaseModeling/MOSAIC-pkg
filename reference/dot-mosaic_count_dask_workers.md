@@ -2,7 +2,7 @@
 
 `client$scheduler_info()$workers` cannot be relied on to count Dask
 workers because it is a STALE, lagging client-side snapshot of the
-workers dict: when workers join over time (the Coiled spin-up case —
+workers dict: when workers join over time (the Coiled spin-up case –
 request 800, scale up gradually) the `workers` dict does not reflect the
 live count and reports a too-low number (e.g. 5 while hundreds are
 actually running). This was verified directly against a local
@@ -11,7 +11,7 @@ actually running). This was verified directly against a local
 (`client.nthreads()`, `scheduler_info()['n_workers']`, the scheduler's
 own `len(s.workers)`) correctly reported 6. (An earlier comment here
 attributed the bug to a reticulate-conversion "per-worker field count of
-5"; that explanation was factually wrong — on a STATIC cluster
+5"; that explanation was factually wrong – on a STATIC cluster
 `len(scheduler_info()$workers)` returns the correct count. The real
 cause is snapshot staleness of the `workers` dict as workers join.)
 
@@ -34,7 +34,7 @@ Integer worker count, or `NA_integer_` on error.
 ## Details
 
 This helper reads a FRESH source server-side. PRIMARY:
-`len(client.nthreads())` — a live scheduler RPC over a stable public API
+`len(client.nthreads())` – a live scheduler RPC over a stable public API
 that returns one entry per worker (chosen over
 `client.run_on_scheduler(lambda s: len(s.workers))` because it needs no
 lambda serialization, which was observed to fail in some environments,

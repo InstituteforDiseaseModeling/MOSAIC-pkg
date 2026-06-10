@@ -11,7 +11,7 @@ cutoff or to add quantile columns), without recalibrating."><meta property="og:i
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,6 +72,18 @@ cutoff or to add quantile columns), without recalibrating.</p>
 <dt id="arg-base-config">base_config<a class="anchor" aria-label="anchor" href="#arg-base-config"></a></dt>
 <dd><p>Config used to recover the held-out (unmasked) observed
 series (default <code><a href="config_default.html">MOSAIC::config_default</a></code>); must match the run config.</p></dd>
+
+
+<dt id="arg-models">models<a class="anchor" aria-label="anchor" href="#arg-models"></a></dt>
+<dd><p>Character vector of model types to compile (e.g.
+<code>"ensemble"</code>, <code>"opt"</code>, <code>"best"</code>, <code>"medioid"</code>); NULL
+(default) uses the set recorded in each run's manifest.</p></dd>
+
+
+<dt id="arg-n-reps-best-medioid">n_reps_best_medioid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medioid"></a></dt>
+<dd><p>Integer or NULL (default); number of stochastic
+LASER replicates to draw for the single-config <code>best</code>/<code>medioid</code>
+models. NULL reuses the value stored in the run manifest.</p></dd>
 
 
 <dt id="arg-write">write<a class="anchor" aria-label="anchor" href="#arg-write"></a></dt>

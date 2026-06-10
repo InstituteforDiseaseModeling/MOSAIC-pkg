@@ -15,7 +15,7 @@ generalization capability."><meta property="og:image" content="https://institute
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,8 +71,9 @@ generalization capability.</p>
 
 
 <dl><dt id="arg-train-sequences">train_sequences<a class="anchor" aria-label="anchor" href="#arg-train-sequences"></a></dt>
-<dd><p>List containing LSTM sequences with X, y, countries, and dates
-(output from create_lstm_sequences function)</p></dd>
+<dd><p>List containing LSTM sequences with components
+<code>X</code>, <code>y</code>, <code>countries</code>, and <code>dates</code> (the sequence
+structure built internally by the legacy <code><a href="est_suitability.html">est_suitability()</a></code> path).</p></dd>
 
 
 <dt id="arg-split-method">split_method<a class="anchor" aria-label="anchor" href="#arg-split-method"></a></dt>
@@ -116,8 +117,8 @@ generalization capability.</p>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="co"># After creating LSTM sequences</span></span></span>
-<span class="r-in"><span><span class="va">train_sequences</span> <span class="op">&lt;-</span> <span class="fu">create_lstm_sequences</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># train_sequences is a list with X, y, countries, and dates components</span></span></span>
+<span class="r-in"><span><span class="co"># (built internally by the legacy est_suitability() path).</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Random splitting (existing method)</span></span></span>
 <span class="r-in"><span><span class="va">splits_random</span> <span class="op">&lt;-</span> <span class="fu">get_lstm_sequence_splits</span><span class="op">(</span></span></span>

@@ -41,7 +41,7 @@ Data sources:
   and ALL files matching `cholera_adm0_public_*.csv` in the dashboard
   directory are ingested. Each row's actual coverage is derived from
   `first_epiwk` / `last_epiwk` (rolling snapshots cross calendar-year
-  boundaries — see the year-labeling note below).
+  boundaries – see the year-labeling note below).
 
 **Year labeling**: The ArcGIS dashboard returns one row per country
 summing `case_total` / `death_total` between `first_epiwk` and
@@ -59,7 +59,7 @@ with the year filter applied). Re-run `process_WHO_annual_data()`.
 
 Outputs (in `PATHS$DATA_WHO_ANNUAL`):
 
-- `who_afro_annual.csv` — current full series, columns
+- `who_afro_annual.csv` – current full series, columns
   `country, iso_code, region, year, cases_total, cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk, last_epiwk, coverage_days, year_fraction, source`.
 
 - Intermediate per-source slices for traceability.

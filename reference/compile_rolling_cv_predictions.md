@@ -33,6 +33,18 @@ compile_rolling_cv_predictions(
   [`MOSAIC::config_default`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/config_default.md));
   must match the run config.
 
+- models:
+
+  Character vector of model types to compile (e.g. `"ensemble"`,
+  `"opt"`, `"best"`, `"medioid"`); NULL (default) uses the set recorded
+  in each run's manifest.
+
+- n_reps_best_medioid:
+
+  Integer or NULL (default); number of stochastic LASER replicates to
+  draw for the single-config `best`/`medioid` models. NULL reuses the
+  value stored in the run manifest.
+
 - write:
 
   Logical; write `predictions.parquet` (default TRUE).

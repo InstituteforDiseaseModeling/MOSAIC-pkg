@@ -109,6 +109,9 @@ make_LASER_config(
 
   ### Initialization
 
+  Parameters defining the simulation window and the initial compartment
+  sizes (and optional proportions) for each location.
+
 - date_start:
 
   Start date for the simulation period in "YYYY-MM-DD" format. If
@@ -209,6 +212,8 @@ make_LASER_config(
 
   ### Demographics
 
+  Time-varying birth and mortality rate matrices.
+
 - b_jt:
 
   A matrix of birth rates with rows equal to length(location_name) and
@@ -220,6 +225,9 @@ make_LASER_config(
   and columns equal to the daily sequence from date_start to date_stop.
 
   ### Vaccination
+
+  OCV dosing schedules, dose effectiveness, waning rates, and eligible
+  source compartments.
 
 - nu_1_jt:
 
@@ -256,6 +264,9 @@ make_LASER_config(
   listed compartments.
 
   ### Infection dynamics
+
+  Transition rates between SEIR compartments and the
+  infection-fatality-ratio model parameters.
 
 - iota:
 
@@ -304,6 +315,9 @@ make_LASER_config(
 
   ### Observation Processes
 
+  Surveillance-cascade parameters mapping true infections and deaths to
+  reported counts.
+
 - rho:
 
   Care-seeking rate: probability a symptomatic individual presents to
@@ -351,6 +365,9 @@ make_LASER_config(
 
   ### Spatial model
 
+  Location coordinates and the gravity-model mobility parameters
+  governing between-location movement.
+
 - longitude:
 
   A numeric vector of longitudes for each location. Must be same length
@@ -377,6 +394,9 @@ make_LASER_config(
   length(location_name) in \[0, 1\]).
 
   ### Force of Infection (human-to-human)
+
+  Baseline transmission rates, seasonal forcing harmonics, and FOI
+  mixing exponents for direct human-to-human transmission.
 
 - beta_j0_tot:
 
@@ -433,6 +453,10 @@ make_LASER_config(
   `I/N`); `alpha_2 = 0` is density-dependent (FOI proportional to `I`).
 
   ### Force of Infection (environment-to-human)
+
+  Environmental suitability, its calibration parameters, shedding rates,
+  and *V. cholerae* decay parameters for environment-to-human
+  transmission.
 
 - beta_j0_env:
 
@@ -511,6 +535,9 @@ make_LASER_config(
   the environment. Must be numeric \> 0.
 
   ### Reported data
+
+  Observed surveillance series and epidemic-peak metadata used by the
+  likelihood.
 
 - reported_cases:
 
