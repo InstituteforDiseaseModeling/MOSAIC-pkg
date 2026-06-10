@@ -154,8 +154,8 @@ plot_cholera_surveillance_data <- function(PATHS, iso) {
      combined <- (p1 / p2) +
           patchwork::plot_layout(guides = "collect") +
           patchwork::plot_annotation(
-               title    = paste0(country_name, " — Cholera Surveillance"),
-               subtitle = "Bars: daily downscaled counts by source  ·  Points: weekly observed counts (log₁₀ scale)",
+               title    = paste0(country_name, " \u2014 Cholera Surveillance"),
+               subtitle = "Bars: daily downscaled counts by source  \u00B7  Points: weekly observed counts (log\u2081\u2080 scale)",
                theme    = annot_theme
           ) &
           ggplot2::theme(legend.position = "bottom")

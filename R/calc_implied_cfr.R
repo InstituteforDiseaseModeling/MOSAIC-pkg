@@ -2,15 +2,15 @@
 #'
 #' Adds four derived columns per location to a sampled-parameters table:
 #' \itemize{
-#'   \item \code{cfr_baseline_<iso>}  — surveillance CFR under endemic regime
-#'   \item \code{cfr_epidemic_<iso>}  — surveillance CFR under epidemic regime
-#'   \item \code{cfr_clinical_baseline_<iso>}  — per-symptomatic-episode lethality (endemic)
-#'   \item \code{cfr_clinical_epidemic_<iso>}  — per-symptomatic-episode lethality (epidemic)
+#'   \item \code{cfr_baseline_<iso>}  -- surveillance CFR under endemic regime
+#'   \item \code{cfr_epidemic_<iso>}  -- surveillance CFR under epidemic regime
+#'   \item \code{cfr_clinical_baseline_<iso>}  -- per-symptomatic-episode lethality (endemic)
+#'   \item \code{cfr_clinical_epidemic_<iso>}  -- per-symptomatic-episode lethality (epidemic)
 #' }
 #' These are policy-relevant transformations of the sampled microparameters
 #' via the v0.13+ engine identity in MOSAIC.
 #'
-#' \strong{Surveillance CFR (reported-deaths / reported-cases)} — analytic
+#' \strong{Surveillance CFR (reported-deaths / reported-cases)} -- analytic
 #' steady-state limit of the deaths-cases ratio in the surveillance signal:
 #'
 #' \deqn{\text{CFR}_{\text{baseline}}^{j}\ =\ \mu_{j,0} \cdot \rho_{\text{deaths}}
@@ -18,7 +18,7 @@
 #' \deqn{\text{CFR}_{\text{epidemic}}^{j}\ =\ \mu_{j,0} \cdot (1 + \varepsilon_j)
 #'        \cdot \rho_{\text{deaths}} \cdot \chi^{\text{epi}} / \rho}
 #'
-#' \strong{Important — these are evaluated at simulation tick 0} (i.e. with
+#' \strong{Important -- these are evaluated at simulation tick 0} (i.e. with
 #' the temporal slope \eqn{\mu_{j,\text{slope}} \cdot t_{\text{factor}} = 0}).
 #' Under the default prior \eqn{\mu_{j,\text{slope}} \sim \mathcal{N}(0, 0.05)}
 #' the slope contribution over a typical 3-year calibration is < 5% at any
@@ -27,7 +27,7 @@
 #' compute the time-resolved CFR per tick from the predictions arrays
 #' instead.
 #'
-#' \strong{Clinical CFR (per-episode lethality)} — probability a symptomatic
+#' \strong{Clinical CFR (per-episode lethality)} -- probability a symptomatic
 #' individual dies of cholera over their expected symptomatic period
 #' (\eqn{1/\gamma_1}). Approximation \eqn{1 - e^{-\mu_{j,t}/\gamma_1}}:
 #'
@@ -98,7 +98,7 @@
 
      has_gamma1 <- "gamma_1" %in% names(results)
      if (!has_gamma1 && verbose) {
-          message("  Note: gamma_1 not in samples — clinical (per-episode) CFR will be omitted")
+          message("  Note: gamma_1 not in samples \u2014 clinical (per-episode) CFR will be omitted")
      }
 
      # Clamp a numeric vector to [0, 1] and replace non-finite (Inf/NaN) with NA.
@@ -134,7 +134,7 @@
           # investigating.
           n_neg_eps <- sum((1 + results[[eps_col]]) <= 0, na.rm = TRUE)
           if (n_neg_eps > 0L && verbose) {
-               message(sprintf("  Warning (%s): %d sample(s) have (1 + mu_j_epidemic_factor) <= 0 — pathological epsilon posterior",
+               message(sprintf("  Warning (%s): %d sample(s) have (1 + mu_j_epidemic_factor) <= 0 \u2014 pathological epsilon posterior",
                                iso, n_neg_eps))
           }
 
@@ -171,19 +171,19 @@
           ce <- results[[paste0("cfr_epidemic_", iso)]]
           n_extreme <- sum(ce > 0.5, na.rm = TRUE)
           if (n_extreme > 0L && verbose) {
-               message(sprintf("  Warning (%s): %d/%d cfr_epidemic samples > 0.5 — review epidemic_factor / rho posteriors",
+               message(sprintf("  Warning (%s): %d/%d cfr_epidemic samples > 0.5 \u2014 review epidemic_factor / rho posteriors",
                                iso, n_extreme, sum(is.finite(ce))))
           }
           # Parallel sanity check for clinical (per-episode) epidemic CFR.
           # A per-episode lethality > 50% indicates mu_eff/gamma_1 > 0.69
           # (death hazard exceeds recovery hazard over the symptomatic
-          # period) — biologically possible in untreated severe outbreaks
+          # period) -- biologically possible in untreated severe outbreaks
           # but warrants a review of the gamma_1 / mu_j_baseline posterior.
           if (has_gamma1) {
                cce <- results[[paste0("cfr_clinical_epidemic_", iso)]]
                n_clin_extreme <- sum(cce > 0.5, na.rm = TRUE)
                if (n_clin_extreme > 0L && verbose) {
-                    message(sprintf("  Warning (%s): %d/%d cfr_clinical_epidemic samples > 0.5 — biologically extreme, audit gamma_1 / mu posteriors",
+                    message(sprintf("  Warning (%s): %d/%d cfr_clinical_epidemic samples > 0.5 \u2014 biologically extreme, audit gamma_1 / mu posteriors",
                                     iso, n_clin_extreme, sum(is.finite(cce))))
                }
           }

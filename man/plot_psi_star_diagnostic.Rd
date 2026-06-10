@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_psi_star_diagnostic.R
 \name{plot_psi_star_diagnostic}
 \alias{plot_psi_star_diagnostic}
-\title{Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ*)}
+\title{Plot Raw vs Calibrated Environmental Suitability (psi vs psi*)}
 \usage{
 plot_psi_star_diagnostic(dirs, PATHS, location_names, verbose = TRUE)
 }
@@ -31,12 +31,12 @@ The psi_star parameters recalibrate the LSTM suitability signal on the logit
 scale before it enters the transmission model. Without this plot there is no
 routine way to see how much the calibration suppresses or reshapes the LSTM
 output. The subtitle reports the mean suppression percentage, making it
-immediately clear whether ψ is acting as a meaningful seasonal driver or
+immediately clear whether psi is acting as a meaningful seasonal driver or
 being effectively disabled.
 }
 \details{
 Creates a time-series plot comparing the raw LSTM-predicted environmental
-suitability ψ with the calibrated ψ* after applying the posterior psi_star
+suitability psi with the calibrated psi* after applying the posterior psi_star
 parameters (\code{psi_star_a}, \code{psi_star_b}, \code{psi_star_z},
 \code{psi_star_k}) via \code{\link{calc_psi_star}}.
 

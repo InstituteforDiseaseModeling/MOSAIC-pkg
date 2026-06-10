@@ -265,13 +265,13 @@ test_that("R and Python agree on weekly cadence with peak terms", {
 })
 
 # -----------------------------------------------------------------------------
-# 6. NA observations — exercises mask_weights() on both sides and the
+# 6. NA observations — exercises .mask_weights() on both sides and the
 #    have_cases / have_deaths >= 3 finite-obs gate.
 # -----------------------------------------------------------------------------
 test_that("R and Python WIS agree within the known NA-masking tolerance", {
   skip_if_no_python_likelihood()
   # KNOWN, TRACKED divergence (observed on laser-cholera 0.13.1): Python's
-  # compute_wis_parametric_row() does NOT mask NA observations before the
+  # .compute_wis_parametric_row() does NOT mask NA observations before the
   # subtraction (it emits "invalid value encountered in subtract"), whereas R
   # masks first. On this fixture that is a ~0.5% disagreement (R -489.57 vs
   # Python -487.02). Instead of a silent skip() (which false-greened this guard)

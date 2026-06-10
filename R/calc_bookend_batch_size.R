@@ -47,7 +47,7 @@ calc_bookend_batch_size <- function(ess_history,
         }, error = function(e) {})
     }
 
-    # Calculate R² values
+    # Calculate R^2 values
     r2_linear <- summary(fit_linear)$r.squared
     r2_sqrt <- summary(fit_sqrt)$r.squared
     r2_log <- ifelse(!is.null(fit_log), summary(fit_log)$r.squared, 0)
@@ -58,7 +58,7 @@ calc_bookend_batch_size <- function(ess_history,
     best_fit <- fit_sqrt
 
     # Only switch to linear with STRONG evidence
-    # Require: High R² AND meaningful improvement over sqrt
+    # Require: High R^2 AND meaningful improvement over sqrt
     if (r2_linear >= 0.95 && r2_linear - r2_sqrt > 0.03) {
         best_model <- "linear"
         best_r2 <- r2_linear
@@ -68,18 +68,18 @@ calc_bookend_batch_size <- function(ess_history,
     # Diagnostic: Warn if log fits best (NEVER use for prediction)
     if (r2_log > r2_linear && r2_log > r2_sqrt) {
         warning(sprintf(
-            "Log model fits best (R²=%.4f) - suggests prior-posterior mismatch. Consider extending calibration.",
+            "Log model fits best (R\u00B2=%.4f) - suggests prior-posterior mismatch. Consider extending calibration.",
             r2_log
         ))
     }
 
-    # Check confidence against target R²
+    # Check confidence against target R^2
     if (best_r2 < target_r_squared) {
         return(list(
             phase = "low_confidence",
             batch_size = 500,  # Default batch
             r_squared = best_r2,
-            message = sprintf("Low confidence (R²=%.3f < %.2f), continuing calibration",
+            message = sprintf("Low confidence (R\u00B2=%.3f < %.2f), continuing calibration",
                             best_r2, target_r_squared)
         ))
     }
@@ -119,7 +119,7 @@ calc_bookend_batch_size <- function(ess_history,
     # Predictive batch uses full remaining budget
     predictive_batch_size <- total_needed - current_n
 
-    # Apply safety margins based on R² confidence
+    # Apply safety margins based on R^2 confidence
     # Adjusted for better prediction accuracy with high-confidence models
     if (best_r2 >= 0.95) {
         safety_factor <- 1.05  # Slight overshoot OK when very confident
@@ -156,7 +156,7 @@ calc_bookend_batch_size <- function(ess_history,
     }
 
     # Predict ESS after the batch
-    # Models expect raw n_sims — the formula already applies the transformation
+    # Models expect raw n_sims -- the formula already applies the transformation
     # The model formula already applies the transformation (sqrt or log)
     predicted_ess <- predict(best_fit,
         newdata = data.frame(n_sims = current_n + predictive_batch_size))
@@ -171,7 +171,7 @@ calc_bookend_batch_size <- function(ess_history,
         target_ess = target_ess,
         predicted_ess = as.numeric(predicted_ess),
         total_predicted = current_n + predictive_batch_size,
-        message = sprintf("Predictive batch: %.0f sims (model=%s, R²=%.3f)",
+        message = sprintf("Predictive batch: %.0f sims (model=%s, R\u00B2=%.3f)",
                          predictive_batch_size, best_model, best_r2)
     ))
 }

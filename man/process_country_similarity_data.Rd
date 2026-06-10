@@ -25,7 +25,7 @@ Country similarity data comes from the \href{https://objectivelists.com/country-
 This function performs the following steps:
 \enumerate{
 \item Loads a global similarity distance matrix from a CSV file.
-\item Normalizes country names to title case and replaces non-standard names like "Ivory Coast" with "Côte d'Ivoire" to match ISO3 country standards.
+\item Normalizes country names to title case and replaces non-standard names like "Ivory Coast" with "Cote d'Ivoire" to match ISO3 country standards.
 \item Subsets the matrix to only include African countries, based on ISO3 codes provided by \code{MOSAIC::iso_codes_africa}.
 \item Outputs a CSV file containing the similarity matrix for African countries, with row and column names in ISO3 format.
 }

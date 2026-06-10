@@ -118,7 +118,7 @@ a CSV file and a plot showing the model fit (MAE and loss) is generated.
 }
 \section{Architectures}{
 
-\strong{\code{lstm_v2_hierarchical_film} (default, v0.34) — hierarchical-FiLM LSTM,
+\strong{\code{lstm_v2_hierarchical_film} (default, v0.34) -- hierarchical-FiLM LSTM,
 rolling-origin CV.} A 3-stack LSTM trunk (128->64->32 units, recurrent dropout)
 maps the weekly covariate window (\code{timesteps=13}) to a shared climate-response
 latent \code{z}. Country/region identity modulates \code{z} via hierarchical FiLM: a
@@ -128,7 +128,7 @@ region embedding produces \verb{(gamma_r, beta_r)} and a zero-initialized countr
 \code{gamma} use \code{tanh} (gain in \verb{[0,2]}, identity at init); an L2 partial-pool
 penalty shrinks data-sparse countries toward their region. A sigmoid head
 outputs psi in \verb{[0,1]}. Trained with BCE loss under \code{balanced_uniform} sample
-weights (correcting the zero-week imbalance — ~72\% of all-MOSAIC training
+weights (correcting the zero-week imbalance -- ~72\% of all-MOSAIC training
 weeks are zero, higher per high-incidence country) plus an optional per-row
 confidence-weight overlay. Training uses expanding-window rolling-origin CV
 (each step validates strictly forward in time with a 4-week embargo,
@@ -142,11 +142,11 @@ forecasts. Defaults are pinned to the B4 fixture; override via \code{arch_contro
 \emph{Honest framing.} lstm_v2 converts a structurally-collapsed flat psi
 (Pearson ~0.09, ~3\\% of observed amplitude) into a weak-but-real, better-phased
 directional signal (median cross-country Pearson ~0.22, but a wide per-cell
-range with a large anti-correlated minority — psi can be worse than climatology
+range with a large anti-correlated minority -- psi can be worse than climatology
 for some countries). It strictly dominates the incumbent on shape; it is NOT a
 decision-grade forecaster. psi reaches the downstream LASER engine through TWO
-channels — a fractional deviation \code{(psi - psi_bar)/psi_bar} (timing/shape) and
-the absolute level (environmental-reservoir decay) — so the response anchor and
+channels -- a fractional deviation \code{(psi - psi_bar)/psi_bar} (timing/shape) and
+the absolute level (environmental-reservoir decay) -- so the response anchor and
 \code{bias_correct} can move outbreak magnitude, not just timing. Report the
 per-country spread, not just the median. The v0.34.0 defaults
 (\code{response_var="transmission_intensity"}, \code{region_map="snf_k5"},
@@ -154,7 +154,7 @@ per-country spread, not just the median. The v0.34.0 defaults
 psi->LASER case-skill experiment; \code{snf_k5} ships unvalidated as a FiLM region
 map and reverts to \code{"csv"} if it does not beat it.
 
-\strong{\code{lstm_v1_legacy} (v0.33, frozen) — shared LSTM, random split +
+\strong{\code{lstm_v1_legacy} (v0.33, frozen) -- shared LSTM, random split +
 sequential fine-tuning.} A single 3-stack LSTM (128->64->32) with no
 country/region identity (one shared model for all countries). Trained on a
 random 60/40 split across all weeks with MSE on the logit-transformed target,
@@ -162,7 +162,7 @@ followed by sequential fine-tuning. Frozen at the canonical v0.33 settings (not
 tunable; legacy knobs are hard-coded internally). \strong{Retained only for
 reproducibility/rollback.} Known limitation: the random split places
 temporally-adjacent weeks on both sides of the train/val boundary, so the
-out-of-sample forecast collapses in amplitude — the failure lstm_v2 fixes.
+out-of-sample forecast collapses in amplitude -- the failure lstm_v2 fixes.
 }
 
 \section{Migration (reproduce v0.33 production behavior)}{

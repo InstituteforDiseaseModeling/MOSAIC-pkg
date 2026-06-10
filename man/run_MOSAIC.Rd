@@ -61,7 +61,7 @@ missing id within the target is re-run so the exact target is met.
 Resume is \strong{rejected} (hard error) when:
 \itemize{
 \item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
-\item the run already completed — a consolidated \code{2_calibration/samples.parquet}
+\item the run already completed -- a consolidated \code{2_calibration/samples.parquet}
 exists that the on-disk shards would shrink (start fresh, or remove it to recompute);
 \item the supplied \code{config}, \code{priors}, \code{control$likelihood},
 \code{control$sampling}, \code{control$calibration$n_iterations}, or the
@@ -70,7 +70,7 @@ calibration mode (auto vs fixed) differ from those persisted in
 incomparable);
 \item the current \code{laser-cholera} engine version crosses the v0.13
 deaths-scale boundary relative to the original run;
-\item the likelihood-value provenance differs — i.e. the existing shards
+\item the likelihood-value provenance differs -- i.e. the existing shards
 were scored by a different likelihood engine or implementation than the
 current session would produce (e.g. R \code{calc_model_likelihood} on
 the local backend vs on-worker Python scoring on the Dask backend, or

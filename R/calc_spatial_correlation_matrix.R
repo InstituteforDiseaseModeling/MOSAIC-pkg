@@ -1,12 +1,12 @@
-#' Build the full spatial–correlation matrix across all locations
+#' Build the full spatial-correlation matrix across all locations
 #'
 #' Given LASER simulation outputs, this function constructs the
 #' \eqn{J \times J} matrix
 #' \eqn{\mathbf C = [\mathcal{C}_{ij}]} of Pearson
-#' spatial–correlation coefficients (Keeling & Rohani 2002) for every pair of
+#' spatial-correlation coefficients (Keeling & Rohani 2002) for every pair of
 #' locations.
 #'
-#' All three input objects must be arranged as (locations J × time T)
+#' All three input objects must be arranged as (locations J x time T)
 #' (rows are the J locations; columns are the T time steps).
 #'
 #' Total infections at time t in location j are taken as
@@ -15,15 +15,15 @@
 #' \eqn{N_{jt}}.  Pair-wise correlations are then computed with
 #' [`calc_spatial_correlation()`].
 #'
-#' @param I_sym  Numeric matrix (J × T).  Symptomatic infections.
-#' @param I_asym Numeric matrix (J × T).  Asymptomatic infections.
+#' @param I_sym  Numeric matrix (J x T).  Symptomatic infections.
+#' @param I_asym Numeric matrix (J x T).  Asymptomatic infections.
 #'               Must have the same dimensions as `I_sym`.
 #' @param N      Population sizes. Accepts
 #'   * a single scalar (same for every j & t),
 #'   * a length-J vector (different per location, constant in time), or
-#'   * a full J × T matrix (time‑varying populations).
+#'   * a full J x T matrix (time-varying populations).
 #'
-#' @return A J × J symmetric numeric matrix whose \((i,j)\) entry is
+#' @return A J x J symmetric numeric matrix whose \((i,j)\) entry is
 #'   \eqn{\mathcal{C}_{ij}}; diagonal elements are set to 1.
 #'   Pairs that cannot be computed (all `NA`, zero variance, etc.) are `NA_real_`.
 #'
@@ -34,7 +34,7 @@ calc_spatial_correlation_matrix <- function(I_sym,
                                             N) {
      # Dimension checks
      if (!is.matrix(I_sym) || !is.matrix(I_asym)) {
-          stop("`I_sym` and `I_asym` must both be J×T matrices (locations × time).")
+          stop("`I_sym` and `I_asym` must both be J\u00D7T matrices (locations \u00D7 time).")
      }
      if (!all(dim(I_sym) == dim(I_asym))) {
           stop("`I_sym` and `I_asym` must have identical dimensions.")
@@ -43,7 +43,7 @@ calc_spatial_correlation_matrix <- function(I_sym,
      J <- nrow(I_sym)  # number of locations
      T <- ncol(I_sym)  # number of time steps
 
-     # Conform N to a J×T matrix
+     # Conform N to a JxT matrix
      if (length(N) == 1L) {
           N_mat <- matrix(N, nrow = J, ncol = T)
      } else if (is.vector(N) && length(N) == J) {
@@ -51,13 +51,13 @@ calc_spatial_correlation_matrix <- function(I_sym,
      } else if (is.matrix(N) && all(dim(N) == c(J, T))) {
           N_mat <- N
      } else {
-          stop("`N` must be a scalar, a length-J vector, or a J×T matrix.")
+          stop("`N` must be a scalar, a length-J vector, or a J\u00D7T matrix.")
      }
 
-     # Total infections (J×T)
+     # Total infections (JxT)
      I_tot <- I_sym + I_asym
 
-     # Prepare result matrix (J×J)
+     # Prepare result matrix (JxJ)
      loc_names <- rownames(I_sym)
      C <- matrix(NA_real_, nrow = J, ncol = J,
                  dimnames = list(loc_names, loc_names))

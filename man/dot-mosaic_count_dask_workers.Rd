@@ -15,7 +15,7 @@ Integer worker count, or \code{NA_integer_} on error.
 \description{
 \code{client$scheduler_info()$workers} cannot be relied on to count Dask
 workers because it is a STALE, lagging client-side snapshot of the workers
-dict: when workers join over time (the Coiled spin-up case — request 800,
+dict: when workers join over time (the Coiled spin-up case -- request 800,
 scale up gradually) the \code{workers} dict does not reflect the live count
 and reports a too-low number (e.g. 5 while hundreds are actually running).
 This was verified directly against a local \code{LocalCluster}: scaling
@@ -24,13 +24,13 @@ while every fresh source (\code{client.nthreads()},
 \code{scheduler_info()['n_workers']}, the scheduler's own
 \code{len(s.workers)}) correctly reported 6. (An earlier comment here
 attributed the bug to a reticulate-conversion "per-worker field count of 5";
-that explanation was factually wrong — on a STATIC cluster
+that explanation was factually wrong -- on a STATIC cluster
 \code{len(scheduler_info()$workers)} returns the correct count. The real
 cause is snapshot staleness of the \code{workers} dict as workers join.)
 }
 \details{
 This helper reads a FRESH source server-side. PRIMARY:
-\code{len(client.nthreads())} — a live scheduler RPC over a stable public
+\code{len(client.nthreads())} -- a live scheduler RPC over a stable public
 API that returns one entry per worker (chosen over
 \code{client.run_on_scheduler(lambda s: len(s.workers))} because it needs no
 lambda serialization, which was observed to fail in some environments, and

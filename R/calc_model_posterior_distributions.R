@@ -77,7 +77,7 @@ calc_model_posterior_distributions <- function(
                 if (verbose) message("Loading control from: ", control)
                 control <- jsonlite::read_json(control)
             } else {
-                warning("Control file not found: ", control, " — skipping frozen detection")
+                warning("Control file not found: ", control, " \u2014 skipping frozen detection")
                 control <- NULL
             }
         }
@@ -247,7 +247,7 @@ calc_model_posterior_distributions <- function(
         # Note: With small sample sizes (n<30), median is more stable than KDE mode
         if ("mode" %in% names(param_row) && !is.na(param_row$mode)) {
             mode_val <- param_row$mode
-            # Check if mode is reasonable (within CI); always warn — this is a data quality signal
+            # Check if mode is reasonable (within CI); always warn -- this is a data quality signal
             if (mode_val < q_low || mode_val > q_high) {
                 message("  Warning: Mode outside CI for ", param_name,
                         " (mode=", round(mode_val, 4), ", CI=[", round(q_low, 4), ",", round(q_high, 4), "]),",
@@ -281,8 +281,8 @@ calc_model_posterior_distributions <- function(
 
         # Detect near-zero-variance parameters.
         # Two distinct cases:
-        #   "frozen" — sampling flag was FALSE (user deliberately froze it)
-        #   "fixed"  — sampling flag was TRUE but posterior converged to a point
+        #   "frozen" -- sampling flag was FALSE (user deliberately froze it)
+        #   "fixed"  -- sampling flag was TRUE but posterior converged to a point
         # update_priors_from_posteriors() restores original priors for "frozen"
         # and propagates "fixed" as-is.
         relative_range <- if (abs(q_med) > 1e-10) {
@@ -316,7 +316,7 @@ calc_model_posterior_distributions <- function(
         # Apply bounds correction based on distribution type BEFORE fitting
         # This ensures values are in the valid range for each distribution
         if (dist_type == "beta") {
-            # Beta requires (0, 1) — use 1e-10 to preserve near-zero posteriors
+            # Beta requires (0, 1) -- use 1e-10 to preserve near-zero posteriors
             # (e.g. prop_E_initial, prop_I_initial with means ~0.0001%)
             mode_val <- max(1e-10, min(1 - 1e-10, mode_val))
             q_low <- max(1e-10, min(1 - 1e-10, q_low))
@@ -384,7 +384,7 @@ calc_model_posterior_distributions <- function(
                 )
             } else if (dist_type == "truncnorm") {
                 # Read hard bounds from the prior template first.
-                # This preserves biological constraints in the posterior fit —
+                # This preserves biological constraints in the posterior fit --
                 # e.g., psi_star_a >= 0 and psi_star_k <= 0.
                 # posterior_lower/upper columns override when present
                 # (e.g., delta_reporting_* integer support).
@@ -534,7 +534,7 @@ calc_model_posterior_distributions <- function(
             # Update global parameter. If the slot does not exist in the
             # priors template (e.g. derived parameters like zeta_2 and
             # decay_days_long that have no independent prior), create it
-            # dynamically — the fitted posterior is a meaningful summary
+            # dynamically -- the fitted posterior is a meaningful summary
             # computed from the derived sample values.
             posteriors$parameters_global[[param_base]] <- structured_dist
             success <- TRUE
@@ -547,12 +547,12 @@ calc_model_posterior_distributions <- function(
                     posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
                     success <- TRUE
                 } else {
-                    # Location doesn't exist in template — add it
+                    # Location doesn't exist in template -- add it
                     posteriors$parameters_location[[param_base]]$location[[location]] <- structured_dist
                     success <- TRUE
                 }
             } else {
-                # Parameter doesn't exist in priors template — create dynamically
+                # Parameter doesn't exist in priors template -- create dynamically
                 if (verbose) {
                     message(sprintf("  Adding new parameter '%s' to posteriors structure", param_base))
                 }
@@ -642,7 +642,7 @@ calc_model_posterior_distributions <- function(
             message("Failed parameters: ", paste(failed_params, collapse = ", "))
         }
         message("Output file: ", output_file)
-        message("\n✓ Posterior distributions calculation complete")
+        message("\n\u2713 Posterior distributions calculation complete")
     }
 
     # Return results

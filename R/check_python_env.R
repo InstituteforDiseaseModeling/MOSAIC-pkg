@@ -46,7 +46,7 @@ check_python_env <- function() {
      # Check which environment is active
      if (grepl("r-mosaic", current_python)) {
           is_mosaic_env <- TRUE
-          cli::cli_alert_success("✓ Using MOSAIC Python environment")
+          cli::cli_alert_success("\u2713 Using MOSAIC Python environment")
           cli::cli_text("Optional: {.run MOSAIC::check_dependencies()} to verify all packages")
 
      } else if (grepl("r-keras", current_python)) {

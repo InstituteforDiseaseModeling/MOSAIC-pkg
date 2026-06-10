@@ -99,7 +99,7 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      }
      
      # Step 1: Exact matching (same country, date within 7 days, doses within 5%)
-     message("\nStep 1: Finding exact matches (±7 days, ±5% doses)...")
+     message("\nStep 1: Finding exact matches (\u00B17 days, \u00B15% doses)...")
      exact_matches <- data.frame()
      who_matched_exact <- logical(nrow(who_data))
      gtfcc_matched_exact <- logical(nrow(gtfcc_data))
@@ -122,7 +122,7 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      message(glue::glue("  Found {nrow(exact_matches)} exact matches"))
      
      # Step 2: Fuzzy matching (broader tolerance for remaining campaigns)
-     message(glue::glue("\nStep 2: Finding fuzzy matches (±{date_tolerance} days, ±{dose_tolerance*100}% doses)..."))
+     message(glue::glue("\nStep 2: Finding fuzzy matches (\u00B1{date_tolerance} days, \u00B1{dose_tolerance*100}% doses)..."))
      fuzzy_matches <- data.frame()
      who_matched_fuzzy <- logical(nrow(who_data))
      gtfcc_matched_fuzzy <- logical(nrow(gtfcc_data))
@@ -145,7 +145,7 @@ combine_vaccination_data <- function(PATHS, date_tolerance = 60, dose_tolerance 
      message(glue::glue("  Found {nrow(fuzzy_matches)} fuzzy matches"))
      
      # Step 3: Check for date-only matches (might be same campaign with different reported doses)
-     message("\nStep 3: Finding date-only matches (±30 days, any dose difference)...")
+     message("\nStep 3: Finding date-only matches (\u00B130 days, any dose difference)...")
      date_matches <- data.frame()
      who_matched_date <- logical(nrow(who_data))
      

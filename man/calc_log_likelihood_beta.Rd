@@ -17,7 +17,7 @@ calc_log_likelihood_beta(
 
 \item{estimated}{Numeric vector of model-predicted values in (0, 1).}
 
-\item{mean_precision}{Logical; if \code{TRUE} (default), use mean–precision parameterization.
+\item{mean_precision}{Logical; if \code{TRUE} (default), use mean-precision parameterization.
 If \code{FALSE}, estimate shape parameters directly from the observed vector.}
 
 \item{weights}{Optional numeric vector of non-negative weights, same length as \code{observed}.
@@ -30,7 +30,7 @@ A scalar log-likelihood (numeric).
 }
 \description{
 Computes the total log-likelihood for proportion data under the Beta distribution.
-Supports either the mean–precision parameterization (default) or the standard
+Supports either the mean-precision parameterization (default) or the standard
 shape parameterization. In both cases, a single global set of shape parameters is
 estimated from the data using the method of moments. Each observation can be
 weighted via \code{weights}.

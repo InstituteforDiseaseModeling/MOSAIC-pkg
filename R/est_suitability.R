@@ -57,7 +57,7 @@
 #'   `train_prop`, `exclude_covariates` (ignored with a deprecation message).
 #'
 #' @section Architectures:
-#' \strong{`lstm_v2_hierarchical_film` (default, v0.34) — hierarchical-FiLM LSTM,
+#' \strong{`lstm_v2_hierarchical_film` (default, v0.34) -- hierarchical-FiLM LSTM,
 #' rolling-origin CV.} A 3-stack LSTM trunk (128->64->32 units, recurrent dropout)
 #' maps the weekly covariate window (`timesteps=13`) to a shared climate-response
 #' latent `z`. Country/region identity modulates `z` via hierarchical FiLM: a
@@ -67,7 +67,7 @@
 #' `gamma` use \code{tanh} (gain in `[0,2]`, identity at init); an L2 partial-pool
 #' penalty shrinks data-sparse countries toward their region. A sigmoid head
 #' outputs psi in `[0,1]`. Trained with BCE loss under `balanced_uniform` sample
-#' weights (correcting the zero-week imbalance — ~72% of all-MOSAIC training
+#' weights (correcting the zero-week imbalance -- ~72% of all-MOSAIC training
 #' weeks are zero, higher per high-incidence country) plus an optional per-row
 #' confidence-weight overlay. Training uses expanding-window rolling-origin CV
 #' (each step validates strictly forward in time with a 4-week embargo,
@@ -81,11 +81,11 @@
 #' \emph{Honest framing.} lstm_v2 converts a structurally-collapsed flat psi
 #' (Pearson ~0.09, ~3\% of observed amplitude) into a weak-but-real, better-phased
 #' directional signal (median cross-country Pearson ~0.22, but a wide per-cell
-#' range with a large anti-correlated minority — psi can be worse than climatology
+#' range with a large anti-correlated minority -- psi can be worse than climatology
 #' for some countries). It strictly dominates the incumbent on shape; it is NOT a
 #' decision-grade forecaster. psi reaches the downstream LASER engine through TWO
-#' channels — a fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and
-#' the absolute level (environmental-reservoir decay) — so the response anchor and
+#' channels -- a fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and
+#' the absolute level (environmental-reservoir decay) -- so the response anchor and
 #' `bias_correct` can move outbreak magnitude, not just timing. Report the
 #' per-country spread, not just the median. The v0.34.0 defaults
 #' (`response_var="transmission_intensity"`, `region_map="snf_k5"`,
@@ -93,7 +93,7 @@
 #' psi->LASER case-skill experiment; `snf_k5` ships unvalidated as a FiLM region
 #' map and reverts to `"csv"` if it does not beat it.
 #'
-#' \strong{`lstm_v1_legacy` (v0.33, frozen) — shared LSTM, random split +
+#' \strong{`lstm_v1_legacy` (v0.33, frozen) -- shared LSTM, random split +
 #' sequential fine-tuning.} A single 3-stack LSTM (128->64->32) with no
 #' country/region identity (one shared model for all countries). Trained on a
 #' random 60/40 split across all weeks with MSE on the logit-transformed target,
@@ -101,7 +101,7 @@
 #' tunable; legacy knobs are hard-coded internally). \strong{Retained only for
 #' reproducibility/rollback.} Known limitation: the random split places
 #' temporally-adjacent weeks on both sides of the train/val boundary, so the
-#' out-of-sample forecast collapses in amplitude — the failure lstm_v2 fixes.
+#' out-of-sample forecast collapses in amplitude -- the failure lstm_v2 fixes.
 #'
 #' @section Migration (reproduce v0.33 production behavior):
 #' The v0.34 defaults flip `response_var` to `"transmission_intensity"` and
@@ -265,14 +265,14 @@ est_suitability <- function(PATHS,
 
 
 # =============================================================================
-# .est_suitability_legacy() — frozen v0.33 shared-LSTM path.
+# .est_suitability_legacy() -- frozen v0.33 shared-LSTM path.
 #
 # This is a VERBATIM cut of the v0.33 est_suitability() body. The six v0.33
 # process knobs are hard-coded as local constants below (the legacy path is not
 # tunable); `bias_correct` drives the v0.33 `calibrate` switch, and
 # `exclude_covariates` is fixed at NULL (its v0.33 default: derived from
 # feature_set). Everything from "# All required packages loaded via NAMESPACE"
-# onward is unchanged v0.33 source — see the legacy-parity test.
+# onward is unchanged v0.33 source -- see the legacy-parity test.
 # =============================================================================
 
 #' @keywords internal
@@ -341,7 +341,7 @@ est_suitability <- function(PATHS,
      # cases as log1p(cases) / log1p(cases_99th). When `response_var` names a
      # pre-computed [0,1] column already present in the suitability CSV (e.g.,
      # `target_C_rate_global`, `target_A_count_global`, `target_F_rank_per_country`
-     # — set by compile_suitability_data() with anchors on trusted/non-AI rows),
+     # -- set by compile_suitability_data() with anchors on trusted/non-AI rows),
      # use that column directly and skip the cases-based recomputation. In both
      # cases the final column is named `transmission_intensity` for downstream
      # compatibility.
@@ -370,7 +370,7 @@ est_suitability <- function(PATHS,
           y_max <- max(d_all$transmission_intensity, na.rm = TRUE)
           if (is.finite(y_min) && is.finite(y_max) && (y_min < 0 || y_max > 1)) {
                warning(sprintf(
-                    "response_var '%s' had values outside [0,1] (range %.3g–%.3g); clamping",
+                    "response_var '%s' had values outside [0,1] (range %.3g\u2013%.3g); clamping",
                     response_var, y_min, y_max))
                d_all$transmission_intensity <- pmax(0, pmin(1, d_all$transmission_intensity))
           }
@@ -929,7 +929,7 @@ est_suitability <- function(PATHS,
 
                # Targets must be on the same logit scale as the first split's
                # training (the model output head is `activation = "linear",
-               # name = "logit_head"` — see L580). Feeding raw [0,1]
+               # name = "logit_head"` -- see L580). Feeding raw [0,1]
                # probabilities here would push the head to fit values in
                # [0,1], silently undoing the first split's training across
                # every subsequent fine-tune iteration.
@@ -1068,7 +1068,7 @@ est_suitability <- function(PATHS,
      train_pred_logit <- as.numeric(predict(model, X_train_reshaped))
      pred_pred_logit <- as.numeric(predict(model, X_pred_all_reshaped))
 
-     # Clip logits to prevent extreme predictions (±6 allows up to 99.75% confidence)
+     # Clip logits to prevent extreme predictions (+/-6 allows up to 99.75% confidence)
      train_pred_sequences <- plogis(pmax(-6, pmin(6, train_pred_logit)))
      pred_pred_sequences <- plogis(pmax(-6, pmin(6, pred_pred_logit)))
 

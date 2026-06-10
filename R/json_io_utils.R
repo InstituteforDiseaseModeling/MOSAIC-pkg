@@ -254,9 +254,9 @@ validate_priors_json <- function(priors_object, verbose = TRUE) {
 
   if (verbose) {
     if (issues_found) {
-      message("⚠ Priors JSON has formatting issues but is structurally valid")
+      message("\u26A0 Priors JSON has formatting issues but is structurally valid")
     } else {
-      message("✓ Priors JSON structure is valid and well-formatted")
+      message("\u2713 Priors JSON structure is valid and well-formatted")
     }
   }
 
@@ -306,7 +306,7 @@ clean_priors_json <- function(input_path, output_path = input_path, backup = TRU
                                "posteriors", "priors"),
                   validate = FALSE)
 
-  message("✓ Cleaned JSON written to: ", output_path)
+  message("\u2713 Cleaned JSON written to: ", output_path)
 
   # Validate the result
   tryCatch({
@@ -371,6 +371,6 @@ batch_clean_json <- function(pattern, path = ".", dry_run = FALSE) {
     })
   }
 
-  message("\n✓ Successfully cleaned ", length(cleaned), " file(s)")
+  message("\n\u2713 Successfully cleaned ", length(cleaned), " file(s)")
   invisible(cleaned)
 }

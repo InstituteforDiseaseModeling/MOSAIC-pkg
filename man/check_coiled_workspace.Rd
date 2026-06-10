@@ -39,7 +39,7 @@ Coiled can see in your workspace. The Azure subnet IP heuristic is
 a best-effort warning: Coiled's API doesn't expose subnet usage
 from OTHER tenants on the same VNet, so the IP count is a lower
 bound on actual consumption. A clean Coiled view here does NOT
-guarantee that the next large cluster will provision — a noisy
+guarantee that the next large cluster will provision -- a noisy
 tenant in the same subnet could still cause SubnetIsFull. For the
 authoritative view, query Azure directly (requires Azure CLI +
 resource-group read access):

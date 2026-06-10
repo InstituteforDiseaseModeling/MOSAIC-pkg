@@ -240,7 +240,7 @@ sample_parameters <- function(
   }
 
   # Extract sampling flags from function arguments
-  sampling_flags <- extract_sampling_flags(environment())
+  sampling_flags <- .extract_sampling_flags(environment())
 
   # Create a copy of config to modify
   config_sampled <- config
@@ -258,7 +258,7 @@ sample_parameters <- function(
   }
 
   # Sample global parameters
-  config_sampled <- sample_global_parameters_impl(
+  config_sampled <- .sample_global_parameters_impl(
     config_sampled,
     priors$parameters_global,
     sampling_flags,
@@ -277,7 +277,7 @@ sample_parameters <- function(
   }
 
   # Sample location-specific parameters
-  config_sampled <- sample_location_parameters_impl(
+  config_sampled <- .sample_location_parameters_impl(
     config_sampled,
     priors$parameters_location,
     locations,
@@ -287,7 +287,7 @@ sample_parameters <- function(
 
   # Sample and normalize initial conditions if requested
   if (sample_initial_conditions) {
-    config_sampled <- sample_initial_conditions_impl(
+    config_sampled <- .sample_initial_conditions_impl(
       config_sampled,
       priors$parameters_location,
       locations,
@@ -297,7 +297,7 @@ sample_parameters <- function(
   }
 
   # Apply psi_star calibration to psi_jt matrix if psi_star parameters were sampled
-  config_sampled <- apply_psi_star_calibration(config_sampled, sampling_flags, verbose)
+  config_sampled <- .apply_psi_star_calibration(config_sampled, sampling_flags, verbose)
 
   # Update seed in config
   config_sampled$seed <- seed
@@ -329,7 +329,7 @@ sample_parameters <- function(
 
 #' Extract sampling flags from function environment
 #' @noRd
-extract_sampling_flags <- function(env) {
+.extract_sampling_flags <- function(env) {
   # Get all objects from the environment
   all_vars <- ls(env)
 
@@ -354,7 +354,7 @@ extract_sampling_flags <- function(env) {
 
 #' Format value for verbose output
 #' @noRd
-format_verbose_value <- function(value) {
+.format_verbose_value <- function(value) {
   if (is.null(value)) return("NULL")
   if (length(value) == 1) {
     if (is.na(value)) return("NA")
@@ -369,20 +369,20 @@ format_verbose_value <- function(value) {
   # Vector formatting
   n <- length(value)
   if (n <= 4) {
-    formatted <- format_numeric_vector(value)
+    formatted <- .format_numeric_vector(value)
     return(paste0("[", paste(formatted, collapse = ", "), "]"))
   }
 
   # Show first 3 and last for long vectors
-  first <- format_numeric_vector(value[1:3])
-  last <- format_numeric_vector(value[n])
+  first <- .format_numeric_vector(value[1:3])
+  last <- .format_numeric_vector(value[n])
   return(paste0("[", paste(first, collapse = ", "),
                 ", ... (n=", n, "), ", last, "]"))
 }
 
 #' Helper to format numeric vectors consistently
 #' @noRd
-format_numeric_vector <- function(vals) {
+.format_numeric_vector <- function(vals) {
   sapply(vals, function(v) {
     if (is.na(v)) return("NA")
     if (!is.numeric(v)) return(as.character(v))
@@ -395,7 +395,7 @@ format_numeric_vector <- function(vals) {
 
 #' Sample global parameters implementation
 #' @noRd
-sample_global_parameters_impl <- function(config_sampled, global_params,
+.sample_global_parameters_impl <- function(config_sampled, global_params,
                                          sampling_flags, verbose) {
 
   if (verbose) cat("Processing global parameters...\n")
@@ -424,14 +424,14 @@ sample_global_parameters_impl <- function(config_sampled, global_params,
 
       if (verbose) {
         cat("  - Sampling:", param_name, "=",
-            format_verbose_value(sampled_value), "\n")
+            .format_verbose_value(sampled_value), "\n")
       }
 
     } else {
       if (verbose) {
         default_value <- config_sampled[[param_name]]
         cat("  - Keeping default:", param_name, "=",
-            format_verbose_value(default_value), "\n")
+            .format_verbose_value(default_value), "\n")
       }
       # Verify the parameter exists in config
       if (!(param_name %in% names(config_sampled))) {
@@ -446,7 +446,7 @@ sample_global_parameters_impl <- function(config_sampled, global_params,
 
 #' Sample location-specific parameters implementation
 #' @noRd
-sample_location_parameters_impl <- function(config_sampled, location_params,
+.sample_location_parameters_impl <- function(config_sampled, location_params,
                                            locations, sampling_flags, verbose) {
 
   if (verbose) cat("\nProcessing location-specific parameters...\n")
@@ -464,7 +464,7 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
     # IC proportions are governed by the sample_initial_conditions flag
     if (param_name %in% ic_prop_names) {
-      should_sample <- FALSE  # Never sample here — handled by sample_initial_conditions_impl
+      should_sample <- FALSE  # Never sample here -- handled by .sample_initial_conditions_impl
     }
 
     # Default to TRUE if flag not found (for backward compatibility)
@@ -539,14 +539,14 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 
       if (verbose) {
         cat("  - Sampling:", param_name, "=",
-            format_verbose_value(sampled_values), "\n")
+            .format_verbose_value(sampled_values), "\n")
       }
 
     } else {
       if (verbose) {
         default_values <- config_sampled[[param_name]]
         cat("  - Keeping defaults:", param_name, "=",
-            format_verbose_value(default_values), "\n")
+            .format_verbose_value(default_values), "\n")
       }
 
       if (!(param_name %in% names(config_sampled))) {
@@ -576,8 +576,8 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
     }
 
     if (verbose) {
-      cat("  - Derived beta_j0_hum =", format_verbose_value(config_sampled$beta_j0_hum), "\n")
-      cat("  - Derived beta_j0_env =", format_verbose_value(config_sampled$beta_j0_env), "\n")
+      cat("  - Derived beta_j0_hum =", .format_verbose_value(config_sampled$beta_j0_hum), "\n")
+      cat("  - Derived beta_j0_env =", .format_verbose_value(config_sampled$beta_j0_env), "\n")
     }
   }
 
@@ -594,7 +594,7 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
     config_sampled$zeta_2 <- config_sampled$zeta_1 / config_sampled$zeta_ratio
 
     if (verbose) {
-      cat("  - Derived zeta_2 =", format_verbose_value(config_sampled$zeta_2), "\n")
+      cat("  - Derived zeta_2 =", .format_verbose_value(config_sampled$zeta_2), "\n")
     }
   }
 
@@ -605,19 +605,19 @@ sample_location_parameters_impl <- function(config_sampled, location_params,
 #'
 #' Sample initial condition proportions and convert to counts with normalization
 #' @noRd
-sample_initial_conditions_impl <- function(config_sampled, location_params,
+.sample_initial_conditions_impl <- function(config_sampled, location_params,
                                           locations, ic_moment_match = FALSE,
                                           verbose = FALSE) {
   if (verbose) cat("\nProcessing initial conditions...\n")
 
   # Sample proportions for each compartment
-  sampled_props <- sample_ic_proportions(location_params, locations, verbose)
+  sampled_props <- .sample_ic_proportions(location_params, locations, verbose)
 
   # Moment-match: override E and I proportions using observed week-1 cases
   # and the already-sampled reporting chain parameters
 
   if (isTRUE(ic_moment_match)) {
-    sampled_props <- moment_match_E_I(config_sampled, sampled_props, locations, verbose)
+    sampled_props <- .moment_match_E_I(config_sampled, sampled_props, locations, verbose)
   }
 
   # Update prop_*_initial fields to match the final normalized proportions
@@ -630,14 +630,14 @@ sample_initial_conditions_impl <- function(config_sampled, location_params,
   }
 
   # Normalize and convert to counts
-  config_sampled <- props_to_counts(config_sampled, sampled_props, locations, verbose)
+  config_sampled <- .props_to_counts(config_sampled, sampled_props, locations, verbose)
 
   return(config_sampled)
 }
 
 #' Sample initial condition proportions
 #' @noRd
-sample_ic_proportions <- function(location_params, locations, verbose) {
+.sample_ic_proportions <- function(location_params, locations, verbose) {
      n_locations <- length(locations)
 
      # Define IC compartments - NOTE: S is calculated/adjusted, not sampled
@@ -707,7 +707,7 @@ sample_ic_proportions <- function(location_params, locations, verbose) {
 
           if (verbose) {
                cat("  - Sampling:", param_name, "=",
-                   format_verbose_value(sampled_values), "\n")
+                   .format_verbose_value(sampled_values), "\n")
           }
      }
 
@@ -733,7 +733,7 @@ sample_ic_proportions <- function(location_params, locations, verbose) {
                # Overfull case: set S=0, normalize the others to sum to 1
                sampled_props[j, "S"] <- 0
                if (other_sum == 0) {
-                    # Degenerate (all zeros) — put all mass in S (rare, but safe-guard)
+                    # Degenerate (all zeros) -- put all mass in S (rare, but safe-guard)
                     sampled_props[j, ic_compartments_sample] <- 0
                     sampled_props[j, "S"] <- 1
                } else {
@@ -764,7 +764,7 @@ sample_ic_proportions <- function(location_params, locations, verbose) {
 
      # Verbose preview (first few locations)
      if (verbose) {
-          cat("  ✓ Initial conditions sampled and constrained\n")
+          cat("  \u2713 Initial conditions sampled and constrained\n")
 
           cat("\n  Summary of initial conditions (first up to 3 locations):\n")
           for (j in 1:min(3, n_locations)) {
@@ -795,7 +795,7 @@ sample_ic_proportions <- function(location_params, locations, verbose) {
 #' @param verbose Logical for progress messages.
 #' @return Updated sampled_props matrix with moment-matched E and I.
 #' @noRd
-moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) {
+.moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) {
 
   # Extract reporting chain parameters (already sampled)
   sigma       <- config_sampled$sigma        # symptomatic fraction
@@ -926,7 +926,7 @@ moment_match_E_I <- function(config_sampled, sampled_props, locations, verbose) 
 
 #' Convert proportions to counts
 #' @noRd
-props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
+.props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
   if (verbose) cat("  - Converting to counts...\n")
 
   N_j <- config_sampled$N_j_initial
@@ -976,7 +976,7 @@ props_to_counts <- function(config_sampled, sampled_props, locations, verbose) {
   stopifnot(all(rowSums(counts_mat) == N_j))
 
   if (verbose) {
-    cat("  ✓ Initial conditions sampled and normalized\n")
+    cat("  \u2713 Initial conditions sampled and normalized\n")
 
     # Show detailed summary with full precision proportions and integer counts
     cat("\n  Summary of initial conditions:\n")
@@ -1064,17 +1064,17 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 
   # Validate using schema
   for (param in schema$global$params) {
-    issue <- validate_parameter(config_sampled, param, "scalar", n_locations)
+    issue <- .validate_parameter(config_sampled, param, "scalar", n_locations)
     if (!is.null(issue)) {
-      if (verbose) cat("  ⚠", issue, "\n")
+      if (verbose) cat("  \u26A0", issue, "\n")
       valid <- FALSE
     }
   }
 
   for (param in schema$location$params) {
-    issue <- validate_parameter(config_sampled, param, "vector", n_locations)
+    issue <- .validate_parameter(config_sampled, param, "vector", n_locations)
     if (!is.null(issue)) {
-      if (verbose) cat("  ⚠", issue, "\n")
+      if (verbose) cat("  \u26A0", issue, "\n")
       valid <- FALSE
     }
   }
@@ -1086,13 +1086,13 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       vals <- config_sampled[[param]]
       if (bounds[3]) {  # inclusive min
         if (any(vals < bounds[1] | vals > bounds[2], na.rm = TRUE)) {
-          if (verbose) cat("  ⚠", param, "contains values outside [",
+          if (verbose) cat("  \u26A0", param, "contains values outside [",
                           bounds[1], ",", bounds[2], "]\n")
           valid <- FALSE
         }
       } else {  # exclusive min
         if (any(vals <= bounds[1] | vals > bounds[2], na.rm = TRUE)) {
-          if (verbose) cat("  ⚠", param, "contains non-positive values\n")
+          if (verbose) cat("  \u26A0", param, "contains non-positive values\n")
           valid <- FALSE
         }
       }
@@ -1100,8 +1100,8 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   }
 
   if (verbose) {
-    cat(ifelse(valid, "  ✓ Config validation passed!\n",
-               "  ✗ Config validation failed - see warnings above\n"))
+    cat(ifelse(valid, "  \u2713 Config validation passed!\n",
+               "  \u2717 Config validation failed - see warnings above\n"))
   }
 
   return(valid)
@@ -1109,7 +1109,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 
 #' Helper to validate a single parameter
 #' @noRd
-validate_parameter <- function(config, param, type, n_locations) {
+.validate_parameter <- function(config, param, type, n_locations) {
   if (!(param %in% names(config))) {
     return(paste("Missing", ifelse(type == "scalar", "global", "location"),
                  "parameter:", param))
@@ -1157,7 +1157,7 @@ validate_parameter <- function(config, param, type, n_locations) {
 #' - Updates psi_jt matrix in-place for memory efficiency
 #'
 #' @noRd
-apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose = FALSE) {
+.apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose = FALSE) {
 
   # ============================================================================
   # Check if calibration should be applied
@@ -1169,7 +1169,7 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
   psi_star_flags_exist <- psi_star_params %in% names(sampling_flags)
 
   if (!any(psi_star_flags_exist)) {
-    if (verbose) cat("  ℹ No psi_star sampling flags found, skipping calibration\n")
+    if (verbose) cat("  \u2139 No psi_star sampling flags found, skipping calibration\n")
     return(config_sampled)
   }
 
@@ -1177,13 +1177,13 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
   psi_star_enabled <- any(unlist(sampling_flags[psi_star_params[psi_star_flags_exist]]))
 
   if (!psi_star_enabled) {
-    if (verbose) cat("  ℹ No psi_star parameters were enabled for sampling, skipping calibration\n")
+    if (verbose) cat("  \u2139 No psi_star parameters were enabled for sampling, skipping calibration\n")
     return(config_sampled)
   }
 
   # Check if psi_jt matrix exists
   if (!"psi_jt" %in% names(config_sampled)) {
-    if (verbose) cat("  ⚠ psi_jt matrix not found in config, skipping psi_star calibration\n")
+    if (verbose) cat("  \u26A0 psi_jt matrix not found in config, skipping psi_star calibration\n")
     return(config_sampled)
   }
 
@@ -1193,7 +1193,7 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
     return(config_sampled)
   }
 
-  if (verbose) cat("\n🎯 Applying psi_star calibration to psi_jt matrix...\n")
+  if (verbose) cat("\n\U0001F3AF Applying psi_star calibration to psi_jt matrix...\n")
 
   # ============================================================================
   # Setup calibration data
@@ -1205,7 +1205,7 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
   n_days <- ncol(psi_original)
 
   if (verbose) {
-    cat("  Matrix dimensions:", n_locations, "locations ×", n_days, "days\n")
+    cat("  Matrix dimensions:", n_locations, "locations \u00D7", n_days, "days\n")
   }
 
   # Validate matrix dimensions
@@ -1331,7 +1331,7 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
       if (verbose && n_calibrated <= 3) {
         cat("  -", iso, ": a=", round(a,3), ", b=", round(b,3),
             ", z=", round(z,3), ", k=", round(k,1), "\n")
-        cat("    Range: [", round(orig_min, 4), ",", round(orig_max, 4), "] → [",
+        cat("    Range: [", round(orig_min, 4), ",", round(orig_max, 4), "] \u2192 [",
             round(cal_min, 4), ",", round(cal_max, 4), "]\n")
       }
 
@@ -1348,11 +1348,11 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
 
   if (verbose) {
     if (n_calibrated > 0) {
-      cat("  ✓ Successfully calibrated", n_calibrated, "of", n_locations, "locations\n")
+      cat("  \u2713 Successfully calibrated", n_calibrated, "of", n_locations, "locations\n")
 
       # Overall transformation statistics
       psi_final <- config_sampled$psi_jt
-      cat("  📊 Overall psi_jt transformation:\n")
+      cat("  \U0001F4CA Overall psi_jt transformation:\n")
       cat("     Original range: [", round(min(psi_original, na.rm=TRUE), 4),
           ",", round(max(psi_original, na.rm=TRUE), 4), "]\n")
       cat("     Calibrated range: [", round(min(psi_final, na.rm=TRUE), 4),
@@ -1360,7 +1360,7 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
 
       # Parameter usage summary
       if (nrow(calibration_effects) > 0) {
-        cat("  📈 Parameter ranges used:\n")
+        cat("  \U0001F4C8 Parameter ranges used:\n")
         cat("     psi_star_a: [", round(min(calibration_effects$a), 3),
             ",", round(max(calibration_effects$a), 3), "]\n")
         cat("     psi_star_b: [", round(min(calibration_effects$b), 3),
@@ -1373,14 +1373,14 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
     }
 
     if (n_failed > 0) {
-      cat("  ⚠", n_failed, "locations failed calibration:",
+      cat("  \u26A0", n_failed, "locations failed calibration:",
           paste(head(failed_locations, 5), collapse=", "))
       if (n_failed > 5) cat(" (and", n_failed - 5, "more)")
       cat("\n")
     }
 
     if (n_calibrated == 0) {
-      cat("  ⚠ No locations were successfully calibrated\n")
+      cat("  \u26A0 No locations were successfully calibrated\n")
     }
   }
 
@@ -1389,7 +1389,7 @@ apply_psi_star_calibration <- function(config_sampled, sampling_flags, verbose =
 
 #' Get all sampling parameters with defaults
 #' @noRd
-get_all_sampling_params <- function() {
+.get_all_sampling_params <- function() {
   # Extract from function formals
   formals_list <- formals(sample_parameters)
 
@@ -1450,7 +1450,7 @@ create_sampling_args <- function(pattern = "all",
   }
 
   # Get all sampling parameters using function formals
-  all_params <- get_all_sampling_params()
+  all_params <- .get_all_sampling_params()
 
   # Apply pattern
   if (pattern == "all") {

@@ -1,7 +1,7 @@
 #' Process Combined Weekly and Daily Cholera Surveillance Data with Truly Square Data Structure
 #'
 #' This function reads the processed weekly cholera data from WHO, JHU, and supplemental (SUPP) sources,
-#' labels each record by its source, combines them (removing duplicate country–week entries according to
+#' labels each record by its source, combines them (removing duplicate country-week entries according to
 #' the specified source preference), creates a truly square data structure with all country-week combinations
 #' from min to max date across the entire dataset, and downscales the combined weekly totals to a daily time series 
 #' using \code{MOSAIC::downscale_weekly_values} with integer allocation.
@@ -14,7 +14,7 @@
 #'   \item \strong{DATA_CHOLERA_WEEKLY}: Directory where the combined weekly output will be saved.
 #'   \item \strong{DATA_CHOLERA_DAILY}: Directory where the combined daily output will be saved.
 #' }
-#' @details Duplicate country–week entries across sources are resolved by a fixed
+#' @details Duplicate country-week entries across sources are resolved by a fixed
 #'   priority \strong{WHO > JHU > AI > SUPP}, with a completeness tie-break: within
 #'   a key, rows with complete cases AND deaths are preferred before the source
 #'   priority is applied.
@@ -90,7 +90,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
 
      # Interlock: AI rows carry confidence_weight, but downstream consumers
      # (LSTM loss, calibration likelihood) do NOT yet multiply by it. Until that
-     # lands, AI rows — including synthetic fourier reconstructions — would train
+     # lands, AI rows -- including synthetic fourier reconstructions -- would train
      # at parity with direct observations in the suitability/LSTM path. Warn loudly.
      if (isTRUE(include_ai) && !is.null(d_ai)) {
           warning(sprintf(
@@ -219,7 +219,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # Sort by country and date for clean output
      wk <- wk[order(wk$iso_code, wk$year, wk$week), ]
      
-     message(sprintf("Created truly square data structure: %d total observations (%d countries × %d weeks)", 
+     message(sprintf("Created truly square data structure: %d total observations (%d countries \u00D7 %d weeks)", 
                      nrow(wk), 
                      length(all_countries), 
                      length(all_monday_dates)))
@@ -275,7 +275,7 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      daily_reported <- sum(!is.na(daily_all$cases))
      daily_missing <- sum(is.na(daily_all$cases))
      
-     message(sprintf("Created truly square daily data structure: %d total observations (%d countries × %d days)", 
+     message(sprintf("Created truly square daily data structure: %d total observations (%d countries \u00D7 %d days)", 
                      nrow(daily_all), daily_countries, daily_days))
      message(sprintf("  - %d reported daily observations (%.1f%%)", 
                      daily_reported, 100 * daily_reported / nrow(daily_all)))

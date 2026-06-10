@@ -458,7 +458,7 @@ plot_CFR_hierarchical <- function(
             ) +
             ggplot2::labs(
                 title = "All MOSAIC Countries: Historical CFR vs. 2024 Model Predictions",
-                subtitle = "Gray bars: historical mean ± SD | Points: 2024 model predictions",
+                subtitle = "Gray bars: historical mean \u00B1 SD | Points: 2024 model predictions",
                 x = "",
                 y = "Case Fatality Rate (%)",
                 caption = sprintf("Total: %d countries | With historical data: %d | Population average: %d",
@@ -668,7 +668,7 @@ plot_CFR_hierarchical <- function(
             # Labels
             ggplot2::labs(
                 title = sprintf("All MOSAIC Countries CFR Trends (Page %d of %d)", page, n_all_pages),
-                subtitle = paste("Solid lines: Countries with sufficient data (≥20 cases) | ",
+                subtitle = paste("Solid lines: Countries with sufficient data (\u226520 cases) | ",
                                "Dashed lines: Population-average estimates\n",
                                "Points indicate years with observed data"),
                 x = "Year",

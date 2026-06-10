@@ -173,7 +173,7 @@ grid_search_best_subset <- function(
     # Check convergence (all three criteria must be met)
     if (ESS >= target_ESS && A >= target_A && CVw <= target_CVw) {
       if (verbose) {
-        cat(sprintf("  ✓ Converged at n=%d after %d evaluations\n", n, evaluations))
+        cat(sprintf("  \u2713 Converged at n=%d after %d evaluations\n", n, evaluations))
       }
 
       return(list(
@@ -221,7 +221,7 @@ grid_search_best_subset <- function(
   CVw_max <- calc_model_cvw(w_max_unnorm)
 
   if (verbose) {
-    cat(sprintf("  ✗ No convergence after %d evaluations (max_size=%d reached)\n",
+    cat(sprintf("  \u2717 No convergence after %d evaluations (max_size=%d reached)\n",
                 evaluations, max_size))
     cat(sprintf("    Final: ESS=%.1f (target=%.1f), A=%.3f (target=%.3f), CVw=%.3f (target=%.3f)\n",
                 ESS_max, target_ESS, A_max, target_A, CVw_max, target_CVw))

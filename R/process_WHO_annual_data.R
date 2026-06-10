@@ -26,7 +26,7 @@
 #'         and ALL files matching \code{cholera_adm0_public_*.csv} in the
 #'         dashboard directory are ingested. Each row's actual coverage is
 #'         derived from \code{first_epiwk} / \code{last_epiwk} (rolling
-#'         snapshots cross calendar-year boundaries — see the year-labeling
+#'         snapshots cross calendar-year boundaries -- see the year-labeling
 #'         note below).
 #' }
 #'
@@ -47,7 +47,7 @@
 #'
 #' Outputs (in \code{PATHS$DATA_WHO_ANNUAL}):
 #' \itemize{
-#'   \item \code{who_afro_annual.csv} — current full series, columns
+#'   \item \code{who_afro_annual.csv} -- current full series, columns
 #'         \code{country, iso_code, region, year, cases_total,
 #'         cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk,
 #'         last_epiwk, coverage_days, year_fraction, source}.
@@ -111,7 +111,7 @@ process_WHO_annual_data <- function(PATHS) {
      cholera_data_1949_2021$source         <- "OWiD"
 
      ################################################################################
-     # 2. 2022 — manually transcribed from the WHO annual cholera PDF
+     # 2. 2022 -- manually transcribed from the WHO annual cholera PDF
      ################################################################################
 
      message("Processing WHO cholera data for 2022 (manual extraction)...")
@@ -141,12 +141,12 @@ process_WHO_annual_data <- function(PATHS) {
      )
 
      ################################################################################
-     # 3. 2023+ — WHO Global Cholera & AWD dashboard (ArcGIS)
+     # 3. 2023+ -- WHO Global Cholera & AWD dashboard (ArcGIS)
      ################################################################################
 
      message("Processing WHO cholera data from 2023 onward (dashboard)...")
 
-     # Live dashboard URL (rolling — content changes over time as the dashboard
+     # Live dashboard URL (rolling -- content changes over time as the dashboard
      # updates). We archive each download by snapshot date so historical
      # snapshots are preserved.
      dashboard_url <- "https://who.maps.arcgis.com/sharing/rest/content/items/3aa7bfec5da047a7ba7d4f9bcebd0061/data"
@@ -189,7 +189,7 @@ process_WHO_annual_data <- function(PATHS) {
                              "first_epiwk", "last_epiwk", "case_total", "death_total")
           missing_cols <- setdiff(required_cols, colnames(df))
           if (length(missing_cols)) {
-               warning(sprintf("Skipping %s — missing columns: %s",
+               warning(sprintf("Skipping %s \u2014 missing columns: %s",
                                basename(path), paste(missing_cols, collapse = ", ")))
                return(NULL)
           }

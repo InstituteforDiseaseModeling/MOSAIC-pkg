@@ -217,7 +217,7 @@ plot_model_parameters <- function(results,
      if (!is.null(n_sim) && !is.null(n_iter)) {
           subtitle_text <- paste0("N = ", n_successful, " successful / ",
                                   n_sim * n_iter, " total (",
-                                  n_sim, " simulations × ", n_iter, " iterations)")
+                                  n_sim, " simulations \u00D7 ", n_iter, " iterations)")
      } else if (!is.null(n_sim)) {
           subtitle_text <- paste0("N = ", n_successful, " successful / ",
                                   n_total, " total simulations")

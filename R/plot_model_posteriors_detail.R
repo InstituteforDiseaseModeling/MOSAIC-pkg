@@ -271,14 +271,14 @@ plot_model_posteriors_detail <- function(quantiles_file,
     # Generate parameter name variants to handle naming inconsistencies
     param_variants <- c(param_name)
 
-    # Add underscore variants for seasonality params (a1 → a_1_j)
+    # Add underscore variants for seasonality params (a1 -> a_1_j)
     if (grepl("^[ab]\\d$", param_name)) {
       base <- substr(param_name, 1, 1)
       num <- substr(param_name, 2, 2)
       param_variants <- c(param_variants, paste0(base, "_", num, "_j"))
     }
 
-    # Add non-underscore variants (a_1_j → a1)
+    # Add non-underscore variants (a_1_j -> a1)
     if (grepl("^[ab]_\\d_j$", param_name)) {
       param_variants <- c(param_variants,
                          gsub("_j$", "", gsub("_", "", param_name)))
@@ -1111,7 +1111,7 @@ plot_model_posteriors_detail <- function(quantiles_file,
   }
 
   if (verbose) {
-    cat("\n✓ Successfully created detailed posterior distribution plots\n")
+    cat("\n\u2713 Successfully created detailed posterior distribution plots\n")
     cat("  Output directory:", output_subdir, "\n")
   }
 

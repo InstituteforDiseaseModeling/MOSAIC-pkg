@@ -22,7 +22,7 @@
 \item{phase}{Short slug for the \code{phase=} field of the progress line
 (e.g. \code{"calibration_batch"}, \code{"postca_ensemble"}).}
 
-\item{interval_sec}{Heartbeat interval. Defaults to 30 s — long enough that
+\item{interval_sec}{Heartbeat interval. Defaults to 30 s -- long enough that
 the log isn't spammed during fast gathers, short enough that a hung
 gather is detected within a minute.}
 }
@@ -43,10 +43,10 @@ wake on completion-or-timeout. That API raises \code{TimeoutError} on
 timeout (it does NOT return a \code{DoneAndNotDoneFutures} as the docs
 suggest at first read), which aborted the gather on the very first
 heartbeat. We now poll \code{future.status} from Python in a single batched
-call (cheap — the status is mirrored locally from scheduler push updates,
+call (cheap -- the status is mirrored locally from scheduler push updates,
 no round-trip per future) and sleep between iterations.
 
-On gather error the helper does NOT swallow — it lets the caller's tryCatch
+On gather error the helper does NOT swallow -- it lets the caller's tryCatch
 handle diagnostics (first-future status inspection).
 }
 \keyword{internal}

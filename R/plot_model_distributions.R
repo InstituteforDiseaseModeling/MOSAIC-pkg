@@ -279,7 +279,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
   # Distributions whose effective support (q_0.01, q_0.99) spans less than
   # this many decades on a log-x axis are rendered as a vertical line at
-  # the median rather than a narrow density spike — the latter would
+  # the median rather than a narrow density spike -- the latter would
   # dominate the y-axis and visually erase wider prior/posterior curves.
   log_scale_point_decades <- 0.05
 
@@ -416,7 +416,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
             x <- NULL
             y <- NULL
           } else {
-            # Very lenient filtering: keep points with density > 1e-12 × max
+            # Very lenient filtering: keep points with density > 1e-12 x max
             # This allows plotting of very diffuse/wide distributions with low peak density
             # while still filtering out numerical noise near zero
             keep_idx <- y > max_density * 1e-12
@@ -509,7 +509,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         if (valid_bounds) {
           # For plotting, use finite range based on distribution
           if (is.infinite(a_bound) || is.infinite(b_bound)) {
-            # No truncation or one-sided: use mean ± 4sd (covers ~99.99% of normal dist)
+            # No truncation or one-sided: use mean +/- 4sd (covers ~99.99% of normal dist)
             x_min <- if (is.infinite(a_bound)) mean_param - 4*sd_param else a_bound
             x_max <- if (is.infinite(b_bound)) mean_param + 4*sd_param else b_bound
           } else {
@@ -674,7 +674,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
         plot_data <- rbind(plot_data, method_data_df)
       } else {
         if (verbose) {
-          cat(sprintf("  [FILTERED] %s (%s): Only %d finite points (need ≥5)\n",
+          cat(sprintf("  [FILTERED] %s (%s): Only %d finite points (need \u22655)\n",
                      param_name, method_name, n_finite))
         }
       }
@@ -719,7 +719,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
 
     # Determine x-axis formatting. Params spanning multiple orders of
     # magnitude (lognormal kappa/zeta_*, heavily left-skewed Beta priors on
-    # initial conditions) render better on log10 — mirrors the kappa_prior
+    # initial conditions) render better on log10 -- mirrors the kappa_prior
     # styling in est_kappa_prior.R:375.
     x_scale <- if (param_name %in% log_scale_params) {
       ggplot2::scale_x_log10(labels = scales::label_log())
@@ -732,7 +732,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     # later when the scale is added to the plot.
     add_logticks <- param_name %in% log_scale_params
 
-    # Build base plot — use an empty data frame when only fixed values exist
+    # Build base plot -- use an empty data frame when only fixed values exist
     if (fixed_only) {
       # x range from fixed values; y range 0-1 (arbitrary, no density axis needed)
       fv <- unlist(fixed_values)
@@ -774,7 +774,7 @@ plot_model_distributions <- function(json_files, method_names, output_dir, custo
     # Dashed mode lines: argmax of the density curve as plotted. For
     # log-scale params the curve is the density w.r.t. log10(x) so the
     # mode corresponds to exp(meanlog) for a lognormal (the median of X)
-    # — which is where the visible peak sits. For linear-axis params the
+    # -- which is where the visible peak sits. For linear-axis params the
     # mode corresponds to the classical mode of X (e.g. (s1-1)/(s1+s2-2)
     # for a Beta with s1>1 and s2>1). Drawn for every method so both
     # prior and posterior are marked on every panel.

@@ -265,7 +265,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
 
                          rho_i <- sample_from_prior(n = 1, prior = rho_prior, verbose = FALSE)  # Reporting rate: 5-30%
                          chi_i <- sample_from_prior(n = 1, prior = chi_prior, verbose = FALSE)  # Diagnostic accuracy: 50-75%
-                         tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)  # Reporting delay ~ mean 4, sd ≈ 2.8
+                         tau_r_i <- sample_from_prior(n = 1, prior = tau_r_prior, verbose = FALSE)  # Reporting delay ~ mean 4, sd ~= 2.8
                          #---------------------------------------------------------------------------------
 
                          # Bounds & fallbacks
@@ -527,7 +527,7 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                            loc, E_beta_str, E_mean_str, E_ci_str,
                            I_beta_str, I_mean_str, I_ci_str))
           }
-          cat("\nNote: CIs based on Monte Carlo sample statistics (mean ± 1.96×SD)\n")
+          cat("\nNote: CIs based on Monte Carlo sample statistics (mean \u00B1 1.96\u00D7SD)\n")
      }
 
      return(results)
@@ -645,14 +645,14 @@ est_initial_E_I_location <- function(cases, dates, population, t0, lookback_days
   }
 
   # ---- Back-calculation: reported cases -> true infections ----
-  # True infections = (reported cases × chi) / (rho × sigma)
+  # True infections = (reported cases x chi) / (rho x sigma)
   total_cases <- sum(cases_filtered, na.rm = TRUE)
   multiplier <- chi / (rho * sigma)
   total_infections <- total_cases * multiplier
 
   if (verbose) {
-    cat(sprintf("  Surveillance multiplier: chi/(rho×sigma) = %.1f\n", multiplier))
-    cat(sprintf("  Total infections: %.0f cases × %.1f = %.0f\n",
+    cat(sprintf("  Surveillance multiplier: chi/(rho\u00D7sigma) = %.1f\n", multiplier))
+    cat(sprintf("  Total infections: %.0f cases \u00D7 %.1f = %.0f\n",
                 total_cases, multiplier, total_infections))
   }
 

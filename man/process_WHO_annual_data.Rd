@@ -35,7 +35,7 @@ download is archived to
 and ALL files matching \code{cholera_adm0_public_*.csv} in the
 dashboard directory are ingested. Each row's actual coverage is
 derived from \code{first_epiwk} / \code{last_epiwk} (rolling
-snapshots cross calendar-year boundaries — see the year-labeling
+snapshots cross calendar-year boundaries -- see the year-labeling
 note below).
 }
 
@@ -56,7 +56,7 @@ with the year filter applied). Re-run \code{process_WHO_annual_data()}.
 
 Outputs (in \code{PATHS$DATA_WHO_ANNUAL}):
 \itemize{
-\item \code{who_afro_annual.csv} — current full series, columns
+\item \code{who_afro_annual.csv} -- current full series, columns
 \code{country, iso_code, region, year, cases_total,
         cases_imported, deaths_total, cfr, cfr_lo, cfr_hi, first_epiwk,
         last_epiwk, coverage_days, year_fraction, source}.

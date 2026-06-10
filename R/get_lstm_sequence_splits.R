@@ -205,10 +205,10 @@ get_lstm_sequence_splits <- function(train_sequences,
 
     if (verbose) {
       message(sprintf("  Location-month block split created:"))
-      message(sprintf("    Training: %d blocks → %d sequences (%.1f%%) from %d countries",
+      message(sprintf("    Training: %d blocks \u2192 %d sequences (%.1f%%) from %d countries",
                       split_info$n_train_blocks, split_info$n_train,
                       split_info$train_prop_actual * 100, split_info$n_countries_train))
-      message(sprintf("    Validation: %d blocks → %d sequences (%.1f%%) from %d countries",
+      message(sprintf("    Validation: %d blocks \u2192 %d sequences (%.1f%%) from %d countries",
                       split_info$n_val_blocks, split_info$n_val,
                       (1 - split_info$train_prop_actual) * 100, split_info$n_countries_val))
       message(sprintf("    Actual train proportion: %.3f (target: %.3f)",

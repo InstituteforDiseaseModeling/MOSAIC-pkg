@@ -2,25 +2,25 @@
 % Please edit documentation in R/calc_spatial_correlation_matrix.R
 \name{calc_spatial_correlation_matrix}
 \alias{calc_spatial_correlation_matrix}
-\title{Build the full spatial–correlation matrix across all locations}
+\title{Build the full spatial-correlation matrix across all locations}
 \usage{
 calc_spatial_correlation_matrix(I_sym, I_asym, N)
 }
 \arguments{
-\item{I_sym}{Numeric matrix (J × T).  Symptomatic infections.}
+\item{I_sym}{Numeric matrix (J x T).  Symptomatic infections.}
 
-\item{I_asym}{Numeric matrix (J × T).  Asymptomatic infections.
+\item{I_asym}{Numeric matrix (J x T).  Asymptomatic infections.
 Must have the same dimensions as \code{I_sym}.}
 
 \item{N}{Population sizes. Accepts
 \itemize{
 \item a single scalar (same for every j & t),
 \item a length-J vector (different per location, constant in time), or
-\item a full J × T matrix (time‑varying populations).
+\item a full J x T matrix (time-varying populations).
 }}
 }
 \value{
-A J × J symmetric numeric matrix whose \((i,j)\) entry is
+A J x J symmetric numeric matrix whose \((i,j)\) entry is
 \eqn{\mathcal{C}_{ij}}; diagonal elements are set to 1.
 Pairs that cannot be computed (all \code{NA}, zero variance, etc.) are \code{NA_real_}.
 }
@@ -28,11 +28,11 @@ Pairs that cannot be computed (all \code{NA}, zero variance, etc.) are \code{NA_
 Given LASER simulation outputs, this function constructs the
 \eqn{J \times J} matrix
 \eqn{\mathbf C = [\mathcal{C}_{ij}]} of Pearson
-spatial–correlation coefficients (Keeling & Rohani 2002) for every pair of
+spatial-correlation coefficients (Keeling & Rohani 2002) for every pair of
 locations.
 }
 \details{
-All three input objects must be arranged as (locations J × time T)
+All three input objects must be arranged as (locations J x time T)
 (rows are the J locations; columns are the T time steps).
 
 Total infections at time t in location j are taken as

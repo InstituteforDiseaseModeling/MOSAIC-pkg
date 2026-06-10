@@ -3,7 +3,7 @@
 #
 # Covers:
 #   1. Control infrastructure (flag registration, validation, defaults)
-#   2. Deterministic math (moment_match_E_I formula and normalization)
+#   2. Deterministic math (.moment_match_E_I formula and normalization)
 #   3. Guard clauses (zero obs, near-zero sigma*rho, 10% cap)
 #   4. Integration with sample_parameters() and sample_initial_conditions
 # =============================================================================
@@ -22,7 +22,7 @@ make_test_config <- function(N = 1000000L,
     # 100 days, first 10 are zero, then 10 cases/day for a week
     reported_cases <- c(rep(0, 10), rep(10, 7), rep(5, 83))
   }
-  # gamma_1 is required by moment_match_E_I's steady-state formula
+  # gamma_1 is required by .moment_match_E_I's steady-state formula
   # (E = Isym * gamma_1 / (sigma * iota)); without it the function falls
   # back to prior ICs but the guard clause must still receive a numeric.
   list(
@@ -91,10 +91,10 @@ test_that(".mosaic_validate_sampling_args warns if ic_moment_match is non-logica
 
 
 # ===========================================================================
-# 2. DETERMINISTIC MATH (moment_match_E_I)
+# 2. DETERMINISTIC MATH (.moment_match_E_I)
 # ===========================================================================
 
-test_that("moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
+test_that(".moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
   cfg <- make_test_config(
     N = 1000000L,
     reported_cases = c(rep(0, 5), rep(100, 7), rep(50, 88)),
@@ -105,7 +105,7 @@ test_that("moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # Expected I = obs_week1 * chi / (sigma * rho)
   obs_week1 <- 100  # first 7 positive days are all 100
@@ -121,21 +121,21 @@ test_that("moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
   expect_equal(result[1, "E"], expected_prop_E, tolerance = 1e-10)
 })
 
-test_that("moment_match_E_I normalizes compartments to sum to 1", {
+test_that(".moment_match_E_I normalizes compartments to sum to 1", {
   cfg <- make_test_config(reported_cases = c(rep(0, 3), rep(50, 7), rep(20, 90)))
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   expect_equal(sum(result[1, ]), 1.0, tolerance = 1e-12)
   expect_true(all(result[1, ] >= 0))
 })
 
-test_that("moment_match_E_I does not modify V1, V2, R", {
+test_that(".moment_match_E_I does not modify V1, V2, R", {
   cfg <- make_test_config(reported_cases = c(rep(0, 3), rep(50, 7), rep(20, 90)))
   props <- make_test_props(V1 = 0.03, V2 = 0.01, R = 0.15)
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # V1, V2, R should be unchanged (only E, I, S are modified)
   expect_equal(result[1, "V1"], 0.03)
@@ -143,11 +143,11 @@ test_that("moment_match_E_I does not modify V1, V2, R", {
   expect_equal(result[1, "R"], 0.15)
 })
 
-test_that("moment_match_E_I adjusts S as residual", {
+test_that(".moment_match_E_I adjusts S as residual", {
   cfg <- make_test_config(reported_cases = c(rep(0, 3), rep(50, 7), rep(20, 90)))
   props <- make_test_props(V1 = 0.03, V2 = 0.01, R = 0.15)
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # S should equal 1 - (V1 + V2 + E + I + R)
   expected_S <- 1 - result[1, "V1"] - result[1, "V2"] - result[1, "E"] -
@@ -155,7 +155,7 @@ test_that("moment_match_E_I adjusts S as residual", {
   expect_equal(result[1, "S"], expected_S, tolerance = 1e-12)
 })
 
-test_that("moment_match_E_I uses first positive observation window", {
+test_that(".moment_match_E_I uses first positive observation window", {
   # 50 leading zeros, then cases start at day 51
   cases <- c(rep(0, 50), rep(200, 7), rep(100, 43))
   cfg <- make_test_config(
@@ -167,7 +167,7 @@ test_that("moment_match_E_I uses first positive observation window", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # obs_week1 should be 200 (first 7 positive days)
   expected_I <- 200 * 0.5 / (0.25 * 0.4)  # = 1000
@@ -176,7 +176,7 @@ test_that("moment_match_E_I uses first positive observation window", {
   expect_equal(result[1, "I"], expected_prop_I, tolerance = 1e-10)
 })
 
-test_that("moment_match_E_I handles partial first week (< 7 positive days)", {
+test_that(".moment_match_E_I handles partial first week (< 7 positive days)", {
   # Only 3 days of data after the first positive observation
   cases <- c(rep(0, 10), 80, 100, 120)
   cfg <- make_test_config(
@@ -189,7 +189,7 @@ test_that("moment_match_E_I handles partial first week (< 7 positive days)", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # obs_week1 = mean(80, 100, 120) = 100
   expected_I <- 100 * 0.5 / (0.5 * 0.2)  # = 500
@@ -198,7 +198,7 @@ test_that("moment_match_E_I handles partial first week (< 7 positive days)", {
   expect_equal(result[1, "I"], expected_prop_I, tolerance = 1e-10)
 })
 
-test_that("moment_match_E_I reproduces the reporting chain identity", {
+test_that(".moment_match_E_I reproduces the reporting chain identity", {
   # For any valid parameters: I * sigma * rho / chi_endemic ≈ obs_week1
   cfg <- make_test_config(
     N = 10000000L,
@@ -210,7 +210,7 @@ test_that("moment_match_E_I reproduces the reporting chain identity", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # Reconstruct
   I_count <- result[1, "I"] * 10000000
@@ -225,32 +225,32 @@ test_that("moment_match_E_I reproduces the reporting chain identity", {
 # 3. GUARD CLAUSES
 # ===========================================================================
 
-test_that("moment_match_E_I falls back when all obs are zero", {
+test_that(".moment_match_E_I falls back when all obs are zero", {
   cfg <- make_test_config(reported_cases = rep(0, 100))
   props <- make_test_props(E = 0.001, I = 0.002)
   original_E <- props[1, "E"]
   original_I <- props[1, "I"]
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # E and I should be unchanged (fallback to prior)
   expect_equal(result[1, "E"], original_E)
   expect_equal(result[1, "I"], original_I)
 })
 
-test_that("moment_match_E_I falls back when all obs are NA", {
+test_that(".moment_match_E_I falls back when all obs are NA", {
   cfg <- make_test_config(reported_cases = rep(NA, 100))
   props <- make_test_props(E = 0.001, I = 0.002)
   original_E <- props[1, "E"]
   original_I <- props[1, "I"]
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   expect_equal(result[1, "E"], original_E)
   expect_equal(result[1, "I"], original_I)
 })
 
-test_that("moment_match_E_I falls back when sigma*rho near zero", {
+test_that(".moment_match_E_I falls back when sigma*rho near zero", {
   cfg <- make_test_config(
     reported_cases = c(rep(0, 5), rep(100, 7), rep(50, 88)),
     sigma = 1e-12,
@@ -260,13 +260,13 @@ test_that("moment_match_E_I falls back when sigma*rho near zero", {
   original_E <- props[1, "E"]
   original_I <- props[1, "I"]
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   expect_equal(result[1, "E"], original_E)
   expect_equal(result[1, "I"], original_I)
 })
 
-test_that("moment_match_E_I caps E+I at 10% of population", {
+test_that(".moment_match_E_I caps E+I at 10% of population", {
   # Very high obs relative to small reporting product → uncapped would exceed 10%
   cfg <- make_test_config(
     N = 100000L,
@@ -278,7 +278,7 @@ test_that("moment_match_E_I caps E+I at 10% of population", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # E + I should not exceed 10%
   EI_sum <- result[1, "E"] + result[1, "I"]
@@ -288,7 +288,7 @@ test_that("moment_match_E_I caps E+I at 10% of population", {
   expect_equal(sum(result[1, ]), 1.0, tolerance = 1e-12)
 })
 
-test_that("moment_match_E_I preserves E/I ratio when cap triggers", {
+test_that(".moment_match_E_I preserves E/I ratio when cap triggers", {
   cfg <- make_test_config(
     N = 100000L,
     reported_cases = c(rep(0, 3), rep(10000, 7), rep(5000, 90)),
@@ -300,7 +300,7 @@ test_that("moment_match_E_I preserves E/I ratio when cap triggers", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # Steady-state E/Isym ratio (v0.30.40 fix): gamma_1 / (sigma * iota)
   # With gamma_1 = 0.5, sigma = 0.01, iota = 0.4: ratio = 125.
@@ -310,7 +310,7 @@ test_that("moment_match_E_I preserves E/I ratio when cap triggers", {
   expect_equal(ratio, expected_ratio, tolerance = 1e-6)
 })
 
-test_that("moment_match_E_I ensures at least 1 person in E and I", {
+test_that(".moment_match_E_I ensures at least 1 person in E and I", {
   # Very tiny obs_week1 with large population → counts would round to 0
   cfg <- make_test_config(
     N = 100000000L,  # 100 million
@@ -322,7 +322,7 @@ test_that("moment_match_E_I ensures at least 1 person in E and I", {
   )
   props <- make_test_props()
 
-  result <- MOSAIC:::moment_match_E_I(cfg, props, "TST", verbose = FALSE)
+  result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
   # Proportions should be at least 1/N
   expect_gte(result[1, "E"], 1 / 100000000)

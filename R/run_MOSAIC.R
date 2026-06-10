@@ -71,7 +71,7 @@
   # `reported_cases` / `reported_deaths` from get_location_config() store
   # counts as integer-mode, with NA_integer_ for missing surveillance weeks.
   # reticulate maps an R integer matrix to numpy int32, replacing NA with
-  # INT_MIN — those huge negatives then evaluate as valid (extreme) counts
+  # INT_MIN -- those huge negatives then evaluate as valid (extreme) counts
   # in calc_model_likelihood, returning -Inf. storage.mode() preserves the
   # matrix dim attribute and only flips the underlying type; the local-path
   # R-side calc_model_likelihood is unaffected because it handles NA_real_
@@ -456,7 +456,7 @@
 #'   Resume is \strong{rejected} (hard error) when:
 #'   \itemize{
 #'     \item \code{control$paths$clean_output = TRUE} (the wipe would delete the shards);
-#'     \item the run already completed — a consolidated \code{2_calibration/samples.parquet}
+#'     \item the run already completed -- a consolidated \code{2_calibration/samples.parquet}
 #'       exists that the on-disk shards would shrink (start fresh, or remove it to recompute);
 #'     \item the supplied \code{config}, \code{priors}, \code{control$likelihood},
 #'       \code{control$sampling}, \code{control$calibration$n_iterations}, or the
@@ -465,7 +465,7 @@
 #'       incomparable);
 #'     \item the current \code{laser-cholera} engine version crosses the v0.13
 #'       deaths-scale boundary relative to the original run;
-#'     \item the likelihood-value provenance differs — i.e. the existing shards
+#'     \item the likelihood-value provenance differs -- i.e. the existing shards
 #'       were scored by a different likelihood engine or implementation than the
 #'       current session would produce (e.g. R \code{calc_model_likelihood} on
 #'       the local backend vs on-worker Python scoring on the Dask backend, or
@@ -634,7 +634,7 @@ run_MOSAIC <- function(config,
     dask_spec$scheduler_vm_types <- dask_spec$scheduler_vm_types %||% c("Standard_D4s_v6")
     dask_spec$region             <- dask_spec$region             %||% "westus2"
     dask_spec$idle_timeout       <- dask_spec$idle_timeout       %||% "2 hours"
-    # workspace: no default — NULL is valid for single-workspace Coiled accounts;
+    # workspace: no default -- NULL is valid for single-workspace Coiled accounts;
     # required for multi-workspace orgs. Validate below if type = "coiled".
     if (dask_spec$type == "coiled" && is.null(dask_spec$workspace)) {
       message("Note: dask_spec$workspace not set. If you have multiple Coiled workspaces, ",
@@ -964,7 +964,7 @@ run_MOSAIC <- function(config,
   # Normalize to sum to n_t (number of time points) so the scale is independent
   # of user-supplied magnitude. Applied once here for both R and Dask paths;
   # the Dask path also has its own copy of this logic for the likelihood_settings
-  # local variable it builds — that redundant normalization is harmless.
+  # local variable it builds -- that redundant normalization is harmless.
   if (!is.null(control$likelihood$weights_time)) {
     n_t_cfg <- if (is.matrix(config$reported_cases)) ncol(config$reported_cases) else
                  length(config$reported_cases)
@@ -976,7 +976,7 @@ run_MOSAIC <- function(config,
   }
 
   # Initialise Dask-related variables to NULL so the on.exit handler is always safe.
-  # Never alias the caller-provided R cluster here — if dask_spec is provided the
+  # Never alias the caller-provided R cluster here -- if dask_spec is provided the
   # caller retains full ownership of any R cluster they passed; it is not used and
   # not touched by the Dask code path.
   client      <- NULL
@@ -1036,7 +1036,7 @@ run_MOSAIC <- function(config,
         }
       }
 
-      # Cluster creation with retry — transient Azure provisioning failures
+      # Cluster creation with retry -- transient Azure provisioning failures
       # (e.g. "Timed out waiting for process to phone home") are common and
       # resolve on retry without any code change needed.
       max_cluster_attempts <- 3L
@@ -1090,8 +1090,8 @@ run_MOSAIC <- function(config,
     # Upload Python worker module to all workers
     worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
     if (!nzchar(worker_py_path) || !file.exists(worker_py_path)) {
-      log_fatal("Cannot find inst/python/mosaic_dask_worker.py — was the package reinstalled?")
-      stop("Cannot find inst/python/mosaic_dask_worker.py — was the package reinstalled?",
+      log_fatal("Cannot find inst/python/mosaic_dask_worker.py \u2014 was the package reinstalled?")
+      stop("Cannot find inst/python/mosaic_dask_worker.py \u2014 was the package reinstalled?",
            call. = FALSE)
     }
     client$upload_file(worker_py_path)
@@ -1121,7 +1121,7 @@ run_MOSAIC <- function(config,
 
     # Inject likelihood-control settings + epidemic_peaks + calc_likelihood
     # toggle onto config so the laser-cholera analyzer can score on-worker
-    # (issue #100, plan §3.1, §3.4.1). Dask path only — local PSOCK/FORK
+    # (issue #100, plan section3.1, section3.4.1). Dask path only -- local PSOCK/FORK
     # path keeps R-side scoring.
     config <- .mosaic_inject_likelihood_settings(config, likelihood_settings)
 
@@ -1154,8 +1154,8 @@ run_MOSAIC <- function(config,
     }
 
     # Determine cluster ownership:
-    #   owns_cluster = TRUE  → we created it, we tear it down
-    #   owns_cluster = FALSE → caller provided it, caller tears it down
+    #   owns_cluster = TRUE  -> we created it, we tear it down
+    #   owns_cluster = FALSE -> caller provided it, caller tears it down
     owns_cluster <- FALSE
 
     if (!is.null(cluster)) {
@@ -1256,13 +1256,13 @@ run_MOSAIC <- function(config,
   if (isTRUE(resume) && identical(state$mode, "auto") && isTRUE(state$converged)) {
     # Already converged on the reconstructed pool: skip simulation entirely and
     # go straight to post-processing (the loop below breaks immediately).
-    log_msg("[RESUME] Reconstructed state already converged — skipping simulation, proceeding to post-processing")
+    log_msg("[RESUME] Reconstructed state already converged \u2014 skipping simulation, proceeding to post-processing")
   } else {
     log_msg("Starting simulation (mode: %s)", state$mode)
   }
   start_time <- Sys.time()
 
-  # Disk space check removed in v0.17.10 — fragile across platforms (macOS df
+  # Disk space check removed in v0.17.10 -- fragile across platforms (macOS df
   # output parsing) and low value on local machines. Cluster deployments should
   # check quotas at the job scheduler level, not inside R.
 
@@ -1291,7 +1291,7 @@ run_MOSAIC <- function(config,
       state$total_sims_successful <- length(done_ids)
       state$n_sims_reused <- length(done_ids)
       if (length(done_ids) == 0L) {
-        log_msg("[RESUME] No existing shards in target range — running all %d from scratch", target)
+        log_msg("[RESUME] No existing shards in target range \u2014 running all %d from scratch", target)
       } else {
         log_msg("[RESUME] Reusing %d of %d existing simulation(s); running the remaining %d",
                 length(done_ids), target, target - length(done_ids))
@@ -1379,7 +1379,7 @@ run_MOSAIC <- function(config,
   } else {
 
     log_msg("Phase 1: Adaptive Calibration")
-    log_msg("  - Run %d-%d batches × %d sims (ESS regression R² target: %.2f)",
+    log_msg("  - Run %d-%d batches \u00D7 %d sims (ESS regression R\u00B2 target: %.2f)",
             control$calibration$min_batches_adaptive, control$calibration$max_batches_adaptive,
             control$calibration$batch_size_adaptive, control$calibration$target_r2_adaptive)
     log_msg("Phase 2: Predictive Batches (max %d \u00d7 %d sims, floor %d)",
@@ -1404,10 +1404,10 @@ run_MOSAIC <- function(config,
         # Reset batch counter for new phase
         state$phase_batch_count <- 0L
         state$phase_last <- current_phase
-        log_msg("  ✓ Phase transition: %s → %s", toupper(old_phase), toupper(state$phase))
+        log_msg("  \u2713 Phase transition: %s \u2192 %s", toupper(old_phase), toupper(state$phase))
       }
 
-      # If batch size is 0, ESS target already met — save state before breaking
+      # If batch size is 0, ESS target already met -- save state before breaking
       if (current_batch_size <= 0) {
         log_msg("No additional simulations needed (batch_size = 0)")
         .mosaic_save_state(state, state_file)
@@ -1495,7 +1495,7 @@ run_MOSAIC <- function(config,
               state$batch_number, n_success_batch, length(sim_ids),
               batch_success_rate, as.numeric(batch_runtime))
 
-      # ESS convergence check — always run so state$converged is accurate.
+      # ESS convergence check -- always run so state$converged is accurate.
       # The old guard skipped this when total_sims_run >= max_simulations,
       # which meant the final batch never updated the converged flag and
       # always emitted a spurious "no convergence" warning even when the
@@ -1575,7 +1575,7 @@ run_MOSAIC <- function(config,
     # Only apply the lower fence. Log-likelihoods have a long left tail (many
     # poor fits) but are bounded above near 0. Applying an upper fence via
     # Q3 + k*IQR would incorrectly discard the highest-likelihood simulations
-    # — exactly the models we want to keep for the posterior. The lower fence
+    # -- exactly the models we want to keep for the posterior. The lower fence
     # removes pathologically bad simulations via Tukey lower fence.
     results$is_outlier[results$is_valid] <- valid_ll < lower_threshold
 
@@ -1632,7 +1632,7 @@ run_MOSAIC <- function(config,
 
   log_msg("Calculating parameter ESS")
   # Adaptive n_grid: scales with ESS target so higher targets demand finer
-  # posterior resolution. At ESS_param=100 → 100; at 500 → 161; at 1000 → 230.
+  # posterior resolution. At ESS_param=100 -> 100; at 500 -> 161; at 1000 -> 230.
   ess_target_val <- control$targets$ESS_param %||% 100
   n_grid_adaptive <- as.integer(round(100 * (1 + log(max(ess_target_val, 100) / 100))))
 
@@ -1681,14 +1681,14 @@ run_MOSAIC <- function(config,
     if (tier_result$converged) {
       # CRITICAL: Calculate percentile from absolute count
       tier_percentile <- (tier_result$n / nrow(results)) * 100
-      log_msg("    ✓ Tier '%s' converged at n=%d (%.1f%% of retained)",
+      log_msg("    \u2713 Tier '%s' converged at n=%d (%.1f%% of retained)",
               tier$name, tier_result$n, tier_percentile)
       optimal_subset_result <- tier_result
       tier_used <- tier$name
       rm(tier)
       break
     } else {
-      log_msg("    ✗ Tier '%s' failed to converge", tier$name)
+      log_msg("    \u2717 Tier '%s' failed to converge", tier$name)
       rm(tier_result)
       rm(tier)
     }
@@ -1763,7 +1763,7 @@ run_MOSAIC <- function(config,
       effective_range_best <- 4.0
       delta_aic_truncated <- pmin(delta_aic_final, effective_range_best)
 
-      # Calculate standard Akaike weights: w ∝ exp(-0.5 * delta_aic)
+      # Calculate standard Akaike weights: w prop.to exp(-0.5 * delta_aic)
       gibbs_temperature_final <- 0.5  # Standard for Akaike weights
       weights_final <- calc_model_weights_gibbs(
         x = delta_aic_truncated,
@@ -1796,12 +1796,12 @@ run_MOSAIC <- function(config,
 
   # Check convergence based on tier used
   if (convergence_tier != "fallback") {
-    log_msg("\n✓ Post-hoc optimization succeeded with %s criteria", convergence_tier)
-    log_msg("  → Using %.1f%% of simulations (%d total)",
+    log_msg("\n\u2713 Post-hoc optimization succeeded with %s criteria", convergence_tier)
+    log_msg("  \u2192 Using %.1f%% of simulations (%d total)",
             percentile_used, n_top_final)
     final_converged <- TRUE
   } else {
-    log_msg("\n⚠ Post-hoc optimization: No tier converged, using fallback")
+    log_msg("\n\u26A0 Post-hoc optimization: No tier converged, using fallback")
     log_msg("  Consider running more simulations or adjusting tier criteria")
     final_converged <- FALSE
   }
@@ -2035,7 +2035,7 @@ run_MOSAIC <- function(config,
           # position in this kept list, and those slices are paired with the
           # weights handed to calc_model_ensemble() below. An unkeyed Filter()
           # would shift every later config onto the wrong weight and leave a
-          # trailing all-NA slice — a silent posterior-ensemble error (the
+          # trailing all-NA slice -- a silent posterior-ensemble error (the
           # v0.35.1 weight-misalignment class).
           keep <- !vapply(raw_configs, is.null, logical(1))
           if (any(!keep)) {
@@ -2058,7 +2058,7 @@ run_MOSAIC <- function(config,
       )
 
       # NOTE: Do NOT close the cluster here. It is kept alive for the best and
-      # medioid stochastic-ensemble dispatch later (Option A — single second
+      # medioid stochastic-ensemble dispatch later (Option A -- single second
       # dispatch once the medioid seed is known). The cluster is closed after
       # that dispatch, in the PRE-SAMPLE + DASK DISPATCH block before the
       # posterior predictive checks (best single model) section.
@@ -2079,7 +2079,7 @@ run_MOSAIC <- function(config,
 
   # Format a number-or-NA as a log-line-safe string. Replaces the prior
   # `ifelse(is.na(x), 0, x)` pattern which silently substituted 0 for NA in
-  # the prose log lines (best / medioid / ensemble R² + bias), making
+  # the prose log lines (best / medioid / ensemble R^2 + bias), making
   # "computation failed" indistinguishable from "model fit is awful but
   # ran". The [RUN_SUMMARY] sentinel already emits literal NA; the prose
   # lines now do too.
@@ -2096,7 +2096,7 @@ run_MOSAIC <- function(config,
   n_ensemble_stochastic_per  <- as.integer(control$predictions$n_iter_ensemble %||% 10L)
   n_best_stochastic_per      <- as.integer(control$predictions$n_iter_best %||% 100L)
 
-  # Tier-subset ensemble metrics — populated only when optimize_subset = TRUE
+  # Tier-subset ensemble metrics -- populated only when optimize_subset = TRUE
   # (preserved for comparison against the canonical optimized-ensemble metrics).
   r2_cases_ensemble_tier          <- NA_real_
   r2_deaths_ensemble_tier         <- NA_real_
@@ -2161,11 +2161,11 @@ run_MOSAIC <- function(config,
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
     }
   } else {
-    log_warn("no best subset — skipping posterior ensemble")
+    log_warn("no best subset \u2014 skipping posterior ensemble")
   }
 
   # ===========================================================================
-  # OPTIMIZE SUBSET — refine best subset using ensemble prediction quality
+  # OPTIMIZE SUBSET -- refine best subset using ensemble prediction quality
   # ===========================================================================
   # When control$predictions$optimize_subset = TRUE, rescore the ensemble against
   # observed cases/deaths and write the optimizer-selected subset to new _opt
@@ -2297,7 +2297,7 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # MEDIOID SEED — computed once on the final ensemble after all subset logic
+  # MEDIOID SEED -- computed once on the final ensemble after all subset logic
   # ===========================================================================
   # The medioid is the ensemble member whose predicted case trajectory is closest
   # (log-scale MAE) to the ensemble median. Computing here ensures it always
@@ -2436,7 +2436,7 @@ run_MOSAIC <- function(config,
   # ===========================================================================
 
   # ---------------------------------------------------------------------------
-  # Order of operations (Option A — dispatch best+medioid sims on the
+  # Order of operations (Option A -- dispatch best+medioid sims on the
   # still-alive Dask cluster before closing it):
   #   1. Sample config_best (early-return on failure) and config_medioid.
   #   2. If a Dask cluster is alive, batch-dispatch best+medioid stochastic
@@ -2444,7 +2444,7 @@ run_MOSAIC <- function(config,
   #      cluster. Otherwise leave precomputed = NULL and calc_model_ensemble()
   #      falls back to its local PSOCK / sequential path.
   #   3. Build best/medioid mosaic_ensemble objects (consuming precomputed
-  #      results when present), compute R²/bias, render plots.
+  #      results when present), compute R^2/bias, render plots.
   # ---------------------------------------------------------------------------
 
   log_msg("Running posterior predictive checks")
@@ -2493,7 +2493,7 @@ run_MOSAIC <- function(config,
       runtime_bail,
       dir_output
     )
-    # Suppress the on.exit [RUN_FATAL] — we just emitted a more specific one.
+    # Suppress the on.exit [RUN_FATAL] -- we just emitted a more specific one.
     run_completed <- TRUE
     return(invisible(list(
       dirs    = dirs,
@@ -2539,7 +2539,7 @@ run_MOSAIC <- function(config,
   # ---------------------------------------------------------------------------
   # Dispatch best and medioid as TWO SEQUENTIAL .mosaic_postca_dask() calls,
   # each with a single-element param_configs list. This keeps both standalone
-  # ensembles in the param_idx=1 seed namespace (seeds 1001..1000+N) — the
+  # ensembles in the param_idx=1 seed namespace (seeds 1001..1000+N) -- the
   # SAME namespace used by the local PSOCK / sequential fallback path in
   # calc_model_ensemble() (R/calc_model_ensemble.R:247). A single batched
   # dispatch would put medioid under param_idx=2 (seeds 2001..2000+N), which
@@ -2551,7 +2551,7 @@ run_MOSAIC <- function(config,
   # quantiles, distributions, sensitivity/correlation plots, config sampling).
   # client$upload_file() registers the module with the scheduler so new
   # workers receive it automatically, but the postca block re-uploads
-  # defensively for the same reason — matched here for symmetry.
+  # defensively for the same reason -- matched here for symmetry.
   #
   # On any dispatch error, OR when zero sims succeeded, the precomputed list
   # is forced to NULL so calc_model_ensemble() falls back to local execution
@@ -2598,7 +2598,7 @@ run_MOSAIC <- function(config,
       }
 
       # Report per-role counts and (separately) flag fallbacks. The two roles
-      # are independent — best can be dask-precomputed while medioid falls
+      # are independent -- best can be dask-precomputed while medioid falls
       # back to local. Emit one line per role so an operator reading the log
       # can disambiguate "Dask returned nothing" from "role not applicable
       # this run" (e.g. medioid skipped because medioid_seed_sim was NULL).
@@ -2636,10 +2636,10 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # BEST MODEL — build mosaic_ensemble, compute R²/bias, render plot
+  # BEST MODEL -- build mosaic_ensemble, compute R^2/bias, render plot
   # ===========================================================================
   # Run N stochastic reruns of the best config. Produces the mosaic_ensemble
-  # object used for both R²/bias (from the stochastic median) and the prediction
+  # object used for both R^2/bias (from the stochastic median) and the prediction
   # plot, matching how the posterior ensemble reports its metrics. When
   # best_precomputed is non-NULL, calc_model_ensemble() consumes Dask results
   # and the parallel/n_cores args are ignored by its precomputed branch.
@@ -2704,8 +2704,8 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # MEDIOID MODEL — ensemble member closest to ensemble median trajectory
-  # Runs after best model using the same pattern: config → LASER → R² → plot.
+  # MEDIOID MODEL -- ensemble member closest to ensemble median trajectory
+  # Runs after best model using the same pattern: config -> LASER -> R^2 -> plot.
   # Consumes Dask precomputed_results when available; falls back to local.
   # ===========================================================================
 
@@ -2713,7 +2713,7 @@ run_MOSAIC <- function(config,
     if (!is.null(config_medioid)) {
 
       # Run N stochastic reruns of the medioid config. Same pattern as the
-      # best-model block: R²/bias and the prediction plot both derive from
+      # best-model block: R^2/bias and the prediction plot both derive from
       # the stochastic median for consistency with the posterior ensemble.
       log_msg("Building medioid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
@@ -2777,7 +2777,7 @@ run_MOSAIC <- function(config,
   # ===========================================================================
   # ENSEMBLE METRICS, WINDOWED FIT, AND PREDICTIVE PLOTS
   # ===========================================================================
-  # The `ensemble` variable is the canonical object — the optimized ensemble
+  # The `ensemble` variable is the canonical object -- the optimized ensemble
   # when optimize_subset = TRUE and the optimizer succeeded, otherwise the
   # tier ensemble.
 
@@ -2892,7 +2892,7 @@ run_MOSAIC <- function(config,
     }
 
   } else {
-    log_warn("ensemble is NULL — skipping ensemble R\u00b2 and predictive plots")
+    log_warn("ensemble is NULL \u2014 skipping ensemble R\u00b2 and predictive plots")
   }
 
   # ===========================================================================
@@ -3078,7 +3078,7 @@ run_MOSAIC <- function(config,
     dir_output
   )
 
-  # Reached normal end-of-run — suppress the on.exit [RUN_FATAL] sentinel.
+  # Reached normal end-of-run -- suppress the on.exit [RUN_FATAL] sentinel.
   run_completed <- TRUE
 
   # Finalize run state (mark as completed)
@@ -3182,7 +3182,7 @@ run_mosaic <- run_MOSAIC
 #'       These runs execute on an internal PSOCK cluster when
 #'       \code{parallel$enable = TRUE}.
 #'     \item \code{optimize_subset}: Logical; when \code{TRUE}, the post-ensemble
-#'       optimizer (MAE / WIS / R²+bias) refines the best subset used for
+#'       optimizer (MAE / WIS / R^2+bias) refines the best subset used for
 #'       \code{posteriors.json}, \code{posterior_quantiles.csv}, and the ensemble
 #'       object driving all downstream plots and metrics. The tier-selected subset
 #'       is preserved in the \code{is_best_subset} / \code{weight_best} columns of
@@ -3191,7 +3191,7 @@ run_mosaic <- run_MOSAIC
 #'       \code{FALSE} (default), the tier-selected subset is canonical and no
 #'       \code{_opt} columns are written. \strong{Statistical note:} enabling this
 #'       flag yields a posterior conditioned on ensemble predictive performance
-#'       (MAE / WIS / R²+bias on the training data) rather than a pure
+#'       (MAE / WIS / R^2+bias on the training data) rather than a pure
 #'       likelihood-weighted posterior.
 #'     \item \code{optimize_min_n}: Minimum subset size the optimizer may select
 #'       (default \code{30L}, raised from \code{4L} to guard against KDE
@@ -3462,7 +3462,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     n_iter_ensemble    = 10L,            # Stochastic runs per posterior parameter set (ensemble)
     n_iter_best        = 100L,           # Stochastic runs for best + medioid single-config plots
     optimize_subset    = FALSE,          # Post-ensemble subset optimization
-    optimize_min_n     = 30L,            # Minimum subset size — raised from 4L (Fox et al. 2024)
+    optimize_min_n     = 30L,            # Minimum subset size -- raised from 4L (Fox et al. 2024)
                                           # to guard against KDE degeneracy when the
                                           # optimized subset drives posterior densities.
     optimize_objective = "mae"           # Objective: "mae", "r2_bias", or "wis"
@@ -3491,7 +3491,7 @@ mosaic_control_defaults <- function(calibration = NULL,
   )
 
   # Merge user-provided settings with defaults
-  # Order follows workflow: calibration → sampling → likelihood → targets → predictions → weights → parallel → io → paths → logging
+  # Order follows workflow: calibration -> sampling -> likelihood -> targets -> predictions -> weights -> parallel -> io -> paths -> logging
   list(
     calibration = if (is.null(calibration)) default_calibration else modifyList(default_calibration, calibration),
     sampling = if (is.null(sampling)) default_sampling else modifyList(default_sampling, sampling),

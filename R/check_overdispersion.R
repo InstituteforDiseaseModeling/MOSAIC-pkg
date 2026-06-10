@@ -96,16 +96,16 @@ check_overdispersion <- function(y,
           cat("Dispersion Ratio (Var / Mean):", round(disp_ratio, 2), "\n")
           cat("Pearson Dispersion (intercept-only):", round(pearson_disp_int, 2), "\n")
           if (overdispersed_int) {
-               cat("→ Overdispersion detected (intercept-only model)\n")
+               cat("\u2192 Overdispersion detected (intercept-only model)\n")
           } else {
-               cat("→ No strong overdispersion (intercept-only model)\n")
+               cat("\u2192 No strong overdispersion (intercept-only model)\n")
           }
           if (seasonality && !is.na(pearson_disp_season)) {
                cat("Pearson Dispersion (seasonal model):", round(pearson_disp_season, 2), "\n")
                if (overdispersed_season) {
-                    cat("→ Overdispersion remains after adjusting for seasonality\n")
+                    cat("\u2192 Overdispersion remains after adjusting for seasonality\n")
                } else {
-                    cat("→ No strong overdispersion after seasonal adjustment\n")
+                    cat("\u2192 No strong overdispersion after seasonal adjustment\n")
                }
           }
      }

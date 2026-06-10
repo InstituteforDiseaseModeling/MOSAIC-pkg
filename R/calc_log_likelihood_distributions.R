@@ -5,14 +5,14 @@
 #' Calculate log-likelihood for Beta-distributed proportions
 #'
 #' Computes the total log-likelihood for proportion data under the Beta distribution.
-#' Supports either the mean–precision parameterization (default) or the standard
+#' Supports either the mean-precision parameterization (default) or the standard
 #' shape parameterization. In both cases, a single global set of shape parameters is
 #' estimated from the data using the method of moments. Each observation can be
 #' weighted via \code{weights}.
 #'
 #' @param observed Numeric vector of observed values in (0, 1).
 #' @param estimated Numeric vector of model-predicted values in (0, 1).
-#' @param mean_precision Logical; if \code{TRUE} (default), use mean–precision parameterization.
+#' @param mean_precision Logical; if \code{TRUE} (default), use mean-precision parameterization.
 #'                       If \code{FALSE}, estimate shape parameters directly from the observed vector.
 #' @param weights Optional numeric vector of non-negative weights, same length as \code{observed}.
 #'                Default is \code{NULL}, which sets all weights to 1.
@@ -67,7 +67,7 @@ calc_log_likelihood_beta <- function(observed,
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
-          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          if (verbose) message("No usable data (all NA) \u2014 returning NA for log-likelihood.")
           return(NA_real_)
      }
 
@@ -98,20 +98,20 @@ calc_log_likelihood_beta <- function(observed,
           residuals <- observed - estimated
           sigma2 <- var(residuals)
           if (sigma2 <= 0) {
-               stop("Residual variance is non-positive — cannot estimate phi.")
+               stop("Residual variance is non-positive \u2014 cannot estimate phi.")
           }
 
           mu <- mean(observed)
           phi <- (mu * (1 - mu)) / sigma2 - 1
           if (phi <= 0) {
-               stop("Estimated phi must be > 0 — data may be too dispersed or flat.")
+               stop("Estimated phi must be > 0 \u2014 data may be too dispersed or flat.")
           }
 
           shape_1 <- estimated * phi
           shape_2 <- (1 - estimated) * phi
 
           if (verbose) {
-               message(sprintf("Mean–precision mode: estimated phi = %.2f", phi))
+               message(sprintf("Mean\u2013precision mode: estimated phi = %.2f", phi))
           }
 
      } else {
@@ -121,7 +121,7 @@ calc_log_likelihood_beta <- function(observed,
           shape_2 <- shape_1 * (1 / mu - 1)
 
           if (shape_1 <= 0 || shape_2 <= 0) {
-               stop("Estimated shape parameters must be positive — check observed values.")
+               stop("Estimated shape parameters must be positive \u2014 check observed values.")
           }
           if (verbose) {
                message(sprintf("Standard shape mode: shape_1 = %.2f, shape_2 = %.2f", shape_1, shape_2))
@@ -195,7 +195,7 @@ calc_log_likelihood_binomial <- function(observed,
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
-          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          if (verbose) message("No usable data (all NA) \u2014 returning NA for log-likelihood.")
           return(NA_real_)
      }
 
@@ -278,7 +278,7 @@ calc_log_likelihood_gamma <- function(observed,
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
-          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          if (verbose) message("No usable data (all NA) \u2014 returning NA for log-likelihood.")
           return(NA_real_)
      }
 
@@ -305,7 +305,7 @@ calc_log_likelihood_gamma <- function(observed,
      scale <- estimated / shape
 
      if (verbose) {
-          message(sprintf("Gamma shape (α) = %.2f", shape))
+          message(sprintf("Gamma shape (\u03B1) = %.2f", shape))
      }
 
      ll_vec <- dgamma(observed, shape = shape, scale = scale, log = TRUE)
@@ -379,7 +379,7 @@ calc_log_likelihood_negbin <- function(observed,
 
      # Handle empty after filtering
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
-          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          if (verbose) message("No usable data (all NA) \u2014 returning NA for log-likelihood.")
           return(NA_real_)
      }
 
@@ -514,7 +514,7 @@ calc_log_likelihood_normal <- function(observed,
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
-          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          if (verbose) message("No usable data (all NA) \u2014 returning NA for log-likelihood.")
           return(NA_real_)
      }
 
@@ -559,7 +559,7 @@ calc_log_likelihood_normal <- function(observed,
      ll <- sum(weights * ll_vec)
 
      if (verbose) {
-          message(sprintf("Estimated σ = %.4f", sigma))
+          message(sprintf("Estimated \u03C3 = %.4f", sigma))
           message(sprintf("Normal log-likelihood: %.2f", ll))
      }
 
@@ -622,7 +622,7 @@ calc_log_likelihood_poisson <- function(observed,
 
      # Handle empty input after NA removal
      if (length(observed) == 0 || length(estimated) == 0 || length(weights) == 0) {
-          if (verbose) message("No usable data (all NA) — returning NA for log-likelihood.")
+          if (verbose) message("No usable data (all NA) \u2014 returning NA for log-likelihood.")
           return(NA_real_)
      }
 

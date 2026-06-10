@@ -30,7 +30,7 @@
 #' a best-effort warning: Coiled's API doesn't expose subnet usage
 #' from OTHER tenants on the same VNet, so the IP count is a lower
 #' bound on actual consumption. A clean Coiled view here does NOT
-#' guarantee that the next large cluster will provision — a noisy
+#' guarantee that the next large cluster will provision -- a noisy
 #' tenant in the same subnet could still cause SubnetIsFull. For the
 #' authoritative view, query Azure directly (requires Azure CLI +
 #' resource-group read access):
@@ -124,7 +124,7 @@ check_coiled_workspace <- function(workspace = NULL,
 
   # Estimate subnet IP pressure. Each active cluster consumes one IP per
   # worker plus one per scheduler. We can't see other Azure tenants on
-  # the same /23 — only mosaic-* clusters in OUR workspace — but a
+  # the same /23 -- only mosaic-* clusters in OUR workspace -- but a
   # surprisingly-high count here is at least a leading indicator.
   # subnet_ip_estimate defaults to ~507 (a /23 subnet on Azure has
   # 512 addresses, ~5 reserved). Pass a different value for workspaces
@@ -155,7 +155,7 @@ check_coiled_workspace <- function(workspace = NULL,
   cat("\n")
   if (total_ips_used > 0.5 * subnet_ip_estimate) {
     cat(sprintf(
-      "  WARNING: %d/%d IPs in use — provisioning a new large cluster\n",
+      "  WARNING: %d/%d IPs in use \u2014 provisioning a new large cluster\n",
       total_ips_used, subnet_ip_estimate))
     cat(
       "           may hit SubnetIsFull. Reduce n_workers or wait for\n")

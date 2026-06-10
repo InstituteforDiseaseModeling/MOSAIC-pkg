@@ -22,8 +22,8 @@
 #' calibration scoring and post-calibration prediction (best / medioid /
 #' posterior ensemble) use IDENTICAL clamped values. Prevents the laser-cholera
 #' ValueError where \code{p = -expm1(-rate) > 1} when \code{rate < 0}
-#' (GitHub #24) and keeps probabilities in \[0, 1\]. Idempotent — clamping an
-#' already-clamped config is a no-op — so it is safe to apply at every sampling
+#' (GitHub #24) and keeps probabilities in \[0, 1\]. Idempotent -- clamping an
+#' already-clamped config is a no-op -- so it is safe to apply at every sampling
 #' site without changing values that are already in range.
 #'
 #' @param params A config/parameter list from \code{sample_parameters()} (or NULL).
@@ -47,7 +47,7 @@
 #'
 #' \code{client$scheduler_info()$workers} cannot be relied on to count Dask
 #' workers because it is a STALE, lagging client-side snapshot of the workers
-#' dict: when workers join over time (the Coiled spin-up case — request 800,
+#' dict: when workers join over time (the Coiled spin-up case -- request 800,
 #' scale up gradually) the \code{workers} dict does not reflect the live count
 #' and reports a too-low number (e.g. 5 while hundreds are actually running).
 #' This was verified directly against a local \code{LocalCluster}: scaling
@@ -56,12 +56,12 @@
 #' \code{scheduler_info()['n_workers']}, the scheduler's own
 #' \code{len(s.workers)}) correctly reported 6. (An earlier comment here
 #' attributed the bug to a reticulate-conversion "per-worker field count of 5";
-#' that explanation was factually wrong — on a STATIC cluster
+#' that explanation was factually wrong -- on a STATIC cluster
 #' \code{len(scheduler_info()$workers)} returns the correct count. The real
 #' cause is snapshot staleness of the \code{workers} dict as workers join.)
 #'
 #' This helper reads a FRESH source server-side. PRIMARY:
-#' \code{len(client.nthreads())} — a live scheduler RPC over a stable public
+#' \code{len(client.nthreads())} -- a live scheduler RPC over a stable public
 #' API that returns one entry per worker (chosen over
 #' \code{client.run_on_scheduler(lambda s: len(s.workers))} because it needs no
 #' lambda serialization, which was observed to fail in some environments, and
@@ -124,10 +124,10 @@
 #' timeout (it does NOT return a \code{DoneAndNotDoneFutures} as the docs
 #' suggest at first read), which aborted the gather on the very first
 #' heartbeat. We now poll \code{future.status} from Python in a single batched
-#' call (cheap — the status is mirrored locally from scheduler push updates,
+#' call (cheap -- the status is mirrored locally from scheduler push updates,
 #' no round-trip per future) and sleep between iterations.
 #'
-#' On gather error the helper does NOT swallow — it lets the caller's tryCatch
+#' On gather error the helper does NOT swallow -- it lets the caller's tryCatch
 #' handle diagnostics (first-future status inspection).
 #'
 #' @param client A reticulated \code{dask.distributed.Client} object.
@@ -135,7 +135,7 @@
 #' @param log_fn Logging function compatible with \code{log_msg(msg, ...)}.
 #' @param phase Short slug for the \code{phase=} field of the progress line
 #'   (e.g. \code{"calibration_batch"}, \code{"postca_ensemble"}).
-#' @param interval_sec Heartbeat interval. Defaults to 30 s — long enough that
+#' @param interval_sec Heartbeat interval. Defaults to 30 s -- long enough that
 #'   the log isn't spammed during fast gathers, short enough that a hung
 #'   gather is detected within a minute.
 #' @return The list returned by \code{client$gather(futures)}.
@@ -185,7 +185,7 @@
     n_pending <- total - n_done
     elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
     # Count active workers via a pure-Python helper. See
-    # .mosaic_count_dask_workers() for the rationale — the obvious
+    # .mosaic_count_dask_workers() for the rationale -- the obvious
     # length(client$scheduler_info()$workers) reads a STALE client-side
     # snapshot that lags the live count as workers join (the Coiled spin-up
     # case), so it under-reports (e.g. 5 while hundreds run). The helper reads
@@ -226,7 +226,7 @@
   }
 
   # BACKWARD COMPATIBILITY: Renamed parameters (v0.22.16)
-  # batch_size → batch_size_adaptive
+  # batch_size -> batch_size_adaptive
   if (!is.null(def$calibration$batch_size) && is.null(def$calibration$batch_size_adaptive)) {
     warning("calibration$batch_size is deprecated; use calibration$batch_size_adaptive instead.", call. = FALSE)
     def$calibration$batch_size_adaptive <- def$calibration$batch_size
@@ -235,7 +235,7 @@
     def$calibration$batch_size <- NULL
   }
 
-  # min_batches → min_batches_adaptive
+  # min_batches -> min_batches_adaptive
   if (!is.null(def$calibration$min_batches) && is.null(def$calibration$min_batches_adaptive)) {
     warning("calibration$min_batches is deprecated; use calibration$min_batches_adaptive instead.", call. = FALSE)
     def$calibration$min_batches_adaptive <- def$calibration$min_batches
@@ -244,7 +244,7 @@
     def$calibration$min_batches <- NULL
   }
 
-  # max_batches → max_batches_adaptive
+  # max_batches -> max_batches_adaptive
   if (!is.null(def$calibration$max_batches) && is.null(def$calibration$max_batches_adaptive)) {
     warning("calibration$max_batches is deprecated; use calibration$max_batches_adaptive instead.", call. = FALSE)
     def$calibration$max_batches_adaptive <- def$calibration$max_batches
@@ -253,7 +253,7 @@
     def$calibration$max_batches <- NULL
   }
 
-  # target_r2 → target_r2_ess → target_r2_adaptive (two-step deprecation chain)
+  # target_r2 -> target_r2_ess -> target_r2_adaptive (two-step deprecation chain)
   if (!is.null(def$calibration$target_r2) && is.null(def$calibration$target_r2_adaptive)) {
     warning("calibration$target_r2 is deprecated; use calibration$target_r2_adaptive instead.", call. = FALSE)
     def$calibration$target_r2_adaptive <- def$calibration$target_r2
@@ -269,7 +269,7 @@
     def$calibration$target_r2_ess <- NULL
   }
 
-  # max_predictive_batch → max_batch_predictive
+  # max_predictive_batch -> max_batch_predictive
   if (!is.null(def$calibration$max_predictive_batch) && is.null(def$calibration$max_batch_predictive)) {
     warning("calibration$max_predictive_batch is deprecated; use calibration$max_batch_predictive instead.", call. = FALSE)
     def$calibration$max_batch_predictive <- def$calibration$max_predictive_batch
@@ -278,7 +278,7 @@
     def$calibration$max_predictive_batch <- NULL
   }
 
-  # max_simulations → max_simulations_total
+  # max_simulations -> max_simulations_total
   if (!is.null(def$calibration$max_simulations) && is.null(def$calibration$max_simulations_total)) {
     warning("calibration$max_simulations is deprecated; use calibration$max_simulations_total instead.", call. = FALSE)
     def$calibration$max_simulations_total <- def$calibration$max_simulations
@@ -516,7 +516,7 @@
 #'
 #' The \code{any(results$is_best_subset_opt)} guard handles the edge case where
 #' \code{optimize_subset = TRUE} but the optimizer silently failed (e.g.,
-#' \code{stability_flag} + \code{optimal_n == 0}) — in which case we fall back
+#' \code{stability_flag} + \code{optimal_n == 0}) -- in which case we fall back
 #' to the tier subset.
 #'
 #' @param results data.frame with at least \code{is_best_subset} and
@@ -643,7 +643,7 @@
 
   if (verbose) {
     load_time <- difftime(Sys.time(), load_start, units = "secs")
-    log_msg("Loaded %d rows × %d columns in %.1f seconds",
+    log_msg("Loaded %d rows \u00D7 %d columns in %.1f seconds",
             nrow(results), ncol(results), as.numeric(load_time))
 
     # Memory usage info
@@ -793,7 +793,7 @@
 # 2_calibration/samples/ as the single source of truth. Because each sim's
 # parameters are a deterministic function of seed = sim_id (content-addressed
 # seeds; see .mosaic_run_simulation_worker), a resumed run must continue from
-# max(sim_id on disk) + 1 — never count + 1 — or it would regenerate existing
+# max(sim_id on disk) + 1 -- never count + 1 -- or it would regenerate existing
 # draws and double-count mass in the post-hoc importance weights.
 #
 # Decision-relevant state that cannot be recovered from shards alone
@@ -933,13 +933,13 @@
 #' @param dirs Directory list
 #' @param control Control list
 #' @param param_names_est Estimated-parameter names
-#' @return Reconstructed state (unchanged if no shards exist → fresh run)
+#' @return Reconstructed state (unchanged if no shards exist -> fresh run)
 #' @noRd
 .mosaic_reconstruct_state <- function(state, dirs, control, param_names_est) {
   scan <- .mosaic_resume_scan(dirs$cal_samples)
 
   if (scan$n == 0L) {
-    log_msg("[RESUME] No existing shards in %s — starting fresh run", dirs$cal_samples)
+    log_msg("[RESUME] No existing shards in %s \u2014 starting fresh run", dirs$cal_samples)
     return(state)
   }
 
@@ -973,7 +973,7 @@
     # Refresh ESS/convergence from the ACTUAL on-disk pool whenever it differs
     # from what the checkpoint was certified against:
     #   - more shards than the checkpoint (a partial batch wrote after it), or
-    #   - FEWER shards (some were quarantined on this scan) — in which case a
+    #   - FEWER shards (some were quarantined on this scan) -- in which case a
     #     stale converged=TRUE no longer matches the pool, so clear it and let
     #     the ESS check re-derive convergence rather than trusting the flag.
     if (identical(state$mode, "auto") && scan$n != last_count) {
@@ -1310,8 +1310,8 @@
     # Log predictive batch calculation details
     if (!is.null(res) && !is.null(res$model) && res$batch_size > 0) {
       log_msg("Predictive batch calculation:")
-      log_msg("  Model: %s (R² = %.4f)", res$model, res$r_squared)
-      log_msg("  Current ESS: %.1f → Target: %.0f", res$current_ess, res$target_ess)
+      log_msg("  Model: %s (R\u00B2 = %.4f)", res$model, res$r_squared)
+      log_msg("  Current ESS: %.1f \u2192 Target: %.0f", res$current_ess, res$target_ess)
       log_msg("  Predicted batch size: %.0f sims (safety factor: %.2f)",
               res$batch_size, res$safety_factor)
       log_msg("  Expected total after batch: %.0f sims", res$total_predicted)
@@ -1325,7 +1325,7 @@
     if (!is.null(res) && res$batch_size > 0) {
       size <- as.integer(res$batch_size)
     } else {
-      # Model returned 0 or failed — use floor as fallback
+      # Model returned 0 or failed -- use floor as fallback
       if (!is.null(res) && !is.null(res$message)) {
         log_msg("Predictive model: %s \u2014 using batch_size_adaptive as fallback", res$message)
       } else if (is.null(res)) {
@@ -1357,7 +1357,7 @@
 
   # If we reach here, calibration_done and predictive_done are both TRUE
   # but convergence hasn't been declared. This shouldn't happen in normal
-  # operation — the predictive phase should run until convergence or its
+  # operation -- the predictive phase should run until convergence or its
   # batch limit. Return batch_size=0 to signal the loop to stop.
   list(
     phase = "predictive",
@@ -1459,7 +1459,7 @@
           control$targets$ESS_param,
           min(ess_current$ess_marginal, na.rm = TRUE))
 
-  # Calibration R² check
+  # Calibration R^2 check
   # ESS is calculated for ALL batches (data accumulates from batch 1)
   # But calibration model fitting only starts when we have min_batches data points
   # This ensures the model uses data from ALL batches (1, 2, 3, ..., N)
@@ -1486,11 +1486,11 @@
     state$r2_ess <- r2
 
     # Calculate estimated simulations to reach target ESS
-    # Model: ESS = intercept + slope × sqrt(n)
+    # Model: ESS = intercept + slope x sqrt(n)
     # Solving for n: n = ((target_ess - intercept) / slope)^2
     target_ess <- control$targets$ESS_param
     # Guard against NA/NaN coefficients (occurs when ess_df has only 1 row,
-    # making the 2-parameter lm underdetermined — R sets slope=NA)
+    # making the 2-parameter lm underdetermined -- R sets slope=NA)
     est_sims <- if (isTRUE(slope > 0) && isTRUE((target_ess - intercept) > 0)) {
       ((target_ess - intercept) / slope)^2
     } else {
@@ -1498,33 +1498,33 @@
     }
 
     # Print model fit diagnostics
-    # slope/r2 may be NA when ESS has plateaued (constant response → rank-deficient lm)
+    # slope/r2 may be NA when ESS has plateaued (constant response -> rank-deficient lm)
     slope_print <- if (is.finite(slope)) slope else 0
     r2_print    <- if (is.finite(r2))    r2    else 0
     log_msg("Calibration convergence check (batch %d):", state$batch_number)
     if (!is.na(est_sims)) {
-      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  ESS regression R² = %.4f (target %.2f) | Est. Sims: %.0f",
+      log_msg("  Model: ESS = %.2f + %.4f \u00D7 sqrt(n)  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: %.0f",
               intercept, slope_print, r2_print, control$calibration$target_r2_adaptive, round(est_sims))
     } else {
-      log_msg("  Model: ESS = %.2f + %.4f × sqrt(n)  |  ESS regression R² = %.4f (target %.2f) | Est. Sims: N/A%s",
+      log_msg("  Model: ESS = %.2f + %.4f \u00D7 sqrt(n)  |  ESS regression R\u00B2 = %.4f (target %.2f) | Est. Sims: N/A%s",
               intercept, slope_print, r2_print, control$calibration$target_r2_adaptive,
-              if (!is.finite(slope)) " [ESS plateau — slope undefined]" else "")
+              if (!is.finite(slope)) " [ESS plateau \u2014 slope undefined]" else "")
     }
     log_msg("  Data points: %d measurements (batches 1-%d) | Simulations: %d-%d",
             nrow(ess_df), state$batch_number, min(ess_df$sims), max(ess_df$sims))
 
     # Check if calibration should end.
-    # R² is only used as an exit signal when there are at least 5 data points
+    # R^2 is only used as an exit signal when there are at least 5 data points
     # (3 residual df). A 2-parameter model fit to exactly min_batches=3 points
-    # has only 1 residual df, making R² trivially near 1 for any monotone ESS
+    # has only 1 residual df, making R^2 trivially near 1 for any monotone ESS
     # trajectory. The max_batches hard limit is always honoured regardless.
     min_r2_points <- 5L
     r2_converged <- r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) >= min_r2_points
     if (r2_converged) {
-      log_msg("  ESS regression R² criterion met with %d data points (min required: %d)",
+      log_msg("  ESS regression R\u00B2 criterion met with %d data points (min required: %d)",
               nrow(ess_df), min_r2_points)
     } else if (r2 >= control$calibration$target_r2_adaptive && nrow(ess_df) < min_r2_points) {
-      log_msg("  ESS regression R² = %.4f >= target, but only %d data point(s) — need >= %d for reliable fit",
+      log_msg("  ESS regression R\u00B2 = %.4f >= target, but only %d data point(s) \u2014 need >= %d for reliable fit",
               r2, nrow(ess_df), min_r2_points)
     }
 
@@ -1541,17 +1541,17 @@
       # Decide whether to end calibration or continue
       # Check max_batches FIRST to ensure hard limit is enforced
       if (state$batch_number >= control$calibration$max_batches_adaptive) {
-        # Hit max batches limit - always exit regardless of R² or gap
+        # Hit max batches limit - always exit regardless of R^2 or gap
         state$calibration_done <- TRUE
         if (r2 < control$calibration$target_r2_adaptive) {
-          log_msg("  → Calibration complete: reached max_batches (%d) before ESS regression R² converged (%.4f < %.2f)",
+          log_msg("  \u2192 Calibration complete: reached max_batches (%d) before ESS regression R\u00B2 converged (%.4f < %.2f)",
                   control$calibration$max_batches_adaptive, r2, control$calibration$target_r2_adaptive)
         } else {
-          log_msg("  → Calibration complete: reached max_batches (%d)",
+          log_msg("  \u2192 Calibration complete: reached max_batches (%d)",
                   control$calibration$max_batches_adaptive)
         }
         if (remaining_sims > 0) {
-          log_msg("    Estimated gap: %.0f sims → proceeding to predictive phase", ceiling(remaining_sims))
+          log_msg("    Estimated gap: %.0f sims \u2192 proceeding to predictive phase", ceiling(remaining_sims))
         }
 
       } else if (threshold_ess >= target_ess) {
@@ -1561,18 +1561,18 @@
 
       } else if (remaining_sims > 0 && remaining_sims < control$calibration$batch_size_adaptive) {
         # Small gap remaining - continue calibration instead of transitioning
-        log_msg("  → Calibration R² achieved, but gap is small")
+        log_msg("  \u2192 Calibration R\u00B2 achieved, but gap is small")
         log_msg("    Current: %d sims | Estimated need: %.0f sims | Gap: %.0f sims",
                 current_n, round(est_sims), ceiling(remaining_sims))
         log_msg("    Continuing calibration (gap < batch_size_adaptive)")
         # Don't set calibration_done, continue with one more batch
 
       } else {
-        # R² converged and gap is large enough for predictive phase
+        # R^2 converged and gap is large enough for predictive phase
         state$calibration_done <- TRUE
-        log_msg("  → Calibration complete: R² converged")
+        log_msg("  \u2192 Calibration complete: R\u00B2 converged")
         if (remaining_sims > 0) {
-          log_msg("    Estimated gap: %.0f sims → proceeding to predictive batch", ceiling(remaining_sims))
+          log_msg("    Estimated gap: %.0f sims \u2192 proceeding to predictive batch", ceiling(remaining_sims))
         }
       }
     }
@@ -1611,7 +1611,7 @@
   # Check convergence.
   # Denominator is the total number of sampled parameters (not just those with
   # a valid ESS estimate). Parameters whose KDE returned NA are counted as
-  # "not converged" — otherwise silent KDE failures would shrink the
+  # "not converged" -- otherwise silent KDE failures would shrink the
   # denominator and falsely inflate prop_converged, causing the loop to exit
   # before the post-hoc ESS calculation can confirm the 0.975 target.
   n_total        <- length(param_names_est)
@@ -1624,11 +1624,11 @@
     # Early batches can spuriously meet ESS targets with small samples.
     if (state$batch_number >= control$calibration$min_batches_adaptive) {
       state$converged <- TRUE
-      log_msg("  → CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (%d/%d; %d ESS computed)",
+      log_msg("  \u2192 CONVERGENCE ACHIEVED: %.1f%% of parameters at ESS >= %.0f (%d/%d; %d ESS computed)",
               prop_converged * 100, control$targets$ESS_param,
               n_converged, n_total, n_ess_computed)
     } else {
-      log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d — continuing",
+      log_msg("  ESS criterion met (%.1f%% >= %.0f) but batch %d < min_batches %d \u2014 continuing",
               prop_converged * 100, control$targets$ESS_param,
               state$batch_number, control$calibration$min_batches_adaptive)
     }
@@ -1653,7 +1653,7 @@
 #' @param likelihood Numeric vector of log-likelihood values
 #' @param weight_floor Minimum weight for any model (default: 1e-15)
 #'   Prevents numerical underflow by ensuring worst model gets at least this weight.
-#'   Research-backed value: 10× above machine epsilon, safe up to ΔAIC = 69.
+#'   Research-backed value: 10x above machine epsilon, safe up to DeltaAIC = 69.
 #' @param verbose Logical, print diagnostics
 #'
 #' @return List containing:
@@ -1801,7 +1801,7 @@
   # Calculate inverse temperature (eta) and weights
   # ===========================================================================
 
-  # calc_model_weights_gibbs uses inverse temperature (eta) in: w ∝ exp(-eta * x)
+  # calc_model_weights_gibbs uses inverse temperature (eta) in: w prop.to exp(-eta * x)
   # We want: exp(-max_delta_aic * eta) >= floor
   # Therefore: eta = -log(floor) / max_delta_aic
   #
@@ -1813,7 +1813,7 @@
   # (not used in weight calculation, just for reporting)
   temperature <- 0.5 * (effective_range / actual_range)
 
-  # Calculate Gibbs weights using inverse temperature — valid models only.
+  # Calculate Gibbs weights using inverse temperature -- valid models only.
   # delta_aic[!valid_idx] = Inf; passing the full vector to calc_model_weights_gibbs
   # would crash because that function stop()s on any non-finite input. Compute
   # weights on the valid subset, then place them back into a full-length vector
@@ -1841,8 +1841,8 @@
     message("Adaptive Gibbs Weight Calculation:")
     message("  Total models: ", n_total)
     message("  Valid models: ", n_valid)
-    message("  Actual ΔAIC range: ", sprintf("%.2f", actual_range))
-    message("  Max ΔAIC: ", sprintf("%.2f", max_delta_aic))
+    message("  Actual \u0394AIC range: ", sprintf("%.2f", actual_range))
+    message("  Max \u0394AIC: ", sprintf("%.2f", max_delta_aic))
     message("  Weight floor: ", sprintf("%.2e", weight_floor))
     message("  Adaptive effective range: ", sprintf("%.2f", effective_range))
     message("  Temperature: ", sprintf("%.4f", temperature))
@@ -1888,7 +1888,7 @@
     if (isTRUE(show_progress)) {
       # Simple progress bar with block character (no color codes)
       # style = 1: Shows elapsed and remaining time with percentage
-      pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
       on.exit(pbapply::pboptions(pbo), add = TRUE)
 
       # Wrap worker to suppress unwanted output
@@ -1906,7 +1906,7 @@
     if (isTRUE(show_progress)) {
       # Simple progress bar with block character (no color codes)
       # style = 1: Shows elapsed and remaining time with percentage
-      pbo <- pbapply::pboptions(type = "timer", char = "█", style = 1)
+      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
       on.exit(pbapply::pboptions(pbo), add = TRUE)
 
       pbapply::pblapply(sim_ids, worker_func, cl = cl)
@@ -1927,14 +1927,14 @@
 #' @noRd
 .extract_base_config <- function(config) {
   keep <- c(
-    # 2-D matrices (n_locations × n_time_steps) — the bulk of the data
+    # 2-D matrices (n_locations x n_time_steps) -- the bulk of the data
     "b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
     "reported_cases", "reported_deaths",
     # Structural / metadata
     "date_start", "date_stop", "location_name",
     "N_j_initial", "longitude", "latitude",
     # Likelihood-control + epidemic_peaks + analyzer toggle (issue #100,
-    # plan §3.1, §3.4.1). Only present when injected by
+    # plan section3.1, section3.4.1). Only present when injected by
     # .mosaic_inject_likelihood_settings() on the Dask path; absent on
     # the local PSOCK/FORK path (no-op).
     "calc_likelihood",
@@ -1954,13 +1954,13 @@
 #' Returns only the scalar/vector parameters that sample_parameters() modifies.
 #' Most matrix fields are excluded because they live in the broadcast
 #' base_config. However, psi_jt is INCLUDED here because
-#' apply_psi_star_calibration() modifies it in-place per simulation — the
+#' .apply_psi_star_calibration() modifies it in-place per simulation -- the
 #' broadcast base_config has stale (uncalibrated) psi_jt.
 #' @noRd
 .extract_sampled_params <- function(params_sim) {
   # Exclude fields that are in the broadcast base_config AND are never
   # modified by sample_parameters().  psi_jt is intentionally NOT excluded:
-  # apply_psi_star_calibration() recalculates it per-sim using psi_star_*
+  # .apply_psi_star_calibration() recalculates it per-sim using psi_star_*
   # params, so the per-sim version must override the broadcast base_config.
   base_fields <- c(
     "b_jt", "d_jt", "mu_jt", "nu_1_jt", "nu_2_jt",
@@ -1989,12 +1989,12 @@
 #' Error handling: the entire body is wrapped in tryCatch so any failure
 #' (in sample_parameters, in the guardrail clamps, in toJSON) is
 #' captured and returned as $error. Callers MUST NOT emit warnings
-#' inside this function — a warning raised on a PSOCK worker never
+#' inside this function -- a warning raised on a PSOCK worker never
 #' reaches the parent. Surface $error in the parent instead.
 #'
 #' Constraint: do NOT touch the parent's reticulate/Coiled state from
 #' inside this function. The parent's `client` and `mosaic_worker`
-#' objects live only in the parent — they are never exported to the
+#' objects live only in the parent -- they are never exported to the
 #' PSOCK workers, which must stay reticulate-free.
 #' @noRd
 .mosaic_sample_and_serialize <- function(sim_id, PATHS, priors, config,
@@ -2036,7 +2036,7 @@
 #'   character message      : a failure reason for the parent to log
 #'
 #' This dual-type return lets the parent distinguish success from failure
-#' AND surface a diagnostic — `warning()` calls on a PSOCK worker never
+#' AND surface a diagnostic -- `warning()` calls on a PSOCK worker never
 #' reach the parent, so we propagate failure reasons through the return
 #' value instead.
 #'
@@ -2044,14 +2044,14 @@
 #' on success.
 #'
 #' Pure compute given (sim_id, res). No shared mutable state, no I/O
-#' beyond the single parquet write, no Python calls — safe to invoke in
+#' beyond the single parquet write, no Python calls -- safe to invoke in
 #' parallel on PSOCK workers. The caller (parent process) is
 #' responsible for freeing result_lookup / params_list entries after
 #' each chunk completes.
 #'
 #' Constraint: do NOT touch the parent's reticulate/Coiled state from
 #' inside this function. The parent's `client` and `mosaic_worker`
-#' objects live only in the parent — they are never exported to the
+#' objects live only in the parent -- they are never exported to the
 #' PSOCK workers, which must stay reticulate-free.
 #' @noRd
 .mosaic_write_one_shard_dask <- function(sim_id, res, n_iterations,
@@ -2077,7 +2077,7 @@
     # Fast path: .mosaic_extract_param_row() uses the precomputed
     # param_lookup to extract values directly by ISO suffix, avoiding the
     # O(n^2) c()-accumulation inside convert_config_to_matrix(). At 47
-    # countries / ~60 sampled fields, this saves ~3-5 ms per sim — adds
+    # countries / ~60 sampled fields, this saves ~3-5 ms per sim -- adds
     # up to ~50 s wall over a 100K-sim batch on 8 cores.
     raw_params <- .mosaic_extract_param_row(params, param_lookup,
                                             length(param_names_all))
@@ -2123,7 +2123,7 @@
 }
 
 
-#' Run One Dask Batch (sample → submit → gather → write parquets)
+#' Run One Dask Batch (sample -> submit -> gather -> write parquets)
 #'
 #' Replaces .mosaic_run_batch() for Dask execution. Workers compute the
 #' likelihood on-worker (issue #101) and return per-iter scalar likelihoods
@@ -2132,13 +2132,13 @@
 #' n_iterations > 1, mirroring the local-path semantics in run_MOSAIC.R).
 #'
 #' Two R-side phases run in parallel on a PSOCK cluster (fresh R
-#' processes — never fork — so a worker cannot inherit the parent's
+#' processes -- never fork -- so a worker cannot inherit the parent's
 #' reticulate interpreter or live Dask sockets and deadlock the client):
 #'
-#'   - Submission (sample_parameters + JSON serialize) — chunked in
+#'   - Submission (sample_parameters + JSON serialize) -- chunked in
 #'     batches of `submit_chunk_size` (default 1000) so that one
 #'     `client$map()` RPC handles each chunk's submissions to Coiled.
-#'   - Post-gather parquet write — chunked in batches of
+#'   - Post-gather parquet write -- chunked in batches of
 #'     `write_chunk_size` (default 1000) for dispatch amortization,
 #'     progress logging, parent-side memory frees, and Dask scheduler
 #'     health pings.
@@ -2171,14 +2171,14 @@
   # ---------------------------------------------------------------------------
   # submit_chunk_size: number of sims per client$map() RPC to Coiled.
   # Controls Dask scheduler load (one RPC per chunk vs. one RPC per sim),
-  # NOT local R-side parallelism — that's the inner PSOCK parLapply over
+  # NOT local R-side parallelism -- that's the inner PSOCK parLapply over
   # each chunk_indices block. 1000 sits inside Dask's documented sweet spot
   # for client.map() batch sizing
   # (https://docs.dask.org/en/stable/best-practices.html): individual
   # submit() calls are discouraged due to per-call RPC overhead, and
   # batches in the thousands amortize that overhead while keeping the
   # first chunk's futures dispatchable within ~1 s of submission.
-  # Not a function of n_cores_parallel — RPC amortization is a network
+  # Not a function of n_cores_parallel -- RPC amortization is a network
   # constant, not a CPU-amortization constant.
   submit_chunk_size <- 1000L
   n_chunks <- ceiling(n_sims / submit_chunk_size)
@@ -2235,14 +2235,14 @@
                  ARROW_NUM_THREADS = "1")
       # Both Arrow pools: library(MOSAIC) loads arrow and initializes its IO pool
       # before ARROW_NUM_THREADS is read, so the env var alone leaves IO at its
-      # 8-thread default — set both pools explicitly (mirrors the parent pin).
+      # 8-thread default -- set both pools explicitly (mirrors the parent pin).
       try(arrow::set_cpu_count(1L), silent = TRUE)
       try(arrow::set_io_thread_count(1L), silent = TRUE)
       NULL
     })
     # Export read-only inputs + the (internal) worker fns to each worker's
     # global env. Deliberately NOT exported: client, mosaic_worker,
-    # base_config_future (reticulate objects — they stay in the parent).
+    # base_config_future (reticulate objects -- they stay in the parent).
     parallel::clusterExport(
       psock_cl,
       varlist = c("sim_ids", "PATHS", "priors", "config", "sampling_args",
@@ -2309,10 +2309,10 @@
     # Under PSOCK the live failure shape is (1); (2) and (3) are kept as
     # defensive guards:
     #   1. `list(params = NULL, json = NULL, error = "...")`
-    #      — the worker fn's own tryCatch caught an exception (never throws)
-    #   2. NULL — a worker returned no result (defensive; should not occur
+    #      -- the worker fn's own tryCatch caught an exception (never throws)
+    #   2. NULL -- a worker returned no result (defensive; should not occur
     #      now that the worker fn always returns the list in (1))
-    #   3. `try-error` — defensive; a dead PSOCK worker process normally
+    #   3. `try-error` -- defensive; a dead PSOCK worker process normally
     #      makes parLapply raise a cluster error rather than per-item errors
     map_indices  <- integer(0)    # positions in params_list/futures
     map_sim_ids  <- integer(0)
@@ -2409,7 +2409,7 @@
   gather_elapsed <- as.numeric(difftime(Sys.time(), gather_start, units = "secs"))
   log_msg("  Gather complete: %d results in %.1fs", length(gathered), gather_elapsed)
 
-  # Build lookup: sim_id → worker result
+  # Build lookup: sim_id -> worker result
   result_lookup <- list()
   n_worker_errors <- 0L
   for (res in gathered) {
@@ -2445,7 +2445,7 @@
             sum(worker_times))
   }
 
-  # Free the raw gathered list — result_lookup holds the same data
+  # Free the raw gathered list -- result_lookup holds the same data
   rm(gathered); gc(verbose = FALSE)
 
   # ---------------------------------------------------------------------------
@@ -2453,7 +2453,7 @@
   #
   # Workers return per-iter scalar likelihoods alongside a sim-level params
   # dict (the sampled scalars/vectors echoed back, minus matrix fields and
-  # location_name — the latter is stripped by .extract_sampled_params()
+  # location_name -- the latter is stripped by .extract_sampled_params()
   # before JSON serialization). We re-inject location_name here so
   # convert_config_to_matrix() emits ISO-suffixed column names (e.g.
   # beta_j0_tot_ETH) instead of falling back to numeric suffixes.
@@ -2463,24 +2463,24 @@
 
   # Parallel parquet write on the same PSOCK cluster. Per-sim work is pure (no
   # shared mutable state, one file per sim). Each chunk's gathered results are
-  # sent as the task payload — PSOCK workers can't COW the parent's
+  # sent as the task payload -- PSOCK workers can't COW the parent's
   # result_lookup the way fork did, so we hand them their slice explicitly.
   log_msg("  Building parquet rows for %d sims (%s)...", n_sims, par_label)
 
   # write_chunk_size: number of sims per inner parLapply() call in the
   # write loop. Gates THREE things simultaneously:
-  #   1. PSOCK task batch — one chunk is dispatched per parLapply round;
+  #   1. PSOCK task batch -- one chunk is dispatched per parLapply round;
   #      smaller chunks mean more dispatch rounds.
-  #   2. Parent-side memory free cadence — result_lookup[key] entries
+  #   2. Parent-side memory free cadence -- result_lookup[key] entries
   #      are nulled out only at chunk boundaries (each chunk's results are
   #      copied into the parLapply payload, so the parent can only drop
   #      them safely once that chunk has returned).
-  #   3. Progress log + Dask scheduler health-check cadence — one
+  #   3. Progress log + Dask scheduler health-check cadence -- one
   #      "X/N elapsed" line per chunk, one client$scheduler_info()
   #      ping per chunk.
   # Fixed at 1000 to match `submit_chunk_size` for log-line cadence
-  # consistency across the two phases. Unlike submit_chunk_size — which
-  # is governed by Dask RPC amortization — this one is a dispatch+progress
+  # consistency across the two phases. Unlike submit_chunk_size -- which
+  # is governed by Dask RPC amortization -- this one is a dispatch+progress
   # constant; if it ever wants to diverge (e.g. scale with
   # n_cores_parallel for tighter dispatch amortization, or with n_sims for
   # progress-line cadence), the two are semantically independent.
@@ -2513,7 +2513,7 @@
     # parLapply raise a cluster error rather than per-item shapes). isTRUE()
     # correctly maps all non-TRUE shapes to FALSE in success_indicators.
     # After accounting for success/failure, surface the failure diagnostic
-    # (which would otherwise be lost — a warning raised on a PSOCK worker
+    # (which would otherwise be lost -- a warning raised on a PSOCK worker
     # never reaches the parent).
     success_indicators[chunk_idxs] <- vapply(chunk_out, isTRUE, logical(1))
 
@@ -2606,7 +2606,7 @@
 
   stochastic_results  <- NULL
 
-  # --- Stochastic param sims (many configs × many seeds) ---
+  # --- Stochastic param sims (many configs x many seeds) ---
   if (!is.null(param_configs) && length(param_configs) > 0 && n_stochastic_per > 0L) {
     n_param_sets <- length(param_configs)
     total <- n_param_sets * n_stochastic_per

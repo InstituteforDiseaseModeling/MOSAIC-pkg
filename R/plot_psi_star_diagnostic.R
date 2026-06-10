@@ -1,7 +1,7 @@
-#' Plot Raw vs Calibrated Environmental Suitability (ψ vs ψ*)
+#' Plot Raw vs Calibrated Environmental Suitability (psi vs psi*)
 #'
 #' Creates a time-series plot comparing the raw LSTM-predicted environmental
-#' suitability ψ with the calibrated ψ* after applying the posterior psi_star
+#' suitability psi with the calibrated psi* after applying the posterior psi_star
 #' parameters (\code{psi_star_a}, \code{psi_star_b}, \code{psi_star_z},
 #' \code{psi_star_k}) via \code{\link{calc_psi_star}}.
 #'
@@ -10,7 +10,7 @@
 #' scale before it enters the transmission model. Without this plot there is no
 #' routine way to see how much the calibration suppresses or reshapes the LSTM
 #' output. The subtitle reports the mean suppression percentage, making it
-#' immediately clear whether ψ is acting as a meaningful seasonal driver or
+#' immediately clear whether psi is acting as a meaningful seasonal driver or
 #' being effectively disabled.
 #'
 #' @param dirs Named list of output directory paths as returned by the internal
@@ -56,15 +56,15 @@ plot_psi_star_diagnostic <- function(dirs,
 
   if (!file.exists(psi_csv)) {
     if (verbose) message("plot_psi_star_diagnostic: psi CSV not found at ", psi_csv,
-                         " — skipping.")
+                         " \u2014 skipping.")
     return(invisible(NULL))
   }
   if (!file.exists(param_csv)) {
-    if (verbose) message("plot_psi_star_diagnostic: parameter_estimates.csv not found — skipping.")
+    if (verbose) message("plot_psi_star_diagnostic: parameter_estimates.csv not found \u2014 skipping.")
     return(invisible(NULL))
   }
   if (!file.exists(config_json)) {
-    if (verbose) message("plot_psi_star_diagnostic: config.json not found — skipping.")
+    if (verbose) message("plot_psi_star_diagnostic: config.json not found \u2014 skipping.")
     return(invisible(NULL))
   }
 
@@ -107,7 +107,7 @@ plot_psi_star_diagnostic <- function(dirs,
 
       if (any(sapply(list(psi_a, psi_b, psi_z, psi_k), is.null))) {
         if (verbose) message(sprintf(
-          "plot_psi_star_diagnostic: psi_star params not found for %s — skipping.", j))
+          "plot_psi_star_diagnostic: psi_star params not found for %s \u2014 skipping.", j))
         next
       }
 
@@ -118,7 +118,7 @@ plot_psi_star_diagnostic <- function(dirs,
 
       if (nrow(psi_cal) == 0L) {
         if (verbose) message(sprintf(
-          "plot_psi_star_diagnostic: no psi data in calibration window for %s — skipping.", j))
+          "plot_psi_star_diagnostic: no psi data in calibration window for %s \u2014 skipping.", j))
         next
       }
 
@@ -205,7 +205,7 @@ plot_psi_star_diagnostic <- function(dirs,
 
     }, error = function(e) {
       if (verbose) message(sprintf(
-        "plot_psi_star_diagnostic: failed for %s — %s", j, e$message))
+        "plot_psi_star_diagnostic: failed for %s \u2014 %s", j, e$message))
     })
   }
 

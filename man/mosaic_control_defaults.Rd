@@ -72,7 +72,7 @@ prediction plots (default: 100L). Applied identically to both models.
 These runs execute on an internal PSOCK cluster when
 \code{parallel$enable = TRUE}.
 \item \code{optimize_subset}: Logical; when \code{TRUE}, the post-ensemble
-optimizer (MAE / WIS / R²+bias) refines the best subset used for
+optimizer (MAE / WIS / R^2+bias) refines the best subset used for
 \code{posteriors.json}, \code{posterior_quantiles.csv}, and the ensemble
 object driving all downstream plots and metrics. The tier-selected subset
 is preserved in the \code{is_best_subset} / \code{weight_best} columns of
@@ -81,7 +81,7 @@ to new \code{is_best_subset_opt} / \code{weight_best_opt} columns. When
 \code{FALSE} (default), the tier-selected subset is canonical and no
 \code{_opt} columns are written. \strong{Statistical note:} enabling this
 flag yields a posterior conditioned on ensemble predictive performance
-(MAE / WIS / R²+bias on the training data) rather than a pure
+(MAE / WIS / R^2+bias on the training data) rather than a pure
 likelihood-weighted posterior.
 \item \code{optimize_min_n}: Minimum subset size the optimizer may select
 (default \code{30L}, raised from \code{4L} to guard against KDE

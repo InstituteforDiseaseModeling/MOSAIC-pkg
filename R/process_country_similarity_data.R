@@ -14,7 +14,7 @@
 #' This function performs the following steps:
 #' \enumerate{
 #'   \item Loads a global similarity distance matrix from a CSV file.
-#'   \item Normalizes country names to title case and replaces non-standard names like "Ivory Coast" with "Côte d'Ivoire" to match ISO3 country standards.
+#'   \item Normalizes country names to title case and replaces non-standard names like "Ivory Coast" with "Cote d'Ivoire" to match ISO3 country standards.
 #'   \item Subsets the matrix to only include African countries, based on ISO3 codes provided by `MOSAIC::iso_codes_africa`.
 #'   \item Outputs a CSV file containing the similarity matrix for African countries, with row and column names in ISO3 format.
 #' }
@@ -50,7 +50,7 @@ process_country_similarity_data <- function(PATHS) {
      country_names_normalized[country_names_normalized == "Dem Rep Congo"] <- "Democratic Republic of Congo"
      country_names_normalized[country_names_normalized == "Rep Congo"] <- "Congo"
      country_names_normalized[country_names_normalized == "Equat. Guinea"] <- "Equatorial Guinea"
-     country_names_normalized[country_names_normalized == "Ivory Coast"] <- "Côte d’Ivoire"
+     country_names_normalized[country_names_normalized == "Ivory Coast"] <- "C\u00F4te d\u2019Ivoire"
      country_names_normalized[country_names_normalized == "Guinea Bissau"] <- "Guinea-Bissau"
 
      # Subset the matrix for African countries

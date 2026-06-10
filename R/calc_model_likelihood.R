@@ -172,18 +172,18 @@ calc_model_likelihood <- function(obs_cases,
           # Weighted NB dispersion (k) estimated from observed data via method-of-moments.
           # Note: k is a property of the observation process, not the model-observation
           # mismatch, so all simulations are evaluated against the same k. This is
-          # intentional — it ensures the likelihood reflects data noise characteristics
+          # intentional -- it ensures the likelihood reflects data noise characteristics
           # rather than calibration quality. The k_min floor prevents the NB from
           # collapsing to a near-Poisson kernel for low-variance series.
-          k_c <- if (have_cases)  nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min_cases) else Inf
-          k_d <- if (have_deaths) nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min_deaths) else Inf
+          k_c <- if (have_cases)  .nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min_cases) else Inf
+          k_d <- if (have_deaths) .nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min_deaths) else Inf
 
           # Core NB time series LL (pass k and k_min explicitly)
           ll_cases  <- if (have_cases) MOSAIC::calc_log_likelihood(
                observed  = obs_c,
                estimated = est_c,
                family    = "negbin",
-               weights   = mask_weights(weights_time, obs_c, est_c),
+               weights   = .mask_weights(weights_time, obs_c, est_c),
                k         = k_c,
                k_min     = nb_k_min_cases,
                verbose   = FALSE
@@ -193,7 +193,7 @@ calc_model_likelihood <- function(obs_cases,
                observed  = obs_d,
                estimated = est_d,
                family    = "negbin",
-               weights   = mask_weights(weights_time, obs_d, est_d),
+               weights   = .mask_weights(weights_time, obs_d, est_d),
                k         = k_d,
                k_min     = nb_k_min_deaths,
                verbose   = FALSE
@@ -238,20 +238,20 @@ calc_model_likelihood <- function(obs_cases,
           # Cumulative progression (using data-driven k)
           ll_cum_tot_c <- ll_cum_tot_d <- 0
           if (weight_cumulative_total > 0) {
-               if (have_cases)  ll_cum_tot_c <- ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c, weights_time)
-               if (have_deaths) ll_cum_tot_d <- ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d, weights_time)
+               if (have_cases)  ll_cum_tot_c <- .ll_cumulative_progressive_nb(obs_c, est_c, cumulative_timepoints, k_c, weights_time)
+               if (have_deaths) ll_cum_tot_d <- .ll_cumulative_progressive_nb(obs_d, est_d, cumulative_timepoints, k_d, weights_time)
           }
 
 
-          # WIS (optional) — raw negated WIS; weight_wis applied at assembly (like other components)
+          # WIS (optional) -- raw negated WIS; weight_wis applied at assembly (like other components)
           ll_wis_cases <- ll_wis_deaths <- 0
           if (weight_wis > 0) {
                if (have_cases) {
-                    wis_c <- compute_wis_parametric_row(obs_c, est_c, weights_time, wis_quantiles, k_use = k_c)
+                    wis_c <- .compute_wis_parametric_row(obs_c, est_c, weights_time, wis_quantiles, k_use = k_c)
                     if (is.finite(wis_c)) ll_wis_cases <- -wis_c
                }
                if (have_deaths) {
-                    wis_d <- compute_wis_parametric_row(obs_d, est_d, weights_time, wis_quantiles, k_use = k_d)
+                    wis_d <- .compute_wis_parametric_row(obs_d, est_d, weights_time, wis_quantiles, k_use = k_d)
                     if (is.finite(wis_d)) ll_wis_deaths <- -wis_d
                }
           }
@@ -265,10 +265,10 @@ calc_model_likelihood <- function(obs_cases,
           # factor inflates it to O(N_obs) to match the NB core. The denominator
           # is the number of independent observations for that component:
           #
-          #   NB core:     N_obs observations → no scaling (reference)
-          #   Peaks:       N_peaks observations → scale by N_obs / N_peaks
-          #   WIS:         N_quantiles evaluations → scale by N_obs / N_quantiles
-          #   Cumulative:  N_eval_points evaluations → scale by N_obs / N_eval_points
+          #   NB core:     N_obs observations -> no scaling (reference)
+          #   Peaks:       N_peaks observations -> scale by N_obs / N_peaks
+          #   WIS:         N_quantiles evaluations -> scale by N_obs / N_quantiles
+          #   Cumulative:  N_eval_points evaluations -> scale by N_obs / N_eval_points
           #
           # This makes w=0.05 mean "~5% of NB core influence" for ALL shape terms.
           #
@@ -327,7 +327,7 @@ calc_model_likelihood <- function(obs_cases,
      }
 
      if (all(is.na(ll_locations))) {
-          if (verbose) message("All locations contributed NA — returning NA.")
+          if (verbose) message("All locations contributed NA \u2014 returning NA.")
           return(NA_real_)
      }
 
@@ -342,7 +342,7 @@ calc_model_likelihood <- function(obs_cases,
 ###############################################################################
 
 # Mask weights on non-finite entries
-mask_weights <- function(w, obs_vec, est_vec = NULL) {
+.mask_weights <- function(w, obs_vec, est_vec = NULL) {
      w2 <- w
      bad <- !is.finite(obs_vec) | (!is.null(est_vec) & !is.finite(est_vec))
      if (any(bad)) w2[bad] <- 0
@@ -392,7 +392,7 @@ mask_weights <- function(w, obs_vec, est_vec = NULL) {
 }
 
 # Robust cumulative NB progression
-ll_cumulative_progressive_nb <- function(obs_vec,
+.ll_cumulative_progressive_nb <- function(obs_vec,
                                          est_vec,
                                          timepoints = c(0.25, 0.5, 0.75, 1.0),
                                          k_data = NULL,
@@ -413,7 +413,7 @@ ll_cumulative_progressive_nb <- function(obs_vec,
           end_idx <- min(n, max(1L, round(n * tp)))
 
           # Scale k proportionally to the number of summed timesteps.
-          # For independent NB(mu_i, k) variables, the sum's dispersion ≈ k * n_summed
+          # For independent NB(mu_i, k) variables, the sum's dispersion ~= k * n_summed
           # (exact for identical means; reasonable upper bound for varying means).
           cum_k <- if (!is.null(k_data) && is.finite(k_data)) {
                k_data * end_idx
@@ -456,7 +456,7 @@ ll_cumulative_progressive_nb <- function(obs_vec,
 
 
 # WIS helper (uses fixed k from core, or Poisson if Inf)
-compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
+.compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
      # Early return for all-NA cases
      if (all(!is.finite(y)) || all(!is.finite(est))) return(NA_real_)
      
@@ -519,7 +519,7 @@ compute_wis_parametric_row <- function(y, est, w_time, probs, k_use) {
 # where V1 = sum(w) and V2 = sum(w^2). This avoids underestimating variance
 # (and hence overestimating k) with small or unequal-weight samples.
 #' @keywords internal
-nb_size_from_obs_weighted <- function(x, w, k_min = 3, k_max = 1e5) {
+.nb_size_from_obs_weighted <- function(x, w, k_min = 3, k_max = 1e5) {
      ok <- is.finite(x) & is.finite(w) & (w > 0)
      if (!any(ok)) return(Inf)
      x <- x[ok]; w <- w[ok]
