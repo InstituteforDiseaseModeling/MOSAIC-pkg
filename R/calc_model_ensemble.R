@@ -350,8 +350,12 @@ calc_model_ensemble <- function(config,
     n_locs <- dims[1L]; n_times <- dims[2L]
     n_params <- dims[3L]; n_stoch <- dims[4L]
 
-    # Each param set's weight is divided equally among its stochastic runs
-    sim_weights <- rep(parameter_weights, each = n_stoch) / n_stoch
+    # Each param set's weight is divided equally among its stochastic runs.
+    # `times` (NOT `each`): as.vector(data_array[i, j, , ]) flattens the
+    # [param, stoch] slice param-fastest, so the weight vector must repeat
+    # param-fastest to pair every (param, stoch) prediction with its own
+    # parameter's weight. Using `each` mis-pairs them when n_stoch > 1.
+    sim_weights <- rep(parameter_weights, times = n_stoch) / n_stoch
 
     n_ci_pairs   <- length(envelope_quantiles) / 2L
     stats_mean   <- matrix(NA_real_, nrow = n_locs, ncol = n_times)
@@ -373,9 +377,10 @@ calc_model_ensemble <- function(config,
         valid <- is.finite(values) & is.finite(sim_weights) & sim_weights > 0
         w_sum <- if (any(valid)) sum(sim_weights[valid]) else 0
         stats_mean[i, j]   <- if (w_sum > 0) sum(values[valid] * sim_weights[valid]) / w_sum else NA_real_
-        stats_median[i, j] <- weighted_quantiles(values, sim_weights, 0.5)
-
-        all_q <- weighted_quantiles(values, sim_weights, envelope_quantiles)
+        # One weighted_quantiles call for median + envelope (single sort, not two)
+        qv <- weighted_quantiles(values, sim_weights, c(0.5, envelope_quantiles))
+        stats_median[i, j] <- qv[1]
+        all_q <- qv[-1]
         for (ci_idx in seq_len(n_ci_pairs)) {
           lower_idx <- ci_idx
           upper_idx <- length(envelope_quantiles) - ci_idx + 1L

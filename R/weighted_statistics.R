@@ -36,6 +36,44 @@ weighted_var <- function(x, w) {
   numerator / denominator
 }
 
+#' Weighted quantiles from already-sorted, pre-filtered inputs
+#'
+#' Internal core of \code{\link{weighted_quantiles}}: the cumulative-weight
+#' interpolation, assuming inputs are already filtered (finite values, positive
+#' weights) and sorted ascending by value with weights aligned. Exposed so hot
+#' callers that sort once and reuse the order across many subsets (e.g.
+#' \code{\link{optimize_ensemble_subset}}) can skip the per-call \code{order()}.
+#'
+#' @param x_sorted Numeric vector of values, sorted ascending, all finite.
+#' @param w_sorted Numeric vector of weights aligned with \code{x_sorted}, all
+#'   finite and positive.
+#' @param probs Numeric vector of quantile probabilities (between 0 and 1).
+#' @return Vector of weighted quantiles, one per element of \code{probs}.
+#' @seealso \code{\link{weighted_quantiles}}
+#' @export
+weighted_quantiles_presorted <- function(x_sorted, w_sorted, probs) {
+  n <- length(x_sorted)
+  if (n == 0) return(rep(NA_real_, length(probs)))
+
+  # Single / constant value
+  if (n == 1) return(rep(x_sorted[1], length(probs)))
+  if (length(unique(x_sorted)) == 1) return(rep(x_sorted[1], length(probs)))
+
+  # Cumulative normalized weights (strictly increasing when all w > 0)
+  cumsum_w_norm <- cumsum(w_sorted) / sum(w_sorted)
+
+  # Need at least 2 distinct cumulative levels to interpolate
+  if (length(unique(cumsum_w_norm)) < 2) {
+    return(stats::quantile(x_sorted, probs = probs, na.rm = TRUE, names = FALSE))
+  }
+
+  tryCatch({
+    stats::approx(cumsum_w_norm, x_sorted, xout = probs, rule = 2)$y
+  }, error = function(e) {
+    stats::quantile(x_sorted, probs = probs, na.rm = TRUE, names = FALSE)
+  })
+}
+
 #' Weighted quantiles
 #'
 #' Calculates weighted quantiles for a vector of values using linear interpolation.
@@ -46,8 +84,10 @@ weighted_var <- function(x, w) {
 #' @return Vector of weighted quantiles
 #'
 #' @details
-#' Sorts values and weights, calculates cumulative weight distribution,
-#' and uses linear interpolation to estimate quantiles at specified probability levels.
+#' Drops non-finite values and non-positive weights, sorts the survivors by
+#' value, then delegates to \code{\link{weighted_quantiles_presorted}} for the
+#' cumulative-weight interpolation. (Splitting out the sorted core lets hot
+#' callers sort once and reuse the order; the public behaviour is unchanged.)
 #'
 #' @examples
 #' x <- c(1, 2, 3, 4, 5)
@@ -57,42 +97,17 @@ weighted_var <- function(x, w) {
 #' @export
 weighted_quantiles <- function(x, w, probs) {
   if (length(x) == 0) return(rep(NA_real_, length(probs)))
-  
-  # Remove non-finite values
+
+  # Remove non-finite values and non-positive weights
   valid_idx <- is.finite(x) & is.finite(w) & w > 0
   if (sum(valid_idx) == 0) return(rep(NA_real_, length(probs)))
-  
+
   x <- x[valid_idx]
   w <- w[valid_idx]
-  
-  # Handle single value case
-  if (length(x) == 1) return(rep(x[1], length(probs)))
-  
-  # Handle constant values case
-  if (length(unique(x)) == 1) return(rep(x[1], length(probs)))
-  
-  # Sort values and weights
+
+  # Sort by value and delegate to the presorted core
   ord <- order(x)
-  x_sorted <- x[ord]
-  w_sorted <- w[ord]
-  
-  # Calculate cumulative weights
-  cumsum_w <- cumsum(w_sorted)
-  cumsum_w_norm <- cumsum_w / sum(w_sorted)
-  
-  # Check if we have at least 2 distinct cumulative weight values
-  if (length(unique(cumsum_w_norm)) < 2) {
-    # Fallback: use simple quantiles without weights
-    return(stats::quantile(x, probs = probs, na.rm = TRUE, names = FALSE))
-  }
-  
-  # Interpolate quantiles
-  tryCatch({
-    stats::approx(cumsum_w_norm, x_sorted, xout = probs, rule = 2)$y
-  }, error = function(e) {
-    # Final fallback
-    stats::quantile(x, probs = probs, na.rm = TRUE, names = FALSE)
-  })
+  weighted_quantiles_presorted(x[ord], w[ord], probs)
 }
 
 #' Weighted mode estimation using kernel density

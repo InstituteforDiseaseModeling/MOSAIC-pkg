@@ -144,6 +144,27 @@ optimize_ensemble_subset <- function(ensemble,
   if (verbose) message(sprintf("Optimizing ensemble subset: N = %d to %d (%s objective)...",
                                min_n, max_n, objective))
 
+  # ── 3b. PER-CELL SORTED TABLES (sort once, reuse across all N) ────────
+  # Top-N subsets are nested in param index, and each (param, stoch) prediction
+  # carries its OWN param's weight (param-fastest alignment). So sort each cell's
+  # finite predictions over the full param block ONCE; for each N, mask to
+  # param_id <= N (a sorted subsequence) and weight by the per-N Gibbs weights.
+  # Bit-identical to re-sorting per N (a sorted subsequence equals sorting the
+  # subset; ties break identically because both layouts are param-fastest with
+  # param <= N). Removes ~all the O(m log m) re-sorts from the N loop.
+  pid_full <- rep(seq_len(max_n), times = n_stoch)   # param id of each as.vector() element
+  .presort_cells <- function(arr) {
+    out <- vector("list", n_locs * n_times); ci <- 0L
+    for (i in seq_len(n_locs)) for (j in seq_len(n_times)) {
+      ci <- ci + 1L
+      v <- as.vector(arr[i, j, , ]); fin <- is.finite(v); o <- order(v[fin])
+      out[[ci]] <- list(xs = v[fin][o], pid = pid_full[fin][o])
+    }
+    out
+  }
+  cell_c <- .presort_cells(cases_array)
+  cell_d <- .presort_cells(deaths_array)
+
   # ── 4. EVALUATION LOOP ───────────────────────────────────────────────
 
   for (idx in seq_len(n_evals)) {
@@ -163,10 +184,11 @@ optimize_ensemble_subset <- function(ensemble,
       weights_n <- calc_model_weights_gibbs(x = delta_n, eta = eta_n)
     }
 
-    # 4b. Sim weights: each param weight divided among stochastic runs
-    sim_weights_n <- rep(weights_n, each = n_stoch) / n_stoch
+    # 4b. Per-param weight share = param weight / n_stoch; indexed by param id below.
+    w_per_param <- weights_n / n_stoch
 
-    # 4c. Compute weighted medians (and quantiles for WIS)
+    # 4c. Weighted medians (and WIS quantiles) from the per-cell sorted tables:
+    #     mask each cell to param_id <= n and weight each value by its param.
     median_c <- matrix(NA_real_, n_locs, n_times)
     median_d <- matrix(NA_real_, n_locs, n_times)
 
@@ -174,12 +196,14 @@ optimize_ensemble_subset <- function(ensemble,
       q025_c <- q25_c <- q75_c <- q975_c <- matrix(NA_real_, n_locs, n_times)
       q025_d <- q25_d <- q75_d <- q975_d <- matrix(NA_real_, n_locs, n_times)
 
+      ci <- 0L
       for (i in seq_len(n_locs)) {
         for (j in seq_len(n_times)) {
-          vals_c <- as.vector(cases_array[i, j, 1:n, ])
-          vals_d <- as.vector(deaths_array[i, j, 1:n, ])
-          qc <- weighted_quantiles(vals_c, sim_weights_n, wis_probs)
-          qd <- weighted_quantiles(vals_d, sim_weights_n, wis_probs)
+          ci <- ci + 1L
+          cc <- cell_c[[ci]]; kc <- cc$pid <= n
+          qc <- weighted_quantiles_presorted(cc$xs[kc], w_per_param[cc$pid[kc]], wis_probs)
+          dd <- cell_d[[ci]]; kd <- dd$pid <= n
+          qd <- weighted_quantiles_presorted(dd$xs[kd], w_per_param[dd$pid[kd]], wis_probs)
           q025_c[i, j] <- qc[1]; q25_c[i, j] <- qc[2]; median_c[i, j] <- qc[3]
           q75_c[i, j]  <- qc[4]; q975_c[i, j] <- qc[5]
           q025_d[i, j] <- qd[1]; q25_d[i, j] <- qd[2]; median_d[i, j] <- qd[3]
@@ -187,12 +211,14 @@ optimize_ensemble_subset <- function(ensemble,
         }
       }
     } else {
+      ci <- 0L
       for (i in seq_len(n_locs)) {
         for (j in seq_len(n_times)) {
-          vals_c <- as.vector(cases_array[i, j, 1:n, ])
-          vals_d <- as.vector(deaths_array[i, j, 1:n, ])
-          median_c[i, j] <- weighted_quantiles(vals_c, sim_weights_n, 0.5)
-          median_d[i, j] <- weighted_quantiles(vals_d, sim_weights_n, 0.5)
+          ci <- ci + 1L
+          cc <- cell_c[[ci]]; kc <- cc$pid <= n
+          median_c[i, j] <- weighted_quantiles_presorted(cc$xs[kc], w_per_param[cc$pid[kc]], 0.5)
+          dd <- cell_d[[ci]]; kd <- dd$pid <= n
+          median_d[i, j] <- weighted_quantiles_presorted(dd$xs[kd], w_per_param[dd$pid[kd]], 0.5)
         }
       }
     }
@@ -294,7 +320,8 @@ optimize_ensemble_subset <- function(ensemble,
   opt_deaths <- deaths_array[, , optimal_indices, , drop = FALSE]
 
   # Re-compute all statistics (medians, means, CIs)
-  sim_weights_opt <- rep(optimal_weights, each = n_stoch) / n_stoch
+  # `times` (NOT `each`): param-fastest weights to match as.vector(opt_cases[i, j, , ]).
+  sim_weights_opt <- rep(optimal_weights, times = n_stoch) / n_stoch
 
   cases_mean_m   <- matrix(NA_real_, n_locs, n_times)
   cases_median_m <- matrix(NA_real_, n_locs, n_times)
@@ -315,13 +342,14 @@ optimize_ensemble_subset <- function(ensemble,
       vals_c <- as.vector(opt_cases[i, j, , ])
       vals_d <- as.vector(opt_deaths[i, j, , ])
 
-      cases_mean_m[i, j]   <- sum(vals_c * sim_weights_opt, na.rm = TRUE)
-      cases_median_m[i, j] <- weighted_quantiles(vals_c, sim_weights_opt, 0.5)
+      cases_mean_m[i, j]    <- sum(vals_c * sim_weights_opt, na.rm = TRUE)
       deaths_mean_m[i, j]   <- sum(vals_d * sim_weights_opt, na.rm = TRUE)
-      deaths_median_m[i, j] <- weighted_quantiles(vals_d, sim_weights_opt, 0.5)
 
-      all_q_c <- weighted_quantiles(vals_c, sim_weights_opt, envelope_quantiles)
-      all_q_d <- weighted_quantiles(vals_d, sim_weights_opt, envelope_quantiles)
+      # One weighted_quantiles call per metric for median + envelope (single sort)
+      qc <- weighted_quantiles(vals_c, sim_weights_opt, c(0.5, envelope_quantiles))
+      qd <- weighted_quantiles(vals_d, sim_weights_opt, c(0.5, envelope_quantiles))
+      cases_median_m[i, j]  <- qc[1]; all_q_c <- qc[-1]
+      deaths_median_m[i, j] <- qd[1]; all_q_d <- qd[-1]
 
       for (ci_idx in seq_len(n_ci_pairs)) {
         lower_idx <- ci_idx

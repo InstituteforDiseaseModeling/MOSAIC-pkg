@@ -228,3 +228,47 @@ test_that("non-uniform weights produce different predictions than uniform", {
   # Heavily weighted toward param 1 (100s), so weighted mean should be closer to 100
   expect_true(mean(ens_weighted$cases_mean) > mean(ens_uniform$cases_mean))
 })
+
+test_that("ensemble weighting pairs each (param,stoch) prediction with its OWN param weight (n_stoch>1 alignment)", {
+  # Regression guard for the value<->weight alignment. as.vector(cases_array[i,j,,])
+  # flattens the [param, stoch] slice param-fastest, so sim_weights must repeat
+  # param-fastest (rep(w, times=n_stoch)) to attach each (param,stoch) prediction
+  # to its own parameter's weight. The previous code used rep(w, each=n_stoch),
+  # which mis-pairs them whenever n_stoch > 1. This test fails if that regresses.
+  n_params <- 3L; n_stoch <- 2L
+  vals <- c(10, 20, 30)          # each param emits a constant value across its stoch runs
+  pw   <- c(0.7, 0.2, 0.1)       # param 1 dominates
+
+  mock_config <- list(
+    reported_cases = matrix(0, 1, 1), reported_deaths = matrix(0, 1, 1),
+    location_name = "A", date_start = "2023-01-01", date_stop = "2023-01-01"
+  )
+  configs <- lapply(seq_len(n_params), function(i) mock_config)
+  precomputed <- list(); idx <- 0L
+  for (p in seq_len(n_params)) for (s in seq_len(n_stoch)) {
+    idx <- idx + 1L
+    precomputed[[idx]] <- list(param_idx = p, stoch_idx = s,
+      reported_cases = matrix(vals[p], 1, 1),
+      reported_deaths = matrix(vals[p], 1, 1), success = TRUE)
+  }
+
+  ens <- calc_model_ensemble(
+    config = mock_config, configs = configs, parameter_weights = pw,
+    n_simulations_per_config = n_stoch, envelope_quantiles = c(0.025, 0.975),
+    precomputed_results = precomputed, verbose = FALSE
+  )
+
+  flat_vals    <- rep(vals, times = n_stoch)          # = as.vector(cases_array[1,1,,]) (param-fastest)
+  aligned_w    <- rep(pw, times = n_stoch) / n_stoch  # CORRECT (what the fixed code uses)
+  misaligned_w <- rep(pw, each  = n_stoch) / n_stoch  # the OLD bug
+
+  # The ensemble median must equal the param-ALIGNED weighted quantile (bit-identical).
+  expect_equal(as.numeric(ens$cases_median),
+               weighted_quantiles(flat_vals, aligned_w, 0.5))
+  # ...and the aligned vs misaligned results genuinely differ here, so this test
+  # would FAIL if the weighting regressed to rep(..., each = n_stoch).
+  expect_false(isTRUE(all.equal(
+    weighted_quantiles(flat_vals, aligned_w,    0.5),
+    weighted_quantiles(flat_vals, misaligned_w, 0.5)
+  )))
+})

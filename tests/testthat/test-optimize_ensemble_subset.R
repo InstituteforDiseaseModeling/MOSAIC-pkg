@@ -25,8 +25,9 @@ make_mock_ensemble <- function(n_locs = 2, n_times = 10, n_params = 20, n_stoch 
   weights <- rev(seq_len(n_params))
   weights <- weights / sum(weights)
 
-  # Compute medians (simplified — just use first param's first stoch for mock)
-  sim_weights <- rep(weights, each = n_stoch) / n_stoch
+  # Compute medians (simplified — just use first param's first stoch for mock).
+  # `times` matches the param-fastest as.vector() layout (see calc_model_ensemble).
+  sim_weights <- rep(weights, times = n_stoch) / n_stoch
   cases_median  <- matrix(NA_real_, n_locs, n_times)
   deaths_median <- matrix(NA_real_, n_locs, n_times)
   for (i in seq_len(n_locs)) {

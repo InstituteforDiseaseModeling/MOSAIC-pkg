@@ -110,8 +110,14 @@ grid_search_best_subset <- function(
 
   ess_method <- match.arg(ess_method)
 
-  # Rank results by likelihood (descending)
-  results_ranked <- results[order(results$likelihood, decreasing = TRUE), ]
+  # Rank by likelihood (descending). Compute the ORDER once and slice the
+  # likelihood VECTOR in the loop (the metrics use only $likelihood); the full
+  # (wide) subset data.frame is materialized once, at the chosen n. This avoids
+  # re-sorting/copying the full frame on every call and per-n wide-row copies.
+  # Bit-identical: ll_sorted[1:n] == results_ranked[1:n, ]$likelihood, and
+  # results[ord[1:n], ] == results_ranked[1:n, ] (same rows, order, row.names).
+  ord       <- order(results$likelihood, decreasing = TRUE)
+  ll_sorted <- results$likelihood[ord]
 
   # Grid search with early stopping
   n_values <- seq(min_size, max_size, by = step_size)
@@ -120,12 +126,9 @@ grid_search_best_subset <- function(
   for (n in n_values) {
     evaluations <- evaluations + 1
 
-    # Select top n
-    subset_n <- results_ranked[1:n, ]
-
     # Calculate Gibbs weights based on likelihood (matching identify_best_subset logic)
-    # 1. Calculate AIC for subset
-    aic_subset <- -2 * subset_n$likelihood
+    # 1. Calculate AIC for the top-n likelihoods (vector slice; no wide-frame copy)
+    aic_subset <- -2 * ll_sorted[1:n]
 
     # 2. Calculate delta AIC within subset (relative to best in subset)
     best_aic_in_subset <- min(aic_subset)
@@ -175,7 +178,7 @@ grid_search_best_subset <- function(
 
       return(list(
         n = n,
-        subset = subset_n,
+        subset = results[ord[1:n], ],   # materialize the selected rows once
         metrics = list(
           ESS = ESS,
           A = A,
@@ -188,10 +191,8 @@ grid_search_best_subset <- function(
   }
 
   # No convergence - return results at max_size with Gibbs weights
-  subset_max <- results_ranked[1:max_size, ]
-
   # Calculate Gibbs weights for fallback (with dynamic temperature)
-  aic_max <- -2 * subset_max$likelihood
+  aic_max <- -2 * ll_sorted[1:max_size]
   best_aic_max <- min(aic_max)
   delta_max <- aic_max - best_aic_max
 
@@ -228,7 +229,7 @@ grid_search_best_subset <- function(
 
   return(list(
     n = max_size,
-    subset = subset_max,
+    subset = results[ord[1:max_size], ],
     metrics = list(
       ESS = ESS_max,
       A = A_max,

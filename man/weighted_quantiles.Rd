@@ -20,8 +20,10 @@ Vector of weighted quantiles
 Calculates weighted quantiles for a vector of values using linear interpolation.
 }
 \details{
-Sorts values and weights, calculates cumulative weight distribution,
-and uses linear interpolation to estimate quantiles at specified probability levels.
+Drops non-finite values and non-positive weights, sorts the survivors by
+value, then delegates to \code{\link{weighted_quantiles_presorted}} for the
+cumulative-weight interpolation. (Splitting out the sorted core lets hot
+callers sort once and reuse the order; the public behaviour is unchanged.)
 }
 \examples{
 x <- c(1, 2, 3, 4, 5)
