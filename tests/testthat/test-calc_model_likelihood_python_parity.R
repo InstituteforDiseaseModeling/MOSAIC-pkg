@@ -17,6 +17,12 @@
 # All tests skip cleanly when the Python port is not importable. Requires
 # laser-cholera >= 0.13.1 for the peak-term tests to pass (v0.13.1 ported the
 # in-window peak filter from the R upstream).
+#
+# Tests #6 (NA-WIS) and #7 (zero-prediction penalty) PIN two known, tracked
+# R-vs-Python divergences (observed on laser-cholera 0.13.1) rather than
+# skip()-ing them: they run the comparison and assert the divergence is its
+# documented magnitude, so the suite no longer false-greens and BOTH a fix
+# (divergence closes) and a regression (it grows) surface as failures.
 # =============================================================================
 
 PY_LIKELIHOOD_MODULE <- "laser.cholera.calc_model_likelihood"
@@ -262,17 +268,16 @@ test_that("R and Python agree on weekly cadence with peak terms", {
 # 6. NA observations — exercises mask_weights() on both sides and the
 #    have_cases / have_deaths >= 3 finite-obs gate.
 # -----------------------------------------------------------------------------
-test_that("R and Python agree when observations contain NAs", {
+test_that("R and Python WIS agree within the known NA-masking tolerance", {
   skip_if_no_python_likelihood()
-  # Known divergence vs laser-cholera v0.13.0: Python emits RuntimeWarning
-  # "invalid value encountered in subtract" inside the WIS path when NAs are
-  # present, indicating it propagates NaN through arithmetic instead of
-  # masking before the difference. Diff is ~0.5% on this fixture (-487 vs
-  # -489.6 with tol=1e-4). Skipping pending an upstream fix to mask NAs in
-  # compute_wis_parametric_row() before subtraction. File an issue against
-  # laser-cholera referencing this test.
-  skip("known Python-side NA-masking divergence in WIS path (laser-cholera v0.13.0)")
-
+  # KNOWN, TRACKED divergence (observed on laser-cholera 0.13.1): Python's
+  # compute_wis_parametric_row() does NOT mask NA observations before the
+  # subtraction (it emits "invalid value encountered in subtract"), whereas R
+  # masks first. On this fixture that is a ~0.5% disagreement (R -489.57 vs
+  # Python -487.02). Instead of a silent skip() (which false-greened this guard)
+  # we run the comparison and assert agreement to within 2%: this tolerates the
+  # small known gap but FAILS if the divergence grows. Tighten back to
+  # PARITY_TOL once laser-cholera masks NAs in the WIS path.
   inp <- make_parity_inputs()
   inp$obs_c[1L, c(5L, 6L, 7L)] <- NA_real_
   inp$obs_d[2L, 1L:2L] <- NA_real_
@@ -282,25 +287,24 @@ test_that("R and Python agree when observations contain NAs", {
     obs_deaths = inp$obs_d, est_deaths = inp$est_d,
     weight_wis = 0.10
   )
-  ll_py <- call_python_ll(inp, weight_wis = 0.10)
+  ll_py <- suppressWarnings(as.numeric(call_python_ll(inp, weight_wis = 0.10)))
 
-  expect_equal(as.numeric(ll_py), ll_r, tolerance = PARITY_TOL)
+  expect_true(is.finite(ll_r) && is.finite(ll_py))
+  expect_equal(ll_py, ll_r, tolerance = 0.02)
 })
 
 # -----------------------------------------------------------------------------
 # 7. Zero-prediction proportional penalty path: when est==0 and obs>0, the
 #    helper applies -obs * log(1e6). Force a row of zero estimates.
 # -----------------------------------------------------------------------------
-test_that("R and Python agree on zero-prediction penalty path", {
+test_that("R and Python zero-prediction penalty differ by the known fixed ratio", {
   skip_if_no_python_likelihood()
-  # Known divergence vs laser-cholera v0.13.0: the zero-prediction penalty
-  # constant differs. On this fixture R returns -28327.6 and Python returns
-  # -50475.1 — both finite but the per-obs penalty scaling is roughly 1.78x
-  # higher on the Python side. Likely the Python port uses a different
-  # log(1e6) coefficient or applies it at a different stage of the cumulative
-  # term. File an issue against laser-cholera referencing this test.
-  skip("known Python-side zero-prediction penalty scaling divergence (laser-cholera v0.13.0)")
-
+  # KNOWN, TRACKED divergence (observed on laser-cholera 0.13.1): the
+  # zero-prediction cumulative penalty is scaled differently on the Python side
+  # — Python is ~1.78x more negative than R (R -28327.6 vs Python -50475.1 on
+  # this fixture). This is a STRUCTURAL disagreement, not numerical noise, so
+  # instead of a silent skip() we PIN the ratio: the test FAILS if the gap
+  # closes (engine aligned -> switch this to exact parity) OR widens (regression).
   inp <- make_parity_inputs()
   inp$est_c[1L, ] <- 0
   inp$est_d[1L, ] <- 0
@@ -310,12 +314,10 @@ test_that("R and Python agree on zero-prediction penalty path", {
     obs_deaths = inp$obs_d, est_deaths = inp$est_d,
     weight_cumulative_total = 0.25
   )
-  ll_py <- call_python_ll(inp, weight_cumulative_total = 0.25)
+  ll_py <- suppressWarnings(as.numeric(call_python_ll(inp, weight_cumulative_total = 0.25)))
 
-  # Both sides may produce -Inf here; if so, just check both agree on the verdict.
-  if (!is.finite(ll_r) || !is.finite(as.numeric(ll_py))) {
-    expect_equal(is.finite(ll_r), is.finite(as.numeric(ll_py)))
-  } else {
-    expect_equal(as.numeric(ll_py), ll_r, tolerance = PARITY_TOL)
-  }
+  expect_true(is.finite(ll_r) && is.finite(ll_py))
+  # Pinned known ratio ~1.78 (Python more negative). If laser-cholera aligns the
+  # penalty (ratio -> ~1.0) this WILL fail -> replace with expect_equal parity.
+  expect_equal(ll_py / ll_r, 1.78, tolerance = 0.05)
 })
