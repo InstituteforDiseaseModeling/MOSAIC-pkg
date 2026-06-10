@@ -343,7 +343,9 @@ est_initial_R <- function(
      # Process locations either in parallel or sequentially
      if (parallel && length(location_codes) >= 8) {
           # Parallel processing
-          location_results <- parallel::mclapply(location_codes, process_location, mc.cores = parallel::detectCores())
+          # Pin threads (forks inherit the parent env) and leave one core free.
+          .mosaic_set_all_thread_env(1L)
+          location_results <- parallel::mclapply(location_codes, process_location, mc.cores = max(1L, parallel::detectCores() - 1L))
 
           # Extract results into results_list format, handling errors
           for (i in seq_along(location_results)) {

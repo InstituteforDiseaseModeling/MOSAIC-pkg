@@ -300,8 +300,11 @@ est_initial_E_I <- function(PATHS, priors, config, n_samples = 1000,
                          c(E = ei_results$E, I = ei_results$I)
                     }
 
+                    # Pin threads (forks inherit the parent env) and leave one
+                    # core free so the forks don't oversubscribe the host.
+                    .mosaic_set_all_thread_env(1L)
                     mc_results <- parallel::mclapply(1:n_samples, mc_function,
-                                                     mc.cores = parallel::detectCores())
+                                                     mc.cores = max(1L, parallel::detectCores() - 1L))
                     E_samples <- sapply(mc_results, function(x) x["E"])
                     I_samples <- sapply(mc_results, function(x) x["I"])
 

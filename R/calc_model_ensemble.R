@@ -303,8 +303,11 @@ calc_model_ensemble <- function(config,
       cl <- parallel::makeCluster(n_cores_use, type = "PSOCK")
       on.exit(parallel::stopCluster(cl), add = TRUE)
 
+      # Workers load the same MOSAIC build as this parent (no hardcoded path).
+      .parent_libs <- .libPaths()
+      parallel::clusterExport(cl, ".parent_libs", envir = environment())
       parallel::clusterEvalQ(cl, {
-        .libPaths(c("~/R/library", .libPaths()))
+        .libPaths(unique(c(.parent_libs, .libPaths())))
         library(MOSAIC)
         library(reticulate)
         MOSAIC:::.mosaic_set_blas_threads(1L)
@@ -334,6 +337,11 @@ calc_model_ensemble <- function(config,
       )
     } else {
       if (verbose) message("Running ", total_sims, " simulations sequentially...")
+      # In-process LASER: pin threads so numba/MKL/OpenBLAS don't oversubscribe.
+      # The parallel branch pins its workers; run_MOSAIC pins the orchestrator;
+      # pin here too so standalone calc_model_ensemble(parallel=FALSE) is
+      # self-sufficient. Idempotent.
+      MOSAIC:::.mosaic_set_blas_threads(1L)
       pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
       on.exit(pbapply::pboptions(pbo), add = TRUE)
 

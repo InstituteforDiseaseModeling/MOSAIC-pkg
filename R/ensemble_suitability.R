@@ -92,11 +92,12 @@
      on.exit(parallel::stopCluster(cl), add = TRUE)
      parallel::clusterExport(cl, "retpy", envir = environment())
      parallel::clusterEvalQ(cl, {
-          Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
-                     OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1",
-                     TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1")
           if (nzchar(retpy)) Sys.setenv(RETICULATE_PYTHON = retpy)
           suppressMessages(library(MOSAIC))
+          # Canonical per-worker thread pin (all 7 vars incl ARROW + the BLAS
+          # clamp), set BEFORE keras3/TF import so TF reads the pinned env.
+          # Matches every other PSOCK worker in the package.
+          MOSAIC:::.mosaic_set_blas_threads(1L)
           suppressMessages(library(keras3))
           NULL
      })

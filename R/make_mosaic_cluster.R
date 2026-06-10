@@ -69,10 +69,13 @@ make_mosaic_cluster <- function(n_cores = parallel::detectCores() - 1L,
 
   # One-time worker initialization
   .root_dir_val <- root_dir
-  parallel::clusterExport(cl, varlist = c(".root_dir_val"), envir = environment())
+  # Give workers the SAME library paths as this parent (so they load the same
+  # MOSAIC build) rather than assuming a hardcoded ~/R/library.
+  .parent_libs <- .libPaths()
+  parallel::clusterExport(cl, varlist = c(".root_dir_val", ".parent_libs"), envir = environment())
 
   parallel::clusterEvalQ(cl, {
-    .libPaths(c("~/R/library", .libPaths()))
+    .libPaths(unique(c(.parent_libs, .libPaths())))
 
     library(MOSAIC)
     library(reticulate)

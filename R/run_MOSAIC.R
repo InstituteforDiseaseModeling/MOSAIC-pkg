@@ -749,6 +749,16 @@ run_MOSAIC <- function(config,
 
   .mosaic_check_blas_control()
 
+  # Pin every thread pool on THIS orchestrator process to 1 regardless of backend
+  # (local-sequential, local-PSOCK, or Dask). This previously ran only inside the
+  # Dask branch, leaving the local in-process LASER path (sequential calibration +
+  # calc_model_ensemble's sequential branch) able to oversubscribe numba/MKL/
+  # OpenBLAS on a multi-core host. Idempotent with the per-worker and Dask-path
+  # pins; PSOCK/Coiled workers set their own pins separately (fresh processes).
+  .mosaic_set_blas_threads(1L)
+  try(arrow::set_cpu_count(1L), silent = TRUE)
+  try(arrow::set_io_thread_count(1L), silent = TRUE)
+
   # ===========================================================================
   # SETUP PATHS
   log_msg("Starting MOSAIC calibration")
