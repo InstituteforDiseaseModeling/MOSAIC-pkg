@@ -1,13 +1,122 @@
 {
-  "fit_date_start": "2015-05-06",
-  "fit_date_stop": "2026-03-19",
-  "pred_date_start": "2015-05-06",
+  "architecture": "lstm_v2_hierarchical_film",
+  "fit_date_start": "2015-01-01",
+  "fit_date_stop": "2026-04-30",
+  "pred_date_start": "2015-01-01",
   "pred_date_stop": "2026-08-01",
-  "n_training_samples": 22706,
-  "n_prediction_samples": 23466,
-  "model_performance": {
-    "validation_loss": 7.11161613464355,
-    "validation_mae": 0.828987061977386
-  },
-  "covariates": ["sin_annual", "cos_annual", "sin_biannual", "cos_biannual", "sin_quarterly", "cos_quarterly", "sin_monthly", "cos_monthly", "total_population", "population_density", "urban_population_pct", "GDP", "poverty_ratio", "Piped_Water", "Other_Improved_Water", "Septic_or_Sewer_Sanitation", "Other_Improved_Sanitation", "Unimproved_Water", "Surface_Water", "Open_Defecation", "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min", "precipitation_sum", "relative_humidity_2m_mean", "wind_speed_10m_mean", "cloud_cover_mean", "et0_fao_evapotranspiration_sum", "soil_moisture_0_to_10cm_mean", "precip_sum_2w", "precip_sum_4w", "precip_sum_8w", "precip_sum_12w", "temp_mean_2w", "temp_mean_4w", "temp_mean_8w", "temp_mean_12w", "rh_mean_2w", "rh_mean_4w", "rh_mean_8w", "rh_mean_12w", "precip_anom", "temp_anom", "vpd_anom", "soil_moisture_anom", "precip_extreme_p90_count", "heatwave_days", "dry_spell_len", "temp_precip_interaction", "humidity_temp_interaction", "enso_precip_interaction", "iod_temp_interaction", "elevation_temp_interaction", "moisture_temp_interaction", "wash_precip_extreme_interaction", "urban_precip_anom_interaction", "precip_anom_sq", "temp_anom_sq", "vpd", "moisture_deficit", "aridity_index", "spei_approx", "gdd_cholera", "diurnal_temp_range", "heat_index", "dew_point_2m_max", "dew_point_2m_mean", "dew_point_2m_min", "pressure_msl_mean", "relative_humidity_2m_max", "relative_humidity_2m_min", "shortwave_radiation_sum", "wind_speed_10m_max", "IOD", "ENSO3", "ENSO34", "ENSO4", "elevation", "emdat_flood_prob", "emdat_flood_prob_4w_max", "emdat_flood_prob_12w_max", "emdat_flood_prob_12w_sum", "emdat_flood_prob_anom", "precipitation_sum_lag1", "precipitation_sum_lag2", "precipitation_sum_lag4", "precipitation_sum_lag6", "precipitation_sum_lag8", "precipitation_sum_lag12", "precipitation_sum_lag16", "precipitation_sum_lag20", "precipitation_sum_lag24", "temperature_2m_mean_lag2", "temperature_2m_mean_lag4", "temperature_2m_mean_lag8", "temperature_2m_mean_lag12", "temperature_2m_mean_lag16", "temperature_2m_mean_lag20", "temperature_2m_mean_lag24", "temperature_2m_max_lag2", "temperature_2m_max_lag4", "temperature_2m_max_lag6", "temperature_2m_max_lag8", "temperature_2m_max_lag12", "temperature_2m_max_lag16", "relative_humidity_2m_mean_lag1", "relative_humidity_2m_mean_lag2", "relative_humidity_2m_mean_lag4", "relative_humidity_2m_mean_lag8", "relative_humidity_2m_mean_lag12", "relative_humidity_2m_mean_lag16", "vpd_lag1", "vpd_lag4", "vpd_lag8", "vpd_lag12", "vpd_lag16", "soil_moisture_0_to_10cm_mean_lag1", "soil_moisture_0_to_10cm_mean_lag2", "soil_moisture_0_to_10cm_mean_lag4", "soil_moisture_0_to_10cm_mean_lag6", "soil_moisture_0_to_10cm_mean_lag8", "soil_moisture_0_to_10cm_mean_lag12", "soil_moisture_0_to_10cm_mean_lag16", "spei_approx_lag4", "spei_approx_lag8", "spei_approx_lag12", "spei_approx_lag16", "spei_approx_lag20", "spei_approx_lag24", "et0_fao_evapotranspiration_sum_lag1", "et0_fao_evapotranspiration_sum_lag4", "et0_fao_evapotranspiration_sum_lag8", "et0_fao_evapotranspiration_sum_lag12", "et0_fao_evapotranspiration_sum_lag16", "diurnal_temp_range_lag2", "diurnal_temp_range_lag4", "diurnal_temp_range_lag8", "heat_index_lag2", "heat_index_lag4", "heat_index_lag8", "heat_index_lag12", "heat_index_lag16", "cloud_cover_mean_lag1", "cloud_cover_mean_lag4", "cloud_cover_mean_lag8", "wind_speed_10m_mean_lag1", "wind_speed_10m_mean_lag2", "wind_speed_10m_mean_lag4", "wind_speed_10m_mean_lag8", "precip_anom_lag4", "precip_anom_lag8", "precip_anom_lag12", "precip_anom_lag16", "precip_anom_lag20", "temp_anom_lag4", "temp_anom_lag8", "temp_anom_lag12", "temp_anom_lag16", "soil_moisture_anom_lag4", "soil_moisture_anom_lag8", "soil_moisture_anom_lag12", "soil_moisture_anom_lag16", "soil_moisture_anom_lag20", "vpd_anom_lag4", "vpd_anom_lag8", "vpd_anom_lag12", "vpd_anom_lag16", "IOD_anom_lag4", "IOD_anom_lag8", "IOD_anom_lag12", "IOD_anom_lag16", "IOD_anom_lag20", "IOD_anom_lag24", "ENSO3_anom_lag4", "ENSO3_anom_lag8", "ENSO3_anom_lag12", "ENSO3_anom_lag16", "ENSO3_anom_lag20", "ENSO3_anom_lag24", "ENSO34_anom_lag4", "ENSO34_anom_lag8", "ENSO34_anom_lag12", "ENSO34_anom_lag16", "ENSO34_anom_lag20", "ENSO34_anom_lag24", "ENSO4_anom_lag4", "ENSO4_anom_lag8", "ENSO4_anom_lag12", "ENSO4_anom_lag16", "ENSO4_anom_lag20", "ENSO4_anom_lag24", "ENSO3_lag4", "ENSO3_lag8", "ENSO3_lag12", "ENSO3_lag16", "ENSO3_lag20", "ENSO3_lag24", "ENSO3_lag28", "ENSO3_lag32", "ENSO3_lag36", "ENSO3_lag40", "ENSO3_lag44", "ENSO34_lag4", "ENSO34_lag8", "ENSO34_lag12", "ENSO34_lag16", "ENSO34_lag20", "ENSO34_lag24", "ENSO34_lag28", "ENSO34_lag32", "ENSO34_lag36", "ENSO34_lag40", "ENSO34_lag44", "ENSO34_lag48", "ENSO4_lag4", "ENSO4_lag8", "ENSO4_lag12", "ENSO4_lag16", "ENSO4_lag20", "ENSO4_lag24", "ENSO4_lag28", "ENSO4_lag32", "ENSO4_lag36", "ENSO4_lag40", "ENSO4_lag44", "IOD_lag0", "IOD_lag4", "IOD_lag8", "IOD_lag12", "IOD_lag16", "IOD_lag20", "IOD_lag24", "IOD_lag28", "IOD_lag32", "IOD_lag36", "IOD_lag40", "IOD_lag44", "emdat_flood_prob_anom_lag4", "emdat_flood_prob_anom_lag8", "emdat_flood_prob_anom_lag12", "emdat_flood_prob_anom_lag16", "emdat_flood_prob_anom_lag20"]
+  "feature_set": "v7.3",
+  "response_var": "transmission_intensity",
+  "bias_correct": true,
+  "region_map": "snf_k5",
+  "n_seeds": 5,
+  "seeds": [11, 22, 33, 44, 55],
+  "parallel_seeds": 5,
+  "n_countries": 40,
+  "n_regions": 5,
+  "n_features": 38,
+  "features": ["emdat_flood_prob_anom", "emdat_flood_prob_anom_lag4", "emdat_flood_prob_anom_lag8", "emdat_flood_prob_anom_lag12", "emdat_flood_prob_anom_lag16", "emdat_flood_prob_anom_lag20", "emdat_flood_prob", "emdat_flood_prob_12w_max", "ENSO4", "ENSO4_lag4", "ENSO4_lag8", "ENSO4_lag12", "ENSO4_lag16", "ENSO4_lag28", "ENSO34", "ENSO34_lag8", "ENSO34_lag12", "ENSO34_lag16", "ENSO34_lag24", "ENSO34_lag36", "temperature_2m_mean", "precipitation_sum", "relative_humidity_2m_mean", "soil_moisture_0_to_10cm_mean", "precipitation_sum_lag8", "precipitation_sum_lag12", "precipitation_sum_lag16", "soil_moisture_0_to_10cm_mean_lag16", "soil_moisture_anom_lag16", "precip_sum_12w", "temp_mean_12w", "precip_anom", "precip_anom_lag8", "precip_anom_lag12", "temp_anom", "spei_approx_lag12", "cos_annual", "cos_biannual"],
+  "fit_info": [
+    {
+      "seed": 11,
+      "val_loss": 0.660320288755677,
+      "val_metric": 0.146710998294028,
+      "train_minutes": 36.8,
+      "n_epochs": 12,
+      "loss_type": "bce",
+      "status": "ok",
+      "_row": "elapsed"
+    },
+    {
+      "seed": 22,
+      "val_loss": 0.665139947425235,
+      "val_metric": 0.146532110531222,
+      "train_minutes": 42.88,
+      "n_epochs": 14,
+      "loss_type": "bce",
+      "status": "ok",
+      "_row": "elapsed1"
+    },
+    {
+      "seed": 33,
+      "val_loss": 0.672077352350408,
+      "val_metric": 0.148401286114346,
+      "train_minutes": 40.51,
+      "n_epochs": 14,
+      "loss_type": "bce",
+      "status": "ok",
+      "_row": "elapsed2"
+    },
+    {
+      "seed": 44,
+      "val_loss": 0.655041939832947,
+      "val_metric": 0.146289971064438,
+      "train_minutes": 41.2,
+      "n_epochs": 14,
+      "loss_type": "bce",
+      "status": "ok",
+      "_row": "elapsed3"
+    },
+    {
+      "seed": 55,
+      "val_loss": 0.676128835840659,
+      "val_metric": 0.144481060179797,
+      "train_minutes": 38.83,
+      "n_epochs": 12,
+      "loss_type": "bce",
+      "status": "ok",
+      "_row": "elapsed4"
+    }
+  ],
+  "rw_diagnostics": {
+    "11": {
+      "n_rw_steps": 22,
+      "best_epochs": [12, 12, 31, 13, 12, 20, 19, 12, 11, 12, 15, 12, 16, 12, 12, 11, 11, 11, 11, 13, 11, 12],
+      "val_losses": [0.660029232501984, 0.562407910823822, 0.350642055273056, 0.54841685295105, 0.678058624267578, 0.646437048912048, 0.669029951095581, 0.653898477554321, 0.656079709529877, 0.523043811321259, 0.605149030685425, 0.606513261795044, 0.707436740398407, 0.632259726524353, 0.596512317657471, 0.690222322940826, 0.782431900501251, 0.743664979934692, 0.819970607757568, 0.759112119674683, 0.801277637481689, 0.834452033042908],
+      "val_metrics": [0.176148325204849, 0.155678659677505, 0.0807579010725021, 0.13540506362915, 0.109678164124489, 0.119994699954987, 0.107631117105484, 0.12122105807066, 0.181064665317535, 0.155123442411423, 0.140419185161591, 0.185216814279556, 0.158786043524742, 0.145239859819412, 0.111738413572311, 0.127279862761497, 0.15623739361763, 0.157235860824585, 0.163140162825584, 0.15482971072197, 0.180529206991196, 0.204286351799965],
+      "step_minutes": [1.28, 1.16, 2.67, 1.27, 1.32, 1.89, 1.85, 1.28, 1.23, 1.33, 1.85, 1.5, 1.95, 1.5, 1.55, 1.36, 1.54, 1.54, 1.52, 1.89, 1.66, 1.88],
+      "final_minutes": 1.78,
+      "n_epochs_final": 12,
+      "all_steps_failed": false
+    },
+    "22": {
+      "n_rw_steps": 22,
+      "best_epochs": [16, 26, 35, 22, 25, 14, 19, 11, 11, 12, 26, 14, 21, 15, 12, 11, 14, 11, 11, 11, 12, 12],
+      "val_losses": [0.691999197006226, 0.549582004547119, 0.394854128360748, 0.498300522565842, 0.516563832759857, 0.645066618919373, 0.659075915813446, 0.752730429172516, 0.674124300479889, 0.546932220458984, 0.648510873317719, 0.592867374420166, 0.72547572851181, 0.609461545944214, 0.65686708688736, 0.676106333732605, 0.742875993251801, 0.725241363048553, 0.865730106830597, 0.784162759780884, 0.738988101482391, 0.93756240606308],
+      "val_metrics": [0.173428058624268, 0.134270682930946, 0.0910053998231888, 0.110775202512741, 0.0997927859425545, 0.114315368235111, 0.107017271220684, 0.153339207172394, 0.181677743792534, 0.182874396443367, 0.164610728621483, 0.170974910259247, 0.166448920965195, 0.15305383503437, 0.119878485798836, 0.128968983888626, 0.137633323669434, 0.150044277310371, 0.16004104912281, 0.154317513108253, 0.187098801136017, 0.182139486074448],
+      "step_minutes": [1.63, 2.24, 3.09, 2.12, 2.51, 1.41, 2.08, 1.19, 1.32, 1.3, 2.94, 1.78, 2.42, 1.84, 1.57, 1.33, 1.88, 1.64, 1.51, 1.59, 1.75, 1.66],
+      "final_minutes": 2.08,
+      "n_epochs_final": 14,
+      "all_steps_failed": false
+    },
+    "33": {
+      "n_rw_steps": 22,
+      "best_epochs": [16, 12, 17, 15, 18, 17, 21, 19, 11, 12, 12, 18, 32, 11, 11, 11, 14, 14, 11, 13, 11, 11],
+      "val_losses": [0.650218367576599, 0.568618893623352, 0.356313109397888, 0.555635392665863, 0.591531217098236, 0.640680909156799, 0.574440896511078, 0.666340589523315, 0.64055734872818, 0.570807874202728, 0.616860449314117, 0.580800414085388, 0.640160739421844, 0.720488607883453, 0.734099686145782, 0.812801361083984, 0.788104474544525, 0.836363792419434, 0.884451448917389, 0.666613876819611, 0.833069980144501, 0.856742322444916],
+      "val_metrics": [0.156424403190613, 0.160708367824554, 0.0787532031536102, 0.126155897974968, 0.106374457478523, 0.114877365529537, 0.100892327725887, 0.114970080554485, 0.169731765985489, 0.174439087510109, 0.148832604289055, 0.180582866072655, 0.16289658844471, 0.163319915533066, 0.122016377747059, 0.13642044365406, 0.152123957872391, 0.161781251430511, 0.162287518382072, 0.143860802054405, 0.225570157170296, 0.201808854937553],
+      "step_minutes": [1.61, 1.15, 1.61, 1.61, 1.91, 1.67, 2.12, 1.89, 1.25, 1.25, 1.49, 2.18, 3.87, 1.35, 1.41, 1.33, 1.99, 2.12, 1.51, 1.89, 1.63, 1.63],
+      "final_minutes": 2.04,
+      "n_epochs_final": 14,
+      "all_steps_failed": false
+    },
+    "44": {
+      "n_rw_steps": 22,
+      "best_epochs": [11, 19, 29, 20, 18, 13, 26, 17, 11, 12, 15, 17, 21, 23, 14, 11, 11, 11, 11, 11, 11, 11],
+      "val_losses": [0.687648713588715, 0.477821439504623, 0.374347180128098, 0.473924726247787, 0.559054136276245, 0.667994320392609, 0.658141076564789, 0.562076508998871, 0.573474645614624, 0.666973471641541, 0.591673076152802, 0.570831179618835, 0.616815626621246, 0.561548352241516, 0.730963051319122, 0.676696181297302, 0.902165412902832, 0.773568034172058, 0.851825952529907, 0.712017714977264, 0.810569405555725, 0.910792469978333],
+      "val_metrics": [0.181468173861504, 0.13135614991188, 0.0856558606028557, 0.0911652147769928, 0.110650718212128, 0.122560955584049, 0.0926162302494049, 0.113933555781841, 0.169610902667046, 0.199994161725044, 0.164404660463333, 0.187926381826401, 0.15336012840271, 0.137222692370415, 0.12366608530283, 0.127680629491806, 0.153749004006386, 0.159704461693764, 0.160461470484734, 0.146187126636505, 0.181458622217178, 0.223546177148819],
+      "step_minutes": [1.17, 1.74, 2.59, 1.86, 1.84, 1.36, 2.57, 1.72, 1.21, 1.36, 1.79, 2.02, 2.55, 2.68, 1.77, 1.35, 1.56, 1.58, 1.59, 1.7, 1.6, 1.63],
+      "final_minutes": 1.96,
+      "n_epochs_final": 14,
+      "all_steps_failed": false
+    },
+    "55": {
+      "n_rw_steps": 22,
+      "best_epochs": [27, 14, 14, 16, 17, 26, 11, 12, 11, 12, 12, 12, 21, 12, 12, 11, 11, 11, 17, 12, 11, 17],
+      "val_losses": [0.710489094257355, 0.542339622974396, 0.379655033349991, 0.503095805644989, 0.637490093708038, 0.620956242084503, 0.715761125087738, 0.591534614562988, 0.753130853176117, 0.53162682056427, 0.641516506671906, 0.63520747423172, 0.698602318763733, 0.655159413814545, 0.628975570201874, 0.692178905010223, 0.796707212924957, 0.84305065870285, 0.819780945777893, 0.759489178657532, 0.824499189853668, 0.893587708473206],
+      "val_metrics": [0.154107928276062, 0.139308676123619, 0.0863439664244652, 0.101160377264023, 0.106006450951099, 0.111387088894844, 0.111693412065506, 0.126839652657509, 0.17607793211937, 0.169695094227791, 0.163210660219193, 0.184130728244781, 0.146326988935471, 0.156518757343292, 0.107545450329781, 0.1363325715065, 0.151203200221062, 0.163728445768356, 0.143765866756439, 0.162260323762894, 0.197827994823456, 0.183111757040024],
+      "step_minutes": [2.46, 1.33, 1.38, 1.67, 1.71, 2.5, 1.2, 1.27, 1.29, 1.25, 1.48, 1.51, 2.63, 1.48, 1.49, 1.31, 1.57, 1.53, 2.27, 1.75, 1.62, 2.39],
+      "final_minutes": 1.74,
+      "n_epochs_final": 12,
+      "all_steps_failed": false
+    }
+  }
 }

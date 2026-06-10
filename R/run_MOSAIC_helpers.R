@@ -16,21 +16,35 @@
 # Dask worker count
 # =============================================================================
 
-#' Count active Dask workers via Python (reticulate-conversion-safe)
+#' Count active Dask workers via Python (snapshot-staleness-safe)
 #'
-#' \code{length(client$scheduler_info()$workers)} cannot be relied on to count
-#' Dask workers — reticulate's auto-conversion of the nested
-#' \code{scheduler_info} dict surfaces the workers attribute as an R object
-#' whose \code{length()} is the per-worker FIELD count (typically 5 in current
-#' Dask versions), not the number of workers. The v0.32.35 fix that branched
-#' on \code{inherits(workers, "python.builtin.object")} also fails when the
-#' attribute IS auto-converted (the inherits check returns FALSE, the
-#' \code{length()} fallback fires, and the wrong count is logged anyway).
+#' \code{client$scheduler_info()$workers} cannot be relied on to count Dask
+#' workers because it is a STALE, lagging client-side snapshot of the workers
+#' dict: when workers join over time (the Coiled spin-up case — request 800,
+#' scale up gradually) the \code{workers} dict does not reflect the live count
+#' and reports a too-low number (e.g. 5 while hundreds are actually running).
+#' This was verified directly against a local \code{LocalCluster}: scaling
+#' from 1 to 6 workers left \code{len(scheduler_info()['workers'])} reporting 5
+#' while every fresh source (\code{client.nthreads()},
+#' \code{scheduler_info()['n_workers']}, the scheduler's own
+#' \code{len(s.workers)}) correctly reported 6. (An earlier comment here
+#' attributed the bug to a reticulate-conversion "per-worker field count of 5";
+#' that explanation was factually wrong — on a STATIC cluster
+#' \code{len(scheduler_info()$workers)} returns the correct count. The real
+#' cause is snapshot staleness of the \code{workers} dict as workers join.)
 #'
-#' This helper bypasses the conversion problem entirely: a tiny Python helper
-#' calls \code{len()} server-side on the workers dict and returns a plain
+#' This helper reads a FRESH source server-side. PRIMARY:
+#' \code{len(client.nthreads())} — a live scheduler RPC over a stable public
+#' API that returns one entry per worker (chosen over
+#' \code{client.run_on_scheduler(lambda s: len(s.workers))} because it needs no
+#' lambda serialization, which was observed to fail in some environments, and
+#' is a lighter call). FALLBACK 1: \code{scheduler_info()['n_workers']} when
+#' present (also fresh, but counts threads when threads-per-worker > 1).
+#' FALLBACK 2: \code{len(scheduler_info().get('workers', {}))} (the stale
+#' last-resort original behavior). The tiny Python helper returns a plain
 #' \code{int}, which \code{py_run_string(..., convert = TRUE)} reliably
-#' converts to an R integer.
+#' converts to an R integer; \code{-1} signals a Python-side failure that the R
+#' \code{tryCatch} maps to \code{NA_integer_}.
 #'
 #' @param client A reticulated \code{dask.distributed.Client} object.
 #' @return Integer worker count, or \code{NA_integer_} on error.
@@ -40,6 +54,19 @@
     py_env <- reticulate::py_run_string(
       paste0(
         "def _mosaic_count_workers(client):\n",
+        "    # PRIMARY: fresh scheduler RPC, one entry per live worker.\n",
+        "    try:\n",
+        "        return len(client.nthreads())\n",
+        "    except Exception:\n",
+        "        pass\n",
+        "    # FALLBACK 1: fresh 'n_workers' key when the scheduler exposes it.\n",
+        "    try:\n",
+        "        si = client.scheduler_info()\n",
+        "        if 'n_workers' in si:\n",
+        "            return int(si['n_workers'])\n",
+        "    except Exception:\n",
+        "        pass\n",
+        "    # FALLBACK 2: last-resort stale snapshot (original behavior).\n",
         "    try:\n",
         "        return len(client.scheduler_info().get('workers', {}))\n",
         "    except Exception:\n",
@@ -132,9 +159,10 @@
     elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
     # Count active workers via a pure-Python helper. See
     # .mosaic_count_dask_workers() for the rationale — the obvious
-    # length(client$scheduler_info()$workers) returns the per-worker field
-    # count (typically 5), NOT the worker count, regardless of whether the
-    # workers attribute is still a Python object or already auto-converted.
+    # length(client$scheduler_info()$workers) reads a STALE client-side
+    # snapshot that lags the live count as workers join (the Coiled spin-up
+    # case), so it under-reports (e.g. 5 while hundreds run). The helper reads
+    # a fresh source (client.nthreads()) instead.
     n_workers <- .mosaic_count_dask_workers(client)
 
     log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d sims_errored=%d elapsed_sec=%.0f workers=%s",
