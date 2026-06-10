@@ -152,18 +152,28 @@ optimize_ensemble_subset <- function(ensemble,
   # Bit-identical to re-sorting per N (a sorted subsequence equals sorting the
   # subset; ties break identically because both layouts are param-fastest with
   # param <= N). Removes ~all the O(m log m) re-sorts from the N loop.
+  #
+  # MEMORY (R-7): store only the per-cell sorted FINITE-INDEX vector (integers),
+  # not the sorted values. The values are re-derived per use by gathering
+  # as.vector(arr[i,j,,])[ord]; since ord = which(is.finite(v))[order(v[finite])],
+  # v[ord] equals the old v[fin][o] and pid_full[ord] equals the old pid_full[fin][o]
+  # exactly -- so weighted_quantiles_presorted receives identical inputs and the
+  # result is BIT-IDENTICAL (guarded by test-tier2_parity.R). This drops the
+  # dominant memory term (a full doubles copy of both arrays) from the optimize
+  # step's peak (~40% less), trading a per-cell gather in the N loop for the RAM
+  # -- the value tables dominated memory at the 40K-sim target.
   pid_full <- rep(seq_len(max_n), times = n_stoch)   # param id of each as.vector() element
-  .presort_cells <- function(arr) {
+  .presort_cell_orders <- function(arr) {
     out <- vector("list", n_locs * n_times); ci <- 0L
     for (i in seq_len(n_locs)) for (j in seq_len(n_times)) {
       ci <- ci + 1L
-      v <- as.vector(arr[i, j, , ]); fin <- is.finite(v); o <- order(v[fin])
-      out[[ci]] <- list(xs = v[fin][o], pid = pid_full[fin][o])
+      v   <- as.vector(arr[i, j, , ]); fin <- which(is.finite(v))
+      out[[ci]] <- fin[order(v[fin])]   # finite element indices, ascending value order
     }
     out
   }
-  cell_c <- .presort_cells(cases_array)
-  cell_d <- .presort_cells(deaths_array)
+  ord_c <- .presort_cell_orders(cases_array)
+  ord_d <- .presort_cell_orders(deaths_array)
 
   # ── 4. EVALUATION LOOP ───────────────────────────────────────────────
 
@@ -200,10 +210,12 @@ optimize_ensemble_subset <- function(ensemble,
       for (i in seq_len(n_locs)) {
         for (j in seq_len(n_times)) {
           ci <- ci + 1L
-          cc <- cell_c[[ci]]; kc <- cc$pid <= n
-          qc <- weighted_quantiles_presorted(cc$xs[kc], w_per_param[cc$pid[kc]], wis_probs)
-          dd <- cell_d[[ci]]; kd <- dd$pid <= n
-          qd <- weighted_quantiles_presorted(dd$xs[kd], w_per_param[dd$pid[kd]], wis_probs)
+          oc <- ord_c[[ci]]; pc <- pid_full[oc]; kc <- pc <= n
+          xc <- as.vector(cases_array[i, j, , ])[oc]
+          qc <- weighted_quantiles_presorted(xc[kc], w_per_param[pc[kc]], wis_probs)
+          od <- ord_d[[ci]]; pd <- pid_full[od]; kd <- pd <= n
+          xd <- as.vector(deaths_array[i, j, , ])[od]
+          qd <- weighted_quantiles_presorted(xd[kd], w_per_param[pd[kd]], wis_probs)
           q025_c[i, j] <- qc[1]; q25_c[i, j] <- qc[2]; median_c[i, j] <- qc[3]
           q75_c[i, j]  <- qc[4]; q975_c[i, j] <- qc[5]
           q025_d[i, j] <- qd[1]; q25_d[i, j] <- qd[2]; median_d[i, j] <- qd[3]
@@ -215,10 +227,12 @@ optimize_ensemble_subset <- function(ensemble,
       for (i in seq_len(n_locs)) {
         for (j in seq_len(n_times)) {
           ci <- ci + 1L
-          cc <- cell_c[[ci]]; kc <- cc$pid <= n
-          median_c[i, j] <- weighted_quantiles_presorted(cc$xs[kc], w_per_param[cc$pid[kc]], 0.5)
-          dd <- cell_d[[ci]]; kd <- dd$pid <= n
-          median_d[i, j] <- weighted_quantiles_presorted(dd$xs[kd], w_per_param[dd$pid[kd]], 0.5)
+          oc <- ord_c[[ci]]; pc <- pid_full[oc]; kc <- pc <= n
+          xc <- as.vector(cases_array[i, j, , ])[oc]
+          median_c[i, j] <- weighted_quantiles_presorted(xc[kc], w_per_param[pc[kc]], 0.5)
+          od <- ord_d[[ci]]; pd <- pid_full[od]; kd <- pd <= n
+          xd <- as.vector(deaths_array[i, j, , ])[od]
+          median_d[i, j] <- weighted_quantiles_presorted(xd[kd], w_per_param[pd[kd]], 0.5)
         }
       }
     }
