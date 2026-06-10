@@ -368,6 +368,12 @@ run_rolling_cv <- function(PATHS,
 #'   \code{manifest.json} and \code{runs/}).
 #' @param base_config Config used to recover the held-out (unmasked) observed
 #'   series (default \code{MOSAIC::config_default}); must match the run config.
+#' @param models Character vector of model types to compile (e.g.
+#'   \code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medioid"}); NULL
+#'   (default) uses the set recorded in each run's manifest.
+#' @param n_reps_best_medioid Integer or NULL (default); number of stochastic
+#'   LASER replicates to draw for the single-config \code{best}/\code{medioid}
+#'   models. NULL reuses the value stored in the run manifest.
 #' @param write Logical; write \code{predictions.parquet} (default TRUE).
 #' @return The compiled long predictions data frame (invisibly if written).
 #' @export

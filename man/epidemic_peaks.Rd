@@ -5,13 +5,15 @@
 \alias{epidemic_peaks}
 \title{Cholera Epidemic Peaks Data}
 \format{
-A data frame with 5 variables:
+A data frame with 6 variables:
 \describe{
 \item{iso_code}{ISO 3166-1 alpha-3 country code}
 \item{peak_start}{Start date of the epidemic period (Date)}
 \item{peak_date}{Date of peak incidence (Date)}
 \item{peak_stop}{End date of the epidemic period (Date)}
 \item{reported_cases}{Number of reported cholera cases at peak (numeric)}
+\item{outbreak_interval_days}{Number of days since the previous peak for
+the same country (numeric)}
 }
 }
 \source{

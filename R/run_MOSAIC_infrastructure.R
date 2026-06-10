@@ -325,48 +325,6 @@ for _h in list(_root.handlers):
   })
 }
 
-#' Log Cluster Metadata
-#'
-#' Captures SLURM/PBS job metadata for debugging.
-#'
-#' @return Named list of cluster metadata
-#' @noRd
-.mosaic_get_cluster_metadata <- function() {
-  metadata <- list(
-    hostname = Sys.info()["nodename"],
-    user = Sys.info()["user"],
-    r_version = R.version.string,
-    platform = R.version$platform,
-    timestamp = Sys.time()
-  )
-
-  # SLURM environment
-  slurm_vars <- c(
-    "SLURM_JOB_ID", "SLURM_JOB_NAME", "SLURM_NODELIST",
-    "SLURM_NTASKS", "SLURM_CPUS_PER_TASK", "SLURM_MEM_PER_NODE"
-  )
-  for (var in slurm_vars) {
-    val <- Sys.getenv(var)
-    if (val != "") {
-      metadata[[tolower(var)]] <- val
-    }
-  }
-
-  # PBS environment
-  pbs_vars <- c(
-    "PBS_JOBID", "PBS_JOBNAME", "PBS_NODEFILE",
-    "PBS_NP", "PBS_NUM_NODES"
-  )
-  for (var in pbs_vars) {
-    val <- Sys.getenv(var)
-    if (val != "") {
-      metadata[[tolower(var)]] <- val
-    }
-  }
-
-  metadata
-}
-
 # =============================================================================
 # ERROR HANDLING
 # =============================================================================

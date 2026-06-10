@@ -36,11 +36,15 @@ ignored.}
 \item{S}{Numeric \strong{T × J} matrix of fully susceptible individuals
 \eqn{S_{jt}}.}
 
-\item{V1_sus, }{V2_sus Numeric \strong{T × J} matrices of vaccine‑derived
-susceptibles after one and two doses, respectively.}
+\item{V1_sus}{Numeric \strong{T × J} matrix of vaccine‑derived susceptibles
+after one dose.}
 
-\item{I1, }{I2 Numeric \strong{T × J} matrices of symptomatic and asymptomatic
-infectives.}
+\item{V2_sus}{Numeric \strong{T × J} matrix of vaccine‑derived susceptibles
+after two doses.}
+
+\item{I1}{Numeric \strong{T × J} matrix of symptomatic infectives.}
+
+\item{I2}{Numeric \strong{T × J} matrix of asymptomatic infectives.}
 
 \item{time_names}{Optional character vector of length \strong{T} for output row
 names.}

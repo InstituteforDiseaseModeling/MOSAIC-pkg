@@ -492,6 +492,8 @@ est_initial_S <- function(PATHS, priors, config, n_samples = 1000,
 }
 
 #' Print method for S compartment initial conditions
+#' @param x An object of class \code{mosaic_initial_conditions_S}.
+#' @param ... Further arguments passed to or from other methods (ignored).
 #' @export
 print.mosaic_initial_conditions_S <- function(x, ...) {
     cat("MOSAIC Initial S Conditions (Constrained Residual Method)\n")

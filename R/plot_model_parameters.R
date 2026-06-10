@@ -36,7 +36,7 @@
 #' @examples
 #' \dontrun{
 #' # Run calibration and collect results
-#' results <- run_calibration()
+#' results <- run_MOSAIC()
 #'
 #' # Create plots (automatically infers n_sim and n_iter from results)
 #' plots <- plot_model_parameters(results, output_dir = "calibration_output")

@@ -6,8 +6,9 @@
 #' to train/test, which better preserves spatial-temporal structure and tests
 #' generalization capability.
 #'
-#' @param train_sequences List containing LSTM sequences with X, y, countries, and dates
-#'   (output from create_lstm_sequences function)
+#' @param train_sequences List containing LSTM sequences with components
+#'   \code{X}, \code{y}, \code{countries}, and \code{dates} (the sequence
+#'   structure built internally by the legacy \code{est_suitability()} path).
 #' @param split_method Character. Either "random" (default) or "location_month_block"
 #' @param train_prop Numeric. Proportion of data for training (default 0.6)
 #' @param seed Integer. Random seed for reproducibility
@@ -47,8 +48,8 @@
 #'
 #' @examples
 #' \dontrun{
-#' # After creating LSTM sequences
-#' train_sequences <- create_lstm_sequences(...)
+#' # train_sequences is a list with X, y, countries, and dates components
+#' # (built internally by the legacy est_suitability() path).
 #'
 #' # Random splitting (existing method)
 #' splits_random <- get_lstm_sequence_splits(

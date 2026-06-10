@@ -12,7 +12,7 @@ store_sampling_metadata(config, ...)
 \item{...}{Sampling flag arguments (e.g., sample_alpha_1 = FALSE)}
 }
 \value{
-Config object with sampling metadata stored in \$\strong{sampling_metadata}
+Config object with sampling metadata stored in \code{$__sampling_metadata__}
 }
 \description{
 Adds sampling flag metadata to a config object for later retrieval during

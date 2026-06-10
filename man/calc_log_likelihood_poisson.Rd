@@ -34,7 +34,7 @@ Computes the total log-likelihood for integer count data under the Poisson distr
 Each observation can be weighted via \code{weights}, defaulting to equal weights.
 }
 \details{
-The Poisson distribution assumes that the variance equals the mean, \\( \\text{Var}(Y) = \\mu \\).
+The Poisson distribution assumes that the variance equals the mean, \eqn{\mathrm{Var}(Y) = \mu}.
 Weighted log-likelihood is summed across observations. If the variance/mean ratio is > 1.5,
 a warning about possible overdispersion is issued.
 }

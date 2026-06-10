@@ -8,6 +8,8 @@
 #' @param method_names Vector of method names corresponding to each JSON file (for legends and colors)
 #' @param output_dir Directory to save generated plots
 #' @param custom_colors Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4"))
+#' @param verbose Logical; if \code{TRUE}, print per-parameter diagnostic
+#'   messages while building the plots (default \code{FALSE}).
 #'
 #' @return Invisibly returns a list of generated plot objects
 #'

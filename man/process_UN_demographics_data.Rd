@@ -42,7 +42,7 @@ Data Source: \href{https://population.un.org/wpp/}{United Nations World Populati
 PATHS <- get_paths()
 
 # Process the UN World Prospects data for all available years and save the results
-process_demographics_data(PATHS)
+process_UN_demographics_data(PATHS)
 }
 
 }

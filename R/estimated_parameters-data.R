@@ -6,7 +6,7 @@
 #' parameters that have prior distributions and are part of the parameter
 #' estimation process.
 #'
-#' @format A data frame with 43 rows and 11 columns:
+#' @format A data frame with 54 rows and 14 columns:
 #' \describe{
 #'   \item{parameter_name}{Character. Parameter names as used in configuration files and sampling functions}
 #'   \item{display_name}{Character. Human-readable display names for plotting and reporting}
@@ -15,10 +15,13 @@
 #'   \item{distribution}{Character. Prior distribution type (beta, gamma, lognormal, uniform, normal, gompertz, truncnorm, derived)}
 #'   \item{scale}{Character. Parameter scale: "global" (same value across all locations) or "location" (varies by location)}
 #'   \item{category}{Character. Biological/functional category: transmission, environmental, disease, immunity, surveillance, mobility, spatial, initial_conditions, seasonality}
-#'   \item{order}{Integer. Overall ordering for systematic presentation (1-43)}
+#'   \item{order}{Integer. Overall ordering for systematic presentation}
 #'   \item{order_scale}{Character. Scale-based ordering (01 = global, 02 = location)}
 #'   \item{order_category}{Character. Category-based ordering within each scale}
 #'   \item{order_parameter}{Character. Parameter-based ordering within each category}
+#'   \item{posterior_distribution}{Character. Fitted posterior distribution type for each parameter (NA when not yet estimated)}
+#'   \item{posterior_lower}{Numeric. Lower bound of the fitted posterior support (NA when not yet estimated)}
+#'   \item{posterior_upper}{Numeric. Upper bound of the fitted posterior support (NA when not yet estimated)}
 #' }
 #'
 #' @details

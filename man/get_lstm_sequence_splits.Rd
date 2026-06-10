@@ -13,8 +13,9 @@ get_lstm_sequence_splits(
 )
 }
 \arguments{
-\item{train_sequences}{List containing LSTM sequences with X, y, countries, and dates
-(output from create_lstm_sequences function)}
+\item{train_sequences}{List containing LSTM sequences with components
+\code{X}, \code{y}, \code{countries}, and \code{dates} (the sequence
+structure built internally by the legacy \code{est_suitability()} path).}
 
 \item{split_method}{Character. Either "random" (default) or "location_month_block"}
 
@@ -66,8 +67,8 @@ The location-month blocking approach is particularly valuable for:
 }
 \examples{
 \dontrun{
-# After creating LSTM sequences
-train_sequences <- create_lstm_sequences(...)
+# train_sequences is a list with X, y, countries, and dates components
+# (built internally by the legacy est_suitability() path).
 
 # Random splitting (existing method)
 splits_random <- get_lstm_sequence_splits(

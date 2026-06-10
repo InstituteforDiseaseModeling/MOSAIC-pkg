@@ -3,11 +3,9 @@
 #' Reads the "Survey Estimates" sheet from the raw UNICEF malnutrition Excel file,
 #' drops footnote columns, reshapes key indicators to long format, and writes a CSV.
 #'
-#' @param paths A named list of file paths with components:
-#'   \itemize{
-#'     \item raw$malnutrition_data: path to the raw Excel file
-#'     \item processed$malnutrition_data: path to write the processed CSV
-#'   }
+#' @param PATHS A named list of file paths from \code{\link{get_paths}},
+#'   providing \code{DATA_RAW} (root of the raw UNICEF Excel file) and
+#'   \code{DATA_PROCESSED} (destination for the processed CSV).
 #' @return Invisibly returns the processed data frame (long format).
 #' @importFrom readxl read_excel
 #' @importFrom utils write.csv

@@ -95,20 +95,22 @@ using past cholera case data and climate conditions, and predictions are made fo
 suitability (psi) based on the climate covariates.
 }
 \details{
-The function performs the following steps:
+Common to all architectures, the function:
 \itemize{
 \item Loads processed climate and cholera data.
 \item Determines appropriate date ranges for fitting and prediction based on data availability.
-\item Validates data completeness within specified date ranges.
-\item Scales the climate covariates using training data statistics.
-\item Splits the training data into training and validation sets using either random sampling or location-month blocking.
-\item Creates temporal LSTM sequences respecting country boundaries and temporal gaps.
-\item Builds an LSTM-based recurrent neural network (RNN) model for predicting cholera outbreaks.
-\item Trains the model on the training set and evaluates performance on the validation set.
-\item Makes predictions on the full prediction period dataset.
-\item Applies temporal smoothing to predictions and saves results to specified directories.
-\item Optional: Performs sequential fine-tuning on additional random splits for transfer learning.
+\item Validates data completeness within the specified date ranges.
+\item Scales the climate covariates using training-data statistics.
+\item Builds temporal LSTM sequences respecting country boundaries and temporal gaps.
+\item Trains an LSTM model, predicts environmental suitability (psi) over the
+full prediction period, and writes the predictions and covariate data.
 }
+The training/validation regime differs by architecture: the default
+\code{lstm_v2_hierarchical_film} uses expanding-window rolling-origin
+cross-validation (no random split) with a hierarchical-FiLM trunk, while the
+frozen \code{lstm_v1_legacy} path uses a random 60/40 split with sequential
+fine-tuning. See the \strong{Architectures} section above for the full
+description of each path.
 }
 \note{
 The LSTM model uses climate variables to predict cholera suitability. The model's predictions are saved as
@@ -200,20 +202,7 @@ est_suitability(PATHS, arch_control = list(n_seeds = 7L, region_map = "snf_k4"))
 est_suitability(PATHS, architecture = "lstm_v1_legacy")
 }
 
-\dontrun{
-# Basic usage with auto-detected date ranges
-est_suitability(PATHS)
-
-# Historical validation: fit on 2010-2020, predict on 2021-2023
-est_suitability(PATHS,
-                fit_date_start = "2010-01-01",
-                fit_date_stop = "2020-12-31",
-                pred_date_start = "2021-01-01",
-                pred_date_stop = "2023-12-31")
-
-}
-
 }
 \seealso{
-\code{\link[keras]{layer_lstm}}, \code{\link[keras]{fit}}, \code{\link[ggplot2]{ggplot}}
+\code{\link[keras3]{layer_lstm}}, \code{\link[keras3]{fit.keras.src.models.model.Model}}, \code{\link[ggplot2]{ggplot}}
 }

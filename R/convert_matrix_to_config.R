@@ -334,7 +334,7 @@ detect_sampled_parameters_from_configs <- function(configs, variance_threshold =
 #' @param config Config object to annotate
 #' @param ... Sampling flag arguments (e.g., sample_alpha_1 = FALSE)
 #'
-#' @return Config object with sampling metadata stored in \$__sampling_metadata__
+#' @return Config object with sampling metadata stored in \code{$__sampling_metadata__}
 #'
 #' @details
 #' This function stores the sampling flags used during parameter generation so they

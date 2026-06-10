@@ -21,7 +21,7 @@
 #' \dontrun{
 #' # Assuming PATHS is generated from get_paths()
 #' PATHS <- get_paths()
-#' est_vaccine_immune_decay(PATHS)
+#' est_immune_decay_vaccine(PATHS)
 #' }
 #' @export
 

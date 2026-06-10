@@ -36,10 +36,12 @@
 #' @param N Numeric **T × J** matrix of total population \eqn{N_{jt}}.
 #' @param S Numeric **T × J** matrix of fully susceptible individuals
 #'   \eqn{S_{jt}}.
-#' @param V1_sus, V2_sus Numeric **T × J** matrices of vaccine‑derived
-#'   susceptibles after one and two doses, respectively.
-#' @param I1, I2 Numeric **T × J** matrices of symptomatic and asymptomatic
-#'   infectives.
+#' @param V1_sus Numeric **T × J** matrix of vaccine‑derived susceptibles
+#'   after one dose.
+#' @param V2_sus Numeric **T × J** matrix of vaccine‑derived susceptibles
+#'   after two doses.
+#' @param I1 Numeric **T × J** matrix of symptomatic infectives.
+#' @param I2 Numeric **T × J** matrix of asymptomatic infectives.
 #' @param time_names Optional character vector of length **T** for output row
 #'   names.
 #' @param location_names Optional character vector of length **J** for output

@@ -20,6 +20,9 @@ plot_model_distributions(
 \item{output_dir}{Directory to save generated plots}
 
 \item{custom_colors}{Optional named vector of colors for each method (e.g., c("Prior" = "#4a4a4a", "BFRS" = "#1f77b4"))}
+
+\item{verbose}{Logical; if \code{TRUE}, print per-parameter diagnostic
+messages while building the plots (default \code{FALSE}).}
 }
 \value{
 Invisibly returns a list of generated plot objects

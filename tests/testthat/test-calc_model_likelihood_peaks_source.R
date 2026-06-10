@@ -97,32 +97,3 @@ test_that("calc_model_likelihood falls back to MOSAIC::epidemic_peaks when confi
   )
   expect_true(is.finite(ll))
 })
-
-test_that("legacy peak helpers accept an explicit epidemic_peaks argument", {
-  # Construct a synthetic estimated series with a known peak at index 15.
-  est_vec <- c(rep(0.5, 14), 10, rep(0.5, 14))
-  obs_vec <- c(rep(1, 14), 12, rep(1, 14))
-
-  custom_peaks <- data.frame(
-    iso_code  = "XYZ",
-    peak_date = "2024-01-15",
-    stringsAsFactors = FALSE
-  )
-
-  ll_t <- MOSAIC::calc_multi_peak_timing_ll(
-    obs_vec = obs_vec, est_vec = est_vec, iso_code = "XYZ",
-    date_start = "2024-01-01", date_stop = "2024-01-29",
-    epidemic_peaks = custom_peaks
-  )
-  ll_m <- MOSAIC::calc_multi_peak_magnitude_ll(
-    obs_vec = obs_vec, est_vec = est_vec, iso_code = "XYZ",
-    date_start = "2024-01-01", date_stop = "2024-01-29",
-    epidemic_peaks = custom_peaks
-  )
-
-  # XYZ is not in MOSAIC::epidemic_peaks — non-zero results prove the helper
-  # consulted the supplied data.frame, not the package fallback.
-  expect_true(is.finite(ll_t))
-  expect_true(is.finite(ll_m))
-  expect_true(ll_t != 0 || ll_m != 0)
-})

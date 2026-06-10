@@ -6,6 +6,11 @@
 \usage{
 \method{print}{mosaic_initial_conditions_S}(x, ...)
 }
+\arguments{
+\item{x}{An object of class \code{mosaic_initial_conditions_S}.}
+
+\item{...}{Further arguments passed to or from other methods (ignored).}
+}
 \description{
 Print method for S compartment initial conditions
 }

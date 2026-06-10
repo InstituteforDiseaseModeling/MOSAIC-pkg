@@ -7,11 +7,9 @@
 process_UNICEF_malnutrition_data(PATHS)
 }
 \arguments{
-\item{paths}{A named list of file paths with components:
-\itemize{
-\item raw$malnutrition_data: path to the raw Excel file
-\item processed$malnutrition_data: path to write the processed CSV
-}}
+\item{PATHS}{A named list of file paths from \code{\link{get_paths}},
+providing \code{DATA_RAW} (root of the raw UNICEF Excel file) and
+\code{DATA_PROCESSED} (destination for the processed CSV).}
 }
 \value{
 Invisibly returns the processed data frame (long format).

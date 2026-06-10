@@ -92,6 +92,13 @@ degeneracy in \code{posteriors.json}).
 The number of parameter sets in the ensemble is determined by the best subset
 (all sims with non-zero importance weights).}
 
+\item{weights}{List of importance-weight settings. Default is:
+\itemize{
+\item \code{floor}: Minimum weight to prevent underflow (default: 1e-15).
+\item \code{iqr_multiplier}: Tukey IQR outlier-detection multiplier
+(default: 1.5; use 3.0 for extreme outliers only).
+}}
+
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
 \item \code{enable}: Enable parallel execution (default: FALSE)
@@ -114,6 +121,12 @@ remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 \itemize{
 \item \code{clean_output}: Remove output directory if exists (default: FALSE)
 \item \code{plots}: Generate diagnostic plots (default: TRUE)
+}}
+
+\item{logging}{List of logging settings. Default is:
+\itemize{
+\item \code{verbose}: Enable detailed progress messages in sub-functions
+(default: FALSE).
 }}
 }
 \value{

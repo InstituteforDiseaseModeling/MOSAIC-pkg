@@ -13,6 +13,9 @@
 #' @param seed Integer scalar giving the random seed value for the simulation run.
 #'
 #' ## Initialization
+#' Parameters defining the simulation window and the initial compartment sizes
+#' (and optional proportions) for each location.
+#'
 #' @param date_start Start date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
 #'        it will be converted to a Date object.
 #' @param date_stop End date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
@@ -48,12 +51,17 @@
 #'        of individuals in vaccine compartment V2 for each location. Values must be in \code{[0,1]}. Names must match location_name.
 #'
 #' ## Demographics
+#' Time-varying birth and mortality rate matrices.
+#'
 #' @param b_jt A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily
 #'        sequence from date_start to date_stop.
 #' @param d_jt A matrix of mortality rates with rows equal to length(location_name) and columns equal to the daily
 #'        sequence from date_start to date_stop.
 #'
 #' ## Vaccination
+#' OCV dosing schedules, dose effectiveness, waning rates, and eligible
+#' source compartments.
+#'
 #' @param nu_1_jt A matrix of first-dose OCV vaccinations for each location and time step.
 #' @param nu_2_jt A matrix of second-dose OCV vaccinations for each location and time step.
 #' @param phi_1 Effectiveness of one dose of OCV (numeric in \[0, 1\]).
@@ -66,6 +74,9 @@
 #'        first doses proportionally from all listed compartments.
 #'
 #' ## Infection dynamics
+#' Transition rates between SEIR compartments and the infection-fatality-ratio
+#' model parameters.
+#'
 #' @param iota Incubation rate `E -> I` (numeric > 0, per day). Note this is
 #'        a *rate*, not a period -- prior median ~0.71/day. The engine uses
 #'        `iota * E` as the flow out of E.
@@ -86,6 +97,9 @@
 #'        Numeric vector of length(location_name). Must be >= 0.
 #'
 #' ## Observation Processes
+#' Surveillance-cascade parameters mapping true infections and deaths to
+#' reported counts.
+#'
 #' @param rho Care-seeking rate: probability a symptomatic individual
 #'        presents to surveillance (numeric in \[0, 1\]). *Not* a reporting
 #'        fraction and *not* sigma -- this is the upstream care-seeking
@@ -103,6 +117,9 @@
 #'        (non-negative integer).
 #'
 #' ## Spatial model
+#' Location coordinates and the gravity-model mobility parameters governing
+#' between-location movement.
+#'
 #' @param longitude A numeric vector of longitudes for each location. Must be same length as location_name.
 #' @param latitude A numeric vector of latitudes for each location. Must be same length as location_name.
 #' @param mobility_omega Exponent weight for destination population in the gravity mobility model. Must be numeric ≥ 0.
@@ -110,7 +127,10 @@
 #' @param tau_i Departure probability for each origin location (numeric vector of length(location_name) in \[0, 1\]).
 #'
 #' ## Force of Infection (human-to-human)
-#' @param beta_j0_tot Total baseline transmission rate (human + environmental). Optional numeric vector of 
+#' Baseline transmission rates, seasonal forcing harmonics, and FOI mixing
+#' exponents for direct human-to-human transmission.
+#'
+#' @param beta_j0_tot Total baseline transmission rate (human + environmental). Optional numeric vector of
 #'        length(location_name). If provided with p_beta, used to derive beta_j0_hum and beta_j0_env.
 #' @param p_beta Proportion of total transmission that is human-to-human (0-1). Optional numeric vector of
 #'        length(location_name). If provided with beta_j0_tot, used to derive beta_j0_hum and beta_j0_env.
@@ -129,6 +149,9 @@
 #'        density-dependent (FOI proportional to `I`).
 #'
 #' ## Force of Infection (environment-to-human)
+#' Environmental suitability, its calibration parameters, shedding rates, and
+#' \emph{V. cholerae} decay parameters for environment-to-human transmission.
+#'
 #' @param beta_j0_env Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
 #'        If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_tot * (1 - p_beta).
 #' @param theta_j Proportion with adequate WASH (numeric vector of length(location_name) in \[0, 1\]).
@@ -155,6 +178,9 @@
 #'        the decay rate of *V. cholerae* in the environment. Must be numeric > 0.
 #'
 #' ## Reported data
+#' Observed surveillance series and epidemic-peak metadata used by the
+#' likelihood.
+#'
 #' @param reported_cases Matrix of daily reported cholera cases. Must be integer. NA allowed.
 #'        nrow=length(location_name), ncol=length(t).
 #' @param reported_deaths Matrix of daily reported cholera deaths. Must be integer. NA allowed.

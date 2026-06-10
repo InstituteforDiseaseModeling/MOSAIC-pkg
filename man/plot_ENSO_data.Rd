@@ -12,6 +12,9 @@ plot_ENSO_data(PATHS, frequency)
 \item \strong{DATA_ENSO}: Path to the directory containing the compiled ENSO and IOD data.
 \item \strong{DOCS_FIGURES}: Path to the directory where the output figure will be saved.
 }}
+
+\item{frequency}{Character; temporal resolution of the ENSO/IOD series to
+plot. One of \code{"daily"}, \code{"weekly"}, or \code{"monthly"}.}
 }
 \value{
 A ggplot facet plot showing the time series of IOD, ENSO3, ENSO34, and ENSO4 over time. The plot includes:

@@ -37,3 +37,16 @@ importFrom("ISOweek", "ISOweek2date")
 importFrom("exactextractr", "exact_extract")
 importFrom("yaml", "write_yaml")
 importFrom("data.table", "as.data.table", "rbindlist", "dcast", ".SD")
+importFrom("grDevices", "adjustcolor", "pdf", "rgb")
+importFrom("graphics", "abline", "axis", "axis.Date", "barplot",
+           "grid", "hist", "mtext", "par", "plot.new", "plot.window",
+           "polygon", "rect", "segments", "symbols", "title")
+importFrom("stats", "AIC", "IQR", "approx", "binomial", "dbinom",
+           "df.residual", "dnorm", "dpois", "dunif", "glm",
+           "integrate", "lm", "loess", "loess.control", "optimize",
+           "pbeta", "plogis", "poisson", "ppoints", "qbeta", "qlnorm",
+           "qlogis", "qnorm", "qqplot", "qunif", "reshape",
+           "residuals", "sd", "setNames", "shapiro.test",
+           "smooth.spline", "time", "var")
+importFrom("utils", "capture.output", "data", "modifyList",
+           "object.size", "packageVersion", "tail")

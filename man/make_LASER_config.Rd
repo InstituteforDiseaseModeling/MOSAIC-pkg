@@ -90,6 +90,9 @@ If NULL, no file is written and the parameters are returned.}
 
 \item{seed}{Integer scalar giving the random seed value for the simulation run.
 \subsection{Initialization}{
+
+Parameters defining the simulation window and the initial compartment sizes
+(and optional proportions) for each location.
 }}
 
 \item{date_start}{Start date for the simulation period in "YYYY-MM-DD" format. If provided as a character string,
@@ -141,6 +144,8 @@ of individuals in vaccine compartment V1 for each location. Values must be in \c
 \item{prop_V2_initial}{Optional. A named numeric vector of length equal to location_name giving the starting proportion
 of individuals in vaccine compartment V2 for each location. Values must be in \code{[0,1]}. Names must match location_name.
 \subsection{Demographics}{
+
+Time-varying birth and mortality rate matrices.
 }}
 
 \item{b_jt}{A matrix of birth rates with rows equal to length(location_name) and columns equal to the daily
@@ -149,6 +154,9 @@ sequence from date_start to date_stop.}
 \item{d_jt}{A matrix of mortality rates with rows equal to length(location_name) and columns equal to the daily
 sequence from date_start to date_stop.
 \subsection{Vaccination}{
+
+OCV dosing schedules, dose effectiveness, waning rates, and eligible
+source compartments.
 }}
 
 \item{nu_1_jt}{A matrix of first-dose OCV vaccinations for each location and time step.}
@@ -168,6 +176,9 @@ sequence from date_start to date_stop.
 \code{c("S", "E", "Isym", "Iasym", "R")}. Passed to laser-cholera v0.12+ which draws
 first doses proportionally from all listed compartments.
 \subsection{Infection dynamics}{
+
+Transition rates between SEIR compartments and the infection-fatality-ratio
+model parameters.
 }}
 
 \item{iota}{Incubation rate \code{E -> I} (numeric > 0, per day). Note this is
@@ -196,6 +207,9 @@ Numeric vector of length(location_name). Default is 0 (no temporal trend).}
 \item{mu_j_epidemic_factor}{Proportional increase in IFR during epidemic periods (e.g., 0.5 = 50\% increase).
 Numeric vector of length(location_name). Must be >= 0.
 \subsection{Observation Processes}{
+
+Surveillance-cascade parameters mapping true infections and deaths to
+reported counts.
 }}
 
 \item{rho}{Care-seeking rate: probability a symptomatic individual
@@ -221,6 +235,9 @@ incubation is handled separately by the E compartment and \code{iota}.}
 \item{delta_reporting_deaths}{Symptom-onset-to-death-report delay in days
 (non-negative integer).
 \subsection{Spatial model}{
+
+Location coordinates and the gravity-model mobility parameters governing
+between-location movement.
 }}
 
 \item{longitude}{A numeric vector of longitudes for each location. Must be same length as location_name.}
@@ -233,6 +250,9 @@ incubation is handled separately by the E compartment and \code{iota}.}
 
 \item{tau_i}{Departure probability for each origin location (numeric vector of length(location_name) in [0, 1]).
 \subsection{Force of Infection (human-to-human)}{
+
+Baseline transmission rates, seasonal forcing harmonics, and FOI mixing
+exponents for direct human-to-human transmission.
 }}
 
 \item{beta_j0_tot}{Total baseline transmission rate (human + environmental). Optional numeric vector of
@@ -262,6 +282,9 @@ If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_t
 transmission (FOI proportional to \code{I/N}); \code{alpha_2 = 0} is
 density-dependent (FOI proportional to \code{I}).
 \subsection{Force of Infection (environment-to-human)}{
+
+Environmental suitability, its calibration parameters, shedding rates, and
+\emph{V. cholerae} decay parameters for environment-to-human transmission.
 }}
 
 \item{beta_j0_env}{Baseline environment-to-human transmission rate (numeric vector of length(location_name)).
@@ -302,6 +325,9 @@ the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.}
 \item{decay_shape_2}{Second shape parameter for beta distribution controlling how environmental suitability maps to
 the decay rate of \emph{V. cholerae} in the environment. Must be numeric > 0.
 \subsection{Reported data}{
+
+Observed surveillance series and epidemic-peak metadata used by the
+likelihood.
 }}
 
 \item{reported_cases}{Matrix of daily reported cholera cases. Must be integer. NA allowed.

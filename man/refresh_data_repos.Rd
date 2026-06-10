@@ -44,7 +44,7 @@ changes will also block the pull and surface in \code{pull_output}.
 
 For \code{ees-cholera-mapping} and \code{jhu_cholera_data}, the function
 additionally peeks at the canonical surveillance file (the one the
-\code{process_WHO_weekly_data()} / \code{process_JHU_data()} functions read)
+\code{process_WHO_weekly_data()} / \code{process_JHU_weekly_data()} functions read)
 and reports record count, date range, and country count. ENSO and
 open-meteo coverage stats are not extracted because their data is spread
 across many per-country / per-source files; commit date is the practical

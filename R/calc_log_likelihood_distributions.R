@@ -587,7 +587,7 @@ calc_log_likelihood_normal <- function(observed,
 #' @param verbose Logical; if \code{TRUE}, prints diagnostics and total log-likelihood.
 #'
 #' @details
-#' The Poisson distribution assumes that the variance equals the mean, \\( \\text{Var}(Y) = \\mu \\).
+#' The Poisson distribution assumes that the variance equals the mean, \eqn{\mathrm{Var}(Y) = \mu}.
 #' Weighted log-likelihood is summed across observations. If the variance/mean ratio is > 1.5,
 #' a warning about possible overdispersion is issued.
 #'
