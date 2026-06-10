@@ -59,7 +59,7 @@ mosaic_control_defaults(
 \item \code{A_best}: Target agreement index (default: 0.70). Lower values allow top sims to dominate.
 \item \code{CVw_best}: Target CV of weights (default: 1.0). Higher values permit sharper discrimination.
 \item \code{percentile_min}: Minimum percentile for best subset search (default: 0.001)
-\item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "kish")
+\item \code{ESS_method}: ESS calculation method, "kish" or "perplexity" (default: "perplexity")
 }}
 
 \item{predictions}{List of prediction generation settings. Default is:
@@ -95,8 +95,10 @@ The number of parameter sets in the ensemble is determined by the best subset
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
 \item \code{enable}: Enable parallel execution (default: FALSE)
-\item \code{n_cores}: Number of cores to use (default: 1L). In Dask mode, also
-controls local parallel likelihood computation after simulations return.
+\item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
+parallelism only: the LASER worker count on the non-Dask path, and the
+orchestrator's sampling/parquet fork width on the Dask path. It never sets the
+remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 \item \code{progress}: Show progress bar (default: TRUE)
 }}

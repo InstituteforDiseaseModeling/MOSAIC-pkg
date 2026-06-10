@@ -30,15 +30,23 @@ gather is detected within a minute.}
 The list returned by \code{client$gather(futures)}.
 }
 \description{
-Wraps \code{client$gather(futures)} with a polling loop that uses
-\code{dask.distributed.wait(futures, timeout=interval_sec)} to wake up every
-\code{interval_sec} seconds, count completed vs pending futures, and emit a
-single structured \code{[PROGRESS]} log line per heartbeat. Eliminates the
+Wraps \code{client$gather(futures)} with a polling loop that wakes up every
+\code{interval_sec} seconds, counts completed vs pending futures via a
+single round-trip Python helper, and emits one structured
+\code{[PROGRESS]} log line per heartbeat. Eliminates the
 silent-during-gather window that otherwise leads a tailing operator (human
 or AI) to wrongly conclude the pipeline has hung.
 }
 \details{
-On wait/gather error, the helper does NOT swallow — it lets the caller's
-tryCatch handle diagnostics (e.g. first-future status inspection).
+Note: an earlier version used \code{dask.distributed.wait(timeout=...)} to
+wake on completion-or-timeout. That API raises \code{TimeoutError} on
+timeout (it does NOT return a \code{DoneAndNotDoneFutures} as the docs
+suggest at first read), which aborted the gather on the very first
+heartbeat. We now poll \code{future.status} from Python in a single batched
+call (cheap — the status is mirrored locally from scheduler push updates,
+no round-trip per future) and sleep between iterations.
+
+On gather error the helper does NOT swallow — it lets the caller's tryCatch
+handle diagnostics (first-future status inspection).
 }
 \keyword{internal}

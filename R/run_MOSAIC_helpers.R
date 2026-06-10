@@ -13,6 +13,46 @@
 .MOSAIC_MAX_SIMULATIONS <- 100000000L
 
 # =============================================================================
+# Dask worker count
+# =============================================================================
+
+#' Count active Dask workers via Python (reticulate-conversion-safe)
+#'
+#' \code{length(client$scheduler_info()$workers)} cannot be relied on to count
+#' Dask workers — reticulate's auto-conversion of the nested
+#' \code{scheduler_info} dict surfaces the workers attribute as an R object
+#' whose \code{length()} is the per-worker FIELD count (typically 5 in current
+#' Dask versions), not the number of workers. The v0.32.35 fix that branched
+#' on \code{inherits(workers, "python.builtin.object")} also fails when the
+#' attribute IS auto-converted (the inherits check returns FALSE, the
+#' \code{length()} fallback fires, and the wrong count is logged anyway).
+#'
+#' This helper bypasses the conversion problem entirely: a tiny Python helper
+#' calls \code{len()} server-side on the workers dict and returns a plain
+#' \code{int}, which \code{py_run_string(..., convert = TRUE)} reliably
+#' converts to an R integer.
+#'
+#' @param client A reticulated \code{dask.distributed.Client} object.
+#' @return Integer worker count, or \code{NA_integer_} on error.
+#' @keywords internal
+.mosaic_count_dask_workers <- function(client) {
+  tryCatch({
+    py_env <- reticulate::py_run_string(
+      paste0(
+        "def _mosaic_count_workers(client):\n",
+        "    try:\n",
+        "        return len(client.scheduler_info().get('workers', {}))\n",
+        "    except Exception:\n",
+        "        return -1\n"
+      ),
+      convert = TRUE
+    )
+    n <- as.integer(py_env$"_mosaic_count_workers"(client))
+    if (is.na(n) || n < 0L) NA_integer_ else n
+  }, error = function(e) NA_integer_)
+}
+
+# =============================================================================
 # Dask gather with periodic heartbeat
 # =============================================================================
 
@@ -90,21 +130,12 @@
     n_errored <- as.integer(counts[[2L]])
     n_pending <- total - n_done
     elapsed   <- as.numeric(difftime(Sys.time(), start, units = "secs"))
-    # Count active workers via Python's len() on the workers dict. A bare
-    # length(client$scheduler_info()$workers) returns the wrong value on
-    # reticulated Python dicts (it counted 5 against a 100-worker cluster
-    # during a 5000-sim Coiled smoke test) because reticulate's auto-convert
-    # of a nested dict-of-dicts surfaces a structure whose R-side length is
-    # the per-worker field count, not the worker count. py_len() bypasses
-    # this by invoking Python's __len__ directly.
-    n_workers <- tryCatch({
-      workers <- client$scheduler_info()$workers
-      if (inherits(workers, "python.builtin.object")) {
-        as.integer(reticulate::py_len(workers))
-      } else {
-        length(workers)
-      }
-    }, error = function(e) NA_integer_)
+    # Count active workers via a pure-Python helper. See
+    # .mosaic_count_dask_workers() for the rationale — the obvious
+    # length(client$scheduler_info()$workers) returns the per-worker field
+    # count (typically 5), NOT the worker count, regardless of whether the
+    # workers attribute is still a Python object or already auto-converted.
+    n_workers <- .mosaic_count_dask_workers(client)
 
     log_fn("[PROGRESS] phase=%s event=gather_wait sims_done=%d sims_pending=%d sims_errored=%d elapsed_sec=%.0f workers=%s",
            phase, n_done, n_pending, n_errored, elapsed,
@@ -2102,7 +2133,11 @@
   # where TRUE/FALSE needed".
   .raw_n_cores <- suppressWarnings(as.integer(control$parallel$n_cores %||% 1L))
   if (length(.raw_n_cores) != 1L || is.na(.raw_n_cores)) .raw_n_cores <- 1L
-  n_cores_parallel <- max(1L, .raw_n_cores)
+  # Cap to LOCAL hardware: this is the orchestrator fork width, never the remote
+  # worker count (that is dask_spec$n_workers).
+  .local_cores <- tryCatch(parallel::detectCores(), error = function(e) NA_integer_)
+  if (is.na(.local_cores) || .local_cores < 1L) .local_cores <- .raw_n_cores
+  n_cores_parallel <- max(1L, min(.raw_n_cores, .local_cores))
 
   log_msg("  Sampling + submitting %d simulations (%d chunks, parallel x %d cores)...",
           n_sims, n_chunks, n_cores_parallel)

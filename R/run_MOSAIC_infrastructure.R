@@ -143,9 +143,9 @@
 
 #' Set all thread-count environment variables for parallel workers
 #'
-#' Sets the canonical six variables documented in CLAUDE.md so that BLAS,
-#' OpenMP, MKL, NumExpr, Intel TBB, and Numba each spawn only `n` worker
-#' threads. Use everywhere a worker process is about to do CPU-bound work
+#' Sets the canonical thread-pool variables documented in CLAUDE.md so that
+#' BLAS, OpenMP, MKL, NumExpr, Intel TBB, Numba, and Apache Arrow each spawn only
+#' `n` worker threads. Use everywhere a worker process is about to do CPU-bound work
 #' to prevent oversubscription / deadlock.
 #' @noRd
 .mosaic_set_all_thread_env <- function(n = 1L) {
@@ -156,7 +156,8 @@
     OPENBLAS_NUM_THREADS = n_chr,
     NUMEXPR_NUM_THREADS  = n_chr,
     TBB_NUM_THREADS      = n_chr,
-    NUMBA_NUM_THREADS    = n_chr
+    NUMBA_NUM_THREADS    = n_chr,
+    ARROW_NUM_THREADS    = n_chr   # Apache Arrow CPU thread pool (parquet writer)
   )
   invisible(NULL)
 }

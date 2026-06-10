@@ -317,7 +317,10 @@ ctrl <- mosaic_control_defaults(
     batch_size    = 500
   ),
   parallel = list(
-    n_cores = 10             # used as default n_workers if dask_spec$n_workers not set
+    # LOCAL-machine parallelism only (orchestrator-side sampling + parquet write).
+    # Does NOT size the remote cluster -- that is dask_spec$n_workers below.
+    enable  = TRUE,
+    n_cores = 4
   )
 )
 

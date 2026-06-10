@@ -661,6 +661,20 @@ run_MOSAIC <- function(config,
         (is.null(dask_spec$address) || !nzchar(dask_spec$address))) {
       stop("dask_spec$address must be set when type='scheduler'", call. = FALSE)
     }
+    # Remote worker count is governed SOLELY by dask_spec, never by
+    # control$parallel$n_cores. Require it explicitly for a Coiled cluster
+    # (mosaic_dask_presets() always sets it).
+    if (dask_spec$type == "coiled") {
+      if (is.null(dask_spec$n_workers) || !is.numeric(dask_spec$n_workers) ||
+          length(dask_spec$n_workers) != 1L || is.na(dask_spec$n_workers) ||
+          dask_spec$n_workers < 1) {
+        stop("dask_spec$n_workers must be a positive integer for type='coiled' ",
+             "(set it explicitly, e.g. via mosaic_dask_presets()). `control$parallel$n_cores` ",
+             "governs LOCAL parallelism only and no longer defaults the remote worker count.",
+             call. = FALSE)
+      }
+      dask_spec$n_workers <- as.integer(round(dask_spec$n_workers))
+    }
   }
 
   # ===========================================================================
@@ -985,7 +999,8 @@ run_MOSAIC <- function(config,
 
     # --- Dask / Coiled cluster ---
 
-    # Force sequential if parallel is disabled (n_cores controls n_workers default)
+    # Force LOCAL sequential if parallel is disabled. Sets the orchestrator fork
+    # width only; does NOT affect dask_spec$n_workers (the remote cluster size).
     if (!isTRUE(control$parallel$enable)) {
       control$parallel$n_cores <- 1L
     }
@@ -1001,7 +1016,10 @@ run_MOSAIC <- function(config,
 
     if (dask_spec$type == "coiled") {
       coiled_mod <- reticulate::import("coiled")
-      n_workers_req <- dask_spec$n_workers %||% control$parallel$n_cores
+      # Remote worker count comes ONLY from dask_spec (validated above); it is
+      # deliberately NOT defaulted from control$parallel$n_cores, which governs
+      # local-machine parallelism only and must never size the remote cluster.
+      n_workers_req <- as.integer(dask_spec$n_workers)
 
       log_msg("Creating Coiled cluster: %d workers (%s, %s)",
               n_workers_req, dask_spec$vm_types[1], dask_spec$region)
@@ -1125,6 +1143,16 @@ run_MOSAIC <- function(config,
     base_config_py     <- reticulate::r_to_py(.extract_base_config(config))
     base_config_future <- client$scatter(base_config_py, broadcast = TRUE)
     log_msg("  Base config broadcast complete")
+
+    # Orchestrator-local thread hygiene: the sampling + parquet-write loops run
+    # locally (mclapply forks when control$parallel$n_cores > 1). Pin every local
+    # thread pool to 1 so N forks cannot oversubscribe the orchestrator host
+    # (arrow's CPU pool and OpenBLAS are otherwise uncapped here); forks inherit
+    # this via copy-on-write. Remote Coiled workers set their own nthreads=1 and
+    # are unaffected.
+    .mosaic_set_all_thread_env(1L)
+    try(arrow::set_cpu_count(1L), silent = TRUE)
+    try(arrow::set_io_thread_count(1L), silent = TRUE)
 
     # cl is not used in Dask mode
     cl <- NULL
@@ -1985,7 +2013,11 @@ run_MOSAIC <- function(config,
     postca_dask <- tryCatch({
       log_msg("Reconnecting to Dask cluster for post-cal sims...")
       client <- dask_cluster$get_client()
-      log_msg("  Reconnected (%d workers)", length(client$scheduler_info()$workers))
+      log_msg("  Reconnected (%s workers)",
+              {
+                n_w <- .mosaic_count_dask_workers(client)
+                if (is.na(n_w)) "?" else as.character(n_w)
+              })
 
       # Re-upload worker module (workers may have restarted during idle)
       worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
@@ -3162,8 +3194,10 @@ run_mosaic <- run_MOSAIC
 #' @param parallel List of parallelization settings (infrastructure). Default is:
 #'   \itemize{
 #'     \item \code{enable}: Enable parallel execution (default: FALSE)
-#'     \item \code{n_cores}: Number of cores to use (default: 1L). In Dask mode, also
-#'       controls local parallel likelihood computation after simulations return.
+#'     \item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
+#'       parallelism only: the LASER worker count on the non-Dask path, and the
+#'       orchestrator's sampling/parquet fork width on the Dask path. It never sets the
+#'       remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 #'     \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 #'     \item \code{progress}: Show progress bar (default: TRUE)
 #'   }
