@@ -128,7 +128,7 @@
 #' @param response_var Training target column. "transmission_intensity" (public
 #'   default) and "intensity" both select the train-only
 #'   log1p(cases)/log1p(cases_99th) recipe; a `target_*` name reads that
-#'   pre-computed [0,1] column directly.
+#'   pre-computed \[0,1\] column directly.
 #' @param max_gap_days Max within-sequence date gap (default 14).
 #' @param verbose Logical.
 #' @return A data bundle list consumed by .psi_fit_predict_rw_cv() /

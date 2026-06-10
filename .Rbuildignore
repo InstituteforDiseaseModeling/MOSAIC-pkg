@@ -12,6 +12,8 @@ pkgdown/
 ^vignettes/articles/generate_running_mosaic_figures\.R$
 ^\.github$
 ^claude$
+^\.claude$
+^_pkgdown\.yml$
 ^vm$
 ^CLAUDE\.md$
 ^MEMORY\.md$

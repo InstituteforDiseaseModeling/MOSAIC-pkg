@@ -27,11 +27,11 @@ meta-analytic strata bracket that spectrum:
 
 \itemize{
 \item \strong{General diarrhea} (3+ loose/liquid stools): 29.9\\%
-(95\\% CI \link{25.3, 35.1}) from 122 observations. Represents
+(95\\% CI [25.3, 35.1]) from 122 observations. Represents
 care-seeking for the broader population of diarrheal episodes,
 which is appropriate for the mild-to-moderate tail of
 symptomatic cholera (the majority of cases by count).
-\item \strong{Severe diarrhea + cholera}: 58.6\\% (95\\% CI \link{39.9, 75.2})
+\item \strong{Severe diarrhea + cholera}: 58.6\\% (95\\% CI [39.9, 75.2])
 from 22 observations. Represents care-seeking when symptoms are
 severe enough to be flagged as "severe" or specifically cholera,
 which is appropriate for the severe tail of symptomatic cholera.

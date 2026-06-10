@@ -12,7 +12,7 @@
 
 #' Build a loss-and-target configuration with optional sample weights.
 #'
-#' Two loss kinds: "bce" (default; sigmoid output, BCE on raw [0,1] target — the
+#' Two loss kinds: "bce" (default; sigmoid output, BCE on raw \[0,1\] target — the
 #' gauge_A default) and "mse_logit" (linear output, MSE on logit-transformed
 #' target). Sample weighting addresses the zero-week class imbalance (~72% of
 #' all-MOSAIC training weeks are zero, ratio ~2.5:1; higher for individual

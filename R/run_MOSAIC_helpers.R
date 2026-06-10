@@ -22,7 +22,7 @@
 #' calibration scoring and post-calibration prediction (best / medioid /
 #' posterior ensemble) use IDENTICAL clamped values. Prevents the laser-cholera
 #' ValueError where \code{p = -expm1(-rate) > 1} when \code{rate < 0}
-#' (GitHub #24) and keeps probabilities in [0, 1]. Idempotent — clamping an
+#' (GitHub #24) and keeps probabilities in \[0, 1\]. Idempotent — clamping an
 #' already-clamped config is a no-op — so it is safe to apply at every sampling
 #' site without changing values that are already in range.
 #'

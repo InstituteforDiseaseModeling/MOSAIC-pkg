@@ -53,7 +53,7 @@
 }
 
 #' Interpolate weekly predictions onto a daily grid (forward-fill then smooth).
-#' Returns data.frame(date, pred [forward-filled, un-smoothed], pred_smooth).
+#' Returns data.frame(date, pred \[forward-filled, un-smoothed\], pred_smooth).
 #' @keywords internal
 #' @noRd
 .psi_weekly_to_daily_smooth <- function(weekly_dates, weekly_probs,
@@ -125,7 +125,7 @@
 #' @param parallel_seeds Integer; >1 fits seeds across PSOCK workers (default 1L
 #'   serial). Falls back to serial if the cluster cannot be set up.
 #' @return list(ensemble_long, by_country, seeds_by_country, fit_info,
-#'   rw_diagnostics, ensemble [target headline], seeds [target headline]).
+#'   rw_diagnostics, ensemble \[target headline\], seeds \[target headline\]).
 #' @keywords internal
 #' @noRd
 .psi_run_seed_ensemble <- function(fit_predict_fn, data_bundle,
