@@ -1,14 +1,25 @@
 # Parity tests for the Tier-2 performance refactor (weighted_quantiles_presorted,
-# merge-0.5, sort-once-per-cell). Each asserts BIT-IDENTICAL output vs the
-# post-alignment-fix reference. The golden fixture (fixtures/parity_tier2.rds)
-# was captured from the fixed-but-pre-refactor code (claude/capture_parity_tier2.R).
+# merge-0.5, sort-once-per-cell) and the R-7 presort-memory refactor.
 #
-# v0.36.2 (R-5): the optimized-ensemble MEAN fields were refreshed (only those
-# two fields, verified-surgical via claude/update_parity_tier2_means.R) when
-# optimize_ensemble_subset() began renormalizing the weighted mean over surviving
-# sims to match calc_model_ensemble(). The fixture has no failed sims, so the
-# refresh was a machine-eps (~1e-14) divide-by-sum(w) consistency change; the
-# behavioral change under NA is covered by test-optimize_ensemble_subset.R.
+# Provenance & what each test actually guards (review B2-9):
+#  * Tests #2a and #1 are INDEPENDENT correctness oracles: they recompute the
+#    presorted weighted quantiles from scratch via the naive per-N
+#    weighted_quantiles() and assert agreement (tolerance = 0). They validate the
+#    sort-once / presorted math WITHOUT any stored snapshot, so correctness does
+#    not rest on the fixture.
+#  * Tests #1+#2b and #2b compare optimize_ensemble_subset() / calc_model_ensemble()
+#    against the golden fixture (fixtures/parity_tier2.rds). The fixture was captured
+#    via devtools::load_all() of the package (claude/capture_parity_tier2.R), so it
+#    reflects the code AT CAPTURE TIME and cannot independently prove a pre-refactor
+#    snapshot. It is therefore a REGRESSION guard against drift from a
+#    continuously-verified baseline, not proof of the original bit-identical claim.
+#  * That baseline is kept verified: the optimized-ensemble MEAN fields were
+#    surgically refreshed with all other fields asserted bit-identical in v0.36.2
+#    (R-5, claude/update_parity_tier2_means.R) when optimize_ensemble_subset() began
+#    renormalizing the mean over surviving sims (a ~1e-14 divide-by-sum(w) change on
+#    this no-failed-sim fixture; the NA behavior is covered by
+#    test-optimize_ensemble_subset.R), and the optimize path was re-confirmed
+#    bit-identical at tolerance = 0 after the v0.36.9 (R-7) presort-memory refactor.
 
 test_that("#2a: weighted_quantiles_presorted == weighted_quantiles on sorted input", {
   set.seed(99)
