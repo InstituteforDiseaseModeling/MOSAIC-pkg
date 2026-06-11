@@ -45,6 +45,9 @@ Functions starting with run\_, make\_, or create\_
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
+- [`run_fit_sandbox()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_fit_sandbox.md)
+  : Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter
+  Overrides
 - [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
   : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
@@ -157,6 +160,9 @@ Calculation functions
   threshold-dependent IFR
 - [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
   : Compute Diffusion Matrix Based on Gravity Model
+- [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md)
+  : Fit Diagnostics: Bias, Shape, and Variance for a Single
+  Observed/Predicted Series
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   : Calculate Kullback-Leibler Divergence Between Two Distributions
@@ -555,6 +561,9 @@ Other exported functions and internal helpers
   threshold-dependent IFR
 - [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
   : Compute Diffusion Matrix Based on Gravity Model
+- [`calc_fit_diagnostics()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_fit_diagnostics.md)
+  : Fit Diagnostics: Bias, Shape, and Variance for a Single
+  Observed/Predicted Series
 - [`calc_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   [`calculate_kl_divergence()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_kl_divergence.md)
   : Calculate Kullback-Leibler Divergence Between Two Distributions
@@ -1048,6 +1057,9 @@ Other exported functions and internal helpers
 - [`run_WHO_annual_data_app()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_WHO_annual_data_app.md)
   : Run Shiny Application for Visualizing WHO Annual Cholera Data in
   AFRO Countries
+- [`run_fit_sandbox()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_fit_sandbox.md)
+  : Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter
+  Overrides
 - [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
   : Rolling-Window Forecast Validation for the MOSAIC Transmission Model
 - [`sample_from_prior()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_from_prior.md)

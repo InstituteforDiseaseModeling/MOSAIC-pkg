@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,6 +71,7 @@
 <p><strong>Critical paths (DON’T BREAK THESE):</strong> - <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> — main calibration workflow (<code>R/run_MOSAIC.R</code>) - <code><a href="reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> — called 1000s of times (<code>R/calc_model_likelihood.R</code>) - <code><a href="reference/sample_parameters.html">sample_parameters()</a></code> — 301 parameters (<code>R/sample_parameters.R</code>) - <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> — posterior-weighted ensemble (<code>R/calc_model_ensemble.R</code>)</p>
 <p><strong>File rules:</strong> - Use <code>./claude/</code> for ALL temporary/exploratory files - Use <code><a href="reference/get_paths.html">get_paths()</a></code> for ALL file operations (never hardcode paths) - Never modify: laser-cholera/, ees-cholera-mapping/, jhu_cholera_data/ (read-only) - Never modify: MOSAIC-data/raw/ (read-only) - Never create files in package root without necessity</p>
 <p><strong>Ask user first if:</strong> - Adding new R or Python package dependency - Changing function signature of exported function - Modifying <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> core loop - Unsure about approach (multiple valid solutions)</p>
+<p><strong>Agent roster &amp; skills:</strong> this package defines a Claude Code subagent roster + a <code>diagnose-fit</code> skill in <strong><code>.claude/</code></strong> (tracked in git) — see <strong><code>.claude/agents/README.md</code></strong> for the full roster, routing, colors, and aliases. The agents can read/write data and outputs in sibling repos under <code>~/MOSAIC</code> (e.g. country repos, the <code>output/</code> tree) via the session’s <code>additionalDirectories</code> grant. Shortcuts: <code>/swe</code> (engineering), <code>/stat</code> (Bayesian/likelihood), <code>/dm</code> (epi/priors), <code>/ml</code> (suitability), <code>/etl</code> (data ingestion), <code>/cr</code> (review+housekeeping), <code>/guide</code> (user how-to), <code>/doctor</code> + <code>/diagnose-fit</code> (calibration diagnosis).</p>
 <hr></div>
 <div class="section level2">
 <h2 id="package-overview">Package Overview<a class="anchor" aria-label="anchor" href="#package-overview"></a></h2>
