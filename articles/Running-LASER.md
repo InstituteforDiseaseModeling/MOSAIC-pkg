@@ -29,14 +29,6 @@ growth patterns typical of cholera epidemics.
 
 ``` r
 
-# Run endemic scenario
-config <- MOSAIC::config_simulation_endemic
-
-model_endemic <- run_LASER(config = config, seed = 123, quiet = FALSE)
-```
-
-``` r
-
 library(MOSAIC)
 
 # Run epidemic scenario
@@ -116,11 +108,11 @@ colors <- c("#00CD6C", "#AF58BA", "#009ADE")  # Green, Purple, Blue
 par(mfrow = c(2, 1), mar = c(3, 4, 3, 1), oma = c(2, 0, 0, 0))
 
 matplot(t(cases_endemic), type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "", ylab = "Expected Cases",
+        xlab = "", ylab = "Reported Cases",
         main = "Endemic Transmission Simulation")
 
 matplot(t(deaths_endemic), type = "l", lty = 1, lwd = 2, col = colors,
-        xlab = "Time step", ylab = "Expected Deaths", main = "")
+        xlab = "Time step", ylab = "Reported Deaths", main = "")
 
 par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
 plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
@@ -150,7 +142,7 @@ cases <- as.matrix(results$results$reported_cases)
 
 # Create grid plot showing each location separately
 png("figures/multi_location_grid.png", width = 1400, height = 1600, res = 130)
-par(mfrow = c(8, 5), mar = c(2, 2, 2, 1), oma = c(2, 2, 2, 0))
+par(mfrow = c(ceiling(nrow(cases) / 5), 5), mar = c(2, 2, 2, 1), oma = c(2, 2, 2, 0))
 
 for (i in 1:nrow(cases)) {
      plot(cases[i, ], type = "l", lwd = 1.5, col = "#009ADE",
@@ -162,8 +154,8 @@ for (i in 1:nrow(cases)) {
 
 # Add common axis labels
 mtext("Time step", side = 1, outer = TRUE, line = 0.5)
-mtext("Expected Cases", side = 2, outer = TRUE, line = 0.5)
-mtext("Expected Cases by Location", side = 3, outer = TRUE, line = 0.5, font = 2)
+mtext("Reported Cases", side = 2, outer = TRUE, line = 0.5)
+mtext("Reported Cases by Location", side = 3, outer = TRUE, line = 0.5, font = 2)
 dev.off()
 cat("Saved: figures/multi_location_grid.png\n")
 ```

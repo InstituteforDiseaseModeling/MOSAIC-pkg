@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.12</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -116,7 +116,7 @@ to set up MOSAIC and its dependencies.</p>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.9</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
 <span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span> <span class="co"># Travel probability</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Gravity model exponent</span></span>
@@ -164,11 +164,11 @@ to set up MOSAIC and its dependencies.</p>
 <span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="st">'auto'</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size_adaptive</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches_adaptive</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches_adaptive</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2_adaptive</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations_total</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
 <span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
@@ -176,7 +176,7 @@ to set up MOSAIC and its dependencies.</p>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.9</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">50</span></span>
-<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span><span class="va">control_ETH</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
 <span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
 <span><span class="va">control_ETH</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span>   <span class="co"># Gravity model exponent</span></span>
@@ -224,11 +224,11 @@ to set up MOSAIC and its dependencies.</p>
 <span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_simulations</span> <span class="op">&lt;-</span> <span class="st">'auto'</span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">n_iterations</span> <span class="op">&lt;-</span> <span class="fl">3</span></span>
-<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
-<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
-<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
-<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
-<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">batch_size_adaptive</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">min_batches_adaptive</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_batches_adaptive</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">target_r2_adaptive</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">calibration</span><span class="op">$</span><span class="va">max_simulations_total</span> <span class="op">&lt;-</span> <span class="fl">1e+06</span></span>
 <span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">enable</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">parallel</span><span class="op">$</span><span class="va">n_cores</span> <span class="op">&lt;-</span> <span class="fu">parallel</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/parallel/detectCores.html" class="external-link">detectCores</a></span><span class="op">(</span><span class="op">)</span><span class="op">-</span><span class="fl">1</span></span>
@@ -236,7 +236,7 @@ to set up MOSAIC and its dependencies.</p>
 <span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param</span> <span class="op">&lt;-</span> <span class="fl">100</span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_param_prop</span> <span class="op">&lt;-</span> <span class="fl">0.95</span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_best</span> <span class="op">&lt;-</span> <span class="fl">30</span></span>
-<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ess_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
+<span><span class="va">control</span><span class="op">$</span><span class="va">targets</span><span class="op">$</span><span class="va">ESS_method</span> <span class="op">&lt;-</span> <span class="st">'perplexity'</span></span>
 <span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_tau_i</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span> <span class="co"># Travel probability</span></span>
 <span><span class="va">control</span><span class="op">$</span><span class="va">sampling</span><span class="op">$</span><span class="va">sample_mobility_gamma</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">iso_codes</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>  <span class="co"># Gravity model exponent</span></span>

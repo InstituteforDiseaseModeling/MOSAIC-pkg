@@ -47,7 +47,7 @@ control_ETH$parallel$n_cores <- parallel::detectCores()-1
 control_ETH$targets$ESS_param <- 100
 control_ETH$targets$ESS_param_prop <- 0.9
 control_ETH$targets$ESS_best <- 50
-control_ETH$targets$ess_method <- 'perplexity'
+control_ETH$targets$ESS_method <- 'perplexity'
 
 control_ETH$sampling$sample_tau_i <- FALSE # Travel probability
 control_ETH$sampling$sample_mobility_gamma <- FALSE   # Gravity model exponent
@@ -96,11 +96,11 @@ control_ETH <- mosaic_control_defaults()
 
 control_ETH$calibration$n_simulations <- 'auto'
 control_ETH$calibration$n_iterations <- 2
-control_ETH$calibration$batch_size <- 500
-control_ETH$calibration$min_batches <- 5
-control_ETH$calibration$max_batches <- 10
-control_ETH$calibration$target_r2 <- 0.95
-control_ETH$calibration$max_simulations <- 1e+06
+control_ETH$calibration$batch_size_adaptive <- 500
+control_ETH$calibration$min_batches_adaptive <- 5
+control_ETH$calibration$max_batches_adaptive <- 10
+control_ETH$calibration$target_r2_adaptive <- 0.95
+control_ETH$calibration$max_simulations_total <- 1e+06
 
 control_ETH$parallel$enable <- TRUE
 control_ETH$parallel$n_cores <- parallel::detectCores()-1
@@ -108,7 +108,7 @@ control_ETH$parallel$n_cores <- parallel::detectCores()-1
 control_ETH$targets$ESS_param <- 100
 control_ETH$targets$ESS_param_prop <- 0.9
 control_ETH$targets$ESS_best <- 50
-control_ETH$targets$ess_method <- 'perplexity'
+control_ETH$targets$ESS_method <- 'perplexity'
 
 control_ETH$sampling$sample_tau_i <- FALSE
 control_ETH$sampling$sample_mobility_gamma <- FALSE   # Gravity model exponent
@@ -157,11 +157,11 @@ control <- mosaic_control_defaults()
 
 control$calibration$n_simulations <- 'auto'
 control$calibration$n_iterations <- 3
-control$calibration$batch_size <- 500
-control$calibration$min_batches <- 5
-control$calibration$max_batches <- 10
-control$calibration$target_r2 <- 0.95
-control$calibration$max_simulations <- 1e+06
+control$calibration$batch_size_adaptive <- 500
+control$calibration$min_batches_adaptive <- 5
+control$calibration$max_batches_adaptive <- 10
+control$calibration$target_r2_adaptive <- 0.95
+control$calibration$max_simulations_total <- 1e+06
 
 control$parallel$enable <- TRUE
 control$parallel$n_cores <- parallel::detectCores()-1
@@ -169,7 +169,7 @@ control$parallel$n_cores <- parallel::detectCores()-1
 control$targets$ESS_param <- 100
 control$targets$ESS_param_prop <- 0.95
 control$targets$ESS_best <- 30
-control$targets$ess_method <- 'perplexity'
+control$targets$ESS_method <- 'perplexity'
 
 control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability
 control$sampling$sample_mobility_gamma <- length(iso_codes) > 1  # Gravity model exponent
