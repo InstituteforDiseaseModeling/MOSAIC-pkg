@@ -19,6 +19,12 @@
 #'   with \code{likelihoods}. When supplied, the function returns
 #'   \code{optimal_seeds} so callers can map the optimized subset back to the
 #'   original \code{samples.parquet} rows without re-deriving the internal sort.
+#'   Separately, if \code{ensemble$seeds} is present (the per-member seeds carried
+#'   by \code{calc_model_ensemble}, aligned with \code{cases_array} by
+#'   construction), it is carried through the same sort/slice and exposed as
+#'   \code{ensemble_optimized$seeds} for cases_array-aligned consumers such as
+#'   medioid selection. This argument and \code{ensemble$seeds} serve different
+#'   roles and are kept independent.
 #' @param min_n Minimum subset size to evaluate. Default \code{30L} to guard
 #'   against small-subset KDE degeneracy when the optimized subset drives
 #'   posterior artifacts. Fox et al. (2024) report 4 as a statistical minimum
@@ -35,9 +41,13 @@
 #'     \item{optimal_score}{Score at optimal N.}
 #'     \item{optimal_weights}{Re-computed Gibbs weights for the optimal subset.}
 #'     \item{optimal_indices}{Integer indices into the original ensemble arrays.}
-#'     \item{optimal_seeds}{Simulation seeds of the optimal subset (when
+#'     \item{optimal_seeds}{Simulation seeds of the optimal subset in
+#'       likelihood-sorted order, aligned with \code{optimal_weights} (when
 #'       \code{seeds} supplied), else \code{NULL}.}
-#'     \item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal N.}
+#'     \item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal
+#'       N. Its \code{$seeds} field is the per-member seed aligned with its
+#'       \code{cases_array} (member i <-> seeds[i]) when \code{ensemble$seeds} was
+#'       present, else it falls back to \code{optimal_seeds}.}
 #'     \item{stability_flag}{TRUE if score profile was flat.}
 #'     \item{diagnostics_n}{Original diagnostics-selected N.}
 #'     \item{diagnostics_score}{Score at the diagnostics-selected N.}
@@ -72,6 +82,17 @@ optimize_ensemble_subset <- function(ensemble,
   n_locs   <- ensemble$n_locations
   n_times  <- ensemble$n_time_points
 
+  # Per-member seeds carried ON the ensemble (aligned with cases_array by
+  # construction in calc_model_ensemble: member i <-> ens_member_seeds[i]). These
+  # are carried through the sort/slice below in lockstep with cases_array and
+  # exposed as ensemble_optimized$seeds, giving medioid selection a seed vector
+  # that cannot drift relative to the array. This is deliberately SEPARATE from
+  # `seeds`/`optimal_seeds`, which stay aligned with `likelihoods`/`optimal_weights`
+  # for the downstream seed->weight mapping. NULL when the ensemble carries none.
+  ens_member_seeds <- if (!is.null(ensemble$seeds) && length(ensemble$seeds) == n_params) {
+    ensemble$seeds
+  } else NULL
+
   if (length(likelihoods) != n_params) {
     stop(sprintf("Length of 'likelihoods' (%d) must match ensemble$n_param_sets (%d).",
                  length(likelihoods), n_params), call. = FALSE)
@@ -104,6 +125,8 @@ optimize_ensemble_subset <- function(ensemble,
     cases_array  <- ensemble$cases_array[, , sort_order, , drop = FALSE]
     deaths_array <- ensemble$deaths_array[, , sort_order, , drop = FALSE]
     if (!is.null(seeds)) seeds <- seeds[sort_order]
+    # Carried in lockstep with cases_array so member<->seed alignment survives.
+    if (!is.null(ens_member_seeds)) ens_member_seeds <- ens_member_seeds[sort_order]
   } else {
     cases_array  <- ensemble$cases_array
     deaths_array <- ensemble$deaths_array
@@ -315,6 +338,9 @@ optimize_ensemble_subset <- function(ensemble,
 
   optimal_indices <- 1:optimal_n
   optimal_seeds   <- if (!is.null(seeds)) seeds[optimal_indices] else NULL
+  # Member-aligned seeds for the optimized subset (for medioid selection). Falls
+  # back to optimal_seeds when the ensemble carried no per-member seeds.
+  opt_member_seeds <- if (!is.null(ens_member_seeds)) ens_member_seeds[optimal_indices] else optimal_seeds
 
   # Re-compute Gibbs weights at optimal N
   ll_opt    <- likelihoods[optimal_indices]
@@ -396,6 +422,7 @@ optimize_ensemble_subset <- function(ensemble,
       obs_cases                 = ensemble$obs_cases,
       obs_deaths                = ensemble$obs_deaths,
       parameter_weights         = optimal_weights,
+      seeds                     = opt_member_seeds,
       n_param_sets              = as.integer(optimal_n),
       n_simulations_per_config  = n_stoch,
       n_successful              = as.integer(optimal_n * n_stoch),

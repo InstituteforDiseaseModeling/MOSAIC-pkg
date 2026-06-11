@@ -46,6 +46,10 @@
 #'   \item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x n_stoch).}
 #'   \item{deaths_array}{4-D array matching cases_array dimensions.}
 #'   \item{parameter_weights}{Normalized weight vector.}
+#'   \item{seeds}{Integer vector of per-member simulation seeds, aligned with the
+#'     parameter dimension of \code{cases_array} (member i <-> seeds[i]). Bound to
+#'     the parameter set that produced each member so consumers (e.g. medioid
+#'     selection) need not rely on positional alignment with an external vector.}
 #'   \item{n_param_sets}{Number of parameter sets.}
 #'   \item{n_simulations_per_config}{Stochastic runs per parameter set.}
 #'   \item{n_successful}{Number of successful simulations.}
@@ -435,6 +439,44 @@ calc_model_ensemble <- function(config,
   deaths_stats <- calculate_overall_stats(deaths_array)
 
   # ===========================================================================
+  # Per-member seeds, aligned with cases_array's param dimension (member i <->
+  # seeds[i]). Bound to the parameter set that PRODUCED each member so downstream
+  # consumers (medioid selection, optimize_ensemble_subset) never have to rely on
+  # positional alignment with a separately-passed seed vector -- the failure mode
+  # that mis-mapped the medioid to a collapsed member. Precedence:
+  #   (a) precomputed (Dask) results carry their own config seed (param_seed)
+  #       tagged with the param_idx they fill -- ground truth for that member;
+  #   (b) the per-member config seed (local-sampling and direct-config paths build
+  #       cases_array member i from param_configs[[i]], whose $seed is authoritative);
+  #   (c) last-resort positional fallback to the supplied parameter_seeds.
+  # ===========================================================================
+
+  member_seeds <- rep(NA_integer_, n_param_sets)
+  if (!is.null(precomputed_results)) {
+    for (r in precomputed_results) {
+      p  <- suppressWarnings(as.integer(r$param_idx)[1])
+      ps <- suppressWarnings(as.integer(r$param_seed)[1])
+      if (length(p) && !is.na(p) && p >= 1L && p <= n_param_sets &&
+          length(ps) && !is.na(ps)) {
+        member_seeds[p] <- ps
+      }
+    }
+  }
+  if (anyNA(member_seeds) && length(param_configs) == n_param_sets) {
+    for (i in seq_len(n_param_sets)) {
+      if (is.na(member_seeds[i])) {
+        s <- param_configs[[i]]$seed
+        if (!is.null(s) && length(s)) member_seeds[i] <- suppressWarnings(as.integer(s)[1])
+      }
+    }
+  }
+  if (anyNA(member_seeds) && !is.null(parameter_seeds) &&
+      length(parameter_seeds) == n_param_sets) {
+    na_i <- is.na(member_seeds)
+    member_seeds[na_i] <- suppressWarnings(as.integer(parameter_seeds))[na_i]
+  }
+
+  # ===========================================================================
   # Return mosaic_ensemble object
   # ===========================================================================
 
@@ -451,6 +493,7 @@ calc_model_ensemble <- function(config,
       cases_array               = cases_array,
       deaths_array              = deaths_array,
       parameter_weights         = parameter_weights,
+      seeds                     = member_seeds,
       n_param_sets              = n_param_sets,
       n_simulations_per_config  = as.integer(n_simulations_per_config),
       n_successful              = n_successful,

@@ -2623,6 +2623,11 @@
     task_meta <- vector("list", total)
     idx <- 0L
     for (p in seq_len(n_param_sets)) {
+      # Seed of the parameter set dispatched at this param_idx, carried through so
+      # each ensemble member can be bound to the config that produced it. This
+      # decouples the member<->seed mapping from any positional ordering of a
+      # separately-passed seed vector (the source of the medioid mis-mapping bug).
+      cfg_seed <- tryCatch(as.integer(param_configs[[p]]$seed)[1], error = function(e) NA_integer_)
       for (s in seq_len(n_stochastic_per)) {
         idx <- idx + 1L
         stoch_seed <- as.integer((p * 1000L) + s)
@@ -2633,7 +2638,7 @@
           preps[[p]]$json,
           matrix_futures[[p]]
         )
-        task_meta[[idx]] <- list(param_idx = p, stoch_idx = s)
+        task_meta[[idx]] <- list(param_idx = p, stoch_idx = s, param_seed = cfg_seed)
       }
     }
 
@@ -2653,6 +2658,7 @@
         list(
           param_idx = meta$param_idx,
           stoch_idx = meta$stoch_idx,
+          param_seed = meta$param_seed,
           reported_cases = matrix(unlist(r$reported_cases),
                                   nrow = length(r$reported_cases), byrow = TRUE),
           reported_deaths = matrix(unlist(r$reported_deaths),
@@ -2661,6 +2667,7 @@
         )
       } else {
         list(param_idx = meta$param_idx, stoch_idx = meta$stoch_idx,
+             param_seed = meta$param_seed,
              success = FALSE, error = r$error %||% "unknown")
       }
     })

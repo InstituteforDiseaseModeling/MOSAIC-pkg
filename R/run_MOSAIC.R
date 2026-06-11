@@ -2330,15 +2330,23 @@ run_MOSAIC <- function(config,
 
       medioid_idx <- which.min(medioid_distances)
 
-      # Seed lookup: optimized subset uses subset_opt$optimal_seeds; candidate uses param_seeds
-      final_seeds <- if (!is.null(subset_opt) && !is.null(subset_opt$optimal_seeds) &&
-                         length(subset_opt$optimal_seeds) == ensemble$n_param_sets) {
+      # Seed of the member the metric actually selected. `ensemble$seeds` is carried
+      # ALONGSIDE cases_array (member i <-> seeds[i]) through both calc_model_ensemble
+      # and optimize_ensemble_subset, so the index that minimises the distance maps
+      # to that exact member's seed and cannot drift the way a separately re-derived
+      # vector (optimal_seeds / param_seeds) can. Prefer it; fall back only if absent.
+      final_seeds <- if (!is.null(ensemble$seeds) &&
+                         length(ensemble$seeds) == ensemble$n_param_sets) {
+        ensemble$seeds
+      } else if (!is.null(subset_opt) && !is.null(subset_opt$optimal_seeds) &&
+                 length(subset_opt$optimal_seeds) == ensemble$n_param_sets) {
         subset_opt$optimal_seeds
       } else {
         param_seeds
       }
 
-      if (medioid_idx >= 1L && medioid_idx <= length(final_seeds)) {
+      if (medioid_idx >= 1L && medioid_idx <= length(final_seeds) &&
+          !is.na(final_seeds[[medioid_idx]])) {
         medioid_seed_sim <- final_seeds[[medioid_idx]]
         log_msg("Medioid: param set %d of %d (seed=%d, MAE=%.4f)",
                 medioid_idx, ensemble$n_param_sets,

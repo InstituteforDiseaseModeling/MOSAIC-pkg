@@ -73,6 +73,10 @@ S3 object of class \code{"mosaic_ensemble"} containing:
 \item{cases_array}{4-D array (n_locations x n_time_points x n_param_sets x n_stoch).}
 \item{deaths_array}{4-D array matching cases_array dimensions.}
 \item{parameter_weights}{Normalized weight vector.}
+\item{seeds}{Integer vector of per-member simulation seeds, aligned with the
+parameter dimension of \code{cases_array} (member i <-> seeds\link{i}). Bound to
+the parameter set that produced each member so consumers (e.g. medioid
+selection) need not rely on positional alignment with an external vector.}
 \item{n_param_sets}{Number of parameter sets.}
 \item{n_simulations_per_config}{Stochastic runs per parameter set.}
 \item{n_successful}{Number of successful simulations.}

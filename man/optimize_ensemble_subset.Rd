@@ -23,7 +23,13 @@ in the ensemble. Must have length \code{ensemble$n_param_sets}.}
 \item{seeds}{Optional numeric/integer vector of simulation seeds aligned
 with \code{likelihoods}. When supplied, the function returns
 \code{optimal_seeds} so callers can map the optimized subset back to the
-original \code{samples.parquet} rows without re-deriving the internal sort.}
+original \code{samples.parquet} rows without re-deriving the internal sort.
+Separately, if \code{ensemble$seeds} is present (the per-member seeds carried
+by \code{calc_model_ensemble}, aligned with \code{cases_array} by
+construction), it is carried through the same sort/slice and exposed as
+\code{ensemble_optimized$seeds} for cases_array-aligned consumers such as
+medioid selection. This argument and \code{ensemble$seeds} serve different
+roles and are kept independent.}
 
 \item{min_n}{Minimum subset size to evaluate. Default \code{30L} to guard
 against small-subset KDE degeneracy when the optimized subset drives
@@ -44,9 +50,13 @@ An S3 object of class \code{mosaic_subset_optimization} containing:
 \item{optimal_score}{Score at optimal N.}
 \item{optimal_weights}{Re-computed Gibbs weights for the optimal subset.}
 \item{optimal_indices}{Integer indices into the original ensemble arrays.}
-\item{optimal_seeds}{Simulation seeds of the optimal subset (when
+\item{optimal_seeds}{Simulation seeds of the optimal subset in
+likelihood-sorted order, aligned with \code{optimal_weights} (when
 \code{seeds} supplied), else \code{NULL}.}
-\item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal N.}
+\item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal
+N. Its \code{$seeds} field is the per-member seed aligned with its
+\code{cases_array} (member i <-> seeds\link{i}) when \code{ensemble$seeds} was
+present, else it falls back to \code{optimal_seeds}.}
 \item{stability_flag}{TRUE if score profile was flat.}
 \item{diagnostics_n}{Original diagnostics-selected N.}
 \item{diagnostics_score}{Score at the diagnostics-selected N.}
