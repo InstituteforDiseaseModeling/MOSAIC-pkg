@@ -37,10 +37,13 @@
 #   * omega_1 / omega_2     vaccine-derived immunity waning.
 #   * S_prop / V1_prop      initial susceptible / one-dose-vaccinated fractions.
 #
-# Usage (from anywhere, with MOSAIC installed and its Python env available)
-#   Rscript -e 'source(system.file("examples","simulate_outbreak_settings.R",package="MOSAIC"))'
-#   # or open in RStudio and source it. Set out_root below to change where
-#   # outputs are written (default: ~/MOSAIC/output/simulation_settings).
+# Usage
+#   First run, or if you have not updated in a while: set UPDATE_PACKAGES <- TRUE
+#   in the SETUP section below and run once; restart R when prompted, set it back
+#   to FALSE, then re-run. Thereafter just run:
+#     Rscript -e 'source(system.file("examples","simulate_outbreak_settings.R",package="MOSAIC"))'
+#   or open in RStudio and source it. Set out_root below to change where outputs
+#   are written (default: ~/MOSAIC/output/simulation_settings).
 #
 # Output (organised directory)
 #   <out_root>/
@@ -49,7 +52,62 @@
 #     └── summary.csv
 # =============================================================================
 
+# =============================================================================
+# SETUP: (optionally) update MOSAIC + the LASER engine, then check the install
+# -----------------------------------------------------------------------------
+# If you have not updated in a while, set UPDATE_PACKAGES <- TRUE and run this
+# script once. It reinstalls the MOSAIC R package from GitHub, rebuilds the
+# Python environment with the matching laser-cholera engine, and verifies both.
+#
+# IMPORTANT: reinstalling an R package that is already loaded does not take
+# effect until you restart. After updating, this script stops and asks you to
+# RESTART R (RStudio: Session > Restart R; or just start a new R session), set
+# UPDATE_PACKAGES back to FALSE, and re-run to generate the simulations.
+# =============================================================================
+
+UPDATE_PACKAGES <- FALSE   # <-- set TRUE to update everything, then restart R
+
+if (isTRUE(UPDATE_PACKAGES)) {
+  message("==> Updating MOSAIC + LASER (this can take several minutes)...")
+
+  # 1. MOSAIC R package (latest from GitHub)
+  if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+  remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
+                          upgrade = "never", force = TRUE)
+
+  # 2. Python environment + laser-cholera engine (rebuilt to match this MOSAIC)
+  MOSAIC::install_dependencies(force = TRUE)
+
+  # 3. Verify
+  message("\n==> Verifying installation...")
+  MOSAIC::check_python_env()
+  MOSAIC::check_dependencies()
+
+  message("\n=============================================================\n",
+          " Update complete. Now RESTART R, set UPDATE_PACKAGES <- FALSE,\n",
+          " and re-run this script to generate the simulations.\n",
+          "=============================================================")
+  stop("Packages updated -- restart R and re-run with UPDATE_PACKAGES <- FALSE.",
+       call. = FALSE)
+}
+
 suppressMessages(library(MOSAIC))
+
+# --- Check the install before running (fail fast, with guidance, if stale) ---
+message("Checking MOSAIC + LASER installation...")
+MOSAIC::check_dependencies()   # prints engine + key Python package versions
+.laser_version <- tryCatch(
+  as.character(reticulate::import("importlib.metadata")$version("laser-cholera")),
+  error = function(e) NA_character_
+)
+if (is.na(.laser_version)) {
+  stop("The laser-cholera Python engine is not available in this R session.\n",
+       "  Set UPDATE_PACKAGES <- TRUE at the top of this script (or run\n",
+       "  MOSAIC::install_dependencies(force = TRUE)), restart R, then re-run.",
+       call. = FALSE)
+}
+message(sprintf("OK: MOSAIC %s + laser-cholera %s\n",
+                as.character(utils::packageVersion("MOSAIC")), .laser_version))
 
 # -----------------------------------------------------------------------------
 # 0. Output directory + global settings
