@@ -144,6 +144,14 @@ S3 object of class `"mosaic_ensemble"` containing:
 
   Normalized weight vector.
 
+- seeds:
+
+  Integer vector of per-member simulation seeds, aligned with the
+  parameter dimension of `cases_array` (member i \<-\> seedsi). Bound to
+  the parameter set that produced each member so consumers (e.g. medioid
+  selection) need not rely on positional alignment with an external
+  vector.
+
 - n_param_sets:
 
   Number of parameter sets.

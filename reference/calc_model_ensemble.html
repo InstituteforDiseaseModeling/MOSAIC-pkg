@@ -17,7 +17,7 @@ plot_model_ensemble to render plots from the returned object."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -179,6 +179,12 @@ Each element must have <code>$param_idx</code>, <code>$stoch_idx</code>,
 
 <dt>parameter_weights</dt>
 <dd><p>Normalized weight vector.</p></dd>
+
+<dt>seeds</dt>
+<dd><p>Integer vector of per-member simulation seeds, aligned with the
+parameter dimension of <code>cases_array</code> (member i &lt;-&gt; seedsi). Bound to
+the parameter set that produced each member so consumers (e.g. medioid
+selection) need not rely on positional alignment with an external vector.</p></dd>
 
 <dt>n_param_sets</dt>
 <dd><p>Number of parameter sets.</p></dd>

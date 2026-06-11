@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,10 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.36.12" id="mosaic-03612">MOSAIC 0.36.12<a class="anchor" aria-label="anchor" href="#mosaic-03612"></a></h2>
+<ul><li>Fixed a medioid-model mis-mapping: the medioid metric correctly selected the central ensemble member, but the seed it was mapped to came from a separate vector that could drift out of positional alignment with <code>cases_array</code>, so <code>config_medioid</code> was sampled from the wrong parameter set and its prediction could collapse to near-zero. <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> now carries a per-member <code>seeds</code> vector aligned with <code>cases_array</code> (sourced from the parameter set that produced each member), <code><a href="../reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> propagates it through its sort/slice, and <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>’s medioid uses <code>ensemble$seeds[medioid_idx]</code>. Bit-identical for correctly-aligned runs (Tier-2 parity unchanged).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.36.4" id="mosaic-0364">MOSAIC 0.36.4<a class="anchor" aria-label="anchor" href="#mosaic-0364"></a></h2>
 <ul><li>Test integrity: replaced the two false-green parity-test <code>skip()</code>s with active divergence monitors so the R/Python likelihood-drift suite no longer reports green over known disagreements (review B2-6).</li>

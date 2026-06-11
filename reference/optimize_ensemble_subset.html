@@ -21,7 +21,7 @@ objective function."><meta property="og:image" content="https://institutefordise
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.36.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -94,7 +94,13 @@ in the ensemble. Must have length <code>ensemble$n_param_sets</code>.</p></dd>
 <dd><p>Optional numeric/integer vector of simulation seeds aligned
 with <code>likelihoods</code>. When supplied, the function returns
 <code>optimal_seeds</code> so callers can map the optimized subset back to the
-original <code>samples.parquet</code> rows without re-deriving the internal sort.</p></dd>
+original <code>samples.parquet</code> rows without re-deriving the internal sort.
+Separately, if <code>ensemble$seeds</code> is present (the per-member seeds carried
+by <code>calc_model_ensemble</code>, aligned with <code>cases_array</code> by
+construction), it is carried through the same sort/slice and exposed as
+<code>ensemble_optimized$seeds</code> for cases_array-aligned consumers such as
+medioid selection. This argument and <code>ensemble$seeds</code> serve different
+roles and are kept independent.</p></dd>
 
 
 <dt id="arg-min-n">min_n<a class="anchor" aria-label="anchor" href="#arg-min-n"></a></dt>
@@ -132,11 +138,15 @@ Weighted Interval Score).</p></dd>
 <dd><p>Integer indices into the original ensemble arrays.</p></dd>
 
 <dt>optimal_seeds</dt>
-<dd><p>Simulation seeds of the optimal subset (when
+<dd><p>Simulation seeds of the optimal subset in
+likelihood-sorted order, aligned with <code>optimal_weights</code> (when
 <code>seeds</code> supplied), else <code>NULL</code>.</p></dd>
 
 <dt>ensemble_optimized</dt>
-<dd><p>Complete <code>mosaic_ensemble</code> object at optimal N.</p></dd>
+<dd><p>Complete <code>mosaic_ensemble</code> object at optimal
+N. Its <code>$seeds</code> field is the per-member seed aligned with its
+<code>cases_array</code> (member i &lt;-&gt; seedsi) when <code>ensemble$seeds</code> was
+present, else it falls back to <code>optimal_seeds</code>.</p></dd>
 
 <dt>stability_flag</dt>
 <dd><p>TRUE if score profile was flat.</p></dd>

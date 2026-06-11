@@ -1,5 +1,21 @@
 # Changelog
 
+## MOSAIC 0.36.12
+
+- Fixed a medioid-model mis-mapping: the medioid metric correctly
+  selected the central ensemble member, but the seed it was mapped to
+  came from a separate vector that could drift out of positional
+  alignment with `cases_array`, so `config_medioid` was sampled from the
+  wrong parameter set and its prediction could collapse to near-zero.
+  [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+  now carries a per-member `seeds` vector aligned with `cases_array`
+  (sourced from the parameter set that produced each member),
+  [`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)
+  propagates it through its sort/slice, and
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)’s
+  medioid uses `ensemble$seeds[medioid_idx]`. Bit-identical for
+  correctly-aligned runs (Tier-2 parity unchanged).
+
 ## MOSAIC 0.36.4
 
 - Test integrity: replaced the two false-green parity-test `skip()`s

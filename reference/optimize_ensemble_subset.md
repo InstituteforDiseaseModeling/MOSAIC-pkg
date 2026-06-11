@@ -41,6 +41,12 @@ optimize_ensemble_subset(
   `likelihoods`. When supplied, the function returns `optimal_seeds` so
   callers can map the optimized subset back to the original
   `samples.parquet` rows without re-deriving the internal sort.
+  Separately, if `ensemble$seeds` is present (the per-member seeds
+  carried by `calc_model_ensemble`, aligned with `cases_array` by
+  construction), it is carried through the same sort/slice and exposed
+  as `ensemble_optimized$seeds` for cases_array-aligned consumers such
+  as medioid selection. This argument and `ensemble$seeds` serve
+  different roles and are kept independent.
 
 - min_n:
 
@@ -85,12 +91,15 @@ An S3 object of class `mosaic_subset_optimization` containing:
 
 - optimal_seeds:
 
-  Simulation seeds of the optimal subset (when `seeds` supplied), else
-  `NULL`.
+  Simulation seeds of the optimal subset in likelihood-sorted order,
+  aligned with `optimal_weights` (when `seeds` supplied), else `NULL`.
 
 - ensemble_optimized:
 
-  Complete `mosaic_ensemble` object at optimal N.
+  Complete `mosaic_ensemble` object at optimal N. Its `$seeds` field is
+  the per-member seed aligned with its `cases_array` (member i \<-\>
+  seedsi) when `ensemble$seeds` was present, else it falls back to
+  `optimal_seeds`.
 
 - stability_flag:
 
