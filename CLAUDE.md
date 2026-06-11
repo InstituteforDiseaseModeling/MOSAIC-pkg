@@ -429,3 +429,35 @@ before starting work — they represent patterns to actively avoid.
     literature anchor must match the engine implementation, not the
     analyst’s intuition). Run the change through an independent
     reviewer-pass before shipping (v0.32.0 fix)
+
+13. The renamed-control-parameter deprecation shim in
+    `.mosaic_validate_and_merge_control()` was dead code for ~15 minor
+    versions. It guarded the old→new copy with
+    `is.null(def$calibration$<new>)`, but the function deep-merges the
+    user’s `control` into
+    [`mosaic_control_defaults()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/mosaic_control_defaults.md)
+    FIRST, and the defaults always populate the canonical
+    `*_adaptive`/`*_total`/`ESS_method` keys with non-NULL values. So
+    the guard never fired: every legacy name (`batch_size`,
+    `min_batches`, `max_batches`, `target_r2`, `max_simulations`,
+    `max_predictive_batch`, plus the case-mismatched `ess_method`) was
+    silently dropped and the run reverted to defaults, while the
+    intended deprecation
+    [`warning()`](https://rdrr.io/r/base/warning.html) never appeared.
+    This was invisible because there is no “unknown control key”
+    validator, and the published Running-MOSAIC vignette used the old
+    names — so a user following the docs would set
+    `max_simulations=1e6`/`target_r2=0.95` and silently get the defaults
+    (100,000/0.9). Fix (v0.37.1): detect legacy names in the user’s
+    ORIGINAL `control` (never the merged `def`), and treat the canonical
+    key as “user-set” only when it differs from the pristine default —
+    then honour-and-warn, or (if both genuinely set) keep canonical and
+    warn it was ignored. Lessons: (i) a deprecation/back-compat shim
+    must key off the raw user input, not a structure already merged with
+    defaults; (ii) any guard of the form
+    `is.null(<thing the defaults always fill>)` is dead on arrival —
+    test the shim with the actual `defaults()+override` usage pattern,
+    not a bare partial list; (iii) absent an “unknown key” validator,
+    silently-ignored config is undetectable at runtime, so add
+    regression tests that assert the value actually takes effect
+    (v0.37.1 fix)
