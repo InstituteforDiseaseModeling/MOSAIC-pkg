@@ -59,6 +59,14 @@ Rscript -e "MOSAIC::check_dependencies()"                        # Verify Python
 - Modifying `run_MOSAIC()` core loop
 - Unsure about approach (multiple valid solutions)
 
+**Agent roster & skills:** this package defines a Claude Code subagent roster + a `diagnose-fit`
+skill in **`.claude/`** (tracked in git) — see **`.claude/agents/README.md`** for the full roster,
+routing, colors, and aliases. The agents can read/write data and outputs in sibling repos under
+`~/MOSAIC` (e.g. country repos, the `output/` tree) via the session's `additionalDirectories`
+grant. Shortcuts: `/swe` (engineering), `/stat` (Bayesian/likelihood), `/dm` (epi/priors), `/ml`
+(suitability), `/etl` (data ingestion), `/cr` (review+housekeeping), `/guide` (user how-to),
+`/doctor` + `/diagnose-fit` (calibration diagnosis).
+
 ---
 
 ## Package Overview
