@@ -62,7 +62,7 @@ When MOSAIC loads successfully, you should see:
 Welcome to the Metapopulation Outbreak Simulation with Agent-based Implementation
 for Cholera (MOSAIC) featuring the Light-agent Spatial Model for ERadication (LASER)!
 
-Version: 0.11.25
+Version: 0.37.0
 ```
 
 ---

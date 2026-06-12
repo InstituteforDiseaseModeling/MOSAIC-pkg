@@ -225,66 +225,52 @@
     }
   }
 
-  # BACKWARD COMPATIBILITY: Renamed parameters (v0.22.16)
-  # batch_size -> batch_size_adaptive
-  if (!is.null(def$calibration$batch_size) && is.null(def$calibration$batch_size_adaptive)) {
-    warning("calibration$batch_size is deprecated; use calibration$batch_size_adaptive instead.", call. = FALSE)
-    def$calibration$batch_size_adaptive <- def$calibration$batch_size
-    def$calibration$batch_size <- NULL
-  } else if (!is.null(def$calibration$batch_size)) {
-    def$calibration$batch_size <- NULL
+  # BACKWARD COMPATIBILITY: renamed control parameters (v0.22.16; fixed v0.37.1).
+  #
+  # Detection MUST key off the user's ORIGINAL `control`, not the merged `def`.
+  # The canonical keys (*_adaptive / *_total / ESS_method) always carry a
+  # non-NULL default from mosaic_control_defaults() after the deep-merge above,
+  # so the prior guard `is.null(def$calibration$<new>)` never fired -- the legacy
+  # value was silently dropped (run reverted to defaults) and the deprecation
+  # warning never appeared.
+  #
+  # The dominant usage is `control <- mosaic_control_defaults(); control$..$old <- x`,
+  # so the canonical key is present but holding its DEFAULT. We therefore treat the
+  # canonical key as "user-set" only when it differs from the pristine default:
+  #   - legacy set, canonical untouched -> honour legacy, deprecation warning
+  #   - legacy set, canonical user-set  -> canonical wins, "ignored" warning
+  .ctl_defaults <- mosaic_control_defaults()
+  .mosaic_migrate_renamed <- function(def, section, old, new) {
+    user_old <- control[[section]][[old]]
+    if (is.null(user_old)) return(def)
+    canon         <- control[[section]][[new]]
+    canon_default <- .ctl_defaults[[section]][[new]]
+    canon_user_set <- !is.null(canon) && !isTRUE(all.equal(canon, canon_default))
+    if (!canon_user_set) {
+      def[[section]][[new]] <- user_old
+      warning(sprintf("control$%s$%s is deprecated; use control$%s$%s instead.",
+                      section, old, section, new), call. = FALSE)
+    } else {
+      warning(sprintf(paste0("control$%s$%s is deprecated and was ignored because ",
+                             "control$%s$%s is also set; use control$%s$%s."),
+                      section, old, section, new, section, new), call. = FALSE)
+    }
+    def[[section]][[old]] <- NULL
+    def
   }
 
-  # min_batches -> min_batches_adaptive
-  if (!is.null(def$calibration$min_batches) && is.null(def$calibration$min_batches_adaptive)) {
-    warning("calibration$min_batches is deprecated; use calibration$min_batches_adaptive instead.", call. = FALSE)
-    def$calibration$min_batches_adaptive <- def$calibration$min_batches
-    def$calibration$min_batches <- NULL
-  } else if (!is.null(def$calibration$min_batches)) {
-    def$calibration$min_batches <- NULL
-  }
-
-  # max_batches -> max_batches_adaptive
-  if (!is.null(def$calibration$max_batches) && is.null(def$calibration$max_batches_adaptive)) {
-    warning("calibration$max_batches is deprecated; use calibration$max_batches_adaptive instead.", call. = FALSE)
-    def$calibration$max_batches_adaptive <- def$calibration$max_batches
-    def$calibration$max_batches <- NULL
-  } else if (!is.null(def$calibration$max_batches)) {
-    def$calibration$max_batches <- NULL
-  }
-
-  # target_r2 -> target_r2_ess -> target_r2_adaptive (two-step deprecation chain)
-  if (!is.null(def$calibration$target_r2) && is.null(def$calibration$target_r2_adaptive)) {
-    warning("calibration$target_r2 is deprecated; use calibration$target_r2_adaptive instead.", call. = FALSE)
-    def$calibration$target_r2_adaptive <- def$calibration$target_r2
-    def$calibration$target_r2 <- NULL
-  } else if (!is.null(def$calibration$target_r2)) {
-    def$calibration$target_r2 <- NULL
-  }
-  if (!is.null(def$calibration$target_r2_ess) && is.null(def$calibration$target_r2_adaptive)) {
-    warning("calibration$target_r2_ess is deprecated; use calibration$target_r2_adaptive instead.", call. = FALSE)
-    def$calibration$target_r2_adaptive <- def$calibration$target_r2_ess
-    def$calibration$target_r2_ess <- NULL
-  } else if (!is.null(def$calibration$target_r2_ess)) {
-    def$calibration$target_r2_ess <- NULL
-  }
-
-  # max_predictive_batch -> max_batch_predictive
-  if (!is.null(def$calibration$max_predictive_batch) && is.null(def$calibration$max_batch_predictive)) {
-    warning("calibration$max_predictive_batch is deprecated; use calibration$max_batch_predictive instead.", call. = FALSE)
-    def$calibration$max_batch_predictive <- def$calibration$max_predictive_batch
-    def$calibration$max_predictive_batch <- NULL
-  } else if (!is.null(def$calibration$max_predictive_batch)) {
-    def$calibration$max_predictive_batch <- NULL
-  }
-
-  # max_simulations -> max_simulations_total
-  if (!is.null(def$calibration$max_simulations) && is.null(def$calibration$max_simulations_total)) {
-    warning("calibration$max_simulations is deprecated; use calibration$max_simulations_total instead.", call. = FALSE)
-    def$calibration$max_simulations_total <- def$calibration$max_simulations
-    def$calibration$max_simulations <- NULL
-  } else if (!is.null(def$calibration$max_simulations)) {
-    def$calibration$max_simulations <- NULL
+  .mosaic_renamed_params <- list(
+    c("calibration", "batch_size",           "batch_size_adaptive"),
+    c("calibration", "min_batches",          "min_batches_adaptive"),
+    c("calibration", "max_batches",          "max_batches_adaptive"),
+    c("calibration", "target_r2",            "target_r2_adaptive"),
+    c("calibration", "target_r2_ess",        "target_r2_adaptive"),
+    c("calibration", "max_predictive_batch", "max_batch_predictive"),
+    c("calibration", "max_simulations",      "max_simulations_total"),
+    c("targets",     "ess_method",           "ESS_method")
+  )
+  for (.p in .mosaic_renamed_params) {
+    def <- .mosaic_migrate_renamed(def, .p[[1]], .p[[2]], .p[[3]])
   }
 
   # TYPE VALIDATION

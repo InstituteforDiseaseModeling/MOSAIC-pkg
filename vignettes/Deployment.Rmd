@@ -87,21 +87,25 @@ This script is identical to the complete setup but skips R installation (step 2/
 For running multiple simulations in parallel on a cluster:
 
 ```{r vm-parallel}
-# Set number of cores
 library(MOSAIC)
-options(mc.cores = parallel::detectCores() - 1)
 
-# Run parallel simulations
-ctrl <- mosaic_control_defaults(
-  parallel = TRUE,
-  n_cores = parallel::detectCores() - 1
-)
+# Enable parallel execution across available cores
+control <- mosaic_control_defaults()
+control$parallel$enable  <- TRUE
+control$parallel$n_cores <- parallel::detectCores() - 1
 
-results <- run_MOSAIC(
-  config = config_default,
-  control = ctrl,
-  n_sim = 100,
-  seed = 123
+# Keep this example small so it finishes quickly
+control$calibration$n_simulations <- 500
+control$calibration$n_iterations  <- 1
+
+dir_output <- path.expand("~/MOSAIC/output/ETH_parallel")
+
+result <- run_MOSAIC(
+  config     = get_location_config(iso = "ETH"),
+  priors     = get_location_priors(iso = "ETH"),
+  dir_output = dir_output,
+  control    = control,
+  resume     = FALSE
 )
 ```
 
