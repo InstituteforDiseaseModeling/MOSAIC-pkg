@@ -20,6 +20,16 @@
 #    this no-failed-sim fixture; the NA behavior is covered by
 #    test-optimize_ensemble_subset.R), and the optimize path was re-confirmed
 #    bit-identical at tolerance = 0 after the v0.36.9 (R-7) presort-memory refactor.
+#  * Cross-platform tolerance (v0.36.13): the #1+#2b and #2b fixture comparisons
+#    use testthat::testthat_tolerance() (~1.5e-8), not tolerance = 0. The
+#    fixture was baked on the author's local machine; the docker CI image
+#    (idmmosaicacr.azurecr.io/mosaic-worker:latest, Linux x86_64 + OpenBLAS)
+#    diverges by O(10^3) ULPs (~1e-13) — a length-N float-reduction noise floor
+#    that depends on SIMD lane width and BLAS reduction order, not on code
+#    correctness. The bit-identical guarantee is preserved by the INDEPENDENT
+#    oracles (#2a and #1, which recompute the math from scratch with no fixture
+#    and stay at tolerance = 0). Integer-typed fields (optimal_n, optimal_seeds)
+#    also remain expect_identical.
 
 test_that("#2a: weighted_quantiles_presorted == weighted_quantiles on sorted input", {
   set.seed(99)
@@ -69,14 +79,14 @@ test_that("#1+#2b: optimize_ensemble_subset is bit-identical to the fixed refere
     ref <- fx$opt[[o]]
     expect_identical(new$optimal_n, ref$optimal_n, info = o)
     expect_identical(new$optimal_seeds, ref$optimal_seeds, info = o)
-    expect_equal(new$optimal_weights, ref$optimal_weights, tolerance = 0, info = o)
-    expect_equal(new$evaluation_table, ref$evaluation_table, tolerance = 0, info = o)
+    expect_equal(new$optimal_weights, ref$optimal_weights, tolerance = testthat::testthat_tolerance(), info = o)
+    expect_equal(new$evaluation_table, ref$evaluation_table, tolerance = testthat::testthat_tolerance(), info = o)
     eo <- new$ensemble_optimized; er <- ref$ensemble_optimized
-    expect_equal(eo$cases_median,  er$cases_median,  tolerance = 0, info = o)
-    expect_equal(eo$deaths_median, er$deaths_median, tolerance = 0, info = o)
-    expect_equal(eo$cases_mean,    er$cases_mean,    tolerance = 0, info = o)
-    expect_equal(eo$deaths_mean,   er$deaths_mean,   tolerance = 0, info = o)
-    expect_equal(eo$ci_bounds,     er$ci_bounds,     tolerance = 0, info = o)
+    expect_equal(eo$cases_median,  er$cases_median,  tolerance = testthat::testthat_tolerance(), info = o)
+    expect_equal(eo$deaths_median, er$deaths_median, tolerance = testthat::testthat_tolerance(), info = o)
+    expect_equal(eo$cases_mean,    er$cases_mean,    tolerance = testthat::testthat_tolerance(), info = o)
+    expect_equal(eo$deaths_mean,   er$deaths_mean,   tolerance = testthat::testthat_tolerance(), info = o)
+    expect_equal(eo$ci_bounds,     er$ci_bounds,     tolerance = testthat::testthat_tolerance(), info = o)
   }
 })
 
@@ -87,9 +97,9 @@ test_that("#2b: calc_model_ensemble is bit-identical to the fixed reference", {
             parameter_weights = ci$parameter_weights, n_simulations_per_config = ci$n_stoch,
             envelope_quantiles = ci$envelope, precomputed_results = ci$precomputed,
             verbose = FALSE)
-  expect_equal(new$cases_median,  fx$ce$cases_median,  tolerance = 0)
-  expect_equal(new$deaths_median, fx$ce$deaths_median, tolerance = 0)
-  expect_equal(new$cases_mean,    fx$ce$cases_mean,    tolerance = 0)
-  expect_equal(new$deaths_mean,   fx$ce$deaths_mean,   tolerance = 0)
-  expect_equal(new$ci_bounds,     fx$ce$ci_bounds,     tolerance = 0)
+  expect_equal(new$cases_median,  fx$ce$cases_median,  tolerance = testthat::testthat_tolerance())
+  expect_equal(new$deaths_median, fx$ce$deaths_median, tolerance = testthat::testthat_tolerance())
+  expect_equal(new$cases_mean,    fx$ce$cases_mean,    tolerance = testthat::testthat_tolerance())
+  expect_equal(new$deaths_mean,   fx$ce$deaths_mean,   tolerance = testthat::testthat_tolerance())
+  expect_equal(new$ci_bounds,     fx$ce$ci_bounds,     tolerance = testthat::testthat_tolerance())
 })
