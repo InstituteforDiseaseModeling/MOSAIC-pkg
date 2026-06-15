@@ -216,11 +216,11 @@ mosaic_dask_presets <- function(n_workers) {
     software           = "mosaic-acr-workers",
     region             = "westus2",
     # 90 min covers the R-only post-calibration window between the
-    # posterior-ensemble dispatch and the best/medioid dispatch
-    # (optimize_subset, posterior quantiles + distributions, sensitivity +
-    # correlation plots, sampling of config_best/config_medioid). 30 min
-    # was too tight for large-country runs with optimize_subset = TRUE and
-    # risked the cluster scaling to zero between the two dispatches.
+    # posterior-ensemble dispatch and the medoid dispatch (optimize_subset,
+    # posterior quantiles + distributions, sensitivity + correlation plots,
+    # sampling of config_medoid). 30 min was too tight for large-country runs
+    # with optimize_subset = TRUE and risked the cluster scaling to zero
+    # between the dispatches.
     idle_timeout       = "90 minutes",
     timeout            = timeout,
     worker_options     = list(nthreads = 1L),

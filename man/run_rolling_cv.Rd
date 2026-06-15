@@ -16,8 +16,9 @@ run_rolling_cv(
   priors = MOSAIC::priors_default,
   control = NULL,
   optimize_subset = TRUE,
-  models = c("ensemble", "ensemble_opt", "best", "medioid"),
-  n_reps_best_medioid = 50L,
+  models = c("ensemble", "ensemble_opt", "medoid"),
+  n_reps_best_medoid = 50L,
+  central_method = "mean",
   est_suitability_spec = list(),
   dask_spec = NULL,
   dir_output,
@@ -60,20 +61,30 @@ driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
 candidate ensemble.}
 
 \item{models}{Character vector of model types to score and carry in
-\code{predictions.parquet} (default all four:
-\code{c("ensemble","ensemble_opt","best","medioid")}). \code{"ensemble"}
+\code{predictions.parquet} (default
+\code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 the optimizer-selected subset (only emitted when \code{optimize_subset =
-  TRUE} and \code{ensemble_optimized.rds} exists). \code{"best"} and
-\code{"medioid"} are re-simulated from their saved configs (see
-\code{n_reps_best_medioid}). Each model appears as a value of the
-\code{model} column.}
+  TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
+re-simulated from its saved config (see \code{n_reps_best_medoid}).
+\code{"best"} is accepted for back-compat but is no longer produced by
+\code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
+warning unless an older run dir still carries that file. Each model appears
+as a value of the \code{model} column.}
 
-\item{n_reps_best_medioid}{Integer (default 50); number of stochastic LASER
+\item{n_reps_best_medoid}{Integer (default 50); number of stochastic LASER
 reruns used to build the predictive median + intervals for the \code{best}
-and \code{medioid} configs. These reruns execute locally in the calling R
+and \code{medoid} configs. These reruns execute locally in the calling R
 process (not on Dask), so cost scales with this value times the number of
 cutoffs and locations.}
+
+\item{central_method}{Ensemble central tendency used for the compiled
+predictions and the in-sample calibration metrics/medoid: \code{"mean"}
+(default; unbiased for expected counts, never collapses on sparse deaths)
+or \code{"median"}. Scalar or per-channel \code{c(cases=, deaths=)}. The
+predictions table carries \code{pred_central} (this choice) plus
+\code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
+quantile-based and are unaffected.}
 
 \item{est_suitability_spec}{Named list of \emph{modeling} arguments passed
 through to \code{\link{est_suitability}} (e.g. \code{architecture},
@@ -137,7 +148,8 @@ from the run directories with \code{\link{compile_rolling_cv_predictions}}.
 The predictions table has one row per (cutoff x location x date x metric) with
 columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
-observed_source, pred_median}, and CI columns (\code{pi*_lo}/\code{pi*_hi}).
+observed_source, pred_central} (the scored series), \code{pred_mean,
+pred_median, central_method}, and CI columns (\code{pi*_lo}/\code{pi*_hi}).
 \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
 rows carry the real target for post-hoc scoring.
 }

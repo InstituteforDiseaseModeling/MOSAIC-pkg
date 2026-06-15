@@ -19,7 +19,7 @@
 #' Clamp transmission parameters into laser-cholera-valid ranges
 #'
 #' Applied to every sampled parameter set before it is simulated, so that
-#' calibration scoring and post-calibration prediction (best / medioid /
+#' calibration scoring and post-calibration prediction (best / medoid /
 #' posterior ensemble) use IDENTICAL clamped values. Prevents the laser-cholera
 #' ValueError where \code{p = -expm1(-rate) > 1} when \code{rate < 0}
 #' (GitHub #24) and keeps probabilities in \[0, 1\]. Idempotent -- clamping an
@@ -37,6 +37,87 @@
   if (!is.null(params$p_beta))      params$p_beta      <- pmin(pmax(params$p_beta, 1e-6), 1 - 1e-6)
   if (!is.null(params$tau_i))       params$tau_i       <- pmin(pmax(params$tau_i, 0), 1)
   params
+}
+
+# =============================================================================
+# Ensemble central-tendency selection
+# =============================================================================
+
+#' Resolve a central_method specification into a per-channel character vector
+#'
+#' \code{central_method} selects which weighted ensemble summary
+#' (\code{"mean"} or \code{"median"}) is treated as the canonical central
+#' trajectory for predictions, plots, ensemble R^2/bias metrics, the medoid
+#' target, and the subset-selection objective. The weighted MEAN is the
+#' unbiased estimator of expected counts (\eqn{E[\sum]=\sum E}) and never
+#' collapses to zero, so it is the package default; \code{"median"} reproduces
+#' historical (pre-feature) runs.
+#'
+#' Accepts a scalar (applies to both channels) or a named vector to set cases
+#' and deaths independently, e.g. \code{c(cases = "median", deaths = "mean")}.
+#'
+#' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
+#'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
+#'   unset channel falls back to \code{"mean"}.
+#' @return Named character vector \code{c(cases = ., deaths = .)}, each
+#'   \code{"mean"} or \code{"median"}.
+#' @noRd
+.mosaic_resolve_central_method <- function(x = NULL) {
+  valid <- c("mean", "median")
+  ch    <- c("cases", "deaths")
+  out   <- stats::setNames(rep("mean", 2L), ch)
+
+  if (is.null(x) || length(x) == 0L) {
+    return(out)
+  }
+
+  if (is.null(names(x)) || all(!nzchar(names(x)))) {
+    if (length(x) != 1L) {
+      stop("central_method must be a single value or a named vector with ",
+           "'cases'/'deaths'.", call. = FALSE)
+    }
+    m <- match.arg(as.character(x), valid)
+    out[] <- m
+    return(out)
+  }
+
+  nm      <- names(x)
+  if (any(!nzchar(nm))) {
+    stop("central_method per-channel values must all be named ('cases'/'deaths'); ",
+         "got an unnamed element.", call. = FALSE)
+  }
+  unknown <- setdiff(nm[nzchar(nm)], ch)
+  if (length(unknown)) {
+    stop("central_method has unknown channel name(s): ",
+         paste(unknown, collapse = ", "),
+         ". Use 'cases' and/or 'deaths'.", call. = FALSE)
+  }
+  for (c_ in ch) {
+    if (c_ %in% nm) out[[c_]] <- match.arg(as.character(x[[c_]]), valid)
+  }
+  out
+}
+
+#' Extract the canonical central trajectory matrix from a mosaic_ensemble
+#'
+#' Returns the \code{<channel>_mean} or \code{<channel>_median} matrix
+#' (\code{[n_loc x n_time]}) per the resolved \code{central_method}.
+#'
+#' @param ens A \code{mosaic_ensemble} object (carries both \code{*_mean} and
+#'   \code{*_median} fields).
+#' @param chan \code{"cases"} or \code{"deaths"}.
+#' @param method Named per-channel vector from
+#'   \code{.mosaic_resolve_central_method()}.
+#' @return Numeric matrix; the requested central trajectory.
+#' @noRd
+.mosaic_central_series <- function(ens, chan, method) {
+  field <- paste0(chan, "_", method[[chan]])
+  out   <- ens[[field]]
+  # Fall back to the median if a (e.g. older) ensemble lacks the *_mean field,
+  # mirroring plot_model_ensemble()/run_rolling_cv() so no consumer mis-scores
+  # against a NULL series.
+  if (is.null(out)) out <- ens[[paste0(chan, "_median")]]
+  out
 }
 
 # =============================================================================
@@ -2612,7 +2693,7 @@
       # Seed of the parameter set dispatched at this param_idx, carried through so
       # each ensemble member can be bound to the config that produced it. This
       # decouples the member<->seed mapping from any positional ordering of a
-      # separately-passed seed vector (the source of the medioid mis-mapping bug).
+      # separately-passed seed vector (the source of the medoid mis-mapping bug).
       cfg_seed <- tryCatch(as.integer(param_configs[[p]]$seed)[1], error = function(e) NA_integer_)
       for (s in seq_len(n_stochastic_per)) {
         idx <- idx + 1L

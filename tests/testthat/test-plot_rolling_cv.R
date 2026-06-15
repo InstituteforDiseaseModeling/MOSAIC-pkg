@@ -3,7 +3,7 @@
 # >5-month tail exists and must be truncated by the plotter.
 .mk_rcv_predictions <- function() {
      cutoffs <- as.Date(c("2024-03-01", "2025-01-01"))
-     models  <- c("ensemble", "ensemble_opt", "best", "medioid")
+     models  <- c("ensemble", "ensemble_opt", "best", "medoid")
      metrics <- c("cases", "deaths")
      rows <- list()
      for (cd in cutoffs) {

@@ -75,7 +75,7 @@ S3 object of class \code{"mosaic_ensemble"} containing:
 \item{parameter_weights}{Normalized weight vector.}
 \item{seeds}{Integer vector of per-member simulation seeds, aligned with the
 parameter dimension of \code{cases_array} (member i <-> seeds\link{i}). Bound to
-the parameter set that produced each member so consumers (e.g. medioid
+the parameter set that produced each member so consumers (e.g. medoid
 selection) need not rely on positional alignment with an external vector.}
 \item{n_param_sets}{Number of parameter sets.}
 \item{n_simulations_per_config}{Stochastic runs per parameter set.}

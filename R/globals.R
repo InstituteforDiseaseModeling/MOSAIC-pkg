@@ -41,7 +41,7 @@ utils::globalVariables(c(
      "param_type", "parameter", "parameter_clean", "parameter_name", "peak_value",
      "pop_density", "population_density", "poverty_ratio", "precip_anom", "precip_clim_mean",
      "precip_clim_sd", "precip_p90_threshold", "precip_scaled", "precipitation_sum", "pred",
-     "pred_smooth", "predicted_median", "Probability", "psi_star", "q_lower",
+     "pred_smooth", "predicted_median", "predicted_central", "Probability", "psi_star", "q_lower",
      "q_median", "q_upper", "q0.25", "q0.75", "Q2.5",
      "q2.75", "q25", "q75", "q97.5", "Q97.5",
      "r", "random_effect", "ratio", "ratio_hi", "ratio_lo",

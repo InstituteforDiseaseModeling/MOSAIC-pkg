@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Runs a \strong{single deterministic} LASER simulation from a calibration config
-#' (typically a run's medioid config) with optional point-value parameter overrides,
+#' (typically a run's medoid config) with optional point-value parameter overrides,
 #' then scores the result against the observed series carried in the config. This is
 #' the experiment unit behind the active fit-diagnostic workflow (the \code{diagnose-fit}
 #' skill): ~1-2 seconds per run, no calibration machinery, so a modeller (or the
@@ -20,7 +20,7 @@
 #' Full metrics are delegated to [calc_fit_diagnostics()].
 #'
 #' @param config A config as a named list, or a path to a config JSON
-#'   (e.g. \code{.../2_calibration/best_model/config_medioid.json}).
+#'   (e.g. \code{.../2_calibration/best_model/config_medoid.json}).
 #' @param params Named list of point-value parameter overrides applied to the config
 #'   before the run (unknown names are skipped with a warning). Default \code{list()}.
 #' @param seed Integer RNG seed for the LASER run. Default \code{42L}.

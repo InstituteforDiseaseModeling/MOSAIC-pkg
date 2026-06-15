@@ -228,7 +228,7 @@
 
   # Guardrails: clamp transmission parameters to prevent laser-cholera ValueError
   # (GitHub #24: p = -np.expm1(-rate) produces p > 1 when rate < 0). Single
-  # source of truth so re-sampled best/medioid/ensemble configs clamp identically.
+  # source of truth so re-sampled medoid/ensemble configs clamp identically.
   params_sim <- .mosaic_clamp_transmission_params(params_sim)
 
   # Defensive guard (issue #100): ensure local-path workers never trigger the
@@ -2068,8 +2068,8 @@ run_MOSAIC <- function(config,
       )
 
       # NOTE: Do NOT close the cluster here. It is kept alive for the best and
-      # medioid stochastic-ensemble dispatch later (Option A -- single second
-      # dispatch once the medioid seed is known). The cluster is closed after
+      # medoid stochastic-ensemble dispatch later (Option A -- single second
+      # dispatch once the medoid seed is known). The cluster is closed after
       # that dispatch, in the PRE-SAMPLE + DASK DISPATCH block before the
       # posterior predictive checks (best single model) section.
 
@@ -2089,7 +2089,7 @@ run_MOSAIC <- function(config,
 
   # Format a number-or-NA as a log-line-safe string. Replaces the prior
   # `ifelse(is.na(x), 0, x)` pattern which silently substituted 0 for NA in
-  # the prose log lines (best / medioid / ensemble R^2 + bias), making
+  # the prose log lines (best / medoid / ensemble R^2 + bias), making
   # "computation failed" indistinguishable from "model fit is awful but
   # ran". The [RUN_SUMMARY] sentinel already emits literal NA; the prose
   # lines now do too.
@@ -2097,11 +2097,33 @@ run_MOSAIC <- function(config,
     if (!is.finite(x)) "NA" else sprintf(paste0("%.", as.integer(digits), "f"), x)
   }
 
+  # Ensemble central tendency. Resolved once here (per-channel) and applied
+  # consistently to the medoid target, tier/best/medoid/ensemble metrics, the
+  # subset optimizer, and the prediction plots. Defined before every consumer
+  # (incl. the tier block) so a single choice governs the whole post-calibration
+  # path. `.central()` is a closure over the resolved method; it takes the
+  # ensemble as an argument so it is valid before any ensemble is built.
+  central_method <- .mosaic_resolve_central_method(control$predictions$central_method)
+  .central <- function(ens, chan) .mosaic_central_series(ens, chan, central_method)
+  log_msg("Ensemble central tendency: cases=%s, deaths=%s",
+          central_method[["cases"]], central_method[["deaths"]])
+
   # Initialize metric variables (populated after ensemble is built/resolved)
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
   bias_ratio_cases_ensemble  <- NA_real_
   bias_ratio_deaths_ensemble <- NA_real_
+  # Dual metrics: BOTH the mean- and median-derived ensemble R^2/bias are
+  # emitted in summary.json during the transition so historical (median) runs
+  # remain cross-walkable regardless of the canonical central_method.
+  r2_cases_ensemble_mean     <- NA_real_
+  r2_deaths_ensemble_mean    <- NA_real_
+  r2_cases_ensemble_median   <- NA_real_
+  r2_deaths_ensemble_median  <- NA_real_
+  bias_ratio_cases_ensemble_mean    <- NA_real_
+  bias_ratio_deaths_ensemble_mean   <- NA_real_
+  bias_ratio_cases_ensemble_median  <- NA_real_
+  bias_ratio_deaths_ensemble_median <- NA_real_
   n_ensemble_params          <- 0L
   n_ensemble_stochastic_per  <- as.integer(control$predictions$n_iter_ensemble %||% 10L)
   n_best_stochastic_per      <- as.integer(control$predictions$n_iter_best %||% 100L)
@@ -2203,6 +2225,7 @@ run_MOSAIC <- function(config,
         seeds       = cand_seeds,
         min_n       = as.integer(control$predictions$optimize_min_n %||% 30L),
         objective   = control$predictions$optimize_objective %||% "mae",
+        central_method = central_method,
         verbose     = control$logging$verbose
       ),
       error = function(e) {
@@ -2268,18 +2291,20 @@ run_MOSAIC <- function(config,
       # replace `ensemble` with the optimized one so all downstream work uses it.
       # The canonical r2_cases_ensemble field will be recomputed later from the
       # (now optimized) `ensemble`; these *_tier fields hold the pre-opt metrics.
-      median_c_tier_flat <- as.numeric(ensemble$cases_median)
-      median_d_tier_flat <- as.numeric(ensemble$deaths_median)
-      obs_c_flat_tier    <- as.numeric(ensemble$obs_cases)
-      obs_d_flat_tier    <- as.numeric(ensemble$obs_deaths)
+      # Tier metrics use the same central_method as the canonical ensemble so
+      # the pre-/post-optimization comparison is on the same central tendency.
+      cen_c_tier_flat <- as.numeric(.central(ensemble, "cases"))
+      cen_d_tier_flat <- as.numeric(.central(ensemble, "deaths"))
+      obs_c_flat_tier <- as.numeric(ensemble$obs_cases)
+      obs_d_flat_tier <- as.numeric(ensemble$obs_deaths)
 
       n_ensemble_params_tier <- ensemble$n_param_sets
-      r2_cases_ensemble_tier  <- calc_model_R2(obs_c_flat_tier, median_c_tier_flat)
-      r2_deaths_ensemble_tier <- calc_model_R2(obs_d_flat_tier, median_d_tier_flat)
+      r2_cases_ensemble_tier  <- calc_model_R2(obs_c_flat_tier, cen_c_tier_flat)
+      r2_deaths_ensemble_tier <- calc_model_R2(obs_d_flat_tier, cen_d_tier_flat)
       bias_ratio_cases_ensemble_tier  <- tryCatch(
-        calc_bias_ratio(obs_c_flat_tier, median_c_tier_flat), error = function(e) NA_real_)
+        calc_bias_ratio(obs_c_flat_tier, cen_c_tier_flat), error = function(e) NA_real_)
       bias_ratio_deaths_ensemble_tier <- tryCatch(
-        calc_bias_ratio(obs_d_flat_tier, median_d_tier_flat), error = function(e) NA_real_)
+        calc_bias_ratio(obs_d_flat_tier, cen_d_tier_flat), error = function(e) NA_real_)
 
       ensemble <- subset_opt$ensemble_optimized
 
@@ -2307,28 +2332,35 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # MEDIOID SEED -- computed once on the final ensemble after all subset logic
+  # MEDOID SEED -- computed once on the final ensemble after all subset logic
   # ===========================================================================
-  # The medioid is the ensemble member whose predicted case trajectory is closest
-  # (log-scale MAE) to the ensemble median. Computing here ensures it always
-  # reflects the FINAL ensemble (optimized when optimize_subset=TRUE, candidate
-  # otherwise), using the correct median and the matching seed vector.
+  # The medoid is the ensemble member whose predicted case trajectory is closest
+  # (log-scale MAE) to the ensemble CENTRAL trajectory (mean or median per
+  # central_method). Computing here ensures it always reflects the FINAL ensemble
+  # (optimized when optimize_subset=TRUE, candidate otherwise), using the correct
+  # central series and the matching seed vector. The distance is cases-only by
+  # design (a joint cases+deaths distance is a future refinement).
 
-  medioid_seed_sim <- NULL
+  medoid_seed_sim <- NULL
 
   if (!is.null(ensemble)) {
     tryCatch({
       # Aggregate stochastic runs: median over dim 4 -> [n_locs, n_times, n_params]
       member_cases_agg <- apply(ensemble$cases_array, c(1L, 2L, 3L), stats::median)
 
-      # Log-scale MAE from each member to ensemble median (location 1, cases)
+      # Log-scale MAE from each member to the ensemble central trajectory
+      # (location 1, cases). Deliberate mix: per-member stochastic spread is
+      # summarized by its MEDIAN (robust to a member's stochastic outliers),
+      # while the ensemble TARGET is the canonical central series (mean by
+      # default) so the chosen representative member tracks the reported curve.
+      cen_cases_target <- .central(ensemble, "cases")
       eps_med <- 1.0
-      medioid_distances <- vapply(seq_len(ensemble$n_param_sets), function(i) {
-        mean(abs(log(member_cases_agg[1L, , i]        + eps_med) -
-                 log(ensemble$cases_median[1L, ] + eps_med)), na.rm = TRUE)
+      medoid_distances <- vapply(seq_len(ensemble$n_param_sets), function(i) {
+        mean(abs(log(member_cases_agg[1L, , i]   + eps_med) -
+                 log(cen_cases_target[1L, ]      + eps_med)), na.rm = TRUE)
       }, numeric(1L))
 
-      medioid_idx <- which.min(medioid_distances)
+      medoid_idx <- which.min(medoid_distances)
 
       # Seed of the member the metric actually selected. `ensemble$seeds` is carried
       # ALONGSIDE cases_array (member i <-> seeds[i]) through both calc_model_ensemble
@@ -2345,15 +2377,15 @@ run_MOSAIC <- function(config,
         param_seeds
       }
 
-      if (medioid_idx >= 1L && medioid_idx <= length(final_seeds) &&
-          !is.na(final_seeds[[medioid_idx]])) {
-        medioid_seed_sim <- final_seeds[[medioid_idx]]
-        log_msg("Medioid: param set %d of %d (seed=%d, MAE=%.4f)",
-                medioid_idx, ensemble$n_param_sets,
-                medioid_seed_sim, medioid_distances[medioid_idx])
+      if (medoid_idx >= 1L && medoid_idx <= length(final_seeds) &&
+          !is.na(final_seeds[[medoid_idx]])) {
+        medoid_seed_sim <- final_seeds[[medoid_idx]]
+        log_msg("Medoid: param set %d of %d (seed=%d, MAE=%.4f)",
+                medoid_idx, ensemble$n_param_sets,
+                medoid_seed_sim, medoid_distances[medoid_idx])
       }
     }, error = function(e) {
-      log_warn("medioid computation failed: %s", e$message)
+      log_warn("medoid computation failed: %s", e$message)
     })
   }
 
@@ -2450,133 +2482,76 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # POSTERIOR PREDICTIVE CHECKS (best single model)
+  # POSTERIOR PREDICTIVE CHECKS (medoid representative model)
   # ===========================================================================
 
   # ---------------------------------------------------------------------------
-  # Order of operations (Option A -- dispatch best+medioid sims on the
-  # still-alive Dask cluster before closing it):
-  #   1. Sample config_best (early-return on failure) and config_medioid.
-  #   2. If a Dask cluster is alive, batch-dispatch best+medioid stochastic
-  #      sims on it in a single .mosaic_postca_dask() call, then close the
-  #      cluster. Otherwise leave precomputed = NULL and calc_model_ensemble()
-  #      falls back to its local PSOCK / sequential path.
-  #   3. Build best/medioid mosaic_ensemble objects (consuming precomputed
-  #      results when present), compute R^2/bias, render plots.
+  # The pipeline produces TWO post-calibration models: the posterior ENSEMBLE
+  # (built above) and the MEDOID representative member. The single
+  # best-likelihood model is intentionally NOT produced (no config_best.json, no
+  # best plot/metrics); `is_best_model` in samples.parquet still flags the
+  # top-likelihood draw for diagnostics.
+  #
+  # Order of operations (Option A -- dispatch the medoid sim on the still-alive
+  # Dask cluster before closing it):
+  #   1. Sample config_medoid (non-fatal; NULL skips the medoid build).
+  #   2. If a Dask cluster is alive, dispatch medoid stochastic sims on it, then
+  #      close the cluster. Otherwise leave precomputed = NULL and
+  #      calc_model_ensemble() falls back to its local PSOCK / sequential path.
+  #   3. Build the medoid mosaic_ensemble object (consuming precomputed results
+  #      when present), compute R^2/bias, render the plot.
   # ---------------------------------------------------------------------------
 
   log_msg("Running posterior predictive checks")
-  best_idx <- which.max(results$likelihood)
-  best_seed_sim <- results$seed_sim[best_idx]
 
-  config_best <- tryCatch(
-    .mosaic_clamp_transmission_params(sample_parameters(
-      PATHS       = PATHS,
-      priors      = priors,
-      config      = config,
-      seed        = best_seed_sim,
-      sample_args = sampling_args,
-      verbose     = FALSE
-    )),
-    error = function(e) {
-      log_error("sample_parameters failed for best seed %d: %s", best_seed_sim, e$message)
-      log_msg("  Post-processing (PPC, summary) will be skipped.")
-      NULL
-    }
-  )
-
-  if (is.null(config_best)) {
-    # Finalize state so the run is not left perpetually "running" in monitoring.
-    # Also tear down any still-alive Dask cluster on this bail path so a Coiled
-    # cluster isn't left running until idle_timeout.
-    .mosaic_finalize_state(state_file)
-    if (use_dask) {
-      tryCatch(
-        { if (!is.null(client)) client$close() },
-        error = function(e) log_warn("cluster client close failed on bail path: %s", e$message)
-      )
-      tryCatch(
-        { if (!is.null(dask_cluster)) dask_cluster$close() },
-        error = function(e) log_warn("cluster close failed on bail path: %s", e$message)
-      )
-      client       <- NULL
-      dask_cluster <- NULL
-    }
-    runtime_bail <- as.numeric(difftime(Sys.time(), start_time, units = "mins"))
-    log_fatal("sample_parameters failed for best seed; cannot proceed to post-processing")
-    log_msg(paste0(
-      "[RUN_FATAL] status=failed reason=best_seed_sample_failed ",
-      "converged=%s runtime_min=%.2f dir_output=%s"),
-      if (isTRUE(state$converged)) "YES" else "NO",
-      runtime_bail,
-      dir_output
-    )
-    # Suppress the on.exit [RUN_FATAL] -- we just emitted a more specific one.
-    run_completed <- TRUE
-    return(invisible(list(
-      dirs    = dirs,
-      files   = list(),
-      summary = list(converged = isTRUE(state$converged),
-                     error     = "sample_parameters failed for best seed")
-    )))
-  }
-
-  config_best_file <- file.path(dirs$cal_best_model, "config_best.json")
-  jsonlite::write_json(config_best, config_best_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
-  log_msg("Saved %s", config_best_file)
-
-  # Pre-sample the medioid config (when a medioid seed was identified). NULL
-  # skips the medioid build block below.
-  config_medioid <- NULL
-  if (!is.null(medioid_seed_sim)) {
-    config_medioid <- tryCatch(
+  # Pre-sample the medoid config (when a medoid seed was identified). NULL
+  # skips the medoid build block below.
+  config_medoid <- NULL
+  if (!is.null(medoid_seed_sim)) {
+    config_medoid <- tryCatch(
       .mosaic_clamp_transmission_params(sample_parameters(
         PATHS       = PATHS,
         priors      = priors,
         config      = config,
-        seed        = medioid_seed_sim,
+        seed        = medoid_seed_sim,
         sample_args = sampling_args,
         verbose     = FALSE
       )),
       error = function(e) {
-        log_warn("sample_parameters failed for medioid seed %d: %s",
-                medioid_seed_sim, e$message)
+        log_warn("sample_parameters failed for medoid seed %d: %s",
+                medoid_seed_sim, e$message)
         NULL
       }
     )
-    if (!is.null(config_medioid)) {
-      config_medioid_file <- file.path(dirs$cal_best_model, "config_medioid.json")
-      jsonlite::write_json(config_medioid, config_medioid_file,
+    if (!is.null(config_medoid)) {
+      config_medoid_file <- file.path(dirs$cal_best_model, "config_medoid.json")
+      jsonlite::write_json(config_medoid, config_medoid_file,
                            pretty = TRUE, auto_unbox = TRUE, digits = NA)
-      log_msg("Saved %s", config_medioid_file)
+      log_msg("Saved %s", config_medoid_file)
     }
   }
 
   # ---------------------------------------------------------------------------
-  # Dask dispatch for best + medioid stochastic ensembles
+  # Dask dispatch for the medoid stochastic ensemble
   # ---------------------------------------------------------------------------
-  # Dispatch best and medioid as TWO SEQUENTIAL .mosaic_postca_dask() calls,
-  # each with a single-element param_configs list. This keeps both standalone
-  # ensembles in the param_idx=1 seed namespace (seeds 1001..1000+N) -- the
-  # SAME namespace used by the local PSOCK / sequential fallback path in
-  # calc_model_ensemble() (R/calc_model_ensemble.R:247). A single batched
-  # dispatch would put medioid under param_idx=2 (seeds 2001..2000+N), which
-  # silently breaks bit-level reproducibility against a local re-run.
+  # Dispatch the medoid via a single-element param_configs list, keeping it in
+  # the param_idx=1 seed namespace (seeds 1001..1000+N) -- the SAME namespace
+  # used by the local PSOCK / sequential fallback path in calc_model_ensemble()
+  # (R/calc_model_ensemble.R:247) so a Dask run is bit-reproducible against a
+  # local re-run.
   #
   # Defensive re-upload of mosaic_dask_worker.py before dispatch: workers may
   # have restarted (preemption, OOM kill) during the long R-only window
   # between the posterior-ensemble dispatch and now (optimize_subset,
   # quantiles, distributions, sensitivity/correlation plots, config sampling).
   # client$upload_file() registers the module with the scheduler so new
-  # workers receive it automatically, but the postca block re-uploads
-  # defensively for the same reason -- matched here for symmetry.
+  # workers receive it automatically.
   #
   # On any dispatch error, OR when zero sims succeeded, the precomputed list
   # is forced to NULL so calc_model_ensemble() falls back to local execution
   # rather than producing an all-NA ensemble.
   # The on.exit handler at line ~1036 is a safety net if close() throws.
-  best_precomputed    <- NULL
-  medioid_precomputed <- NULL
+  medoid_precomputed <- NULL
 
   .pruneOrNull <- function(results_list) {
     if (is.null(results_list) || length(results_list) == 0) return(NULL)
@@ -2585,64 +2560,38 @@ run_MOSAIC <- function(config,
   }
 
   if (use_dask && !is.null(client)) {
-    log_msg("Dispatching best%s stochastic ensembles on Dask (%d reruns each)...",
-            if (!is.null(config_medioid)) " + medioid" else "",
-            n_best_stochastic_per)
+    if (!is.null(config_medoid)) {
+      log_msg("Dispatching medoid stochastic ensemble on Dask (%d reruns)...",
+              n_best_stochastic_per)
 
-    tryCatch({
-      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
-      if (nzchar(worker_py_path)) {
-        client$upload_file(worker_py_path)
-      }
+      tryCatch({
+        worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
+        if (nzchar(worker_py_path)) {
+          client$upload_file(worker_py_path)
+        }
 
-      best_result <- .mosaic_postca_dask(
-        client           = client,
-        mosaic_worker    = mosaic_worker,
-        param_configs    = list(config_best),
-        n_stochastic_per = n_best_stochastic_per,
-        log_msg          = log_msg
-      )
-      best_precomputed <- .pruneOrNull(best_result$stochastic_results)
-
-      if (!is.null(config_medioid)) {
-        medioid_result <- .mosaic_postca_dask(
+        medoid_result <- .mosaic_postca_dask(
           client           = client,
           mosaic_worker    = mosaic_worker,
-          param_configs    = list(config_medioid),
+          param_configs    = list(config_medoid),
           n_stochastic_per = n_best_stochastic_per,
           log_msg          = log_msg
         )
-        medioid_precomputed <- .pruneOrNull(medioid_result$stochastic_results)
-      }
+        medoid_precomputed <- .pruneOrNull(medoid_result$stochastic_results)
 
-      # Report per-role counts and (separately) flag fallbacks. The two roles
-      # are independent -- best can be dask-precomputed while medioid falls
-      # back to local. Emit one line per role so an operator reading the log
-      # can disambiguate "Dask returned nothing" from "role not applicable
-      # this run" (e.g. medioid skipped because medioid_seed_sim was NULL).
-      describe_role <- function(role_name, results_list, applicable) {
-        if (!applicable) {
-          log_msg("  %s precomputed: n/a (skipped this run)", role_name)
-          return(invisible())
+        if (is.null(medoid_precomputed)) {
+          log_warn("Medoid Dask dispatch returned 0 successful sims; falling back to local")
+        } else {
+          n_ok    <- sum(vapply(medoid_precomputed, function(r) isTRUE(r$success), logical(1)))
+          n_total <- length(medoid_precomputed)
+          log_msg("  Medoid precomputed: %d/%d sims succeeded on Dask", n_ok, n_total)
         }
-        if (is.null(results_list)) {
-          log_warn("%s Dask dispatch returned 0 successful sims; falling back to local",
-                   role_name)
-          return(invisible())
-        }
-        n_ok    <- sum(vapply(results_list, function(r) isTRUE(r$success), logical(1)))
-        n_total <- length(results_list)
-        log_msg("  %s precomputed: %d/%d sims succeeded on Dask",
-                role_name, n_ok, n_total)
-      }
-      describe_role("Best",    best_precomputed,    TRUE)
-      describe_role("Medioid", medioid_precomputed, !is.null(config_medioid))
-    }, error = function(e) {
-      log_warn("best/medioid Dask dispatch failed: %s", e$message)
-      log_msg("  Falling back to local execution for best/medioid ensembles")
-      best_precomputed    <<- NULL
-      medioid_precomputed <<- NULL
-    })
+      }, error = function(e) {
+        log_warn("medoid Dask dispatch failed: %s", e$message)
+        log_msg("  Falling back to local execution for the medoid ensemble")
+        medoid_precomputed <<- NULL
+      })
+    }
 
     log_msg("Closing Dask cluster (all post-cal sims complete)")
     tryCatch(client$close(), error = function(e) NULL)
@@ -2654,120 +2603,53 @@ run_MOSAIC <- function(config,
   }
 
   # ===========================================================================
-  # BEST MODEL -- build mosaic_ensemble, compute R^2/bias, render plot
-  # ===========================================================================
-  # Run N stochastic reruns of the best config. Produces the mosaic_ensemble
-  # object used for both R^2/bias (from the stochastic median) and the prediction
-  # plot, matching how the posterior ensemble reports its metrics. When
-  # best_precomputed is non-NULL, calc_model_ensemble() consumes Dask results
-  # and the parallel/n_cores args are ignored by its precomputed branch.
-  r2_cases         <- NA_real_
-  r2_deaths        <- NA_real_
-  bias_ratio_cases <- NA_real_
-  bias_ratio_deaths <- NA_real_
-
-  log_msg("Building best model stochastic ensemble (%d reruns, source=%s)...",
-          n_best_stochastic_per,
-          if (!is.null(best_precomputed)) "dask-precomputed"
-          else if (isTRUE(control$parallel$enable)) "local-parallel"
-          else "local-sequential")
-  best_ensemble <- tryCatch(
-    calc_model_ensemble(
-      config                   = config_best,
-      configs                  = list(config_best),
-      n_simulations_per_config = n_best_stochastic_per,
-      envelope_quantiles       = c(0.025, 0.975),
-      parallel                 = isTRUE(control$parallel$enable),
-      n_cores                  = control$parallel$n_cores,
-      root_dir                 = root_dir,
-      precomputed_results      = best_precomputed,
-      verbose                  = control$logging$verbose
-    ),
-    error = function(e) {
-      log_warn("best model stochastic ensemble failed: %s", e$message)
-      NULL
-    }
-  )
-
-  if (!is.null(best_ensemble)) {
-    best_c_flat <- as.numeric(best_ensemble$cases_median)
-    best_d_flat <- as.numeric(best_ensemble$deaths_median)
-    obs_c_flat  <- as.numeric(best_ensemble$obs_cases)
-    obs_d_flat  <- as.numeric(best_ensemble$obs_deaths)
-
-    r2_cases          <- tryCatch(calc_model_R2(obs_c_flat, best_c_flat),  error = function(e) NA_real_)
-    r2_deaths         <- tryCatch(calc_model_R2(obs_d_flat, best_d_flat),  error = function(e) NA_real_)
-    bias_ratio_cases  <- tryCatch(calc_bias_ratio(obs_c_flat, best_c_flat), error = function(e) NA_real_)
-    bias_ratio_deaths <- tryCatch(calc_bias_ratio(obs_d_flat, best_d_flat), error = function(e) NA_real_)
-
-    log_msg("Best model R\u00b2 (1 params x %d stoch): cases = %s (bias=%s), deaths = %s (bias=%s)",
-            n_best_stochastic_per,
-            .fmt_num(r2_cases,          4L), .fmt_num(bias_ratio_cases,  2L),
-            .fmt_num(r2_deaths,         4L), .fmt_num(bias_ratio_deaths, 2L))
-
-    if (control$paths$plots) {
-      tryCatch(
-        plot_model_ensemble(
-          ensemble         = best_ensemble,
-          output_dir       = dirs$res_fig_pred,
-          data_dir         = dirs$res_predictions,
-          file_prefix      = "best",
-          title_label      = "Best Model",
-          save_predictions = TRUE,
-          verbose          = control$logging$verbose
-        ),
-        error = function(e) log_warn("best model plot failed: %s", e$message)
-      )
-    }
-  }
-
-  # ===========================================================================
-  # MEDIOID MODEL -- ensemble member closest to ensemble median trajectory
-  # Runs after best model using the same pattern: config -> LASER -> R^2 -> plot.
+  # MEDOID MODEL -- ensemble member closest to the ensemble central trajectory
+  # Runs after the posterior ensemble using the same pattern: config -> LASER ->
+  # R^2 -> plot.
   # Consumes Dask precomputed_results when available; falls back to local.
   # ===========================================================================
 
   tryCatch({
-    if (!is.null(config_medioid)) {
+    if (!is.null(config_medoid)) {
 
-      # Run N stochastic reruns of the medioid config. Same pattern as the
-      # best-model block: R^2/bias and the prediction plot both derive from
-      # the stochastic median for consistency with the posterior ensemble.
-      log_msg("Building medioid model stochastic ensemble (%d reruns, source=%s)...",
+      # Run N stochastic reruns of the medoid config: R^2/bias and the
+      # prediction plot both derive from the ensemble central series
+      # (central_method, mean by default), consistent with the posterior ensemble.
+      log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
-              if (!is.null(medioid_precomputed)) "dask-precomputed"
+              if (!is.null(medoid_precomputed)) "dask-precomputed"
               else if (isTRUE(control$parallel$enable)) "local-parallel"
               else "local-sequential")
-      medioid_ensemble <- tryCatch(
+      medoid_ensemble <- tryCatch(
         calc_model_ensemble(
-          config                   = config_medioid,
-          configs                  = list(config_medioid),
+          config                   = config_medoid,
+          configs                  = list(config_medoid),
           n_simulations_per_config = n_best_stochastic_per,
           envelope_quantiles       = c(0.025, 0.975),
           parallel                 = isTRUE(control$parallel$enable),
           n_cores                  = control$parallel$n_cores,
           root_dir                 = root_dir,
-          precomputed_results      = medioid_precomputed,
+          precomputed_results      = medoid_precomputed,
           verbose                  = control$logging$verbose
         ),
         error = function(e) {
-          log_warn("medioid model stochastic ensemble failed: %s", e$message)
+          log_warn("medoid model stochastic ensemble failed: %s", e$message)
           NULL
         }
       )
 
-      if (!is.null(medioid_ensemble)) {
-        med_c_flat <- as.numeric(medioid_ensemble$cases_median)
-        med_d_flat <- as.numeric(medioid_ensemble$deaths_median)
-        obs_c_flat <- as.numeric(medioid_ensemble$obs_cases)
-        obs_d_flat <- as.numeric(medioid_ensemble$obs_deaths)
+      if (!is.null(medoid_ensemble)) {
+        med_c_flat <- as.numeric(.central(medoid_ensemble, "cases"))
+        med_d_flat <- as.numeric(.central(medoid_ensemble, "deaths"))
+        obs_c_flat <- as.numeric(medoid_ensemble$obs_cases)
+        obs_d_flat <- as.numeric(medoid_ensemble$obs_deaths)
 
         r2_cases_med   <- tryCatch(calc_model_R2(obs_c_flat, med_c_flat),  error = function(e) NA_real_)
         r2_deaths_med  <- tryCatch(calc_model_R2(obs_d_flat, med_d_flat),  error = function(e) NA_real_)
         bias_cases_med <- tryCatch(calc_bias_ratio(obs_c_flat, med_c_flat), error = function(e) NA_real_)
         bias_deaths_med <- tryCatch(calc_bias_ratio(obs_d_flat, med_d_flat), error = function(e) NA_real_)
 
-        log_msg("Medioid model R\u00b2 (1 params x %d stoch): cases = %s (bias=%s), deaths = %s (bias=%s)",
+        log_msg("Medoid model R\u00b2 (1 params x %d stoch): cases = %s (bias=%s), deaths = %s (bias=%s)",
                 n_best_stochastic_per,
                 .fmt_num(r2_cases_med,    4L), .fmt_num(bias_cases_med,  2L),
                 .fmt_num(r2_deaths_med,   4L), .fmt_num(bias_deaths_med, 2L))
@@ -2775,21 +2657,22 @@ run_MOSAIC <- function(config,
         if (control$paths$plots) {
           tryCatch(
             plot_model_ensemble(
-              ensemble         = medioid_ensemble,
+              ensemble         = medoid_ensemble,
               output_dir       = dirs$res_fig_pred,
               data_dir         = dirs$res_predictions,
-              file_prefix      = "medioid",
-              title_label      = "Medioid Model",
+              file_prefix      = "medoid",
+              title_label      = "Medoid Model",
               save_predictions = TRUE,
+              central_method   = central_method,
               verbose          = control$logging$verbose
             ),
-            error = function(e) log_warn("medioid prediction plot failed: %s", e$message)
+            error = function(e) log_warn("medoid prediction plot failed: %s", e$message)
           )
         }
       }
     }
   }, error = function(e) {
-    log_warn("medioid model block failed: %s", e$message)
+    log_warn("medoid model block failed: %s", e$message)
   })
 
   # ===========================================================================
@@ -2803,17 +2686,33 @@ run_MOSAIC <- function(config,
 
     n_ensemble_params <- ensemble$n_param_sets
 
-    median_c_flat <- as.numeric(ensemble$cases_median)
-    median_d_flat <- as.numeric(ensemble$deaths_median)
     obs_c_flat    <- as.numeric(ensemble$obs_cases)
     obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
-    r2_cases_ensemble  <- calc_model_R2(obs_c_flat, median_c_flat)
-    r2_deaths_ensemble <- calc_model_R2(obs_d_flat, median_d_flat)
+    # Canonical ensemble metrics follow central_method (per channel).
+    cen_c_flat <- as.numeric(.central(ensemble, "cases"))
+    cen_d_flat <- as.numeric(.central(ensemble, "deaths"))
+    r2_cases_ensemble  <- calc_model_R2(obs_c_flat, cen_c_flat)
+    r2_deaths_ensemble <- calc_model_R2(obs_d_flat, cen_d_flat)
     bias_ratio_cases_ensemble  <- tryCatch(
-      calc_bias_ratio(obs_c_flat, median_c_flat), error = function(e) NA_real_)
+      calc_bias_ratio(obs_c_flat, cen_c_flat), error = function(e) NA_real_)
     bias_ratio_deaths_ensemble <- tryCatch(
-      calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
+      calc_bias_ratio(obs_d_flat, cen_d_flat), error = function(e) NA_real_)
+
+    # Dual metrics (both central tendencies) for summary.json cross-walk. These
+    # are independent of central_method so median runs stay comparable.
+    mean_c_flat   <- as.numeric(ensemble$cases_mean)
+    mean_d_flat   <- as.numeric(ensemble$deaths_mean)
+    median_c_flat <- as.numeric(ensemble$cases_median)
+    median_d_flat <- as.numeric(ensemble$deaths_median)
+    r2_cases_ensemble_mean    <- tryCatch(calc_model_R2(obs_c_flat, mean_c_flat),   error = function(e) NA_real_)
+    r2_deaths_ensemble_mean   <- tryCatch(calc_model_R2(obs_d_flat, mean_d_flat),   error = function(e) NA_real_)
+    r2_cases_ensemble_median  <- tryCatch(calc_model_R2(obs_c_flat, median_c_flat), error = function(e) NA_real_)
+    r2_deaths_ensemble_median <- tryCatch(calc_model_R2(obs_d_flat, median_d_flat), error = function(e) NA_real_)
+    bias_ratio_cases_ensemble_mean    <- tryCatch(calc_bias_ratio(obs_c_flat, mean_c_flat),   error = function(e) NA_real_)
+    bias_ratio_deaths_ensemble_mean   <- tryCatch(calc_bias_ratio(obs_d_flat, mean_d_flat),   error = function(e) NA_real_)
+    bias_ratio_cases_ensemble_median  <- tryCatch(calc_bias_ratio(obs_c_flat, median_c_flat), error = function(e) NA_real_)
+    bias_ratio_deaths_ensemble_median <- tryCatch(calc_bias_ratio(obs_d_flat, median_d_flat), error = function(e) NA_real_)
 
     log_msg("Ensemble R\u00b2 (%d params x %d stoch, source=%s): cases = %s (bias=%s), deaths = %s (bias=%s)",
             n_ensemble_params, n_ensemble_stochastic_per, active_cols$source,
@@ -2859,15 +2758,18 @@ run_MOSAIC <- function(config,
          }
     }
 
-    # Windowed model fit metrics on the canonical ensemble
+    # Windowed model fit metrics on the canonical ensemble. Uses the chosen
+    # central series (cen_*_flat) so the windowed diagnostic agrees with the
+    # headline r2_*_ensemble + plots; identical to median under
+    # central_method="median".
     n_ts      <- ensemble$n_time_points
     dates_vec <- seq.Date(as.Date(config$date_start), by = "day", length.out = n_ts)
 
     windowed_metrics <- .mosaic_compute_windowed_metrics(
       obs_cases  = obs_c_flat,
-      est_cases  = median_c_flat,
+      est_cases  = cen_c_flat,
       obs_deaths = obs_d_flat,
-      est_deaths = median_d_flat,
+      est_deaths = cen_d_flat,
       dates      = dates_vec,
       windows    = fit_windows
     )
@@ -2905,6 +2807,7 @@ run_MOSAIC <- function(config,
         file_prefix      = "ensemble",
         title_label      = "Posterior Ensemble",
         save_predictions = TRUE,
+        central_method   = central_method,
         verbose          = control$logging$verbose
       )
     }
@@ -2917,13 +2820,13 @@ run_MOSAIC <- function(config,
   # COMBINE PREDICTION CSVs
   # ===========================================================================
 
-  # Combine per-location prediction CSVs by type. Ensemble, best, medioid, and
+  # Combine per-location prediction CSVs by type. Ensemble, best, medoid, and
   # stochastic each have their own column schema and cannot be rbind'd together.
   # Per-location files live in dirs$res_predictions alongside the combined
   # file. Pattern: predictions_<type>_<LOC>.csv (per-location) ->
   # predictions_<type>_all.csv (combined, multi-location only). For N=1 the
   # per-location CSV is canonical on its own and no _all.csv is written.
-  for (pred_type in c("ensemble", "best", "medioid", "stochastic")) {
+  for (pred_type in c("ensemble", "medoid", "stochastic")) {
     pred_csvs <- list.files(
       dirs$res_predictions,
       pattern = sprintf("^predictions_%s_.*\\.csv$", pred_type),
@@ -3001,13 +2904,19 @@ run_MOSAIC <- function(config,
   # Summary JSON (machine-readable run summary)
   log_msg("Writing summary...")
   summary_obj <- .mosaic_write_summary_json(dirs, state, start_time, config,
-                                             r2_cases = r2_cases, r2_deaths = r2_deaths,
                                              r2_cases_ensemble = r2_cases_ensemble,
                                              r2_deaths_ensemble = r2_deaths_ensemble,
-                                             bias_ratio_cases = bias_ratio_cases,
-                                             bias_ratio_deaths = bias_ratio_deaths,
                                              bias_ratio_cases_ensemble = bias_ratio_cases_ensemble,
                                              bias_ratio_deaths_ensemble = bias_ratio_deaths_ensemble,
+                                             central_method = central_method,
+                                             r2_cases_ensemble_mean = r2_cases_ensemble_mean,
+                                             r2_deaths_ensemble_mean = r2_deaths_ensemble_mean,
+                                             r2_cases_ensemble_median = r2_cases_ensemble_median,
+                                             r2_deaths_ensemble_median = r2_deaths_ensemble_median,
+                                             bias_ratio_cases_ensemble_mean = bias_ratio_cases_ensemble_mean,
+                                             bias_ratio_deaths_ensemble_mean = bias_ratio_deaths_ensemble_mean,
+                                             bias_ratio_cases_ensemble_median = bias_ratio_cases_ensemble_median,
+                                             bias_ratio_deaths_ensemble_median = bias_ratio_deaths_ensemble_median,
                                              n_ensemble_params = n_ensemble_params,
                                              n_ensemble_stochastic_per = n_ensemble_stochastic_per,
                                              r2_cases_ensemble_tier = r2_cases_ensemble_tier,
@@ -3025,8 +2934,6 @@ run_MOSAIC <- function(config,
     bs  <- if (is.na(bias)) "" else sprintf(" (bias=%.2f)", bias)
     paste0(r2s, bs)
   }
-  r2c_str  <- fmt_r2b(summary_obj$r2_cases, summary_obj$bias_ratio_cases)
-  r2d_str  <- fmt_r2b(summary_obj$r2_deaths, summary_obj$bias_ratio_deaths)
   r2ce_str <- fmt_r2b(summary_obj$r2_cases_ensemble, summary_obj$bias_ratio_cases_ensemble)
   r2de_str <- fmt_r2b(summary_obj$r2_deaths_ensemble, summary_obj$bias_ratio_deaths_ensemble)
   ret_str  <- if (is.na(summary_obj$n_retained))    "NA" else format(as.integer(summary_obj$n_retained),  big.mark = ",")
@@ -3034,7 +2941,6 @@ run_MOSAIC <- function(config,
   log_msg("=== Run Summary ===")
   log_msg("  Location: %s (%s to %s)", summary_obj$location, summary_obj$date_start, summary_obj$date_stop)
   log_msg("  Converged: %s", if (isTRUE(summary_obj$converged)) "YES" else "NO")
-  log_msg("  R2 best model: cases = %s | deaths = %s", r2c_str, r2d_str)
   log_msg("  R2 ensemble:   cases = %s | deaths = %s", r2ce_str, r2de_str)
   if (!is.na(summary_obj$ess_n_params)) {
     log_msg("  ESS: %d/%d params (%.0f%%) above target %g (min: %.1f, median: %.1f)",
@@ -3057,13 +2963,10 @@ run_MOSAIC <- function(config,
   # Status decision tree (don't conflate "calibration converged" with
   # "end-to-end run succeeded"):
   #   - "completed_unconverged": calibration ESS criterion not met
-  #   - "success_partial":       converged BUT key output metrics are NA
-  #                              (best-model or posterior-ensemble block
-  #                              failed and never populated r2_*)
-  #   - "success":               converged AND r2_cases AND r2_cases_ensemble
-  #                              both populated
-  outputs_ok <- !is.na(summary_obj$r2_cases) &&
-                !is.na(summary_obj$r2_cases_ensemble)
+  #   - "success_partial":       converged BUT the posterior-ensemble block
+  #                              failed and never populated r2_cases_ensemble
+  #   - "success":               converged AND r2_cases_ensemble populated
+  outputs_ok <- !is.na(summary_obj$r2_cases_ensemble)
   status_str <- if (!isTRUE(state$converged)) {
     "completed_unconverged"
   } else if (!outputs_ok) {
@@ -3074,7 +2977,6 @@ run_MOSAIC <- function(config,
 
   log_msg(paste0(
     "[RUN_SUMMARY] status=%s converged=%s outputs_ok=%s runtime_min=%.2f ",
-    "r2_cases_best=%s r2_deaths_best=%s ",
     "r2_cases_ensemble=%s r2_deaths_ensemble=%s ",
     "sims_total=%s sims_retained=%s sims_best_subset=%s sims_best_subset_tier=%s ",
     "ess_pct_above_target=%s resumed=%s dir_output=%s"),
@@ -3082,8 +2984,6 @@ run_MOSAIC <- function(config,
     if (isTRUE(state$converged)) "YES" else "NO",
     if (outputs_ok) "YES" else "NO",
     as.numeric(runtime),
-    if (is.na(summary_obj$r2_cases))           "NA" else sprintf("%.4f", summary_obj$r2_cases),
-    if (is.na(summary_obj$r2_deaths))          "NA" else sprintf("%.4f", summary_obj$r2_deaths),
     if (is.na(summary_obj$r2_cases_ensemble))  "NA" else sprintf("%.4f", summary_obj$r2_cases_ensemble),
     if (is.na(summary_obj$r2_deaths_ensemble)) "NA" else sprintf("%.4f", summary_obj$r2_deaths_ensemble),
     if (is.na(summary_obj$n_simulations_total)) "NA" else as.character(as.integer(summary_obj$n_simulations_total)),
@@ -3195,7 +3095,7 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{n_iter_ensemble}: Stochastic runs per posterior parameter set
 #'       in the weighted ensemble (default: 10L). Total ensemble sims =
 #'       N parameter sets x \code{n_iter_ensemble}.
-#'     \item \code{n_iter_best}: Stochastic runs for the best and medioid single-config
+#'     \item \code{n_iter_best}: Stochastic runs for the medoid single-config
 #'       prediction plots (default: 100L). Applied identically to both models.
 #'       These runs execute on an internal PSOCK cluster when
 #'       \code{parallel$enable = TRUE}.
@@ -3216,6 +3116,12 @@ run_mosaic <- run_MOSAIC
 #'       degeneracy in \code{posteriors.json}).
 #'     \item \code{optimize_objective}: Objective function, \code{"mae"} (default),
 #'       \code{"r2_bias"}, or \code{"wis"}.
+#'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
+#'       (default; unbiased for expected counts and never collapses on sparse
+#'       deaths) or \code{"median"} (reproduces pre-v0.38 runs). Scalar or
+#'       per-channel \code{c(cases=, deaths=)}. Governs the prediction
+#'       trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
+#'       the medoid target, and the subset-selection objective consistently.
 #'   }
 #'   The number of parameter sets in the ensemble is determined by the best subset
 #'   (all sims with non-zero importance weights).
@@ -3478,12 +3384,18 @@ mosaic_control_defaults <- function(calibration = NULL,
   # Default prediction settings
   default_predictions <- list(
     n_iter_ensemble    = 10L,            # Stochastic runs per posterior parameter set (ensemble)
-    n_iter_best        = 100L,           # Stochastic runs for best + medioid single-config plots
+    n_iter_best        = 100L,           # Stochastic runs for medoid single-config plots
     optimize_subset    = FALSE,          # Post-ensemble subset optimization
     optimize_min_n     = 30L,            # Minimum subset size -- raised from 4L (Fox et al. 2024)
                                           # to guard against KDE degeneracy when the
                                           # optimized subset drives posterior densities.
-    optimize_objective = "mae"           # Objective: "mae", "r2_bias", or "wis"
+    optimize_objective = "mae",          # Objective: "mae", "r2_bias", or "wis"
+    central_method     = "mean"          # Ensemble central tendency: "mean" (default,
+                                          # unbiased E[sum]; never collapses on sparse
+                                          # deaths) or "median" (reproduces historical
+                                          # runs). Scalar or per-channel
+                                          # c(cases=, deaths=). Drives predictions,
+                                          # plots, *_ensemble metrics, medoid, subset.
   )
 
   # Default weight calculation settings

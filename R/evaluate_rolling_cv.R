@@ -34,7 +34,7 @@
 #' @param seed RNG seed for the bootstrap (default 1).
 #'
 #' When the predictions carry a \code{model} column (\code{ensemble},
-#' \code{ensemble_opt}, \code{best}, \code{medioid}), every metric is computed and
+#' \code{ensemble_opt}, \code{best}, \code{medoid}), every metric is computed and
 #' reported \strong{per model}; absent that column all rows are treated as a
 #' single \code{"ensemble"} model (back-compatible).
 #'
@@ -60,6 +60,9 @@ evaluate_rolling_cv <- function(predictions,
               "observed", "pred_median")
      miss <- setdiff(req, names(d))
      if (length(miss)) stop("predictions missing column(s): ", paste(miss, collapse = ", "))
+     # pred_central is the scored point series (mean or median per channel);
+     # default to the median for back-compat with pre-central_method parquets.
+     if (!"pred_central" %in% names(d)) d$pred_central <- d$pred_median
      d$date        <- as.Date(d$date)
      d$cutoff_date <- as.Date(d$cutoff_date)
      if (!"run_id" %in% names(d)) d$run_id <- paste0("cutoff_", d$cutoff_date)
@@ -77,8 +80,8 @@ evaluate_rolling_cv <- function(predictions,
           cd <- d[d$run_id == cells$run_id[r] & d$model == cells$model[r] &
                   d$iso_code == cells$iso_code[r] & d$metric == cells$metric[r], ]
           cutoff <- cd$cutoff_date[1]
-          is_df  <- cd[cd$segment == "IS"  & is.finite(cd$observed) & is.finite(cd$pred_median), ]
-          oos_df <- cd[cd$segment == "OOS" & is.finite(cd$observed) & is.finite(cd$pred_median), ]
+          is_df  <- cd[cd$segment == "IS"  & is.finite(cd$observed) & is.finite(cd$pred_central), ]
+          oos_df <- cd[cd$segment == "OOS" & is.finite(cd$observed) & is.finite(cd$pred_central), ]
           oos0   <- if (nrow(oos_df)) min(oos_df$date) else cutoff
 
           base_meta <- list(run_id = cells$run_id[r], model = cells$model[r],
@@ -159,12 +162,16 @@ evaluate_rolling_cv <- function(predictions,
 #' @keywords internal
 #' @noRd
 .rcv_window_metrics <- function(df) {
-     o <- df$observed; p <- df$pred_median
+     o <- df$observed
+     # Point metrics use the chosen central series; WIS uses the median point
+     # (quantile-based, central-method-invariant -- matches the in-sample WIS).
+     p     <- if ("pred_central" %in% names(df)) df$pred_central else df$pred_median
+     p_med <- df$pred_median
      cov50 <- cov95 <- wis <- NA_real_
      if (all(c("pi50_lo","pi50_hi","pi95_lo","pi95_hi") %in% names(df))) {
           cov50 <- mean(o >= df$pi50_lo & o <= df$pi50_hi, na.rm = TRUE)
           cov95 <- mean(o >= df$pi95_lo & o <= df$pi95_hi, na.rm = TRUE)
-          wis   <- mean(.rcv_wis(o, p, df$pi50_lo, df$pi50_hi, df$pi95_lo, df$pi95_hi), na.rm = TRUE)
+          wis   <- mean(.rcv_wis(o, p_med, df$pi50_lo, df$pi50_hi, df$pi95_lo, df$pi95_hi), na.rm = TRUE)
      }
      data.frame(
           n        = nrow(df),
@@ -210,7 +217,8 @@ evaluate_rolling_cv <- function(predictions,
 #' @keywords internal
 #' @noRd
 .rcv_skill <- function(sl, is_df, baselines) {
-     mae_m <- mean(abs(sl$observed - sl$pred_median), na.rm = TRUE)
+     sl_p  <- if ("pred_central" %in% names(sl)) sl$pred_central else sl$pred_median
+     mae_m <- mean(abs(sl$observed - sl_p), na.rm = TRUE)
      out <- list()
      for (b in baselines) {
           bp <- .rcv_baseline_point(is_df, sl$date, b)

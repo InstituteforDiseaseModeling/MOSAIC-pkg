@@ -67,7 +67,7 @@ mosaic_control_defaults(
 \item \code{n_iter_ensemble}: Stochastic runs per posterior parameter set
 in the weighted ensemble (default: 10L). Total ensemble sims =
 N parameter sets x \code{n_iter_ensemble}.
-\item \code{n_iter_best}: Stochastic runs for the best and medioid single-config
+\item \code{n_iter_best}: Stochastic runs for the medoid single-config
 prediction plots (default: 100L). Applied identically to both models.
 These runs execute on an internal PSOCK cluster when
 \code{parallel$enable = TRUE}.
@@ -88,6 +88,12 @@ likelihood-weighted posterior.
 degeneracy in \code{posteriors.json}).
 \item \code{optimize_objective}: Objective function, \code{"mae"} (default),
 \code{"r2_bias"}, or \code{"wis"}.
+\item \code{central_method}: Ensemble central tendency, \code{"mean"}
+(default; unbiased for expected counts and never collapses on sparse
+deaths) or \code{"median"} (reproduces pre-v0.38 runs). Scalar or
+per-channel \code{c(cases=, deaths=)}. Governs the prediction
+trajectory + plots, the canonical \code{*_ensemble} R^2/bias metrics,
+the medoid target, and the subset-selection objective consistently.
 }
 The number of parameter sets in the ensemble is determined by the best subset
 (all sims with non-zero importance weights).}

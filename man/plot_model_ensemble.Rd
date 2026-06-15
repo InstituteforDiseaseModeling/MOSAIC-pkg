@@ -11,6 +11,7 @@ plot_model_ensemble(
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
+  central_method = "mean",
   verbose = TRUE
 )
 }
@@ -36,7 +37,14 @@ multi-location overview plots. Default \code{"ensemble"}.}
 (\code{"<title_label>: <LOC>"}). Default \code{"Posterior Ensemble"}.}
 
 \item{save_predictions}{Logical. Save per-location prediction CSVs. Default
-\code{FALSE}.}
+\code{FALSE}. CSVs carry \code{predicted_central} (the plotted series),
+\code{predicted_mean}, \code{predicted_median}, and a \code{central_method}
+column so the choice is never ambiguous.}
+
+\item{central_method}{Central tendency for the plotted/scored line:
+\code{"mean"} (default; unbiased for expected counts, never collapses on
+sparse deaths) or \code{"median"} (historical). Scalar or per-channel
+\code{c(cases=, deaths=)}.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }

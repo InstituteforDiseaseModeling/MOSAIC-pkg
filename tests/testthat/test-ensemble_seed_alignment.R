@@ -1,18 +1,18 @@
 # Regression coverage for the ensemble member <-> seed alignment that drives
-# best/medioid selection in run_MOSAIC().
+# best/medoid selection in run_MOSAIC().
 #
-# BUG (observed in a 60k MOZ run, MOSAIC v0.36.1): the medioid metric correctly
+# BUG (observed in a 60k MOZ run, MOSAIC v0.36.1): the medoid metric correctly
 # selected the central ensemble member (cases_array slice), but the seed it was
 # mapped to came from a SEPARATE vector that had drifted out of positional
-# alignment with cases_array. config_medioid was then sampled from the wrong
-# (low-transmission) seed and the medioid prediction collapsed to ~zero while the
+# alignment with cases_array. config_medoid was then sampled from the wrong
+# (low-transmission) seed and the medoid prediction collapsed to ~zero while the
 # selected member's own trajectory was perfectly healthy.
 #
 # FIX: calc_model_ensemble() now carries a per-member `seeds` vector aligned with
 # cases_array (member i <-> seeds[i]), sourced from the parameter set that
 # PRODUCED each member (precomputed param_seed, else the member's config $seed,
 # else positional parameter_seeds). optimize_ensemble_subset() carries it through
-# the sort/slice, and run_MOSAIC()'s medioid uses ensemble$seeds[medioid_idx].
+# the sort/slice, and run_MOSAIC()'s medoid uses ensemble$seeds[medoid_idx].
 #
 # These tests are pure construction (no Python, no packaged data) and always run.
 
@@ -93,12 +93,12 @@ test_that("seed<->member alignment survives optimize_ensemble_subset sort/slice"
 
   # The optimized ensemble carries member-aligned seeds, and every member's seed
   # still matches its OWN trajectory after the internal sort + top-N slice. This
-  # is the exact invariant the medioid relies on (and that the bug violated).
+  # is the exact invariant the medoid relies on (and that the bug violated).
   expect_false(is.null(eo$seeds))
   for (k in seq_len(eo$n_param_sets)) {
     expect_equal(eo$seeds[k], 100L + as.integer(eo$cases_array[1, 1, k, 1] / 10))
   }
-  # ensemble_optimized$seeds (the medioid's source) follows cases_array, NOT the
+  # ensemble_optimized$seeds (the medoid's source) follows cases_array, NOT the
   # supplied `seeds` arg -- so the deliberately-misaligned arg cannot leak in.
   expect_false(any(eo$seeds %in% c(901L, 902L, 903L, 904L)))
   # optimal_seeds stays aligned with the `seeds` arg / optimal_weights for the

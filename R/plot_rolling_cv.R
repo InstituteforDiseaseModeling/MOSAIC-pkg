@@ -5,7 +5,7 @@
 #' restricted to the assessed horizon (default \eqn{\le 5} months). The two
 #' posterior ensembles (\code{ensemble}, \code{ensemble_opt}) are drawn as
 #' "hero" series with 50/95\% prediction-interval ribbons; the two point
-#' configurations (\code{best}, \code{medioid}) are drawn as thin reference
+#' configurations (\code{best}, \code{medoid}) are drawn as thin reference
 #' lines. Held-out observations are overlaid as points and the forecast origin
 #' is marked with a labelled dashed rule. Each panel is annotated with the
 #' cumulative \eqn{\le}max-horizon skill (R\eqn{^2} correlation + WIS) of the
@@ -34,7 +34,7 @@
 #' @param models_ribbon Models drawn with 50/95\% PI ribbons + median line
 #'   (default \code{c("ensemble", "ensemble_opt")}).
 #' @param models_line Models drawn as thin reference median lines
-#'   (default \code{c("best", "medioid")}).
+#'   (default \code{c("best", "medoid")}).
 #' @param annotate Annotate each panel with ensemble \eqn{\le}max-horizon skill
 #'   (R\eqn{^2}_corr + WIS). Default \code{TRUE}.
 #' @param eval Optional precomputed \code{\link{evaluate_rolling_cv}} result
@@ -69,7 +69,7 @@ plot_rolling_cv <- function(predictions,
                             horizon_max_months = 5,
                             context_months     = 2,
                             models_ribbon      = c("ensemble", "ensemble_opt"),
-                            models_line        = c("best", "medioid"),
+                            models_line        = c("best", "medoid"),
                             annotate           = TRUE,
                             eval               = NULL,
                             title              = NULL,
@@ -93,6 +93,8 @@ plot_rolling_cv <- function(predictions,
      miss <- setdiff(req, names(d))
      if (length(miss))
           stop("predictions missing column(s): ", paste(miss, collapse = ", "))
+     # Plot the chosen central series; default to median for pre-central_method parquets.
+     if (!"pred_central" %in% names(d)) d$pred_central <- d$pred_median
      d <- d[d$metric == metric, , drop = FALSE]
      if (!nrow(d)) stop("no rows for metric '", metric, "'")
      d$date        <- as.Date(d$date)
@@ -118,16 +120,16 @@ plot_rolling_cv <- function(predictions,
                         levels = paste0("Forecast origin: ", format(cutoffs, "%Y-%m-%d")))
 
      # canonical model order + presentation styling
-     order_all <- c("ensemble", "ensemble_opt", "best", "medioid")
+     order_all <- c("ensemble", "ensemble_opt", "best", "medoid")
      lvl       <- order_all[order_all %in% keep_models]
      d$model   <- factor(d$model, levels = lvl)
      model_cols <- c(ensemble = unname(mosaic_colors("cases")), ensemble_opt = "#EE7733",
-                     best = "#555555", medioid = "#999999")[lvl]
+                     best = "#555555", medoid = "#999999")[lvl]
      model_labs <- c(ensemble = "Ensemble", ensemble_opt = "Optimized ensemble",
-                     best = "Best", medioid = "Medioid")[lvl]
-     model_lwd  <- c(ensemble = 1.1, ensemble_opt = 1.1, best = 0.55, medioid = 0.55)[lvl]
+                     best = "Best", medoid = "Medoid")[lvl]
+     model_lwd  <- c(ensemble = 1.1, ensemble_opt = 1.1, best = 0.55, medoid = 0.55)[lvl]
      model_lty  <- c(ensemble = "solid", ensemble_opt = "solid",
-                     best = "longdash", medioid = "dotted")[lvl]
+                     best = "longdash", medoid = "dotted")[lvl]
 
      # ---- forecast-region band + cutoff rules (one row per cutoff) ------------
      band_df <- data.frame(
@@ -206,7 +208,7 @@ plot_rolling_cv <- function(predictions,
                ggplot2::geom_vline(data = bb, inherit.aes = FALSE,
                                    ggplot2::aes(xintercept = .data[["cutoff_date"]]),
                                    linetype = 2, linewidth = 0.4, colour = "#B5123B") +
-               ggplot2::geom_line(ggplot2::aes(y = .data[["pred_median"]], colour = .data[["model"]],
+               ggplot2::geom_line(ggplot2::aes(y = .data[["pred_central"]], colour = .data[["model"]],
                                                linewidth = .data[["model"]], linetype = .data[["model"]]),
                                   na.rm = TRUE) +
                ggplot2::geom_point(ggplot2::aes(y = .data[["observed"]]),

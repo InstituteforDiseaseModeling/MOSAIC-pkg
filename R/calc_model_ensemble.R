@@ -48,7 +48,7 @@
 #'   \item{parameter_weights}{Normalized weight vector.}
 #'   \item{seeds}{Integer vector of per-member simulation seeds, aligned with the
 #'     parameter dimension of \code{cases_array} (member i <-> seeds[i]). Bound to
-#'     the parameter set that produced each member so consumers (e.g. medioid
+#'     the parameter set that produced each member so consumers (e.g. medoid
 #'     selection) need not rely on positional alignment with an external vector.}
 #'   \item{n_param_sets}{Number of parameter sets.}
 #'   \item{n_simulations_per_config}{Stochastic runs per parameter set.}
@@ -441,9 +441,9 @@ calc_model_ensemble <- function(config,
   # ===========================================================================
   # Per-member seeds, aligned with cases_array's param dimension (member i <->
   # seeds[i]). Bound to the parameter set that PRODUCED each member so downstream
-  # consumers (medioid selection, optimize_ensemble_subset) never have to rely on
+  # consumers (medoid selection, optimize_ensemble_subset) never have to rely on
   # positional alignment with a separately-passed seed vector -- the failure mode
-  # that mis-mapped the medioid to a collapsed member. Precedence:
+  # that mis-mapped the medoid to a collapsed member. Precedence:
   #   (a) precomputed (Dask) results carry their own config seed (param_seed)
   #       tagged with the param_idx they fill -- ground truth for that member;
   #   (b) the per-member config seed (local-sampling and direct-config paths build

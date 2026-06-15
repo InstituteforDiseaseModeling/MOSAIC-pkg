@@ -4,7 +4,7 @@
 # automated coverage. This test exercises the REAL R pipeline ---
 #   parameter sampling -> batched simulation dispatch -> R-side likelihood
 #   -> outlier/subset selection -> importance weights -> posterior ensemble
-#   -> best/medioid reruns -> summary.json + return contract
+#   -> best/medoid reruns -> summary.json + return contract
 # --- and stubs ONLY the Python LASER engine.
 #
 # The stub seam (run_MOSAIC.R:247-252 and calc_model_ensemble.R:270-274): the
@@ -164,12 +164,12 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
 
   # (1) The stub was actually invoked: the BFRS loop dispatched sims through it.
   # Calibration alone fires n_sims calls (n_sims sims x 1 iter). The
-  # post-calibration ensemble + best/medioid reruns add more, so we expect
+  # post-calibration ensemble + medoid reruns add more, so we expect
   # strictly more than the calibration count -- proving both phases dispatched
-  # through the stub (calibration AND posterior-ensemble/best-model).
+  # through the stub (calibration AND posterior-ensemble/medoid).
   expect_gt(call_env$n, 0L)
   expect_gte(call_env$n, n_sims)         # >= calibration sims
-  expect_gt(call_env$n, n_sims)          # ensemble/best/medioid reruns dispatched too
+  expect_gt(call_env$n, n_sims)          # ensemble/medoid reruns dispatched too
 
   # (2) Return contract.
   expect_type(result, "list")
@@ -191,9 +191,13 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   expect_true(file.exists(file.path(dir_output, "1_inputs", "priors.json")))
   expect_true(file.exists(
     file.path(dir_output, "2_calibration", "diagnostics", "parameter_ess.csv")))
-  # Best-model config: produced only after sampling the max-likelihood seed.
-  expect_true(file.exists(
+  # The best model is no longer produced: config_best.json must NOT be written.
+  # The medoid config IS the representative single-config model (written when a
+  # medoid seed was identified, which it is for this fixture).
+  expect_false(file.exists(
     file.path(dir_output, "2_calibration", "best_model", "config_best.json")))
+  expect_true(file.exists(
+    file.path(dir_output, "2_calibration", "best_model", "config_medoid.json")))
 
   # (5) samples.parquet holds exactly the fixed pool with the loop's derived
   # columns and a spread of FINITE likelihoods (degenerate likelihoods would
@@ -224,4 +228,16 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   }
   expect_equal(as.integer(summ$n_simulations_total), n_sims)
   expect_gt(as.integer(summ$n_simulations_successful), 0L)
+
+  # (7) Ensemble-only fit metrics (v0.39 best-model removal) + central_method
+  # provenance (v0.38). The single-model best fields must be GONE; the canonical
+  # ensemble fields, the central_method provenance, and the dual cross-walk
+  # fields must all be present (and default to the package "mean").
+  expect_false(any(c("r2_cases", "r2_deaths", "bias_ratio_cases", "bias_ratio_deaths")
+                   %in% names(summ)))
+  expect_true(all(c("r2_cases_ensemble", "central_method_cases", "central_method_deaths",
+                    "r2_cases_ensemble_mean", "r2_cases_ensemble_median")
+                  %in% names(summ)))
+  expect_equal(summ$central_method_cases,  "mean")
+  expect_equal(summ$central_method_deaths, "mean")
 })

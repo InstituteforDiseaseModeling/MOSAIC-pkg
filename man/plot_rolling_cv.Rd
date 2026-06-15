@@ -10,7 +10,7 @@ plot_rolling_cv(
   horizon_max_months = 5,
   context_months = 2,
   models_ribbon = c("ensemble", "ensemble_opt"),
-  models_line = c("best", "medioid"),
+  models_line = c("best", "medoid"),
   annotate = TRUE,
   eval = NULL,
   title = NULL,
@@ -42,7 +42,7 @@ panel relative to its cutoff (default 5).}
 (default \code{c("ensemble", "ensemble_opt")}).}
 
 \item{models_line}{Models drawn as thin reference median lines
-(default \code{c("best", "medioid")}).}
+(default \code{c("best", "medoid")}).}
 
 \item{annotate}{Annotate each panel with ensemble \eqn{\le}max-horizon skill
 (R\eqn{^2}_corr + WIS). Default \code{TRUE}.}
@@ -87,7 +87,7 @@ predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \eqn{\le 5} months). The two
 posterior ensembles (\code{ensemble}, \code{ensemble_opt}) are drawn as
 "hero" series with 50/95\\% prediction-interval ribbons; the two point
-configurations (\code{best}, \code{medioid}) are drawn as thin reference
+configurations (\code{best}, \code{medoid}) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
 cumulative \eqn{\le}max-horizon skill (R\eqn{^2} correlation + WIS) of the

@@ -31,7 +31,7 @@ evaluate_rolling_cv(
 \item{seed}{RNG seed for the bootstrap (default 1).
 
 When the predictions carry a \code{model} column (\code{ensemble},
-\code{ensemble_opt}, \code{best}, \code{medioid}), every metric is computed and
+\code{ensemble_opt}, \code{best}, \code{medoid}), every metric is computed and
 reported \strong{per model}; absent that column all rows are treated as a
 single \code{"ensemble"} model (back-compatible).}
 }

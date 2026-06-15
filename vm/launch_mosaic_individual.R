@@ -105,7 +105,7 @@ CONTROL_SETTINGS <- list(
   weight_deaths = 0.05,         # Weight for death data
 
   # Predictions
-  n_iter_best = 100,            # Stochastic runs for best + medioid single-config plots
+  n_iter_best = 100,            # Stochastic runs for medoid single-config plots
   n_iter_ensemble = 10,         # Stochastic runs per posterior parameter set (ensemble)
 
   # Parallel

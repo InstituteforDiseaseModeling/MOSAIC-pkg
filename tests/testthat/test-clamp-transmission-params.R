@@ -1,7 +1,7 @@
 # Regression tests for .mosaic_clamp_transmission_params() — the single source
 # of truth for the transmission-parameter guardrail (v0.36.2 / review item R-2).
 # Before v0.36.2 the clamp was duplicated inline in the calibration worker and
-# the Dask serializer but MISSING from the post-cal best/medioid/ensemble
+# the Dask serializer but MISSING from the post-cal best/medoid/ensemble
 # re-samples, so a boundary-hitting winning draw could be predicted with
 # different (unclamped) parameters than were scored. This helper is now applied
 # at every sampling site; these tests pin its behavior so the copies can't drift.

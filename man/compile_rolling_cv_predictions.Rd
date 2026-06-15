@@ -8,7 +8,8 @@ compile_rolling_cv_predictions(
   dir_output,
   base_config = MOSAIC::config_default,
   models = NULL,
-  n_reps_best_medioid = NULL,
+  n_reps_best_medoid = NULL,
+  central_method = NULL,
   write = TRUE
 )
 }
@@ -20,12 +21,17 @@ compile_rolling_cv_predictions(
 series (default \code{MOSAIC::config_default}); must match the run config.}
 
 \item{models}{Character vector of model types to compile (e.g.
-\code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medioid"}); NULL
+\code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medoid"}); NULL
 (default) uses the set recorded in each run's manifest.}
 
-\item{n_reps_best_medioid}{Integer or NULL (default); number of stochastic
-LASER replicates to draw for the single-config \code{best}/\code{medioid}
+\item{n_reps_best_medoid}{Integer or NULL (default); number of stochastic
+LASER replicates to draw for the single-config \code{best}/\code{medoid}
 models. NULL reuses the value stored in the run manifest.}
+
+\item{central_method}{Central tendency for \code{pred_central}: \code{NULL}
+(default) reuses the value recorded in the run manifest (or \code{"mean"}
+for older manifests); otherwise a scalar or per-channel
+\code{c(cases=, deaths=)} override.}
 
 \item{write}{Logical; write \code{predictions.parquet} (default TRUE).}
 }

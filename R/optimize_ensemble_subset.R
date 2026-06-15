@@ -23,7 +23,7 @@
 #'   by \code{calc_model_ensemble}, aligned with \code{cases_array} by
 #'   construction), it is carried through the same sort/slice and exposed as
 #'   \code{ensemble_optimized$seeds} for cases_array-aligned consumers such as
-#'   medioid selection. This argument and \code{ensemble$seeds} serve different
+#'   medoid selection. This argument and \code{ensemble$seeds} serve different
 #'   roles and are kept independent.
 #' @param min_n Minimum subset size to evaluate. Default \code{30L} to guard
 #'   against small-subset KDE degeneracy when the optimized subset drives
@@ -32,6 +32,16 @@
 #' @param objective Scoring function: \code{"mae"} (default, normalized MAE),
 #'   \code{"r2_bias"} (R-squared plus bias penalty), or \code{"wis"} (normalized
 #'   Weighted Interval Score).
+#' @param central_method Central tendency used to summarize each per-cell
+#'   ensemble distribution for the \code{"mae"} and \code{"r2_bias"} objectives
+#'   and for the recorded R^2/bias/MAE diagnostics: \code{"median"} (default,
+#'   reproduces historical selection) or \code{"mean"} (weighted mean, unbiased
+#'   for expected counts). Scalar or per-channel \code{c(cases=, deaths=)}. The
+#'   \code{"wis"} objective is quantile-based and \strong{unaffected} by this
+#'   setting (its point forecast remains the weighted median). The default
+#'   \code{"median"} here is deliberate -- it preserves historical direct-call
+#'   selection and the Tier-2 bit-for-bit parity guarantee; \code{run_MOSAIC()}
+#'   passes the package default (\code{"mean"}) explicitly.
 #' @param verbose Logical; if \code{TRUE}, emit progress messages.
 #'
 #' @return An S3 object of class \code{mosaic_subset_optimization} containing:
@@ -52,6 +62,8 @@
 #'     \item{diagnostics_n}{Original diagnostics-selected N.}
 #'     \item{diagnostics_score}{Score at the diagnostics-selected N.}
 #'     \item{objective}{Which objective was used.}
+#'     \item{central_method}{Resolved per-channel central tendency used for
+#'       \code{"mae"}/\code{"r2_bias"} scoring and the recorded diagnostics.}
 #'   }
 #'
 #' @references
@@ -67,9 +79,11 @@ optimize_ensemble_subset <- function(ensemble,
                                      seeds = NULL,
                                      min_n = 30L,
                                      objective = c("mae", "r2_bias", "wis"),
+                                     central_method = "median",
                                      verbose = TRUE) {
 
   objective <- match.arg(objective)
+  central_method <- .mosaic_resolve_central_method(central_method)
 
   # ── 1. VALIDATE INPUTS ────────────────────────────────────────────────
 
@@ -85,7 +99,7 @@ optimize_ensemble_subset <- function(ensemble,
   # Per-member seeds carried ON the ensemble (aligned with cases_array by
   # construction in calc_model_ensemble: member i <-> ens_member_seeds[i]). These
   # are carried through the sort/slice below in lockstep with cases_array and
-  # exposed as ensemble_optimized$seeds, giving medioid selection a seed vector
+  # exposed as ensemble_optimized$seeds, giving medoid selection a seed vector
   # that cannot drift relative to the array. This is deliberately SEPARATE from
   # `seeds`/`optimal_seeds`, which stay aligned with `likelihoods`/`optimal_weights`
   # for the downstream seed->weight mapping. NULL when the ensemble carries none.
@@ -198,6 +212,19 @@ optimize_ensemble_subset <- function(ensemble,
   ord_c <- .presort_cell_orders(cases_array)
   ord_d <- .presort_cell_orders(deaths_array)
 
+  # Per-channel central tendency for scoring/diagnostics. The median path is
+  # always computed (it is the WIS point forecast and the historical selection
+  # series); the weighted mean is computed only when requested. The mean mirrors
+  # calc_model_ensemble()'s mean exactly (drop non-finite/zero-weight, then
+  # weight-renormalize) so selection and the final ensemble report agree.
+  need_mean_c <- central_method[["cases"]]  == "mean"
+  need_mean_d <- central_method[["deaths"]] == "mean"
+  .cell_mean <- function(vals, wts) {
+    ok <- is.finite(vals) & is.finite(wts) & wts > 0
+    if (!any(ok)) return(NA_real_)
+    sum(vals[ok] * wts[ok]) / sum(wts[ok])
+  }
+
   # ── 4. EVALUATION LOOP ───────────────────────────────────────────────
 
   for (idx in seq_len(n_evals)) {
@@ -224,6 +251,8 @@ optimize_ensemble_subset <- function(ensemble,
     #     mask each cell to param_id <= n and weight each value by its param.
     median_c <- matrix(NA_real_, n_locs, n_times)
     median_d <- matrix(NA_real_, n_locs, n_times)
+    mean_c   <- if (need_mean_c) matrix(NA_real_, n_locs, n_times) else NULL
+    mean_d   <- if (need_mean_d) matrix(NA_real_, n_locs, n_times) else NULL
 
     if (objective == "wis") {
       q025_c <- q25_c <- q75_c <- q975_c <- matrix(NA_real_, n_locs, n_times)
@@ -243,6 +272,8 @@ optimize_ensemble_subset <- function(ensemble,
           q75_c[i, j]  <- qc[4]; q975_c[i, j] <- qc[5]
           q025_d[i, j] <- qd[1]; q25_d[i, j] <- qd[2]; median_d[i, j] <- qd[3]
           q75_d[i, j]  <- qd[4]; q975_d[i, j] <- qd[5]
+          if (need_mean_c) mean_c[i, j] <- .cell_mean(xc[kc], w_per_param[pc[kc]])
+          if (need_mean_d) mean_d[i, j] <- .cell_mean(xd[kd], w_per_param[pd[kd]])
         }
       }
     } else {
@@ -256,26 +287,32 @@ optimize_ensemble_subset <- function(ensemble,
           od <- ord_d[[ci]]; pd <- pid_full[od]; kd <- pd <= n
           xd <- as.vector(deaths_array[i, j, , ])[od]
           median_d[i, j] <- weighted_quantiles_presorted(xd[kd], w_per_param[pd[kd]], 0.5)
+          if (need_mean_c) mean_c[i, j] <- .cell_mean(xc[kc], w_per_param[pc[kc]])
+          if (need_mean_d) mean_d[i, j] <- .cell_mean(xd[kd], w_per_param[pd[kd]])
         }
       }
     }
 
-    # 4d. Flatten medians for scoring
+    # 4d. Flatten the central series (mean or median per channel) for scoring and
+    #     diagnostics. The median is also kept flat as the WIS point forecast.
+    cen_c_flat <- if (need_mean_c) as.numeric(mean_c) else as.numeric(median_c)
+    cen_d_flat <- if (need_mean_d) as.numeric(mean_d) else as.numeric(median_d)
     med_c_flat <- as.numeric(median_c)
     med_d_flat <- as.numeric(median_d)
 
-    # 4e. Score with selected objective
+    # 4e. Score with selected objective. mae/r2_bias use the chosen central
+    #     series; wis is quantile-based (median point) and central-invariant.
     score_n <- switch(objective,
       "mae" = {
-        mae_c <- mean(abs(med_c_flat - obs_c_flat), na.rm = TRUE)
-        mae_d <- mean(abs(med_d_flat - obs_d_flat), na.rm = TRUE)
+        mae_c <- mean(abs(cen_c_flat - obs_c_flat), na.rm = TRUE)
+        mae_d <- mean(abs(cen_d_flat - obs_d_flat), na.rm = TRUE)
         -(mae_c / mean_obs_c + mae_d / mean_obs_d)
       },
       "r2_bias" = {
-        r2_c   <- calc_model_R2(obs_c_flat, med_c_flat)
-        r2_d   <- calc_model_R2(obs_d_flat, med_d_flat)
-        bias_c <- calc_bias_ratio(obs_c_flat, med_c_flat)
-        bias_d <- calc_bias_ratio(obs_d_flat, med_d_flat)
+        r2_c   <- calc_model_R2(obs_c_flat, cen_c_flat)
+        r2_d   <- calc_model_R2(obs_d_flat, cen_d_flat)
+        bias_c <- calc_bias_ratio(obs_c_flat, cen_c_flat)
+        bias_d <- calc_bias_ratio(obs_d_flat, cen_d_flat)
         lbc <- if (is.finite(bias_c) && bias_c > 0) abs(log(bias_c)) else 10
         lbd <- if (is.finite(bias_d) && bias_d > 0) abs(log(bias_d)) else 10
         r2_c + r2_d - 0.5 * (lbc + lbd)
@@ -291,13 +328,14 @@ optimize_ensemble_subset <- function(ensemble,
       }
     )
 
-    # 4f. Record ALL metrics regardless of which drives selection
-    mae_c_n  <- mean(abs(med_c_flat - obs_c_flat), na.rm = TRUE)
-    mae_d_n  <- mean(abs(med_d_flat - obs_d_flat), na.rm = TRUE)
-    r2_c_n   <- calc_model_R2(obs_c_flat, med_c_flat)
-    r2_d_n   <- calc_model_R2(obs_d_flat, med_d_flat)
-    bias_c_n <- calc_bias_ratio(obs_c_flat, med_c_flat)
-    bias_d_n <- calc_bias_ratio(obs_d_flat, med_d_flat)
+    # 4f. Record ALL metrics (on the chosen central series) regardless of which
+    #     objective drives selection.
+    mae_c_n  <- mean(abs(cen_c_flat - obs_c_flat), na.rm = TRUE)
+    mae_d_n  <- mean(abs(cen_d_flat - obs_d_flat), na.rm = TRUE)
+    r2_c_n   <- calc_model_R2(obs_c_flat, cen_c_flat)
+    r2_d_n   <- calc_model_R2(obs_d_flat, cen_d_flat)
+    bias_c_n <- calc_bias_ratio(obs_c_flat, cen_c_flat)
+    bias_d_n <- calc_bias_ratio(obs_d_flat, cen_d_flat)
     ess_n    <- calc_model_ess(weights_n)
 
     eval_table[idx, ] <- list(
@@ -338,7 +376,7 @@ optimize_ensemble_subset <- function(ensemble,
 
   optimal_indices <- 1:optimal_n
   optimal_seeds   <- if (!is.null(seeds)) seeds[optimal_indices] else NULL
-  # Member-aligned seeds for the optimized subset (for medioid selection). Falls
+  # Member-aligned seeds for the optimized subset (for medoid selection). Falls
   # back to optimal_seeds when the ensemble carried no per-member seeds.
   opt_member_seeds <- if (!is.null(ens_member_seeds)) ens_member_seeds[optimal_indices] else optimal_seeds
 
@@ -450,7 +488,8 @@ optimize_ensemble_subset <- function(ensemble,
       stability_flag    = stability_flag,
       diagnostics_n     = as.integer(diagnostics_n),
       diagnostics_score = diagnostics_score,
-      objective         = objective
+      objective         = objective,
+      central_method    = central_method
     ),
     class = "mosaic_subset_optimization"
   )

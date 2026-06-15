@@ -154,12 +154,14 @@ plot_model_ppc <- function(predictions_dir = NULL,
             message("Total rows: ", format(nrow(all_data), big.mark = ","))
         }
 
-        pred_col <- if ("predicted_median" %in% names(all_data)) {
+        pred_col <- if ("predicted_central" %in% names(all_data)) {
+            "predicted_central"
+        } else if ("predicted_median" %in% names(all_data)) {
             "predicted_median"
         } else if ("predicted_mean" %in% names(all_data)) {
             "predicted_mean"
         } else {
-            stop("CSV must contain 'predicted_median' or 'predicted_mean' column")
+            stop("CSV must contain 'predicted_central', 'predicted_median', or 'predicted_mean' column")
         }
 
         if (verbose) message("Using prediction column: ", pred_col)

@@ -10,6 +10,7 @@ optimize_ensemble_subset(
   seeds = NULL,
   min_n = 30L,
   objective = c("mae", "r2_bias", "wis"),
+  central_method = "median",
   verbose = TRUE
 )
 }
@@ -28,7 +29,7 @@ Separately, if \code{ensemble$seeds} is present (the per-member seeds carried
 by \code{calc_model_ensemble}, aligned with \code{cases_array} by
 construction), it is carried through the same sort/slice and exposed as
 \code{ensemble_optimized$seeds} for cases_array-aligned consumers such as
-medioid selection. This argument and \code{ensemble$seeds} serve different
+medoid selection. This argument and \code{ensemble$seeds} serve different
 roles and are kept independent.}
 
 \item{min_n}{Minimum subset size to evaluate. Default \code{30L} to guard
@@ -39,6 +40,17 @@ for accuracy, but posterior density estimation needs larger N.}
 \item{objective}{Scoring function: \code{"mae"} (default, normalized MAE),
 \code{"r2_bias"} (R-squared plus bias penalty), or \code{"wis"} (normalized
 Weighted Interval Score).}
+
+\item{central_method}{Central tendency used to summarize each per-cell
+ensemble distribution for the \code{"mae"} and \code{"r2_bias"} objectives
+and for the recorded R^2/bias/MAE diagnostics: \code{"median"} (default,
+reproduces historical selection) or \code{"mean"} (weighted mean, unbiased
+for expected counts). Scalar or per-channel \code{c(cases=, deaths=)}. The
+\code{"wis"} objective is quantile-based and \strong{unaffected} by this
+setting (its point forecast remains the weighted median). The default
+\code{"median"} here is deliberate -- it preserves historical direct-call
+selection and the Tier-2 bit-for-bit parity guarantee; \code{run_MOSAIC()}
+passes the package default (\code{"mean"}) explicitly.}
 
 \item{verbose}{Logical; if \code{TRUE}, emit progress messages.}
 }
@@ -61,6 +73,8 @@ present, else it falls back to \code{optimal_seeds}.}
 \item{diagnostics_n}{Original diagnostics-selected N.}
 \item{diagnostics_score}{Score at the diagnostics-selected N.}
 \item{objective}{Which objective was used.}
+\item{central_method}{Resolved per-channel central tendency used for
+\code{"mae"}/\code{"r2_bias"} scoring and the recorded diagnostics.}
 }
 }
 \description{

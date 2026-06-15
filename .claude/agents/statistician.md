@@ -55,7 +55,7 @@ subtly wrong is the failure mode you exist to prevent.
   scaling change.
 - **Gibbs posterior:** `w(η) ∝ exp(-η·x)` where `x = -log L`; η is inverse temperature
   (0 → uniform, ∞ → hard selection).
-- **Ensemble/medioid:** the medioid must keep per-member seed↔cases-array alignment (collapse =
+- **Ensemble/medoid:** the medoid must keep per-member seed↔cases-array alignment (collapse =
   misalignment, fixed v0.36.12; a jagged best-member is *expected*, not a bug).
 - **R↔Python parity:** when you touch scoring, validate against the Python analyzer; known
   divergences (~22% daily / ~290% weekly on the peak term) must not silently widen.

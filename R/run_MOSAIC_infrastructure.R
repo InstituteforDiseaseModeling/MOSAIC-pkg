@@ -384,11 +384,10 @@ for _h in list(_root.handlers):
 #' @param state Internal calibration state
 #' @param start_time POSIXct start time for wall-clock calculation
 #' @param config Base LASER config (for provenance fields)
-#' @param r2_cases R-squared for cases (best model vs observed)
-#' @param r2_deaths R-squared for deaths (best model vs observed)
-#' @param r2_cases_ensemble R-squared for cases (weighted median of the canonical
-#'   posterior ensemble — tier-selected when optimize_subset = FALSE, optimizer-
-#'   refined when optimize_subset = TRUE)
+#' @param r2_cases_ensemble R-squared for cases (central tendency -- mean by
+#'   default, per central_method -- of the canonical posterior ensemble;
+#'   tier-selected when optimize_subset = FALSE, optimizer-refined when
+#'   optimize_subset = TRUE)
 #' @param r2_deaths_ensemble R-squared for deaths (canonical ensemble, see above)
 #' @param n_ensemble_params Number of parameter sets in the canonical ensemble
 #' @param n_ensemble_stochastic_per Stochastic reruns per parameter set
@@ -400,16 +399,30 @@ for _h in list(_root.handlers):
 #' @param bias_ratio_deaths_ensemble_tier Tier-subset bias ratio for deaths.
 #' @param n_ensemble_params_tier Tier-subset param count (= n_ensemble_params when
 #'   optimize_subset = FALSE; typically larger than n_ensemble_params when TRUE).
+#' @param central_method Resolved per-channel central tendency
+#'   (\code{c(cases=, deaths=)}) that the canonical r2_*_ensemble fields and the
+#'   prediction plots use. Recorded as provenance in summary.json.
+#' @param r2_cases_ensemble_mean,r2_deaths_ensemble_mean,r2_cases_ensemble_median,r2_deaths_ensemble_median
+#'   Ensemble R-squared computed against BOTH the weighted mean and weighted
+#'   median, independent of \code{central_method}, for transition cross-walk.
+#' @param bias_ratio_cases_ensemble_mean,bias_ratio_deaths_ensemble_mean,bias_ratio_cases_ensemble_median,bias_ratio_deaths_ensemble_median
+#'   Ensemble bias ratios against both tendencies (see above).
 #' @param io I/O settings for JSON writing
 #' @noRd
 .mosaic_write_summary_json <- function(dirs, state, start_time, config,
-                                       r2_cases = NA_real_, r2_deaths = NA_real_,
                                        r2_cases_ensemble = NA_real_,
                                        r2_deaths_ensemble = NA_real_,
-                                       bias_ratio_cases = NA_real_,
-                                       bias_ratio_deaths = NA_real_,
                                        bias_ratio_cases_ensemble = NA_real_,
                                        bias_ratio_deaths_ensemble = NA_real_,
+                                       central_method = NULL,
+                                       r2_cases_ensemble_mean = NA_real_,
+                                       r2_deaths_ensemble_mean = NA_real_,
+                                       r2_cases_ensemble_median = NA_real_,
+                                       r2_deaths_ensemble_median = NA_real_,
+                                       bias_ratio_cases_ensemble_mean = NA_real_,
+                                       bias_ratio_deaths_ensemble_mean = NA_real_,
+                                       bias_ratio_cases_ensemble_median = NA_real_,
+                                       bias_ratio_deaths_ensemble_median = NA_real_,
                                        n_ensemble_params = NA_integer_,
                                        n_ensemble_stochastic_per = NA_integer_,
                                        r2_cases_ensemble_tier = NA_real_,
@@ -490,17 +503,27 @@ for _h in list(_root.handlers):
                                    as.integer(diag$metrics$B_size$value)
                                  } else NA_integer_,
     n_best_subset_tier         = if (!is.null(diag$metrics$B_size$value)) as.integer(diag$metrics$B_size$value) else NA_integer_,
-    # Convergence and model fit
-    # best = single best parameter set; ensemble = weighted median of posterior ensemble
+    # Convergence and model fit. The pipeline produces the posterior ENSEMBLE
+    # and the MEDOID member; the single best-likelihood model is not produced,
+    # so summary.json reports ensemble (+ tier) fit metrics only.
     converged     = isTRUE(state$converged),
-    r2_cases      = if (!is.na(r2_cases)) round(r2_cases, 4) else NA_real_,
-    r2_deaths     = if (!is.na(r2_deaths)) round(r2_deaths, 4) else NA_real_,
     r2_cases_ensemble  = if (!is.na(r2_cases_ensemble)) round(r2_cases_ensemble, 4) else NA_real_,
     r2_deaths_ensemble = if (!is.na(r2_deaths_ensemble)) round(r2_deaths_ensemble, 4) else NA_real_,
-    bias_ratio_cases   = if (!is.na(bias_ratio_cases)) round(bias_ratio_cases, 4) else NA_real_,
-    bias_ratio_deaths  = if (!is.na(bias_ratio_deaths)) round(bias_ratio_deaths, 4) else NA_real_,
     bias_ratio_cases_ensemble  = if (!is.na(bias_ratio_cases_ensemble)) round(bias_ratio_cases_ensemble, 4) else NA_real_,
     bias_ratio_deaths_ensemble = if (!is.na(bias_ratio_deaths_ensemble)) round(bias_ratio_deaths_ensemble, 4) else NA_real_,
+    # Resolved central tendency the canonical r2_*_ensemble fields + plots use.
+    central_method_cases  = if (!is.null(central_method)) central_method[["cases"]]  else NA_character_,
+    central_method_deaths = if (!is.null(central_method)) central_method[["deaths"]] else NA_character_,
+    # Dual ensemble metrics (BOTH tendencies, central_method-independent) so
+    # median runs stay comparable after the default flipped to mean.
+    r2_cases_ensemble_mean     = if (!is.na(r2_cases_ensemble_mean))     round(r2_cases_ensemble_mean, 4)     else NA_real_,
+    r2_deaths_ensemble_mean    = if (!is.na(r2_deaths_ensemble_mean))    round(r2_deaths_ensemble_mean, 4)    else NA_real_,
+    r2_cases_ensemble_median   = if (!is.na(r2_cases_ensemble_median))   round(r2_cases_ensemble_median, 4)   else NA_real_,
+    r2_deaths_ensemble_median  = if (!is.na(r2_deaths_ensemble_median))  round(r2_deaths_ensemble_median, 4)  else NA_real_,
+    bias_ratio_cases_ensemble_mean    = if (!is.na(bias_ratio_cases_ensemble_mean))    round(bias_ratio_cases_ensemble_mean, 4)    else NA_real_,
+    bias_ratio_deaths_ensemble_mean   = if (!is.na(bias_ratio_deaths_ensemble_mean))   round(bias_ratio_deaths_ensemble_mean, 4)   else NA_real_,
+    bias_ratio_cases_ensemble_median  = if (!is.na(bias_ratio_cases_ensemble_median))  round(bias_ratio_cases_ensemble_median, 4)  else NA_real_,
+    bias_ratio_deaths_ensemble_median = if (!is.na(bias_ratio_deaths_ensemble_median)) round(bias_ratio_deaths_ensemble_median, 4) else NA_real_,
     n_ensemble_params          = if (!is.na(n_ensemble_params)) as.integer(n_ensemble_params) else NA_integer_,
     n_ensemble_stochastic_per  = if (!is.na(n_ensemble_stochastic_per)) as.integer(n_ensemble_stochastic_per) else NA_integer_,
     # Tier-subset ensemble metrics — populated ONLY when optimize_subset = TRUE,

@@ -22,7 +22,13 @@
 #' @param title_label Character. Leading label used in plot titles
 #'   (\code{"<title_label>: <LOC>"}). Default \code{"Posterior Ensemble"}.
 #' @param save_predictions Logical. Save per-location prediction CSVs. Default
-#'   \code{FALSE}.
+#'   \code{FALSE}. CSVs carry \code{predicted_central} (the plotted series),
+#'   \code{predicted_mean}, \code{predicted_median}, and a \code{central_method}
+#'   column so the choice is never ambiguous.
+#' @param central_method Central tendency for the plotted/scored line:
+#'   \code{"mean"} (default; unbiased for expected counts, never collapses on
+#'   sparse deaths) or \code{"median"} (historical). Scalar or per-channel
+#'   \code{c(cases=, deaths=)}.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return Invisibly returns a list with:
@@ -47,6 +53,7 @@ plot_model_ensemble <- function(ensemble,
                                 file_prefix      = "ensemble",
                                 title_label      = "Posterior Ensemble",
                                 save_predictions = FALSE,
+                                central_method   = "mean",
                                 verbose          = TRUE) {
 
   # ---------------------------------------------------------------------------
@@ -65,6 +72,17 @@ plot_model_ensemble <- function(ensemble,
   # Unpack ensemble fields
   cases_median       <- ensemble$cases_median
   deaths_median      <- ensemble$deaths_median
+  # Central trajectory plotted + scored: mean or median per channel. The mean is
+  # the unbiased estimator of expected counts and never collapses on sparse
+  # deaths; the median reproduces historical plots. Both are kept for the CSV
+  # cross-walk. Fall back to median if an older ensemble lacks the *_mean field.
+  central_method     <- .mosaic_resolve_central_method(central_method)
+  cases_mean         <- ensemble$cases_mean
+  deaths_mean        <- ensemble$deaths_mean
+  if (is.null(cases_mean))  cases_mean  <- cases_median
+  if (is.null(deaths_mean)) deaths_mean <- deaths_median
+  cases_central      <- if (central_method[["cases"]]  == "mean") cases_mean  else cases_median
+  deaths_central     <- if (central_method[["deaths"]] == "mean") deaths_mean else deaths_median
   obs_cases          <- ensemble$obs_cases
   obs_deaths         <- ensemble$obs_deaths
   location_names     <- ensemble$location_names
@@ -114,10 +132,19 @@ plot_model_ensemble <- function(ensemble,
       date             = rep(dates, 2L),
       metric           = c(rep("Suspected Cases", n_time_points),
                            rep("Deaths",          n_time_points)),
-      observed         = c(.extract_loc(obs_cases,    i),
-                           .extract_loc(obs_deaths,   i)),
-      predicted_median = c(.extract_loc(cases_median, i),
-                           .extract_loc(deaths_median, i)),
+      observed          = c(.extract_loc(obs_cases,    i),
+                            .extract_loc(obs_deaths,   i)),
+      # Canonical plotted/scored series (mean or median per channel).
+      predicted_central = c(.extract_loc(cases_central, i),
+                            .extract_loc(deaths_central, i)),
+      # Both tendencies retained so consumers can cross-walk regardless of choice;
+      # predicted_median stays the TRUE median (never mislabeled).
+      predicted_mean    = c(.extract_loc(cases_mean,   i),
+                            .extract_loc(deaths_mean,  i)),
+      predicted_median  = c(.extract_loc(cases_median, i),
+                            .extract_loc(deaths_median, i)),
+      central_method    = c(rep(central_method[["cases"]],  n_time_points),
+                            rep(central_method[["deaths"]], n_time_points)),
       stringsAsFactors = FALSE
     )
 
@@ -181,8 +208,8 @@ plot_model_ensemble <- function(ensemble,
 
     obs_c  <- .extract_loc(obs_cases,    i)
     obs_d  <- .extract_loc(obs_deaths,   i)
-    pred_c <- .extract_loc(cases_median, i)
-    pred_d <- .extract_loc(deaths_median, i)
+    pred_c <- .extract_loc(cases_central, i)
+    pred_d <- .extract_loc(deaths_central, i)
 
     r2_c   <- tryCatch(round(calc_model_R2(obs_c, pred_c), 3L), error = function(e) NA)
     r2_d   <- tryCatch(round(calc_model_R2(obs_d, pred_d), 3L), error = function(e) NA)
@@ -207,7 +234,7 @@ plot_model_ensemble <- function(ensemble,
     p <- p +
       ggplot2::geom_point(data = loc_data_points, ggplot2::aes(y = observed),
                           color = mosaic_colors("data"), size = 1.5, alpha = 0.6) +
-      ggplot2::geom_line(ggplot2::aes(y = predicted_median, color = metric),
+      ggplot2::geom_line(ggplot2::aes(y = predicted_central, color = metric),
                          linewidth = 0.75) +
       ggplot2::facet_grid(metric ~ ., scales = "free_y", switch = "y") +
       ggplot2::scale_color_manual(
@@ -242,7 +269,8 @@ plot_model_ensemble <- function(ensemble,
             paste0(round(envelope_quantiles[seq(1, length(envelope_quantiles), by = 2)] * 100), "-",
                    round(envelope_quantiles[seq(2, length(envelope_quantiles), by = 2)] * 100), "%"),
             collapse = " and "
-          ), " confidence intervals\n",
+          ), " confidence intervals | Central: cases=", central_method[["cases"]],
+          ", deaths=", central_method[["deaths"]], "\n",
           "Cases: Obs = ", format(round(sum(obs_c, na.rm = TRUE)), big.mark = ","),
           ", Pred = ",     format(round(sum(pred_c, na.rm = TRUE)), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_c), "NA", r2_c),
@@ -276,7 +304,7 @@ plot_model_ensemble <- function(ensemble,
 
     cases_data <- plot_data[plot_data$metric == "Suspected Cases", ]
     all_obs_c  <- as.numeric(obs_cases)
-    all_pred_c <- as.numeric(cases_median)
+    all_pred_c <- as.numeric(cases_central)
     r2_c_all   <- tryCatch(round(calc_model_R2(all_obs_c, all_pred_c), 3L),
                             error = function(e) NA)
     bias_c_all <- tryCatch(round(calc_bias_ratio(all_obs_c, all_pred_c), 2L),
@@ -299,7 +327,7 @@ plot_model_ensemble <- function(ensemble,
     p_cases <- p_cases +
       ggplot2::geom_point(data = cases_data_points, ggplot2::aes(y = observed),
                           color = mosaic_colors("data"), size = 1.5, alpha = 0.6) +
-      ggplot2::geom_line(ggplot2::aes(y = predicted_median),
+      ggplot2::geom_line(ggplot2::aes(y = predicted_central),
                          color = mosaic_colors("cases"), linewidth = 0.8) +
       ggplot2::facet_wrap(~ location, scales = "free_y",
                           ncol = min(3L, n_locations)) +
@@ -318,9 +346,10 @@ plot_model_ensemble <- function(ensemble,
         },
         caption  = paste0(
           "Total: Obs = ",    format(round(sum(obs_cases, na.rm = TRUE)), big.mark = ","),
-          ", Pred = ",         format(round(sum(cases_median, na.rm = TRUE)), big.mark = ","),
+          ", Pred = ",         format(round(sum(cases_central, na.rm = TRUE)), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_c_all), "NA", r2_c_all),
           ", Bias = ",    ifelse(is.na(bias_c_all), "NA", bias_c_all),
+          " (central: ", central_method[["cases"]], ")",
           "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
         )
       )
@@ -344,7 +373,7 @@ plot_model_ensemble <- function(ensemble,
 
     deaths_data <- plot_data[plot_data$metric == "Deaths", ]
     all_obs_d   <- as.numeric(obs_deaths)
-    all_pred_d  <- as.numeric(deaths_median)
+    all_pred_d  <- as.numeric(deaths_central)
     r2_d_all    <- tryCatch(round(calc_model_R2(all_obs_d, all_pred_d), 3L),
                             error = function(e) NA)
     bias_d_all  <- tryCatch(round(calc_bias_ratio(all_obs_d, all_pred_d), 2L),
@@ -367,7 +396,7 @@ plot_model_ensemble <- function(ensemble,
     p_deaths <- p_deaths +
       ggplot2::geom_point(data = deaths_data_points, ggplot2::aes(y = observed),
                           color = mosaic_colors("data"), size = 1.5, alpha = 0.6) +
-      ggplot2::geom_line(ggplot2::aes(y = predicted_median),
+      ggplot2::geom_line(ggplot2::aes(y = predicted_central),
                          color = mosaic_colors("deaths"), linewidth = 0.8) +
       ggplot2::facet_wrap(~ location, scales = "free_y",
                           ncol = min(3L, n_locations)) +
@@ -386,9 +415,10 @@ plot_model_ensemble <- function(ensemble,
         },
         caption  = paste0(
           "Total: Obs = ",    format(round(sum(obs_deaths, na.rm = TRUE)), big.mark = ","),
-          ", Pred = ",         format(round(sum(deaths_median, na.rm = TRUE)), big.mark = ","),
+          ", Pred = ",         format(round(sum(deaths_central, na.rm = TRUE)), big.mark = ","),
           ", R\u00b2 = ", ifelse(is.na(r2_d_all), "NA", r2_d_all),
           ", Bias = ",    ifelse(is.na(bias_d_all), "NA", bias_d_all),
+          " (central: ", central_method[["deaths"]], ")",
           "\nGenerated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
         )
       )

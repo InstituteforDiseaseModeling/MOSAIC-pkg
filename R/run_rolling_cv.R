@@ -42,7 +42,8 @@
 #' The predictions table has one row per (cutoff x location x date x metric) with
 #' columns: \code{run_id, iso_code, anchor_date, cutoff_date, date, metric,
 #' segment} (IS/embargo/OOS), \code{weeks_ahead, horizon_bucket, observed,
-#' observed_source, pred_median}, and CI columns (\code{pi*_lo}/\code{pi*_hi}).
+#' observed_source, pred_central} (the scored series), \code{pred_mean,
+#' pred_median, central_method}, and CI columns (\code{pi*_lo}/\code{pi*_hi}).
 #' \code{observed} is the held-out (unmasked) trusted surveillance value, so OOS
 #' rows carry the real target for post-hoc scoring.
 #'
@@ -70,19 +71,28 @@
 #'   driven by the optimizer-selected subset. Set \code{FALSE} to use the raw
 #'   candidate ensemble.
 #' @param models Character vector of model types to score and carry in
-#'   \code{predictions.parquet} (default all four:
-#'   \code{c("ensemble","ensemble_opt","best","medioid")}). \code{"ensemble"}
+#'   \code{predictions.parquet} (default
+#'   \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 #'   (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 #'   the optimizer-selected subset (only emitted when \code{optimize_subset =
-#'   TRUE} and \code{ensemble_optimized.rds} exists). \code{"best"} and
-#'   \code{"medioid"} are re-simulated from their saved configs (see
-#'   \code{n_reps_best_medioid}). Each model appears as a value of the
-#'   \code{model} column.
-#' @param n_reps_best_medioid Integer (default 50); number of stochastic LASER
+#'   TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
+#'   re-simulated from its saved config (see \code{n_reps_best_medoid}).
+#'   \code{"best"} is accepted for back-compat but is no longer produced by
+#'   \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
+#'   warning unless an older run dir still carries that file. Each model appears
+#'   as a value of the \code{model} column.
+#' @param n_reps_best_medoid Integer (default 50); number of stochastic LASER
 #'   reruns used to build the predictive median + intervals for the \code{best}
-#'   and \code{medioid} configs. These reruns execute locally in the calling R
+#'   and \code{medoid} configs. These reruns execute locally in the calling R
 #'   process (not on Dask), so cost scales with this value times the number of
 #'   cutoffs and locations.
+#' @param central_method Ensemble central tendency used for the compiled
+#'   predictions and the in-sample calibration metrics/medoid: \code{"mean"}
+#'   (default; unbiased for expected counts, never collapses on sparse deaths)
+#'   or \code{"median"}. Scalar or per-channel \code{c(cases=, deaths=)}. The
+#'   predictions table carries \code{pred_central} (this choice) plus
+#'   \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
+#'   quantile-based and are unaffected.
 #' @param est_suitability_spec Named list of \emph{modeling} arguments passed
 #'   through to \code{\link{est_suitability}} (e.g. \code{architecture},
 #'   \code{feature_set}, \code{response_var}, \code{bias_correct}, and the
@@ -114,8 +124,9 @@ run_rolling_cv <- function(PATHS,
                            priors               = MOSAIC::priors_default,
                            control              = NULL,
                            optimize_subset      = TRUE,
-                           models               = c("ensemble", "ensemble_opt", "best", "medioid"),
-                           n_reps_best_medioid  = 50L,
+                           models               = c("ensemble", "ensemble_opt", "medoid"),
+                           n_reps_best_medoid  = 50L,
+                           central_method       = "mean",
                            est_suitability_spec = list(),
                            dask_spec            = NULL,
                            dir_output,
@@ -123,10 +134,10 @@ run_rolling_cv <- function(PATHS,
 
      stopifnot(is.character(iso), length(iso) >= 1L)
      if (missing(dir_output) || is.null(dir_output)) stop("dir_output is required.")
-     models <- match.arg(models, c("ensemble", "ensemble_opt", "best", "medioid"),
+     models <- match.arg(models, c("ensemble", "ensemble_opt", "best", "medoid"),
                          several.ok = TRUE)
      models <- union("ensemble", models)              # candidate ensemble always emitted
-     n_reps_best_medioid <- as.integer(n_reps_best_medioid)
+     n_reps_best_medoid <- as.integer(n_reps_best_medoid)
      horizons_months <- sort(unique(as.numeric(horizons_months)))
      max_h_days      <- ceiling(max(horizons_months) * 30.4375)
      embargo_days    <- as.integer(embargo_weeks) * 7L
@@ -157,6 +168,11 @@ run_rolling_cv <- function(PATHS,
      # whether `control` is the cheap default or user-supplied.
      if (is.null(control$predictions)) control$predictions <- list()
      control$predictions$optimize_subset <- isTRUE(optimize_subset)
+     # Central tendency is harness-owned too: forced onto the inner control so the
+     # per-cutoff calibration's medoid + ensemble metrics use the SAME summary
+     # the compiled predictions table is scored on (in-sample == out-of-sample).
+     central_method <- .mosaic_resolve_central_method(central_method)
+     control$predictions$central_method <- central_method
 
      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
      runs_dir <- file.path(dir_output, "runs")
@@ -208,7 +224,7 @@ run_rolling_cv <- function(PATHS,
                                   control = control, dask_spec = dask_spec)
 
                # 4. compile predictions for every requested model type
-               #    (ensemble candidate / optimizer subset / best / medioid)
+               #    (ensemble candidate / optimizer subset / best / medoid)
                #    against the held-out trusted observed series.
                pred_tables[[k]] <- .rcv_compile_all_models(
                     run_dir        = dir_k,
@@ -222,7 +238,8 @@ run_rolling_cv <- function(PATHS,
                     obs_dates      = cfg_dates,
                     location_names = loc_cfg_full$location_name,
                     models         = models,
-                    n_reps         = n_reps_best_medioid)
+                    n_reps         = n_reps_best_medoid,
+                    central_method = central_method)
                "success"
           }, error = function(e) {
                if (verbose) message("  FAILED: ", conditionMessage(e))
@@ -258,7 +275,12 @@ run_rolling_cv <- function(PATHS,
                iso              = iso,
                optimize_subset  = isTRUE(optimize_subset),
                models           = models,
-               n_reps_best_medioid = n_reps_best_medioid,
+               n_reps_best_medoid = n_reps_best_medoid,
+               # as.list() so the per-channel names survive JSON round-trip:
+               # auto_unbox drops the names of a length-2 named vector (-> a bare
+               # array), which would break compile_rolling_cv_predictions()'s
+               # read-back. A named list serializes as a JSON object.
+               central_method   = as.list(central_method),
                est_suitability_spec = est_suitability_spec),
           runs = run_records)
      .rcv_write_json(manifest, file.path(dir_output, "manifest.json"))
@@ -369,18 +391,23 @@ run_rolling_cv <- function(PATHS,
 #' @param base_config Config used to recover the held-out (unmasked) observed
 #'   series (default \code{MOSAIC::config_default}); must match the run config.
 #' @param models Character vector of model types to compile (e.g.
-#'   \code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medioid"}); NULL
+#'   \code{"ensemble"}, \code{"opt"}, \code{"best"}, \code{"medoid"}); NULL
 #'   (default) uses the set recorded in each run's manifest.
-#' @param n_reps_best_medioid Integer or NULL (default); number of stochastic
-#'   LASER replicates to draw for the single-config \code{best}/\code{medioid}
+#' @param n_reps_best_medoid Integer or NULL (default); number of stochastic
+#'   LASER replicates to draw for the single-config \code{best}/\code{medoid}
 #'   models. NULL reuses the value stored in the run manifest.
+#' @param central_method Central tendency for \code{pred_central}: \code{NULL}
+#'   (default) reuses the value recorded in the run manifest (or \code{"mean"}
+#'   for older manifests); otherwise a scalar or per-channel
+#'   \code{c(cases=, deaths=)} override.
 #' @param write Logical; write \code{predictions.parquet} (default TRUE).
 #' @return The compiled long predictions data frame (invisibly if written).
 #' @export
 compile_rolling_cv_predictions <- function(dir_output,
                                            base_config = MOSAIC::config_default,
                                            models = NULL,
-                                           n_reps_best_medioid = NULL,
+                                           n_reps_best_medoid = NULL,
+                                           central_method = NULL,
                                            write = TRUE) {
      mpath <- file.path(dir_output, "manifest.json")
      if (!file.exists(mpath)) stop("manifest.json not found in ", dir_output)
@@ -389,11 +416,16 @@ compile_rolling_cv_predictions <- function(dir_output,
      anchor <- as.Date(man$spec$anchor_date)
      horizons <- as.numeric(unlist(man$spec$horizons_months))
      embargo_days <- as.integer(man$spec$embargo_weeks) * 7L
-     # default model set / rep count from the manifest (fall back to all four / 50)
+     # default model set / rep count from the manifest (fall back to the default set / 50)
      if (is.null(models))
-          models <- unlist(man$spec$models) %||% c("ensemble", "ensemble_opt", "best", "medioid")
-     if (is.null(n_reps_best_medioid))
-          n_reps_best_medioid <- as.integer(man$spec$n_reps_best_medioid %||% 50L)
+          models <- unlist(man$spec$models) %||% c("ensemble", "ensemble_opt", "medoid")
+     if (is.null(n_reps_best_medoid))
+          n_reps_best_medoid <- as.integer(man$spec$n_reps_best_medoid %||% 50L)
+     # Reuse the run's recorded central tendency unless the caller overrides it
+     # (older manifests without the field fall back to the package default).
+     if (is.null(central_method))
+          central_method <- man$spec$central_method %||% "mean"
+     central_method <- .mosaic_resolve_central_method(central_method)
 
      cfg_dates <- seq.Date(as.Date(base_config$date_start),
                            as.Date(base_config$date_stop), by = "day")
@@ -414,7 +446,8 @@ compile_rolling_cv_predictions <- function(dir_output,
                embargo_days = embargo_days, horizons_months = horizons,
                obs_cases = oc, obs_deaths = od, obs_dates = cfg_dates,
                location_names = loc$location_name,
-               models = models, n_reps = n_reps_best_medioid)
+               models = models, n_reps = n_reps_best_medoid,
+               central_method = central_method)
      }
      predictions <- if (length(tabs)) do.call(rbind, tabs) else NULL
      if (write && !is.null(predictions))
@@ -427,7 +460,9 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' @noRd
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
-                                    location_names, model = "ensemble") {
+                                    location_names, model = "ensemble",
+                                    central_method = "mean") {
+     central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
      edates <- seq(ds, de, length.out = n_t)
@@ -444,8 +479,13 @@ compile_rolling_cv_predictions <- function(dir_output,
      for (i in seq_along(locs)) {
           oi <- match(locs[i], location_names)
           for (metric in c("cases", "deaths")) {
-               med <- if (metric == "cases") getrow(ensemble$cases_median, i)
-                      else                    getrow(ensemble$deaths_median, i)
+               cm       <- central_method[[metric]]
+               med_mat  <- if (metric == "cases") ensemble$cases_median else ensemble$deaths_median
+               mean_mat <- if (metric == "cases") ensemble$cases_mean   else ensemble$deaths_mean
+               med <- getrow(med_mat, i)
+               # Fall back to median if an older ensemble lacks the *_mean field.
+               mn  <- if (!is.null(mean_mat)) getrow(mean_mat, i) else med
+               central <- if (cm == "mean") mn else med
                obs_src <- if (metric == "cases") obs_cases else obs_deaths
                observed <- if (!is.na(oi)) getrow(obs_src, oi)[obs_idx] else rep(NA_real_, n_t)
                df <- data.frame(
@@ -456,7 +496,12 @@ compile_rolling_cv_predictions <- function(dir_output,
                     horizon_bucket = lab$horizon_bucket,
                     observed = as.numeric(observed),
                     observed_source = "config_reported",
-                    pred_median = as.numeric(med),
+                    # pred_central is the scored series (mean or median per channel);
+                    # pred_median/pred_mean are both retained for cross-walk.
+                    pred_central = as.numeric(central),
+                    pred_mean    = as.numeric(mn),
+                    pred_median  = as.numeric(med),
+                    central_method = cm,
                     stringsAsFactors = FALSE)
                ci_c <- if (metric == "cases") ensemble$ci_bounds$cases else ensemble$ci_bounds$deaths
                for (p in seq_len(n_pair)) {
@@ -497,13 +542,15 @@ compile_rolling_cv_predictions <- function(dir_output,
 #' Compile every requested model type for one cutoff into one long table
 #'
 #' Reads the candidate ensemble (always), the optimizer-selected ensemble (when
-#' present), and re-simulates the best / medioid configs, emitting one
+#' present), and re-simulates the best / medoid configs, emitting one
 #' \code{model}-tagged block per type and row-binding them.
 #' @keywords internal
 #' @noRd
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
-                                    location_names, models, n_reps) {
+                                    location_names, models, n_reps,
+                                    central_method = "mean") {
+     central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")
      if (!file.exists(ens_path)) stop("ensemble_candidate.rds not found at ", ens_path)
@@ -515,7 +562,8 @@ compile_rolling_cv_predictions <- function(dir_output,
                ensemble = predobj, run_id = run_id, cutoff = cutoff, anchor = anchor,
                embargo_days = embargo_days, horizons_months = horizons_months,
                obs_cases = obs_cases, obs_deaths = obs_deaths, obs_dates = obs_dates,
-               location_names = location_names, model = model)
+               location_names = location_names, model = model,
+               central_method = central_method)
      }
 
      parts <- list(emit(ens, "ensemble"))
@@ -525,12 +573,31 @@ compile_rolling_cv_predictions <- function(dir_output,
                parts[[length(parts) + 1L]] <- emit(readRDS(opt_path), "ensemble_opt")
      }
      bm <- file.path(cal, "best_model")
-     if ("best" %in% models)
-          parts[[length(parts) + 1L]] <- emit(
-               .rcv_simulate_config(file.path(bm, "config_best.json"), ens, n_reps), "best")
-     if ("medioid" %in% models)
-          parts[[length(parts) + 1L]] <- emit(
-               .rcv_simulate_config(file.path(bm, "config_medioid.json"), ens, n_reps), "medioid")
+     # "best" is no longer produced by run_MOSAIC() (only ensemble + medoid).
+     # Still honored for back-compat when an older run dir carries config_best.json;
+     # skip with a warning otherwise.
+     if ("best" %in% models) {
+          best_cfg <- file.path(bm, "config_best.json")
+          if (file.exists(best_cfg)) {
+               parts[[length(parts) + 1L]] <- emit(
+                    .rcv_simulate_config(best_cfg, ens, n_reps), "best")
+          } else {
+               warning("models includes 'best' but config_best.json not found in ",
+                       bm, " (best model is no longer produced); skipping.",
+                       call. = FALSE)
+          }
+     }
+     if ("medoid" %in% models) {
+          medoid_cfg <- file.path(bm, "config_medoid.json")
+          if (file.exists(medoid_cfg)) {
+               parts[[length(parts) + 1L]] <- emit(
+                    .rcv_simulate_config(medoid_cfg, ens, n_reps), "medoid")
+          } else {
+               warning("config_medoid.json not found in ", bm,
+                       " (expected for pre-v0.39 run dirs); skipping medoid.",
+                       call. = FALSE)
+          }
+     }
 
      parts <- Filter(Negate(is.null), parts)
      if (!length(parts)) return(NULL)
@@ -573,6 +640,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 
      reduce <- function(arr) {
           med    <- apply(arr, c(2L, 3L), stats::median, na.rm = TRUE)
+          mn     <- apply(arr, c(2L, 3L), mean, na.rm = TRUE)
           n_pair <- length(eq) / 2L
           ci <- vector("list", n_pair)
           for (p in seq_len(n_pair)) {
@@ -581,7 +649,7 @@ compile_rolling_cv_predictions <- function(dir_output,
                     lower = apply(arr, c(2L, 3L), stats::quantile, probs = lo_q, na.rm = TRUE),
                     upper = apply(arr, c(2L, 3L), stats::quantile, probs = hi_q, na.rm = TRUE))
           }
-          list(median = med, ci = ci)
+          list(median = med, mean = mn, ci = ci)
      }
      qc <- reduce(cas); qd <- reduce(dea)
      list(
@@ -591,7 +659,9 @@ compile_rolling_cv_predictions <- function(dir_output,
           location_names     = locs,
           envelope_quantiles = eq,
           cases_median       = qc$median,
+          cases_mean         = qc$mean,
           deaths_median      = qd$median,
+          deaths_mean        = qd$mean,
           ci_bounds          = list(cases = qc$ci, deaths = qd$ci))
 }
 
@@ -631,7 +701,7 @@ compile_rolling_cv_predictions <- function(dir_output,
           "| item | description |",
           "|---|---|",
           "| `manifest.json` | settings + per-run index (status, ranges, runtime) |",
-          "| `predictions.parquet` | compiled long table: 1 row per cutoff x model x location x date x metric. `model` in {ensemble, ensemble_opt, best, medioid}. IS/embargo/OOS labeled; observed + predicted median + CIs |",
+          "| `predictions.parquet` | compiled long table: 1 row per cutoff x model x location x date x metric. `model` in {ensemble, ensemble_opt, best, medoid}. IS/embargo/OOS labeled; observed + predicted median + CIs |",
           "| `runs/cutoff_<T>/` | native run_MOSAIC output per cutoff |",
           "",
           "`predictions.parquet` is a derived view (rebuildable from `runs/`).",
