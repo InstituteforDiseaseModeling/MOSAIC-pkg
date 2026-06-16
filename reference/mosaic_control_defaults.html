@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -144,7 +144,7 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <dd><p>List of prediction generation settings. Default is:</p><ul><li><p><code>n_iter_ensemble</code>: Stochastic runs per posterior parameter set
 in the weighted ensemble (default: 10L). Total ensemble sims =
 N parameter sets x <code>n_iter_ensemble</code>.</p></li>
-<li><p><code>n_iter_best</code>: Stochastic runs for the best and medioid single-config
+<li><p><code>n_iter_best</code>: Stochastic runs for the medoid single-config
 prediction plots (default: 100L). Applied identically to both models.
 These runs execute on an internal PSOCK cluster when
 <code>parallel$enable = TRUE</code>.</p></li>
@@ -165,6 +165,12 @@ likelihood-weighted posterior.</p></li>
 degeneracy in <code>posteriors.json</code>).</p></li>
 <li><p><code>optimize_objective</code>: Objective function, <code>"mae"</code> (default),
 <code>"r2_bias"</code>, or <code>"wis"</code>.</p></li>
+<li><p><code>central_method</code>: Ensemble central tendency, <code>"mean"</code>
+(default; unbiased for expected counts and never collapses on sparse
+deaths) or <code>"median"</code> (reproduces pre-v0.38 runs). Scalar or
+per-channel <code>c(cases=, deaths=)</code>. Governs the prediction
+trajectory + plots, the canonical <code>*_ensemble</code> R^2/bias metrics,
+the medoid target, and the subset-selection objective consistently.</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset
 (all sims with non-zero importance weights).</p></dd>
 

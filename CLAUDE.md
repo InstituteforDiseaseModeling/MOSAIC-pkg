@@ -406,7 +406,7 @@ before starting work — they represent patterns to actively avoid.
     bug becomes real the moment they are re-wired. Prefer consolidating
     into a single shared code path over maintaining N parallel functions
     that must be updated in lockstep; this fix retired
-    `plot_model_fit()` and routes best/medioid plots through the
+    `plot_model_fit()` and routes best/medoid plots through the
     parameterized
     [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
     for exactly this reason (v0.29.2 fix)

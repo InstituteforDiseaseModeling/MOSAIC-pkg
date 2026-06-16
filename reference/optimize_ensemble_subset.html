@@ -21,7 +21,7 @@ objective function."><meta property="og:image" content="https://institutefordise
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,6 +72,7 @@ objective function.</p>
 <span>  seeds <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  min_n <span class="op">=</span> <span class="fl">30L</span>,</span>
 <span>  objective <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mae"</span>, <span class="st">"r2_bias"</span>, <span class="st">"wis"</span><span class="op">)</span>,</span>
+<span>  central_method <span class="op">=</span> <span class="st">"median"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -99,7 +100,7 @@ Separately, if <code>ensemble$seeds</code> is present (the per-member seeds carr
 by <code>calc_model_ensemble</code>, aligned with <code>cases_array</code> by
 construction), it is carried through the same sort/slice and exposed as
 <code>ensemble_optimized$seeds</code> for cases_array-aligned consumers such as
-medioid selection. This argument and <code>ensemble$seeds</code> serve different
+medoid selection. This argument and <code>ensemble$seeds</code> serve different
 roles and are kept independent.</p></dd>
 
 
@@ -114,6 +115,19 @@ for accuracy, but posterior density estimation needs larger N.</p></dd>
 <dd><p>Scoring function: <code>"mae"</code> (default, normalized MAE),
 <code>"r2_bias"</code> (R-squared plus bias penalty), or <code>"wis"</code> (normalized
 Weighted Interval Score).</p></dd>
+
+
+<dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
+<dd><p>Central tendency used to summarize each per-cell
+ensemble distribution for the <code>"mae"</code> and <code>"r2_bias"</code> objectives
+and for the recorded R^2/bias/MAE diagnostics: <code>"median"</code> (default,
+reproduces historical selection) or <code>"mean"</code> (weighted mean, unbiased
+for expected counts). Scalar or per-channel <code>c(cases=, deaths=)</code>. The
+<code>"wis"</code> objective is quantile-based and <strong>unaffected</strong> by this
+setting (its point forecast remains the weighted median). The default
+<code>"median"</code> here is deliberate – it preserves historical direct-call
+selection and the Tier-2 bit-for-bit parity guarantee; <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>
+passes the package default (<code>"mean"</code>) explicitly.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -159,6 +173,10 @@ present, else it falls back to <code>optimal_seeds</code>.</p></dd>
 
 <dt>objective</dt>
 <dd><p>Which objective was used.</p></dd>
+
+<dt>central_method</dt>
+<dd><p>Resolved per-channel central tendency used for
+<code>"mae"</code>/<code>"r2_bias"</code> scoring and the recorded diagnostics.</p></dd>
 
 
 </dl></div>

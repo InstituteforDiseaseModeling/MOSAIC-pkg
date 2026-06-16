@@ -4,7 +4,7 @@ predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \(\le 5\) months). The two
 posterior ensembles (ensemble, ensemble_opt) are drawn as
 "hero" series with 50/95\
-configurations (best, medioid) are drawn as thin reference
+configurations (best, medoid) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
 cumulative \(\le\)max-horizon skill (R\(^2\) correlation + WIS) of the
@@ -13,7 +13,7 @@ predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \(\le 5\) months). The two
 posterior ensembles (ensemble, ensemble_opt) are drawn as
 "hero" series with 50/95\
-configurations (best, medioid) are drawn as thin reference
+configurations (best, medoid) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
 cumulative \(\le\)max-horizon skill (R\(^2\) correlation + WIS) of the
@@ -25,7 +25,7 @@ ensembles, computed via evaluate_rolling_cv.'><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,7 +63,7 @@ predictions artifact for one metric, one panel per cutoff (forecast origin),
 restricted to the assessed horizon (default \(\le 5\) months). The two
 posterior ensembles (<code>ensemble</code>, <code>ensemble_opt</code>) are drawn as
 "hero" series with 50/95\<!-- % prediction-interval ribbons; the two point -->
-configurations (<code>best</code>, <code>medioid</code>) are drawn as thin reference
+configurations (<code>best</code>, <code>medoid</code>) are drawn as thin reference
 lines. Held-out observations are overlaid as points and the forecast origin
 is marked with a labelled dashed rule. Each panel is annotated with the
 cumulative \(\le\)max-horizon skill (R\(^2\) correlation + WIS) of the
@@ -78,7 +78,7 @@ ensembles, computed via <code><a href="evaluate_rolling_cv.html">evaluate_rollin
 <span>  horizon_max_months <span class="op">=</span> <span class="fl">5</span>,</span>
 <span>  context_months <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  models_ribbon <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ensemble"</span>, <span class="st">"ensemble_opt"</span><span class="op">)</span>,</span>
-<span>  models_line <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"best"</span>, <span class="st">"medioid"</span><span class="op">)</span>,</span>
+<span>  models_line <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"best"</span>, <span class="st">"medoid"</span><span class="op">)</span>,</span>
 <span>  annotate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  eval <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  title <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -125,7 +125,7 @@ panel relative to its cutoff (default 5).</p></dd>
 
 <dt id="arg-models-line">models_line<a class="anchor" aria-label="anchor" href="#arg-models-line"></a></dt>
 <dd><p>Models drawn as thin reference median lines
-(default <code>c("best", "medioid")</code>).</p></dd>
+(default <code>c("best", "medoid")</code>).</p></dd>
 
 
 <dt id="arg-annotate">annotate<a class="anchor" aria-label="anchor" href="#arg-annotate"></a></dt>

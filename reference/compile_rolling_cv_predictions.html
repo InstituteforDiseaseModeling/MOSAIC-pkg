@@ -11,7 +11,7 @@ cutoff or to add quantile columns), without recalibrating."><meta property="og:i
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,7 +55,8 @@ cutoff or to add quantile columns), without recalibrating.</p>
 <span>  <span class="va">dir_output</span>,</span>
 <span>  base_config <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="config_default.html">config_default</a></span>,</span>
 <span>  models <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  n_reps_best_medioid <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  n_reps_best_medoid <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  central_method <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  write <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -76,14 +77,21 @@ series (default <code><a href="config_default.html">MOSAIC::config_default</a></
 
 <dt id="arg-models">models<a class="anchor" aria-label="anchor" href="#arg-models"></a></dt>
 <dd><p>Character vector of model types to compile (e.g.
-<code>"ensemble"</code>, <code>"opt"</code>, <code>"best"</code>, <code>"medioid"</code>); NULL
+<code>"ensemble"</code>, <code>"opt"</code>, <code>"best"</code>, <code>"medoid"</code>); NULL
 (default) uses the set recorded in each run's manifest.</p></dd>
 
 
-<dt id="arg-n-reps-best-medioid">n_reps_best_medioid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medioid"></a></dt>
+<dt id="arg-n-reps-best-medoid">n_reps_best_medoid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medoid"></a></dt>
 <dd><p>Integer or NULL (default); number of stochastic
-LASER replicates to draw for the single-config <code>best</code>/<code>medioid</code>
+LASER replicates to draw for the single-config <code>best</code>/<code>medoid</code>
 models. NULL reuses the value stored in the run manifest.</p></dd>
+
+
+<dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
+<dd><p>Central tendency for <code>pred_central</code>: <code>NULL</code>
+(default) reuses the value recorded in the run manifest (or <code>"mean"</code>
+for older manifests); otherwise a scalar or per-channel
+<code>c(cases=, deaths=)</code> override.</p></dd>
 
 
 <dt id="arg-write">write<a class="anchor" aria-label="anchor" href="#arg-write"></a></dt>

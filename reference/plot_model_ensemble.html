@@ -13,7 +13,7 @@ per-location prediction CSVs for downstream use."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,6 +61,7 @@ per-location prediction CSVs for downstream use.</p>
 <span>  file_prefix <span class="op">=</span> <span class="st">"ensemble"</span>,</span>
 <span>  title_label <span class="op">=</span> <span class="st">"Posterior Ensemble"</span>,</span>
 <span>  save_predictions <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  central_method <span class="op">=</span> <span class="st">"mean"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -101,7 +102,16 @@ multi-location overview plots. Default <code>"ensemble"</code>.</p></dd>
 
 <dt id="arg-save-predictions">save_predictions<a class="anchor" aria-label="anchor" href="#arg-save-predictions"></a></dt>
 <dd><p>Logical. Save per-location prediction CSVs. Default
-<code>FALSE</code>.</p></dd>
+<code>FALSE</code>. CSVs carry <code>predicted_central</code> (the plotted series),
+<code>predicted_mean</code>, <code>predicted_median</code>, and a <code>central_method</code>
+column so the choice is never ambiguous.</p></dd>
+
+
+<dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
+<dd><p>Central tendency for the plotted/scored line:
+<code>"mean"</code> (default; unbiased for expected counts, never collapses on
+sparse deaths) or <code>"median"</code> (historical). Scalar or per-channel
+<code>c(cases=, deaths=)</code>.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

@@ -53,7 +53,7 @@ evaluate_rolling_cv(
   RNG seed for the bootstrap (default 1).
 
   When the predictions carry a `model` column (`ensemble`,
-  `ensemble_opt`, `best`, `medioid`), every metric is computed and
+  `ensemble_opt`, `best`, `medoid`), every metric is computed and
   reported **per model**; absent that column all rows are treated as a
   single `"ensemble"` model (back-compatible).
 

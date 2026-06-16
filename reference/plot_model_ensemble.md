@@ -16,6 +16,7 @@ plot_model_ensemble(
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
+  central_method = "mean",
   verbose = TRUE
 )
 ```
@@ -53,7 +54,16 @@ plot_model_ensemble(
 
 - save_predictions:
 
-  Logical. Save per-location prediction CSVs. Default `FALSE`.
+  Logical. Save per-location prediction CSVs. Default `FALSE`. CSVs
+  carry `predicted_central` (the plotted series), `predicted_mean`,
+  `predicted_median`, and a `central_method` column so the choice is
+  never ambiguous.
+
+- central_method:
+
+  Central tendency for the plotted/scored line: `"mean"` (default;
+  unbiased for expected counts, never collapses on sparse deaths) or
+  `"median"` (historical). Scalar or per-channel `c(cases=, deaths=)`.
 
 - verbose:
 

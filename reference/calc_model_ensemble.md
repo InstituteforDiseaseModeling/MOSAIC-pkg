@@ -148,7 +148,7 @@ S3 object of class `"mosaic_ensemble"` containing:
 
   Integer vector of per-member simulation seeds, aligned with the
   parameter dimension of `cases_array` (member i \<-\> seedsi). Bound to
-  the parameter set that produced each member so consumers (e.g. medioid
+  the parameter set that produced each member so consumers (e.g. medoid
   selection) need not rely on positional alignment with an external
   vector.
 

@@ -5,7 +5,7 @@ Renders the out-of-sample forecast from a
 predictions artifact for one metric, one panel per cutoff (forecast
 origin), restricted to the assessed horizon (default \\\le 5\\ months).
 The two posterior ensembles (`ensemble`, `ensemble_opt`) are drawn as
-"hero" series with 50/95\\ configurations (`best`, `medioid`) are drawn
+"hero" series with 50/95\\ configurations (`best`, `medoid`) are drawn
 as thin reference lines. Held-out observations are overlaid as points
 and the forecast origin is marked with a labelled dashed rule. Each
 panel is annotated with the cumulative \\\le\\max-horizon skill (R\\^2\\
@@ -21,7 +21,7 @@ plot_rolling_cv(
   horizon_max_months = 5,
   context_months = 2,
   models_ribbon = c("ensemble", "ensemble_opt"),
-  models_line = c("best", "medioid"),
+  models_line = c("best", "medoid"),
   annotate = TRUE,
   eval = NULL,
   title = NULL,
@@ -66,7 +66,7 @@ plot_rolling_cv(
 - models_line:
 
   Models drawn as thin reference median lines (default
-  `c("best", "medioid")`).
+  `c("best", "medoid")`).
 
 - annotate:
 

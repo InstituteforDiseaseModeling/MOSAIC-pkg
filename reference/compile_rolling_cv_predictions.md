@@ -13,7 +13,8 @@ compile_rolling_cv_predictions(
   dir_output,
   base_config = MOSAIC::config_default,
   models = NULL,
-  n_reps_best_medioid = NULL,
+  n_reps_best_medoid = NULL,
+  central_method = NULL,
   write = TRUE
 )
 ```
@@ -36,14 +37,20 @@ compile_rolling_cv_predictions(
 - models:
 
   Character vector of model types to compile (e.g. `"ensemble"`,
-  `"opt"`, `"best"`, `"medioid"`); NULL (default) uses the set recorded
+  `"opt"`, `"best"`, `"medoid"`); NULL (default) uses the set recorded
   in each run's manifest.
 
-- n_reps_best_medioid:
+- n_reps_best_medoid:
 
   Integer or NULL (default); number of stochastic LASER replicates to
-  draw for the single-config `best`/`medioid` models. NULL reuses the
+  draw for the single-config `best`/`medoid` models. NULL reuses the
   value stored in the run manifest.
+
+- central_method:
+
+  Central tendency for `pred_central`: `NULL` (default) reuses the value
+  recorded in the run manifest (or `"mean"` for older manifests);
+  otherwise a scalar or per-channel `c(cases=, deaths=)` override.
 
 - write:
 

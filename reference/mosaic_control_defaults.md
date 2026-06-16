@@ -137,9 +137,9 @@ mosaic_control_defaults(
     the weighted ensemble (default: 10L). Total ensemble sims = N
     parameter sets x `n_iter_ensemble`.
 
-  - `n_iter_best`: Stochastic runs for the best and medioid
-    single-config prediction plots (default: 100L). Applied identically
-    to both models. These runs execute on an internal PSOCK cluster when
+  - `n_iter_best`: Stochastic runs for the medoid single-config
+    prediction plots (default: 100L). Applied identically to both
+    models. These runs execute on an internal PSOCK cluster when
     `parallel$enable = TRUE`.
 
   - `optimize_subset`: Logical; when `TRUE`, the post-ensemble optimizer
@@ -161,6 +161,13 @@ mosaic_control_defaults(
 
   - `optimize_objective`: Objective function, `"mae"` (default),
     `"r2_bias"`, or `"wis"`.
+
+  - `central_method`: Ensemble central tendency, `"mean"` (default;
+    unbiased for expected counts and never collapses on sparse deaths)
+    or `"median"` (reproduces pre-v0.38 runs). Scalar or per-channel
+    `c(cases=, deaths=)`. Governs the prediction trajectory + plots, the
+    canonical `*_ensemble` R^2/bias metrics, the medoid target, and the
+    subset-selection objective consistently.
 
   The number of parameter sets in the ensemble is determined by the best
   subset (all sims with non-zero importance weights).

@@ -22,8 +22,9 @@ run_rolling_cv(
   priors = MOSAIC::priors_default,
   control = NULL,
   optimize_subset = TRUE,
-  models = c("ensemble", "ensemble_opt", "best", "medioid"),
-  n_reps_best_medioid = 50L,
+  models = c("ensemble", "ensemble_opt", "medoid"),
+  n_reps_best_medoid = 50L,
+  central_method = "mean",
   est_suitability_spec = list(),
   dask_spec = NULL,
   dir_output,
@@ -94,22 +95,35 @@ run_rolling_cv(
 - models:
 
   Character vector of model types to score and carry in
-  `predictions.parquet` (default all four:
-  `c("ensemble","ensemble_opt","best","medioid")`). `"ensemble"`
+  `predictions.parquet` (default
+  `c("ensemble","ensemble_opt","medoid")`). `"ensemble"`
   (posterior-weighted candidate) is always included. `"ensemble_opt"` is
   the optimizer-selected subset (only emitted when
   `optimize_subset = TRUE` and `ensemble_optimized.rds` exists).
-  `"best"` and `"medioid"` are re-simulated from their saved configs
-  (see `n_reps_best_medioid`). Each model appears as a value of the
+  `"medoid"` is re-simulated from its saved config (see
+  `n_reps_best_medoid`). `"best"` is accepted for back-compat but is no
+  longer produced by
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  (no `config_best.json`); it is skipped with a warning unless an older
+  run dir still carries that file. Each model appears as a value of the
   `model` column.
 
-- n_reps_best_medioid:
+- n_reps_best_medoid:
 
   Integer (default 50); number of stochastic LASER reruns used to build
-  the predictive median + intervals for the `best` and `medioid`
-  configs. These reruns execute locally in the calling R process (not on
-  Dask), so cost scales with this value times the number of cutoffs and
+  the predictive median + intervals for the `best` and `medoid` configs.
+  These reruns execute locally in the calling R process (not on Dask),
+  so cost scales with this value times the number of cutoffs and
   locations.
+
+- central_method:
+
+  Ensemble central tendency used for the compiled predictions and the
+  in-sample calibration metrics/medoid: `"mean"` (default; unbiased for
+  expected counts, never collapses on sparse deaths) or `"median"`.
+  Scalar or per-channel `c(cases=, deaths=)`. The predictions table
+  carries `pred_central` (this choice) plus `pred_mean`/`pred_median`
+  for cross-walk; WIS/coverage remain quantile-based and are unaffected.
 
 - est_suitability_spec:
 
@@ -178,10 +192,11 @@ The predictions table has one row per (cutoff x location x date x
 metric) with columns:
 `run_id, iso_code, anchor_date, cutoff_date, date, metric, segment`
 (IS/embargo/OOS),
-`weeks_ahead, horizon_bucket, observed, observed_source, pred_median`,
-and CI columns (`pi*_lo`/`pi*_hi`). `observed` is the held-out
-(unmasked) trusted surveillance value, so OOS rows carry the real target
-for post-hoc scoring.
+`weeks_ahead, horizon_bucket, observed, observed_source, pred_central`
+(the scored series), `pred_mean, pred_median, central_method`, and CI
+columns (`pi*_lo`/`pi*_hi`). `observed` is the held-out (unmasked)
+trusted surveillance value, so OOS rows carry the real target for
+post-hoc scoring.
 
 ## See also
 

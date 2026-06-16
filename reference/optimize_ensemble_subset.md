@@ -19,6 +19,7 @@ optimize_ensemble_subset(
   seeds = NULL,
   min_n = 30L,
   objective = c("mae", "r2_bias", "wis"),
+  central_method = "median",
   verbose = TRUE
 )
 ```
@@ -45,7 +46,7 @@ optimize_ensemble_subset(
   carried by `calc_model_ensemble`, aligned with `cases_array` by
   construction), it is carried through the same sort/slice and exposed
   as `ensemble_optimized$seeds` for cases_array-aligned consumers such
-  as medioid selection. This argument and `ensemble$seeds` serve
+  as medoid selection. This argument and `ensemble$seeds` serve
   different roles and are kept independent.
 
 - min_n:
@@ -60,6 +61,20 @@ optimize_ensemble_subset(
   Scoring function: `"mae"` (default, normalized MAE), `"r2_bias"`
   (R-squared plus bias penalty), or `"wis"` (normalized Weighted
   Interval Score).
+
+- central_method:
+
+  Central tendency used to summarize each per-cell ensemble distribution
+  for the `"mae"` and `"r2_bias"` objectives and for the recorded
+  R^2/bias/MAE diagnostics: `"median"` (default, reproduces historical
+  selection) or `"mean"` (weighted mean, unbiased for expected counts).
+  Scalar or per-channel `c(cases=, deaths=)`. The `"wis"` objective is
+  quantile-based and **unaffected** by this setting (its point forecast
+  remains the weighted median). The default `"median"` here is
+  deliberate – it preserves historical direct-call selection and the
+  Tier-2 bit-for-bit parity guarantee;
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  passes the package default (`"mean"`) explicitly.
 
 - verbose:
 
@@ -116,6 +131,11 @@ An S3 object of class `mosaic_subset_optimization` containing:
 - objective:
 
   Which objective was used.
+
+- central_method:
+
+  Resolved per-channel central tendency used for `"mae"`/`"r2_bias"`
+  scoring and the recorded diagnostics.
 
 ## References
 

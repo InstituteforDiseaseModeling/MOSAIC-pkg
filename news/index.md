@@ -1,19 +1,117 @@
 # Changelog
 
+## MOSAIC 0.39.0
+
+- **[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  now produces only the posterior ensemble and the medoid representative
+  model — the single best-likelihood model is no longer produced.**
+  Removed: the best stochastic ensemble, its prediction plot/CSV
+  (`predictions_best_*`), its Dask dispatch, the `config_best.json`
+  artifact, and the best-seed sampling fatal gate. The best-**subset**
+  calibration machinery (`is_best_subset`/`weight_best`, and the
+  `is_best_model` flag in `samples.parquet`) is unchanged — it still
+  drives the posterior ensemble and parameter diagnostics.
+- `summary.json` now reports ensemble (+ tier) fit metrics only: the
+  single-model fields
+  `r2_cases`/`r2_deaths`/`bias_ratio_cases`/`bias_ratio_deaths` are
+  removed. Run-success (`outputs_ok`/`[RUN_SUMMARY]`) keys off
+  `r2_cases_ensemble`; the `r2_cases_best`/`r2_deaths_best` log fields
+  are dropped.
+- [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
+  drops `"best"` from its default `models` (now
+  `c("ensemble","ensemble_opt","medoid")`). `"best"` is still accepted
+  for back-compat and re-simulated when an older run dir carries
+  `config_best.json`, otherwise skipped with a warning.
+- Migration: scenario scripts that read `config_best.json` should
+  repoint to `config_medoid.json` (the representative single-config
+  model).
+
+## MOSAIC 0.38.0
+
+- **New `central_method` control selects the ensemble central tendency
+  (default `"mean"`).** A single setting —
+  `control$predictions$central_method`, `"mean"` (default) or
+  `"median"`, scalar or per-channel `c(cases=, deaths=)` — now
+  consistently governs the ensemble central trajectory used for (i) the
+  prediction trajectory + plots, (ii) the canonical `*_ensemble` R²/bias
+  metrics, (iii) the medoid representative member (“mean-medoid”),
+  and (iv) the subset-selection objective
+  ([`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)).
+  The weighted **mean** is the unbiased estimator of expected counts
+  (`E[Σ]=ΣE`) and never collapses to zero on sparse deaths (~92%
+  zero-days), where the per-tick weighted median otherwise reads as a
+  zero-collapse. Cases (dense) are insensitive (mean≈median).
+- **Behaviour change:** because the default flips from the historical
+  median to the mean, all `*_ensemble` metrics, the medoid seed, and the
+  prediction plots differ from pre-0.38 runs and are not directly
+  comparable. Set `central_method = "median"` to reproduce historical
+  runs bit-for-bit (the regression-anchored path — ensemble, tier, and
+  medoid metrics, the medoid seed, and the optimizer-selected subset N
+  are all unchanged under `"median"`). The WIS objective is
+  quantile-based and unaffected by `central_method`.
+- **`summary.json` cross-walk:** during the transition both
+  `r2_*_ensemble_mean`/`r2_*_ensemble_median` (and the matching
+  `bias_ratio_*`) are emitted alongside the canonical `r2_*_ensemble`,
+  plus `central_method_cases`/`central_method_deaths` provenance fields.
+- **Prediction CSVs** now carry `predicted_central` (the plotted/scored
+  series), `predicted_mean`, `predicted_median`, and a `central_method`
+  column — `predicted_median` always holds the true median (never
+  mislabeled).
+  [`plot_model_ppc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ppc.md)
+  prefers `predicted_central`.
+- **Rolling-CV**
+  ([`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md),
+  [`compile_rolling_cv_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md),
+  [`evaluate_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/evaluate_rolling_cv.md),
+  [`plot_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_rolling_cv.md))
+  threads `central_method` (default `"mean"`) so in-sample and
+  out-of-sample point metrics use the same summary. The predictions
+  table gains `pred_central`/`pred_mean`/`central_method` (keeping
+  `pred_median`); R²/bias/MAE/RMSE/skill score on `pred_central` while
+  WIS/coverage stay quantile-based on the median.
+- **Reading the new numbers:** under the default mean, the canonical
+  `r2_*_ensemble`/`bias_ratio_*` fields differ from pre-0.38 same-named
+  fields (mean vs median); read
+  `central_method_cases`/`central_method_deaths` and compare across
+  versions via `r2_*_ensemble_mean`/`r2_*_ensemble_median`. In
+  particular the **deaths bias ratio will rise to ~2× on existing runs**
+  — this is the expected unmasking of the posterior implied-CFR property
+  (accepted as admissible; see the plan §0), not a regression. The
+  implied-CFR diagnostic (`summary.json:cfr_implied`) is computed from
+  raw member arrays and is **unchanged** by `central_method`.
+- **Medoid retarget:** `config_medoid.json` is now selected against the
+  chosen central case series; scenario owners that pin the medoid base
+  member should re-pin. The medoid distance is **cases-anchored** (a
+  representative case trajectory), not deaths-calibrated — a
+  single-member base under-states the across-member mean deaths, so
+  deaths-sensitive counterfactuals should propagate the full retained
+  ensemble.
+- **Rolling-CV note:** OOS point metrics (R²/bias/MAE/RMSE/skill)
+  default to the mean for in-sample/out-of-sample consistency; these are
+  not directly comparable to externally-reported *median*-point forecast
+  errors on right-skewed counts. WIS and interval coverage remain
+  median/quantile-based (the externally-comparable scores).
+- **Known cosmetic (sparse deaths):** the plotted central line is the
+  weighted mean while the ribbon shows member quantiles, so on
+  near-all-zero death series the mean line can sit slightly *above* its
+  own 97.5% ribbon (a moment vs order-statistics of a zero-inflated
+  count — mathematically correct, not a plotting bug). The
+  proper-scoring “predictive fan” in plan §7 is the planned follow-up.
+
 ## MOSAIC 0.36.12
 
-- Fixed a medioid-model mis-mapping: the medioid metric correctly
-  selected the central ensemble member, but the seed it was mapped to
-  came from a separate vector that could drift out of positional
-  alignment with `cases_array`, so `config_medioid` was sampled from the
-  wrong parameter set and its prediction could collapse to near-zero.
+- Fixed a medoid-model mis-mapping: the medoid metric correctly selected
+  the central ensemble member, but the seed it was mapped to came from a
+  separate vector that could drift out of positional alignment with
+  `cases_array`, so `config_medoid` was sampled from the wrong parameter
+  set and its prediction could collapse to near-zero.
   [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
   now carries a per-member `seeds` vector aligned with `cases_array`
   (sourced from the parameter set that produced each member),
   [`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)
   propagates it through its sort/slice, and
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)’s
-  medioid uses `ensemble$seeds[medioid_idx]`. Bit-identical for
+  medoid uses `ensemble$seeds[medoid_idx]`. Bit-identical for
   correctly-aligned runs (Tier-2 parity unchanged).
 
 ## MOSAIC 0.36.4
@@ -121,8 +219,8 @@ reproducibility/rollback.
 ## MOSAIC 0.33.4
 
 - [`run_rolling_cv()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_rolling_cv.md)
-  now scores all four model types (ensemble, optimized, best, medioid);
-  added `models` and `n_reps_best_medioid` knobs to
+  now scores all four model types (ensemble, optimized, best, medoid);
+  added `models` and `n_reps_best_medoid` knobs to
   [`compile_rolling_cv_predictions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_rolling_cv_predictions.md).
 
 ## MOSAIC 0.33.3
@@ -1673,7 +1771,7 @@ This release:
     `output_dir`.
     [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
     passes `data_dir = dirs$res_predictions` at all three call sites
-    (best, medioid, ensemble). `figures/predictions/` now holds PDFs
+    (best, medoid, ensemble). `figures/predictions/` now holds PDFs
     only.
 2.  **Combining step reads from `predictions/`** (the new canonical
     location) instead of `figures/predictions/`. Regex excludes
@@ -1818,14 +1916,14 @@ priors still use linear x.
 
 ## MOSAIC 0.29.5
 
-### Best/medioid prediction plots: independent `n_iter` and parallel execution
+### Best/medoid prediction plots: independent `n_iter` and parallel execution
 
-Best and medioid single-config prediction plots previously reused
+Best and medoid single-config prediction plots previously reused
 `ensemble_n_sims_per_param` (default 5, sequential) because they were
 refactored into
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
 in 0.29.2 without giving them their own iteration control. For tight
-stochastic CI envelopes on the best/medioid plots, users had to bump the
+stochastic CI envelopes on the best/medoid plots, users had to bump the
 ensemble count — paying the cost across all N posterior parameter sets.
 
 This release splits the two:
@@ -1834,18 +1932,17 @@ This release splits the two:
   runs per posterior parameter set in the weighted ensemble. Renamed
   from `ensemble_n_sims_per_param`.
 - `control$predictions$n_iter_best` (default **100L**) — stochastic runs
-  for the best and medioid single-config plots. Applied identically to
+  for the best and medoid single-config plots. Applied identically to
   both models.
 
-Best/medioid now also run in parallel:
+Best/medoid now also run in parallel:
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
 is invoked with `parallel = control$parallel$enable` and
 `n_cores = control$parallel$n_cores` (previously hardcoded
 `parallel = FALSE`). Parallelization uses an internal PSOCK cluster —
 same infrastructure the posterior ensemble already uses in the non-Dask
-path. For Dask calibrations, the best/medioid step still uses local
-PSOCK since the Dask cluster is closed after the posterior-ensemble
-sims.
+path. For Dask calibrations, the best/medoid step still uses local PSOCK
+since the Dask cluster is closed after the posterior-ensemble sims.
 
 **Breaking rename:** `control$predictions$ensemble_n_sims_per_param` →
 `control$predictions$n_iter_ensemble`. User scripts (`vm/`, `azure/`,
@@ -1857,36 +1954,36 @@ to `n_iter_best` and are now wired in.
 
 ## MOSAIC 0.29.3
 
-### Unified stochastic-median R² and bias across best, medioid, and ensemble
+### Unified stochastic-median R² and bias across best, medoid, and ensemble
 
-Follow-up to 0.29.2. The 0.29.2 fix routed the best and medioid
+Follow-up to 0.29.2. The 0.29.2 fix routed the best and medoid
 prediction **plots** through
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md) +
 [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
 so the plot captions report R²/bias from the stochastic median. But the
-separate `"Best model R²"` / `"Medioid model R²"` **log lines** still
+separate `"Best model R²"` / `"Medoid model R²"` **log lines** still
 came from a single deterministic `lc$run_model()` call, producing two
 different numbers for the same thing (log vs plot caption). Red-team
 review flagged the inconsistency.
 
 This release eliminates the separate deterministic LASER calls for
-best/medioid and sources all three sets of reported metrics — best,
-medioid, ensemble — from the stochastic median of their respective
+best/medoid and sources all three sets of reported metrics — best,
+medoid, ensemble — from the stochastic median of their respective
 `mosaic_ensemble` objects:
 
 - `R/run_MOSAIC.R` best-model block reordered:
   `calc_model_ensemble(configs = list(config_best), ...)` is called
   once; R²/bias are computed from `best_ensemble$cases_median` /
   `$deaths_median` and passed to both the log line and downstream
-  `summary.json`. Same refactor applied to the medioid block.
+  `summary.json`. Same refactor applied to the medoid block.
 - Log format now:
   `"Best model R² (1 params x N stoch): cases = X (bias=Y), deaths = ..."`
   — mirrors the existing ensemble log format.
 - Removes two per-run LASER calls (the single deterministic
-  `best_model <-` and `medioid_model <-` runs) that are no longer
-  needed; best/medioid each now run `n_ensemble_stochastic_per` LASER
-  sims total (default 10), same as before the 0.29.2 fix *plus* plot but
-  minus the deterministic R² helper run.
+  `best_model <-` and `medoid_model <-` runs) that are no longer needed;
+  best/medoid each now run `n_ensemble_stochastic_per` LASER sims total
+  (default 10), same as before the 0.29.2 fix *plus* plot but minus the
+  deterministic R² helper run.
 - Retires the `lc <- reticulate::import(...)` import in the main
   `run_MOSAIC` body — `calc_model_ensemble` handles the import
   internally.
@@ -1897,9 +1994,9 @@ No public API changes.
 
 ## MOSAIC 0.29.2
 
-### Fix best/medioid prediction plots: `reported_cases`, stochastic CI, unified naming
+### Fix best/medoid prediction plots: `reported_cases`, stochastic CI, unified naming
 
-`plot_model_fit()` (used by the best-model and medioid-model plots in
+`plot_model_fit()` (used by the best-model and medoid-model plots in
 [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md))
 rendered `model$results$expected_cases` — the back-calculated burden
 `new_symptomatic / rho`, typically 5-10x inflated vs
@@ -1911,7 +2008,7 @@ plotting functions missed this fourth file; the bug was latent until
 v0.22.15 re-wired `plot_model_fit()` into the best-model block, and real
 from v0.22.15 through v0.29.1.
 
-**Fix consolidates best/medioid plots into the existing
+**Fix consolidates best/medoid plots into the existing
 `calc_model_ensemble` + `plot_model_ensemble` pipeline** — the same
 functions the posterior ensemble uses — in single-config mode (one
 parameter set × N stochastic reruns). One codepath for all three plot
@@ -1924,15 +2021,15 @@ original bug.
   and `title_label` (default `"Posterior Ensemble"`) parameters;
   hardcoded filename and title strings replaced; single-param-set
   subtitle branch added.
-- `R/run_MOSAIC.R`: best and medioid plot calls replaced with
+- `R/run_MOSAIC.R`: best and medoid plot calls replaced with
   `calc_model_ensemble(configs = list(config_<...>), n_simulations_per_config = n_ensemble_stochastic_per, envelope_quantiles = c(0.025, 0.975))` +
-  `plot_model_ensemble(file_prefix = "best" | "medioid", ...)`. Medioid
+  `plot_model_ensemble(file_prefix = "best" | "medoid", ...)`. Medoid
   output moved from `2_calibration/best_model/` to
   `3_results/figures/predictions/` alongside the ensemble plots.
   Explicit `file_prefix = "ensemble"` added at the main ensemble plot
   call for self-documentation.
 - Prediction-CSV combining loop extended to iterate
-  `c("ensemble", "best", "medioid", "stochastic")` and filename pattern
+  `c("ensemble", "best", "medoid", "stochastic")` and filename pattern
   renamed from `all_predictions_<type>.csv` →
   `predictions_<type>_all.csv` for consistency with the plot naming.
 - `R/plot_model_fit.R`: deleted (retired). The function was the single
@@ -1943,7 +2040,7 @@ original bug.
 noted):
 
 - `predictions_<prefix>_<LOC>.pdf` + `.csv` per-location (prefixes:
-  `ensemble`, `best`, `medioid`)
+  `ensemble`, `best`, `medoid`)
 - `predictions_<prefix>_cases_all.pdf`,
   `predictions_<prefix>_deaths_all.pdf` faceted multi-location overviews
 - `predictions_<type>_all.csv` combined across locations (in

@@ -1,7 +1,7 @@
 # Deterministic Fit-Diagnostic Sandbox: One LASER Run with Parameter Overrides
 
 Runs a **single deterministic** LASER simulation from a calibration
-config (typically a run's medioid config) with optional point-value
+config (typically a run's medoid config) with optional point-value
 parameter overrides, then scores the result against the observed series
 carried in the config. This is the experiment unit behind the active
 fit-diagnostic workflow (the `diagnose-fit` skill): ~1-2 seconds per
@@ -35,7 +35,7 @@ run_fit_sandbox(
 - config:
 
   A config as a named list, or a path to a config JSON (e.g.
-  `.../2_calibration/best_model/config_medioid.json`).
+  `.../2_calibration/best_model/config_medoid.json`).
 
 - params:
 

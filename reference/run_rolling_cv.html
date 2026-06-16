@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.37.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,8 +69,9 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  priors <span class="op">=</span> <span class="fu">MOSAIC</span><span class="fu">::</span><span class="va"><a href="priors_default.html">priors_default</a></span>,</span>
 <span>  control <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  optimize_subset <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ensemble"</span>, <span class="st">"ensemble_opt"</span>, <span class="st">"best"</span>, <span class="st">"medioid"</span><span class="op">)</span>,</span>
-<span>  n_reps_best_medioid <span class="op">=</span> <span class="fl">50L</span>,</span>
+<span>  models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ensemble"</span>, <span class="st">"ensemble_opt"</span>, <span class="st">"medoid"</span><span class="op">)</span>,</span>
+<span>  n_reps_best_medoid <span class="op">=</span> <span class="fl">50L</span>,</span>
+<span>  central_method <span class="op">=</span> <span class="st">"mean"</span>,</span>
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
@@ -140,22 +141,34 @@ candidate ensemble.</p></dd>
 
 <dt id="arg-models">models<a class="anchor" aria-label="anchor" href="#arg-models"></a></dt>
 <dd><p>Character vector of model types to score and carry in
-<code>predictions.parquet</code> (default all four:
-<code>c("ensemble","ensemble_opt","best","medioid")</code>). <code>"ensemble"</code>
+<code>predictions.parquet</code> (default
+<code>c("ensemble","ensemble_opt","medoid")</code>). <code>"ensemble"</code>
 (posterior-weighted candidate) is always included. <code>"ensemble_opt"</code> is
 the optimizer-selected subset (only emitted when <code>optimize_subset =
-  TRUE</code> and <code>ensemble_optimized.rds</code> exists). <code>"best"</code> and
-<code>"medioid"</code> are re-simulated from their saved configs (see
-<code>n_reps_best_medioid</code>). Each model appears as a value of the
-<code>model</code> column.</p></dd>
+  TRUE</code> and <code>ensemble_optimized.rds</code> exists). <code>"medoid"</code> is
+re-simulated from its saved config (see <code>n_reps_best_medoid</code>).
+<code>"best"</code> is accepted for back-compat but is no longer produced by
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> (no <code>config_best.json</code>); it is skipped with a
+warning unless an older run dir still carries that file. Each model appears
+as a value of the <code>model</code> column.</p></dd>
 
 
-<dt id="arg-n-reps-best-medioid">n_reps_best_medioid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medioid"></a></dt>
+<dt id="arg-n-reps-best-medoid">n_reps_best_medoid<a class="anchor" aria-label="anchor" href="#arg-n-reps-best-medoid"></a></dt>
 <dd><p>Integer (default 50); number of stochastic LASER
 reruns used to build the predictive median + intervals for the <code>best</code>
-and <code>medioid</code> configs. These reruns execute locally in the calling R
+and <code>medoid</code> configs. These reruns execute locally in the calling R
 process (not on Dask), so cost scales with this value times the number of
 cutoffs and locations.</p></dd>
+
+
+<dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
+<dd><p>Ensemble central tendency used for the compiled
+predictions and the in-sample calibration metrics/medoid: <code>"mean"</code>
+(default; unbiased for expected counts, never collapses on sparse deaths)
+or <code>"median"</code>. Scalar or per-channel <code>c(cases=, deaths=)</code>. The
+predictions table carries <code>pred_central</code> (this choice) plus
+<code>pred_mean</code>/<code>pred_median</code> for cross-walk; WIS/coverage remain
+quantile-based and are unaffected.</p></dd>
 
 
 <dt id="arg-est-suitability-spec">est_suitability_spec<a class="anchor" aria-label="anchor" href="#arg-est-suitability-spec"></a></dt>
@@ -218,7 +231,8 @@ from the run directories with <code><a href="compile_rolling_cv_predictions.html
 <p>The predictions table has one row per (cutoff x location x date x metric) with
 columns: <code>run_id, iso_code, anchor_date, cutoff_date, date, metric,
 segment</code> (IS/embargo/OOS), <code>weeks_ahead, horizon_bucket, observed,
-observed_source, pred_median</code>, and CI columns (<code>pi*_lo</code>/<code>pi*_hi</code>).
+observed_source, pred_central</code> (the scored series), <code>pred_mean,
+pred_median, central_method</code>, and CI columns (<code>pi*_lo</code>/<code>pi*_hi</code>).
 <code>observed</code> is the held-out (unmasked) trusted surveillance value, so OOS
 rows carry the real target for post-hoc scoring.</p>
     </div>
