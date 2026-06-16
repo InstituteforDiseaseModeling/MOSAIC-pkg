@@ -85,11 +85,23 @@
 #' \code{\link{get_cases_binary_from_peaks}} for the epidemic peak-based method
 #' \code{\link{est_epidemic_peaks}} for epidemic peak detection
 #'
+#' @param backfill_case_gaps Logical (default \code{TRUE}). Linearly interpolate
+#'   short interior gaps in the weekly case series (e.g. holiday non-reporting)
+#'   before the suitability target is built, via
+#'   \code{\link{backfill_weekly_case_gaps}}, so missing weeks inside an active
+#'   outbreak are not stamped as false zeros by the downstream NA->0 sanitiser.
+#' @param backfill_max_weeks Integer (default \code{2L}). Maximum interior gap
+#'   length (in weeks) to interpolate; longer gaps are left for the zero-fill.
+#' @param backfill_method Interpolation method passed to
+#'   \code{\link{backfill_weekly_case_gaps}} (default \code{"linear"}).
+#'
 #' @export
 compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
                                     date_start = "2000-01-01", date_stop = NULL,
                                     forecast_mode = TRUE, forecast_horizon = 3, include_lags = FALSE,
-                                    include_flood_prob = TRUE) {
+                                    include_flood_prob = TRUE,
+                                    backfill_case_gaps = TRUE, backfill_max_weeks = 2L,
+                                    backfill_method = "linear") {
 
      requireNamespace('arrow')
      requireNamespace('ISOweek')
@@ -274,6 +286,21 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      d <- d %>% dplyr::filter(!is.na(ENSO34))  # Use ENSO34 as the reference since it's always present
      
      message(sprintf("  - Filtered to ENSO data availability: %d observations retained", nrow(d)))
+
+     # ---- Backfill short reporting gaps (e.g. holiday non-reporting) ---------
+     # Genuinely-missing interior weeks bounded by reported weeks (most often the
+     # Christmas/New-Year reporting lapse) are linearly interpolated here -- BEFORE
+     # cases_binary / transmission_intensity are built and before the
+     # est_suitability NA->0 sanitiser -- so a missing holiday week inside an
+     # active outbreak is not stamped as a false zero-incidence week. Gaps longer
+     # than `backfill_max_weeks` (major missing months/years) and the series ends
+     # are left NA for the downstream zero-fill. The canonical surveillance files
+     # are untouched; this only shapes the suitability panel, and a
+     # `cases_interpolated` flag marks the filled weeks.
+     if (isTRUE(backfill_case_gaps)) {
+          d <- backfill_weekly_case_gaps(d, max_interp_weeks = backfill_max_weeks,
+                                         method = backfill_method, verbose = TRUE)
+     }
 
      if ("rain_sum" %in% colnames(d)) d <- d[,-which(colnames(d) == 'rain_sum')]
 

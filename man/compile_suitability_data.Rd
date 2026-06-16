@@ -13,7 +13,10 @@ compile_suitability_data(
   forecast_mode = TRUE,
   forecast_horizon = 3,
   include_lags = FALSE,
-  include_flood_prob = TRUE
+  include_flood_prob = TRUE,
+  backfill_case_gaps = TRUE,
+  backfill_max_weeks = 2L,
+  backfill_method = "linear"
 )
 }
 \arguments{
@@ -63,6 +66,18 @@ aggregates (\code{emdat_flood_prob_4w_max}, \code{emdat_flood_prob_12w_max},
 probability covariates are populated in both the historical training and
 the forecast windows, so the downstream LSTM consumes the same feature
 definition in both regimes.}
+
+\item{backfill_case_gaps}{Logical (default \code{TRUE}). Linearly interpolate
+short interior gaps in the weekly case series (e.g. holiday non-reporting)
+before the suitability target is built, via
+\code{\link{backfill_weekly_case_gaps}}, so missing weeks inside an active
+outbreak are not stamped as false zeros by the downstream NA->0 sanitiser.}
+
+\item{backfill_max_weeks}{Integer (default \code{2L}). Maximum interior gap
+length (in weeks) to interpolate; longer gaps are left for the zero-fill.}
+
+\item{backfill_method}{Interpolation method passed to
+\code{\link{backfill_weekly_case_gaps}} (default \code{"linear"}).}
 }
 \value{
 This function processes the data and merges the climate, ENSO, and cholera cases data into a single dataset. It creates a \code{cases_binary} column indicating environmental suitability based on case patterns using sophisticated temporal logic. The processed dataset is saved as a CSV file.
