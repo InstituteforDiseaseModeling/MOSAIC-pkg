@@ -18,7 +18,7 @@ tensorflow>=2.16.0,<2.21
 
 laser-core==1.0.2
 # laser-cholera: update the wheel filename (X.Y.Z) when upgrading
-https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.13.0/laser_cholera-0.13.0-py3-none-any.whl
+https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.14.0/laser_cholera-0.14.0-py3-none-any.whl
 
 # Dask distributed computing and Coiled cloud orchestration (required by run_MOSAIC_dask())
 dask[distributed]

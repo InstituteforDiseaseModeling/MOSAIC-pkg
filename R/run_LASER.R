@@ -68,7 +68,19 @@ run_LASER <- function(
      # Suppress NumPy divide-by-zero warnings
      warnings <- reticulate::import("warnings", convert = FALSE)
      warnings$filterwarnings("ignore", message = "invalid value encountered in divide")
-     warnings$filterwarnings("ignore", category = reticulate::import("numpy", convert = FALSE)$VisibleDeprecationWarning)
+     # VisibleDeprecationWarning moved from the numpy top-level namespace to
+     # numpy.exceptions in numpy 2.0 (and was removed from the top level). Resolve
+     # it defensively so this works under both numpy 1.x and 2.x, and is a no-op
+     # if the class is unavailable.
+     np <- reticulate::import("numpy", convert = FALSE)
+     vis_dep <- tryCatch(
+          np$exceptions$VisibleDeprecationWarning,
+          error = function(e) tryCatch(np$VisibleDeprecationWarning,
+                                       error = function(e2) NULL)
+     )
+     if (!is.null(vis_dep)) {
+          warnings$filterwarnings("ignore", category = vis_dep)
+     }
 
      # Wrap length-1 location-specific array params as R lists so reticulate
      # passes them as Python lists (not scalars) for single-location runs
