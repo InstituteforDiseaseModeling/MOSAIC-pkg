@@ -757,7 +757,7 @@ run_MOSAIC <- function(config,
   # pins; PSOCK/Coiled workers set their own pins separately (fresh processes).
   .mosaic_set_blas_threads(1L)
   try(arrow::set_cpu_count(1L), silent = TRUE)
-  try(arrow::set_io_thread_count(1L), silent = TRUE)
+  try(arrow::set_io_thread_count(2L), silent = TRUE)
 
   # ===========================================================================
   # SETUP PATHS
@@ -1149,7 +1149,7 @@ run_MOSAIC <- function(config,
     # Remote Coiled workers set their own nthreads=1 and are unaffected.
     .mosaic_set_all_thread_env(1L)
     try(arrow::set_cpu_count(1L), silent = TRUE)
-    try(arrow::set_io_thread_count(1L), silent = TRUE)
+    try(arrow::set_io_thread_count(2L), silent = TRUE)
 
     # cl is not used in Dask mode
     cl <- NULL

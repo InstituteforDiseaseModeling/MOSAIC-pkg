@@ -820,7 +820,7 @@ sample_parameters <- function(
   if (!is.matrix(obs_mat)) obs_mat <- matrix(obs_mat, nrow = 1)
 
   # Guard: reporting chain product must be positive and non-trivial
-  reporting_product <- sigma * rho  # cases = I * sigma * rho / chi_endemic
+  reporting_product <- sigma * rho  # guard only: ensures sigma > 0 and rho > 0
   if (!is.finite(reporting_product) || reporting_product < 1e-10) {
     if (verbose) cat("  - ic_moment_match: sigma*rho near zero, using prior ICs\n")
     return(sampled_props)
@@ -836,8 +836,9 @@ sample_parameters <- function(
     return(sampled_props)
   }
 
-  # Derive I proportion: obs_week1 = I * sigma * rho / chi_endemic
-  # Therefore: I = obs_week1 * chi_endemic / (sigma * rho)
+  # Invert the v0.14.0 observation model reported = Binom(new_symptomatic, rho) /
+  # chi_endemic to recover the daily incidence of new symptomatic infections,
+  # then map that incidence to steady-state E and Isym stocks below.
   N_j <- config_sampled$N_j_initial
   n_locations <- length(locations)
 
@@ -860,20 +861,19 @@ sample_parameters <- function(
       next
     }
 
-    # I_count is an estimate of Isym (symptomatic-infectious compartment),
-    # since cases = Isym * rho * chi_endemic in the laser-cholera model.
-    # The earlier comment labelled this "I" but the reporting chain only
-    # observes Isym.
-    Isym_count <- obs_week1_j * chi_endemic / reporting_product
+    # laser-cholera v0.14.0 reports INCIDENT new symptomatic infections, not the
+    # Isym prevalence stock (issue #67): reported = Binom(new_symptomatic, rho) /
+    # chi_endemic. Invert for the daily incidence of new symptomatic infections.
+    new_symptomatic <- obs_week1_j * chi_endemic / rho
+    # Steady-state Isym stock: inflow (new_symptomatic) = outflow (gamma_1 * Isym).
+    Isym_count <- new_symptomatic / gamma_1
     I_count    <- Isym_count   # kept for the verbose message + downstream prop_I
 
-    # Steady-state E:Isym balance for the laser-cholera SEIRVW engine:
-    #   inflow to Isym = sigma * iota * E
-    #   outflow        = gamma_1 * Isym
-    # so E = Isym * gamma_1 / (sigma * iota). The earlier
-    # E_count = I_count * iota was dimensionally wrong (count * 1/day) and
-    # over-seeded E by ~5x at prior medians.
-    E_count <- Isym_count * gamma_1 / (sigma * iota)
+    # Steady-state E balance: inflow to Isym = sigma * iota * E = new_symptomatic,
+    # so E = new_symptomatic / (sigma * iota). This preserves the E:Isym ratio
+    # gamma_1 / (sigma * iota); only the observation anchor moved from the
+    # (pre-v0.14, now-removed) Isym-prevalence path to the incidence path.
+    E_count <- new_symptomatic / (sigma * iota)
     obs_week1 <- obs_week1_j  # for the verbose message below
 
     # Convert to proportions of population

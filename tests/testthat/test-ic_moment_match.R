@@ -94,26 +94,27 @@ test_that(".mosaic_validate_sampling_args warns if ic_moment_match is non-logica
 # 2. DETERMINISTIC MATH (.moment_match_E_I)
 # ===========================================================================
 
-test_that(".moment_match_E_I derives I from obs_week1 * chi / (sigma * rho)", {
+test_that(".moment_match_E_I derives Isym from incidence new_sym/gamma_1 (v0.14.0)", {
   cfg <- make_test_config(
     N = 1000000L,
     reported_cases = c(rep(0, 5), rep(100, 7), rep(50, 88)),
     sigma = 0.5,
     rho = 0.2,
     chi_endemic = 0.4,
-    iota = 0.3
+    iota = 0.3,
+    gamma_1 = 0.5
   )
   props <- make_test_props()
 
   result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
-  # Expected I = obs_week1 * chi / (sigma * rho)
+  # v0.14.0: reported = Binom(new_symptomatic, rho) / chi, so invert to the daily
+  # incidence then map to steady-state stocks (Isym = new_sym/gamma_1,
+  # E = new_sym/(sigma*iota)).
   obs_week1 <- 100  # first 7 positive days are all 100
-  expected_I_count <- obs_week1 * 0.4 / (0.5 * 0.2)  # = 400
-  # Steady-state E (v0.30.40 fix): E = Isym * gamma_1 / (sigma * iota).
-  # With gamma_1 = 0.5 (default), sigma = 0.5, iota = 0.3:
-  #   E = 400 * 0.5 / (0.5 * 0.3) = 1333.33
-  expected_E_count <- expected_I_count * 0.5 / (0.5 * 0.3)
+  new_sym   <- obs_week1 * 0.4 / 0.2         # = 200 (incidence)
+  expected_I_count <- new_sym / 0.5          # Isym = new_sym/gamma_1 = 400
+  expected_E_count <- new_sym / (0.5 * 0.3)  # E = new_sym/(sigma*iota) = 1333.33
   expected_prop_I <- expected_I_count / 1000000
   expected_prop_E <- expected_E_count / 1000000
 
@@ -169,8 +170,9 @@ test_that(".moment_match_E_I uses first positive observation window", {
 
   result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
-  # obs_week1 should be 200 (first 7 positive days)
-  expected_I <- 200 * 0.5 / (0.25 * 0.4)  # = 1000
+  # obs_week1 should be 200 (first 7 positive days); gamma_1 = 0.5 (default)
+  new_sym    <- 200 * 0.5 / 0.4           # = 250 (incidence)
+  expected_I <- new_sym / 0.5             # Isym = new_sym/gamma_1 = 500
   expected_prop_I <- expected_I / 1000000
 
   expect_equal(result[1, "I"], expected_prop_I, tolerance = 1e-10)
@@ -191,30 +193,33 @@ test_that(".moment_match_E_I handles partial first week (< 7 positive days)", {
 
   result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
-  # obs_week1 = mean(80, 100, 120) = 100
-  expected_I <- 100 * 0.5 / (0.5 * 0.2)  # = 500
+  # obs_week1 = mean(80, 100, 120) = 100; gamma_1 = 0.5 (default)
+  new_sym    <- 100 * 0.5 / 0.2           # = 250 (incidence)
+  expected_I <- new_sym / 0.5             # Isym = new_sym/gamma_1 = 500
   expected_prop_I <- expected_I / 1000000
 
   expect_equal(result[1, "I"], expected_prop_I, tolerance = 1e-10)
 })
 
-test_that(".moment_match_E_I reproduces the reporting chain identity", {
-  # For any valid parameters: I * sigma * rho / chi_endemic ≈ obs_week1
+test_that(".moment_match_E_I reproduces the v0.14.0 reporting identity", {
+  # v0.14.0: reported = Binom(new_symptomatic, rho)/chi with new_symptomatic =
+  # gamma_1 * Isym at steady state, so (gamma_1 * Isym) * rho / chi ≈ obs_week1.
   cfg <- make_test_config(
     N = 10000000L,
     reported_cases = c(rep(0, 5), rep(500, 7), rep(200, 88)),
     sigma = 0.3,
     rho = 0.15,
     chi_endemic = 0.6,
-    iota = 0.4
+    iota = 0.4,
+    gamma_1 = 0.5
   )
   props <- make_test_props()
 
   result <- MOSAIC:::.moment_match_E_I(cfg, props, "TST", verbose = FALSE)
 
-  # Reconstruct
+  # Reconstruct incidence from the seeded Isym stock, then the reported rate.
   I_count <- result[1, "I"] * 10000000
-  est_t1 <- I_count * 0.3 * 0.15 / 0.6
+  est_t1  <- (0.5 * I_count) * 0.15 / 0.6   # (gamma_1 * Isym) * rho / chi
   obs_week1 <- 500  # all 7 positive days are 500
 
   expect_equal(est_t1, obs_week1, tolerance = 0.01)

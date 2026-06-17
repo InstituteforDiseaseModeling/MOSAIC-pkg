@@ -5,7 +5,7 @@ description: >
   calibration-actionable parameter/prior recommendations. Use after a calibration run
   returns poor fit (e.g. case/death bias, low R², timing or shape errors) and you want
   to know WHAT to change before paying for another full calibration. Drives fast
-  deterministic single-LASER experiments (MOSAIC::run_fit_sandbox) on the run's medioid
+  deterministic single-LASER experiments (MOSAIC::run_fit_sandbox) on the run's medoid
   config and scores them with MOSAIC::calc_fit_diagnostics. Not a passive metrics summary.
 ---
 
@@ -31,7 +31,7 @@ Runs ONE deterministic `run_LASER()` from a calibration config with point-value 
 (~1-2 s), aggregates predicted vs observed across `locations`, and returns
 `$predictions`, `$metrics` (incl. `fit_diagnostics` + merged `scorecard`), and
 `$params_applied`. `config` may be a list or a path to a config JSON (use the run's
-medioid, e.g. `.../2_calibration/best_model/config_medioid.json`).
+medoid, e.g. `.../2_calibration/best_model/config_medoid.json`).
 
 **`calc_fit_diagnostics(observed, predicted, dates, epidemic_threshold = NULL)`**
 The metrics engine (called for you by the sandbox; call directly to re-score series). Returns
@@ -48,7 +48,7 @@ Example:
 ```r
 Rscript -e '
   library(MOSAIC); MOSAIC::use_mosaic_env()
-  cfg <- "output/calibration/<run>/2_calibration/best_model/config_medioid.json"
+  cfg <- "output/calibration/<run>/2_calibration/best_model/config_medoid.json"
   res <- MOSAIC::run_fit_sandbox(cfg, params = list(beta_j0_hum = 2.4e-6, beta_j0_env = 1.9e-6),
                                  outdir = "claude/diagnose_fit", run_label = "beta_x0.75")
   print(res$metrics$scorecard); print(res$metrics$fit_diagnostics$cases$bias)
@@ -57,8 +57,16 @@ Rscript -e '
 
 ## Investigation protocol (adapt based on findings)
 
-1. **Baseline first.** Run the medioid with no overrides, `full_metrics = TRUE`. Read the
-   scorecard. Identify which dimensions are WARN/FAIL.
+1. **Baseline + plausibility.** Run the medoid with no overrides, `full_metrics = TRUE`. Read the
+   scorecard; identify which dimensions are WARN/FAIL. **Then, regardless of the scorecard,** pull
+   the medoid's point values and the posterior marginals (`2_calibration/samples.parquet`,
+   `posterior/`) and check them against each parameter's prior support (`1_inputs/priors.json`) and
+   its biologically plausible range. Flag any parameter at/over a bound, piling against a bound,
+   drifting outside the plausible range, or taking an impossible value. A good fit does **not**
+   clear this — implausible values under a good R² mean overfitting, non-identifiability, or
+   compensation between correlated parameters (cf. `mu_j_baseline`↔`rho_deaths`). When you later
+   recommend parameter targets, keep them inside the plausible range too — never buy fit with an
+   implausible value. Carry flagged parameters into the brief.
 2. **Prioritise bias → shape → variance.** Bias is most tractable and often the root cause;
    shape/variance diagnostics are confounded when total scale is wrong. Fix/understand bias first.
 3. **Bias.** If cases bias WARN/FAIL: sweep `beta_j0_hum` and `beta_j0_env` ×{0.25,0.5,0.75,1,1.5,2}.
@@ -135,9 +143,10 @@ SCORECARD
   Peak timing:   {...} mean {n}d               Peak shape:    {...} shape_corr={x.xx}
   Variance:      {...} cv_ratio={x.xx}
 
+PLAUSIBILITY         <param>: <pt value> vs prior [lo,hi] / bio range — {OK|AT-BOUND|DRIFT|IMPOSSIBLE}  (report even if fit PASSes)
 KEY FINDINGS         1. <primary finding + mechanism>  2. ...
 EXPERIMENTS RUN      <label> bias_c=.. bias_d=.. params:{...}   (one line each)
-RECOMMENDED PARAMETER ADJUSTMENTS   beta_j0_hum: <medioid> -> <target> (x<ratio>) ...
+RECOMMENDED PARAMETER ADJUSTMENTS   beta_j0_hum: <medoid> -> <target> (x<ratio>) ...
 RECOMMENDED PRIOR CHANGES           <param>: <old dist> -> <new dist>   (hand to disease-modeler/statistician)
 TRADEOFFS NOTED
 NEXT CALIBRATION CONFIGURATION      <specific changes to the calibration script / priors>

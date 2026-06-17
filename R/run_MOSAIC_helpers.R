@@ -2304,7 +2304,7 @@
       # before ARROW_NUM_THREADS is read, so the env var alone leaves IO at its
       # 8-thread default -- set both pools explicitly (mirrors the parent pin).
       try(arrow::set_cpu_count(1L), silent = TRUE)
-      try(arrow::set_io_thread_count(1L), silent = TRUE)
+      try(arrow::set_io_thread_count(2L), silent = TRUE)
       NULL
     })
     # Export read-only inputs + the (internal) worker fns to each worker's
