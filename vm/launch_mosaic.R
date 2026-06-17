@@ -1,14 +1,15 @@
 # ==============================================================================
-# MOSAIC ETH Production Calibration
+# MOSAIC Production Calibration (single- or multi-country)
 # ==============================================================================
-# VM-compatible script for production-level Ethiopia calibration
-# - High ESS convergence targets (1000 per param, 99% convergence)
-# - 5 iterations with adaptive batch sizing
-# - BFRS calibration with adaptive convergence
+# VM-compatible launcher for a production-level MOSAIC calibration. Edit the
+# `iso_codes` and `dir_output` assignments below to select the country/region.
+# - High ESS convergence targets
+# - Adaptive batch sizing with BFRS convergence
+# - Multi-location mobility params auto-enabled when length(iso_codes) > 1
 # ==============================================================================
 #
-# ONE-LINE SETUP AND RUN:
-# curl -sSL https://raw.githubusercontent.com/InstituteforDiseaseModeling/MOSAIC-pkg/main/vm/run_mosaic_ETH.R -o ~/run_mosaic_ETH.R && r-mosaic-Rscript ~/run_mosaic_ETH.R
+# Run via the GLIBCXX wrapper (see vm/HEDGEHOG.md), e.g.:
+#   nohup ~/bin/r-mosaic-Rscript ~/launch_mosaic.R </dev/null >run.log 2>&1 &
 #
 # ==============================================================================
 
@@ -58,13 +59,13 @@ config <- get_location_config(iso=iso_codes)
 
 control <- mosaic_control_defaults()
 
-control$calibration$n_simulations <- 1000
+control$calibration$n_simulations <- 1000        # integer = fixed mode; NULL = adaptive/auto
 control$calibration$n_iterations <- 3
-control$calibration$batch_size <- 1000
-control$calibration$min_batches <- 5
-control$calibration$max_batches <- 10
-control$calibration$target_r2 <- 0.95
-control$calibration$max_simulations <- 1e+06
+control$calibration$batch_size_adaptive <- 1000
+control$calibration$min_batches_adaptive <- 5
+control$calibration$max_batches_adaptive <- 10
+control$calibration$target_r2_adaptive <- 0.95
+control$calibration$max_simulations_total <- 1e+06
 
 control$parallel$enable <- TRUE
 control$parallel$n_cores <- parallel::detectCores()-1
@@ -74,7 +75,7 @@ control$targets$ESS_param_prop <- 0.95
 control$targets$ESS_best <- 100
 control$targets$min_best_subset <- 30
 control$targets$max_best_subset <- 1500
-control$targets$ess_method <- 'perplexity'
+control$targets$ESS_method <- 'perplexity'
 
 control$sampling$sample_tau_i <- length(iso_codes) > 1 # Travel probability
 control$sampling$sample_mobility_gamma <- length(iso_codes) > 1  # Gravity model exponent

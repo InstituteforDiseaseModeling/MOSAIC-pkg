@@ -192,7 +192,7 @@ def run_laser_sim(sim_id: int, n_iterations: int,
     # (not at module level) to guarantee it runs per-task.
     # ------------------------------------------------------------------
     for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS",
-                 "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+                 "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         os.environ[_var] = "1"
 
     try:
@@ -301,7 +301,7 @@ def run_laser_postca(task_id: int, seed: int,
     dict with keys: task_id, seed, success, reported_cases, reported_deaths
     """
     for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS",
-                 "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+                 "TBB_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
         os.environ[_var] = "1"
 
     try:

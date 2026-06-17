@@ -157,6 +157,86 @@ sudo Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); \
 echo "[7/7] Installing Python dependencies..."
 Rscript -e "MOSAIC::install_dependencies(force = TRUE)"
 
+# Configure R wrapper for Ubuntu 20.04 GLIBCXX compatibility
+echo "Configuring R wrapper for Ubuntu 20.04 compatibility..."
+if [ "$OS_VERSION" = "20.04" ]; then
+  echo "  Creating r-mosaic-R and r-mosaic-Rscript wrappers..."
+
+  # Create ~/bin directory
+  mkdir -p ~/bin
+
+  # Create R wrapper script with auto-detection of libstdc++ location
+  cat > ~/bin/r-mosaic-R <<'EOF'
+#!/usr/bin/env bash
+# Find a modern libstdc++ inside common reticulate env locations
+candidates=(
+  "$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-reticulate/lib/libstdc++.so.6"
+)
+for f in "${candidates[@]}"; do
+  if [ -f "$f" ] && strings "$f" 2>/dev/null | grep -q "GLIBCXX_3\.4\.29"; then
+    export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"
+    export LD_LIBRARY_PATH="$(dirname "$f")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    break
+  fi
+done
+# Preload libexpat from conda environment to avoid system's old version
+if [ -f "$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1" ]; then
+  export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+# Set R library path to include user library
+export R_LIBS_USER="$HOME/R/library"
+# If we later want to hard-pin Python for reticulate:
+[ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
+exec R "$@"
+EOF
+  chmod +x ~/bin/r-mosaic-R
+  # Shebang guard: a corrupted (indented) shebang makes the kernel fall back to
+  # /bin/sh (dash), which dies on the bash array with `Syntax error: "(" unexpected`.
+  head -1 ~/bin/r-mosaic-R | grep -q '^#!' || { echo "ERROR: ~/bin/r-mosaic-R shebang malformed (not at column 0)"; exit 1; }
+
+  # Create Rscript wrapper with same logic
+  cat > ~/bin/r-mosaic-Rscript <<'EOF'
+#!/usr/bin/env bash
+# Same preload logic for Rscript
+candidates=(
+  "$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-mosaic/lib/libstdc++.so.6"
+  "$HOME/.local/share/r-miniconda/envs/r-reticulate/lib/libstdc++.so.6"
+)
+for f in "${candidates[@]}"; do
+  if [ -f "$f" ] && strings "$f" 2>/dev/null | grep -q "GLIBCXX_3\.4\.29"; then
+    export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"
+    export LD_LIBRARY_PATH="$(dirname "$f")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    break
+  fi
+done
+# Preload libexpat from conda environment to avoid system's old version
+if [ -f "$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1" ]; then
+  export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+# Set R library path to include user library
+export R_LIBS_USER="$HOME/R/library"
+[ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] && export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"
+exec Rscript "$@"
+EOF
+  chmod +x ~/bin/r-mosaic-Rscript
+  head -1 ~/bin/r-mosaic-Rscript | grep -q '^#!' || { echo "ERROR: ~/bin/r-mosaic-Rscript shebang malformed (not at column 0)"; exit 1; }
+
+  # Ensure launchers are first on PATH for this session and future shells
+  export PATH="$HOME/bin:$PATH"
+  if ! grep -q 'export PATH="$HOME/bin:$PATH"' ~/.bashrc; then
+    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+  fi
+
+  echo "  ✓ Created r-mosaic-R wrapper at ~/bin/r-mosaic-R"
+  echo "  ✓ Created r-mosaic-Rscript wrapper at ~/bin/r-mosaic-Rscript"
+  echo "  ✓ Added ~/bin to PATH in ~/.bashrc"
+else
+  echo "  Skipping wrapper creation (only needed for Ubuntu 20.04)"
+fi
+
 # Verify installation
 echo ""
 echo "Verifying installation..."

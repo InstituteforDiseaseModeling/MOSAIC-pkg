@@ -128,6 +128,9 @@ export R_LIBS_USER="$HOME/R/library"
 exec R "$@"
 EOF
   chmod +x ~/bin/r-mosaic-R
+  # Shebang guard: a corrupted (indented) shebang makes the kernel fall back to
+  # /bin/sh (dash), which dies on the bash array with `Syntax error: "(" unexpected`.
+  head -1 ~/bin/r-mosaic-R | grep -q '^#!' || { echo "ERROR: ~/bin/r-mosaic-R shebang malformed (not at column 0)"; exit 1; }
 
   # Create Rscript wrapper with same logic
   cat > ~/bin/r-mosaic-Rscript <<'EOF'
@@ -155,6 +158,7 @@ export R_LIBS_USER="$HOME/R/library"
 exec Rscript "$@"
 EOF
   chmod +x ~/bin/r-mosaic-Rscript
+  head -1 ~/bin/r-mosaic-Rscript | grep -q '^#!' || { echo "ERROR: ~/bin/r-mosaic-Rscript shebang malformed (not at column 0)"; exit 1; }
 
   # Ensure launchers are first on PATH for this session and future shells
   export PATH="$HOME/bin:$PATH"

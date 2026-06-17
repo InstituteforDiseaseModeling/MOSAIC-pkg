@@ -36,6 +36,21 @@ Host hedgehog
   ServerAliveCountMax 3
 ```
 
+## Running R on hedgehog (the wrapper)
+hedgehog is Ubuntu 20.04; its system `libstdc++` lacks `GLIBCXX_3.4.29`, which the venv's compiled
+wheels (pyarrow / numba / laser_core) need. **Always run R through the wrapper**, which `LD_PRELOAD`s
+a modern libstdc++:
+```bash
+~/bin/r-mosaic-Rscript script.R     # batch
+~/bin/r-mosaic-R                     # interactive
+```
+Plain `Rscript`/`R` will make `check_dependencies()` report "BROKEN" and laser-cholera won't import.
+Invoke the wrapper **normally** — the shebang was repaired on 2026-06-16, so no `bash` prefix is
+needed. (Historically a hand-edited copy of `r-mosaic-Rscript` had an indented shebang, which made
+the kernel fall back to `/bin/sh`/dash and fail with `Syntax error: "(" unexpected`; the setup
+scripts now guard against this. If you ever see that error, check `head -1 ~/bin/r-mosaic-Rscript`
+is `#!/usr/bin/env bash` at column 0, or prefix `bash` as a stop-gap.)
+
 ## Results layout
 - Home: `/home/jgiles/`
 - Calibration results: `~/MOSAIC/output/individual/*.tar.gz`
@@ -55,11 +70,19 @@ scp hedgehog:~/MOSAIC/output/individual/ZWE.tar.gz .
 ```
 
 ## Long-running jobs
-Run inside `tmux` so a dropped SSH session doesn't kill a multi-hour calibration:
-```bash
-ssh hedgehog
-tmux new -s mosaic      # detach: Ctrl-b d   |   reattach later: tmux attach -t mosaic
-```
+A multi-hour calibration MUST survive an SSH disconnect. Two options:
+
+- **`nohup` + logfile (default for scripted/agent launches)** — detach fully and capture all output:
+  ```bash
+  ssh hedgehog
+  nohup ~/bin/r-mosaic-Rscript ~/launch_mosaic.R </dev/null >run.log 2>&1 &
+  tail -f run.log        # monitor; safe to Ctrl-C and re-tail / re-connect
+  ```
+- **`tmux` (interactive humans)** — keep a live session you can reattach:
+  ```bash
+  ssh hedgehog
+  tmux new -s mosaic      # detach: Ctrl-b d   |   reattach later: tmux attach -t mosaic
+  ```
 
 ## Troubleshooting
 - **`Permission denied (publickey)` after it used to work** → the VM was likely redeployed (fresh

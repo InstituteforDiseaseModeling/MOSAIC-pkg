@@ -29,8 +29,8 @@
 # RESUME BEHAVIOR:
 #   Script automatically detects completed countries by checking for:
 #   - Existence of output directory
-#   - Presence of convergence_results.parquet
-#   - Presence of simulations.parquet
+#   - Presence of 2_calibration/samples.parquet
+#   - Presence of 2_calibration/diagnostics/convergence_results.parquet
 #   If all exist, country is skipped. To force re-run, delete output directory.
 #
 # OUTPUT STRUCTURE:
@@ -84,13 +84,13 @@ DELETE_AFTER_COMPRESS <- FALSE  # Delete uncompressed directory after compressio
 # Control settings
 CONTROL_SETTINGS <- list(
   # Calibration
-  n_simulations = 'auto',         # Per batch (use 1000 for production)
+  n_simulations = NULL,         # NULL = adaptive/auto mode; integer = fixed mode
   n_iterations = 3,             # LASER iterations per simulation
-  batch_size = 1000,            # Simulations per batch
-  min_batches = 5,              # Minimum batches before convergence check
-  max_batches = 10,             # Maximum batches
-  target_r2 = 0.95,             # R? convergence threshold
-  max_simulations = 50000,        # Safety limit
+  batch_size_adaptive = 1000,   # Simulations per Phase 1 adaptive batch
+  min_batches_adaptive = 5,     # Minimum batches before convergence check
+  max_batches_adaptive = 10,    # Maximum adaptive batches
+  target_r2_adaptive = 0.95,    # R^2 convergence threshold
+  max_simulations_total = 50000,  # Safety limit on total simulations
 
   # Targets
   ESS_param = 1000,             # Target ESS per parameter
@@ -98,7 +98,7 @@ CONTROL_SETTINGS <- list(
   ESS_best = 100,               # Target for top-weighted samples
   min_best_subset = 30,         # Minimum best subset size
   max_best_subset = 1500,       # Maximum best subset size
-  ess_method = 'perplexity',    # ESS calculation method
+  ESS_method = 'perplexity',    # ESS calculation method
 
   # Likelihood weights
   weight_cases = 1.0,           # Weight for case data
@@ -132,17 +132,17 @@ log_message <- function(msg, log_file) {
 
 #' Check if country calibration is complete
 is_country_complete <- function(dir_output) {
-  # Check for existence of key output files
+  # Check for existence of key output files. As of v0.42.0 these live under
+  # 2_calibration/ (not the dir root): samples.parquet and the convergence
+  # results parquet in 2_calibration/diagnostics/.
   if (!dir.exists(dir_output)) return(FALSE)
 
   required_files <- c(
-    "convergence_results.parquet",
-    "simulations.parquet"
+    file.path(dir_output, "2_calibration", "samples.parquet"),
+    file.path(dir_output, "2_calibration", "diagnostics", "convergence_results.parquet")
   )
 
-  files_exist <- sapply(required_files, function(f) {
-    file.exists(file.path(dir_output, f))
-  })
+  files_exist <- file.exists(required_files)
 
   return(all(files_exist))
 }
@@ -292,11 +292,11 @@ for (i in seq_along(COUNTRIES)) {
     # Calibration settings
     control$calibration$n_simulations <- CONTROL_SETTINGS$n_simulations
     control$calibration$n_iterations <- CONTROL_SETTINGS$n_iterations
-    control$calibration$batch_size <- CONTROL_SETTINGS$batch_size
-    control$calibration$min_batches <- CONTROL_SETTINGS$min_batches
-    control$calibration$max_batches <- CONTROL_SETTINGS$max_batches
-    control$calibration$target_r2 <- CONTROL_SETTINGS$target_r2
-    control$calibration$max_simulations <- CONTROL_SETTINGS$max_simulations
+    control$calibration$batch_size_adaptive <- CONTROL_SETTINGS$batch_size_adaptive
+    control$calibration$min_batches_adaptive <- CONTROL_SETTINGS$min_batches_adaptive
+    control$calibration$max_batches_adaptive <- CONTROL_SETTINGS$max_batches_adaptive
+    control$calibration$target_r2_adaptive <- CONTROL_SETTINGS$target_r2_adaptive
+    control$calibration$max_simulations_total <- CONTROL_SETTINGS$max_simulations_total
 
     # Parallel settings
     control$parallel$enable <- CONTROL_SETTINGS$use_parallel
@@ -308,7 +308,7 @@ for (i in seq_along(COUNTRIES)) {
     control$targets$ESS_best <- CONTROL_SETTINGS$ESS_best
     control$targets$min_best_subset <- CONTROL_SETTINGS$min_best_subset
     control$targets$max_best_subset <- CONTROL_SETTINGS$max_best_subset
-    control$targets$ess_method <- CONTROL_SETTINGS$ess_method
+    control$targets$ESS_method <- CONTROL_SETTINGS$ESS_method
 
     # CRITICAL: Disable multi-location parameters for single-location runs
     control$sampling$sample_tau_i <- FALSE           # Travel probability
