@@ -163,3 +163,32 @@ exported signatures / the `run_MOSAIC()` core loop.
 5. **Inheritance:** ask any agent the post-v0.13 deaths-field rule → must answer `reported_deaths`.
 6. **Read-only enforcement:** ask `run-guide` and `calibration-doctor` to edit a source file →
    both must refuse and (for the doctor) confirm writes are confined to its memory dir.
+
+## Using this roster (and MOSAIC-pkg files) from an adjacent repo
+
+If you work in a *different* repo alongside a clone of `MOSAIC-pkg` (siblings under one parent):
+
+```
+your-workspace/
+├── MOSAIC-pkg/      ← this clone
+└── your-project/    ← you work here
+```
+
+two **independent** mechanisms give you the two things you want — they do **not** substitute for each other:
+
+**1. Symlink the agents → makes this roster usable in your repo**
+```bash
+cd your-project && mkdir -p .claude
+ln -s ../../MOSAIC-pkg/.claude/agents .claude/agents
+```
+The agents listed above then appear in `/agents` and can be invoked from your sessions — Claude Code discovers them by walking up from your working dir and following the symlink. (If MOSAIC-pkg is not a direct sibling, point the link at an absolute path instead.)
+
+**2. Grant file access → lets Claude read/edit MOSAIC-pkg files** — add to `your-project/.claude/settings.local.json`:
+```json
+{ "permissions": { "additionalDirectories": ["/abs/path/to/MOSAIC-pkg"] } }
+```
+Claude (and the agents) can now open and edit MOSAIC-pkg source from your session; without it, MOSAIC-pkg sits outside your repo and is off-limits to the file tools.
+
+**Why both:** the symlink only handles *agent discovery* (`additionalDirectories` does **not** load agents), and `additionalDirectories` only handles *file access* (the symlink does **not** grant it). Agents that also need to read MOSAIC-pkg source require both steps.
+
+**Verify / shortcut:** restart Claude Code, then run `/agents` — the roster should appear. A one-off alternative that does both at once (no files to edit): launch with `claude --add-dir /abs/path/to/MOSAIC-pkg` (the flag grants file access *and* loads the agents). Note: the symlink is local/untracked by default — `git add .claude/agents` if you want it to travel with your repo.
