@@ -25,11 +25,13 @@ jobs:
       - name: Install package from checkout
         run: R CMD INSTALL .
 
-      - name: Run testthat tests
-        run: Rscript -e "res <- devtools::test('.'); if (any(as.data.frame(res)\$failed > 0)) quit(status = 1)"
-
+      # NOTE: the full testthat suite runs on the macOS/Ubuntu R CMD check jobs
+      # (R-CMD-check.yml), not here. This worker image is the *engine runtime*:
+      # it intentionally strips Python TensorFlow (suitability-only, ~2-3 GB) and
+      # may lag the package, so running the whole suite in it fails by design
+      # (suitability/keras tests, env-drift determinism tests). This job's job is
+      # to prove current MOSAIC code runs the engine end-to-end in the image.
       - name: Run Smoke test (sample → LASER → likelihood)
-        if: always()
         run: |
           Rscript -e '
             library(MOSAIC)
