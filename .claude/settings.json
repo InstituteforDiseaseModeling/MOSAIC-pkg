@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh hedgehog:*)",
+      "Bash(scp hedgehog:*)",
+      "Bash(scp -r hedgehog:*)",
+      "Bash(vm/pull_results.sh:*)",
+      "Bash(bash vm/pull_results.sh:*)"
+    ]
+  }
+}
