@@ -30,9 +30,9 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "15.8",
+          version = "15.9",
           date = Sys.Date(),
-          description = "Default informative prior distributions for MOSAIC model parameters. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
+          description = "Default informative prior distributions for MOSAIC model parameters. v15.9 (2026-06-16): laser-cholera v0.14.0 (issue #67) adjustments. (a) mu_j_baseline CFR->mu identity gains a gamma_1 (dwell) factor — mu = CFR * gamma_1 * rho / (rho_deaths * chi) — because v0.14.0 reports the new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state) instead of the Isym prevalence stock; per-country mu_j_baseline prior means drop ~9x (gamma_1 prior mean ~0.113) vs v15.8. (b) beta_j0_tot per-country medians recentred for the 14 cases-data countries from the v0.14.0 beta*mu magnitude sweep (e.g. ETH 1.75e-6->1.39e-5, SSD 2e-5->2.83e-4, NGA 2e-5->4.74e-6); the 26 no-data countries keep the 2e-5 global default (the sweep found no transferable beta shift, geomean ~1.2x / log-CV 1.5). Supersedes the v15.3 ETH-only override. See MOSAIC-pkg/claude/beta_percountry_sweep.R + beta_mu_percountry_sweep.R and memory project_laser_cholera_reported_cases_fix_67. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
      ),
      parameters_global = list(),    # Single parameters used by all locations
      parameters_location = list()   # Location specific parameters
@@ -653,15 +653,28 @@ for (iso in j) {
      )
 }
 
-# --- Per-country recentred transmission defaults ---------------------------
-# ETH: the global median (2e-5) over-predicts reported cholera ~8x for Ethiopia.
-# Recentred to median 1.75e-6 from fixed-ensemble fitting against current ETH
-# surveillance + raw LSTM suitability (see MOSAIC-pkg/local/collab_ETH_v2/).
-# NOTE: this median is conditional on the suitability-window mean (psi_bar), which
-# the LASER environmental term normalises by (beta_jt_env = beta_j0_env * psi_t/psi_bar).
-# If date_start/date_stop change materially the effective magnitude shifts, so
-# re-validate -- or, preferably, replace with a calibration-derived median.
-priors_default$parameters_location$beta_j0_tot$location[["ETH"]]$parameters$meanlog <- log(1.75e-6)
+# --- Per-country recentred transmission defaults (laser-cholera v0.14.0) ----
+# v15.9 (2026-06-16): per-country beta_j0_tot medians recentred for laser-cholera
+# v0.14.0 (incidence-based reported_cases, issue #67) from the v0.14.0 beta*mu
+# magnitude sweep (single-LASER bias->1 against surveillance under config_default
+# defaults; see MOSAIC-pkg/claude/beta_percountry_sweep.R). These are the 14
+# cases-data countries with a solved beta* (NAM excluded: beta-insensitive, an
+# IC/suitability issue not a transmission one). The 26 no-data countries keep the
+# global default (2e-5): the sweep found NO transferable beta shift (geomean ~1.2x,
+# log-CV 1.5, bidirectional). Supersedes the v15.3 ETH-only override (1.75e-6,
+# v0.13-era; v0.14.0 needs ETH ~8x higher). NOTE: env-term medians are conditional
+# on the suitability-window mean (psi_bar); re-validate if date_start/stop shift.
+beta_j0_tot_v0140 <- c(
+     RWA = 7.6683e-07, COG = 4.6667e-06, NGA = 4.7366e-06, TZA = 6.8399e-06,
+     ETH = 1.3943e-05, BDI = 1.4751e-05, AGO = 2.3553e-05, ZMB = 3.6863e-05,
+     COD = 3.7875e-05, MWI = 4.1308e-05, MOZ = 4.7650e-05, ZWE = 6.8069e-05,
+     SOM = 1.0127e-04, SSD = 2.8302e-04
+)
+for (iso in names(beta_j0_tot_v0140)) {
+     if (!is.null(priors_default$parameters_location$beta_j0_tot$location[[iso]])) {
+          priors_default$parameters_location$beta_j0_tot$location[[iso]]$parameters$meanlog <- log(beta_j0_tot_v0140[[iso]])
+     }
+}
 
 
 # p_beta - Proportion of human-to-human vs environmental transmission
@@ -1526,20 +1539,26 @@ for (loc in names(initial_conditions_S$parameters_location$prop_S_initial$parame
 # prior by inverting the steady-state data-generating identity under the
 # laser-cholera v0.13+ schema:
 #
-#   reported_deaths = round(disease_deaths * rho_deaths)           (engine)
-#   disease_deaths  ~ Binomial(Isym, mu_jt)                        (engine)
-#   reported_cases  = round(Isym * rho / chi_eff)                  (engine)
+#   reported_deaths = Binomial(disease_deaths, rho_deaths)          (engine v0.14.0)
+#   disease_deaths  ~ Binomial(Isym, mu_jt)                         (engine)
+#   reported_cases  = round(Binomial(new_symptomatic, rho)/chi_eff) (engine v0.14.0)
 #
-# Taking expectations and ratios at steady state:
+# v0.14.0 (laser-cholera issue #67) moved reported_cases from the Isym PREVALENCE
+# stock to the new_symptomatic INCIDENCE flow. At steady state new_symptomatic =
+# gamma_1 * Isym (inflow = outflow), so the CFR identity gains a gamma_1 (dwell)
+# factor relative to the pre-v0.14 prevalence form:
 #
 #   CFR_observed = E[reported_deaths] / E[reported_cases]
-#                = (Isym * mu_jt * rho_deaths) / (Isym * rho / chi)
-#                = mu_jt * rho_deaths * chi / rho
+#                = (Isym * mu_jt * rho_deaths) / (gamma_1 * Isym * rho / chi)
+#                = mu_jt * rho_deaths * chi / (gamma_1 * rho)
 #
 # Solving for mu_j_baseline (the un-modulated component of mu_jt):
 #
-#   mu_j_baseline = CFR_observed * rho / (rho_deaths * chi)
+#   mu_j_baseline = CFR_observed * gamma_1 * rho / (rho_deaths * chi)
 #
+# The gamma_1 factor (~0.11 at the prior mean) is the v0.14.0 correction: the
+# pre-v0.14 identity (mu = CFR*rho/(rho_deaths*chi)) over-stated mu by ~1/gamma_1
+# (~9x) because it assumed prevalence-based reporting.
 # (sigma — the symptomatic fraction — cancels because both observation
 #  pathways start from Isym, not from infections.) The empirical observed
 #  CFR comes from the hierarchical GAM in est_CFR_hierarchical.R, which
@@ -1572,16 +1591,21 @@ if (file.exists(mu_file)) {
      chi_end_mean     <- .beta_mean(priors_default$parameters_global$chi_endemic$parameters)
      chi_epi_mean     <- .beta_mean(priors_default$parameters_global$chi_epidemic$parameters)
      chi_mean         <- 0.5 * (chi_end_mean + chi_epi_mean)
-     # cfr_to_mu_adjustment ≈ 1.015 under v0.13+ (was 0.43 under pre-v0.13)
-     cfr_to_mu_adjustment <- rho_mean / (rho_deaths_mean * chi_mean)
+     # v0.14.0: include the gamma_1 (dwell) factor — reported_cases is now the
+     # new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state), not the
+     # Isym prevalence stock. gamma_1 prior mean (lognormal) ~0.113.
+     g1_par       <- priors_default$parameters_global$gamma_1$parameters
+     gamma_1_mean <- exp(g1_par$meanlog + 0.5 * g1_par$sdlog^2)
+     # cfr_to_mu_adjustment ≈ 0.115 under v0.14.0 (was ~1.015 v0.13, 0.43 pre-v0.13)
+     cfr_to_mu_adjustment <- gamma_1_mean * rho_mean / (rho_deaths_mean * chi_mean)
      message(sprintf(
-          "  CFR->mu_j_baseline adjustment: rho/(rho_deaths*chi) = %.4f/(%.4f*%.4f) = %.4f",
-          rho_mean, rho_deaths_mean, chi_mean, cfr_to_mu_adjustment
+          "  CFR->mu_j_baseline adjustment: gamma_1*rho/(rho_deaths*chi) = %.3f*%.4f/(%.4f*%.4f) = %.4f",
+          gamma_1_mean, rho_mean, rho_deaths_mean, chi_mean, cfr_to_mu_adjustment
      ))
 
      # Initialize mu_j_baseline prior structure
      priors_default$parameters_location$mu_j_baseline <- list(
-          description = "Baseline daily cholera mortality hazard applied to the symptomatic compartment (Isym) in LASER, per day. Derived from observed reported CFR via the v0.13+ steady-state identity: mu_j_baseline = reported_CFR * rho / (rho_deaths * chi).",
+          description = "Baseline daily cholera mortality hazard applied to the symptomatic compartment (Isym) in LASER, per day. Derived from observed reported CFR via the v0.14.0 steady-state identity (incidence-based reported_cases): mu_j_baseline = reported_CFR * gamma_1 * rho / (rho_deaths * chi).",
           location = list()
      )
 

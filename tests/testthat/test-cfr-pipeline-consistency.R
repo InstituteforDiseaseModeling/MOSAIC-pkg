@@ -88,15 +88,17 @@ test_that("config_default mu_j_baseline implies plausible per-episode CFR for hi
   cfg <- tryCatch(MOSAIC::config_default, error = function(e) NULL)
   if (is.null(cfg)) skip("config_default not loadable")
 
-  # Per-episode CFR ~ 1 - exp(-mu_baseline / gamma_1)
-  # For gamma_1 = 0.2/day (5-day symptomatic duration), this is ~ 5 * mu_baseline
-  # for small mu. High-N stable countries (MOZ, KEN, ETH, COD) should be in [0.5%, 15%].
+  # Per-episode CFR ~ 1 - exp(-mu_baseline / gamma_1), evaluated at config_default's
+  # ACTUAL gamma_1 (not a hardcoded 0.2 — config_default uses 0.1; the old hardcode
+  # was a latent 2x error that only surfaced once v0.14.0 lowered mu). v0.14.0: the
+  # gamma_1-factor CFR->mu identity lowers mu (hence per-episode CFR) ~8.8x vs the
+  # pre-v0.14 prevalence form. High-N stable countries should be in [0.5%, 15%].
   high_n_isos <- c("MOZ", "KEN", "ETH", "COD")
   for (iso in high_n_isos) {
     idx <- match(iso, cfg$location_name)
     if (is.na(idx)) next
     mu_baseline <- cfg$mu_j_baseline[idx]
-    per_episode_cfr <- 1 - exp(-mu_baseline / 0.2)
+    per_episode_cfr <- 1 - exp(-mu_baseline / cfg$gamma_1)
     expect_gt(per_episode_cfr, 0.005,
               label = sprintf("%s per-episode CFR (%.3f%%) too low", iso, 100*per_episode_cfr))
     expect_lt(per_episode_cfr, 0.15,
