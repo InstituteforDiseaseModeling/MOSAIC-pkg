@@ -542,6 +542,8 @@ Other exported functions and internal helpers
   : Named LSTM covariate feature sets for est_suitability()
 - [`attach_mosaic_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/attach_mosaic_env.md)
   : Attach MOSAIC Python Environment
+- [`backfill_weekly_case_gaps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md)
+  : Backfill Short Reporting Gaps in a Weekly Case Series
 - [`batch_clean_json()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/batch_clean_json.md)
   : Batch clean multiple JSON files
 - [`calc_affine_normalization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_affine_normalization.md)

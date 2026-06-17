@@ -1,5 +1,31 @@
 # Changelog
 
+## MOSAIC 0.40.0
+
+- **New
+  [`backfill_weekly_case_gaps()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md) +
+  `compile_suitability_data(backfill_case_gaps = TRUE)` repair
+  holiday-week false zeros in the suitability target.**
+  Genuinely-missing weekly surveillance weeks (most often the
+  Christmas/New-Year reporting lapse) were turned into `0` cases by the
+  suitability pipeline’s `NA→0` keras-target sanitiser, fabricating a
+  “no transmission” week inside an active outbreak. The new helper
+  linearly interpolates **short interior** gaps (`≤ max_interp_weeks`,
+  default 2) that are bounded by reported weeks, on the per-group weekly
+  series, inside
+  [`compile_suitability_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/compile_suitability_data.md)
+  before the target is built. It is **suitability-local by design** —
+  the canonical surveillance files and the calibration likelihood (which
+  correctly NA-skips missing weeks) are untouched.
+- Interpolation is **date-weighted** (handles unevenly-spaced rows,
+  e.g. a dropped ISO W53 leaving a 14-day step); **reported anchors are
+  never modified** (rounding/clamping apply to filled cells only, so
+  fractional disaggregated counts are preserved); gaps **shouldered by a
+  reported zero are left unfilled** (`min_anchor`, default 0 — a
+  near-zero shoulder is more likely a genuine non-outbreak week);
+  phantom duplicate `(iso, date)` rows are not fabricated; and a
+  `cases_interpolated` flag marks the filled weeks.
+
 ## MOSAIC 0.39.0
 
 - **[`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)

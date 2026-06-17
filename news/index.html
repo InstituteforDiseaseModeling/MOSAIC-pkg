@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.39.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.40.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,12 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.40.0" id="mosaic-0400">MOSAIC 0.40.0<a class="anchor" aria-label="anchor" href="#mosaic-0400"></a></h2>
+<ul><li>
+<strong>New <code><a href="../reference/backfill_weekly_case_gaps.html">backfill_weekly_case_gaps()</a></code> + <code>compile_suitability_data(backfill_case_gaps = TRUE)</code> repair holiday-week false zeros in the suitability target.</strong> Genuinely-missing weekly surveillance weeks (most often the Christmas/New-Year reporting lapse) were turned into <code>0</code> cases by the suitability pipeline’s <code>NA→0</code> keras-target sanitiser, fabricating a “no transmission” week inside an active outbreak. The new helper linearly interpolates <strong>short interior</strong> gaps (<code>≤ max_interp_weeks</code>, default 2) that are bounded by reported weeks, on the per-group weekly series, inside <code><a href="../reference/compile_suitability_data.html">compile_suitability_data()</a></code> before the target is built. It is <strong>suitability-local by design</strong> — the canonical surveillance files and the calibration likelihood (which correctly NA-skips missing weeks) are untouched.</li>
+<li>Interpolation is <strong>date-weighted</strong> (handles unevenly-spaced rows, e.g. a dropped ISO W53 leaving a 14-day step); <strong>reported anchors are never modified</strong> (rounding/clamping apply to filled cells only, so fractional disaggregated counts are preserved); gaps <strong>shouldered by a reported zero are left unfilled</strong> (<code>min_anchor</code>, default 0 — a near-zero shoulder is more likely a genuine non-outbreak week); phantom duplicate <code>(iso, date)</code> rows are not fabricated; and a <code>cases_interpolated</code> flag marks the filled weeks.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.39.0" id="mosaic-0390">MOSAIC 0.39.0<a class="anchor" aria-label="anchor" href="#mosaic-0390"></a></h2>
 <ul><li>

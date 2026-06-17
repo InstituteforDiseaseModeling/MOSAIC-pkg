@@ -18,7 +18,10 @@ compile_suitability_data(
   forecast_mode = TRUE,
   forecast_horizon = 3,
   include_lags = FALSE,
-  include_flood_prob = TRUE
+  include_flood_prob = TRUE,
+  backfill_case_gaps = TRUE,
+  backfill_max_weeks = 2L,
+  backfill_method = "linear"
 )
 ```
 
@@ -99,6 +102,26 @@ compile_suitability_data(
   `emdat_flood_prob_anom`). The probability covariates are populated in
   both the historical training and the forecast windows, so the
   downstream LSTM consumes the same feature definition in both regimes.
+
+- backfill_case_gaps:
+
+  Logical (default `TRUE`). Linearly interpolate short interior gaps in
+  the weekly case series (e.g. holiday non-reporting) before the
+  suitability target is built, via
+  [`backfill_weekly_case_gaps`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md),
+  so missing weeks inside an active outbreak are not stamped as false
+  zeros by the downstream NA-\>0 sanitiser.
+
+- backfill_max_weeks:
+
+  Integer (default `2L`). Maximum interior gap length (in weeks) to
+  interpolate; longer gaps are left for the zero-fill.
+
+- backfill_method:
+
+  Interpolation method passed to
+  [`backfill_weekly_case_gaps`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/backfill_weekly_case_gaps.md)
+  (default `"linear"`).
 
 ## Value
 
