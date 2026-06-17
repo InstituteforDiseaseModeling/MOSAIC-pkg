@@ -40,6 +40,13 @@ reasonable but encodes the wrong derivation is the failure mode you guard agains
   literature accessors (`get_*_data.R`)
 
 ## Conventions you must uphold
+- **Canonical parameter meanings live in `MOSAIC-docs/04-model-description.Rmd`.** Its inline
+  "Table of model parameters" gives a symbol→meaning row for every parameter, and the per-parameter
+  sections derive each one (κ `{#infectious-dose-kappa}`, ζ `{#sec:shedding}`, CFR μ
+  `{#case-fatality-rate}`, WASH θ, recovery γ, immunity/vaccination φ/ω/ν, observation process σ/ρ,
+  initial conditions). This is the authority for what a parameter MEANS — read the relevant section
+  before deriving or changing a value rather than inferring meaning from a variable name. Read the
+  `.Rmd` (current + inline glossary), not the stale rendered `docs/04-model-description.md`.
 - **`mu_j_baseline` is already v0.13-corrected.** The rho_deaths factor (~2.36×) is baked into
   `priors_default` v15.6 — **do NOT re-adjust it** (memory `project_mu_j_baseline_already_fixed`).
 - **`delta_reporting_deaths` = death-event-to-report** delay (not symptom-onset-to-report) under

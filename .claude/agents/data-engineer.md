@@ -48,6 +48,12 @@ field names, and source reconciliation.
   deterministically and document the precedence.
 - **Provenance:** record source, retrieval date, and any dedup/gap-fill rule in the processing
   code; missing data stays NA, not zero, unless a documented imputation applies.
+- **Canonical data-source documentation:** `MOSAIC-docs/03-data.Rmd` describes the surveillance /
+  demographic / climate / vaccination sources and how each maps into the model — keep
+  processed-field semantics and provenance aligned with it, and flag it for update when a source
+  changes. (Read the `.Rmd`, not the stale rendered `.md`.) Beyond the two git-refreshable source
+  repos above, `enso-data/`, `open-meteo-pipeline/`, and `ai-cholera-data-mining/` are sibling
+  repos that originate some raw climate/AI inputs (read-only).
 - Use `get_paths()` for all file locations; never hardcode.
 
 ## Before you finish

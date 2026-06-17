@@ -40,6 +40,13 @@ subtly wrong is the failure mode you exist to prevent.
 - **Distribution fitting machinery:** `fit_*_from_ci.R`
 
 ## Conventions you must uphold
+- **Model-term definitions you score against** — the observation process (σ, ρ, CFR μ), the R₀
+  decomposition, the effective Rₜ, and the generation-time distribution — are derived
+  authoritatively in `MOSAIC-docs/04-model-description.Rmd` ("## The observation process", "## The
+  basic reproductive number", "## The effective reproductive number", "### The generation time
+  distribution"); BFRS calibration methodology (weighting, convergence) is in
+  `05-model-calibration.Rmd`. Read the relevant section rather than reverse-engineering intent from
+  the scoring code. (Read the `.Rmd`, not the stale rendered `.md`.)
 - **Deaths/cases field naming:** likelihood and PPC comparisons use
   `model$results$reported_deaths` and `reported_cases` — **never** raw `disease_deaths` /
   `disease_cases`. Raw disease counts are inflated by ~1/rho_deaths (≈2.4×). (Lesson #12.)

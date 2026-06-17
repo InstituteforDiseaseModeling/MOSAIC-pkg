@@ -39,6 +39,11 @@ predictive validity without leakage and honest reporting of a genuinely weak sig
   `evaluate_rolling_cv.R` (suitability scope)
 
 ## Conventions you must uphold
+- **The canonical ψ definition is in `MOSAIC-docs/04-model-description.Rmd`** — "## Environmental
+  transmission" and "### Modeling environmental suitability" cover how ψ_jt enters β_env and the
+  decay rate δ, the cumulative-Beta f(ψ) transform, the LSTM architecture/covariates, and the ψ*
+  affine calibration step. Read it (the `.Rmd`, not the stale rendered `.md`) so your modeling
+  matches how the engine actually consumes ψ.
 - **Rolling-origin CV is strict forward-in-time with a 4-week embargo** — no future information
   may reach training. Leakage is the cardinal sin here.
 - **5-seed ensemble averaged on the logit scale** (not the probability scale).

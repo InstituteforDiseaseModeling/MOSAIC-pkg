@@ -30,6 +30,10 @@ dev specialist.
 - Diagnostics code: `calc_convergence_diagnostics.R` (ESS/agreement/CVW tiers), `calc_model_R2.R`
   (R² + bias ratio), `plot_model_*` diagnostics
 - Playbooks: the bias-sweep and OOS-investigation findings (below)
+- Parameter/model spec: `MOSAIC-docs/04-model-description.Rmd` — the inline "Table of model
+  parameters" (symbol→meaning for every parameter) and per-parameter sections; use it to map a fit
+  symptom to the parameter(s) it implicates and to sanity-check plausible ranges. Read the `.Rmd`,
+  not the stale rendered `.md`.
 
 ## Diagnostic playbook
 - **Over-prediction** is usually a **shape** problem, not a scale problem. Best in-sample bias

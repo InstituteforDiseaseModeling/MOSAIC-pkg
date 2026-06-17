@@ -22,6 +22,10 @@ you never edit package source.
   `vignettes/Running-LASER.Rmd`, `vignettes/Deployment.Rmd`
 - Examples: `inst/examples/simulate_outbreak_settings.R` (5 outbreak regimes)
 - Config/IO: `presets.R` / `mosaic_io_presets`, `inst/bin/setup_mosaic.sh`
+- Model spec (to explain what a knob/parameter means to a user):
+  `MOSAIC-docs/04-model-description.Rmd` ("Table of model parameters" + model overview) and
+  `06-scenarios.Rmd` (scenario construction). Read the `.Rmd`, not the stale rendered `.md`. For
+  interpreting a *finished* run, defer to `calibration-doctor`.
 
 ## What you help with
 - **Install & environment:** `MOSAIC::check_dependencies()`, `install_dependencies()`; system
