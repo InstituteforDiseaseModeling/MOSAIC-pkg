@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.43.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,10 +69,29 @@
 <span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="ex">R</span> CMD check .                                                     <span class="co"># Full package check</span></span>
 <span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"MOSAIC::check_dependencies()"</span>                        <span class="co"># Verify Python env</span></span></code></pre></div>
 <p><strong>Critical paths (DON’T BREAK THESE):</strong> - <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> — main calibration workflow (<code>R/run_MOSAIC.R</code>) - <code><a href="reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> — called 1000s of times (<code>R/calc_model_likelihood.R</code>) - <code><a href="reference/sample_parameters.html">sample_parameters()</a></code> — 301 parameters (<code>R/sample_parameters.R</code>) - <code><a href="reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> — posterior-weighted ensemble (<code>R/calc_model_ensemble.R</code>)</p>
-<p><strong>File rules:</strong> - Use <code>./claude/</code> for ALL temporary/exploratory files - Use <code><a href="reference/get_paths.html">get_paths()</a></code> for ALL file operations (never hardcode paths) - Never modify: laser-cholera/, ees-cholera-mapping/, jhu_cholera_data/ (read-only) - Never modify: MOSAIC-data/raw/ (read-only) - Never create files in package root without necessity</p>
+<p><strong>File rules:</strong> - Use <code>./claude/</code> for ALL temporary/exploratory files - Use <code><a href="reference/get_paths.html">get_paths()</a></code> for ALL file operations (never hardcode paths) - Never modify read-only deps: laser-cholera/, ees-cholera-mapping/, jhu_cholera_data/, MOSAIC-data/raw/ (canonical list: root CLAUDE.md “Repository Access Rules”) - Never create files in package root without necessity</p>
 <p><strong>Ask user first if:</strong> - Adding new R or Python package dependency - Changing function signature of exported function - Modifying <code><a href="reference/run_MOSAIC.html">run_MOSAIC()</a></code> core loop - Unsure about approach (multiple valid solutions)</p>
-<p><strong>Agent roster &amp; skills:</strong> this package defines a Claude Code subagent roster + a <code>diagnose-fit</code> skill in <strong><code>.claude/</code></strong> (tracked in git) — see <strong><code>.claude/agents/README.md</code></strong> for the full roster, routing, colors, and aliases. The agents can read/write data and outputs in sibling repos under <code>~/MOSAIC</code> (e.g. country repos, the <code>output/</code> tree) via the session’s <code>additionalDirectories</code> grant. Shortcuts: <code>/swe</code> (engineering), <code>/stat</code> (Bayesian/likelihood), <code>/dm</code> (epi/priors), <code>/ml</code> (suitability), <code>/etl</code> (data ingestion), <code>/cr</code> (review+housekeeping), <code>/guide</code> (user how-to), <code>/doctor</code> + <code>/diagnose-fit</code> (calibration diagnosis).</p>
+<p><strong>Agent roster &amp; skills:</strong> this package defines a Claude Code subagent roster + the <code>diagnose-fit</code>, <code>context-audit</code>, and <code>hedgehog-run</code> skills in <strong><code>.claude/</code></strong> (tracked in git) — see <strong><code>.claude/agents/README.md</code></strong> for the full roster, routing, colors, and aliases. The agents can read/write data and outputs in sibling repos under <code>~/MOSAIC</code> (e.g. country repos, the <code>output/</code> tree) via the session’s <code>additionalDirectories</code> grant. Shortcuts: <code>/swe</code> (engineering), <code>/stat</code> (Bayesian/likelihood), <code>/dm</code> (epi/priors), <code>/ml</code> (suitability), <code>/etl</code> (data ingestion), <code>/cr</code> (review+housekeeping), <code>/guide</code> (user how-to), <code>/doctor</code> + <code>/diagnose-fit</code> (calibration diagnosis), <code>/arch</code> + <code>/context-audit</code> (AI-context hygiene).</p>
 <hr></div>
+<div class="section level2">
+<h2 id="canonical-references--parameter-meanings--model-spec">Canonical references — parameter meanings &amp; model spec<a class="anchor" aria-label="anchor" href="#canonical-references--parameter-meanings--model-spec"></a></h2>
+<p><strong>If you are unsure what a parameter means or how a model term is defined, READ THE SPEC — do not guess from the variable name.</strong> The authoritative definitions live <em>outside</em> this package and are reachable via the session’s additional-directory access. Pull the specific section on demand (don’t paste the whole doc into context):</p>
+<ul><li>
+<strong><code>MOSAIC-docs/04-model-description.Rmd</code></strong> — THE model specification + full parameter glossary. Its <strong>“Table of model parameters”</strong> section (~line 1434) is an inline symbol→meaning table for <em>every</em> parameter (β_hum/β_env, ψ, κ, ζ₁/ζ₂, θ, ν, φ/ω, μ_jt, σ, ρ, γ₁/γ₂, δ/δ_min/δ_max, ι, ε, a₁/b₁/a₂/b₂, α₁/α₂, τ, π, …). <strong>Read the <code>.Rmd</code></strong> (current + inline) — the rendered <code>docs/04-model-description.md</code> is stale and omits the table. Section index for deep dives:
+<ul><li>Transmission / force of infection → “## Transmission dynamics”; seasonality → “## Seasonality”</li>
+<li>Environmental suitability ψ + LSTM → “### Modeling environmental suitability”</li>
+<li>Infectious dose κ → <code>{#infectious-dose-kappa}</code>; shedding ζ → <code>{#sec:shedding}</code>; recovery γ → “### Recovery rates”</li>
+<li>WASH θ → “### WAter, Sanitation, and Hygiene (WASH)”; immunity/vaccination φ/ω/ν → “## Immune dynamics”</li>
+<li>Spatial τ/π/coupling → “## Spatial dynamics”; observation process σ/ρ + CFR μ → “## The observation process”, <code>{#case-fatality-rate}</code>
+</li>
+<li>R₀ decomposition / Rₜ / generation time → “## The basic reproductive number”, “## The effective reproductive number”</li>
+<li>Initial conditions → “## Initial conditions”; transitions/vaccine terms → “## Table of stochastic transitions”, “## Table of vaccination model terms”</li>
+</ul></li>
+<li>
+<strong><code>MOSAIC-docs/05-model-calibration.Rmd</code></strong> — BFRS calibration methodology (weighting, convergence). <strong><code>MOSAIC-docs/03-data.Rmd</code></strong> — data sources &amp; provenance. <strong><code>06-scenarios.Rmd</code></strong> — scenarios.</li>
+<li>
+<strong><code>laser-cholera/src/laser/cholera/metapop/params.py</code></strong> — engine-side authoritative parameter names/types (the contract the simulator actually consumes; read-only).</li>
+</ul><hr></div>
 <div class="section level2">
 <h2 id="package-overview">Package Overview<a class="anchor" aria-label="anchor" href="#package-overview"></a></h2>
 <p><strong>MOSAIC</strong> (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. It integrates with the Python laser-cholera engine via reticulate and provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.</p>

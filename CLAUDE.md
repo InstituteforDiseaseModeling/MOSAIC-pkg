@@ -57,10 +57,10 @@ Rscript -e "MOSAIC::check_dependencies()"                        # Verify Python
 **File rules:** - Use `./claude/` for ALL temporary/exploratory files -
 Use
 [`get_paths()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_paths.md)
-for ALL file operations (never hardcode paths) - Never modify:
-laser-cholera/, ees-cholera-mapping/, jhu_cholera_data/ (read-only) -
-Never modify: MOSAIC-data/raw/ (read-only) - Never create files in
-package root without necessity
+for ALL file operations (never hardcode paths) - Never modify read-only
+deps: laser-cholera/, ees-cholera-mapping/, jhu_cholera_data/,
+MOSAIC-data/raw/ (canonical list: root CLAUDE.md “Repository Access
+Rules”) - Never create files in package root without necessity
 
 **Ask user first if:** - Adding new R or Python package dependency -
 Changing function signature of exported function - Modifying
@@ -68,15 +68,55 @@ Changing function signature of exported function - Modifying
 core loop - Unsure about approach (multiple valid solutions)
 
 **Agent roster & skills:** this package defines a Claude Code subagent
-roster + a `diagnose-fit` skill in **`.claude/`** (tracked in git) — see
-**`.claude/agents/README.md`** for the full roster, routing, colors, and
-aliases. The agents can read/write data and outputs in sibling repos
-under `~/MOSAIC` (e.g. country repos, the `output/` tree) via the
-session’s `additionalDirectories` grant. Shortcuts: `/swe`
-(engineering), `/stat` (Bayesian/likelihood), `/dm` (epi/priors), `/ml`
-(suitability), `/etl` (data ingestion), `/cr` (review+housekeeping),
-`/guide` (user how-to), `/doctor` + `/diagnose-fit` (calibration
-diagnosis).
+roster + the `diagnose-fit`, `context-audit`, and `hedgehog-run` skills
+in **`.claude/`** (tracked in git) — see **`.claude/agents/README.md`**
+for the full roster, routing, colors, and aliases. The agents can
+read/write data and outputs in sibling repos under `~/MOSAIC`
+(e.g. country repos, the `output/` tree) via the session’s
+`additionalDirectories` grant. Shortcuts: `/swe` (engineering), `/stat`
+(Bayesian/likelihood), `/dm` (epi/priors), `/ml` (suitability), `/etl`
+(data ingestion), `/cr` (review+housekeeping), `/guide` (user how-to),
+`/doctor` + `/diagnose-fit` (calibration diagnosis), `/arch` +
+`/context-audit` (AI-context hygiene).
+
+------------------------------------------------------------------------
+
+## Canonical references — parameter meanings & model spec
+
+**If you are unsure what a parameter means or how a model term is
+defined, READ THE SPEC — do not guess from the variable name.** The
+authoritative definitions live *outside* this package and are reachable
+via the session’s additional-directory access. Pull the specific section
+on demand (don’t paste the whole doc into context):
+
+- **`MOSAIC-docs/04-model-description.Rmd`** — THE model specification +
+  full parameter glossary. Its **“Table of model parameters”** section
+  (~line 1434) is an inline symbol→meaning table for *every* parameter
+  (β_hum/β_env, ψ, κ, ζ₁/ζ₂, θ, ν, φ/ω, μ_jt, σ, ρ, γ₁/γ₂,
+  δ/δ_min/δ_max, ι, ε, a₁/b₁/a₂/b₂, α₁/α₂, τ, π, …). **Read the `.Rmd`**
+  (current + inline) — the rendered `docs/04-model-description.md` is
+  stale and omits the table. Section index for deep dives:
+  - Transmission / force of infection → “## Transmission dynamics”;
+    seasonality → “## Seasonality”
+  - Environmental suitability ψ + LSTM → “### Modeling environmental
+    suitability”
+  - Infectious dose κ → `{#infectious-dose-kappa}`; shedding ζ →
+    `{#sec:shedding}`; recovery γ → “### Recovery rates”
+  - WASH θ → “### WAter, Sanitation, and Hygiene (WASH)”;
+    immunity/vaccination φ/ω/ν → “## Immune dynamics”
+  - Spatial τ/π/coupling → “## Spatial dynamics”; observation process
+    σ/ρ + CFR μ → “## The observation process”, `{#case-fatality-rate}`
+  - R₀ decomposition / Rₜ / generation time → “## The basic reproductive
+    number”, “## The effective reproductive number”
+  - Initial conditions → “## Initial conditions”; transitions/vaccine
+    terms → “## Table of stochastic transitions”, “## Table of
+    vaccination model terms”
+- **`MOSAIC-docs/05-model-calibration.Rmd`** — BFRS calibration
+  methodology (weighting, convergence). **`MOSAIC-docs/03-data.Rmd`** —
+  data sources & provenance. **`06-scenarios.Rmd`** — scenarios.
+- **`laser-cholera/src/laser/cholera/metapop/params.py`** — engine-side
+  authoritative parameter names/types (the contract the simulator
+  actually consumes; read-only).
 
 ------------------------------------------------------------------------
 
