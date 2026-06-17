@@ -123,6 +123,11 @@ exported signatures / the `run_MOSAIC()` core loop.
   calibration runs on the hedgehog Azure VM (120 cores / 448 GB): backend choice (local PSOCK vs
   Coiled hybrid), the GLIBCXX R wrapper, surviving SSH disconnect (nohup/tmux), the control +
   `dask_spec` recipe, and pulling results. Invoke via the `Skill` tool for hedgehog run logistics.
+- **`docker-image-update`** (`.claude/skills/docker-image-update/`) — rebuild and publish the MOSAIC
+  Coiled worker image (`idmmosaicacr.azurecr.io/mosaic-worker`): backup-tag, cross-arch
+  (`--platform linux/amd64`) build, push to ACR, delete-then-recreate the `mosaic-acr-workers` Coiled
+  env, smoke test, roll back. Turnkey via `azure/rebuild_image.sh` + `azure/refresh_coiled_env.py`.
+  Invoke via the `Skill` tool when updating the worker image after a version/dependency bump.
 
 ## Invoking
 
