@@ -1,0 +1,1 @@
+- [hedgehog-run infra](project_hedgehog_run_infra.md) — hedgehog VM run mechanics + two vm/ helper traps (broken ETH template, pull_results.sh does not compress)

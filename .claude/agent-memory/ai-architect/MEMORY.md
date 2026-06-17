@@ -1,0 +1,1 @@
+- [Skill refs must resolve on HEAD, not just in git](feedback_skill_refs_must_be_on_branch.md) — verify cited sibling docs are ancestors of HEAD; a doc on an unmerged branch = dangling ref
