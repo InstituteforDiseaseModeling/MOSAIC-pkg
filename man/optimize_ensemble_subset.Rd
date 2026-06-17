@@ -11,6 +11,8 @@ optimize_ensemble_subset(
   min_n = 30L,
   objective = c("mae", "r2_bias", "wis"),
   central_method = "median",
+  stride = 1L,
+  cl = NULL,
   verbose = TRUE
 )
 }
@@ -52,12 +54,28 @@ setting (its point forecast remains the weighted median). The default
 selection and the Tier-2 bit-for-bit parity guarantee; \code{run_MOSAIC()}
 passes the package default (\code{"mean"}) explicitly.}
 
+\item{stride}{Integer >= 1. \code{1L} (default) evaluates every N in
+\code{min_n:max_n} (exhaustive, bit-identical parity path). \code{> 1L}
+enables a coarse-then-refine two-stage search (see Details). \strong{Opt-in};
+changes which N's are evaluated and may select a slightly different
+\code{optimal_n} than the exhaustive search.}
+
+\item{cl}{Optional parallel cluster (from
+\code{\link{make_mosaic_cluster}} or \code{parallel::makeCluster}) used to
+split the per-cell evaluation kernel across workers. \code{NULL} (default)
+runs serially. When supplied, the result is bit-for-bit identical to the
+serial path. Must be a \code{"PSOCK"} cluster (FORK is unsafe at this point
+in the pipeline). For trivially small problems the function falls back to
+serial regardless of \code{cl}.}
+
 \item{verbose}{Logical; if \code{TRUE}, emit progress messages.}
 }
 \value{
 An S3 object of class \code{mosaic_subset_optimization} containing:
 \describe{
-\item{evaluation_table}{Data frame with one row per N evaluated.}
+\item{evaluation_table}{Data frame with one row per N evaluated. With
+\code{stride > 1L} this contains only the coarse + refine N's, sorted by
+N, not every N in \code{min_n:max_n}.}
 \item{optimal_n}{Selected subset size.}
 \item{optimal_score}{Score at optimal N.}
 \item{optimal_weights}{Re-computed Gibbs weights for the optimal subset.}
@@ -67,7 +85,7 @@ likelihood-sorted order, aligned with \code{optimal_weights} (when
 \code{seeds} supplied), else \code{NULL}.}
 \item{ensemble_optimized}{Complete \code{mosaic_ensemble} object at optimal
 N. Its \code{$seeds} field is the per-member seed aligned with its
-\code{cases_array} (member i <-> seeds\link{i}) when \code{ensemble$seeds} was
+\code{cases_array} (member-to-seed aligned) when \code{ensemble$seeds} was
 present, else it falls back to \code{optimal_seeds}.}
 \item{stability_flag}{TRUE if score profile was flat.}
 \item{diagnostics_n}{Original diagnostics-selected N.}
@@ -78,15 +96,44 @@ present, else it falls back to \code{optimal_seeds}.}
 }
 }
 \description{
-Post-ensemble optimization that evaluates every possible top-N subset
-(ranked by likelihood) and selects the N that maximizes prediction quality.
-Produces a separate \code{mosaic_ensemble} object at the optimal subset size,
-leaving the original ensemble untouched.
+Post-ensemble optimization that evaluates top-N subsets (ranked by
+likelihood) and selects the N that maximizes prediction quality. Produces a
+separate \code{mosaic_ensemble} object at the optimal subset size, leaving the
+original ensemble untouched.
 
 For each candidate size N (from \code{min_n} to the full ensemble), the
 function re-computes Gibbs weights within the top-N subset, re-computes
 weighted median predictions from the 4D arrays, and scores with the selected
 objective function.
+}
+\details{
+The evaluation loop is organized \emph{cell-outer}: each
+\code{[location, time]} cell's finite predictions are gathered once and then
+scored across every candidate N (the gather does not depend on N), filling a
+per-cell vector of central tendencies. The default call path (\code{stride = 1L},
+\code{cl = NULL}) is exhaustive and serial and is guaranteed bit-for-bit
+identical to the historical implementation (Tier-2 parity).
+
+Two opt-in speed levers are available:
+\itemize{
+\item \strong{PSOCK parallelism} (\code{cl}): the \code{n_locations *
+    n_time_points} cells are split across the supplied cluster's workers. The
+result is bit-for-bit identical to the serial path (each worker runs the
+same kernel on a disjoint block of cells; the master scatters the per-cell
+central/quantile values back into the same \code{[i, j]} positions). FORK
+clusters are unsafe here (native reticulate/numba threads are loaded by
+this post-calibration point); pass a \code{"PSOCK"} cluster.
+\item \strong{Stride-then-refine} (\code{stride}): with \code{stride > 1L},
+a coarse grid \code{seq(min_n, max_n, by = stride)} is evaluated first to
+locate the best N*, then a refinement bracket
+\code{(N*-stride):(N*+stride)} is evaluated, and the selection logic runs
+over the combined (coarse + refine) rows. This is \strong{not} bit-identical
+to the exhaustive path: \code{evaluation_table} contains only the evaluated
+N's (fewer rows), and the selected \code{optimal_n} may differ slightly from
+the exhaustive optimum if the score profile is non-monotone between coarse
+points. The trade is roughly an \code{O(stride)} reduction in the number of
+N's evaluated.
+}
 }
 \references{
 Bracher J et al. (2021). Evaluating epidemic forecasts in an interval format.
@@ -94,4 +141,8 @@ Bracher J et al. (2021). Evaluating epidemic forecasts in an interval format.
 
 Gneiting T & Raftery AE (2007). Strictly Proper Scoring Rules, Prediction,
 and Estimation. \emph{JASA}, 102(477), 359--378.
+}
+\seealso{
+\code{\link{make_mosaic_cluster}} for building a PSOCK cluster to
+pass to \code{cl}.
 }

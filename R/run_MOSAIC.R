@@ -2218,6 +2218,28 @@ run_MOSAIC <- function(config,
     cand_seeds       <- .opt_bs$seed_sim[.opt_nz]
     cand_likelihoods <- .opt_bs$likelihood[.opt_nz]
 
+    # Optional short-lived PSOCK cluster for this step only. The calibration
+    # cluster is already stopped (line ~1527), so the optimizer needs its own.
+    # Only build it when the user asks for >1 core AND the problem is non-trivial
+    # (more than one [location, time] cell). FORK is unsafe here (reticulate /
+    # numba native threads are loaded post-calibration -> fork-deadlock).
+    .opt_n_cores  <- as.integer(control$predictions$optimize_n_cores %||% 1L)
+    .opt_n_cells  <- as.integer(ensemble$n_locations) * as.integer(ensemble$n_time_points)
+    .opt_cl <- NULL
+    if (.opt_n_cores > 1L && .opt_n_cells >= 2L) {
+      .opt_cl <- tryCatch(
+        make_mosaic_cluster(n_cores = min(.opt_n_cores, .opt_n_cells), type = "PSOCK"),
+        error = function(e) {
+          log_warn("optimize subset: PSOCK cluster build failed (%s); running serial",
+                   e$message)
+          NULL
+        }
+      )
+      if (!is.null(.opt_cl)) {
+        on.exit(try(parallel::stopCluster(.opt_cl), silent = TRUE), add = TRUE)
+      }
+    }
+
     subset_opt <- tryCatch(
       optimize_ensemble_subset(
         ensemble    = ensemble,
@@ -2226,6 +2248,8 @@ run_MOSAIC <- function(config,
         min_n       = as.integer(control$predictions$optimize_min_n %||% 30L),
         objective   = control$predictions$optimize_objective %||% "mae",
         central_method = central_method,
+        stride      = as.integer(control$predictions$optimize_stride %||% 1L),
+        cl          = .opt_cl,
         verbose     = control$logging$verbose
       ),
       error = function(e) {
@@ -2233,6 +2257,12 @@ run_MOSAIC <- function(config,
         NULL
       }
     )
+
+    # Release the optimizer's cluster promptly (also covered by on.exit above).
+    if (!is.null(.opt_cl)) {
+      try(parallel::stopCluster(.opt_cl), silent = TRUE)
+      .opt_cl <- NULL
+    }
 
     if (!is.null(subset_opt) && !is.null(subset_opt$optimal_seeds) &&
         length(subset_opt$optimal_seeds) > 0) {
@@ -2312,6 +2342,21 @@ run_MOSAIC <- function(config,
       diag_path <- file.path(dirs$res_fig_diag, "optimization_diagnostics.csv")
       utils::write.csv(subset_opt$evaluation_table, diag_path, row.names = FALSE)
       log_msg("Saved 3_results/figures/diagnostics/optimization_diagnostics.csv")
+
+      # Render the optimization diagnostic figure (objective / R^2 / bias / ESS
+      # vs subset size N). Gated on plots being enabled; the surrounding block
+      # already guarantees optimize_subset = TRUE.
+      if (isTRUE(control$paths$plots)) {
+        tryCatch({
+          plot_model_subset_optimization(
+            subset_opt  = subset_opt,
+            output_dir  = dirs$res_fig_diag,
+            file_prefix = "subset_optimization",
+            verbose     = control$logging$verbose
+          )
+          log_msg("Saved 3_results/figures/diagnostics/subset_optimization_diagnostic.{pdf,png}")
+        }, error = function(e) log_warn("subset optimization plot failed: %s", e$message))
+      }
 
       # Patch convergence_diagnostics.json with the optimizer-selected subset size
       conv_diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -3116,6 +3161,19 @@ run_mosaic <- run_MOSAIC
 #'       degeneracy in \code{posteriors.json}).
 #'     \item \code{optimize_objective}: Objective function, \code{"mae"} (default),
 #'       \code{"r2_bias"}, or \code{"wis"}.
+#'     \item \code{optimize_stride}: Integer >= 1 (default \code{1L}). \code{1L}
+#'       evaluates every candidate subset size in \code{min_n:max_n} (exhaustive,
+#'       bit-identical to the historical search). \code{> 1L} enables a
+#'       coarse-then-refine search that evaluates a strided grid first and then
+#'       refines around the best point -- substantially faster but \strong{opt-in},
+#'       as it may select a slightly different \code{optimal_n} than the exhaustive
+#'       search and records only the evaluated N's in the diagnostics table.
+#'     \item \code{optimize_n_cores}: Integer >= 1 (default \code{1L}). \code{1L}
+#'       runs the subset-optimization step serially. \code{> 1L} builds a
+#'       short-lived PSOCK cluster (the calibration cluster is already stopped by
+#'       this point) that splits the per-cell evaluation across workers. The result
+#'       is bit-for-bit identical to the serial path; the cluster is created and
+#'       stopped within the step.
 #'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
 #'       (default; unbiased for expected counts and never collapses on sparse
 #'       deaths) or \code{"median"} (reproduces pre-v0.38 runs). Scalar or
@@ -3390,6 +3448,16 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # to guard against KDE degeneracy when the
                                           # optimized subset drives posterior densities.
     optimize_objective = "mae",          # Objective: "mae", "r2_bias", or "wis"
+    optimize_stride    = 1L,             # Subset-search stride: 1 = exhaustive
+                                          # (every N in min_n:max_n). >1 enables a
+                                          # coarse-then-refine search (faster, opt-in;
+                                          # changes selection -- may pick a slightly
+                                          # different optimal_n than exhaustive).
+    optimize_n_cores   = 1L,             # Cores for the subset-optimization step:
+                                          # 1 = serial; >1 builds a short-lived PSOCK
+                                          # cluster for this step (bit-identical to
+                                          # serial). Independent of the calibration
+                                          # cluster, which is already stopped here.
     central_method     = "mean"          # Ensemble central tendency: "mean" (default,
                                           # unbiased E[sum]; never collapses on sparse
                                           # deaths) or "median" (reproduces historical

@@ -88,6 +88,19 @@ likelihood-weighted posterior.
 degeneracy in \code{posteriors.json}).
 \item \code{optimize_objective}: Objective function, \code{"mae"} (default),
 \code{"r2_bias"}, or \code{"wis"}.
+\item \code{optimize_stride}: Integer >= 1 (default \code{1L}). \code{1L}
+evaluates every candidate subset size in \code{min_n:max_n} (exhaustive,
+bit-identical to the historical search). \code{> 1L} enables a
+coarse-then-refine search that evaluates a strided grid first and then
+refines around the best point -- substantially faster but \strong{opt-in},
+as it may select a slightly different \code{optimal_n} than the exhaustive
+search and records only the evaluated N's in the diagnostics table.
+\item \code{optimize_n_cores}: Integer >= 1 (default \code{1L}). \code{1L}
+runs the subset-optimization step serially. \code{> 1L} builds a
+short-lived PSOCK cluster (the calibration cluster is already stopped by
+this point) that splits the per-cell evaluation across workers. The result
+is bit-for-bit identical to the serial path; the cluster is created and
+stopped within the step.
 \item \code{central_method}: Ensemble central tendency, \code{"mean"}
 (default; unbiased for expected counts and never collapses on sparse
 deaths) or \code{"median"} (reproduces pre-v0.38 runs). Scalar or

@@ -1,1 +1,3 @@
 - [hedgehog-run infra](project_hedgehog_run_infra.md) — hedgehog VM run mechanics + two vm/ helper traps (broken ETH template, pull_results.sh does not compress)
+- [cairo_pdf glyph trap](cairo_pdf_glyph_trap.md) — capabilities("cairo") lies on this box; probe a real cairo_pdf device + fall back to ASCII labels for PDF Unicode glyphs
+- [optimize_subset levers](project_optimize_subset_levers.md) — optimize_ensemble_subset() A/B/C speedups; the ci=(i-1)*n_times+j scatter contract + byrow=TRUE parity trap; PSOCK-not-FORK; install-before-parallel-test

@@ -314,6 +314,94 @@ test_that("stability guard selects largest N when profile is flat", {
 
 
 # ===========================================================================
+# Lever B: PSOCK cell-split parallelism is bit-identical to serial
+# ===========================================================================
+
+test_that("parallel (cl, stride=1) is bit-identical to serial across objectives", {
+  skip_on_cran()
+  # The worker resolves MOSAIC:::.optimize_eval_cell_block from the INSTALLED
+  # namespace (library(MOSAIC) on each worker). Skip if the installed package
+  # predates this refactor (e.g. running via load_all against a stale install).
+  skip_if_not(isTRUE(tryCatch(
+    is.function(get(".optimize_eval_cell_block", envir = asNamespace("MOSAIC"))),
+    error = function(e) FALSE)),
+    "installed MOSAIC lacks .optimize_eval_cell_block")
+
+  cl <- tryCatch(parallel::makeCluster(2L, type = "PSOCK"), error = function(e) NULL)
+  skip_if(is.null(cl), "could not create PSOCK cluster")
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  invisible(parallel::clusterEvalQ(cl, suppressMessages(library(MOSAIC))))
+
+  ens <- make_mock_ensemble(n_locs = 3, n_times = 8, n_params = 16, n_stoch = 3)
+  lls <- make_mock_likelihoods(16)
+  seeds <- 2001:2016
+
+  for (o in c("mae", "r2_bias", "wis")) {
+    ser <- optimize_ensemble_subset(ens, lls, seeds = seeds, min_n = 4L,
+                                    objective = o, central_method = "mean",
+                                    verbose = FALSE)
+    par <- optimize_ensemble_subset(ens, lls, seeds = seeds, min_n = 4L,
+                                    objective = o, central_method = "mean",
+                                    cl = cl, verbose = FALSE)
+    expect_identical(par$optimal_n, ser$optimal_n, info = o)
+    expect_identical(par$optimal_seeds, ser$optimal_seeds, info = o)
+    expect_equal(par$optimal_weights, ser$optimal_weights, tolerance = 0, info = o)
+    expect_equal(par$evaluation_table, ser$evaluation_table, tolerance = 0, info = o)
+    eo <- par$ensemble_optimized; er <- ser$ensemble_optimized
+    expect_equal(eo$cases_median,  er$cases_median,  tolerance = 0, info = o)
+    expect_equal(eo$deaths_median, er$deaths_median, tolerance = 0, info = o)
+    expect_equal(eo$cases_mean,    er$cases_mean,    tolerance = 0, info = o)
+    expect_equal(eo$deaths_mean,   er$deaths_mean,   tolerance = 0, info = o)
+    expect_equal(eo$ci_bounds,     er$ci_bounds,     tolerance = 0, info = o)
+  }
+})
+
+
+# ===========================================================================
+# Lever C: stride-then-refine selects a valid N and a subset of exhaustive N's
+# ===========================================================================
+
+test_that("stride > 1 returns valid optimal_n and a subset of the exhaustive N's", {
+  ens <- make_mock_ensemble(n_locs = 2, n_times = 10, n_params = 30, n_stoch = 3)
+  lls <- make_mock_likelihoods(30)
+  min_n <- 4L
+
+  exhaustive <- optimize_ensemble_subset(ens, lls, min_n = min_n,
+                                         objective = "mae", verbose = FALSE)
+
+  for (stride in c(3L, 5L)) {
+    res <- optimize_ensemble_subset(ens, lls, min_n = min_n, objective = "mae",
+                                    stride = stride, verbose = FALSE)
+    # optimal_n is within [min_n, max_n]
+    expect_true(res$optimal_n >= min_n && res$optimal_n <= 30L,
+                info = paste("stride", stride))
+    # evaluation_table N's are a strict subset of the exhaustive N's
+    expect_true(all(res$evaluation_table$n %in% exhaustive$evaluation_table$n),
+                info = paste("stride", stride))
+    expect_true(nrow(res$evaluation_table) < nrow(exhaustive$evaluation_table),
+                info = paste("stride", stride))
+    # rows are sorted ascending by N
+    expect_false(is.unsorted(res$evaluation_table$n), info = paste("stride", stride))
+    # returned object is well-formed
+    expect_s3_class(res, "mosaic_subset_optimization")
+    expect_s3_class(res$ensemble_optimized, "mosaic_ensemble")
+    expect_equal(res$ensemble_optimized$n_param_sets, res$optimal_n,
+                 info = paste("stride", stride))
+  }
+})
+
+test_that("stride = 1 reproduces the exhaustive search exactly", {
+  ens <- make_mock_ensemble(n_params = 20)
+  lls <- make_mock_likelihoods(20)
+  a <- optimize_ensemble_subset(ens, lls, min_n = 4L, objective = "mae", verbose = FALSE)
+  b <- optimize_ensemble_subset(ens, lls, min_n = 4L, objective = "mae",
+                                stride = 1L, verbose = FALSE)
+  expect_equal(a$evaluation_table, b$evaluation_table, tolerance = 0)
+  expect_identical(a$optimal_n, b$optimal_n)
+})
+
+
+# ===========================================================================
 # WIS helper tests
 # ===========================================================================
 
