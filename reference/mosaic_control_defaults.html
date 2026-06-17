@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -165,6 +165,19 @@ likelihood-weighted posterior.</p></li>
 degeneracy in <code>posteriors.json</code>).</p></li>
 <li><p><code>optimize_objective</code>: Objective function, <code>"mae"</code> (default),
 <code>"r2_bias"</code>, or <code>"wis"</code>.</p></li>
+<li><p><code>optimize_stride</code>: Integer &gt;= 1 (default <code>1L</code>). <code>1L</code>
+evaluates every candidate subset size in <code>min_n:max_n</code> (exhaustive,
+bit-identical to the historical search). <code>&gt; 1L</code> enables a
+coarse-then-refine search that evaluates a strided grid first and then
+refines around the best point – substantially faster but <strong>opt-in</strong>,
+as it may select a slightly different <code>optimal_n</code> than the exhaustive
+search and records only the evaluated N's in the diagnostics table.</p></li>
+<li><p><code>optimize_n_cores</code>: Integer &gt;= 1 (default <code>1L</code>). <code>1L</code>
+runs the subset-optimization step serially. <code>&gt; 1L</code> builds a
+short-lived PSOCK cluster (the calibration cluster is already stopped by
+this point) that splits the per-cell evaluation across workers. The result
+is bit-for-bit identical to the serial path; the cluster is created and
+stopped within the step.</p></li>
 <li><p><code>central_method</code>: Ensemble central tendency, <code>"mean"</code>
 (default; unbiased for expected counts and never collapses on sparse
 deaths) or <code>"median"</code> (reproduces pre-v0.38 runs). Scalar or

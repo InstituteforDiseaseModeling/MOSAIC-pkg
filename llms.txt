@@ -382,6 +382,9 @@ Plotting functions
   : Plot Detailed Prior to Posterior Distributions
 - [`plot_model_ppc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ppc.md)
   : Plot Posterior Predictive Checks from Ensemble Predictions
+- [`plot_model_subset_optimization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_subset_optimization.md)
+  : Plot Best-Subset Optimization Diagnostic from a
+  mosaic_subset_optimization Object
 - [`plot_mosaic_country_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_country_map.md)
   : Plot MOSAIC Country Map
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
@@ -1001,6 +1004,9 @@ Other exported functions and internal helpers
   : Plot Detailed Prior to Posterior Distributions
 - [`plot_model_ppc()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ppc.md)
   : Plot Posterior Predictive Checks from Ensemble Predictions
+- [`plot_model_subset_optimization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_subset_optimization.md)
+  : Plot Best-Subset Optimization Diagnostic from a
+  mosaic_subset_optimization Object
 - [`plot_mosaic_country_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_country_map.md)
   : Plot MOSAIC Country Map
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)

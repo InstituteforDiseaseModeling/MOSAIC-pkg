@@ -162,6 +162,22 @@ mosaic_control_defaults(
   - `optimize_objective`: Objective function, `"mae"` (default),
     `"r2_bias"`, or `"wis"`.
 
+  - `optimize_stride`: Integer \>= 1 (default `1L`). `1L` evaluates
+    every candidate subset size in `min_n:max_n` (exhaustive,
+    bit-identical to the historical search). `> 1L` enables a
+    coarse-then-refine search that evaluates a strided grid first and
+    then refines around the best point – substantially faster but
+    **opt-in**, as it may select a slightly different `optimal_n` than
+    the exhaustive search and records only the evaluated N's in the
+    diagnostics table.
+
+  - `optimize_n_cores`: Integer \>= 1 (default `1L`). `1L` runs the
+    subset-optimization step serially. `> 1L` builds a short-lived PSOCK
+    cluster (the calibration cluster is already stopped by this point)
+    that splits the per-cell evaluation across workers. The result is
+    bit-for-bit identical to the serial path; the cluster is created and
+    stopped within the step.
+
   - `central_method`: Ensemble central tendency, `"mean"` (default;
     unbiased for expected counts and never collapses on sparse deaths)
     or `"median"` (reproduces pre-v0.38 runs). Scalar or per-channel

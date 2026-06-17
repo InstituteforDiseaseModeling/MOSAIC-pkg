@@ -1,9 +1,9 @@
 # Optimize Ensemble Subset Size
 
-Post-ensemble optimization that evaluates every possible top-N subset
-(ranked by likelihood) and selects the N that maximizes prediction
-quality. Produces a separate `mosaic_ensemble` object at the optimal
-subset size, leaving the original ensemble untouched.
+Post-ensemble optimization that evaluates top-N subsets (ranked by
+likelihood) and selects the N that maximizes prediction quality.
+Produces a separate `mosaic_ensemble` object at the optimal subset size,
+leaving the original ensemble untouched.
 
 For each candidate size N (from `min_n` to the full ensemble), the
 function re-computes Gibbs weights within the top-N subset, re-computes
@@ -20,6 +20,8 @@ optimize_ensemble_subset(
   min_n = 30L,
   objective = c("mae", "r2_bias", "wis"),
   central_method = "median",
+  stride = 1L,
+  cl = NULL,
   verbose = TRUE
 )
 ```
@@ -76,6 +78,26 @@ optimize_ensemble_subset(
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   passes the package default (`"mean"`) explicitly.
 
+- stride:
+
+  Integer \>= 1. `1L` (default) evaluates every N in `min_n:max_n`
+  (exhaustive, bit-identical parity path). `> 1L` enables a
+  coarse-then-refine two-stage search (see Details). **Opt-in**; changes
+  which N's are evaluated and may select a slightly different
+  `optimal_n` than the exhaustive search.
+
+- cl:
+
+  Optional parallel cluster (from
+  [`make_mosaic_cluster`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
+  or
+  [`parallel::makeCluster`](https://rdrr.io/r/parallel/makeCluster.html))
+  used to split the per-cell evaluation kernel across workers. `NULL`
+  (default) runs serially. When supplied, the result is bit-for-bit
+  identical to the serial path. Must be a `"PSOCK"` cluster (FORK is
+  unsafe at this point in the pipeline). For trivially small problems
+  the function falls back to serial regardless of `cl`.
+
 - verbose:
 
   Logical; if `TRUE`, emit progress messages.
@@ -86,7 +108,9 @@ An S3 object of class `mosaic_subset_optimization` containing:
 
 - evaluation_table:
 
-  Data frame with one row per N evaluated.
+  Data frame with one row per N evaluated. With `stride > 1L` this
+  contains only the coarse + refine N's, sorted by N, not every N in
+  `min_n:max_n`.
 
 - optimal_n:
 
@@ -112,8 +136,8 @@ An S3 object of class `mosaic_subset_optimization` containing:
 - ensemble_optimized:
 
   Complete `mosaic_ensemble` object at optimal N. Its `$seeds` field is
-  the per-member seed aligned with its `cases_array` (member i \<-\>
-  seedsi) when `ensemble$seeds` was present, else it falls back to
+  the per-member seed aligned with its `cases_array` (member-to-seed
+  aligned) when `ensemble$seeds` was present, else it falls back to
   `optimal_seeds`.
 
 - stability_flag:
@@ -137,6 +161,36 @@ An S3 object of class `mosaic_subset_optimization` containing:
   Resolved per-channel central tendency used for `"mae"`/`"r2_bias"`
   scoring and the recorded diagnostics.
 
+## Details
+
+The evaluation loop is organized *cell-outer*: each `[location, time]`
+cell's finite predictions are gathered once and then scored across every
+candidate N (the gather does not depend on N), filling a per-cell vector
+of central tendencies. The default call path (`stride = 1L`,
+`cl = NULL`) is exhaustive and serial and is guaranteed bit-for-bit
+identical to the historical implementation (Tier-2 parity).
+
+Two opt-in speed levers are available:
+
+- **PSOCK parallelism** (`cl`): the `n_locations * n_time_points` cells
+  are split across the supplied cluster's workers. The result is
+  bit-for-bit identical to the serial path (each worker runs the same
+  kernel on a disjoint block of cells; the master scatters the per-cell
+  central/quantile values back into the same `[i, j]` positions). FORK
+  clusters are unsafe here (native reticulate/numba threads are loaded
+  by this post-calibration point); pass a `"PSOCK"` cluster.
+
+- **Stride-then-refine** (`stride`): with `stride > 1L`, a coarse grid
+  `seq(min_n, max_n, by = stride)` is evaluated first to locate the best
+  N\*, then a refinement bracket `(N*-stride):(N*+stride)` is evaluated,
+  and the selection logic runs over the combined (coarse + refine) rows.
+  This is **not** bit-identical to the exhaustive path:
+  `evaluation_table` contains only the evaluated N's (fewer rows), and
+  the selected `optimal_n` may differ slightly from the exhaustive
+  optimum if the score profile is non-monotone between coarse points.
+  The trade is roughly an `O(stride)` reduction in the number of N's
+  evaluated.
+
 ## References
 
 Bracher J et al. (2021). Evaluating epidemic forecasts in an interval
@@ -144,3 +198,8 @@ format. *PLOS Computational Biology*, 17(2), e1008618.
 
 Gneiting T & Raftery AE (2007). Strictly Proper Scoring Rules,
 Prediction, and Estimation. *JASA*, 102(477), 359–378.
+
+## See also
+
+[`make_mosaic_cluster`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_mosaic_cluster.md)
+for building a PSOCK cluster to pass to `cl`.
