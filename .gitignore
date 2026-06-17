@@ -28,3 +28,12 @@ MOSAIC.Rcheck/
 
 # Agent local (uncommitted) memory
 .claude/agent-memory-local/
+
+# Local secrets / credentials — never commit
+.env
+.env.*
+*.env
+.ssh/
+*.pem
+*_key
+*_key.pub
