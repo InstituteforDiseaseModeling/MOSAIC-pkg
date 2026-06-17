@@ -25,7 +25,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.42.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.43.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -266,55 +266,135 @@ Installation vignette):</p>
 <span id="cb3-157"><a href="#cb3-157" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"[7/7] Installing Python dependencies..."</span></span>
 <span id="cb3-158"><a href="#cb3-158" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"MOSAIC::install_dependencies(force = TRUE)"</span></span>
 <span id="cb3-159"><a href="#cb3-159" tabindex="-1"></a></span>
-<span id="cb3-160"><a href="#cb3-160" tabindex="-1"></a><span class="co"># Verify installation</span></span>
-<span id="cb3-161"><a href="#cb3-161" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-162"><a href="#cb3-162" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verifying installation..."</span></span>
-<span id="cb3-163"><a href="#cb3-163" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"</span></span>
-<span id="cb3-164"><a href="#cb3-164" tabindex="-1"></a><span class="st">  library(MOSAIC)</span></span>
-<span id="cb3-165"><a href="#cb3-165" tabindex="-1"></a><span class="st">  result &lt;- tryCatch({</span></span>
-<span id="cb3-166"><a href="#cb3-166" tabindex="-1"></a><span class="st">    MOSAIC::check_dependencies()</span></span>
-<span id="cb3-167"><a href="#cb3-167" tabindex="-1"></a><span class="st">    TRUE</span></span>
-<span id="cb3-168"><a href="#cb3-168" tabindex="-1"></a><span class="st">  }, error = function(e) {</span></span>
-<span id="cb3-169"><a href="#cb3-169" tabindex="-1"></a><span class="st">    cat('ERROR:', e</span><span class="dt">\$</span><span class="st">message, '\n')</span></span>
-<span id="cb3-170"><a href="#cb3-170" tabindex="-1"></a><span class="st">    FALSE</span></span>
-<span id="cb3-171"><a href="#cb3-171" tabindex="-1"></a><span class="st">  })</span></span>
-<span id="cb3-172"><a href="#cb3-172" tabindex="-1"></a><span class="st">  if (!result) quit(status = 1)</span></span>
-<span id="cb3-173"><a href="#cb3-173" tabindex="-1"></a><span class="st">"</span></span>
-<span id="cb3-174"><a href="#cb3-174" tabindex="-1"></a></span>
-<span id="cb3-175"><a href="#cb3-175" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
-<span id="cb3-176"><a href="#cb3-176" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-177"><a href="#cb3-177" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-178"><a href="#cb3-178" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation complete and verified!"</span></span>
-<span id="cb3-179"><a href="#cb3-179" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-180"><a href="#cb3-180" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-181"><a href="#cb3-181" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation Summary:"</span></span>
-<span id="cb3-182"><a href="#cb3-182" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - R version: </span><span class="va">$(</span><span class="ex">R</span> <span class="at">--version</span> <span class="kw">|</span> <span class="fu">head</span> <span class="at">-1</span><span class="va">)</span><span class="st">"</span></span>
-<span id="cb3-183"><a href="#cb3-183" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - Python version: </span><span class="va">$(</span><span class="ex">python3</span> <span class="at">--version</span><span class="va">)</span><span class="st">"</span></span>
-<span id="cb3-184"><a href="#cb3-184" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - MOSAIC R package: </span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"cat(as.character(packageVersion('MOSAIC')))"</span> <span class="dv">2</span><span class="op">&gt;</span>/dev/null<span class="va">)</span><span class="st">"</span></span>
-<span id="cb3-185"><a href="#cb3-185" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - Python environment: ~/.virtualenvs/r-mosaic"</span></span>
-<span id="cb3-186"><a href="#cb3-186" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - Conda location: ~/.local/share/r-miniconda"</span></span>
-<span id="cb3-187"><a href="#cb3-187" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-188"><a href="#cb3-188" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Next steps:"</span></span>
-<span id="cb3-189"><a href="#cb3-189" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"</span></span>
-<span id="cb3-190"><a href="#cb3-190" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  2. View documentation: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/"</span></span>
-<span id="cb3-191"><a href="#cb3-191" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  3. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"</span></span>
-<span id="cb3-192"><a href="#cb3-192" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-193"><a href="#cb3-193" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Full installation log saved to: </span><span class="va">$LOG_FILE</span><span class="st">"</span></span>
-<span id="cb3-194"><a href="#cb3-194" tabindex="-1"></a><span class="cf">else</span></span>
-<span id="cb3-195"><a href="#cb3-195" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-196"><a href="#cb3-196" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-197"><a href="#cb3-197" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation completed with errors"</span></span>
-<span id="cb3-198"><a href="#cb3-198" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
-<span id="cb3-199"><a href="#cb3-199" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-200"><a href="#cb3-200" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Please check the error messages above and try the following:"</span></span>
-<span id="cb3-201"><a href="#cb3-201" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  1. Review the full log: cat </span><span class="va">$LOG_FILE</span><span class="st">"</span></span>
-<span id="cb3-202"><a href="#cb3-202" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  2. Check system requirements: Ubuntu 20.04, 8GB RAM, 20GB disk"</span></span>
-<span id="cb3-203"><a href="#cb3-203" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  3. Re-run this script (it will clean up previous attempts)"</span></span>
-<span id="cb3-204"><a href="#cb3-204" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  4. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"</span></span>
-<span id="cb3-205"><a href="#cb3-205" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
-<span id="cb3-206"><a href="#cb3-206" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Full installation log saved to: </span><span class="va">$LOG_FILE</span><span class="st">"</span></span>
-<span id="cb3-207"><a href="#cb3-207" tabindex="-1"></a>  <span class="bu">exit</span> 1</span>
-<span id="cb3-208"><a href="#cb3-208" tabindex="-1"></a><span class="cf">fi</span></span></code></pre></div>
+<span id="cb3-160"><a href="#cb3-160" tabindex="-1"></a><span class="co"># Configure R wrapper for Ubuntu 20.04 GLIBCXX compatibility</span></span>
+<span id="cb3-161"><a href="#cb3-161" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Configuring R wrapper for Ubuntu 20.04 compatibility..."</span></span>
+<span id="cb3-162"><a href="#cb3-162" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="st">"</span><span class="va">$OS_VERSION</span><span class="st">"</span> <span class="ot">=</span> <span class="st">"20.04"</span> <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb3-163"><a href="#cb3-163" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  Creating r-mosaic-R and r-mosaic-Rscript wrappers..."</span></span>
+<span id="cb3-164"><a href="#cb3-164" tabindex="-1"></a></span>
+<span id="cb3-165"><a href="#cb3-165" tabindex="-1"></a>  <span class="co"># Create ~/bin directory</span></span>
+<span id="cb3-166"><a href="#cb3-166" tabindex="-1"></a>  <span class="fu">mkdir</span> <span class="at">-p</span> ~/bin</span>
+<span id="cb3-167"><a href="#cb3-167" tabindex="-1"></a></span>
+<span id="cb3-168"><a href="#cb3-168" tabindex="-1"></a>  <span class="co"># Create R wrapper script with auto-detection of libstdc++ location</span></span>
+<span id="cb3-169"><a href="#cb3-169" tabindex="-1"></a>  <span class="fu">cat</span> <span class="op">&gt;</span> ~/bin/r-mosaic-R <span class="op">&lt;&lt;'EOF'</span></span>
+<span id="cb3-170"><a href="#cb3-170" tabindex="-1"></a><span class="st">#!/usr/bin/env bash</span></span>
+<span id="cb3-171"><a href="#cb3-171" tabindex="-1"></a><span class="st"># Find a modern libstdc++ inside common reticulate env locations</span></span>
+<span id="cb3-172"><a href="#cb3-172" tabindex="-1"></a><span class="st">candidates=(</span></span>
+<span id="cb3-173"><a href="#cb3-173" tabindex="-1"></a><span class="st">  "$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"</span></span>
+<span id="cb3-174"><a href="#cb3-174" tabindex="-1"></a><span class="st">  "$HOME/.local/share/r-miniconda/envs/r-mosaic/lib/libstdc++.so.6"</span></span>
+<span id="cb3-175"><a href="#cb3-175" tabindex="-1"></a><span class="st">  "$HOME/.local/share/r-miniconda/envs/r-reticulate/lib/libstdc++.so.6"</span></span>
+<span id="cb3-176"><a href="#cb3-176" tabindex="-1"></a><span class="st">)</span></span>
+<span id="cb3-177"><a href="#cb3-177" tabindex="-1"></a><span class="st">for f in "${candidates[@]}"; do</span></span>
+<span id="cb3-178"><a href="#cb3-178" tabindex="-1"></a><span class="st">  if [ -f "$f" ] &amp;&amp; strings "$f" 2&gt;/dev/null | grep -q "GLIBCXX_3\.4\.29"; then</span></span>
+<span id="cb3-179"><a href="#cb3-179" tabindex="-1"></a><span class="st">    export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"</span></span>
+<span id="cb3-180"><a href="#cb3-180" tabindex="-1"></a><span class="st">    export LD_LIBRARY_PATH="$(dirname "$f")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"</span></span>
+<span id="cb3-181"><a href="#cb3-181" tabindex="-1"></a><span class="st">    break</span></span>
+<span id="cb3-182"><a href="#cb3-182" tabindex="-1"></a><span class="st">  fi</span></span>
+<span id="cb3-183"><a href="#cb3-183" tabindex="-1"></a><span class="st">done</span></span>
+<span id="cb3-184"><a href="#cb3-184" tabindex="-1"></a><span class="st"># Preload libexpat from conda environment to avoid system's old version</span></span>
+<span id="cb3-185"><a href="#cb3-185" tabindex="-1"></a><span class="st">if [ -f "$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1" ]; then</span></span>
+<span id="cb3-186"><a href="#cb3-186" tabindex="-1"></a><span class="st">  export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1${LD_PRELOAD:+:$LD_PRELOAD}"</span></span>
+<span id="cb3-187"><a href="#cb3-187" tabindex="-1"></a><span class="st">fi</span></span>
+<span id="cb3-188"><a href="#cb3-188" tabindex="-1"></a><span class="st"># Set R library path to include user library</span></span>
+<span id="cb3-189"><a href="#cb3-189" tabindex="-1"></a><span class="st">export R_LIBS_USER="$HOME/R/library"</span></span>
+<span id="cb3-190"><a href="#cb3-190" tabindex="-1"></a><span class="st"># If we later want to hard-pin Python for reticulate:</span></span>
+<span id="cb3-191"><a href="#cb3-191" tabindex="-1"></a><span class="st">[ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] &amp;&amp; export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"</span></span>
+<span id="cb3-192"><a href="#cb3-192" tabindex="-1"></a><span class="st">exec R "$@"</span></span>
+<span id="cb3-193"><a href="#cb3-193" tabindex="-1"></a><span class="op">EOF</span></span>
+<span id="cb3-194"><a href="#cb3-194" tabindex="-1"></a>  <span class="fu">chmod</span> +x ~/bin/r-mosaic-R</span>
+<span id="cb3-195"><a href="#cb3-195" tabindex="-1"></a>  <span class="co"># Shebang guard: a corrupted (indented) shebang makes the kernel fall back to</span></span>
+<span id="cb3-196"><a href="#cb3-196" tabindex="-1"></a>  <span class="co"># /bin/sh (dash), which dies on the bash array with `Syntax error: "(" unexpected`.</span></span>
+<span id="cb3-197"><a href="#cb3-197" tabindex="-1"></a>  <span class="fu">head</span> <span class="at">-1</span> ~/bin/r-mosaic-R <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-q</span> <span class="st">'^#!'</span> <span class="kw">||</span> <span class="kw">{</span> <span class="bu">echo</span> <span class="st">"ERROR: ~/bin/r-mosaic-R shebang malformed (not at column 0)"</span><span class="kw">;</span> <span class="bu">exit</span> 1<span class="kw">;</span> <span class="kw">}</span></span>
+<span id="cb3-198"><a href="#cb3-198" tabindex="-1"></a></span>
+<span id="cb3-199"><a href="#cb3-199" tabindex="-1"></a>  <span class="co"># Create Rscript wrapper with same logic</span></span>
+<span id="cb3-200"><a href="#cb3-200" tabindex="-1"></a>  <span class="fu">cat</span> <span class="op">&gt;</span> ~/bin/r-mosaic-Rscript <span class="op">&lt;&lt;'EOF'</span></span>
+<span id="cb3-201"><a href="#cb3-201" tabindex="-1"></a><span class="st">#!/usr/bin/env bash</span></span>
+<span id="cb3-202"><a href="#cb3-202" tabindex="-1"></a><span class="st"># Same preload logic for Rscript</span></span>
+<span id="cb3-203"><a href="#cb3-203" tabindex="-1"></a><span class="st">candidates=(</span></span>
+<span id="cb3-204"><a href="#cb3-204" tabindex="-1"></a><span class="st">  "$HOME/.virtualenvs/r-mosaic/lib/libstdc++.so.6"</span></span>
+<span id="cb3-205"><a href="#cb3-205" tabindex="-1"></a><span class="st">  "$HOME/.local/share/r-miniconda/envs/r-mosaic/lib/libstdc++.so.6"</span></span>
+<span id="cb3-206"><a href="#cb3-206" tabindex="-1"></a><span class="st">  "$HOME/.local/share/r-miniconda/envs/r-reticulate/lib/libstdc++.so.6"</span></span>
+<span id="cb3-207"><a href="#cb3-207" tabindex="-1"></a><span class="st">)</span></span>
+<span id="cb3-208"><a href="#cb3-208" tabindex="-1"></a><span class="st">for f in "${candidates[@]}"; do</span></span>
+<span id="cb3-209"><a href="#cb3-209" tabindex="-1"></a><span class="st">  if [ -f "$f" ] &amp;&amp; strings "$f" 2&gt;/dev/null | grep -q "GLIBCXX_3\.4\.29"; then</span></span>
+<span id="cb3-210"><a href="#cb3-210" tabindex="-1"></a><span class="st">    export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"</span></span>
+<span id="cb3-211"><a href="#cb3-211" tabindex="-1"></a><span class="st">    export LD_LIBRARY_PATH="$(dirname "$f")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"</span></span>
+<span id="cb3-212"><a href="#cb3-212" tabindex="-1"></a><span class="st">    break</span></span>
+<span id="cb3-213"><a href="#cb3-213" tabindex="-1"></a><span class="st">  fi</span></span>
+<span id="cb3-214"><a href="#cb3-214" tabindex="-1"></a><span class="st">done</span></span>
+<span id="cb3-215"><a href="#cb3-215" tabindex="-1"></a><span class="st"># Preload libexpat from conda environment to avoid system's old version</span></span>
+<span id="cb3-216"><a href="#cb3-216" tabindex="-1"></a><span class="st">if [ -f "$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1" ]; then</span></span>
+<span id="cb3-217"><a href="#cb3-217" tabindex="-1"></a><span class="st">  export LD_PRELOAD="$HOME/.virtualenvs/r-mosaic/lib/libexpat.so.1${LD_PRELOAD:+:$LD_PRELOAD}"</span></span>
+<span id="cb3-218"><a href="#cb3-218" tabindex="-1"></a><span class="st">fi</span></span>
+<span id="cb3-219"><a href="#cb3-219" tabindex="-1"></a><span class="st"># Set R library path to include user library</span></span>
+<span id="cb3-220"><a href="#cb3-220" tabindex="-1"></a><span class="st">export R_LIBS_USER="$HOME/R/library"</span></span>
+<span id="cb3-221"><a href="#cb3-221" tabindex="-1"></a><span class="st">[ -x "$HOME/.virtualenvs/r-mosaic/bin/python" ] &amp;&amp; export RETICULATE_PYTHON="$HOME/.virtualenvs/r-mosaic/bin/python"</span></span>
+<span id="cb3-222"><a href="#cb3-222" tabindex="-1"></a><span class="st">exec Rscript "$@"</span></span>
+<span id="cb3-223"><a href="#cb3-223" tabindex="-1"></a><span class="op">EOF</span></span>
+<span id="cb3-224"><a href="#cb3-224" tabindex="-1"></a>  <span class="fu">chmod</span> +x ~/bin/r-mosaic-Rscript</span>
+<span id="cb3-225"><a href="#cb3-225" tabindex="-1"></a>  <span class="fu">head</span> <span class="at">-1</span> ~/bin/r-mosaic-Rscript <span class="kw">|</span> <span class="fu">grep</span> <span class="at">-q</span> <span class="st">'^#!'</span> <span class="kw">||</span> <span class="kw">{</span> <span class="bu">echo</span> <span class="st">"ERROR: ~/bin/r-mosaic-Rscript shebang malformed (not at column 0)"</span><span class="kw">;</span> <span class="bu">exit</span> 1<span class="kw">;</span> <span class="kw">}</span></span>
+<span id="cb3-226"><a href="#cb3-226" tabindex="-1"></a></span>
+<span id="cb3-227"><a href="#cb3-227" tabindex="-1"></a>  <span class="co"># Ensure launchers are first on PATH for this session and future shells</span></span>
+<span id="cb3-228"><a href="#cb3-228" tabindex="-1"></a>  <span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$HOME</span><span class="st">/bin:</span><span class="va">$PATH</span><span class="st">"</span></span>
+<span id="cb3-229"><a href="#cb3-229" tabindex="-1"></a>  <span class="cf">if</span> <span class="ot">! </span><span class="fu">grep</span> <span class="at">-q</span> <span class="st">'export PATH="$HOME/bin:$PATH"'</span> ~/.bashrc<span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb3-230"><a href="#cb3-230" tabindex="-1"></a>    <span class="bu">echo</span> <span class="st">'export PATH="$HOME/bin:$PATH"'</span> <span class="op">&gt;&gt;</span> ~/.bashrc</span>
+<span id="cb3-231"><a href="#cb3-231" tabindex="-1"></a>  <span class="cf">fi</span></span>
+<span id="cb3-232"><a href="#cb3-232" tabindex="-1"></a></span>
+<span id="cb3-233"><a href="#cb3-233" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  ✓ Created r-mosaic-R wrapper at ~/bin/r-mosaic-R"</span></span>
+<span id="cb3-234"><a href="#cb3-234" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  ✓ Created r-mosaic-Rscript wrapper at ~/bin/r-mosaic-Rscript"</span></span>
+<span id="cb3-235"><a href="#cb3-235" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  ✓ Added ~/bin to PATH in ~/.bashrc"</span></span>
+<span id="cb3-236"><a href="#cb3-236" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-237"><a href="#cb3-237" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  Skipping wrapper creation (only needed for Ubuntu 20.04)"</span></span>
+<span id="cb3-238"><a href="#cb3-238" tabindex="-1"></a><span class="cf">fi</span></span>
+<span id="cb3-239"><a href="#cb3-239" tabindex="-1"></a></span>
+<span id="cb3-240"><a href="#cb3-240" tabindex="-1"></a><span class="co"># Verify installation</span></span>
+<span id="cb3-241"><a href="#cb3-241" tabindex="-1"></a><span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-242"><a href="#cb3-242" tabindex="-1"></a><span class="bu">echo</span> <span class="st">"Verifying installation..."</span></span>
+<span id="cb3-243"><a href="#cb3-243" tabindex="-1"></a><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"</span></span>
+<span id="cb3-244"><a href="#cb3-244" tabindex="-1"></a><span class="st">  library(MOSAIC)</span></span>
+<span id="cb3-245"><a href="#cb3-245" tabindex="-1"></a><span class="st">  result &lt;- tryCatch({</span></span>
+<span id="cb3-246"><a href="#cb3-246" tabindex="-1"></a><span class="st">    MOSAIC::check_dependencies()</span></span>
+<span id="cb3-247"><a href="#cb3-247" tabindex="-1"></a><span class="st">    TRUE</span></span>
+<span id="cb3-248"><a href="#cb3-248" tabindex="-1"></a><span class="st">  }, error = function(e) {</span></span>
+<span id="cb3-249"><a href="#cb3-249" tabindex="-1"></a><span class="st">    cat('ERROR:', e</span><span class="dt">\$</span><span class="st">message, '\n')</span></span>
+<span id="cb3-250"><a href="#cb3-250" tabindex="-1"></a><span class="st">    FALSE</span></span>
+<span id="cb3-251"><a href="#cb3-251" tabindex="-1"></a><span class="st">  })</span></span>
+<span id="cb3-252"><a href="#cb3-252" tabindex="-1"></a><span class="st">  if (!result) quit(status = 1)</span></span>
+<span id="cb3-253"><a href="#cb3-253" tabindex="-1"></a><span class="st">"</span></span>
+<span id="cb3-254"><a href="#cb3-254" tabindex="-1"></a></span>
+<span id="cb3-255"><a href="#cb3-255" tabindex="-1"></a><span class="cf">if</span> <span class="bu">[</span> <span class="va">$?</span> <span class="ot">-eq</span> 0 <span class="bu">]</span><span class="kw">;</span> <span class="cf">then</span></span>
+<span id="cb3-256"><a href="#cb3-256" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-257"><a href="#cb3-257" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-258"><a href="#cb3-258" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation complete and verified!"</span></span>
+<span id="cb3-259"><a href="#cb3-259" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-260"><a href="#cb3-260" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-261"><a href="#cb3-261" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation Summary:"</span></span>
+<span id="cb3-262"><a href="#cb3-262" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - R version: </span><span class="va">$(</span><span class="ex">R</span> <span class="at">--version</span> <span class="kw">|</span> <span class="fu">head</span> <span class="at">-1</span><span class="va">)</span><span class="st">"</span></span>
+<span id="cb3-263"><a href="#cb3-263" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - Python version: </span><span class="va">$(</span><span class="ex">python3</span> <span class="at">--version</span><span class="va">)</span><span class="st">"</span></span>
+<span id="cb3-264"><a href="#cb3-264" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - MOSAIC R package: </span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">"cat(as.character(packageVersion('MOSAIC')))"</span> <span class="dv">2</span><span class="op">&gt;</span>/dev/null<span class="va">)</span><span class="st">"</span></span>
+<span id="cb3-265"><a href="#cb3-265" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - Python environment: ~/.virtualenvs/r-mosaic"</span></span>
+<span id="cb3-266"><a href="#cb3-266" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  - Conda location: ~/.local/share/r-miniconda"</span></span>
+<span id="cb3-267"><a href="#cb3-267" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-268"><a href="#cb3-268" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Next steps:"</span></span>
+<span id="cb3-269"><a href="#cb3-269" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  1. Test MOSAIC: Rscript -e 'library(MOSAIC); MOSAIC::check_dependencies()'"</span></span>
+<span id="cb3-270"><a href="#cb3-270" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  2. View documentation: https://institutefordiseasemodeling.github.io/MOSAIC-pkg/"</span></span>
+<span id="cb3-271"><a href="#cb3-271" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  3. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"</span></span>
+<span id="cb3-272"><a href="#cb3-272" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-273"><a href="#cb3-273" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Full installation log saved to: </span><span class="va">$LOG_FILE</span><span class="st">"</span></span>
+<span id="cb3-274"><a href="#cb3-274" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-275"><a href="#cb3-275" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-276"><a href="#cb3-276" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-277"><a href="#cb3-277" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Installation completed with errors"</span></span>
+<span id="cb3-278"><a href="#cb3-278" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"======================================"</span></span>
+<span id="cb3-279"><a href="#cb3-279" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-280"><a href="#cb3-280" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Please check the error messages above and try the following:"</span></span>
+<span id="cb3-281"><a href="#cb3-281" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  1. Review the full log: cat </span><span class="va">$LOG_FILE</span><span class="st">"</span></span>
+<span id="cb3-282"><a href="#cb3-282" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  2. Check system requirements: Ubuntu 20.04, 8GB RAM, 20GB disk"</span></span>
+<span id="cb3-283"><a href="#cb3-283" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  3. Re-run this script (it will clean up previous attempts)"</span></span>
+<span id="cb3-284"><a href="#cb3-284" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"  4. Report issues: https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues"</span></span>
+<span id="cb3-285"><a href="#cb3-285" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">""</span></span>
+<span id="cb3-286"><a href="#cb3-286" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">"Full installation log saved to: </span><span class="va">$LOG_FILE</span><span class="st">"</span></span>
+<span id="cb3-287"><a href="#cb3-287" tabindex="-1"></a>  <span class="bu">exit</span> 1</span>
+<span id="cb3-288"><a href="#cb3-288" tabindex="-1"></a><span class="cf">fi</span></span></code></pre></div>
 <hr>
 </div>
 </div>
