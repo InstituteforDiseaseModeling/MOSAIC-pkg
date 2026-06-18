@@ -11,7 +11,7 @@ est_suitability(
   pred_date_start = NULL,
   pred_date_stop = NULL,
   feature_set = "v7.3",
-  response_var = "transmission_intensity",
+  response_var = "target_D_rate_per_country_floored",
   bias_correct = TRUE,
   architecture = c("lstm_v2_hierarchical_film", "lstm_v1_legacy"),
   arch_control = NULL,
@@ -148,11 +148,14 @@ decision-grade forecaster. psi reaches the downstream LASER engine through TWO
 channels -- a fractional deviation \code{(psi - psi_bar)/psi_bar} (timing/shape) and
 the absolute level (environmental-reservoir decay) -- so the response anchor and
 \code{bias_correct} can move outbreak magnitude, not just timing. Report the
-per-country spread, not just the median. The v0.34.0 defaults
-(\code{response_var="transmission_intensity"}, \code{region_map="snf_k5"},
-\code{bias_correct=TRUE}) are \strong{provisional}, gated by a post-merge
-psi->LASER case-skill experiment; \code{snf_k5} ships unvalidated as a FiLM region
-map and reverts to \code{"csv"} if it does not beat it.
+per-country spread, not just the median. The default \code{response_var} is
+\code{"target_D_rate_per_country_floored"} (per-capita, per-country anchor),
+selected over \code{"transmission_intensity"} by a 15-country psi->LASER calibration
+case-skill comparison: D lifts cases-R2 for the priority/saturated cluster
+(COD 0.51->0.73, SOM 0.34->0.82, ETH 0.61->0.80) at the cost of regressions on
+5 low-burden countries (RWA/MWI/AGO/NAM/SSD), accepted for the global default.
+\code{region_map="snf_k5"}, \code{bias_correct=TRUE}; \code{snf_k5} ships unvalidated as a FiLM
+region map and reverts to \code{"csv"} if it does not beat it.
 
 \strong{\code{lstm_v1_legacy} (v0.33, frozen) -- shared LSTM, random split +
 sequential fine-tuning.} A single 3-stack LSTM (128->64->32) with no
@@ -167,8 +170,9 @@ out-of-sample forecast collapses in amplitude -- the failure lstm_v2 fixes.
 
 \section{Migration (reproduce v0.33 production behavior)}{
 
-The v0.34 defaults flip \code{response_var} to \code{"transmission_intensity"} and
-\code{architecture} to \code{"lstm_v2_hierarchical_film"}. To run the frozen v0.33
+The current defaults set \code{response_var} to
+\code{"target_D_rate_per_country_floored"} and \code{architecture} to
+\code{"lstm_v2_hierarchical_film"}. To run the frozen v0.33
 shared-LSTM path:
 \preformatted{
 est_suitability(PATHS, architecture = "lstm_v1_legacy",

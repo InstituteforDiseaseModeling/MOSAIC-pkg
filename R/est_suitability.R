@@ -87,11 +87,14 @@
 #' channels -- a fractional deviation `(psi - psi_bar)/psi_bar` (timing/shape) and
 #' the absolute level (environmental-reservoir decay) -- so the response anchor and
 #' `bias_correct` can move outbreak magnitude, not just timing. Report the
-#' per-country spread, not just the median. The v0.34.0 defaults
-#' (`response_var="transmission_intensity"`, `region_map="snf_k5"`,
-#' `bias_correct=TRUE`) are \strong{provisional}, gated by a post-merge
-#' psi->LASER case-skill experiment; `snf_k5` ships unvalidated as a FiLM region
-#' map and reverts to `"csv"` if it does not beat it.
+#' per-country spread, not just the median. The default `response_var` is
+#' `"target_D_rate_per_country_floored"` (per-capita, per-country anchor),
+#' selected over `"transmission_intensity"` by a 15-country psi->LASER calibration
+#' case-skill comparison: D lifts cases-R2 for the priority/saturated cluster
+#' (COD 0.51->0.73, SOM 0.34->0.82, ETH 0.61->0.80) at the cost of regressions on
+#' 5 low-burden countries (RWA/MWI/AGO/NAM/SSD), accepted for the global default.
+#' `region_map="snf_k5"`, `bias_correct=TRUE`; `snf_k5` ships unvalidated as a FiLM
+#' region map and reverts to `"csv"` if it does not beat it.
 #'
 #' \strong{`lstm_v1_legacy` (v0.33, frozen) -- shared LSTM, random split +
 #' sequential fine-tuning.} A single 3-stack LSTM (128->64->32) with no
@@ -104,8 +107,9 @@
 #' out-of-sample forecast collapses in amplitude -- the failure lstm_v2 fixes.
 #'
 #' @section Migration (reproduce v0.33 production behavior):
-#' The v0.34 defaults flip `response_var` to `"transmission_intensity"` and
-#' `architecture` to `"lstm_v2_hierarchical_film"`. To run the frozen v0.33
+#' The current defaults set `response_var` to
+#' `"target_D_rate_per_country_floored"` and `architecture` to
+#' `"lstm_v2_hierarchical_film"`. To run the frozen v0.33
 #' shared-LSTM path:
 #' \preformatted{
 #' est_suitability(PATHS, architecture = "lstm_v1_legacy",
@@ -190,7 +194,7 @@ est_suitability <- function(PATHS,
                             pred_date_start = NULL,
                             pred_date_stop = NULL,
                             feature_set  = "v7.3",
-                            response_var = "transmission_intensity",
+                            response_var = "target_D_rate_per_country_floored",
                             bias_correct = TRUE,
                             architecture = c("lstm_v2_hierarchical_film",
                                              "lstm_v1_legacy"),
@@ -283,7 +287,7 @@ est_suitability <- function(PATHS,
                                     pred_date_start = NULL,
                                     pred_date_stop = NULL,
                                     feature_set = "v7.3",
-                                    response_var = "transmission_intensity",
+                                    response_var = "target_D_rate_per_country_floored",
                                     bias_correct = TRUE,
                                     plot_country_diagnostics = FALSE) {
 

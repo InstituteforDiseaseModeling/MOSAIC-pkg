@@ -68,7 +68,7 @@ test_that("default architecture routes to lstm_v2 and forwards bias_correct/resp
   est_suitability(fake_paths)                       # default architecture
   expect_equal(captured$branch, "lstm_v2")
   expect_true(captured$bias_correct)                # default TRUE
-  expect_equal(captured$response_var, "transmission_intensity")  # v0.34 default
+  expect_equal(captured$response_var, "target_D_rate_per_country_floored")  # per-capita per-country (new default)
   # calibrate -> bias_correct mapping reaches the lstm_v2 branch with the value
   captured <- NULL
   suppressMessages(est_suitability(fake_paths, calibrate = FALSE))
