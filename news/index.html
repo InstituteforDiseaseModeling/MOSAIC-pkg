@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.12</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.13</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,13 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.44.13" id="mosaic-04413">MOSAIC 0.44.13<a class="anchor" aria-label="anchor" href="#mosaic-04413"></a></h2>
+<ul><li>
+<strong>Upgraded the laser-cholera engine pin to v0.15.0</strong> (<code>inst/python/environment.yml</code>). v0.15.0 is a docs-migration + validation-hygiene release: it converts <code>assert</code>-style checks to always-on <code>if/raise ValueError/AttributeError</code> (so parameter validation runs even under <code>python -O</code>), tightens the <code>metapop</code> CLI <code>--over</code> validation, and modernizes type hints — but it leaves the <strong>parameter contract and the <code>model.results</code> schema (<code>reported_cases</code>/<code>reported_deaths</code>) unchanged</strong>. Verified contract-neutral: a deterministic <code>run_LASER(config_default)</code> smoke run and the full test suite pass against v0.15.0 with no changes to the R observation-model code, priors, or config. Unlike the v0.13 (deaths-scale) and v0.14 (reported-cases-incidence) upgrades, no prior/derivation changes are required.</li>
+<li>
+<strong>Resume now pools across verified-likelihood-compatible engine versions on the Dask backend.</strong> Added <code>.mosaic_lc_likelihood_compatible()</code> (an explicit, conservative allow-list) and wired it into <code>.mosaic_resume_check_inputs()</code>: when persisted and current shards were both Python(Dask)-scored by laser-cholera versions whose engine <code>calc_model_likelihood</code> and output schema are byte-identical (currently <code>{0.14.0, 0.15.0}</code> — v0.15.0 changed only docs/type-hints), resume proceeds with a warning instead of hard-failing the likelihood-provenance guard. Non-allow-listed pairs (e.g. <code>0.13.0</code> ↔︎ <code>0.15.0</code>) still hard-error, and the local (R-scored) path is unaffected. Note: the <strong>Coiled worker image / Coiled software env must be rebuilt to v0.15.0 to keep client↔︎worker version parity</strong> (hybrid runs with mismatched engine versions remain invalid).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.44.11" id="mosaic-04411">MOSAIC 0.44.11<a class="anchor" aria-label="anchor" href="#mosaic-04411"></a></h2>
 <ul><li>Integrated the Phase 3 (<a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101" class="external-link">#101</a>) Dask worker-schema rewrite into main: workers now compute the likelihood on-worker and return a per-iter <code>{iter, seed_iter, likelihood}</code> schema, the Dask gather adapter collapses to a single gather-and-write loop, <code>.mosaic_inject_likelihood_settings()</code> re-injects <code>location_name</code> + <code>N_j_initial</code> and casts the observed surveillance matrices to double before scatter, and the <code>test-dask_worker_schema_parity.R</code> regression suite is added. Merged on top of the post-0.40.0 main evolution.</li>
