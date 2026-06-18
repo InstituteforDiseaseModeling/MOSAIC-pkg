@@ -60,7 +60,11 @@ Use
 for ALL file operations (never hardcode paths) - Never modify read-only
 deps: laser-cholera/, ees-cholera-mapping/, jhu_cholera_data/,
 MOSAIC-data/raw/ (canonical list: root CLAUDE.md “Repository Access
-Rules”) - Never create files in package root without necessity
+Rules”) - Never create files in package root without necessity - When
+you reference a file/output/result in a response, state its **full path
+AND which machine** (e.g. local laptop vs the hedgehog VM) — never just
+a bare filename. Work in this project spans repos and a remote VM, so an
+unqualified filename is ambiguous.
 
 **Ask user first if:** - Adding new R or Python package dependency -
 Changing function signature of exported function - Modifying
