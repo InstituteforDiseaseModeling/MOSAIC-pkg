@@ -1,6 +1,19 @@
 # Tests for grid_search_best_subset: bit-identical parity for the hoist-sort
 # refactor (vs a golden fixture captured from the pre-refactor code) + baseline
 # coverage (the function previously had no tests).
+#
+# Cross-platform tolerance (v0.36.13): $metrics is compared at
+# testthat::testthat_tolerance() (~1.5e-8) rather than tolerance = 0. The
+# fixture (fixtures/parity_grid_search.rds) was baked on the author's local
+# machine; the docker CI image (idmmosaicacr.azurecr.io/mosaic-worker:latest,
+# Linux x86_64 + OpenBLAS) re-derives ESS via sum(w^2) over hundreds of weights,
+# and that accumulation's bit-result is build-dependent (SIMD lane width, BLAS
+# reduction strategy). Measured drift in CI: ESS up to ~768 ULP (~1.7e-13);
+# A and CVw <= 1 ULP. Everything that does NOT depend on a length-N float
+# reduction is still asserted bit-identical: $n, $converged, $evaluations,
+# rownames($subset), $subset$sim, $subset$likelihood (integer slices of the
+# input frame). $subset itself stays at tolerance = 0 for the same reason —
+# it is just re-ordered input rows, with no float arithmetic.
 
 # --- helper: small valid results frame ---------------------------------------
 mk_results <- function(n = 100, seed = 1) {
@@ -25,7 +38,7 @@ test_that("#3 grid_search_best_subset is bit-identical to the fixed reference", 
     expect_identical(new$n,           ref$n,           info = k)
     expect_identical(new$converged,   ref$converged,   info = k)
     expect_identical(new$evaluations, ref$evaluations, info = k)
-    expect_equal(new$metrics, ref$metrics, tolerance = 0, info = k)
+    expect_equal(new$metrics, ref$metrics, tolerance = testthat::testthat_tolerance(), info = k)
     # Returned subset must be the same rows, order, columns AND row.names
     expect_equal(new$subset, ref$subset, tolerance = 0, info = k)
     expect_identical(rownames(new$subset), rownames(ref$subset), info = k)
