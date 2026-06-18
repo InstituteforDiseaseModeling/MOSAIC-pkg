@@ -19,18 +19,37 @@ if (!file.exists(psi_path)) {
      stop(sprintf("psi forecast file not found at %s — cannot derive date_stop.",
                   psi_path))
 }
-date_stop <- max(as.Date(read.csv(psi_path)$date), na.rm = TRUE)
+# date_stop: the latest date through which EVERY modeled location still has a
+# genuine (non-filled) suitability value. est_suitability() now drops trailing
+# carry-forward fill, so per-location series end at their own covariate-coverage
+# horizon (ragged). We truncate the common simulation window to the
+# shortest-covered location so psi_jt never contains a forward-filled flat tail
+# (which suppresses the environmental force of infection and causes an artificial
+# end-of-series drop). When the LSTM is re-run with a different horizon this
+# picks up the change automatically — no hand-bump of date_stop needed.
+j <- MOSAIC::iso_codes_mosaic
+psi_dates <- read.csv(psi_path)[, c("iso_code", "date")]
+psi_dates$date <- as.Date(psi_dates$date)
+psi_dates <- psi_dates[psi_dates$iso_code %in% j, ]
+last_by_iso <- tapply(as.integer(psi_dates$date), psi_dates$iso_code, max, na.rm = TRUE)
+missing_iso <- setdiff(j, names(last_by_iso))
+if (length(missing_iso) > 0) {
+     warning(sprintf(
+          "No psi predictions for %d modeled location(s): %s. Excluded from the common-coverage window.",
+          length(missing_iso), paste(missing_iso, collapse = ", ")))
+}
+date_stop <- as.Date(min(last_by_iso, na.rm = TRUE), origin = "1970-01-01")
+limiting_iso <- names(last_by_iso)[which.min(last_by_iso)]
 
 message(sprintf(
-     "Simulation window: %s to %s (%d days). date_stop derived from %s.",
+     "Simulation window: %s to %s (%d days). date_stop = common psi coverage across modeled locations (limited by %s); source %s.",
      format(date_start), format(date_stop),
      as.integer(date_stop - date_start) + 1L,
-     basename(psi_path)
+     limiting_iso, basename(psi_path)
 ))
 
 message("Set simulation time steps and locations")
 t <- seq.Date(date_start, date_stop, by = "day")
-j <- MOSAIC::iso_codes_mosaic
 
 message("Get population size of each location (N_j)")
 tmp <- read.csv(file.path(PATHS$MODEL_INPUT, 'param_N_population_size.csv'))

@@ -1,3 +1,25 @@
+# Internal: drop trailing carry-forward-filled prediction rows, per location.
+#
+# The prediction step only produces a genuine psi for dates with complete
+# covariates; trailing dates beyond a location's covariate coverage are
+# forward-filled (zoo::na.locf) with the last genuine value, producing a flat
+# constant suitability tail. That flat tail feeds psi_jt and suppresses the
+# environmental force of infection, creating an artificial end-of-series drop
+# in downstream LASER predictions. We DROP those filled tails instead.
+#
+# `df` must carry `iso_code` and `date`; `genuine_last` is a data.frame with
+# `iso_code` and `last_genuine_date` (Date), captured BEFORE any fill. Rows
+# whose date exceeds their location's last genuine date are removed; locations
+# absent from `genuine_last` are passed through unchanged.
+.drop_filled_prediction_tail <- function(df, genuine_last) {
+     if (is.null(df) || !all(c("iso_code", "date") %in% names(df))) return(df)
+     lg <- stats::setNames(as.Date(genuine_last$last_genuine_date),
+                           as.character(genuine_last$iso_code))
+     cutoff <- lg[as.character(df$iso_code)]
+     keep <- is.na(cutoff) | as.Date(df$date) <= cutoff
+     df[keep, , drop = FALSE]
+}
+
 #' Estimate Environmental Suitability (psi) for Cholera Transmission
 #'
 #' This function loads climate data, ENSO data, and weekly cholera cases data to estimate the environmental
@@ -1118,6 +1140,15 @@ est_suitability <- function(PATHS,
      message(sprintf("Prediction mapping: %d/%d training obs, %d/%d prediction obs",
                     train_mapped, nrow(d_train), pred_mapped, nrow(d_pred)))
 
+     # Per-location last GENUINE (covariate-supported, sequence-mapped) prediction
+     # date, captured BEFORE the na.locf forward-fill below. Trailing dates beyond
+     # this are present only via carry-forward fill and are dropped before the
+     # CSVs are written (see .drop_filled_prediction_tail) so the forecast tail is
+     # never a flat constant that would suppress environmental FOI downstream.
+     genuine_pred <- d_pred[!is.na(d_pred$pred), c("iso_code", "date")]
+     genuine_last_pred <- stats::aggregate(date ~ iso_code, data = genuine_pred, FUN = max)
+     names(genuine_last_pred)[match("date", names(genuine_last_pred))] <- "last_genuine_date"
+
      # Handle unmapped predictions (early weeks without sufficient sequence history)
      # Use simple forward fill for any remaining NA predictions
      if (train_mapped < nrow(d_train)) {
@@ -1279,6 +1310,22 @@ est_suitability <- function(PATHS,
           d_pred_weekly$psi <- if (isTRUE(calibrate) && "pred_bias_corrected" %in% names(d_pred_weekly))
                d_pred_weekly$pred_bias_corrected else d_pred_weekly[[pcol_w]]
      }
+
+     # Drop trailing carry-forward-filled predictions so the saved series ends at
+     # each location's last genuine (covariate-supported) prediction date. This
+     # removes the flat constant tail that otherwise propagates into psi_jt and
+     # produces an artificial end-of-series drop in LASER output. Downstream,
+     # make_config_default truncates the simulation window to the common coverage
+     # across modeled locations.
+     n_daily_before <- nrow(d_pred_daily)
+     d_pred_daily <- .drop_filled_prediction_tail(d_pred_daily, genuine_last_pred)
+     if (exists("d_pred_weekly") && is.data.frame(d_pred_weekly)) {
+          d_pred_weekly <- .drop_filled_prediction_tail(d_pred_weekly, genuine_last_pred)
+     }
+     message(sprintf(
+          "Dropped %d trailing carry-forward-filled daily prediction rows (kept %d across %d locations).",
+          n_daily_before - nrow(d_pred_daily), nrow(d_pred_daily),
+          length(unique(d_pred_daily$iso_code))))
 
      # Save predictions to CSV
      path <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_week.csv")
