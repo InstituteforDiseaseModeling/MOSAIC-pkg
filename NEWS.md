@@ -1,3 +1,7 @@
+# MOSAIC 0.44.11
+
+* Integrated the Phase 3 (#101) Dask worker-schema rewrite into main: workers now compute the likelihood on-worker and return a per-iter `{iter, seed_iter, likelihood}` schema, the Dask gather adapter collapses to a single gather-and-write loop, `.mosaic_inject_likelihood_settings()` re-injects `location_name` + `N_j_initial` and casts the observed surveillance matrices to double before scatter, and the `test-dask_worker_schema_parity.R` regression suite is added. Merged on top of the post-0.40.0 main evolution.
+
 # MOSAIC 0.40.0
 
 * **New `backfill_weekly_case_gaps()` + `compile_suitability_data(backfill_case_gaps = TRUE)` repair holiday-week false zeros in the suitability target.** Genuinely-missing weekly surveillance weeks (most often the Christmas/New-Year reporting lapse) were turned into `0` cases by the suitability pipeline's `NA→0` keras-target sanitiser, fabricating a "no transmission" week inside an active outbreak. The new helper linearly interpolates **short interior** gaps (`≤ max_interp_weeks`, default 2) that are bounded by reported weeks, on the per-group weekly series, inside `compile_suitability_data()` before the target is built. It is **suitability-local by design** — the canonical surveillance files and the calibration likelihood (which correctly NA-skips missing weeks) are untouched.

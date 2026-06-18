@@ -420,7 +420,7 @@ test_that(".mosaic_resume_check_inputs hard-errors across the v0.13 engine bound
 
 # ---- likelihood-value provenance guard (Phase 3 / PR #111) ----
 
-test_that(".mosaic_likelihood_provenance: R on local path, Python on Dask path", {
+test_that(".mosaic_likelihood_provenance: R on local path, Python on Dask path (phase 3 / #101)", {
   p  <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = FALSE)
   pd <- MOSAIC:::.mosaic_likelihood_provenance(use_dask = TRUE, lc_version = "0.13.0")
 
@@ -428,7 +428,7 @@ test_that(".mosaic_likelihood_provenance: R on local path, Python on Dask path",
   expect_equal(p$engine, "R")
   expect_equal(p$impl_version, MOSAIC:::.mosaic_likelihood_impl_version())
 
-  # Dask path: on-worker Python scoring per Phase 3 (PR #111).  impl_version
+  # Dask path: on-worker Python scoring per phase 3 (#101).  impl_version
   # is the laser-cholera engine version passed by the caller (which holds
   # the canonical Python `calc_model_likelihood` implementation).
   expect_equal(pd$engine, "python")
