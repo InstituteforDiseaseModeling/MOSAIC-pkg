@@ -1,5 +1,18 @@
 # Changelog
 
+## MOSAIC 0.44.11
+
+- Integrated the Phase 3
+  ([\#101](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/101))
+  Dask worker-schema rewrite into main: workers now compute the
+  likelihood on-worker and return a per-iter
+  `{iter, seed_iter, likelihood}` schema, the Dask gather adapter
+  collapses to a single gather-and-write loop,
+  `.mosaic_inject_likelihood_settings()` re-injects `location_name` +
+  `N_j_initial` and casts the observed surveillance matrices to double
+  before scatter, and the `test-dask_worker_schema_parity.R` regression
+  suite is added. Merged on top of the post-0.40.0 main evolution.
+
 ## MOSAIC 0.40.0
 
 - **New
