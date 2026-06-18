@@ -2218,28 +2218,11 @@ run_MOSAIC <- function(config,
     cand_seeds       <- .opt_bs$seed_sim[.opt_nz]
     cand_likelihoods <- .opt_bs$likelihood[.opt_nz]
 
-    # Optional short-lived PSOCK cluster for this step only. The calibration
-    # cluster is already stopped (line ~1527), so the optimizer needs its own.
-    # Only build it when the user asks for >1 core AND the problem is non-trivial
-    # (more than one [location, time] cell). FORK is unsafe here (reticulate /
-    # numba native threads are loaded post-calibration -> fork-deadlock).
-    .opt_n_cores  <- as.integer(control$predictions$optimize_n_cores %||% 1L)
-    .opt_n_cells  <- as.integer(ensemble$n_locations) * as.integer(ensemble$n_time_points)
-    .opt_cl <- NULL
-    if (.opt_n_cores > 1L && .opt_n_cells >= 2L) {
-      .opt_cl <- tryCatch(
-        make_mosaic_cluster(n_cores = min(.opt_n_cores, .opt_n_cells), type = "PSOCK"),
-        error = function(e) {
-          log_warn("optimize subset: PSOCK cluster build failed (%s); running serial",
-                   e$message)
-          NULL
-        }
-      )
-      if (!is.null(.opt_cl)) {
-        on.exit(try(parallel::stopCluster(.opt_cl), silent = TRUE), add = TRUE)
-      }
-    }
-
+    # Runs serially: the dominant speedup is the stride search (control$
+    # predictions$optimize_stride). The step is export-bound, so spinning up a
+    # cluster for it scales poorly and is counterproductive once stride shrinks
+    # the work; the function still accepts a `cl =` for power users who want to
+    # parallelize a one-off direct call.
     subset_opt <- tryCatch(
       optimize_ensemble_subset(
         ensemble    = ensemble,
@@ -2248,8 +2231,7 @@ run_MOSAIC <- function(config,
         min_n       = as.integer(control$predictions$optimize_min_n %||% 30L),
         objective   = control$predictions$optimize_objective %||% "mae",
         central_method = central_method,
-        stride      = as.integer(control$predictions$optimize_stride %||% 1L),
-        cl          = .opt_cl,
+        stride      = as.integer(control$predictions$optimize_stride %||% 3L),
         verbose     = control$logging$verbose
       ),
       error = function(e) {
@@ -2257,12 +2239,6 @@ run_MOSAIC <- function(config,
         NULL
       }
     )
-
-    # Release the optimizer's cluster promptly (also covered by on.exit above).
-    if (!is.null(.opt_cl)) {
-      try(parallel::stopCluster(.opt_cl), silent = TRUE)
-      .opt_cl <- NULL
-    }
 
     if (!is.null(subset_opt) && !is.null(subset_opt$optimal_seeds) &&
         length(subset_opt$optimal_seeds) > 0) {
@@ -3161,19 +3137,18 @@ run_mosaic <- run_MOSAIC
 #'       degeneracy in \code{posteriors.json}).
 #'     \item \code{optimize_objective}: Objective function, \code{"mae"} (default),
 #'       \code{"r2_bias"}, or \code{"wis"}.
-#'     \item \code{optimize_stride}: Integer >= 1 (default \code{1L}). \code{1L}
+#'     \item \code{optimize_stride}: Integer >= 1 (default \code{3L}). \code{1L}
 #'       evaluates every candidate subset size in \code{min_n:max_n} (exhaustive,
-#'       bit-identical to the historical search). \code{> 1L} enables a
+#'       bit-identical to the historical search). \code{> 1L} runs a
 #'       coarse-then-refine search that evaluates a strided grid first and then
-#'       refines around the best point -- substantially faster but \strong{opt-in},
-#'       as it may select a slightly different \code{optimal_n} than the exhaustive
-#'       search and records only the evaluated N's in the diagnostics table.
-#'     \item \code{optimize_n_cores}: Integer >= 1 (default \code{1L}). \code{1L}
-#'       runs the subset-optimization step serially. \code{> 1L} builds a
-#'       short-lived PSOCK cluster (the calibration cluster is already stopped by
-#'       this point) that splits the per-cell evaluation across workers. The result
-#'       is bit-for-bit identical to the serial path; the cluster is created and
-#'       stopped within the step.
+#'       refines around the best point. The default \code{3L} gives roughly a 3x
+#'       speedup with negligible accuracy cost on the smooth \code{score(N)} curve
+#'       (it re-examines a +/- 3 window around the coarse winner); raise it
+#'       (\code{5L}/\code{10L}/\code{25L}) for more speed, or set \code{1L} to force
+#'       the exhaustive search. Note it may select a slightly different
+#'       \code{optimal_n} than exhaustive and records only the evaluated N's in the
+#'       diagnostics table. (The \code{\link{optimize_ensemble_subset}} function's
+#'       own \code{stride} default remains \code{1L} to preserve bit-identicality.)
 #'     \item \code{central_method}: Ensemble central tendency, \code{"mean"}
 #'       (default; unbiased for expected counts and never collapses on sparse
 #'       deaths) or \code{"median"} (reproduces pre-v0.38 runs). Scalar or
@@ -3448,16 +3423,14 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # to guard against KDE degeneracy when the
                                           # optimized subset drives posterior densities.
     optimize_objective = "mae",          # Objective: "mae", "r2_bias", or "wis"
-    optimize_stride    = 1L,             # Subset-search stride: 1 = exhaustive
-                                          # (every N in min_n:max_n). >1 enables a
-                                          # coarse-then-refine search (faster, opt-in;
-                                          # changes selection -- may pick a slightly
-                                          # different optimal_n than exhaustive).
-    optimize_n_cores   = 1L,             # Cores for the subset-optimization step:
-                                          # 1 = serial; >1 builds a short-lived PSOCK
-                                          # cluster for this step (bit-identical to
-                                          # serial). Independent of the calibration
-                                          # cluster, which is already stopped here.
+    optimize_stride    = 3L,             # Subset-search stride: 1 = exhaustive
+                                          # (every N in min_n:max_n); 3 (default) =
+                                          # coarse-then-refine, ~3x fewer evals with
+                                          # negligible accuracy cost on the smooth
+                                          # score(N) curve. Raise (5/10/25) for more
+                                          # speed; set 1 for a bit-identical exhaustive
+                                          # search. (The optimize_ensemble_subset()
+                                          # function default stays 1L for parity.)
     central_method     = "mean"          # Ensemble central tendency: "mean" (default,
                                           # unbiased E[sum]; never collapses on sparse
                                           # deaths) or "median" (reproduces historical
