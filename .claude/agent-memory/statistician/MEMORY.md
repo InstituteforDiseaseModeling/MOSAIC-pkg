@@ -1,0 +1,1 @@
+- [Best-subset preset red-team R1+R2 (2026-06-17)](project_best_subset_preset_redteam.md) — R1: gate-K percentile confusion + budget-exponent≠engine-sqrt + omitted n_params. R2 (rewrite K=0.18/h=2.0): budget FIXED for T≤725 but engine batch-cap ~104k (T=1000 unconverged); reachability overstated (~86% not 95%, fixed-mode-only); era ess_min drift; subset_size↔1.13 sound
