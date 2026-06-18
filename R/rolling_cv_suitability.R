@@ -191,6 +191,25 @@
 
           sub <- .psi_slice_rw_step(data_bundle, step)
 
+          # Skip folds with no held-out validation slice (e.g. a terminal RW
+          # step whose test window extends past observed data, or a country
+          # data gap that leaves the response NA across the window). The arch
+          # fit uses early stopping in CV mode (n_epochs_fixed = NULL), which
+          # requires validation; without it the fit errors ("validation data
+          # required when n_epochs_fixed is NULL"). Such a fold cannot inform
+          # best_epoch anyway, so record NA and skip rather than crash. (No-op
+          # for folds that have validation, so targets with full coverage are
+          # unaffected; only sparse targets/windows trigger this.)
+          if (is.null(sub$X_val) || isTRUE(sub$n_val == 0L)) {
+               best_epochs[k]  <- NA_integer_
+               val_losses[k]   <- NA_real_
+               val_metrics[k]  <- NA_real_
+               step_minutes[k] <- 0
+               if (verbose)
+                    message("       (no validation slice; fold skipped for epoch selection)")
+               next
+          }
+
           # Sub-bundle that masquerades as a full data_bundle for the arch.
           sub_bundle <- utils::modifyList(data_bundle, list(
                X_train = sub$X_train, y_train = sub$y_train,
