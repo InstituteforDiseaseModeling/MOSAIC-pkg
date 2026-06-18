@@ -477,3 +477,56 @@ test_that(".mosaic_resume_check_inputs rejects a different likelihood provenance
      file.path(inp, "environment.json"))
   expect_true(suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors)))
 })
+
+test_that(".mosaic_lc_likelihood_compatible allow-lists verified-identical engine pairs", {
+  f <- MOSAIC:::.mosaic_lc_likelihood_compatible
+  # equal versions are trivially compatible
+  expect_true(f("0.15.0", "0.15.0"))
+  # verified-identical set: v0.15.0 changed only docs/type-hints vs v0.14.0
+  expect_true(f("0.14.0", "0.15.0"))
+  expect_true(f("0.15.0", "0.14.0"))
+  # not on the allow-list -> not compatible (must stay conservative)
+  expect_false(f("0.13.0", "0.15.0"))
+  expect_false(f("0.14.0", "0.13.0"))
+  # degenerate inputs -> FALSE (never silently pool)
+  expect_false(f(NA_character_, "0.15.0"))
+  expect_false(f("0.15.0", ""))
+  expect_false(f(NULL, "0.15.0"))
+})
+
+test_that(".mosaic_resume_check_inputs pools verified-compatible Dask engine versions, still rejects others", {
+  current_lc <- tryCatch({
+    if (reticulate::py_available(initialize = FALSE)) {
+      as.character(reticulate::import("importlib.metadata", delay_load = FALSE)$version("laser-cholera"))
+    } else NA_character_
+  }, error = function(e) NA_character_)
+  # This integration assertion needs the live engine to have a verified-compatible
+  # partner version; gate on that rather than hard-coding the installed version.
+  partner <- if (identical(current_lc, "0.15.0")) "0.14.0"
+             else if (identical(current_lc, "0.14.0")) "0.15.0" else NA_character_
+  skip_if(is.na(partner), "installed laser-cholera has no verified-compatible partner version")
+
+  base <- tempfile("provcompat_"); inp <- file.path(base, "1_inputs"); dir.create(inp, recursive = TRUE)
+  dirs <- list(inputs = inp)
+  config <- list(location_name = "ETH"); priors <- list(a = 1)
+  wj <- function(x, f) jsonlite::write_json(x, f, pretty = TRUE, auto_unbox = TRUE, digits = NA)
+  wj(priors, file.path(inp, "priors.json"))
+  wj(config, file.path(inp, "config.json"))
+
+  # persisted Dask (python) shards scored by the compatible partner version ->
+  # resume proceeds (warning only) under use_dask = TRUE.
+  wj(list(likelihood_provenance = list(engine = "python", impl_version = partner),
+          python = list(pkg_laser_cholera = partner)),
+     file.path(inp, "environment.json"))
+  expect_true(suppressWarnings(
+    MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, use_dask = TRUE)))
+
+  # persisted Dask shards scored by a NON-compatible engine version (0.13.0) ->
+  # still a hard error (provenance differs); allow-list must not over-reach.
+  wj(list(likelihood_provenance = list(engine = "python", impl_version = "0.13.0"),
+          python = list(pkg_laser_cholera = "0.13.0")),
+     file.path(inp, "environment.json"))
+  expect_error(
+    suppressWarnings(MOSAIC:::.mosaic_resume_check_inputs(dirs, config, priors, use_dask = TRUE)),
+    "likelihood provenance differs")
+})

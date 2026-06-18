@@ -1107,6 +1107,40 @@
   "compatible"
 }
 
+#' laser-cholera Likelihood-Value Compatibility (Python / Dask backend)
+#'
+#' On the Dask backend the likelihood is computed on-worker by laser-cholera's
+#' \code{calc_model_likelihood}, so the shard impl_version is the raw engine
+#' version (see \code{.mosaic_likelihood_provenance}). Two Dask-scored shards are
+#' poolable only if BOTH the engine OUTPUT schema (reported_cases/reported_deaths)
+#' AND the likelihood CODE produce identical values. Equal versions are trivially
+#' compatible; different versions are compatible only when explicitly verified
+#' identical and listed here (conservative allow-list, not a forward-looking
+#' "all >= X" rule).
+#'
+#' Verified-identical sets (engine output schema + calc_model_likelihood values
+#' byte-identical across the pair):
+#' \itemize{
+#'   \item \code{{0.14.0, 0.15.0}}: v0.15.0 is a docs/validation-hygiene release;
+#'     \code{calc_model_likelihood.py} differs only in \code{Optional[X]} ->
+#'     \code{X | None} type annotations, and the results schema
+#'     (reported_cases/reported_deaths) is unchanged.
+#' }
+#' @return TRUE if the two versions produce comparable Dask likelihood values.
+#' @noRd
+.mosaic_lc_likelihood_compatible <- function(a, b) {
+  norm <- function(v) {
+    if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA_character_)
+    as.character(v)
+  }
+  a <- norm(a); b <- norm(b)
+  if (is.na(a) || is.na(b)) return(FALSE)
+  if (identical(a, b)) return(TRUE)
+  compatible_sets <- list(c("0.14.0", "0.15.0"))
+  for (s in compatible_sets) if (a %in% s && b %in% s) return(TRUE)
+  FALSE
+}
+
 #' R-side Likelihood Implementation Version
 #'
 #' Identifies the numeric behaviour of the R \code{calc_model_likelihood()}
@@ -1334,13 +1368,30 @@
     cur_prov <- .mosaic_likelihood_provenance(use_dask, current_lc)
     a <- serialize_obj(cur_prov); b <- serialize_obj(persisted_prov)
     if (!is.na(a) && !is.na(b) && !identical(a, b)) {
-      stop(sprintf(paste0(
-        "resume: likelihood provenance differs (persisted engine '%s' / impl '%s' vs current ",
-        "engine '%s' / impl '%s'). The shards on disk were scored by a different likelihood ",
-        "engine or implementation, so pooling them with new draws would mix incomparable ",
-        "likelihoods. Start a fresh run in a new directory."),
-        persisted_prov$engine %||% "?", persisted_prov$impl_version %||% "?",
-        cur_prov$engine, cur_prov$impl_version), call. = FALSE)
+      # Before hard-failing, allow the Python (Dask) backend to resume across two
+      # laser-cholera engine versions whose OUTPUT schema and calc_model_likelihood
+      # values are byte-identical (an explicit, verified allow-list). Same engine,
+      # likelihood-compatible impl_version -> the Dask-scored shards stay poolable.
+      pers_engine <- persisted_prov$engine %||% "?"
+      likelihood_compatible <-
+        identical(cur_prov$engine, "python") && identical(pers_engine, "python") &&
+        .mosaic_lc_likelihood_compatible(persisted_prov$impl_version, cur_prov$impl_version)
+      if (likelihood_compatible) {
+        warning(sprintf(paste0(
+          "resume: laser-cholera engine version differs (persisted impl '%s' vs current '%s'), ",
+          "but both are in the verified likelihood-compatible set (identical engine ",
+          "calc_model_likelihood + output schema), so the Dask-scored shards remain ",
+          "comparable. Proceeding."),
+          persisted_prov$impl_version %||% "?", cur_prov$impl_version), call. = FALSE)
+      } else {
+        stop(sprintf(paste0(
+          "resume: likelihood provenance differs (persisted engine '%s' / impl '%s' vs current ",
+          "engine '%s' / impl '%s'). The shards on disk were scored by a different likelihood ",
+          "engine or implementation, so pooling them with new draws would mix incomparable ",
+          "likelihoods. Start a fresh run in a new directory."),
+          pers_engine, persisted_prov$impl_version %||% "?",
+          cur_prov$engine, cur_prov$impl_version), call. = FALSE)
+      }
     }
   }
 
