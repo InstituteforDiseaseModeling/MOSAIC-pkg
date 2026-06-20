@@ -8,26 +8,23 @@ library(jsonlite)
 MOSAIC::set_root_directory("~/MOSAIC")
 PATHS <- MOSAIC::get_paths()
 
-# Load config_default to get the global date_start
+# Load config_default to get the global fit-window start. The build start date can
+# be overridden via the MOSAIC_BUILD_DATE_START env var so a back-history rebuild
+# (e.g. a 2015 start) flows the SAME start date into BOTH this script and
+# make_config_default.R; otherwise it falls back to the installed config_default.
 config_default <- MOSAIC::config_default
-date_start <- as.Date(config_default$date_start)
+.env_ds    <- Sys.getenv("MOSAIC_BUILD_DATE_START", "")
+date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date(config_default$date_start)
 
-# Initial-condition seeding epoch, DECOUPLED from the fit-window date_start.
-# ICs (V1/V2/E/I/R/S) must be seeded from a data-rich epoch. Empirically the
-# 2015 IC lookback window has 0 countries with active cases and the late-2022
-# window (a 2023-01-01 start) only ~6, vs 11 at 2023-02-01 -- seeding from a thin
-# window sends most countries to the no-data Beta defaults => near-zero E/I =>
-# no outbreak ignition (the R_eff<1 cold start the IC block in make_config_default.R
-# warns about). Floor the IC epoch at the proven data-rich 2023-02-01 anchor,
-# regardless of how early date_start is set. This also breaks the circular hazard
-# whereby a <2023 config rebuild (date_start read from the installed config above)
-# would otherwise poison the next priors rebuild's IC epoch.
-# NOTE (lookahead): when date_start < 2023-02-01 (the 2023-01-01 default, or a 2015
-# back-history build) ic_t0 POST-DATES simulation t=1, so the t=1 compartment state is
-# derived from a lookback window a few weeks after sim start. This ~3-week onset
-# look-ahead is accepted: seeding from the thin pre-2023 window instead cold-starts
-# E/I and prevents ignition, which is far worse over a multi-year run.
-ic_t0 <- max(date_start, as.Date("2023-02-01"))
+# Initial-condition seeding epoch (ic_t0) is DATA-DRIVEN and TRACKS date_start: it is
+# the active-case-richest epoch within the first 12 months at/after date_start,
+# computed below once the surveillance data has loaded (see "Data-driven IC seeding
+# epoch"). This replaces the former hard `max(date_start, 2023-02-01)` floor, whose
+# "2015 has 0 active-case countries" premise predated the multi-source (JHU/AI)
+# back-history that now populates pre-2023 years (2015-02 now has ~9 active-case
+# countries). For a 2023 build it still resolves to ~2023-02 (the data-richest epoch)
+# so the shipped 2023 priors are unchanged; for an earlier start it seeds from that
+# era's data instead of an 8-year-mismatched 2023 state.
 
 j <- MOSAIC::iso_codes_mosaic
 
@@ -39,6 +36,21 @@ surv_weekly <- read.csv(
      file.path(PATHS$DATA_PROCESSED, "cholera/weekly/cholera_surveillance_weekly_combined.csv"),
      stringsAsFactors = FALSE
 )
+
+# --- Data-driven IC seeding epoch (tracks date_start; see note near the top) -------
+# Pick the active-case-richest month within [date_start, date_start + 12mo] using a
+# +/-8-week window over the combined weekly surveillance. Falls back to date_start
+# itself if no active cases are found in that span (degenerate/no-data case).
+.ic_surv_dt <- as.Date(surv_weekly$date_start)
+.ic_cand    <- seq(date_start, date_start + 365L, by = "1 month")
+.ic_nactive <- vapply(.ic_cand, function(cd) {
+     w <- which(.ic_surv_dt >= (cd - 56L) & .ic_surv_dt <= (cd + 56L) &
+                is.finite(surv_weekly$cases) & surv_weekly$cases > 0)
+     length(unique(surv_weekly$iso_code[w]))
+}, integer(1))
+ic_t0 <- if (all(.ic_nactive == 0L)) date_start else .ic_cand[which.max(.ic_nactive)]
+message(sprintf("IC seeding epoch ic_t0 = %s  (%d active-case countries; date_start = %s)",
+                format(ic_t0), max(.ic_nactive), format(date_start)))
 
 dem_annual <- read.csv(
      file.path(PATHS$DATA_PROCESSED, "demographics/demographics_mosaic_countries_2000_2024_annual.csv"),
