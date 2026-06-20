@@ -4,6 +4,10 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  # Nightly slow/engine tier (MOSAIC_RUN_SLOW_TESTS=1) and manual dispatch.
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 name: R-CMD-check.yaml
 
@@ -100,6 +104,28 @@ jobs:
 
       - name: Smoke-load MOSAIC
         run: Rscript -e 'library(MOSAIC)'
+
+      # Default PR / push runs the FAST tier SERIALLY. The slow prior-derivation
+      # tests gate on MOSAIC_RUN_SLOW_TESTS (unset here); engine/keras/integration
+      # tests stay gated on their own env vars. We force TESTTHAT_PARALLEL=FALSE
+      # here so the inner-parallel tests (mclapply fork / PSOCK cluster) actually
+      # run -- they self-skip under Config/testthat/parallel (local dev speedup)
+      # to avoid nesting parallel-over-parallel, so CI must run serial to cover
+      # them. ~2 min serial is acceptable; local `devtools::test()` stays parallel.
+      - name: Run testthat (fast tier, serial -> full coverage)
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        env:
+          TESTTHAT_PARALLEL: 'FALSE'
+        run: Rscript -e 'testthat::test_local(stop_on_failure = TRUE)'
+
+      # Nightly schedule / manual dispatch runs the SLOW tier in addition to the
+      # fast tier (engine/keras still require the worker image and stay gated).
+      - name: Run testthat (slow tier, serial)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          MOSAIC_RUN_SLOW_TESTS: '1'
+          TESTTHAT_PARALLEL: 'FALSE'
+        run: Rscript -e 'testthat::test_local(stop_on_failure = TRUE)'
 
 
       - name: Install MOSAIC from GitHub

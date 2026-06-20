@@ -6,13 +6,7 @@ library(MOSAIC)
 # data-raw rebuild has populated priors_default with rho_deaths.
 tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
 
-skip_if_no_rho_deaths_prior <- function() {
-  skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  pri <- tryCatch(MOSAIC::priors_default, error = function(e) NULL)
-  if (is.null(pri) || is.null(pri$parameters_global$rho_deaths)) {
-    skip("priors_default$parameters_global$rho_deaths not yet populated (data-raw rebuild pending)")
-  }
-}
+# skip_if_no_rho_deaths_prior() is centralized in helper-skips.R.
 
 test_that("rho_deaths is present in default config", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
@@ -62,7 +56,10 @@ test_that("sample_parameters holds rho_deaths fixed when sample_rho_deaths = FAL
 
 test_that("rho_deaths empirical draws match Beta(36.95, 51.02)", {
   skip_if_no_rho_deaths_prior()
-  draws <- vapply(1:200, function(s) {
+  # 40 draws: Beta(36.95,51.02) has sd ~0.052, so SE(mean) ~0.008 -- the [0.37,
+  # 0.47] mean band sits ~6 SE from the true mean (0.420), comfortably robust at
+  # this draw count while keeping the loop cheap.
+  draws <- vapply(1:40, function(s) {
     sample_parameters(seed = s, verbose = FALSE)$rho_deaths
   }, numeric(1))
   expect_true(all(is.finite(draws)))

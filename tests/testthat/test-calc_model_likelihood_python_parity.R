@@ -25,20 +25,9 @@
 # (divergence closes) and a regression (it grows) surface as failures.
 # =============================================================================
 
-PY_LIKELIHOOD_MODULE <- "laser.cholera.calc_model_likelihood"
 PARITY_TOL <- 1e-4
-
-skip_if_no_python_likelihood <- function() {
-  skip_if_not_installed("reticulate")
-  skip_on_cran()
-  if (!reticulate::py_available(initialize = TRUE)) {
-    skip("Python not available via reticulate")
-  }
-  if (!reticulate::py_module_available(PY_LIKELIHOOD_MODULE)) {
-    skip(sprintf("%s not installed (requires laser-cholera >= 0.13.1)", PY_LIKELIHOOD_MODULE))
-  }
-  invisible(TRUE)
-}
+# PY_LIKELIHOOD_MODULE and skip_if_no_python_likelihood() are centralized in
+# helper-skips.R (which reads the cached probe from setup-python.R).
 
 # Build inputs that exercise the daily-timestep + epidemic_peaks path.
 # 2 locations x 60 daily timesteps; date_start chosen so a single MOZ peak

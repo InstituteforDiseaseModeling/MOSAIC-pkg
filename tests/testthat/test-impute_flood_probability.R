@@ -7,8 +7,17 @@
 # inputs are wrong. Keep the diagnostics block disabled for speed except
 # in one focused diagnostics test.
 
+# Synthetic panel dimensions are deliberately the smallest that still
+# satisfy the function's guards and recover the precip-driven signal with
+# margin: 2 ISOs x 4 years x 52 weeks = 416 rows -> 210 training rows after
+# the 52-week lag/window warm-up (the >= 100-row guard, ~line 243 of
+# impute_flood_probability.R). At these dimensions each mgcv::bam() fit is
+# ~1.5s (vs ~5s on the old 5x4 set), and the synthetic-recovery AUC stays
+# in the 0.82-0.88 band across the seeds used below (well above the 0.75
+# threshold). Shrinking ISOs further (to 1-2) or years to 3 pushes AUC down
+# to ~0.76 with no margin, so do not reduce these without re-checking AUC.
 .mk_synth_suitability <- function(seed = 7L,
-                                   n_iso = 5L, n_years = 4L,
+                                   n_iso = 2L, n_years = 4L,
                                    na_forecast_year = TRUE) {
      set.seed(seed)
      isos  <- LETTERS[seq_len(n_iso)]
@@ -54,7 +63,7 @@
      # Severity target for the Tweedie GAM (v0.30.22+): log1p of
      # synthetic Total Affected. Severity scales deterministically with
      # precip_anom so the Tweedie GAM has a strong signal to recover on
-     # tiny synthetic data (5 ISOs x 4 years x 52 weeks).
+     # tiny synthetic data (2 ISOs x 4 years x 52 weeks).
      severity_raw <- ifelse(
           d$emdat_flood_active == 1,
           pmax(0, 200 * exp(d$precip_anom)) + stats::rexp(nrow(d), rate = 0.05),
@@ -85,8 +94,8 @@ testthat::test_that("recovers a known precip-driven flood signal", {
 
      # Training-period AUC against the observed binary should be well
      # above chance. select = TRUE (v0.30.25+) applies shrinkage that is
-     # more aggressive on small synthetic datasets (5 ISOs x 4 yrs
-     # ~ 1k rows) than it is on the real ~35k-row training set, so the
+     # more aggressive on small synthetic datasets (2 ISOs x 4 yrs
+     # ~ 416 rows) than it is on the real ~35k-row training set, so the
      # synthetic threshold is set conservatively at 0.75. Real-data
      # CV AUC is 0.85.
      train <- !is.na(d$emdat_flood_active)
@@ -144,8 +153,13 @@ testthat::test_that("is deterministic on the same input (no hidden randomness)",
 testthat::test_that("diagnostics writes the four expected artefacts", {
      d <- .mk_synth_suitability(seed = 13L)
      tmp <- withr::local_tempdir()
-     # The diagnostics path includes a rolling-year CV; with year_val >= 2018
-     # and our synthetic years 2018:2021, only 2019/2020 are eligible folds.
+     # The diagnostics path includes a rolling-year CV. On this tiny 2-ISO x
+     # 4-year synthetic set (last year hidden as the forecast window) the
+     # per-fold guards in .write_flood_gam_diagnostics() (>= 100 train rows,
+     # >= 20 validation rows, both classes present) are not met, so the CV
+     # folds are all skipped -- the diagnostics call performs exactly ONE
+     # GAM fit and the optional cv_metrics CSV is not written. The PNG/txt
+     # artefacts below are always produced regardless of CV.
      out <- MOSAIC::impute_flood_probability(
           d, diagnostics = TRUE, diag_dir = tmp, verbose = FALSE
      )

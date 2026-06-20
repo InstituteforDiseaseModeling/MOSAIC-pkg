@@ -4,9 +4,13 @@ library(MOSAIC)
 # Set root directory (required for sample_parameters to load defaults)
 tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
 
+# These tests assert STRUCTURE and derivation identities that hold for any seed,
+# so they share one memoized draw via .cached_sampled_config() (helper-fixtures.R)
+# rather than re-running the full sampler five times.
+
 test_that("beta_j0_tot and p_beta are sampled correctly", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  config <- sample_parameters(seed = 123, verbose = FALSE)
+  config <- .cached_sampled_config(123L)
 
   # Check that parameters exist
   expect_true("beta_j0_tot" %in% names(config))
@@ -24,7 +28,7 @@ test_that("beta_j0_tot and p_beta are sampled correctly", {
 
 test_that("beta_j0_hum and beta_j0_env are derived correctly", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  config <- sample_parameters(seed = 456, verbose = FALSE)
+  config <- .cached_sampled_config(123L)
 
   expect_true("beta_j0_hum" %in% names(config))
   expect_true("beta_j0_env" %in% names(config))
@@ -40,7 +44,7 @@ test_that("beta_j0_hum and beta_j0_env are derived correctly", {
 
 test_that("derived beta values maintain expected ratio", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  config <- sample_parameters(seed = 789, verbose = FALSE)
+  config <- .cached_sampled_config(123L)
 
   # ratio hum/env must equal p_beta/(1-p_beta) exactly
   ratio <- config$beta_j0_hum / config$beta_j0_env
@@ -50,7 +54,7 @@ test_that("derived beta values maintain expected ratio", {
 
 test_that("config structure maintains laser-cholera compatibility", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  config <- sample_parameters(seed = 321, verbose = FALSE)
+  config <- .cached_sampled_config(123L)
 
   n_locations <- length(config$location_name)
   expect_equal(length(config$beta_j0_hum), n_locations)
@@ -65,7 +69,7 @@ test_that("config structure maintains laser-cholera compatibility", {
 
 test_that("validation catches invalid beta values", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  config <- sample_parameters(seed = 654, verbose = FALSE)
+  config <- .cached_sampled_config(123L)
 
   # Valid config should pass (skip if validator has known issues with defaults)
   valid <- validate_sampled_config(config, verbose = FALSE)

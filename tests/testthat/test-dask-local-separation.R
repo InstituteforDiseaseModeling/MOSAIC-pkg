@@ -22,6 +22,7 @@ test_that("Part A: coiled dask_spec requires n_workers; n_cores never substitute
 })
 
 test_that("B1: .mosaic_set_all_thread_env pins ARROW_NUM_THREADS and forks inherit it", {
+  skip_if_testthat_parallel()  # inner mclapply fork is unsafe inside a testthat worker
   old <- Sys.getenv("ARROW_NUM_THREADS", unset = NA_character_)
   on.exit(if (is.na(old)) Sys.unsetenv("ARROW_NUM_THREADS") else
             Sys.setenv(ARROW_NUM_THREADS = old), add = TRUE)

@@ -59,7 +59,8 @@ test_that(".props_to_counts holds across locations and tolerates proportion drif
 # ---------------------------------------------------------------------------
 test_that("sample_parameters: initial-condition counts sum to population per location", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-  cfg    <- sample_parameters(seed = 42, verbose = FALSE)
+  # Structural invariant (holds for any seed) -> memoized fixture.
+  cfg    <- .cached_sampled_config(42L)
   counts <- sapply(.IC, function(c) cfg[[paste0(c, "_j_initial")]])   # [n_loc x 6]
   expect_equal(rowSums(counts), cfg$N_j_initial)
   expect_true(all(counts >= 0))

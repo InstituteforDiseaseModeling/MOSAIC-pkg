@@ -6,7 +6,8 @@ tryCatch(set_root_directory("~/MOSAIC"), error = function(e) NULL)
 
 test_that("sample_parameters produces valid zeta tuples under new priors", {
      skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-     cfg <- sample_parameters(seed = 1L, verbose = FALSE)
+     # Structural identity (holds for any seed) -> memoized fixture.
+     cfg <- .cached_sampled_config(1L)
      expect_true(is.finite(cfg$zeta_1))
      expect_true(is.finite(cfg$zeta_2))
      expect_true(is.finite(cfg$zeta_ratio))
@@ -18,7 +19,9 @@ test_that("sample_parameters produces valid zeta tuples under new priors", {
 
 test_that("zeta draws fall in expected ranges in >=95% of draws", {
      skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
-     draws <- lapply(1:100, function(s) sample_parameters(seed = s, verbose = FALSE))
+     # 40 draws: the coverage bands below span several orders of magnitude
+     # (>=95% within multi-OOM ranges), so 40 is ample and keeps the loop cheap.
+     draws <- lapply(1:40, function(s) sample_parameters(seed = s, verbose = FALSE))
      z1  <- vapply(draws, function(d) d$zeta_1,     numeric(1))
      zr  <- vapply(draws, function(d) d$zeta_ratio, numeric(1))
      # zeta_1 ~ LN(25.65, 2.46) after v0.29.1 bias corrections.

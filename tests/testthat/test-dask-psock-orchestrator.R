@@ -4,6 +4,7 @@
 # deadlock/corrupt the client. These tests validate the plumbing + the invariant.
 
 test_that("B2: PSOCK plumbing is serial-identical, order-preserving, on reticulate-free workers", {
+  skip_if_testthat_parallel()  # spawning a PSOCK cluster inside a testthat worker is unsafe
   cl <- parallel::makeCluster(2L, type = "PSOCK")
   on.exit(parallel::stopCluster(cl), add = TRUE)
   parallel::clusterEvalQ(cl, suppressMessages(library(MOSAIC)))

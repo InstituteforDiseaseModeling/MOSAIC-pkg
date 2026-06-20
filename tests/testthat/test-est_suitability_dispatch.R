@@ -1,21 +1,13 @@
 # Tier-1 (CI, pure-R, no keras): est_suitability() dispatcher + deprecation
-# handling. The routing assertions mock .est_suitability_lstm_v2 /
+# handling. ALL tests in this file mock .est_suitability_lstm_v2 /
 # .est_suitability_legacy via testthat::local_mocked_bindings, so they never
-# touch Python. The deprecation-message tests, however, are NOT mocked: after
-# emitting the message est_suitability() proceeds into the real lstm_v2 path,
-# which loads the tensorflow R package (whose .onLoad imports Python TF). In an
-# env without the Python tensorflow module (e.g. the TF-stripped worker image)
-# that load errors, so those tests guard with skip_without_tensorflow().
+# touch Python. The deprecation messages/warnings are emitted in
+# est_suitability() BEFORE dispatch reaches the lstm_v2 path, so mocking that
+# binding lets us assert the message/warning without loading TensorFlow. This
+# is why the deprecation tests no longer need skip_without_tensorflow().
+# skip_without_tensorflow() itself is centralized in helper-skips.R.
 
 fake_paths <- list()  # dispatch logic never touches PATHS
-
-# Skip when the Python tensorflow module is unavailable (e.g. the worker image
-# strips it). Keeps the suite portable; a no-op where TF is installed.
-skip_without_tensorflow <- function() {
-  testthat::skip_if_not_installed("reticulate")
-  testthat::skip_if_not(reticulate::py_module_available("tensorflow"),
-                        "Python tensorflow module not available")
-}
 
 test_that("supplying both bias_correct and the deprecated calibrate errors", {
   expect_error(
@@ -27,29 +19,32 @@ test_that("supplying both bias_correct and the deprecated calibrate errors", {
 })
 
 test_that("calibrate alone is mapped to bias_correct with a deprecation message", {
-  skip_without_tensorflow()
+  # Mock the lstm_v2 path to a no-op so the deprecation message (emitted before
+  # dispatch) is asserted without loading TensorFlow.
+  testthat::local_mocked_bindings(
+    .est_suitability_lstm_v2 = function(...) "ok", .package = "MOSAIC")
   expect_message(
-    tryCatch(est_suitability(fake_paths, calibrate = FALSE), error = function(e) NULL),
+    est_suitability(fake_paths, calibrate = FALSE),
     "`calibrate` is deprecated and was mapped to `bias_correct`")
 })
 
 test_that("frozen v0.33 legacy knobs are ignored with a deprecation message", {
-  skip_without_tensorflow()
+  testthat::local_mocked_bindings(
+    .est_suitability_lstm_v2 = function(...) "ok", .package = "MOSAIC")
   for (arg in list(list(n_splits = 5), list(seed_base = 1), list(split_method = "x"),
                    list(train_prop = 0.5), list(fine_tune_epochs = 3),
                    list(fine_tune_lr = 0.01), list(exclude_covariates = "foo"))) {
     expect_message(
-      tryCatch(do.call(est_suitability, c(list(fake_paths), arg)),
-               error = function(e) NULL),
+      do.call(est_suitability, c(list(fake_paths), arg)),
       "ignored. The legacy path is frozen at v0.33 settings")
   }
 })
 
 test_that("truly unknown args warn", {
-  skip_without_tensorflow()
+  testthat::local_mocked_bindings(
+    .est_suitability_lstm_v2 = function(...) "ok", .package = "MOSAIC")
   expect_warning(
-    tryCatch(est_suitability(fake_paths, totally_bogus_arg = 1),
-             error = function(e) NULL),
+    est_suitability(fake_paths, totally_bogus_arg = 1),
     "ignoring unrecognized argument")
 })
 

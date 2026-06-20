@@ -179,16 +179,7 @@ test_that("parallel_seeds=1 (serial default) never warns", {
   expect_null(check_ram(parallel_seeds = 1L, n_seeds = 5L))
 })
 
-# The OOM projection multiplies by n_workers = min(parallel_seeds, n_seeds,
-# cores - 2); on a tiny CI box (<= 3 cores) the clamp drops concurrency to 1 and
-# the guard is (correctly) silent, so the small-RAM warn assertions only hold
-# with enough cores to actually spawn multiple workers.
-skip_if_few_cores <- function(min_workers = 4L) {
-  nc <- parallel::detectCores()
-  if (is.na(nc)) nc <- 2L
-  testthat::skip_if(nc - 2L < min_workers,
-                    sprintf("needs >= %d spawnable cores (have %d)", min_workers + 2L, nc))
-}
+# skip_if_few_cores() is centralized in helper-skips.R.
 
 test_that("high parallel_seeds on a small box warns about OOM (does not error/cap)", {
   skip_if_few_cores(4L)

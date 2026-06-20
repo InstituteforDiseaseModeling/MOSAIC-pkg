@@ -17,28 +17,11 @@
 # Python) so it runs in every CI configuration.
 # =============================================================================
 
-skip_if_no_data <- function() {
-  skip_if_not_installed("MOSAIC")
-  env <- new.env()
-  ok <- tryCatch({
-    utils::data("config_default", package = "MOSAIC", envir = env)
-    utils::data("priors_default", package = "MOSAIC", envir = env)
-    TRUE
-  }, error = function(e) FALSE, warning = function(w) FALSE)
-  if (!ok || !exists("config_default", envir = env)) {
-    skip("config_default / priors_default not available")
-  }
-  root <- if (dir.exists("/workspace/MOSAIC")) "/workspace/MOSAIC" else "~/MOSAIC"
-  if (!dir.exists(root)) {
-    skip(paste("MOSAIC root not found at", root))
-  }
-  MOSAIC::set_root_directory(root)
-  # config_default is the global (multi-location) sub-Saharan Africa config.
-  # The parity tests below are R-side flattening only — no LASER sims — so
-  # the ~40-location config is cheap to exercise and gives broader coverage
-  # of the ISO-suffix invariant than a single-country fixture would.
-  list(config = env$config_default, priors = env$priors_default)
-}
+# skip_if_no_data() is centralized in helper-skips.R. It returns
+# list(config = config_default, priors = priors_default) after setting the
+# MOSAIC root; config_default is the global (multi-location) SSA config, which
+# is cheap to exercise R-side (no LASER sims) and gives broad ISO-suffix
+# coverage. Callers use it as `fx <- skip_if_no_data()`.
 
 # Mirrors inst/python/mosaic_dask_worker.py::_MATRIX_FIELDS. Kept as a local
 # constant rather than reaching into Python so this test works in pure R.
@@ -348,6 +331,7 @@ test_that(".mosaic_write_one_shard_dask returns a character error instead of thr
 
 
 test_that("parallel write loop survives mixed success/failure without aborting", {
+  skip_if_testthat_parallel()  # inner mclapply fork is unsafe inside a testthat worker
   fx <- skip_if_no_data()
   skip_if_not_installed("arrow")
   skip_on_os("windows")  # mclapply is POSIX-only
@@ -417,6 +401,7 @@ test_that("parallel write loop survives mixed success/failure without aborting",
 
 
 test_that(".mosaic_sample_and_serialize is reproducible across parallel and serial paths", {
+  skip_if_testthat_parallel()  # inner mclapply fork is unsafe inside a testthat worker
   fx <- skip_if_no_data()
   skip_on_os("windows")  # mclapply is POSIX-only
   cfg <- fx$config
@@ -452,6 +437,7 @@ test_that(".mosaic_sample_and_serialize is reproducible across parallel and seri
 
 
 test_that("parallel mclapply produces identical shards to serial lapply", {
+  skip_if_testthat_parallel()  # inner mclapply fork is unsafe inside a testthat worker
   fx <- skip_if_no_data()
   skip_if_not_installed("arrow")
   skip_on_os("windows")  # mclapply is POSIX-only

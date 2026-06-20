@@ -317,6 +317,7 @@ test_that("est_initial_E_I handles missing data gracefully", {
 })
 
 test_that("Parallel processing works", {
+  skip_if_testthat_parallel()  # est_initial_E_I(parallel=TRUE) forks via mclapply; unsafe inside a testthat worker
   skip_if_not_installed("withr")
   skip_on_os("windows")  # mclapply doesn't work on Windows
   

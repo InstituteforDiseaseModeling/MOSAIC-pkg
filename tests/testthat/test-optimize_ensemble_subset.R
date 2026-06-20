@@ -318,6 +318,7 @@ test_that("stability guard selects largest N when profile is flat", {
 # ===========================================================================
 
 test_that("parallel (cl, stride=1) is bit-identical to serial across objectives", {
+  skip_if_testthat_parallel()  # spawning a PSOCK cluster inside a testthat worker is unsafe
   skip_on_cran()
   # The worker resolves MOSAIC:::.optimize_eval_cell_block from the INSTALLED
   # namespace (library(MOSAIC) on each worker). Skip if the installed package

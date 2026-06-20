@@ -1,4 +1,5 @@
 test_that("est_zeta_1_prior returns expected list structure", {
+     skip_if_slow()
      PATHS <- .mk_test_paths()
      res <- est_zeta_1_prior(PATHS)
      expect_named(res, c("data", "fit", "param_df", "prediction", "sensitivity"))
@@ -13,6 +14,7 @@ test_that("est_zeta_1_prior returns expected list structure", {
 })
 
 test_that("zeta_1 fit is in biologically plausible range", {
+     skip_if_slow()
      PATHS <- .mk_test_paths()
      res <- est_zeta_1_prior(PATHS)
      expect_true(res$fit$median > 1e10 && res$fit$median < 1e13)
@@ -20,6 +22,7 @@ test_that("zeta_1 fit is in biologically plausible range", {
 })
 
 test_that("est_zeta_1_prior writes all four artefacts", {
+     skip_if_slow()
      PATHS <- .mk_test_paths()
      est_zeta_1_prior(PATHS)
      expect_true(file.exists(file.path(PATHS$MODEL_INPUT, "data_zeta_1_prior.csv")))
@@ -29,6 +32,7 @@ test_that("est_zeta_1_prior writes all four artefacts", {
 })
 
 test_that("severity_mix argument is honoured", {
+     skip_if_slow()
      PATHS <- .mk_test_paths()
      res_outbreak <- est_zeta_1_prior(PATHS,
                                       severity_mix = c(severe = 0.35, moderate = 0.4, mild = 0.25))
@@ -47,6 +51,7 @@ test_that("severity_mix argument is honoured", {
 })
 
 test_that("sensitivity fits are populated", {
+     skip_if_slow()
      PATHS <- .mk_test_paths()
      res <- est_zeta_1_prior(PATHS)
      expect_named(res$sensitivity, c("include_calib", "volume_peak", "volume_low"))
