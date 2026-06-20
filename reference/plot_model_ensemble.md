@@ -17,6 +17,8 @@ plot_model_ensemble(
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
   central_method = "mean",
+  mask_final_deaths_step = TRUE,
+  n_cases_warmup_mask = 2L,
   verbose = TRUE
 )
 ```
@@ -64,6 +66,29 @@ plot_model_ensemble(
   Central tendency for the plotted/scored line: `"mean"` (default;
   unbiased for expected counts, never collapses on sparse deaths) or
   `"median"` (historical). Scalar or per-channel `c(cases=, deaths=)`.
+
+- mask_final_deaths_step:
+
+  Logical. If `TRUE` (default), blank the FINAL timestep of every Deaths
+  prediction (set the predicted/CI cells to `NA`) in the exported CSV
+  and the rendered lines. This masks a laser-cholera engine off-by-one
+  in which `reported_deaths` is written at `[tick]` on an array of
+  length `nticks + 1`, so the final slot is never written and reads as
+  an artificial drop-to-zero. DISPLAY ONLY: the underlying ensemble
+  arrays are untouched, so any R2/bias/likelihood computed upstream from
+  the raw object is unaffected. Cases are written at `[tick + 1]` and
+  are not affected.
+
+- n_cases_warmup_mask:
+
+  Integer. Number of LEADING timesteps of every Suspected Cases
+  prediction to blank (set to `NA`) in the exported CSV and the rendered
+  lines. Default `2L`. This masks the initial-condition warm-up
+  transient (seeded E/I progressing into new_symptomatic before the SEIR
+  dynamics settle), which is visually dominant for low-count countries.
+  DISPLAY ONLY (raw arrays untouched). The legitimate leading
+  reporting-lag zeros in Deaths (from `delta_reporting_deaths`) are REAL
+  and are NOT masked by this argument. Set to `0L` to disable.
 
 - verbose:
 

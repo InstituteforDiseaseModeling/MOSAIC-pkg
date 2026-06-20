@@ -13,7 +13,7 @@ per-location prediction CSVs for downstream use."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,6 +62,8 @@ per-location prediction CSVs for downstream use.</p>
 <span>  title_label <span class="op">=</span> <span class="st">"Posterior Ensemble"</span>,</span>
 <span>  save_predictions <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  central_method <span class="op">=</span> <span class="st">"mean"</span>,</span>
+<span>  mask_final_deaths_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  n_cases_warmup_mask <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -112,6 +114,29 @@ column so the choice is never ambiguous.</p></dd>
 <code>"mean"</code> (default; unbiased for expected counts, never collapses on
 sparse deaths) or <code>"median"</code> (historical). Scalar or per-channel
 <code>c(cases=, deaths=)</code>.</p></dd>
+
+
+<dt id="arg-mask-final-deaths-step">mask_final_deaths_step<a class="anchor" aria-label="anchor" href="#arg-mask-final-deaths-step"></a></dt>
+<dd><p>Logical. If <code>TRUE</code> (default), blank the
+FINAL timestep of every Deaths prediction (set the predicted/CI cells to
+<code>NA</code>) in the exported CSV and the rendered lines. This masks a
+laser-cholera engine off-by-one in which <code>reported_deaths</code> is written
+at <code>[tick]</code> on an array of length <code>nticks + 1</code>, so the final slot
+is never written and reads as an artificial drop-to-zero. DISPLAY ONLY:
+the underlying ensemble arrays are untouched, so any R2/bias/likelihood
+computed upstream from the raw object is unaffected. Cases are written at
+<code>[tick + 1]</code> and are not affected.</p></dd>
+
+
+<dt id="arg-n-cases-warmup-mask">n_cases_warmup_mask<a class="anchor" aria-label="anchor" href="#arg-n-cases-warmup-mask"></a></dt>
+<dd><p>Integer. Number of LEADING timesteps of every
+Suspected Cases prediction to blank (set to <code>NA</code>) in the exported CSV
+and the rendered lines. Default <code>2L</code>. This masks the initial-condition
+warm-up transient (seeded E/I progressing into new_symptomatic before the
+SEIR dynamics settle), which is visually dominant for low-count countries.
+DISPLAY ONLY (raw arrays untouched). The legitimate leading
+reporting-lag zeros in Deaths (from <code>delta_reporting_deaths</code>) are REAL
+and are NOT masked by this argument. Set to <code>0L</code> to disable.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

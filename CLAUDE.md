@@ -79,8 +79,8 @@ read/write data and outputs in sibling repos under `~/MOSAIC`
 (e.g. country repos, the `output/` tree) via the session’s
 `additionalDirectories` grant. Shortcuts: `/swe` (engineering), `/stat`
 (Bayesian/likelihood), `/dm` (epi/priors), `/ml` (suitability), `/etl`
-(data ingestion), `/cr` (review+housekeeping), `/guide` (user how-to),
-`/doctor` + `/diagnose-fit` (calibration diagnosis), `/arch` +
+(data ingestion), `/maint` (R-pkg maintenance + review), `/guide` (user
+how-to), `/doctor` + `/diagnose-fit` (calibration diagnosis), `/arch` +
 `/context-audit` (AI-context hygiene).
 
 ------------------------------------------------------------------------

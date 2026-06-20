@@ -1,5 +1,48 @@
 # Changelog
 
+## MOSAIC 0.45.5
+
+- **Test suite sped up ~2x and re-tiered.** The default fast-tier
+  `devtools::test()` now runs in parallel
+  (`Config/testthat/parallel: true`) at ~70–90s wall-clock on a 10-core
+  laptop versus the ~153s single-threaded baseline, with no loss of
+  assertion coverage. Changes:
+  - **Parallel testthat** with `Config/testthat/start-first` ordering
+    the slowest cluster-spawning files first. A new `setup-python.R`
+    pins all thread env vars (OMP/MKL/OPENBLAS/NUMEXPR/TBB/NUMBA + ARROW
+    = `1`) and `BLAS` threads to 1 in every worker *before* Python
+    starts, then probes the interpreter once and caches the result in
+    [`options()`](https://rdrr.io/r/base/options.html). The 5 tests that
+    themselves fork (`mclapply`) or spawn PSOCK clusters self-skip under
+    a testthat callr worker (`skip_if_testthat_parallel()`) to avoid
+    result-IPC corruption; CI runs serial (`TESTTHAT_PARALLEL=FALSE`) so
+    they retain full coverage.
+  - **Removed a gratuitous TensorFlow load** from
+    `test-est_suitability_dispatch.R`: the deprecation/unknown-arg tests
+    now mock `.est_suitability_lstm_v2` (the message fires before
+    dispatch) instead of falling through into the real lstm_v2 path
+    (~14s saved where TF is installed).
+  - **Trimmed Monte-Carlo / whole-config work** in the prior and sampler
+    tests: `est_zeta_*` `n_sim` 10000/5000 → 500;
+    [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
+    distributional loops 200/100 → 40; a shared
+    [`local()`](https://rdrr.io/r/base/eval.html)-memoized
+    `.cached_sampled_config()` fixture (`helper-fixtures.R`) replaces
+    repeated full 301-parameter draws in structural-assertion tests.
+  - **Centralized skip helpers** into `helper-skips.R` (single source of
+    truth for `skip_if_no_python_likelihood`, `skip_without_tensorflow`,
+    `skip_if_no_data`, `skip_if_few_cores`,
+    `skip_if_no_rho_deaths_prior`), removing duplicated inline copies
+    across 5 files, and added `skip_if_slow()` (gated on
+    `MOSAIC_RUN_SLOW_TESTS`) to tier genuinely-slow non-engine tests.
+  - **Shrank the flood-GAM test fixture**
+    (`test-impute_flood_probability.R`) from 5→2 synthetic ISOs (28s→19s
+    warm); the AUC signal-recovery assertion is preserved always-on (AUC
+    0.82–0.88 across seeds, clearing the 0.75 threshold with margin).
+  - **CI workflow** (`.github/workflows/R-CMD-check.yaml`): push/PR runs
+    the fast tier; a scheduled + `workflow_dispatch` job runs the slow
+    tier with `MOSAIC_RUN_SLOW_TESTS=1`.
+
 ## MOSAIC 0.44.13
 
 - **Upgraded the laser-cholera engine pin to v0.15.0**

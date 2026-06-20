@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,24 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.45.5" id="mosaic-0455">MOSAIC 0.45.5<a class="anchor" aria-label="anchor" href="#mosaic-0455"></a></h2>
+<ul><li>
+<strong>Test suite sped up ~2x and re-tiered.</strong> The default fast-tier <code>devtools::test()</code> now runs in parallel (<code>Config/testthat/parallel: true</code>) at ~70–90s wall-clock on a 10-core laptop versus the ~153s single-threaded baseline, with no loss of assertion coverage. Changes:
+<ul><li>
+<strong>Parallel testthat</strong> with <code>Config/testthat/start-first</code> ordering the slowest cluster-spawning files first. A new <code>setup-python.R</code> pins all thread env vars (OMP/MKL/OPENBLAS/NUMEXPR/TBB/NUMBA + ARROW = <code>1</code>) and <code>BLAS</code> threads to 1 in every worker <em>before</em> Python starts, then probes the interpreter once and caches the result in <code><a href="https://rdrr.io/r/base/options.html" class="external-link">options()</a></code>. The 5 tests that themselves fork (<code>mclapply</code>) or spawn PSOCK clusters self-skip under a testthat callr worker (<code>skip_if_testthat_parallel()</code>) to avoid result-IPC corruption; CI runs serial (<code>TESTTHAT_PARALLEL=FALSE</code>) so they retain full coverage.</li>
+<li>
+<strong>Removed a gratuitous TensorFlow load</strong> from <code>test-est_suitability_dispatch.R</code>: the deprecation/unknown-arg tests now mock <code>.est_suitability_lstm_v2</code> (the message fires before dispatch) instead of falling through into the real lstm_v2 path (~14s saved where TF is installed).</li>
+<li>
+<strong>Trimmed Monte-Carlo / whole-config work</strong> in the prior and sampler tests: <code>est_zeta_*</code> <code>n_sim</code> 10000/5000 → 500; <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code> distributional loops 200/100 → 40; a shared <code><a href="https://rdrr.io/r/base/eval.html" class="external-link">local()</a></code>-memoized <code>.cached_sampled_config()</code> fixture (<code>helper-fixtures.R</code>) replaces repeated full 301-parameter draws in structural-assertion tests.</li>
+<li>
+<strong>Centralized skip helpers</strong> into <code>helper-skips.R</code> (single source of truth for <code>skip_if_no_python_likelihood</code>, <code>skip_without_tensorflow</code>, <code>skip_if_no_data</code>, <code>skip_if_few_cores</code>, <code>skip_if_no_rho_deaths_prior</code>), removing duplicated inline copies across 5 files, and added <code>skip_if_slow()</code> (gated on <code>MOSAIC_RUN_SLOW_TESTS</code>) to tier genuinely-slow non-engine tests.</li>
+<li>
+<strong>Shrank the flood-GAM test fixture</strong> (<code>test-impute_flood_probability.R</code>) from 5→2 synthetic ISOs (28s→19s warm); the AUC signal-recovery assertion is preserved always-on (AUC 0.82–0.88 across seeds, clearing the 0.75 threshold with margin).</li>
+<li>
+<strong>CI workflow</strong> (<code>.github/workflows/R-CMD-check.yaml</code>): push/PR runs the fast tier; a scheduled + <code>workflow_dispatch</code> job runs the slow tier with <code>MOSAIC_RUN_SLOW_TESTS=1</code>.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.44.13" id="mosaic-04413">MOSAIC 0.44.13<a class="anchor" aria-label="anchor" href="#mosaic-04413"></a></h2>
 <ul><li>
