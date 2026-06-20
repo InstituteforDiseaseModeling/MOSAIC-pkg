@@ -12,7 +12,11 @@ calibrate_psi_predictions(
   obs_col = "transmission_intensity",
   out_col = "pred_bias_corrected",
   min_train = 8L,
-  eps = 1e-06
+  eps = 1e-06,
+  slope_range = c(0.25, 4),
+  offset_range = c(-4, 4),
+  amp_range = c(0.5, 2),
+  min_pred_sd = 0.05
 )
 }
 \arguments{
@@ -36,9 +40,27 @@ otherwise identity (default 8).}
 
 \item{eps}{Clamp applied to predictions and observations before \code{qlogis}
 to keep the logit transform finite (default 1e-6).}
+
+\item{slope_range}{Length-2 numeric \code{c(lo, hi)}; the per-country logit
+slope is clamped to this range before being applied (default
+\code{c(0.25, 4)}).}
+
+\item{offset_range}{Length-2 numeric \code{c(lo, hi)}; the per-country logit
+offset is clamped to this range (default \code{c(-4, 4)}).}
+
+\item{amp_range}{Length-2 numeric \code{c(lo, hi)}; the corrected series'
+logit-scale sd is constrained to within this multiple of the input
+prediction's logit-scale sd (default \code{c(0.5, 2)}), shrinking the affine
+toward identity when violated.}
+
+\item{min_pred_sd}{Minimum logit-pred standard deviation (over outbreak weeks)
+for a country to be eligible for a fit; below it, identity (default 0.05).}
 }
 \value{
-\code{pred_df} with an added \code{out_col} in \eqn{(0,1)}.
+\code{pred_df} with an added \code{out_col} in \eqn{(0,1)}. A
+per-country diagnostic data frame is attached as
+\code{attr(., "calibration_diagnostics")} (see
+\code{\link{check_psi_amplitude}}).
 }
 \description{
 Fits a per-country affine recalibration on the \strong{logit scale},
@@ -69,6 +91,35 @@ to the \strong{identity} transform (output = input prediction) with a warning.
 This is the defined behavior for low-incidence / zero-history countries: their
 psi is the uncorrected (region-FiLM-modulated) model output.
 }
+\section{Robustness (B1)}{
+
+An \emph{unregularized}, \emph{unbounded} per-country \code{lm} corrupts
+degenerate / low-signal countries: a near-flat logit-pred predictor yields a
+wild slope that either collapses the country's psi to a constant or blows its
+amplitude up many-fold (the \code{prediction from rank-deficient fit}
+warning). To prevent that, each per-country fit is screened and the affine is
+guarded:
+\itemize{
+\item \strong{Degeneracy screen.} Fits that are rank-deficient, have a
+too-low logit-pred standard deviation (\code{min_pred_sd}), too few
+distinct logit-pred values, or a non-finite / explosive slope fall back to
+the identity transform.
+\item \strong{Bounded affine.} The estimated slope is clamped to
+\code{slope_range} and the offset to \code{offset_range} (logit scale)
+before being applied, so no country's correction can be steeper / more
+offset than is plausible for a scale/level fix.
+\item \strong{Amplitude clamp.} The corrected series' logit-scale standard
+deviation is constrained to within \code{amp_range} times the input
+prediction's logit-scale standard deviation (shrinking the affine toward
+identity if it would over-collapse or over-inflate the amplitude), so a
+country's psi cannot be flattened to a constant or inflated beyond a sane
+range.
+}
+Well-behaved countries (ample outbreak weeks, real logit-pred variance, a
+slope/offset/amplitude inside the guard ranges) are \strong{unaffected} — the
+guard is a no-op for them.
+}
+
 \seealso{
-\code{\link{est_suitability}}
+\code{\link{est_suitability}}, \code{\link{check_psi_amplitude}}
 }

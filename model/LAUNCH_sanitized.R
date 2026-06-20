@@ -107,8 +107,19 @@ process_CFR_data(PATHS, min_obs = 3/0.02)
 process_WHO_weekly_data(PATHS)
 process_JHU_weekly_data(PATHS)
 process_SUPP_weekly_data(PATHS)
+process_AI_cholera_data(PATHS)
 downscale_weekly_cholera_data(PATHS)
-process_cholera_surveillance_data(PATHS)
+
+#    PROVENANCE — config_default psi is fit on the AI-ENHANCED combined
+#    surveillance set, so the canonical pipeline reproduces it via
+#    include_ai = TRUE. This merges the AI-mined weekly source under
+#    WHO > JHU > AI > SUPP precedence and propagates per-row confidence_weight +
+#    disaggregation_method into the combined WEEKLY file. AI rows carry
+#    confidence_weight in (0,1] (median ~0.5); direct sources get 1.0. The LSTM
+#    down-weights AI rows via use_confidence_weight = TRUE (B4 arch_control
+#    fixture). include_ai affects only the weekly suitability path; the daily
+#    fit-target file NA-blanks all AI rows.
+process_cholera_surveillance_data(PATHS, include_ai = TRUE)
 
 
 #--- 2B. Case fatality rate: hierarchical Bayesian model ----------------------#
@@ -242,19 +253,26 @@ compile_suitability_data(PATHS,
 
 
 #--- 4B. Fit LSTM suitability model -------------------------------------------#
-#    Depends on: 4A (compiled suitability data)
+#    Depends on: 4A (compiled suitability data, AI-enhanced via include_ai=TRUE)
+#
+#    AI down-weighting: use_confidence_weight = TRUE is pinned in the B4
+#    arch_control fixture (default when arch_control = NULL). Do NOT disable it.
+#    TODO(parent): set arch_control to the production "G" config (fit_date_start
+#    = 2010, rw_subsample = 5, multi-seed) to reproduce the shipped config_default
+#    psi; arch_control = NULL fits the simpler B4-fixture default config instead.
 
+# PRODUCTION config_default psi = "G" config (see model/README_psi_provenance.md):
+# per-capita-per-country target + AI data + CW ON + tiling CV folds + fit from 2010.
 est_suitability(PATHS,
-                fit_date_start = '2015-01-01',
-                fit_date_stop = '2025-07-24',
-                pred_date_start = '2015-01-01',
-                pred_date_stop = DATE_STOP,
-                n_splits = 0,
-                seed_base = 99,
-                fine_tune_epochs = 15,
-                fine_tune_lr = 0.001,
-                split_method = "random",
-                train_prop = 0.6)
+                response_var  = "target_D_rate_per_country_floored",
+                architecture  = "lstm_v2_hierarchical_film",
+                arch_control  = list(n_seeds        = 10L,
+                                     region_map     = "snf_k5",
+                                     parallel_seeds = 1L,
+                                     rw_subsample   = 5L),
+                bias_correct  = TRUE,
+                fit_date_start = "2010-01-01",
+                pred_date_stop = DATE_STOP)
 
 
 

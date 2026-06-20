@@ -70,10 +70,82 @@
      unique(c(.PSI_DEFAULT_FEATURE_CANDIDATES, lag_cols))
 }
 
+# Per-PSOCK-worker RAM budget (GB) for a parallel suitability seed fit. Each
+# worker is a separate process that imports TensorFlow/keras AND holds the full
+# pooled data bundle; TF grabs memory per process and does not release it. ~6 GB
+# is a deliberately conservative single-worker footprint (TF runtime + the
+# all-MOSAIC pooled tensors + the K+1 fits' graphs); used only to decide whether
+# parallel_seeds risks OOM, not to allocate anything.
+.PSI_PER_SEED_WORKER_GB <- 6
+
+#' Best-effort total system RAM in GB (NA if it cannot be probed portably).
+#' macOS: sysctl hw.memsize; Linux: /proc/meminfo MemTotal. No hard dependency.
+#' @keywords internal
+#' @noRd
+.psi_total_system_ram_gb <- function() {
+     os <- Sys.info()[["sysname"]]
+     bytes <- tryCatch({
+          if (identical(os, "Darwin")) {
+               as.numeric(system2("sysctl", c("-n", "hw.memsize"),
+                                  stdout = TRUE, stderr = FALSE))
+          } else if (identical(os, "Linux")) {
+               mi <- readLines("/proc/meminfo", n = 1L)            # "MemTotal:  N kB"
+               as.numeric(sub("\\D*(\\d+)\\s*kB.*", "\\1", mi)) * 1024
+          } else NA_real_
+     }, error = function(e) NA_real_, warning = function(e) NA_real_)
+     if (length(bytes) != 1L || !is.finite(bytes) || bytes <= 0) return(NA_real_)
+     bytes / 2^30
+}
+
+#' Warn (do NOT cap) when parallel_seeds risks OOM. The number of concurrent
+#' PSOCK workers is min(parallel_seeds, n_seeds, cores - 2) (see
+#' .psi_fit_seeds_parallel); each holds ~.PSI_PER_SEED_WORKER_GB of TF + bundle
+#' RAM. If the projected footprint exceeds ~85% of probed system RAM we warn so
+#' a user does not silently OOM a small box. We warn rather than cap because the
+#' true per-worker footprint depends on the pool size and the box; the safe move
+#' is to inform, not to second-guess a user who knows their RAM.
+#' @keywords internal
+#' @noRd
+.psi_check_parallel_seeds_ram <- function(parallel_seeds, n_seeds) {
+     ps <- as.integer(parallel_seeds %||% 1L)
+     if (is.na(ps) || ps <= 1L) return(invisible(NULL))   # serial path: no risk
+     nc <- parallel::detectCores()
+     if (is.na(nc) || nc < 1L) nc <- 2L
+     n_workers <- max(1L, min(ps, as.integer(n_seeds %||% ps), nc - 2L))
+     if (n_workers <= 1L) return(invisible(NULL))         # clamps to serial anyway
+
+     need_gb  <- n_workers * .PSI_PER_SEED_WORKER_GB
+     total_gb <- .psi_total_system_ram_gb()
+     if (is.na(total_gb)) {
+          warning(sprintf(
+               "parallel_seeds=%d will spawn ~%d concurrent TF/keras workers (~%.0f GB total at ~%g GB each). System RAM could not be probed on this platform; ensure the box has the headroom or set parallel_seeds=1 (serial).",
+               ps, n_workers, need_gb, .PSI_PER_SEED_WORKER_GB), call. = FALSE)
+          return(invisible(NULL))
+     }
+     if (need_gb > 0.85 * total_gb) {
+          warning(sprintf(
+               "parallel_seeds=%d projects ~%d concurrent TF/keras workers needing ~%.0f GB (~%g GB each) but the system has ~%.0f GB RAM -- this risks OOM. Lower parallel_seeds (each worker is one whole seed pipeline) or run serial (parallel_seeds=1). NOTE: the production runs used parallel_seeds=10, which only fit on a 448 GB host.",
+               ps, n_workers, need_gb, .PSI_PER_SEED_WORKER_GB, total_gb),
+               call. = FALSE)
+     }
+     invisible(NULL)
+}
+
 #' Load + resolve the lstm_v2 arch_control: read the B4 fixture, apply the two
 #' production overrides (n_seeds=5, region_map="snf_k5") + the parallel_seeds
 #' execution default (1L), then the user's arch_control via modifyList, then
 #' coerce known-integer fields (a user override could inject a double).
+#'
+#' \strong{parallel_seeds / OOM:} \code{parallel_seeds} (default \code{1L} =
+#' serial) fits seeds across PSOCK workers, each a separate process that imports
+#' TensorFlow/keras and holds the full pooled data bundle (~6 GB/worker; RAM, not
+#' cores, is the binding constraint). Concurrency is
+#' \code{min(parallel_seeds, n_seeds, cores - 2)}. Safe range: keep
+#' \code{parallel_seeds * ~6 GB} comfortably under system RAM (e.g. <= 4 on a
+#' 32 GB box). The production runs used \code{parallel_seeds = 10}, which only
+#' fit on the 448 GB compute host; do not copy that value onto a smaller machine.
+#' A RAM-aware \code{warning()} fires here when the projected footprint exceeds
+#' ~85\% of probed system memory.
 #' @keywords internal
 #' @noRd
 .psi_load_arch_control <- function(arch_control = NULL) {
@@ -94,6 +166,9 @@
                      "rw_gap_weeks", "parallel_seeds")
      for (k in int_fields) if (!is.null(ac[[k]]) && !is.na(ac[[k]]))
           ac[[k]] <- as.integer(round(as.numeric(ac[[k]])))
+     # Warn (once, before any worker spawns) if parallel_seeds risks OOM on this
+     # box. Does not change ac; serial (default) is a no-op.
+     .psi_check_parallel_seeds_ram(ac$parallel_seeds, ac$n_seeds)
      ac
 }
 
