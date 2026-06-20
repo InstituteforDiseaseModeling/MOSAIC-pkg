@@ -87,9 +87,10 @@
 #'   process (not on Dask), so cost scales with this value times the number of
 #'   cutoffs and locations.
 #' @param central_method Ensemble central tendency used for the compiled
-#'   predictions and the in-sample calibration metrics/medoid: \code{"mean"}
-#'   (default; unbiased for expected counts, never collapses on sparse deaths)
-#'   or \code{"median"}. Scalar or per-channel \code{c(cases=, deaths=)}. The
+#'   predictions and the in-sample calibration metrics/medoid: \code{"median"}
+#'   (default; lower calibration bias) or \code{"mean"} (unbiased for expected
+#'   counts, never collapses on sparse deaths). Scalar or per-channel
+#'   \code{c(cases=, deaths=)}. The
 #'   predictions table carries \code{pred_central} (this choice) plus
 #'   \code{pred_mean}/\code{pred_median} for cross-walk; WIS/coverage remain
 #'   quantile-based and are unaffected.
@@ -126,7 +127,7 @@ run_rolling_cv <- function(PATHS,
                            optimize_subset      = TRUE,
                            models               = c("ensemble", "ensemble_opt", "medoid"),
                            n_reps_best_medoid  = 50L,
-                           central_method       = "mean",
+                           central_method       = "median",
                            est_suitability_spec = list(),
                            dask_spec            = NULL,
                            dir_output,
@@ -461,7 +462,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rolling_cv_compile_run <- function(ensemble, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, model = "ensemble",
-                                    central_method = "mean") {
+                                    central_method = "median") {
      central_method <- .mosaic_resolve_central_method(central_method)
      n_t   <- ensemble$n_time_points
      ds    <- as.Date(ensemble$date_start); de <- as.Date(ensemble$date_stop)
@@ -549,7 +550,7 @@ compile_rolling_cv_predictions <- function(dir_output,
 .rcv_compile_all_models <- function(run_dir, run_id, cutoff, anchor, embargo_days,
                                     horizons_months, obs_cases, obs_deaths, obs_dates,
                                     location_names, models, n_reps,
-                                    central_method = "mean") {
+                                    central_method = "median") {
      central_method <- .mosaic_resolve_central_method(central_method)
      cal      <- file.path(run_dir, "2_calibration")
      ens_path <- file.path(cal, "ensemble_candidate.rds")

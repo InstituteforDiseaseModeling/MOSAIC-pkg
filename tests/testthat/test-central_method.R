@@ -8,18 +8,20 @@
 # ---- .mosaic_resolve_central_method -----------------------------------------
 
 test_that("resolver: NULL and scalar default/expand correctly", {
+  # Package default is median (v0.46.1): NULL / empty resolves both channels to median.
   expect_equal(MOSAIC:::.mosaic_resolve_central_method(NULL),
-               c(cases = "mean", deaths = "mean"))
+               c(cases = "median", deaths = "median"))
   expect_equal(MOSAIC:::.mosaic_resolve_central_method("median"),
                c(cases = "median", deaths = "median"))
   expect_equal(MOSAIC:::.mosaic_resolve_central_method("mean"),
                c(cases = "mean", deaths = "mean"))
 })
 
-test_that("resolver: per-channel named vector, missing channel falls back to mean", {
+test_that("resolver: per-channel named vector, missing channel falls back to median", {
   expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(cases = "median", deaths = "mean")),
                c(cases = "median", deaths = "mean"))
-  expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(deaths = "median")),
+  # Unset channel inherits the package default (median), not mean.
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(c(cases = "mean")),
                c(cases = "mean", deaths = "median"))
 })
 
@@ -28,6 +30,16 @@ test_that("resolver: invalid inputs error", {
   expect_error(MOSAIC:::.mosaic_resolve_central_method(c("mean", "median"))) # unnamed length-2
   expect_error(MOSAIC:::.mosaic_resolve_central_method(c(foo = "mean")))    # unknown channel
   expect_error(MOSAIC:::.mosaic_resolve_central_method(c(cases = "median", "mean"))) # partially named
+})
+
+test_that("package default central tendency is median (v0.46.1)", {
+  # Pin the new default at every authoritative site so a future regression to
+  # mean is caught (the v0.38 default was mean; reverted for lower calibration bias).
+  expect_equal(MOSAIC:::.mosaic_resolve_central_method(NULL),
+               c(cases = "median", deaths = "median"))
+  expect_equal(MOSAIC:::mosaic_control_defaults()$predictions$central_method, "median")
+  expect_equal(formals(MOSAIC::plot_model_ensemble)$central_method, "median")
+  expect_equal(formals(MOSAIC::run_rolling_cv)$central_method, "median")
 })
 
 test_that(".mosaic_central_series selects the requested field per channel", {

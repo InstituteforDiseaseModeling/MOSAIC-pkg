@@ -58,14 +58,14 @@
 #'
 #' @param x \code{NULL}, a scalar \code{"mean"}/\code{"median"}, or a named
 #'   vector with \code{"cases"} and/or \code{"deaths"}. \code{NULL} or an
-#'   unset channel falls back to \code{"mean"}.
+#'   unset channel falls back to \code{"median"}.
 #' @return Named character vector \code{c(cases = ., deaths = .)}, each
 #'   \code{"mean"} or \code{"median"}.
 #' @noRd
 .mosaic_resolve_central_method <- function(x = NULL) {
   valid <- c("mean", "median")
   ch    <- c("cases", "deaths")
-  out   <- stats::setNames(rep("mean", 2L), ch)
+  out   <- stats::setNames(rep("median", 2L), ch)
 
   if (is.null(x) || length(x) == 0L) {
     return(out)

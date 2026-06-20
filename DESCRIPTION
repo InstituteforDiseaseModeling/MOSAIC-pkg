@@ -1,7 +1,7 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.46.0
+Version: 0.46.1
 Date: 2026-06-20
 Authors@R: c(
           person("John R", "Giles",

@@ -11,7 +11,7 @@ plot_model_ensemble(
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
-  central_method = "mean",
+  central_method = "median",
   mask_final_deaths_step = TRUE,
   n_cases_warmup_mask = 2L,
   verbose = TRUE
@@ -44,9 +44,9 @@ multi-location overview plots. Default \code{"ensemble"}.}
 column so the choice is never ambiguous.}
 
 \item{central_method}{Central tendency for the plotted/scored line:
-\code{"mean"} (default; unbiased for expected counts, never collapses on
-sparse deaths) or \code{"median"} (historical). Scalar or per-channel
-\code{c(cases=, deaths=)}.}
+\code{"median"} (default; lower calibration bias) or \code{"mean"}
+(unbiased for expected counts, never collapses on sparse deaths, unmasks
+implied-CFR bias). Scalar or per-channel \code{c(cases=, deaths=)}.}
 
 \item{mask_final_deaths_step}{Logical. If \code{TRUE} (default), blank the
 FINAL timestep of every Deaths prediction (set the predicted/CI cells to

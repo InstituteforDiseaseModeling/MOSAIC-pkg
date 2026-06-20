@@ -384,7 +384,7 @@ for _h in list(_root.handlers):
 #' @param state Internal calibration state
 #' @param start_time POSIXct start time for wall-clock calculation
 #' @param config Base LASER config (for provenance fields)
-#' @param r2_cases_ensemble R-squared for cases (central tendency -- mean by
+#' @param r2_cases_ensemble R-squared for cases (central tendency -- median by
 #'   default, per central_method -- of the canonical posterior ensemble;
 #'   tier-selected when optimize_subset = FALSE, optimizer-refined when
 #'   optimize_subset = TRUE)
