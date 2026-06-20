@@ -17,7 +17,7 @@ plot_model_ensemble to render plots from the returned object."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,6 +70,8 @@ envelopes for cases and deaths.</p>
 <span>  PATHS <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  priors <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sampling_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  n_cases_warmup_mask <span class="op">=</span> <span class="fl">2L</span>,</span>
+<span>  mask_final_deaths_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  n_cores <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  root_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -124,6 +126,26 @@ Must be even length to form lower/upper pairs. Default
 <dt id="arg-sampling-args">sampling_args<a class="anchor" aria-label="anchor" href="#arg-sampling-args"></a></dt>
 <dd><p>Named list of additional arguments for
 <code><a href="sample_parameters.html">sample_parameters</a></code>.</p></dd>
+
+
+<dt id="arg-n-cases-warmup-mask">n_cases_warmup_mask<a class="anchor" aria-label="anchor" href="#arg-n-cases-warmup-mask"></a></dt>
+<dd><p>Integer. Number of LEADING cases timesteps that are
+an initial-condition warm-up transient (seeded E flushing into
+new_symptomatic before the SEIR dynamics settle). Default <code>2L</code>, matching
+<code><a href="plot_model_ensemble.html">plot_model_ensemble</a></code>. This value is NOT applied to any of the
+returned series here; it is recorded in the returned <code>artifact_mask</code>
+element so downstream scoring (R2/bias) can exclude these positions. Set to
+<code>0L</code> to record "no cases warm-up mask".</p></dd>
+
+
+<dt id="arg-mask-final-deaths-step">mask_final_deaths_step<a class="anchor" aria-label="anchor" href="#arg-mask-final-deaths-step"></a></dt>
+<dd><p>Logical. If <code>TRUE</code> (default, matching
+<code><a href="plot_model_ensemble.html">plot_model_ensemble</a></code>), record that the FINAL deaths timestep is
+a laser-cholera structural zero (<code>reported_deaths</code> written at tick
+then leading-trimmed, so the last slot is never written; laser issue #82).
+This value is NOT applied to any returned series here; it
+is recorded in the returned <code>artifact_mask</code> element for downstream
+scoring.</p></dd>
 
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
@@ -206,6 +228,13 @@ selection) need not rely on positional alignment with an external vector.</p></d
 
 <dt>envelope_quantiles</dt>
 <dd><p>Quantiles used for CI envelopes.</p></dd>
+
+<dt>artifact_mask</dt>
+<dd><p>List recording the engine-artifact masking spec for
+downstream scoring: <code>$cases_warmup</code> (integer, leading cases timesteps
+to exclude) and <code>$deaths_final</code> (logical, exclude the final deaths
+timestep). The central/quantile/array fields above are RAW (unmasked); this
+spec is the contract scoring sites use to drop artifact positions.</p></dd>
 
 
 </dl></div>

@@ -1,5 +1,38 @@
 # Changelog
 
+## MOSAIC 0.46.0
+
+- **Engine-artifact mask for post-calibration R²/bias scoring
+  (metrics-only).** Two laser-cholera (0.15.0) array artifacts were
+  silently contaminating the post-calibration fit metrics: (1) the first
+  ~2 `reported_cases` timesteps are an initial-condition warm-up
+  transient (seeded E flushing into `new_symptomatic` before the SEIR
+  dynamics settle), and (2) the final `reported_deaths` timestep is a
+  structural zero (written at `[tick]` then `[1:]`-trimmed; laser issue
+  [\#82](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/82)).
+  [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+  already masked these for DISPLAY ONLY; the R²/bias metrics in
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  still scored them.
+  - [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+    now carries the mask spec via two new params
+    (`n_cases_warmup_mask = 2L`, `mask_final_deaths_step = TRUE`,
+    defaults matching
+    [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md))
+    and records the resolved spec in the returned `mosaic_ensemble`
+    object as `artifact_mask = list(cases_warmup, deaths_final)`. The
+    central/quantile/array fields stay RAW (unmutated).
+  - A new internal helper `.mosaic_mask_central_for_scoring()` sets the
+    artifact time-positions to `NA` on the EST central matrix only;
+    observed series stay unmasked and
+    [`calc_model_R2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_R2.md)/[`calc_bias_ratio()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_bias_ratio.md)
+    drop the NA pairs pairwise. Wired into every R²/bias scoring site in
+    [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    (canonical ensemble, dual mean/median, tier subset, medoid; windowed
+    metrics inherit the masked canonical series). The medoid SELECTION
+    distance is deliberately left unmasked. CSV/prediction export and
+    plot series are unchanged.
+
 ## MOSAIC 0.45.5
 
 - **Test suite sped up ~2x and re-tiered.** The default fast-tier

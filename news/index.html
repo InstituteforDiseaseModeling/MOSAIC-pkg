@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,15 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.46.0" id="mosaic-0460">MOSAIC 0.46.0<a class="anchor" aria-label="anchor" href="#mosaic-0460"></a></h2>
+<ul><li>
+<strong>Engine-artifact mask for post-calibration R²/bias scoring (metrics-only).</strong> Two laser-cholera (0.15.0) array artifacts were silently contaminating the post-calibration fit metrics: (1) the first ~2 <code>reported_cases</code> timesteps are an initial-condition warm-up transient (seeded E flushing into <code>new_symptomatic</code> before the SEIR dynamics settle), and (2) the final <code>reported_deaths</code> timestep is a structural zero (written at <code>[tick]</code> then <code>[1:]</code>-trimmed; laser issue <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/82" class="external-link">#82</a>). <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> already masked these for DISPLAY ONLY; the R²/bias metrics in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> still scored them.
+<ul><li>
+<code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> now carries the mask spec via two new params (<code>n_cases_warmup_mask = 2L</code>, <code>mask_final_deaths_step = TRUE</code>, defaults matching <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code>) and records the resolved spec in the returned <code>mosaic_ensemble</code> object as <code>artifact_mask = list(cases_warmup, deaths_final)</code>. The central/quantile/array fields stay RAW (unmutated).</li>
+<li>A new internal helper <code>.mosaic_mask_central_for_scoring()</code> sets the artifact time-positions to <code>NA</code> on the EST central matrix only; observed series stay unmasked and <code><a href="../reference/calc_model_R2.html">calc_model_R2()</a></code>/<code><a href="../reference/calc_bias_ratio.html">calc_bias_ratio()</a></code> drop the NA pairs pairwise. Wired into every R²/bias scoring site in <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> (canonical ensemble, dual mean/median, tier subset, medoid; windowed metrics inherit the masked canonical series). The medoid SELECTION distance is deliberately left unmasked. CSV/prediction export and plot series are unchanged.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.45.5" id="mosaic-0455">MOSAIC 0.45.5<a class="anchor" aria-label="anchor" href="#mosaic-0455"></a></h2>
 <ul><li>

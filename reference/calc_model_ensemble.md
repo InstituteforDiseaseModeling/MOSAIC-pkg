@@ -22,6 +22,8 @@ calc_model_ensemble(
   PATHS = NULL,
   priors = NULL,
   sampling_args = list(),
+  n_cases_warmup_mask = 2L,
+  mask_final_deaths_step = TRUE,
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
@@ -77,6 +79,28 @@ calc_model_ensemble(
 
   Named list of additional arguments for
   [`sample_parameters`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md).
+
+- n_cases_warmup_mask:
+
+  Integer. Number of LEADING cases timesteps that are an
+  initial-condition warm-up transient (seeded E flushing into
+  new_symptomatic before the SEIR dynamics settle). Default `2L`,
+  matching
+  [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md).
+  This value is NOT applied to any of the returned series here; it is
+  recorded in the returned `artifact_mask` element so downstream scoring
+  (R2/bias) can exclude these positions. Set to `0L` to record "no cases
+  warm-up mask".
+
+- mask_final_deaths_step:
+
+  Logical. If `TRUE` (default, matching
+  [`plot_model_ensemble`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)),
+  record that the FINAL deaths timestep is a laser-cholera structural
+  zero (`reported_deaths` written at tick then leading-trimmed, so the
+  last slot is never written; laser issue \#82). This value is NOT
+  applied to any returned series here; it is recorded in the returned
+  `artifact_mask` element for downstream scoring.
 
 - parallel:
 
@@ -179,6 +203,14 @@ S3 object of class `"mosaic_ensemble"` containing:
 - envelope_quantiles:
 
   Quantiles used for CI envelopes.
+
+- artifact_mask:
+
+  List recording the engine-artifact masking spec for downstream
+  scoring: `$cases_warmup` (integer, leading cases timesteps to exclude)
+  and `$deaths_final` (logical, exclude the final deaths timestep). The
+  central/quantile/array fields above are RAW (unmasked); this spec is
+  the contract scoring sites use to drop artifact positions.
 
 ## See also
 
