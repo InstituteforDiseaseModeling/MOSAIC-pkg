@@ -44,21 +44,35 @@ compile_suitability_data(PATHS,
 
 # 4. Fit the suitability model. use_confidence_weight = TRUE (B4 arch_control
 #    fixture default) down-weights AI rows in the LSTM loss.
-est_suitability(PATHS, ...)   # see LAUNCH.R 4B; production "G" arch_control TBD
+est_suitability(PATHS,
+                response_var   = "target_D_rate_per_country_floored",
+                architecture   = "lstm_v2_hierarchical_film",
+                arch_control   = list(n_seeds = 10L, region_map = "snf_k5",
+                                      parallel_seeds = 1L, rw_subsample = 5L),
+                bias_correct   = TRUE,
+                fit_date_start = "2010-01-01")   # the production "G" config
 ```
 
 ## Field semantics (data-engineer notes)
 
-- **Scope:** `include_ai = TRUE` affects only the combined **WEEKLY** file
-  (`cholera_surveillance_weekly_combined.csv`) consumed by the suitability/LSTM
-  path. The **daily** combined file — the calibration **fit target** — NA-blanks
-  all `source == "AI"` rows before downscale and omits the AI metadata columns.
-  So the AI source reaches `psi` but NOT the `reported_cases`/`reported_deaths`
-  fit target.
+- **Scope:** `include_ai = TRUE` propagates AI rows + their `confidence_weight` /
+  `disaggregation_method` into BOTH the combined **WEEKLY** file
+  (`cholera_surveillance_weekly_combined.csv`, consumed by the suitability/LSTM
+  path) and — as of the multi-source integration (v0.45.3) — the **daily** combined
+  file (the calibration **fit target**) via a TRUST-TIER GATE: AI `observed` and
+  `documented_zero` weeks DO reach `reported_cases`/`reported_deaths` (a confirmed
+  absence is an informative zero), while `fourier_*` (synthetic) and `assumed_zero`
+  weeks are NA-blanked so neither modeled fill nor assumed zeros enter the
+  likelihood. (Earlier behavior blanket-NA-blanked every AI row from the daily file.)
 - **`confidence_weight`** (unit: trust weight in (0,1]): AI rows ~ median 0.5;
   direct WHO/JHU/SUPP rows = 1.0. Per-week constant; replicates (does not divide)
-  across days. The LSTM multiplies sample loss weight by this when
-  `use_confidence_weight = TRUE`.
+  across days. Consumed in TWO places: (1) the LSTM multiplies its sample loss
+  weight by this when `use_confidence_weight = TRUE`; (2) as of v0.45.3 the
+  calibration likelihood consumes it too — `make_config_default` carries it as the
+  per-cell `reported_cases_weight` / `reported_deaths_weight` matrices, which
+  `run_MOSAIC` (run_MOSAIC.R:429-430) passes to
+  `calc_model_likelihood(weights_obs_cases=, weights_obs_deaths=)` and from which it
+  derives a per-location `weights_location`.
 - **`disaggregation_method`** is the trust-tier discriminator (NOT
   `confidence_weight`, which overlaps across tiers): `observed` = real mined
   weeklies; `documented_zero` = confirmed absence; `fourier_*` = SYNTHETIC
@@ -78,7 +92,9 @@ behind a flag), because:
    the read-only `ai-cholera-data-mining` repo, regenerated deterministically by
    `process_AI_cholera_data()`.
 3. The AI-downweighting mitigation (`use_confidence_weight = TRUE`) is on the
-   production path, and AI rows never reach the calibration fit target.
+   production path; only AI `observed`/`documented_zero` weeks reach the fit target
+   (trust-tier gate), synthetic `fourier_*` are NA-blanked, and the per-cell
+   `confidence_weight` further down-weights the AI rows that do enter the likelihood.
 
 If a future need arises to A/B the AI-free `psi`, do it via the existing
 `include_ai` argument (set `FALSE`) rather than a new flag — that argument already
