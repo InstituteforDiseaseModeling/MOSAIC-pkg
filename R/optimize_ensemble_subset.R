@@ -70,7 +70,8 @@
 #'   setting (its point forecast remains the weighted median). The default
 #'   \code{"median"} here is deliberate -- it preserves historical direct-call
 #'   selection and the Tier-2 bit-for-bit parity guarantee; \code{run_MOSAIC()}
-#'   passes the package default (\code{"mean"}) explicitly.
+#'   passes the resolved \code{control$predictions$central_method} (package
+#'   default \code{"median"} as of v0.46.1) explicitly.
 #' @param stride Integer >= 1. \code{1L} (default) evaluates every N in
 #'   \code{min_n:max_n} (exhaustive, bit-identical parity path). \code{> 1L}
 #'   enables a coarse-then-refine two-stage search (see Details). \strong{Opt-in};

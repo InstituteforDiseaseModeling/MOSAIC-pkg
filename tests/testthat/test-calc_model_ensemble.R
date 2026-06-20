@@ -414,3 +414,52 @@ test_that("calc_model_ensemble (precomputed) pairs dense param_idx with the righ
                              precomputed_results = precomputed, verbose = FALSE)
   expect_equal(as.numeric(ens$cases_mean), weighted.mean(vals, pw))
 })
+
+# -----------------------------------------------------------------------------
+# Dense-array OOM guard: projection + warn-only behavior
+# -----------------------------------------------------------------------------
+
+test_that("ensemble RAM projection matches the two-array + gathered-list formula", {
+  # 40 locs x 4320 time x 1000 param x 10 stoch doubles.
+  proj <- MOSAIC:::.mosaic_ensemble_ram_projection_gb(40, 4320, 1000, 10)
+  one_gb <- (40 * 4320 * 1000 * 10 * 8) / 2^30
+  # 2 dense arrays + gathered-list factor (2) = 4x one array.
+  expect_equal(proj, 4 * one_gb)
+  # Sanity: a 2015-width production peak is in the tens of GB.
+  expect_gt(proj, 30)
+})
+
+test_that("ensemble RAM guard warns loudly when projection exceeds 80% of RAM", {
+  # Mock a 32 GB box; 2015-width production defaults project ~40+ GB -> warn.
+  expect_warning(
+    MOSAIC:::.mosaic_ensemble_check_ram(40, 4320, 1000, 10, total_ram_gb = 32),
+    "risks an out-of-memory failure"
+  )
+})
+
+test_that("ensemble RAM guard names the dial-down knobs in the warning", {
+  w <- tryCatch(
+    MOSAIC:::.mosaic_ensemble_check_ram(40, 4320, 1000, 10, total_ram_gb = 32),
+    warning = function(e) conditionMessage(e))
+  expect_match(w, "max_best_subset")
+  expect_match(w, "n_iter_ensemble")
+})
+
+test_that("ensemble RAM guard is silent for a normal 2023-width fit on a 32 GB box", {
+  # 40 locs x 1398 time x 1000 param x 10 stoch ~= 13 GB total < 80% of 32 GB.
+  expect_silent(
+    MOSAIC:::.mosaic_ensemble_check_ram(40, 1398, 1000, 10, total_ram_gb = 32)
+  )
+})
+
+test_that("ensemble RAM guard skips silently when RAM cannot be probed (NA)", {
+  expect_silent(
+    MOSAIC:::.mosaic_ensemble_check_ram(40, 4320, 1000, 10, total_ram_gb = NA_real_)
+  )
+})
+
+test_that("ensemble RAM guard returns the projected GB invisibly", {
+  proj <- suppressWarnings(
+    MOSAIC:::.mosaic_ensemble_check_ram(40, 4320, 1000, 10, total_ram_gb = 32))
+  expect_equal(proj, MOSAIC:::.mosaic_ensemble_ram_projection_gb(40, 4320, 1000, 10))
+})

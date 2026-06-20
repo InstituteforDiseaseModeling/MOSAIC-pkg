@@ -2523,7 +2523,7 @@ run_MOSAIC <- function(config,
       # Log-scale MAE from each member to the ensemble central trajectory
       # (location 1, cases). Deliberate mix: per-member stochastic spread is
       # summarized by its MEDIAN (robust to a member's stochastic outliers),
-      # while the ensemble TARGET is the canonical central series (mean by
+      # while the ensemble TARGET is the canonical central series (median by
       # default) so the chosen representative member tracks the reported curve.
       cen_cases_target <- .central(ensemble, "cases")
       eps_med <- 1.0

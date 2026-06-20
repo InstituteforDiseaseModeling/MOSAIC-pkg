@@ -1,3 +1,64 @@
+# -----------------------------------------------------------------------------
+# Dense-array OOM guard
+# -----------------------------------------------------------------------------
+# calc_model_ensemble() allocates TWO dense double arrays of shape
+# [n_loc x n_time x n_param x n_stoch] on the single orchestrator node, then also
+# holds the full gathered results list (each successful element carries its own
+# [n_loc x n_time] cases + deaths matrices) at the same time. At a long (e.g.
+# 2015) calibration window (~4320 time cols) with production defaults
+# (max_best_subset = 1000, n_iter_ensemble = 10) this peaks ~40 GB and silently
+# OOMs a 32 GB box, whereas a 2023 window (~1398 cols, ~13 GB) is fine.
+#
+# This is a WARN-ONLY guard (immediate.): it never changes behavior, perf, or
+# allocation for any width — it merely projects the footprint and, when it would
+# exceed ~80% of probed system RAM, emits a loud warning naming the projected GB
+# and the knobs to dial down. When RAM cannot be probed portably (non-mac/Linux)
+# the projection is skipped. Reuses the package RAM probe .psi_total_system_ram_gb().
+#
+# Projection: two dense arrays (cases + deaths) at 8 bytes/double, PLUS the
+# gathered results list which holds the same payload a second time as per-result
+# matrices (cases + deaths) before the arrays are filled — so the concurrent
+# peak is ~2x the dense-array footprint. We use a factor of 2 for the list term
+# (conservative; the arrays and list co-exist during the fill loop).
+.MOSAIC_ENSEMBLE_RAM_FRACTION <- 0.80
+.MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR <- 2
+
+.mosaic_ensemble_ram_projection_gb <- function(n_locations, n_time_points,
+                                               n_param_sets, n_stoch) {
+  # One dense double array = n_loc * n_time * n_param * n_stoch * 8 bytes.
+  one_array_gb <- (as.numeric(n_locations) * as.numeric(n_time_points) *
+                     as.numeric(n_param_sets) * as.numeric(n_stoch) * 8) / 2^30
+  # Two dense arrays (cases + deaths) + the gathered results list (which holds an
+  # equivalent cases+deaths payload concurrently during the fill loop).
+  dense_gb <- 2 * one_array_gb
+  list_gb  <- .MOSAIC_ENSEMBLE_GATHERED_LIST_FACTOR * one_array_gb
+  dense_gb + list_gb
+}
+
+# Warn (do NOT cap) when the dense-array + gathered-list footprint risks OOM.
+# Returns the projected GB invisibly (for testability). total_ram_gb is injectable
+# so the projection+warn logic can be unit-tested with a mocked probe.
+.mosaic_ensemble_check_ram <- function(n_locations, n_time_points, n_param_sets,
+                                       n_stoch, total_ram_gb = NULL) {
+  proj_gb <- .mosaic_ensemble_ram_projection_gb(n_locations, n_time_points,
+                                                n_param_sets, n_stoch)
+  if (is.null(total_ram_gb)) total_ram_gb <- .psi_total_system_ram_gb()
+  if (is.na(total_ram_gb)) return(invisible(proj_gb))  # un-probed platform: skip
+  if (proj_gb > .MOSAIC_ENSEMBLE_RAM_FRACTION * total_ram_gb) {
+    warning(sprintf(paste0(
+      "calc_model_ensemble: the dense prediction arrays + gathered results list ",
+      "project to ~%.1f GB on this orchestrator node (2 dense [%d x %d x %d x %d] ",
+      "double arrays + the concurrent gathered list), but the system has ~%.0f GB ",
+      "RAM -- this risks an out-of-memory failure. Reduce max_best_subset (fewer ",
+      "parameter sets) and/or n_iter_ensemble (fewer stochastic reruns per set), or ",
+      "run on a larger-memory host. This is the dominant memory cliff at long ",
+      "(e.g. 2015) calibration windows."),
+      proj_gb, n_locations, n_time_points, n_param_sets, n_stoch, total_ram_gb),
+      immediate. = TRUE, call. = FALSE)
+  }
+  invisible(proj_gb)
+}
+
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description
@@ -273,6 +334,14 @@ calc_model_ensemble <- function(config,
     message(sprintf("calc_model_ensemble: %d param sets x %d stochastic = %d total | %d location(s) | %d time steps",
                     n_param_sets, n_simulations_per_config, total_sims, n_locations, n_time_points))
   }
+
+  # ===========================================================================
+  # OOM guard: project the dense-array + gathered-list footprint and warn loudly
+  # (warn-only, no behavior change) before the large allocation below.
+  # ===========================================================================
+
+  .mosaic_ensemble_check_ram(n_locations, n_time_points, n_param_sets,
+                             n_simulations_per_config)
 
   # ===========================================================================
   # Run simulations (precomputed, parallel, or sequential)

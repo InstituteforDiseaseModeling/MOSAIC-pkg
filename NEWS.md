@@ -1,3 +1,23 @@
+# MOSAIC 0.46.4
+
+* **Hardening from the adversarial red-team of the 0.46.1–0.46.3 changes.**
+    * `calc_model_ensemble()` gains a **RAM-projection guard**: before allocating the dense `[loc×time×param×stoch]` ensemble arrays it projects the concurrent peak and emits a loud warning (naming `max_best_subset`/`n_iter_ensemble` to dial down) when it would exceed ~80% of system RAM — so a long-window run (e.g. a 2015, ~4320-column config → ~51 GB at production defaults) fails loud with guidance instead of OOMing the orchestrator. Warn-only; a no-op at normal (2023, ~1400-col) widths.
+    * `make_config_default.R` now **asserts its resolved `date_start` matches the installed `priors_default$metadata$build_date_start`** (newly recorded by `make_priors_default.R`) and `stop()`s on mismatch — closing the silent config/priors window-desync reachable if the documented rebuild order was skipped (back-compat warning for older priors lacking the field).
+    * `ic_t0` selection **relabeled to its actual criterion — broadest-data-coverage** month (maximizes how many countries are seeded from real surveillance rather than Beta defaults), with an explicit note that case-volume weighting was considered and rejected (it biases the epoch toward an outbreak peak and over-seeds E/I). Factored into a pure, unit-tested `.ic_select_epoch()` helper (previously untested).
+    * Doc/cosmetic nits: `optimize_ensemble_subset()` `@param` no longer claims the package default is `"mean"`; `plot_model_ensemble()` uses an adaptive date-break ladder (~10–15 ticks) instead of a fixed 3-month interval (~44 ticks over an 11-yr window).
+
+# MOSAIC 0.46.3
+
+* **Build start date (`date_start`) generalized across the config + priors builders.** `make_config_default.R` and `make_priors_default.R` both honor a `MOSAIC_BUILD_DATE_START` env override (single source of truth; fallback 2023-01-01) so the same start date flows into both, enabling back-history rebuilds (e.g. a 2015-01-01 start — all covariates cover ≥2015). The required rebuild order is documented in `make_config_default.R`. The `ic_t0` tie-break is now explicit (earliest month), with a loud guard if the 2023 anchor ever drifts off 2023-02-01 and a cold-start warning for far-future starts.
+
+# MOSAIC 0.46.2
+
+* **Data-driven initial-condition seeding epoch (`ic_t0`) that tracks `date_start`.** Replaced the hard `max(date_start, 2023-02-01)` floor — whose "2015 has no active-case countries" premise predated the multi-source JHU/AI back-history — with a data-driven epoch (broadest-data-coverage month) within `[date_start, date_start + 12mo]`. Inert for the 2023 default (resolves to 2023-02-01; shipped priors numerically unchanged), and for a back-history build it seeds ICs from that era's data instead of an 8-year-mismatched 2023 state.
+
+# MOSAIC 0.46.1
+
+* **Default ensemble `central_method` changed from `"mean"` to `"median"`.** The posterior-weighted ensemble now summarizes each per-cell predictive with the **median** by default — the conventional epidemiological-forecast point estimate, robust to stochastic right-tail outliers (this is the rationale; note that on a right-skewed predictive a lower bias-to-1.0 ratio mostly reflects the skew, so "lower bias" alone is *not* the justification). **Behavior change, not reporting-only:** `central_method` feeds the best-subset optimizer (`optimize_objective = "mae"`), so this changes the selected subset, the medoid, and `config_best.json` — runs are **not directly comparable across this boundary**. Both `*_ensemble_mean` and `*_ensemble_median` R²/bias remain in `summary.json`, so the mean-based implied-CFR/skew diagnostic is preserved as a cross-walk field. All default sites updated in lockstep (resolver, `mosaic_control_defaults`, `plot_model_ensemble`, `run_rolling_cv`).
+
 # MOSAIC 0.46.0
 
 * **Engine-artifact mask for post-calibration R²/bias scoring (metrics-only).** Two laser-cholera (0.15.0) array artifacts were silently contaminating the post-calibration fit metrics: (1) the first ~2 `reported_cases` timesteps are an initial-condition warm-up transient (seeded E flushing into `new_symptomatic` before the SEIR dynamics settle), and (2) the final `reported_deaths` timestep is a structural zero (written at `[tick]` then `[1:]`-trimmed; laser issue #82). `plot_model_ensemble()` already masked these for DISPLAY ONLY; the R²/bias metrics in `run_MOSAIC()` still scored them.

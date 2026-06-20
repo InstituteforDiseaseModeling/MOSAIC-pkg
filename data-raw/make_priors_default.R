@@ -17,14 +17,63 @@ config_default <- MOSAIC::config_default
 date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date(config_default$date_start)
 
 # Initial-condition seeding epoch (ic_t0) is DATA-DRIVEN and TRACKS date_start: it is
-# the active-case-richest epoch within the first 12 months at/after date_start,
-# computed below once the surveillance data has loaded (see "Data-driven IC seeding
-# epoch"). This replaces the former hard `max(date_start, 2023-02-01)` floor, whose
-# "2015 has 0 active-case countries" premise predated the multi-source (JHU/AI)
+# the BROADEST-DATA-COVERAGE epoch within the first 12 months at/after date_start --
+# i.e. the month that maximizes the COUNT of distinct countries reporting >=1 active
+# case in a +/-8-week window (see ".ic_select_epoch" and "Data-driven IC seeding
+# epoch" below). This replaces the former hard `max(date_start, 2023-02-01)` floor,
+# whose "2015 has 0 active-case countries" premise predated the multi-source (JHU/AI)
 # back-history that now populates pre-2023 years (2015-02 now has ~9 active-case
-# countries). For a 2023 build it still resolves to ~2023-02 (the data-richest epoch)
-# so the shipped 2023 priors are unchanged; for an earlier start it seeds from that
-# era's data instead of an 8-year-mismatched 2023 state.
+# countries). For a 2023 build it still resolves to 2023-02 so the shipped 2023 priors
+# are unchanged; for an earlier start it seeds from that era's data instead of an
+# 8-year-mismatched 2023 state.
+#
+# WHY BREADTH, NOT VOLUME: the criterion deliberately optimizes COVERAGE (how many
+# countries get seeded from REAL surveillance vs the no-data Beta fallback priors), NOT
+# case intensity. est_initial_E_I (R/est_initial_E_I.R:158-164) back-calculates per-
+# country E/I from case VOLUME in [t0-21d, t0); choosing ic_t0 to maximize that volume
+# was considered and REJECTED because it would pull ic_t0 toward an outbreak PEAK and
+# systematically OVER-SEED E/I in the high-burden countries (an inflated-IC bias that
+# the calibration would then have to absorb). Maximizing breadth keeps the per-country
+# VOLUME at each seeded country at its own local level for that epoch while ensuring as
+# many countries as possible are seeded from data; the volume back-calc still runs per
+# country at the selected t0. For 2023 the two criteria diverge as designed: breadth is
+# a near-flat plateau (~22 countries) that ties to the earliest qualifying month
+# (2023-02), whereas volume would pick the April surge (~30k vs ~22k cases in Feb).
+
+# Pure, side-effect-free epoch selector (testable in isolation; see
+# tests/testthat/test-ic_select_epoch.R). Returns the Date of the chosen IC seeding
+# epoch given a long-format weekly surveillance frame. Selection rule:
+#   * candidate months = monthly steps over [date_start, date_start + 12mo];
+#   * score each candidate by BREADTH = n distinct iso_code with cases > 0 in a
+#     +/- `window_days`-week-equivalent window centred on the candidate;
+#   * pick the max-breadth candidate, TIES BROKEN TO THE EARLIEST month;
+#   * if every candidate scores 0 (no active-case countries in the span), fall back
+#     to `date_start` and warn (ICs will COLD-START: near-zero E/I, R_eff < 1).
+.ic_select_epoch <- function(surv_df, date_start, window_days = 56L,
+                             date_col = "date_start", iso_col = "iso_code",
+                             cases_col = "cases") {
+     stopifnot(inherits(date_start, "Date"))
+     surv_dt    <- as.Date(surv_df[[date_col]])
+     surv_iso   <- surv_df[[iso_col]]
+     surv_cases <- surv_df[[cases_col]]
+     cand       <- seq(date_start, date_start + 365L, by = "1 month")
+     nactive <- vapply(cand, function(cd) {
+          w <- which(surv_dt >= (cd - window_days) & surv_dt <= (cd + window_days) &
+                     is.finite(surv_cases) & surv_cases > 0)
+          length(unique(surv_iso[w]))
+     }, integer(1))
+     if (all(nactive == 0L)) {
+          warning(sprintf(paste0("IC epoch: no active-case countries in [%s, +12mo]; ICs ",
+                  "will COLD-START (near-zero E/I, R_eff<1, no ignition). Pick a ",
+                  "date_start with surveillance coverage."), format(date_start)),
+                  immediate. = TRUE)
+          return(list(ic_t0 = date_start, nactive = nactive, candidates = cand))
+     }
+     # which()[1] makes the earliest-month tie-break explicit; this preserves the
+     # 2023-02-01 anchor for the default 2023 build (months 2-10 plateau at ~22).
+     ic_t0 <- cand[which(nactive == max(nactive))[1]]
+     list(ic_t0 = ic_t0, nactive = nactive, candidates = cand)
+}
 
 j <- MOSAIC::iso_codes_mosaic
 
@@ -38,30 +87,16 @@ surv_weekly <- read.csv(
 )
 
 # --- Data-driven IC seeding epoch (tracks date_start; see note near the top) -------
-# Pick the active-case-richest month within [date_start, date_start + 12mo] using a
-# +/-8-week window over the combined weekly surveillance. Falls back to date_start
-# itself if no active cases are found in that span (degenerate/no-data case).
-.ic_surv_dt <- as.Date(surv_weekly$date_start)
-.ic_cand    <- seq(date_start, date_start + 365L, by = "1 month")
-.ic_nactive <- vapply(.ic_cand, function(cd) {
-     w <- which(.ic_surv_dt >= (cd - 56L) & .ic_surv_dt <= (cd + 56L) &
-                is.finite(surv_weekly$cases) & surv_weekly$cases > 0)
-     length(unique(surv_weekly$iso_code[w]))
-}, integer(1))
-if (all(.ic_nactive == 0L)) {
-     ic_t0 <- date_start
-     warning(sprintf(paste0("IC epoch: no active-case countries in [%s, +12mo]; ICs will ",
-             "COLD-START (near-zero E/I, R_eff<1, no ignition). Pick a date_start with ",
-             "surveillance coverage."), format(date_start)), immediate. = TRUE)
-} else {
-     # Ties broken to the EARLIEST month (which()[1] is explicit about this) -- this
-     # preserves the 2023-02-01 anchor for the default 2023 build, where the active-case
-     # counts tie across months 2-4.
-     ic_t0 <- .ic_cand[which(.ic_nactive == max(.ic_nactive))[1]]
-}
-# Guard the shipped-default anchor: if the 2023 build's data-richest epoch ever drifts
-# off 2023-02-01 (e.g. after a surveillance refresh), warn loudly so a change to the
-# shipped 2023 priors is acknowledged on rebuild rather than shipped silently.
+# Select the broadest-data-coverage month within [date_start, date_start + 12mo] using
+# the pure .ic_select_epoch() helper (breadth = n active-case countries in a +/-8-week
+# window over the combined weekly surveillance; ties -> earliest; falls back to
+# date_start + warns if the span is data-empty).
+.ic_sel  <- .ic_select_epoch(surv_weekly, date_start, window_days = 56L)
+ic_t0    <- .ic_sel$ic_t0
+.ic_nactive <- .ic_sel$nactive
+# Guard the shipped-default anchor: if the 2023 build's broadest-coverage epoch ever
+# drifts off 2023-02-01 (e.g. after a surveillance refresh), warn loudly so a change to
+# the shipped 2023 priors is acknowledged on rebuild rather than shipped silently.
 if (date_start == as.Date("2023-01-01") && ic_t0 != as.Date("2023-02-01"))
      warning(sprintf(paste0("IC epoch for the 2023 default drifted to %s (expected 2023-02-01); ",
              "the shipped 2023 priors will change on rebuild -- verify before shipping."),
@@ -78,6 +113,11 @@ priors_default <- list(
      metadata = list(
           version = "15.12",
           date = Sys.Date(),
+          # Build-time fit-window start these priors were derived against. Recorded so
+          # make_config_default.R can assert its own date_start matches the priors it
+          # sources from (cross-artifact desync guard: catches e.g. a 2015-priors /
+          # 2023-config mismatch). Also fixes the IC seeding epoch (ic_t0) below.
+          build_date_start = as.character(date_start),
           description = "Default informative prior distributions for MOSAIC model parameters. v15.12 (2026-06-19): multi-source surveillance integration. (a) Initial-condition seeding epoch DECOUPLED from the fit-window date_start: all est_initial_* calls (V1_V2, E_I, R, S) and the population-at-t0 match now use ic_t0 = max(date_start, 2023-02-01). Empirically the 2015 IC lookback window has 0 active-case countries and late-2022 only ~6 (vs 11 at 2023-02-01), so seeding from an early window cold-starts ICs (near-zero E/I, R_eff<1, no ignition); the floor pins ICs to the proven data-rich anchor regardless of how early the fit window starts, and breaks the circular hazard whereby a <2023 config rebuild would poison the next priors rebuild's IC epoch. (b) epidemic_threshold now derives from the multi-source combined weekly file (include_ai=TRUE adds JHU/AI back-history) with AI rows EXCLUDED (source != 'AI') for parity with est_seasonal_dynamics; more outbreak weeks shift some per-country medians and may flip countries off the Zheng 0.7/100k fallback (MIN_OUTBREAK_WEEKS gate). v15.11 (2026-06-18): psi_star_b prior re-centred mean 0->+1.0 (sd kept 2.5) for all 40 countries to match the new per-capita D-scale suitability psi (target_D_rate_per_country_floored), which sits at a much lower level than the old transmission_intensity scale (per-country mean COD 0.93->0.43, global 0.14->0.10). At the prior center (a=1) the calc_psi_star transform is an odds-multiply psi*=sigma(logit(psi)+b). The +1.0 level shift acts on the delta (environmental decay) channel, NOT beta_env: beta_env (envtohuman.py:24) is self-normalized as beta_j0_env*(psi*/psi_bar*) so a uniform b ~cancels in the low-psi regime (no-op), whereas delta decay (environmental.py:150) reads psi* on its ABSOLUTE level via survival_days = days_short + pbeta(psi*|s1,s2)*(days_long-days_short), so a higher psi* lengthens modelled V. cholerae reservoir survival. The D scale pinned most countries near the days_short floor (~16d) at the old b=0 center; +1.0 raises psi* (COD mean 0.36->0.53, MOZ 0.12->0.21) so survival climbs toward the days_long ceiling at seasonal peaks while staying off the floor in low-burden countries. Validated against the spec eq:decay-priors envelope (claude/validate_psi_star_b_delta_survival.R, 2026-06-19): at the decay prior means (days_short=16, days_long=196, s1=s2=3) post-shift per-country survival lies entirely within ~16-196d (0/40 exceed the 196d ceiling, 0/40 below the 16d floor; median +4.9d/+17% to mean survival; survival is structurally bounded above by days_long since pbeta<=1, so the shift only moves countries ALONG the [16,196] curve and cannot breach the envelope). Gives calibration a sensible STARTING center, not a constraint (sd=2.5 retains both-direction freedom; the global decay days/shape params are also sampled). The MOZ-specific psi_star_b override (mean +0.4, fit on the old scale) is removed/folded into the general center. psi_star_a unchanged (a=1 identity is scale-invariant). v15.10 (2026-06-18): ETH-only mu_j_baseline dwell-mismatch STOP-GAP — scale Ethiopia's derived mu_j_baseline mean by 0.40 (Gamma rate 1816->4540, CV unchanged). The CFR->mu identity uses gamma_1 at its PRIOR MEAN (~0.114, 8.8d dwell), but ETH calibration drifts gamma_1 to the long-dwell tail (~0.076, ~14d); since per-case CFR scales as mu_j/gamma_1, realized reported CFR inflates to ~3.7% vs observed ~1.2% (deaths over-predict ~3.3x while cases stay near-unbiased). The x0.40 re-center returns deterministic reported CFR to ~1.5% (deaths bias ~1.3x) with cases unaffected (mu_j/rho_deaths do not enter the case channel; GTFCC treated-CFR target <1%). NOT a structural cure: the dwell mismatch affects all countries; the durable fix is a dwell-adjusted CFR->mu derivation and/or the run_MOSAIC best-subset weighting fix (the dAIC-4 truncation currently discards the deaths signal, so the ensemble reports near the prior center). Do not chase the exact x0.31 point estimate (overfits the broken weighting). See disease-modeler memory project_eth_deaths_cfr_dwell_mismatch. v15.9 (2026-06-16): laser-cholera v0.14.0 (issue #67) adjustments. (a) mu_j_baseline CFR->mu identity gains a gamma_1 (dwell) factor — mu = CFR * gamma_1 * rho / (rho_deaths * chi) — because v0.14.0 reports the new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state) instead of the Isym prevalence stock; per-country mu_j_baseline prior means drop ~9x (gamma_1 prior mean ~0.113) vs v15.8. (b) beta_j0_tot per-country medians recentred for the 14 cases-data countries from the v0.14.0 beta*mu magnitude sweep (e.g. ETH 1.75e-6->1.39e-5, SSD 2e-5->2.83e-4, NGA 2e-5->4.74e-6); the 26 no-data countries keep the 2e-5 global default (the sweep found no transferable beta shift, geomean ~1.2x / log-CV 1.5). Supersedes the v15.3 ETH-only override. See MOSAIC-pkg/claude/beta_percountry_sweep.R + beta_mu_percountry_sweep.R and memory project_laser_cholera_reported_cases_fix_67. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
      ),
      parameters_global = list(),    # Single parameters used by all locations

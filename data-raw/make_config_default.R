@@ -25,6 +25,36 @@ PATHS <- MOSAIC::get_paths()
 .env_ds    <- Sys.getenv("MOSAIC_BUILD_DATE_START", "")
 date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date("2023-01-01")
 
+# -----------------------------------------------------------------------------
+# Env-desync fail-loud assert (build-order guard)
+# -----------------------------------------------------------------------------
+# make_priors_default.R falls back to the INSTALLED config_default's date_start
+# when MOSAIC_BUILD_DATE_START is unset, so a build that skips the
+# devtools::install(".") step between step 1 (priors) and step 2 (this script)
+# can silently produce e.g. 2015 priors against a 2023 config (or vice versa)
+# with NO warning. make_priors_default.R records the window it was built for in
+# priors_default$metadata$build_date_start; assert it matches the date_start this
+# script resolved. If it differs we stop() and point at the documented rebuild
+# order. For back-compat with older priors that predate the metadata field, skip
+# with a warning() rather than erroring.
+.priors_bds <- tryCatch(MOSAIC::priors_default$metadata$build_date_start,
+                        error = function(e) NULL)
+if (is.null(.priors_bds) || !nzchar(as.character(.priors_bds))) {
+     warning(paste0(
+          "priors_default$metadata$build_date_start is absent (older priors build) -- ",
+          "cannot verify the config/priors calibration windows are in sync. ",
+          "Proceeding, but rebuild priors_default to record the build window."))
+} else if (!identical(date_start, as.Date(.priors_bds))) {
+     stop(sprintf(paste0(
+          "BUILD-ORDER DESYNC: this config resolves date_start = %s but the installed ",
+          "priors_default was built for date_start = %s. The windows MUST match. ",
+          "Rebuild in order: (1) Rscript data-raw/make_priors_default.R, ",
+          "(2) Rscript -e 'devtools::install(\".\")' (so this script sees the new ",
+          "priors_default), then (3) re-run this script -- with MOSAIC_BUILD_DATE_START ",
+          "set to the SAME value for all steps (unset = 2023-01-01)."),
+          format(date_start), format(as.Date(.priors_bds))))
+}
+
 # date_stop: derived from the psi forecast horizon so the simulation window
 # tracks whatever the latest LSTM environmental-suitability forecast extends
 # to. The same file (pred_psi_suitability_day.csv) is read in full at the
