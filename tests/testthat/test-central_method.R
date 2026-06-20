@@ -158,10 +158,14 @@ test_that("plot CSV: central_method='mean' makes predicted_central == predicted_
                     "central_method") %in% names(df)))
   expect_equal(df$predicted_central, df$predicted_mean)
   expect_equal(unique(df$central_method), "mean")
-  # predicted_median stays the TRUE median (deaths collapse), never mislabeled
+  # predicted_median stays the TRUE median (deaths collapse), never mislabeled.
+  # na.rm: plot_model_ensemble masks the final deaths timestep (engine
+  # off-by-one) by default, so the last cell is NA in the CSV; that masked cell
+  # is irrelevant to the mean-vs-median routing check.
   deaths_rows <- df[df$metric == "Deaths", ]
-  expect_true(any(deaths_rows$predicted_median == 0))
-  expect_gt(sum(deaths_rows$predicted_central), sum(deaths_rows$predicted_median))
+  expect_true(any(deaths_rows$predicted_median == 0, na.rm = TRUE))
+  expect_gt(sum(deaths_rows$predicted_central, na.rm = TRUE),
+            sum(deaths_rows$predicted_median, na.rm = TRUE))
 })
 
 test_that("plot CSV: central_method='median' makes predicted_central == predicted_median", {

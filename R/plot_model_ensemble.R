@@ -29,6 +29,23 @@
 #'   \code{"mean"} (default; unbiased for expected counts, never collapses on
 #'   sparse deaths) or \code{"median"} (historical). Scalar or per-channel
 #'   \code{c(cases=, deaths=)}.
+#' @param mask_final_deaths_step Logical. If \code{TRUE} (default), blank the
+#'   FINAL timestep of every Deaths prediction (set the predicted/CI cells to
+#'   \code{NA}) in the exported CSV and the rendered lines. This masks a
+#'   laser-cholera engine off-by-one in which \code{reported_deaths} is written
+#'   at \code{[tick]} on an array of length \code{nticks + 1}, so the final slot
+#'   is never written and reads as an artificial drop-to-zero. DISPLAY ONLY:
+#'   the underlying ensemble arrays are untouched, so any R2/bias/likelihood
+#'   computed upstream from the raw object is unaffected. Cases are written at
+#'   \code{[tick + 1]} and are not affected.
+#' @param n_cases_warmup_mask Integer. Number of LEADING timesteps of every
+#'   Suspected Cases prediction to blank (set to \code{NA}) in the exported CSV
+#'   and the rendered lines. Default \code{2L}. This masks the initial-condition
+#'   warm-up transient (seeded E/I progressing into new_symptomatic before the
+#'   SEIR dynamics settle), which is visually dominant for low-count countries.
+#'   DISPLAY ONLY (raw arrays untouched). The legitimate leading
+#'   reporting-lag zeros in Deaths (from \code{delta_reporting_deaths}) are REAL
+#'   and are NOT masked by this argument. Set to \code{0L} to disable.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return Invisibly returns a list with:
@@ -54,6 +71,8 @@ plot_model_ensemble <- function(ensemble,
                                 title_label      = "Posterior Ensemble",
                                 save_predictions = FALSE,
                                 central_method   = "mean",
+                                mask_final_deaths_step = TRUE,
+                                n_cases_warmup_mask    = 2L,
                                 verbose          = TRUE) {
 
   # ---------------------------------------------------------------------------
@@ -162,6 +181,66 @@ plot_model_ensemble <- function(ensemble,
 
   plot_data$metric <- factor(plot_data$metric,
                               levels = c("Suspected Cases", "Deaths"))
+
+  # ---------------------------------------------------------------------------
+  # Boundary-artifact mask (DISPLAY ONLY)
+  # ---------------------------------------------------------------------------
+  #
+  # Two known laser-cholera engine boundary artifacts are blanked here so they
+  # do not appear in the exported predictions CSV or the rendered lines. This is
+  # purely cosmetic: it acts on the local plot_data frame ONLY. The raw ensemble
+  # arrays (cases_array/deaths_array) and the *_mean/*_median matrices on the
+  # `ensemble` object are NOT modified, so any R2/bias/likelihood computed by the
+  # caller from the raw object (e.g. run_MOSAIC's summary.json metrics) is
+  # provably unchanged whether the mask is on or off. The caption R2/bias below
+  # are likewise computed from the unmasked matrices, not from plot_data.
+  #
+  # Artifact 1 (mask_final_deaths_step): reported_deaths is written at [tick] on
+  #   an array of length nticks+1, so the final slot is never written and reads
+  #   as a drop-to-zero. Cases write at [tick+1] and are fine.
+  # Artifact 2 (n_cases_warmup_mask): the first ~1-2 reported cases steps are an
+  #   IC warm-up transient. The legitimate leading reporting-lag zeros in Deaths
+  #   (delta_reporting_deaths) are REAL and are deliberately NOT masked.
+  # Upstream laser-cholera issue tracks the engine-side fix.
+
+  n_cases_warmup_mask <- as.integer(n_cases_warmup_mask)
+  if (length(n_cases_warmup_mask) != 1L || is.na(n_cases_warmup_mask) ||
+      n_cases_warmup_mask < 0L)
+    stop("n_cases_warmup_mask must be a single non-negative integer")
+
+  if (isTRUE(mask_final_deaths_step) || n_cases_warmup_mask > 0L) {
+    pred_cols <- c("predicted_central", "predicted_mean", "predicted_median")
+    ci_cols   <- grep("^ci_[0-9]+_(lower|upper)$", names(plot_data), value = TRUE)
+    mask_cols <- intersect(c(pred_cols, ci_cols), names(plot_data))
+
+    # Per-(location, metric) the rows are in time order (rep(dates, 2L)), so the
+    # k-th row of a metric block is timestep k. Mask by relative position within
+    # each location x metric group rather than by date value.
+    is_cases  <- plot_data$metric == "Suspected Cases"
+    is_deaths <- plot_data$metric == "Deaths"
+
+    rows_to_mask <- logical(nrow(plot_data))
+
+    if (n_cases_warmup_mask > 0L) {
+      k <- min(n_cases_warmup_mask, n_time_points)
+      warmup_pos <- seq_len(k)
+      for (loc_i in location_names) {
+        sel <- which(plot_data$location == loc_i & is_cases)
+        if (length(sel) >= 1L) rows_to_mask[sel[warmup_pos]] <- TRUE
+      }
+    }
+
+    if (isTRUE(mask_final_deaths_step) && n_time_points >= 1L) {
+      for (loc_i in location_names) {
+        sel <- which(plot_data$location == loc_i & is_deaths)
+        if (length(sel) >= 1L) rows_to_mask[sel[length(sel)]] <- TRUE
+      }
+    }
+
+    if (any(rows_to_mask)) {
+      for (cc in mask_cols) plot_data[rows_to_mask, cc] <- NA_real_
+    }
+  }
 
   # ---------------------------------------------------------------------------
   # Save per-location prediction CSVs
