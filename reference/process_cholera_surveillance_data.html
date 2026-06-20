@@ -15,7 +15,7 @@ using MOSAIC::downscale_weekly_values with integer allocation."><meta property="
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -94,12 +94,19 @@ per-row values; and square-grid cells with no observation get
     <p>Invisibly returns <code>NULL</code>. Side effects:</p><ul><li><p>Reads weekly CSVs from all three sources and adds a <code>source</code> column.</p></li>
 <li><p>Cleans rows with missing key grouping fields (iso_code, year, week).</p></li>
 <li><p>Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).</p></li>
-<li><p>Deduplicates by <code>iso_code</code>, <code>year</code>, <code>week</code> using the fixed priority WHO &gt; JHU &gt; AI &gt; SUPP (completeness tie-break).</p></li>
+<li><p>Deduplicates by <code>iso_code</code> and <code>date_start</code> (the actual ISO-week Monday, robust to year-boundary week-1 collisions) using the fixed priority WHO &gt; JHU &gt; AI &gt; SUPP with a completeness tie-break.</p></li>
 <li><p>Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).</p></li>
 <li><p>Saves the combined weekly data to
 <code>PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv</code>.</p></li>
+<li><p>Applies the trust-tier gate before downscaling: weeks tagged
+<code>disaggregation_method</code> <code>fourier_*</code> (synthetic reconstructions) or
+<code>assumed_zero</code> (surveillance silence) are NA-blanked (cases, deaths, and
+weight) so they never reach the data-likelihood; <code>observed</code>,
+<code>documented_zero</code>, and direct WHO/JHU/SUPP rows are kept.</p></li>
 <li><p>Downscales weekly <code>cases</code> and <code>deaths</code> to daily counts,
-preserving square structure (keeping days with NA), and carries over the <code>source</code>.</p></li>
+preserving square structure (keeping days with NA), and carries <code>source</code>,
+<code>disaggregation_method</code>, and <code>confidence_weight</code> to each daily row
+(the weight is replicated constant across the week, never divided).</p></li>
 <li><p>Saves the combined daily data to
 <code>PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv</code>.</p></li>
 </ul></div>

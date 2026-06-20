@@ -498,6 +498,8 @@ Helper and utility functions
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
   : Check for overdispersion in a count time series
+- [`check_psi_amplitude()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.md)
+  : Amplitude guard for post-correction suitability (psi)
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
   : Check Python Environment for MOSAIC
 - [`check_sampled_parameter()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_sampled_parameter.md)
@@ -693,6 +695,8 @@ Other exported functions and internal helpers
   : Check Installed R and Python Dependencies for MOSAIC
 - [`check_overdispersion()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_overdispersion.md)
   : Check for overdispersion in a count time series
+- [`check_psi_amplitude()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.md)
+  : Amplitude guard for post-correction suitability (psi)
 - [`check_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_python_env.md)
   : Check Python Environment for MOSAIC
 - [`check_sampled_parameter()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_sampled_parameter.md)

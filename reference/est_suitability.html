@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,7 @@ suitability (psi) based on the climate covariates.</p>
 <span>  pred_date_start <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  pred_date_stop <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  feature_set <span class="op">=</span> <span class="st">"v7.3"</span>,</span>
-<span>  response_var <span class="op">=</span> <span class="st">"transmission_intensity"</span>,</span>
+<span>  response_var <span class="op">=</span> <span class="st">"target_D_rate_per_country_floored"</span>,</span>
 <span>  bias_correct <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  architecture <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lstm_v2_hierarchical_film"</span>, <span class="st">"lstm_v1_legacy"</span><span class="op">)</span>,</span>
 <span>  arch_control <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -221,11 +221,14 @@ decision-grade forecaster. psi reaches the downstream LASER engine through TWO
 channels – a fractional deviation <code>(psi - psi_bar)/psi_bar</code> (timing/shape) and
 the absolute level (environmental-reservoir decay) – so the response anchor and
 <code>bias_correct</code> can move outbreak magnitude, not just timing. Report the
-per-country spread, not just the median. The v0.34.0 defaults
-(<code>response_var="transmission_intensity"</code>, <code>region_map="snf_k5"</code>,
-<code>bias_correct=TRUE</code>) are <strong>provisional</strong>, gated by a post-merge
-psi-&gt;LASER case-skill experiment; <code>snf_k5</code> ships unvalidated as a FiLM region
-map and reverts to <code>"csv"</code> if it does not beat it.</p>
+per-country spread, not just the median. The default <code>response_var</code> is
+<code>"target_D_rate_per_country_floored"</code> (per-capita, per-country anchor),
+selected over <code>"transmission_intensity"</code> by a 15-country psi-&gt;LASER calibration
+case-skill comparison: D lifts cases-R2 for the priority/saturated cluster
+(COD 0.51-&gt;0.73, SOM 0.34-&gt;0.82, ETH 0.61-&gt;0.80) at the cost of regressions on
+5 low-burden countries (RWA/MWI/AGO/NAM/SSD), accepted for the global default.
+<code>region_map="snf_k5"</code>, <code>bias_correct=TRUE</code>; <code>snf_k5</code> ships unvalidated as a FiLM
+region map and reverts to <code>"csv"</code> if it does not beat it.</p>
 <p><strong><code>lstm_v1_legacy</code> (v0.33, frozen) – shared LSTM, random split +
 sequential fine-tuning.</strong> A single 3-stack LSTM (128-&gt;64-&gt;32) with no
 country/region identity (one shared model for all countries). Trained on a
@@ -240,8 +243,9 @@ out-of-sample forecast collapses in amplitude – the failure lstm_v2 fixes.</p>
     <h2 id="migration-reproduce-v-production-behavior-">Migration (reproduce v0.33 production behavior)<a class="anchor" aria-label="anchor" href="#migration-reproduce-v-production-behavior-"></a></h2>
 
 
-<p>The v0.34 defaults flip <code>response_var</code> to <code>"transmission_intensity"</code> and
-<code>architecture</code> to <code>"lstm_v2_hierarchical_film"</code>. To run the frozen v0.33
+<p>The current defaults set <code>response_var</code> to
+<code>"target_D_rate_per_country_floored"</code> and <code>architecture</code> to
+<code>"lstm_v2_hierarchical_film"</code>. To run the frozen v0.33
 shared-LSTM path:</p><div class="sourceCode"><pre><code><span></span>
 <span><span class="fu"><a href="../reference/est_suitability.html">est_suitability</a></span><span class="op">(</span><span class="va">PATHS</span>, architecture <span class="op">=</span> <span class="st">"lstm_v1_legacy"</span>,</span>
 <span>                feature_set <span class="op">=</span> <span class="st">"v7.3"</span>, response_var <span class="op">=</span> <span class="st">"target_C_rate_global"</span>,</span>

@@ -17,7 +17,7 @@ without altering its training, and feeds the canonical psi column."><meta proper
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -68,7 +68,11 @@ without altering its training, and feeds the canonical <code>psi</code> column.<
 <span>  obs_col <span class="op">=</span> <span class="st">"transmission_intensity"</span>,</span>
 <span>  out_col <span class="op">=</span> <span class="st">"pred_bias_corrected"</span>,</span>
 <span>  min_train <span class="op">=</span> <span class="fl">8L</span>,</span>
-<span>  eps <span class="op">=</span> <span class="fl">1e-06</span></span>
+<span>  eps <span class="op">=</span> <span class="fl">1e-06</span>,</span>
+<span>  slope_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>  offset_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">4</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>  amp_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  min_pred_sd <span class="op">=</span> <span class="fl">0.05</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -112,10 +116,36 @@ otherwise identity (default 8).</p></dd>
 <dd><p>Clamp applied to predictions and observations before <code>qlogis</code>
 to keep the logit transform finite (default 1e-6).</p></dd>
 
+
+<dt id="arg-slope-range">slope_range<a class="anchor" aria-label="anchor" href="#arg-slope-range"></a></dt>
+<dd><p>Length-2 numeric <code>c(lo, hi)</code>; the per-country logit
+slope is clamped to this range before being applied (default
+<code>c(0.25, 4)</code>).</p></dd>
+
+
+<dt id="arg-offset-range">offset_range<a class="anchor" aria-label="anchor" href="#arg-offset-range"></a></dt>
+<dd><p>Length-2 numeric <code>c(lo, hi)</code>; the per-country logit
+offset is clamped to this range (default <code>c(-4, 4)</code>).</p></dd>
+
+
+<dt id="arg-amp-range">amp_range<a class="anchor" aria-label="anchor" href="#arg-amp-range"></a></dt>
+<dd><p>Length-2 numeric <code>c(lo, hi)</code>; the corrected series'
+logit-scale sd is constrained to within this multiple of the input
+prediction's logit-scale sd (default <code>c(0.5, 2)</code>), shrinking the affine
+toward identity when violated.</p></dd>
+
+
+<dt id="arg-min-pred-sd">min_pred_sd<a class="anchor" aria-label="anchor" href="#arg-min-pred-sd"></a></dt>
+<dd><p>Minimum logit-pred standard deviation (over outbreak weeks)
+for a country to be eligible for a fit; below it, identity (default 0.05).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p><code>pred_df</code> with an added <code>out_col</code> in \((0,1)\).</p>
+    <p><code>pred_df</code> with an added <code>out_col</code> in \((0,1)\). A
+per-country diagnostic data frame is attached as
+<code>attr(., "calibration_diagnostics")</code> (see
+<code><a href="check_psi_amplitude.html">check_psi_amplitude</a></code>).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -137,8 +167,35 @@ This is the defined behavior for low-incidence / zero-history countries: their
 psi is the uncorrected (region-FiLM-modulated) model output.</p>
     </div>
     <div class="section level2">
+    <h2 id="robustness-b-">Robustness (B1)<a class="anchor" aria-label="anchor" href="#robustness-b-"></a></h2>
+
+
+<p>An <em>unregularized</em>, <em>unbounded</em> per-country <code>lm</code> corrupts
+degenerate / low-signal countries: a near-flat logit-pred predictor yields a
+wild slope that either collapses the country's psi to a constant or blows its
+amplitude up many-fold (the <code>prediction from rank-deficient fit</code>
+warning). To prevent that, each per-country fit is screened and the affine is
+guarded:</p><ul><li><p><strong>Degeneracy screen.</strong> Fits that are rank-deficient, have a
+too-low logit-pred standard deviation (<code>min_pred_sd</code>), too few
+distinct logit-pred values, or a non-finite / explosive slope fall back to
+the identity transform.</p></li>
+<li><p><strong>Bounded affine.</strong> The estimated slope is clamped to
+<code>slope_range</code> and the offset to <code>offset_range</code> (logit scale)
+before being applied, so no country's correction can be steeper / more
+offset than is plausible for a scale/level fix.</p></li>
+<li><p><strong>Amplitude clamp.</strong> The corrected series' logit-scale standard
+deviation is constrained to within <code>amp_range</code> times the input
+prediction's logit-scale standard deviation (shrinking the affine toward
+identity if it would over-collapse or over-inflate the amplitude), so a
+country's psi cannot be flattened to a constant or inflated beyond a sane
+range.</p></li>
+</ul><p>Well-behaved countries (ample outbreak weeks, real logit-pred variance, a
+slope/offset/amplitude inside the guard ranges) are <strong>unaffected</strong> — the
+guard is a no-op for them.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="est_suitability.html">est_suitability</a></code></p></div>
+    <div class="dont-index"><p><code><a href="est_suitability.html">est_suitability</a></code>, <code><a href="check_psi_amplitude.html">check_psi_amplitude</a></code></p></div>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

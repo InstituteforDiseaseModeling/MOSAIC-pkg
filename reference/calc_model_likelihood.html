@@ -11,7 +11,7 @@ a weighted MoM dispersion estimate and a k_min floor."><meta property="og:image"
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.44.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.45.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,6 +60,8 @@ a weighted MoM dispersion estimate and a <code>k_min</code> floor.</p>
 <span>  weight_deaths <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  weights_location <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  weights_time <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  weights_obs_cases <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  weights_obs_deaths <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  config <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  nb_k_min_cases <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  nb_k_min_deaths <span class="op">=</span> <span class="fl">3</span>,</span>
@@ -97,6 +99,20 @@ a weighted MoM dispersion estimate and a <code>k_min</code> floor.</p>
 
 <dt id="arg-weights-time">weights_time<a class="anchor" aria-label="anchor" href="#arg-weights-time"></a></dt>
 <dd><p>Length-<code>n_time_steps</code> non-negative weights.</p></dd>
+
+
+<dt id="arg-weights-obs-cases-weights-obs-deaths">weights_obs_cases, weights_obs_deaths<a class="anchor" aria-label="anchor" href="#arg-weights-obs-cases-weights-obs-deaths"></a></dt>
+<dd><p>Optional per-observation
+confidence-weight matrices (<code>n_locations x n_time_steps</code>, values in
+<code>[0,1]</code>; <code>NA</code> where the corresponding cell is <code>NA</code>). When
+supplied, the per-cell weight multiplies <code>weights_time</code> for the NB
+cases/deaths term respectively, and the resulting per-location weight vector
+is renormalized to preserve the current masked-<code>weights_time</code> mass so
+only the trust SHAPE matters (cross-location balance stays with
+<code>weights_location</code>). Default <code>NULL</code> (no per-cell weighting; the
+exact unweighted code path is used, byte-identical to prior behavior). A row
+that is all-1 on finite-obs cells is also routed through the exact unweighted
+path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).</p></dd>
 
 
 <dt id="arg-config">config<a class="anchor" aria-label="anchor" href="#arg-config"></a></dt>

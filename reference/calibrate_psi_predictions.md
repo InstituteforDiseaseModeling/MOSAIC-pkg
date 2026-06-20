@@ -19,7 +19,11 @@ calibrate_psi_predictions(
   obs_col = "transmission_intensity",
   out_col = "pred_bias_corrected",
   min_train = 8L,
-  eps = 1e-06
+  eps = 1e-06,
+  slope_range = c(0.25, 4),
+  offset_range = c(-4, 4),
+  amp_range = c(0.5, 2),
+  min_pred_sd = 0.05
 )
 ```
 
@@ -62,9 +66,33 @@ calibrate_psi_predictions(
   Clamp applied to predictions and observations before `qlogis` to keep
   the logit transform finite (default 1e-6).
 
+- slope_range:
+
+  Length-2 numeric `c(lo, hi)`; the per-country logit slope is clamped
+  to this range before being applied (default `c(0.25, 4)`).
+
+- offset_range:
+
+  Length-2 numeric `c(lo, hi)`; the per-country logit offset is clamped
+  to this range (default `c(-4, 4)`).
+
+- amp_range:
+
+  Length-2 numeric `c(lo, hi)`; the corrected series' logit-scale sd is
+  constrained to within this multiple of the input prediction's
+  logit-scale sd (default `c(0.5, 2)`), shrinking the affine toward
+  identity when violated.
+
+- min_pred_sd:
+
+  Minimum logit-pred standard deviation (over outbreak weeks) for a
+  country to be eligible for a fit; below it, identity (default 0.05).
+
 ## Value
 
-`pred_df` with an added `out_col` in \\(0,1)\\.
+`pred_df` with an added `out_col` in \\(0,1)\\. A per-country diagnostic
+data frame is attached as `attr(., "calibration_diagnostics")` (see
+[`check_psi_amplitude`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.md)).
 
 ## Details
 
@@ -90,6 +118,37 @@ warning. This is the defined behavior for low-incidence / zero-history
 countries: their psi is the uncorrected (region-FiLM-modulated) model
 output.
 
+## Robustness (B1)
+
+An *unregularized*, *unbounded* per-country `lm` corrupts degenerate /
+low-signal countries: a near-flat logit-pred predictor yields a wild
+slope that either collapses the country's psi to a constant or blows its
+amplitude up many-fold (the `prediction from rank-deficient fit`
+warning). To prevent that, each per-country fit is screened and the
+affine is guarded:
+
+- **Degeneracy screen.** Fits that are rank-deficient, have a too-low
+  logit-pred standard deviation (`min_pred_sd`), too few distinct
+  logit-pred values, or a non-finite / explosive slope fall back to the
+  identity transform.
+
+- **Bounded affine.** The estimated slope is clamped to `slope_range`
+  and the offset to `offset_range` (logit scale) before being applied,
+  so no country's correction can be steeper / more offset than is
+  plausible for a scale/level fix.
+
+- **Amplitude clamp.** The corrected series' logit-scale standard
+  deviation is constrained to within `amp_range` times the input
+  prediction's logit-scale standard deviation (shrinking the affine
+  toward identity if it would over-collapse or over-inflate the
+  amplitude), so a country's psi cannot be flattened to a constant or
+  inflated beyond a sane range.
+
+Well-behaved countries (ample outbreak weeks, real logit-pred variance,
+a slope/offset/amplitude inside the guard ranges) are **unaffected** —
+the guard is a no-op for them.
+
 ## See also
 
-[`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+[`est_suitability`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md),
+[`check_psi_amplitude`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_psi_amplitude.md)

@@ -68,8 +68,9 @@ Invisibly returns `NULL`. Side effects:
   any column missing from a given source (so source-specific columns are
   never silently dropped).
 
-- Deduplicates by `iso_code`, `year`, `week` using the fixed priority
-  WHO \> JHU \> AI \> SUPP (completeness tie-break).
+- Deduplicates by `iso_code` and `date_start` (the actual ISO-week
+  Monday, robust to year-boundary week-1 collisions) using the fixed
+  priority WHO \> JHU \> AI \> SUPP with a completeness tie-break.
 
 - Creates truly square data structure with all country-week combinations
   from min to max date (missing data = NA).
@@ -77,9 +78,16 @@ Invisibly returns `NULL`. Side effects:
 - Saves the combined weekly data to
   `PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv`.
 
+- Applies the trust-tier gate before downscaling: weeks tagged
+  `disaggregation_method` `fourier_*` (synthetic reconstructions) or
+  `assumed_zero` (surveillance silence) are NA-blanked (cases, deaths,
+  and weight) so they never reach the data-likelihood; `observed`,
+  `documented_zero`, and direct WHO/JHU/SUPP rows are kept.
+
 - Downscales weekly `cases` and `deaths` to daily counts, preserving
-  square structure (keeping days with NA), and carries over the
-  `source`.
+  square structure (keeping days with NA), and carries `source`,
+  `disaggregation_method`, and `confidence_weight` to each daily row
+  (the weight is replicated constant across the week, never divided).
 
 - Saves the combined daily data to
   `PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv`.
