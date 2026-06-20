@@ -15,4 +15,4 @@ Steps the architect should follow:
 3. Bias to subtraction (remove / merge / relocate-to-skill-or-hook); never add a rule to fix an
    ignored rule. Verify any "stale" reference against the repo before flagging.
 4. Return the CONTEXT-AUDIT VERDICT (CLEAN / NITS / NEEDS-PRUNING) with evidence per finding and
-   line/token deltas for any edits. Hand R-code/Lessons issues to `reviewer`.
+   line/token deltas for any edits. Hand R-code-correctness issues to `maintainer`.

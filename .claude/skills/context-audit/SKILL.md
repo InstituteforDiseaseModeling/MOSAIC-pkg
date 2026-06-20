@@ -121,7 +121,7 @@ FINDINGS (each: severity · file[:line/section] · evidence · action)
 
 EDITS MADE          file — what changed — Δ lines/≈tokens — (duplication/contradiction/link resolved)
 RELOCATIONS         content moved CLAUDE.md → skill/hook (with rationale)
-HAND-OFFS           R-code/Lessons → reviewer
+HAND-OFFS           R-code correctness → maintainer
 ```
 
 ## References (curated — cite, do not inline)

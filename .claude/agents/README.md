@@ -31,7 +31,7 @@ Aliases are the spoken short names; the shortcut is a working slash command that
 | 🟢 green | `disease-modeler` | **EPI**, DM | `/dm` | Epidemiologist — priors, `est_*`, ICs, CFR, reporting chain |
 | 🟠 orange | `ml-scientist` | **ML**, DS | `/ml` | ML / data scientist — LSTM/FiLM suitability, ψ rolling-CV, features |
 | 🩷 pink | `data-engineer` | **ETL**, DE | `/etl` | Data ingestion — `process_*`, `download_*`, geospatial, source reconciliation |
-| 🟡 yellow | `reviewer` | **CR**, REV | `/cr` | Code review (adversarial) + housekeeping (docs/NAMESPACE/version/Lessons) |
+| 🟡 yellow | `maintainer` | **MAINT**, REV | `/maint` | R-package maintainer — R CMD check/build hygiene, testthat suite, roxygen/NAMESPACE/pkgdown docs, DESCRIPTION/deps, versioning + independent review |
 | 🩵 cyan | `run-guide` | **RG**, GUIDE | `/guide` | User how-to — install / configure / run / deploy / scenarios |
 | 🔴 red | `calibration-doctor` | **DOC**, DR | `/doctor`, `/diagnose-fit` | Active result diagnosis — bias/convergence/ψ; runs `run_fit_sandbox` |
 | ⚪ white | `ai-architect` | **AA**, ARCH | `/arch`, `/context-audit` | AI-context hygiene — prunes CLAUDE.md/memory/roster/skills/settings for bloat & drift |
@@ -45,7 +45,7 @@ Aliases are the spoken short names; the shortcut is a working slash command that
 | `disease-modeler` | 🟢 green | Epidemiology — priors, `est_*`, ICs, CFR, reporting chain | opus | project | Read/Edit/Write/Bash/Grep/Glob |
 | `ml-scientist` | 🟠 orange | Suitability ML — LSTM/FiLM, ψ rolling-CV, features, calibration | opus | project | Read/Edit/Write/Bash/Grep/Glob |
 | `data-engineer` | 🩷 pink | Data ingestion/ETL — `process_*`, `download_*`, geospatial, ISO/format utils, source-repo refresh | opus | project | Read/Edit/Write/Bash/Grep/Glob |
-| `reviewer` | 🟡 yellow | Independent adversarial review + housekeeping (docs/NAMESPACE/pkgdown/version/README/Lessons) | opus | project | Read/Edit/Write/Bash/Grep/Glob |
+| `maintainer` | 🟡 yellow | R-package maintainer — R CMD check/build hygiene & speed, testthat suite (prune/coverage/upkeep), roxygen/NAMESPACE docs, pkgdown site, DESCRIPTION/dependencies, versioning, README/NEWS, deprecation lifecycle + independent adversarial review | opus | project | Read/Edit/Write/Bash/Grep/Glob |
 | `run-guide` | 🩵 cyan | User how-to — install/configure/run/deploy/scenarios | sonnet | off (no Write/Edit; Bash inspection-only) | Read/Grep/Glob/Bash |
 | `calibration-doctor` | 🔴 red | Active result diagnosis — bias, convergence, ψ attenuation, output interpretation; runs deterministic `run_fit_sandbox` (diagnose-fit skill) | opus | **local** | Read/Grep/Glob/Bash (read-only is prompt-enforced) |
 | `ai-architect` | ⚪ white | AI-context hygiene — prunes the CLAUDE.md pair, memory store, agent roster, skills, commands, settings for bloat/duplication/contradiction/stale refs (context-audit skill) | opus | project | Read/Edit/Write/Bash/Grep/Glob |
@@ -81,7 +81,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 | What a parameter / model term *means* (symbol→definition), or where a model term comes from | `disease-modeler` — cites `MOSAIC-docs/04-model-description.Rmd` |
 | LSTM suitability, FiLM, rolling-origin CV for ψ, feature engineering, ψ calibration, leakage/overfit | `ml-scientist` |
 | Raw data ingestion/ETL — `process_*`, `download_*`, geospatial, ISO/format utils, source-repo refresh, data provenance/semantics | `data-engineer` |
-| "Review this change", pre-commit audit, "is it complete & wired in?", housekeeping (docs/NAMESPACE/version) | `reviewer` |
+| "Review this change", pre-commit audit, "is it complete & wired in?", R-package maintenance (R CMD check/build speed, tests, docs/pkgdown, DESCRIPTION/deps, versioning) | `maintainer` |
 | "How do I install / configure / run / deploy / build a scenario?" | `run-guide` |
 | "My run came out wrong / what does this diagnostic mean / why didn't it converge?" | `calibration-doctor` |
 | CLAUDE.md/memory/agent/skill/command/settings hygiene — bloat, duplication, contradiction, stale refs, roster overlap, "Claude is ignoring a rule" | `ai-architect` |
@@ -93,7 +93,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 | Raw `process_*`/`download_*` pipeline vs. the prior derived from it | pipeline → `data-engineer`; biological value → `disease-modeler` | data-engineer owns provenance/units; disease-modeler owns the parameter meaning |
 | Distribution fitting | machinery → `statistician`; values → `disease-modeler` | `fit_*_from_ci` / `calc_model_posterior_distributions` is math; the biological CI it consumes is epi |
 | Cross-validation | suitability CV → `ml-scientist`; general CV plumbing → `swe` | `rolling_cv_suitability*` vs `run_rolling_cv.R`/cluster setup |
-| Pre-commit verification & housekeeping | `reviewer` | independent audit + docs/NAMESPACE/version upkeep; dev agents still self-check, reviewer is the second pair of eyes |
+| Pre-commit verification & package maintenance | `maintainer` | independent audit + build/test/doc/dep/version upkeep; dev agents still self-check, maintainer is the second pair of eyes |
 | Diagnostic plot won't render / layout broken | `swe` | rendering/layout/file-output mechanics |
 | Diagnostic plot is confusing to read | `calibration-doctor` | user-facing run interpretation |
 | Plot shows a statistically wrong posterior/quantile | `statistician` | math/aggregation/scoring issue, not rendering |
@@ -104,7 +104,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 | `reported_deaths` / `disease_deaths` confusion | `statistician` (scoring), `disease-modeler` (meaning), `data-engineer` (processed-data semantics), `run-guide` (user output) | make the field convention explicit everywhere |
 | Vignettes / user docs | `run-guide` **drafts** usage text; `swe` **edits** the `.Rmd`/build | run-guide proposes the prose; swe commits it |
 | A user-support agent uncovers a real code bug | state it + hand off to the owning dev agent | run-guide/doctor don't edit source |
-| `.claude/` context hygiene vs. code review | meta-layer → `ai-architect`; R-code correctness + the CLAUDE.md **Lessons-Learned** → `reviewer` | architect prunes the *context surface* (CLAUDE.md structure/budget, memory, roster, skills, settings); reviewer owns code correctness and the versioned Lessons record |
+| `.claude/` context hygiene vs. code review | meta-layer **incl. Lessons-Learned placement** → `ai-architect`; R-code correctness → `maintainer` | architect prunes/owns the *context surface* (CLAUDE.md structure/budget incl. where Lessons entries sit, memory, roster, skills, settings); maintainer reviews code correctness and **drafts** the Lessons content |
 
 ## Skills
 
@@ -134,7 +134,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 - **Automatic:** describe the task; the main session delegates based on the descriptions above.
 - **Explicit:** `@statistician why is the WIS term off by a factor of two?`, or
   "use the calibration-doctor agent to diagnose this run".
-- **Shortcuts (slash commands):** `/swe`, `/stat`, `/dm`, `/ml`, `/etl`, `/cr`, `/guide`, `/doctor`,
+- **Shortcuts (slash commands):** `/swe`, `/stat`, `/dm`, `/ml`, `/etl`, `/maint`, `/guide`, `/doctor`,
   `/arch` each route a request to the matching agent; `/diagnose-fit <run-dir>` runs the active
   fit-diagnostic workflow and `/context-audit` runs the AI-context hygiene audit. These live in
   `.claude/commands/`.
@@ -160,7 +160,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 3. **Positive route matrix:** "Why is WIS off by 2×?" → statistician; "Port the FiLM embedding into
    est_suitability" → ml-scientist; "Was mu_j_baseline already rho_deaths-corrected?" →
    disease-modeler; "The WHO weekly counts look wrong after reprocessing" → data-engineer;
-   "Review my diff before commit" → reviewer; "A Dask worker deadlocks" → swe;
+   "Review my diff before commit" → maintainer; "A Dask worker deadlocks" → swe;
    "Set control params for a 500-sim run" → run-guide; "My run over-predicts 3×, diagnose it" →
    calibration-doctor.
 4. **Negative route matrix:** "The WIS diagnostic plot label overlaps" → swe (not statistician);
