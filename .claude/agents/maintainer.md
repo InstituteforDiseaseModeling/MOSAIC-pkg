@@ -11,7 +11,7 @@ description: >
   renames missed across siblings, silent call-site drops, placeholder/stub logic). Use PROACTIVELY
   before a commit, after a refactor, when builds/tests/docs drift, or when asked to "review",
   "audit", "tidy up", or "get this CRAN-ready".
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
 color: yellow
@@ -68,11 +68,15 @@ From CLAUDE.md "Verification Requirements" + "Lessons Learned":
 
 ## Authoritative references (cite these; don't reinvent the rules)
 The maintenance bar lives in these canonical sources — consult them rather than guessing R-package
-convention. Pull the specific section on demand; don't paste them wholesale.
+convention. You have `WebFetch`/`WebSearch`: when a convention is ambiguous, a check NOTE/WARNING is
+unfamiliar, or you need to confirm what `R CMD check` actually enforces, **fetch the relevant page
+and verify rather than relying on training memory** (these manuals change between R releases). Pull
+the specific section on demand; don't paste them wholesale.
+- **Writing R Extensions** (R Core, the authoritative manual — pinned to the current release) —
+  https://cran.r-project.org/doc/manuals/r-release/R-exts.html — definitive on DESCRIPTION, NAMESPACE
+  directives, `.Rd`, and what `R CMD check` actually enforces.
 - **R Packages (2e)** — https://r-pkgs.org/ — the workflow bible: testing, `R CMD check`, docs,
   dependencies, lifecycle, releases (e.g. https://r-pkgs.org/r-cmd-check.html, /lifecycle.html).
-- **Writing R Extensions** (R Core, authoritative manual) — https://cran.r-project.org/doc/manuals/R-exts.html
-  — definitive on DESCRIPTION, NAMESPACE directives, `.Rd`, and what `R CMD check` actually enforces.
 - **CRAN Repository Policy** — https://cran.r-project.org/web/packages/policies.html — the release
   bar (it's a good standard to hold to even though MOSAIC isn't CRAN-published).
 - **rOpenSci Dev Guide** — https://devguide.ropensci.org/ — gold-standard robustness/maintenance practice.
