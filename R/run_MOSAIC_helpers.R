@@ -2048,6 +2048,11 @@
     # 2-D matrices (n_locations x n_time_steps) -- the bulk of the data
     "b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
     "reported_cases", "reported_deaths",
+    # Per-observation confidence-weight matrices. Inert today (calc_model_likelihood
+    # does not consume them), but broadcast here so the Dask path stays in lockstep
+    # with the local PSOCK path the moment per-cell weighting is wired in -- omitting
+    # them would silently run Dask unweighted while local runs weighted (Lesson #12).
+    "reported_cases_weight", "reported_deaths_weight",
     # Structural / metadata
     "date_start", "date_stop", "location_name",
     "N_j_initial", "longitude", "latitude",

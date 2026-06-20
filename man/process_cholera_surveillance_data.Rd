@@ -37,12 +37,19 @@ Invisibly returns \code{NULL}. Side effects:
 \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 \item Cleans rows with missing key grouping fields (iso_code, year, week).
 \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-\item Deduplicates by \code{iso_code}, \code{year}, \code{week} using the fixed priority WHO > JHU > AI > SUPP (completeness tie-break).
+\item Deduplicates by \code{iso_code} and \code{date_start} (the actual ISO-week Monday, robust to year-boundary week-1 collisions) using the fixed priority WHO > JHU > AI > SUPP with a completeness tie-break.
 \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
+\item Applies the trust-tier gate before downscaling: weeks tagged
+\code{disaggregation_method} \code{fourier_*} (synthetic reconstructions) or
+\code{assumed_zero} (surveillance silence) are NA-blanked (cases, deaths, and
+weight) so they never reach the data-likelihood; \code{observed},
+\code{documented_zero}, and direct WHO/JHU/SUPP rows are kept.
 \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
-preserving square structure (keeping days with NA), and carries over the \code{source}.
+preserving square structure (keeping days with NA), and carries \code{source},
+\code{disaggregation_method}, and \code{confidence_weight} to each daily row
+(the weight is replicated constant across the week, never divided).
 \item Saves the combined daily data to
 \code{PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv}.
 }

@@ -27,6 +27,17 @@
 #' @param weight_cases,weight_deaths Scalar weights for case/death blocks. Default 1.
 #' @param weights_location Length-\code{n_locations} non-negative weights.
 #' @param weights_time Length-\code{n_time_steps} non-negative weights.
+#' @param weights_obs_cases,weights_obs_deaths Optional per-observation
+#'   confidence-weight matrices (\code{n_locations x n_time_steps}, values in
+#'   \code{[0,1]}; \code{NA} where the corresponding cell is \code{NA}). When
+#'   supplied, the per-cell weight multiplies \code{weights_time} for the NB
+#'   cases/deaths term respectively, and the resulting per-location weight vector
+#'   is renormalized to preserve the current masked-\code{weights_time} mass so
+#'   only the trust SHAPE matters (cross-location balance stays with
+#'   \code{weights_location}). Default \code{NULL} (no per-cell weighting; the
+#'   exact unweighted code path is used, byte-identical to prior behavior). A row
+#'   that is all-1 on finite-obs cells is also routed through the exact unweighted
+#'   path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).
 #' @param config Optional LASER config list (location_name, date_start, date_stop).
 #' @param nb_k_min_cases Minimum NB dispersion floor for cases. Default \code{3}.
 #' @param nb_k_min_deaths Minimum NB dispersion floor for deaths. Default \code{3}.
@@ -55,6 +66,8 @@ calc_model_likelihood <- function(obs_cases,
                                   weight_deaths    = NULL,
                                   weights_location = NULL,
                                   weights_time     = NULL,
+                                  weights_obs_cases  = NULL,
+                                  weights_obs_deaths = NULL,
                                   config           = NULL,
                                   nb_k_min_cases   = 3,
                                   nb_k_min_deaths  = 3,
@@ -101,6 +114,22 @@ calc_model_likelihood <- function(obs_cases,
      if (length(weights_time)     != n_time_steps) stop("weights_time must match n_time_steps.")
      if (any(weights_location < 0) || any(weights_time < 0)) stop("All weights must be >= 0.")
      if (sum(weights_location) == 0 || sum(weights_time) == 0) stop("weights_location and weights_time must not all be zero.")
+
+     # Per-observation confidence-weight matrices (optional). When supplied they
+     # must be matrices matching the observation grid exactly. Negative entries
+     # are invalid; NA is allowed (treated as a missing cell, masked out below).
+     if (!is.null(weights_obs_cases)) {
+          if (!is.matrix(weights_obs_cases)) stop("weights_obs_cases must be a matrix.")
+          if (any(dim(weights_obs_cases) != c(n_locations, n_time_steps)))
+               stop("weights_obs_cases must have the same dimensions as obs_cases (n_locations x n_time_steps).")
+          if (any(weights_obs_cases < 0, na.rm = TRUE)) stop("weights_obs_cases must be >= 0.")
+     }
+     if (!is.null(weights_obs_deaths)) {
+          if (!is.matrix(weights_obs_deaths)) stop("weights_obs_deaths must be a matrix.")
+          if (any(dim(weights_obs_deaths) != c(n_locations, n_time_steps)))
+               stop("weights_obs_deaths must have the same dimensions as obs_deaths (n_locations x n_time_steps).")
+          if (any(weights_obs_deaths < 0, na.rm = TRUE)) stop("weights_obs_deaths must be >= 0.")
+     }
 
      # --- precompute peak indices per location (once, not per call) ---
      peak_indices_by_loc <- NULL
@@ -164,10 +193,42 @@ calc_model_likelihood <- function(obs_cases,
           obs_c <- obs_cases[j, ]; est_c <- est_cases[j, ]
           obs_d <- obs_deaths[j, ]; est_d <- est_deaths[j, ]
 
-          # Require minimum observations for meaningful likelihood
+          # Per-cell confidence-weight rows for this location (NULL if absent).
+          wobs_c_row <- if (!is.null(weights_obs_cases))  weights_obs_cases[j, ]  else NULL
+          wobs_d_row <- if (!is.null(weights_obs_deaths)) weights_obs_deaths[j, ] else NULL
+
+          # A row is "trivial" (all-1 on finite-obs cells) -> exact unweighted path.
+          triv_c <- .weights_obs_row_trivial(wobs_c_row, obs_c)
+          triv_d <- .weights_obs_row_trivial(wobs_d_row, obs_d)
+
+          # Require minimum observations for meaningful likelihood.
+          # NULL/trivial path: raw finite-count >= 3 (back-compat, preserves the
+          # exact prior gate decision). Weighted path: effective-sample-size gate
+          # sum(weights_obs[finite & weights_time > 0]) >= 3 (red-team M-3).
           min_obs_for_likelihood <- 3
-          have_cases  <- sum(is.finite(obs_c)) >= min_obs_for_likelihood
-          have_deaths <- sum(is.finite(obs_d)) >= min_obs_for_likelihood
+          if (triv_c) {
+               have_cases <- sum(is.finite(obs_c)) >= min_obs_for_likelihood
+          } else {
+               sel_c <- is.finite(obs_c) & is.finite(weights_time) & (weights_time > 0)
+               have_cases <- sum(wobs_c_row[sel_c], na.rm = TRUE) >= min_obs_for_likelihood
+          }
+          if (triv_d) {
+               have_deaths <- sum(is.finite(obs_d)) >= min_obs_for_likelihood
+          } else {
+               sel_d <- is.finite(obs_d) & is.finite(weights_time) & (weights_time > 0)
+               have_deaths <- sum(wobs_d_row[sel_d], na.rm = TRUE) >= min_obs_for_likelihood
+          }
+
+          # Effective scoring weights per channel. Trivial -> exact unweighted
+          # (masked weights_time); weighted -> mass-preserving renorm (B-1).
+          w_eff_c <- if (have_cases) {
+               if (triv_c) .mask_weights(weights_time, obs_c, est_c)
+               else        .weights_obs_effective(weights_time, wobs_c_row, obs_c, est_c)
+          } else NULL
+          w_eff_d <- if (have_deaths) {
+               if (triv_d) .mask_weights(weights_time, obs_d, est_d)
+               else        .weights_obs_effective(weights_time, wobs_d_row, obs_d, est_d)
+          } else NULL
 
           # Weighted NB dispersion (k) estimated from observed data via method-of-moments.
           # Note: k is a property of the observation process, not the model-observation
@@ -175,15 +236,26 @@ calc_model_likelihood <- function(obs_cases,
           # intentional -- it ensures the likelihood reflects data noise characteristics
           # rather than calibration quality. The k_min floor prevents the NB from
           # collapsing to a near-Poisson kernel for low-variance series.
-          k_c <- if (have_cases)  .nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min_cases) else Inf
-          k_d <- if (have_deaths) .nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min_deaths) else Inf
+          #
+          # k-coherence (red-team M-2): on the trivial/unweighted path k uses the
+          # raw weights_time (exact prior behavior). On the weighted path k uses
+          # the SAME masked, mass-preserving w_eff it is scored under, so the
+          # dispersion is anchored to the cells the LL actually weights.
+          k_c <- if (have_cases) {
+               if (triv_c) .nb_size_from_obs_weighted(obs_c, weights_time, k_min = nb_k_min_cases)
+               else        .nb_size_from_obs_weighted(obs_c, w_eff_c,      k_min = nb_k_min_cases)
+          } else Inf
+          k_d <- if (have_deaths) {
+               if (triv_d) .nb_size_from_obs_weighted(obs_d, weights_time, k_min = nb_k_min_deaths)
+               else        .nb_size_from_obs_weighted(obs_d, w_eff_d,      k_min = nb_k_min_deaths)
+          } else Inf
 
           # Core NB time series LL (pass k and k_min explicitly)
           ll_cases  <- if (have_cases) MOSAIC::calc_log_likelihood(
                observed  = obs_c,
                estimated = est_c,
                family    = "negbin",
-               weights   = .mask_weights(weights_time, obs_c, est_c),
+               weights   = w_eff_c,
                k         = k_c,
                k_min     = nb_k_min_cases,
                verbose   = FALSE
@@ -193,7 +265,7 @@ calc_model_likelihood <- function(obs_cases,
                observed  = obs_d,
                estimated = est_d,
                family    = "negbin",
-               weights   = .mask_weights(weights_time, obs_d, est_d),
+               weights   = w_eff_d,
                k         = k_d,
                k_min     = nb_k_min_deaths,
                verbose   = FALSE
@@ -347,6 +419,42 @@ calc_model_likelihood <- function(obs_cases,
      bad <- !is.finite(obs_vec) | (!is.null(est_vec) & !is.finite(est_vec))
      if (any(bad)) w2[bad] <- 0
      w2
+}
+
+# Decide whether a per-cell confidence-weight row is "trivial" -- i.e. equal to
+# 1 on every cell with a finite observation. A trivial row must route through the
+# exact unweighted code path so that an all-ones matrix is byte-identical to NULL
+# (red-team M-1). Non-finite weight cells are ignored here because they only
+# matter where the observation is finite; the .mask_weights() call already zeros
+# non-finite obs. A non-finite weight on a finite-obs cell is NOT trivial.
+.weights_obs_row_trivial <- function(wobs_row, obs_vec) {
+     if (is.null(wobs_row)) return(TRUE)
+     fin <- is.finite(obs_vec)
+     if (!any(fin)) return(TRUE)
+     wf <- wobs_row[fin]
+     all(is.finite(wf) & wf == 1)
+}
+
+# Build the mass-preserving effective weight vector for one location/channel
+# (red-team B-1). Inputs are the (length-T) time weights and the per-cell
+# confidence-weight row; obs/est mask out non-finite cells. The raw effective
+# weight is weights_time * wobs (masked); it is then rescaled so its sum equals
+# the masked-weights_time sum (target_j). This preserves each location's total
+# LL mass exactly as in the unweighted path -- only the SHAPE (which cells are
+# trusted) changes -- so weights_location stays the sole cross-location lever.
+# Returns a length-T vector (zeros on masked cells).
+.weights_obs_effective <- function(weights_time, wobs_row, obs_vec, est_vec) {
+     masked_wt <- .mask_weights(weights_time, obs_vec, est_vec)
+     target_j  <- sum(masked_wt)
+     wobs_use  <- wobs_row
+     wobs_use[!is.finite(wobs_use)] <- 0
+     w_raw <- masked_wt * wobs_use
+     s <- sum(w_raw)
+     if (s <= 0 || !is.finite(target_j) || target_j <= 0) {
+          # Fully-zeroed row (or degenerate target): contribute nothing.
+          return(rep(0, length(weights_time)))
+     }
+     w_raw / s * target_j
 }
 
 

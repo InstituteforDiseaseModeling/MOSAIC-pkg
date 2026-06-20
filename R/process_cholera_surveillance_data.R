@@ -38,12 +38,19 @@
 #'   \item Reads weekly CSVs from all three sources and adds a \code{source} column.
 #'   \item Cleans rows with missing key grouping fields (iso_code, year, week).
 #'   \item Harmonizes columns by taking the union across all sources, NA-filling any column missing from a given source (so source-specific columns are never silently dropped).
-#'   \item Deduplicates by \code{iso_code}, \code{year}, \code{week} using the fixed priority WHO > JHU > AI > SUPP (completeness tie-break).
+#'   \item Deduplicates by \code{iso_code} and \code{date_start} (the actual ISO-week Monday, robust to year-boundary week-1 collisions) using the fixed priority WHO > JHU > AI > SUPP with a completeness tie-break.
 #'   \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 #'   \item Saves the combined weekly data to
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
+#'   \item Applies the trust-tier gate before downscaling: weeks tagged
+#'     \code{disaggregation_method} \code{fourier_*} (synthetic reconstructions) or
+#'     \code{assumed_zero} (surveillance silence) are NA-blanked (cases, deaths, and
+#'     weight) so they never reach the data-likelihood; \code{observed},
+#'     \code{documented_zero}, and direct WHO/JHU/SUPP rows are kept.
 #'   \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
-#'     preserving square structure (keeping days with NA), and carries over the \code{source}.
+#'     preserving square structure (keeping days with NA), and carries \code{source},
+#'     \code{disaggregation_method}, and \code{confidence_weight} to each daily row
+#'     (the weight is replicated constant across the week, never divided).
 #'   \item Saves the combined daily data to
 #'     \code{PATHS$DATA_CHOLERA_DAILY/cholera_surveillance_daily_combined.csv}.
 #' }
@@ -88,17 +95,24 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
                ai_path), immediate. = TRUE)
      }
 
-     # Interlock: AI rows carry confidence_weight, but downstream consumers
-     # (LSTM loss, calibration likelihood) do NOT yet multiply by it. Until that
-     # lands, AI rows -- including synthetic fourier reconstructions -- would train
-     # at parity with direct observations in the suitability/LSTM path. Warn loudly.
+     # Interlock note: AI rows carry confidence_weight + disaggregation_method.
+     # The LSTM suitability path consumes the weight (loss_suitability.R
+     # apply_cw_overlay, use_confidence_weight = TRUE -- production default), so AI /
+     # synthetic-fourier rows are down-weighted there, NOT at parity with direct
+     # observations. As of the multi-source integration, the daily combined file
+     # applies a TRUST-TIER GATE (below) rather than blanket-blanking AI: AI
+     # `observed` and `documented_zero` weeks DO reach the calibration fit target
+     # (reported_cases/reported_deaths), while `fourier_*` (synthetic) and
+     # `assumed_zero` weeks are NA-blanked. The per-week confidence_weight is carried
+     # to the daily file so a per-observation weighting can consume it later; the
+     # current calibration likelihood does not yet multiply by it (tracked in a
+     # separate issue).
      if (isTRUE(include_ai) && !is.null(d_ai)) {
           warning(sprintf(
-               paste0("include_ai=TRUE: %d AI rows merged with confidence_weight metadata. ",
-                      "Downstream LSTM/likelihood do NOT yet consume confidence_weight, so AI rows ",
-                      "(incl. synthetic fourier reconstructions) enter the suitability/LSTM path at ",
-                      "parity with direct observations. Implement confidence_weight consumption before ",
-                      "relying on AI-augmented results."),
+               paste0("include_ai=TRUE: %d AI rows merged. AI `observed`/`documented_zero` weeks ",
+                      "enter the fit target (trust-tier gate); `fourier_*`/`assumed_zero` are ",
+                      "NA-blanked. confidence_weight is carried to the daily file but not yet ",
+                      "consumed by the calibration likelihood (LSTM suitability does consume it)."),
                nrow(d_ai)), immediate. = TRUE)
      }
 
@@ -137,19 +151,32 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      trusted <- all_df$source %in% c("WHO", "JHU", "SUPP")
      all_df$confidence_weight[trusted & is.na(all_df$confidence_weight)] <- 1.0
 
-     all_df$key <- paste(all_df$iso_code, all_df$year, all_df$week, sep = "_")
+     # Deduplicate by (iso_code, date_start) -- the actual ISO-week Monday -- NOT
+     # (iso_code, year, week). The (year, week) key collides at year boundaries:
+     # ISO week 1 can belong to two different calendar Mondays (e.g. 2012-01-02
+     # and 2012-12-31 both carry year=2012, week=1 across sources), which are 51
+     # weeks apart. Keying on (year, week) collapses those two genuine weeks into
+     # one and silently drops a real observation when only one of the pair carries
+     # data. Keying on the Monday (date_start) keeps every distinct week.
+     all_df$date_start <- as.Date(all_df$date_start)
+     # Guard: dedup keys on date_start, so a row with NA date_start would collide on a
+     # shared "iso_NA" key and could drop a real observation. All current sources carry
+     # complete date_start; this protects against a future malformed source.
+     n_bad_ds <- sum(is.na(all_df$date_start))
+     if (n_bad_ds > 0) {
+          warning(sprintf("Dropped %d row(s) with NA date_start before dedup.", n_bad_ds))
+          all_df <- all_df[!is.na(all_df$date_start), ]
+     }
+     all_df$key <- paste(all_df$iso_code, as.character(all_df$date_start), sep = "_")
 
-     # Deduplicate by (iso_code, year, week) via a fixed source priority with a
-     # completeness tie-break. Priority WHO > JHU > AI > SUPP. For each key we
-     # prefer, in order: (1) rows with complete cases AND deaths, then
-     # (2) higher-priority source. This reproduces the previous split()-based
-     # logic for the 3-source case (WHO-complete > any-complete > WHO-any > first)
-     # and extends it to AI as a fourth source. Vectorized: O(n log n).
+     # Within a key (same country + same Monday across sources) prefer, in order:
+     # (1) rows with complete cases AND deaths, then (2) higher-priority source.
+     # Priority WHO > JHU > AI > SUPP. Vectorized: O(n log n).
      PRIORITY <- c(WHO = 1L, JHU = 2L, AI = 3L, SUPP = 4L)
 
      all_df$.priority <- PRIORITY[all_df$source]
      all_df$.complete <- !is.na(all_df$cases) & !is.na(all_df$deaths)
-     all_df <- all_df[order(all_df$iso_code, all_df$year, all_df$week,
+     all_df <- all_df[order(all_df$iso_code, all_df$date_start,
                             -all_df$.complete, all_df$.priority), ]
      dedup <- all_df[!duplicated(all_df$key), ]
      dedup$key <- NULL
@@ -199,18 +226,23 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # Add country names to the grid
      square_grid$country <- MOSAIC::convert_iso_to_country(square_grid$iso_code)
      
-     # Merge with actual data to preserve reported values
-     # Convert date columns to same format for proper merging
+     # Join observations to the square grid on the unambiguous (iso_code,
+     # date_start) Monday key ONLY; take calendar fields (country, year, week,
+     # month, date_stop) from the grid so year-boundary week-1 rows align
+     # correctly (a 7-column join on (year, week, ...) can mismatch when a source
+     # labels a boundary Monday by ISO year while the grid uses calendar year).
+     # Carry the value and provenance/trust columns from the deduplicated data.
      dedup$date_start <- as.Date(dedup$date_start)
-     dedup$date_stop <- as.Date(dedup$date_stop)
-     
+     carry_cols <- intersect(c("cases", "deaths", "source", "note",
+                               "confidence_weight", "disaggregation_method"),
+                             names(dedup))
      wk <- merge(
           square_grid,
-          dedup,
-          by = c("iso_code", "country", "year", "week", "date_start", "date_stop", "month"),
+          dedup[, c("iso_code", "date_start", carry_cols)],
+          by = c("iso_code", "date_start"),
           all.x = TRUE
      )
-     
+
      # For missing combinations, set cases/deaths to NA and source to NA
      wk$cases[is.na(wk$cases)] <- NA
      wk$deaths[is.na(wk$deaths)] <- NA
@@ -239,30 +271,58 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # downscale to daily
      daily_list <- lapply(split(wk, wk$iso_code), function(df_iso) {
           df_iso$date_start <- as.Date(df_iso$date_start)
+          # Trust-tier gate (replaces the previous blanket source=="AI" blank).
           # Calibration consumers read this daily file (est_epidemic_peaks ->
-          # calc_model_likelihood peak terms, est_initial_E_I, plotting). Exclude
-          # AI gap-fill rows so synthetic/reconstructed cases never reach the
-          # transmission-model likelihood; the AI signal lives only in the
-          # weekly -> suitability (LSTM) path. Setting cases/deaths to NA keeps the
-          # square daily structure (these become no-observation days).
-          ai_rows <- !is.na(df_iso$source) & df_iso$source == "AI"
-          df_iso$cases[ai_rows]  <- NA
-          df_iso$deaths[ai_rows] <- NA
+          # calc_model_likelihood peak terms, est_initial_E_I, plotting, and -- once
+          # re-pointed -- the reported_cases/reported_deaths fit matrices). We gate
+          # on disaggregation_method, NOT source: keep `observed` and
+          # `documented_zero` (informative true-absence), plus direct WHO/JHU/SUPP
+          # rows (disaggregation_method = NA), and NA-blank `fourier_*` (synthetic
+          # seasonal reconstructions) and `assumed_zero` (surveillance silence !=
+          # true absence) so neither modeled fill nor assumed zeros reach the
+          # data-likelihood. The weight is NA'd in lockstep so every surviving
+          # cell carries a finite confidence_weight.
+          meth <- df_iso$disaggregation_method
+          # Trust-tier gate: only `fourier_*` (synthetic reconstructions) and
+          # `assumed_zero` (surveillance silence != true absence) are NA-blanked --
+          # they are not data. `observed` and `documented_zero` (confirmed absence)
+          # flow into the daily fit target carrying their per-week confidence_weight,
+          # which calc_model_likelihood() consumes as a per-observation weight so the
+          # lower-trust cells (incl. confirmed-absence zeros) inform without dominating.
+          drop_week <- !is.na(meth) & (grepl("^fourier", meth) | meth == "assumed_zero")
+          df_iso$cases[drop_week]  <- NA
+          df_iso$deaths[drop_week] <- NA
+          if ("confidence_weight" %in% names(df_iso))
+               df_iso$confidence_weight[drop_week] <- NA
+
           dc <- MOSAIC::downscale_weekly_values(df_iso$date_start, df_iso$cases, integer = TRUE)
           names(dc)[2] <- "cases"
           dd <- MOSAIC::downscale_weekly_values(df_iso$date_start, df_iso$deaths, integer = TRUE)
           names(dd)[2] <- "deaths"
           df_day <- merge(dc, dd, by = "date", all = TRUE)
+
+          # Carry per-week provenance/trust to daily resolution: each daily date
+          # inherits the source, disaggregation_method, and confidence_weight of the
+          # ISO week (Monday) it falls in. confidence_weight is replicated constant
+          # across the 7 days -- it is a trust weight, NOT a summable count, so it is
+          # never routed through downscale_weekly_values(). (Fixes the previous
+          # scalar source[1] carry, which mislabeled every day with the first week.)
+          day_monday <- df_day$date - (as.integer(format(df_day$date, "%u")) - 1L)
+          mi <- match(day_monday, df_iso$date_start)
+          cw_col <- if ("confidence_weight" %in% names(df_iso)) df_iso$confidence_weight[mi] else NA_real_
+
           # Keep all days to maintain square structure (do not remove NA days)
           data.frame(
-               country  = MOSAIC::convert_iso_to_country(df_iso$iso_code[1]),
-               iso_code = df_iso$iso_code[1],
-               month    = lubridate::month(df_day$date),
-               week     = lubridate::wday(df_day$date),
-               date     = df_day$date,
-               cases    = as.integer(df_day$cases),
-               deaths   = as.integer(df_day$deaths),
-               source   = df_iso$source[1],
+               country               = MOSAIC::convert_iso_to_country(df_iso$iso_code[1]),
+               iso_code              = df_iso$iso_code[1],
+               month                 = lubridate::month(df_day$date),
+               week                  = lubridate::wday(df_day$date),
+               date                  = df_day$date,
+               cases                 = as.integer(df_day$cases),
+               deaths                = as.integer(df_day$deaths),
+               source                = df_iso$source[mi],
+               disaggregation_method = df_iso$disaggregation_method[mi],
+               confidence_weight     = cw_col,
                stringsAsFactors = FALSE
           )
      })

@@ -35,6 +35,117 @@
   config
 }
 
+# =============================================================================
+# PER-COUNTRY (CROSS-LOCATION) INFLUENCE WEIGHTS
+# =============================================================================
+
+#' Derive data-driven per-location influence weights from observed signal
+#'
+#' Computes a default \code{weights_location} vector that down-weights
+#' low-signal / absence countries so they inform the fit proportionally to
+#' their information content WITHOUT dominating it. This is the cross-location
+#' complement to the per-cell \code{weights_obs_*} confidence weighting (which,
+#' by mass-preserving renormalization, cannot move influence ACROSS locations).
+#'
+#' \strong{Why this is needed.} An all-zero "absence" series yields a
+#' method-of-moments NB dispersion \code{k = Inf} (a Poisson kernel), so any
+#' over-prediction accrues an unbounded \code{~ -lambda} penalty in EVERY cell.
+#' Summed over a multi-year window an absence country can contribute a larger
+#' magnitude log-likelihood than a real outbreak country (empirically BFA scored
+#' more negative than COD under a constant-outbreak prediction), letting the 16
+#' all-zero countries in the default window dominate the importance weights.
+#'
+#' \strong{Proxy for information content.} Each location's positive-signal mass
+#' is \eqn{s_j = \sum_{t: y^{cases}_{jt} > 0} w^{cases}_{jt} +
+#' \sum_{t: y^{deaths}_{jt} > 0} w^{deaths}_{jt}}, i.e. the confidence-weighted
+#' count of positive observations (cases plus deaths). This is purely
+#' data-derived (no \code{est}/LL dependence -> no circularity) and rewards both
+#' the number AND the surveillance trust of positive reports.
+#'
+#' \strong{Weight map.} A diminishing-returns log compression with a strictly
+#' positive floor:
+#' \deqn{w_j = f + (1 - f)\,\min\!\Big(1,\ \frac{\log(1 + s_j)}{\log(1 + s_{ref})}\Big)}
+#' where \eqn{f} is the floor and \eqn{s_{ref}} is the median positive-signal
+#' mass among locations that have any signal. Absence countries (\eqn{s_j = 0})
+#' map to the floor \eqn{f}; a country at the median signal maps to \eqn{w = 1};
+#' high-signal countries saturate at \eqn{w = 1}. The log compression keeps a
+#' country's influence growing with its information but with diminishing returns,
+#' so a single very large outbreak cannot buy unbounded cross-location weight.
+#'
+#' \strong{Floor.} \code{floor = 0.05} keeps every absence country in the fit at
+#' 5 percent influence (requirement: no location is dropped). At this floor the
+#' worst absence weighted contribution falls well below a typical active
+#' country's, while active countries retain their relative influence.
+#'
+#' \strong{Backward compatibility.} The derivation is gated on the per-cell
+#' weight matrices being present (the v4.1+ trust-aware regime). When
+#' \code{reported_cases_weight}/\code{reported_deaths_weight} are absent (older
+#' config), or when no location has any positive signal, or when all signals are
+#' equal (uniform data), the function returns \code{rep(1, n_locations)} -- i.e.
+#' byte-identical to the current uniform behavior. This is a DEFAULT only; a
+#' \code{weights_location} explicitly supplied by the caller is honored upstream
+#' and never overwritten.
+#'
+#' @param config A LASER config list with \code{reported_cases} (and optionally
+#'   \code{reported_deaths}) observation matrices and the v4.1+ per-cell
+#'   \code{reported_cases_weight} / \code{reported_deaths_weight} matrices.
+#' @param floor Strictly-positive minimum weight for absence/low-signal
+#'   locations. Default \code{0.05}.
+#' @return Length-\code{n_locations} numeric vector of weights in \code{(0, 1]},
+#'   or \code{NULL} when the inputs are absent/degenerate (signalling the caller
+#'   to fall back to uniform \code{rep(1, n_locations)}).
+#' @noRd
+.mosaic_derive_weights_location <- function(config, floor = 0.05) {
+  rc  <- config$reported_cases
+  if (is.null(rc)) return(NULL)
+  if (!is.matrix(rc)) rc <- matrix(rc, nrow = 1L)
+  n_loc <- nrow(rc)
+
+  rcw <- config$reported_cases_weight
+  rdw <- config$reported_deaths_weight
+  rd  <- config$reported_deaths
+
+  # Gate on the per-cell weight matrices (v4.1+). Absent -> uniform (back-compat).
+  if (is.null(rcw)) return(NULL)
+  if (!is.matrix(rcw)) rcw <- matrix(rcw, nrow = 1L)
+  if (any(dim(rcw) != dim(rc))) return(NULL)
+
+  # Confidence-weighted count of positive observations per location.
+  pos_mass_row <- function(obs_row, w_row) {
+    sel <- is.finite(obs_row) & (obs_row > 0)
+    if (!any(sel)) return(0)
+    wv <- w_row[sel]
+    wv[!is.finite(wv)] <- 0
+    sum(wv)
+  }
+
+  s <- numeric(n_loc)
+  for (j in seq_len(n_loc)) s[j] <- pos_mass_row(rc[j, ], rcw[j, ])
+
+  # Add deaths-signal mass when the deaths obs + weight matrices are present and
+  # conformable; otherwise cases-only (a deaths matrix without its weight matrix
+  # contributes nothing rather than silently using implicit weight 1).
+  if (!is.null(rd) && !is.null(rdw)) {
+    if (!is.matrix(rd))  rd  <- matrix(rd,  nrow = 1L)
+    if (!is.matrix(rdw)) rdw <- matrix(rdw, nrow = 1L)
+    if (all(dim(rd) == c(n_loc, ncol(rc))) && all(dim(rdw) == dim(rd))) {
+      for (j in seq_len(n_loc)) s[j] <- s[j] + pos_mass_row(rd[j, ], rdw[j, ])
+    }
+  }
+
+  s_pos <- s[is.finite(s) & s > 0]
+  if (length(s_pos) == 0) return(NULL)            # no signal anywhere -> uniform
+  s_ref <- stats::median(s_pos)
+  if (!is.finite(s_ref) || s_ref <= 0) return(NULL)
+
+  # Uniform data (all positive-signal masses equal) -> all weights 1.
+  rel <- log1p(pmax(s, 0)) / log1p(s_ref)
+  w <- floor + (1 - floor) * pmin(1, rel)
+  if (all(abs(w - 1) < .Machine$double.eps^0.5)) return(NULL)
+
+  w
+}
+
 #' Inject likelihood-control settings + epidemic_peaks into config (Dask path)
 #'
 #' Flattens the resolved \code{control$likelihood} settings and the
@@ -77,6 +188,18 @@
   # R-side calc_model_likelihood is unaffected because it handles NA_real_
   # and NA_integer_ identically via is.finite() masking.
   for (fld in c("reported_cases", "reported_deaths")) {
+    if (!is.null(config[[fld]]) && storage.mode(config[[fld]]) == "integer") {
+      storage.mode(config[[fld]]) <- "double"
+    }
+  }
+
+  # Per-observation confidence-weight matrices (config_default v4.1+). These
+  # live in config already and are broadcast via .extract_base_config(); the
+  # Dask/Python scorer reads them by name exactly as the local PSOCK path reads
+  # config$reported_cases_weight. Cast to double for the same NA_integer_ ->
+  # INT_MIN reticulate-serialization reason as the count matrices above. Absent
+  # on older configs (no-op) -> Dask runs unweighted, matching local (Lesson #12).
+  for (fld in c("reported_cases_weight", "reported_deaths_weight")) {
     if (!is.null(config[[fld]]) && storage.mode(config[[fld]]) == "integer") {
       storage.mode(config[[fld]]) <- "double"
     }
@@ -301,6 +424,10 @@
             est_deaths = est_deaths,
             weights_time = likelihood_settings$.weights_time_resolved,
             weights_location = likelihood_settings$weights_location,
+            # Per-observation confidence-weight matrices (config_default v4.1+).
+            # NULL on older configs that lack them -> no behavior change.
+            weights_obs_cases  = config$reported_cases_weight,
+            weights_obs_deaths = config$reported_deaths_weight,
             nb_k_min_cases = likelihood_settings$nb_k_min_cases,
             nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
             weight_cases = likelihood_settings$weight_cases,
@@ -983,6 +1110,28 @@ run_MOSAIC <- function(config,
     control$likelihood$.weights_time_resolved <- wt_raw / sum(wt_raw) * n_t_cfg
   } else {
     control$likelihood$.weights_time_resolved <- NULL
+  }
+
+  # Resolve per-location (cross-location) influence weights. When the caller did
+  # NOT supply weights_location, derive a data-driven default that down-weights
+  # low-signal / absence countries so they cannot dominate the importance weights
+  # (see .mosaic_derive_weights_location). The derivation returns NULL -- leaving
+  # weights_location at NULL (= uniform rep(1, n_loc) in calc_model_likelihood)
+  # -- whenever the per-cell weight matrices are absent or the data are uniform,
+  # preserving byte-identical prior behavior. An explicitly-supplied
+  # weights_location is a deliberate caller override and is left untouched. Both
+  # R and Dask paths read control$likelihood$weights_location downstream, so
+  # resolving it here covers both backends in lockstep.
+  if (is.null(control$likelihood$weights_location)) {
+    derived_wl <- .mosaic_derive_weights_location(config)
+    if (!is.null(derived_wl)) {
+      control$likelihood$weights_location <- derived_wl
+      log_msg(paste0("Derived data-driven weights_location (down-weighting ",
+                     "low-signal/absence countries): %d below 0.5, floor %.3f, ",
+                     "range [%.3f, %.3f]"),
+              sum(derived_wl < 0.5), min(derived_wl),
+              min(derived_wl), max(derived_wl))
+    }
   }
 
   # Initialise Dask-related variables to NULL so the on.exit handler is always safe.

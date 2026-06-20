@@ -10,6 +10,8 @@
   args$metadata          <- NULL
   args$zeta_ratio        <- NULL
   args$decay_days_spread <- NULL
+  args$reported_cases_weight  <- NULL
+  args$reported_deaths_weight <- NULL
   args$output_file_path  <- NULL
   args
 }

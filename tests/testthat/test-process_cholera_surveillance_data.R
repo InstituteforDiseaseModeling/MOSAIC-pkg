@@ -68,10 +68,12 @@ test_that("include_ai = FALSE merges 3 sources; confidence metadata defaults pre
 
 test_that("include_ai = TRUE adds columns, respects priority, fills gaps", {
   fx <- make_fixture(); P <- fx$P
-  # Fix #3 interlock: a loud warning fires because confidence_weight is not yet consumed.
+  # A loud interlock warning fires describing the trust-tier gate: AI
+  # observed/documented_zero enter the fit target, fourier/assumed are NA-blanked,
+  # and confidence_weight is carried but not yet consumed by the calibration LL.
   expect_warning(
     suppressMessages(process_cholera_surveillance_data(P, include_ai = TRUE)),
-    "do NOT yet consume confidence_weight"
+    "enter the fit target"
   )
   out <- read_combined(P)
   obs <- out[!is.na(out$cases), ]
@@ -95,12 +97,13 @@ test_that("include_ai = TRUE adds columns, respects priority, fills gaps", {
   # empty grid cells stay NA = "no observation"
   expect_true(all(is.na(out$confidence_weight[is.na(out$cases)])))
 
-  # Fix #2: AI rows are EXCLUDED from the daily (calibration) file. Trusted weekly
-  # cases sum to 100+200+300 = 600 (wk2 WHO, wk3 JHU); the AI gap-fill wk4 (50) must
-  # not appear in the daily downscale.
+  # Multi-source trust-tier gate: AI `observed`/`documented_zero` weeks DO reach the
+  # daily (calibration) file; only `fourier_*`/`assumed_zero` are NA-blanked. Daily
+  # cases = wk1 WHO 100 + wk2 WHO 200 + wk3 JHU 300 + wk4 AI-`observed` 50 = 650.
+  # (The AI wk3 `fourier_country_k2` row lost priority to JHU and never reaches daily.)
   daily <- utils::read.csv(file.path(P$DATA_CHOLERA_DAILY, "cholera_surveillance_daily_combined.csv"),
                            stringsAsFactors = FALSE)
-  expect_equal(sum(daily$cases, na.rm = TRUE), 600)
+  expect_equal(sum(daily$cases, na.rm = TRUE), 650)
 })
 
 test_that("include_ai = TRUE warns and falls back when AI file is missing", {

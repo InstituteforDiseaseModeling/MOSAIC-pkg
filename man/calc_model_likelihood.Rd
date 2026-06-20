@@ -13,6 +13,8 @@ calc_model_likelihood(
   weight_deaths = NULL,
   weights_location = NULL,
   weights_time = NULL,
+  weights_obs_cases = NULL,
+  weights_obs_deaths = NULL,
   config = NULL,
   nb_k_min_cases = 3,
   nb_k_min_deaths = 3,
@@ -37,6 +39,18 @@ calc_model_likelihood(
 \item{weights_location}{Length-\code{n_locations} non-negative weights.}
 
 \item{weights_time}{Length-\code{n_time_steps} non-negative weights.}
+
+\item{weights_obs_cases, weights_obs_deaths}{Optional per-observation
+confidence-weight matrices (\code{n_locations x n_time_steps}, values in
+\code{[0,1]}; \code{NA} where the corresponding cell is \code{NA}). When
+supplied, the per-cell weight multiplies \code{weights_time} for the NB
+cases/deaths term respectively, and the resulting per-location weight vector
+is renormalized to preserve the current masked-\code{weights_time} mass so
+only the trust SHAPE matters (cross-location balance stays with
+\code{weights_location}). Default \code{NULL} (no per-cell weighting; the
+exact unweighted code path is used, byte-identical to prior behavior). A row
+that is all-1 on finite-obs cells is also routed through the exact unweighted
+path. Only the NB cases/deaths terms are weighted; shape terms are not (v1).}
 
 \item{config}{Optional LASER config list (location_name, date_start, date_stop).}
 

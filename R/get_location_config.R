@@ -128,9 +128,16 @@ get_location_config <- function(iso, config = NULL) {
      # Match only true location x time matrices ending in "_jt" — anchored
      # to exclude e.g. nu_jt_sources, a 1D character vector of compartment
      # names that happens to contain the "_jt" substring.
+     # Row-subset all location x time matrices: the "_jt" matrices plus the
+     # reported fit matrices and their per-observation confidence-weight matrices.
+     # The weight matrices must stay row-aligned with reported_cases/deaths or a
+     # subset/single-location fit would mismatch dimensions. intersect() keeps this
+     # robust to older configs that lack the weight matrices.
      location_params <- c(
           names(out)[grep('_jt$', names(out))],
-          "reported_cases", "reported_deaths"
+          intersect(c("reported_cases", "reported_deaths",
+                      "reported_cases_weight", "reported_deaths_weight"),
+                    names(out))
      )
 
      for (l in location_params) {
