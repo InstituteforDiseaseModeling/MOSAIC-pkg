@@ -48,7 +48,24 @@ surv_weekly <- read.csv(
                 is.finite(surv_weekly$cases) & surv_weekly$cases > 0)
      length(unique(surv_weekly$iso_code[w]))
 }, integer(1))
-ic_t0 <- if (all(.ic_nactive == 0L)) date_start else .ic_cand[which.max(.ic_nactive)]
+if (all(.ic_nactive == 0L)) {
+     ic_t0 <- date_start
+     warning(sprintf(paste0("IC epoch: no active-case countries in [%s, +12mo]; ICs will ",
+             "COLD-START (near-zero E/I, R_eff<1, no ignition). Pick a date_start with ",
+             "surveillance coverage."), format(date_start)), immediate. = TRUE)
+} else {
+     # Ties broken to the EARLIEST month (which()[1] is explicit about this) -- this
+     # preserves the 2023-02-01 anchor for the default 2023 build, where the active-case
+     # counts tie across months 2-4.
+     ic_t0 <- .ic_cand[which(.ic_nactive == max(.ic_nactive))[1]]
+}
+# Guard the shipped-default anchor: if the 2023 build's data-richest epoch ever drifts
+# off 2023-02-01 (e.g. after a surveillance refresh), warn loudly so a change to the
+# shipped 2023 priors is acknowledged on rebuild rather than shipped silently.
+if (date_start == as.Date("2023-01-01") && ic_t0 != as.Date("2023-02-01"))
+     warning(sprintf(paste0("IC epoch for the 2023 default drifted to %s (expected 2023-02-01); ",
+             "the shipped 2023 priors will change on rebuild -- verify before shipping."),
+             format(ic_t0)), immediate. = TRUE)
 message(sprintf("IC seeding epoch ic_t0 = %s  (%d active-case countries; date_start = %s)",
                 format(ic_t0), max(.ic_nactive), format(date_start)))
 

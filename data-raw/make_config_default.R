@@ -5,18 +5,25 @@ library(MOSAIC)
 MOSAIC::set_root_directory("/Users/johngiles/MOSAIC")
 PATHS <- MOSAIC::get_paths()
 
-# date_start: start of the calibration fit window. DEFAULT 2023-01-01 -- one month
-# earlier than the legacy 2023-02-01, at the clean calendar-year boundary, so the
-# shipped config_default stays directly comparable to the legacy 2023-onward setup
-# while drawing on the multi-source (WHO+JHU+AI documented/observed) combined daily
-# file. CONFIGURABLE: set this constant earlier (e.g. 2015-01-01) to build a
-# back-history config -- all covariates (psi from 2010-04-01, demographics/vaccination
-# from 2000, CFR from 1970) cover >=2015, and IC seeding is floored at a data-rich
-# epoch in make_priors_default.R (ic_t0 = max(date_start, 2023-02-01)) so an early
-# start does not cold-start the model. The floor guard below rejects a start before
-# psi coverage. NOT an env var: a top-of-script constant keeps the value reproducible
-# and recorded in config_default$metadata.
-date_start <- as.Date("2023-01-01")
+# date_start: start of the calibration fit window. DEFAULT 2023-01-01, OVERRIDABLE via
+# the MOSAIC_BUILD_DATE_START env var -- the single source of truth that flows the SAME
+# start date into BOTH this script and make_priors_default.R. CONFIGURABLE to an earlier
+# start (e.g. 2015-01-01): all covariates (psi from 2010-04-01, demographics/vaccination
+# from 2000, CFR from 1970) cover >=2015, and IC seeding in make_priors_default.R is
+# data-driven (ic_t0 = the active-case-richest month within [date_start, date_start+12mo])
+# so an early start seeds from that era's data rather than cold-starting. The floor guard
+# below rejects a start before psi coverage (2010-04-01).
+#
+# REBUILD ORDER for a non-default (back-history) start -- the env var is REQUIRED so both
+# builders agree (make_priors' fallback otherwise reads the STALE installed
+# config_default$date_start, silently desyncing the windows):
+#   export MOSAIC_BUILD_DATE_START=2015-01-01
+#   1. Rscript data-raw/make_priors_default.R     # data-driven ic_t0 at the new start
+#   2. Rscript -e 'devtools::install(".")'         # so THIS script sees the new priors_default
+#   3. Rscript data-raw/make_config_default.R      # sources mu_j_baseline/beta/IC means from new priors
+# For the default 2023 build leave the env var unset (both scripts fall back to 2023-01-01).
+.env_ds    <- Sys.getenv("MOSAIC_BUILD_DATE_START", "")
+date_start <- if (nzchar(.env_ds)) as.Date(.env_ds) else as.Date("2023-01-01")
 
 # date_stop: derived from the psi forecast horizon so the simulation window
 # tracks whatever the latest LSTM environmental-suitability forecast extends
