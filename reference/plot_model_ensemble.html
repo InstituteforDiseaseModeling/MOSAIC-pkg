@@ -13,7 +13,7 @@ per-location prediction CSVs for downstream use."><meta property="og:image" cont
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,7 +61,7 @@ per-location prediction CSVs for downstream use.</p>
 <span>  file_prefix <span class="op">=</span> <span class="st">"ensemble"</span>,</span>
 <span>  title_label <span class="op">=</span> <span class="st">"Posterior Ensemble"</span>,</span>
 <span>  save_predictions <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  central_method <span class="op">=</span> <span class="st">"mean"</span>,</span>
+<span>  central_method <span class="op">=</span> <span class="st">"median"</span>,</span>
 <span>  mask_final_deaths_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  n_cases_warmup_mask <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -111,9 +111,9 @@ column so the choice is never ambiguous.</p></dd>
 
 <dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
 <dd><p>Central tendency for the plotted/scored line:
-<code>"mean"</code> (default; unbiased for expected counts, never collapses on
-sparse deaths) or <code>"median"</code> (historical). Scalar or per-channel
-<code>c(cases=, deaths=)</code>.</p></dd>
+<code>"median"</code> (default; lower calibration bias) or <code>"mean"</code>
+(unbiased for expected counts, never collapses on sparse deaths, unmasks
+implied-CFR bias). Scalar or per-channel <code>c(cases=, deaths=)</code>.</p></dd>
 
 
 <dt id="arg-mask-final-deaths-step">mask_final_deaths_step<a class="anchor" aria-label="anchor" href="#arg-mask-final-deaths-step"></a></dt>

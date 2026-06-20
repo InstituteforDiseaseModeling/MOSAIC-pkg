@@ -21,7 +21,7 @@ objective function."><meta property="og:image" content="https://institutefordise
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -129,7 +129,8 @@ for expected counts). Scalar or per-channel <code>c(cases=, deaths=)</code>. The
 setting (its point forecast remains the weighted median). The default
 <code>"median"</code> here is deliberate – it preserves historical direct-call
 selection and the Tier-2 bit-for-bit parity guarantee; <code><a href="run_MOSAIC.html">run_MOSAIC()</a></code>
-passes the package default (<code>"mean"</code>) explicitly.</p></dd>
+passes the resolved <code>control$predictions$central_method</code> (package
+default <code>"median"</code> as of v0.46.1) explicitly.</p></dd>
 
 
 <dt id="arg-stride">stride<a class="anchor" aria-label="anchor" href="#arg-stride"></a></dt>

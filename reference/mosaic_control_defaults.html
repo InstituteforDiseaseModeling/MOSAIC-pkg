@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -177,10 +177,10 @@ the exhaustive search. Note it may select a slightly different
 <code>optimal_n</code> than exhaustive and records only the evaluated N's in the
 diagnostics table. (The <code><a href="optimize_ensemble_subset.html">optimize_ensemble_subset</a></code> function's
 own <code>stride</code> default remains <code>1L</code> to preserve bit-identicality.)</p></li>
-<li><p><code>central_method</code>: Ensemble central tendency, <code>"mean"</code>
-(default; unbiased for expected counts and never collapses on sparse
-deaths) or <code>"median"</code> (reproduces pre-v0.38 runs). Scalar or
-per-channel <code>c(cases=, deaths=)</code>. Governs the prediction
+<li><p><code>central_method</code>: Ensemble central tendency, <code>"median"</code>
+(default; lower calibration bias) or <code>"mean"</code> (unbiased for
+expected counts, never collapses on sparse deaths, unmasks implied-CFR
+bias). Scalar or per-channel <code>c(cases=, deaths=)</code>. Governs the prediction
 trajectory + plots, the canonical <code>*_ensemble</code> R^2/bias metrics,
 the medoid target, and the subset-selection objective consistently.</p></li>
 </ul><p>The number of parameter sets in the ensemble is determined by the best subset

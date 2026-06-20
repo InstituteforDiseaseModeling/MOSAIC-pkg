@@ -76,7 +76,8 @@ optimize_ensemble_subset(
   deliberate – it preserves historical direct-call selection and the
   Tier-2 bit-for-bit parity guarantee;
   [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
-  passes the package default (`"mean"`) explicitly.
+  passes the resolved `control$predictions$central_method` (package
+  default `"median"` as of v0.46.1) explicitly.
 
 - stride:
 

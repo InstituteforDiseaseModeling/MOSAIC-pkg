@@ -177,12 +177,12 @@ mosaic_control_defaults(
     function's own `stride` default remains `1L` to preserve
     bit-identicality.)
 
-  - `central_method`: Ensemble central tendency, `"mean"` (default;
-    unbiased for expected counts and never collapses on sparse deaths)
-    or `"median"` (reproduces pre-v0.38 runs). Scalar or per-channel
-    `c(cases=, deaths=)`. Governs the prediction trajectory + plots, the
-    canonical `*_ensemble` R^2/bias metrics, the medoid target, and the
-    subset-selection objective consistently.
+  - `central_method`: Ensemble central tendency, `"median"` (default;
+    lower calibration bias) or `"mean"` (unbiased for expected counts,
+    never collapses on sparse deaths, unmasks implied-CFR bias). Scalar
+    or per-channel `c(cases=, deaths=)`. Governs the prediction
+    trajectory + plots, the canonical `*_ensemble` R^2/bias metrics, the
+    medoid target, and the subset-selection objective consistently.
 
   The number of parameter sets in the ensemble is determined by the best
   subset (all sims with non-zero importance weights).

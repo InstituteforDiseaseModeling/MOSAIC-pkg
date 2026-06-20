@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,34 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.46.4" id="mosaic-0464">MOSAIC 0.46.4<a class="anchor" aria-label="anchor" href="#mosaic-0464"></a></h2>
+<ul><li>
+<strong>Hardening from the adversarial red-team of the 0.46.1–0.46.3 changes.</strong>
+<ul><li>
+<code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> gains a <strong>RAM-projection guard</strong>: before allocating the dense <code>[loc×time×param×stoch]</code> ensemble arrays it projects the concurrent peak and emits a loud warning (naming <code>max_best_subset</code>/<code>n_iter_ensemble</code> to dial down) when it would exceed ~80% of system RAM — so a long-window run (e.g. a 2015, ~4320-column config → ~51 GB at production defaults) fails loud with guidance instead of OOMing the orchestrator. Warn-only; a no-op at normal (2023, ~1400-col) widths.</li>
+<li>
+<code>make_config_default.R</code> now <strong>asserts its resolved <code>date_start</code> matches the installed <code>priors_default$metadata$build_date_start</code></strong> (newly recorded by <code>make_priors_default.R</code>) and <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>s on mismatch — closing the silent config/priors window-desync reachable if the documented rebuild order was skipped (back-compat warning for older priors lacking the field).</li>
+<li>
+<code>ic_t0</code> selection <strong>relabeled to its actual criterion — broadest-data-coverage</strong> month (maximizes how many countries are seeded from real surveillance rather than Beta defaults), with an explicit note that case-volume weighting was considered and rejected (it biases the epoch toward an outbreak peak and over-seeds E/I). Factored into a pure, unit-tested <code>.ic_select_epoch()</code> helper (previously untested).</li>
+<li>Doc/cosmetic nits: <code><a href="../reference/optimize_ensemble_subset.html">optimize_ensemble_subset()</a></code> <code>@param</code> no longer claims the package default is <code>"mean"</code>; <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> uses an adaptive date-break ladder (~10–15 ticks) instead of a fixed 3-month interval (~44 ticks over an 11-yr window).</li>
+</ul></li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.46.3" id="mosaic-0463">MOSAIC 0.46.3<a class="anchor" aria-label="anchor" href="#mosaic-0463"></a></h2>
+<ul><li>
+<strong>Build start date (<code>date_start</code>) generalized across the config + priors builders.</strong> <code>make_config_default.R</code> and <code>make_priors_default.R</code> both honor a <code>MOSAIC_BUILD_DATE_START</code> env override (single source of truth; fallback 2023-01-01) so the same start date flows into both, enabling back-history rebuilds (e.g. a 2015-01-01 start — all covariates cover ≥2015). The required rebuild order is documented in <code>make_config_default.R</code>. The <code>ic_t0</code> tie-break is now explicit (earliest month), with a loud guard if the 2023 anchor ever drifts off 2023-02-01 and a cold-start warning for far-future starts.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.46.2" id="mosaic-0462">MOSAIC 0.46.2<a class="anchor" aria-label="anchor" href="#mosaic-0462"></a></h2>
+<ul><li>
+<strong>Data-driven initial-condition seeding epoch (<code>ic_t0</code>) that tracks <code>date_start</code>.</strong> Replaced the hard <code>max(date_start, 2023-02-01)</code> floor — whose “2015 has no active-case countries” premise predated the multi-source JHU/AI back-history — with a data-driven epoch (broadest-data-coverage month) within <code>[date_start, date_start + 12mo]</code>. Inert for the 2023 default (resolves to 2023-02-01; shipped priors numerically unchanged), and for a back-history build it seeds ICs from that era’s data instead of an 8-year-mismatched 2023 state.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.46.1" id="mosaic-0461">MOSAIC 0.46.1<a class="anchor" aria-label="anchor" href="#mosaic-0461"></a></h2>
+<ul><li>
+<strong>Default ensemble <code>central_method</code> changed from <code>"mean"</code> to <code>"median"</code>.</strong> The posterior-weighted ensemble now summarizes each per-cell predictive with the <strong>median</strong> by default — the conventional epidemiological-forecast point estimate, robust to stochastic right-tail outliers (this is the rationale; note that on a right-skewed predictive a lower bias-to-1.0 ratio mostly reflects the skew, so “lower bias” alone is <em>not</em> the justification). <strong>Behavior change, not reporting-only:</strong> <code>central_method</code> feeds the best-subset optimizer (<code>optimize_objective = "mae"</code>), so this changes the selected subset, the medoid, and <code>config_best.json</code> — runs are <strong>not directly comparable across this boundary</strong>. Both <code>*_ensemble_mean</code> and <code>*_ensemble_median</code> R²/bias remain in <code>summary.json</code>, so the mean-based implied-CFR/skew diagnostic is preserved as a cross-walk field. All default sites updated in lockstep (resolver, <code>mosaic_control_defaults</code>, <code>plot_model_ensemble</code>, <code>run_rolling_cv</code>).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.46.0" id="mosaic-0460">MOSAIC 0.46.0<a class="anchor" aria-label="anchor" href="#mosaic-0460"></a></h2>
 <ul><li>

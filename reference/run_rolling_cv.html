@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -71,7 +71,7 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  optimize_subset <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  models <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ensemble"</span>, <span class="st">"ensemble_opt"</span>, <span class="st">"medoid"</span><span class="op">)</span>,</span>
 <span>  n_reps_best_medoid <span class="op">=</span> <span class="fl">50L</span>,</span>
-<span>  central_method <span class="op">=</span> <span class="st">"mean"</span>,</span>
+<span>  central_method <span class="op">=</span> <span class="st">"median"</span>,</span>
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
@@ -163,9 +163,10 @@ cutoffs and locations.</p></dd>
 
 <dt id="arg-central-method">central_method<a class="anchor" aria-label="anchor" href="#arg-central-method"></a></dt>
 <dd><p>Ensemble central tendency used for the compiled
-predictions and the in-sample calibration metrics/medoid: <code>"mean"</code>
-(default; unbiased for expected counts, never collapses on sparse deaths)
-or <code>"median"</code>. Scalar or per-channel <code>c(cases=, deaths=)</code>. The
+predictions and the in-sample calibration metrics/medoid: <code>"median"</code>
+(default; lower calibration bias) or <code>"mean"</code> (unbiased for expected
+counts, never collapses on sparse deaths). Scalar or per-channel
+<code>c(cases=, deaths=)</code>. The
 predictions table carries <code>pred_central</code> (this choice) plus
 <code>pred_mean</code>/<code>pred_median</code> for cross-walk; WIS/coverage remain
 quantile-based and are unaffected.</p></dd>

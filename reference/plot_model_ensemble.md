@@ -16,7 +16,7 @@ plot_model_ensemble(
   file_prefix = "ensemble",
   title_label = "Posterior Ensemble",
   save_predictions = FALSE,
-  central_method = "mean",
+  central_method = "median",
   mask_final_deaths_step = TRUE,
   n_cases_warmup_mask = 2L,
   verbose = TRUE
@@ -63,9 +63,10 @@ plot_model_ensemble(
 
 - central_method:
 
-  Central tendency for the plotted/scored line: `"mean"` (default;
-  unbiased for expected counts, never collapses on sparse deaths) or
-  `"median"` (historical). Scalar or per-channel `c(cases=, deaths=)`.
+  Central tendency for the plotted/scored line: `"median"` (default;
+  lower calibration bias) or `"mean"` (unbiased for expected counts,
+  never collapses on sparse deaths, unmasks implied-CFR bias). Scalar or
+  per-channel `c(cases=, deaths=)`.
 
 - mask_final_deaths_step:
 
