@@ -65,6 +65,37 @@ test_that("calc_model_ensemble validates parameter_weights", {
   )
 })
 
+test_that("calc_model_ensemble validates artifact-mask params", {
+  mock_config <- list(
+    reported_cases = 1:10,
+    reported_deaths = 1:10,
+    location_name = "A",
+    date_start = "2023-01-01",
+    date_stop = "2023-01-10"
+  )
+
+  expect_error(
+    calc_model_ensemble(config = mock_config, configs = list(mock_config),
+                        n_cases_warmup_mask = -1L),
+    "non-negative integer"
+  )
+  expect_error(
+    calc_model_ensemble(config = mock_config, configs = list(mock_config),
+                        n_cases_warmup_mask = c(1L, 2L)),
+    "non-negative integer"
+  )
+  expect_error(
+    calc_model_ensemble(config = mock_config, configs = list(mock_config),
+                        mask_final_deaths_step = "yes"),
+    "single logical"
+  )
+  expect_error(
+    calc_model_ensemble(config = mock_config, configs = list(mock_config),
+                        mask_final_deaths_step = c(TRUE, FALSE)),
+    "single logical"
+  )
+})
+
 test_that("mosaic_ensemble object has expected structure", {
   # Create a minimal precomputed results scenario
   n_locs <- 2
@@ -134,6 +165,51 @@ test_that("mosaic_ensemble object has expected structure", {
 
   # Weights should be normalized
   expect_equal(sum(ens$parameter_weights), 1.0)
+
+  # artifact_mask carries the default resolved spec (defaults match plot_model_ensemble)
+  expect_equal(ens$artifact_mask, list(cases_warmup = 2L, deaths_final = TRUE))
+})
+
+test_that("calc_model_ensemble records non-default artifact_mask without mutating raw series", {
+  n_locs <- 2; n_times <- 5; n_params <- 2; n_stoch <- 1
+
+  mock_config <- list(
+    reported_cases = matrix(rpois(n_locs * n_times, 10), nrow = n_locs),
+    reported_deaths = matrix(rpois(n_locs * n_times, 1), nrow = n_locs),
+    location_name = c("LOC_A", "LOC_B"),
+    date_start = "2023-01-01",
+    date_stop = "2023-01-05"
+  )
+  configs <- lapply(1:n_params, function(i) mock_config)
+
+  precomputed <- list()
+  idx <- 0
+  for (p in 1:n_params) for (s in 1:n_stoch) {
+    idx <- idx + 1
+    precomputed[[idx]] <- list(
+      param_idx = p, stoch_idx = s,
+      reported_cases = matrix(rpois(n_locs * n_times, 10), nrow = n_locs),
+      reported_deaths = matrix(rpois(n_locs * n_times, 1), nrow = n_locs),
+      success = TRUE
+    )
+  }
+
+  ens <- calc_model_ensemble(
+    config = mock_config, configs = configs,
+    n_simulations_per_config = n_stoch,
+    envelope_quantiles = c(0.025, 0.975),
+    precomputed_results = precomputed,
+    n_cases_warmup_mask = 3L, mask_final_deaths_step = FALSE,
+    verbose = FALSE
+  )
+
+  expect_equal(ens$artifact_mask, list(cases_warmup = 3L, deaths_final = FALSE))
+
+  # Raw central series must NOT contain mask-induced NAs (spec is carried, not applied)
+  expect_false(any(is.na(ens$cases_mean)))
+  expect_false(any(is.na(ens$deaths_mean)))
+  expect_false(any(is.na(ens$cases_median)))
+  expect_false(any(is.na(ens$deaths_median)))
 })
 
 test_that("uniform weights produce same result as unweighted mean", {

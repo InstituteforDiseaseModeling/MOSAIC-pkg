@@ -14,6 +14,8 @@ calc_model_ensemble(
   PATHS = NULL,
   priors = NULL,
   sampling_args = list(),
+  n_cases_warmup_mask = 2L,
+  mask_final_deaths_step = TRUE,
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
@@ -47,6 +49,22 @@ Must be even length to form lower/upper pairs. Default
 
 \item{sampling_args}{Named list of additional arguments for
 \code{\link{sample_parameters}}.}
+
+\item{n_cases_warmup_mask}{Integer. Number of LEADING cases timesteps that are
+an initial-condition warm-up transient (seeded E flushing into
+new_symptomatic before the SEIR dynamics settle). Default \code{2L}, matching
+\code{\link{plot_model_ensemble}}. This value is NOT applied to any of the
+returned series here; it is recorded in the returned \code{artifact_mask}
+element so downstream scoring (R2/bias) can exclude these positions. Set to
+\code{0L} to record "no cases warm-up mask".}
+
+\item{mask_final_deaths_step}{Logical. If \code{TRUE} (default, matching
+\code{\link{plot_model_ensemble}}), record that the FINAL deaths timestep is
+a laser-cholera structural zero (\code{reported_deaths} written at tick
+then leading-trimmed, so the last slot is never written; laser issue #82).
+This value is NOT applied to any returned series here; it
+is recorded in the returned \code{artifact_mask} element for downstream
+scoring.}
 
 \item{parallel}{Logical. Use parallel cluster for simulations. Default \code{FALSE}.}
 
@@ -84,6 +102,11 @@ selection) need not rely on positional alignment with an external vector.}
 \item{date_start}{Simulation start date.}
 \item{date_stop}{Simulation end date.}
 \item{envelope_quantiles}{Quantiles used for CI envelopes.}
+\item{artifact_mask}{List recording the engine-artifact masking spec for
+downstream scoring: \code{$cases_warmup} (integer, leading cases timesteps
+to exclude) and \code{$deaths_final} (logical, exclude the final deaths
+timestep). The central/quantile/array fields above are RAW (unmasked); this
+spec is the contract scoring sites use to drop artifact positions.}
 }
 }
 \description{

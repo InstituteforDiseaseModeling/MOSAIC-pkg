@@ -120,6 +120,49 @@
   out
 }
 
+#' Mask engine-artifact time positions in a central series for scoring
+#'
+#' Sets the laser-cholera artifact time-positions to \code{NA} in a central-series
+#' matrix so they are dropped pairwise by \code{calc_model_R2()}/
+#' \code{calc_bias_ratio()} (both \code{na_rm = TRUE} by default). This is applied
+#' to the EST series only; the observed series stays unmasked, and the ensemble's
+#' raw central/array fields are never mutated -- only the matrix passed here is
+#' transformed. Artifacts: (1) the first \code{cases_warmup} cases timesteps are an
+#' initial-condition warm-up transient; (2) the final deaths timestep is a
+#' structural zero (laser issue #82).
+#'
+#' Masks by COLUMN (= time), so it is correct for any number of locations (rows);
+#' scoring sites flatten column-major via \code{as.numeric()}.
+#'
+#' @param mat Numeric matrix \code{[n_loc x n_time]} (a vector is coerced to a
+#'   single-row matrix). The central series to mask.
+#' @param chan \code{"cases"} or \code{"deaths"}.
+#' @param spec Artifact-mask list (\code{ens$artifact_mask}). If \code{NULL},
+#'   falls back to \code{list(cases_warmup = 2L, deaths_final = TRUE)} so older
+#'   ensembles or sub-ensembles lacking the field still mask correctly.
+#' @return The matrix with artifact columns set to \code{NA}.
+#' @noRd
+.mosaic_mask_central_for_scoring <- function(mat, chan, spec) {
+  if (is.null(spec)) spec <- list(cases_warmup = 2L, deaths_final = TRUE)
+  if (is.null(mat)) return(mat)
+  if (is.null(dim(mat))) mat <- matrix(mat, nrow = 1L)
+  nc <- ncol(mat)
+  if (is.null(nc) || nc < 1L) return(mat)
+
+  if (identical(chan, "cases")) {
+    k <- as.integer(spec$cases_warmup)
+    if (length(k) == 1L && !is.na(k) && k > 0L) {
+      k <- min(k, nc)
+      mat[, seq_len(k)] <- NA_real_
+    }
+  } else if (identical(chan, "deaths")) {
+    if (isTRUE(spec$deaths_final)) {
+      mat[, nc] <- NA_real_
+    }
+  }
+  mat
+}
+
 # =============================================================================
 # Dask worker count
 # =============================================================================

@@ -2448,8 +2448,10 @@ run_MOSAIC <- function(config,
       # (now optimized) `ensemble`; these *_tier fields hold the pre-opt metrics.
       # Tier metrics use the same central_method as the canonical ensemble so
       # the pre-/post-optimization comparison is on the same central tendency.
-      cen_c_tier_flat <- as.numeric(.central(ensemble, "cases"))
-      cen_d_tier_flat <- as.numeric(.central(ensemble, "deaths"))
+      cen_c_tier_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+        .central(ensemble, "cases"), "cases", ensemble$artifact_mask))
+      cen_d_tier_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+        .central(ensemble, "deaths"), "deaths", ensemble$artifact_mask))
       obs_c_flat_tier <- as.numeric(ensemble$obs_cases)
       obs_d_flat_tier <- as.numeric(ensemble$obs_deaths)
 
@@ -2809,8 +2811,10 @@ run_MOSAIC <- function(config,
       )
 
       if (!is.null(medoid_ensemble)) {
-        med_c_flat <- as.numeric(.central(medoid_ensemble, "cases"))
-        med_d_flat <- as.numeric(.central(medoid_ensemble, "deaths"))
+        med_c_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+          .central(medoid_ensemble, "cases"), "cases", medoid_ensemble$artifact_mask))
+        med_d_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+          .central(medoid_ensemble, "deaths"), "deaths", medoid_ensemble$artifact_mask))
         obs_c_flat <- as.numeric(medoid_ensemble$obs_cases)
         obs_d_flat <- as.numeric(medoid_ensemble$obs_deaths)
 
@@ -2860,8 +2864,10 @@ run_MOSAIC <- function(config,
     obs_d_flat    <- as.numeric(ensemble$obs_deaths)
 
     # Canonical ensemble metrics follow central_method (per channel).
-    cen_c_flat <- as.numeric(.central(ensemble, "cases"))
-    cen_d_flat <- as.numeric(.central(ensemble, "deaths"))
+    cen_c_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+      .central(ensemble, "cases"), "cases", ensemble$artifact_mask))
+    cen_d_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+      .central(ensemble, "deaths"), "deaths", ensemble$artifact_mask))
     r2_cases_ensemble  <- calc_model_R2(obs_c_flat, cen_c_flat)
     r2_deaths_ensemble <- calc_model_R2(obs_d_flat, cen_d_flat)
     bias_ratio_cases_ensemble  <- tryCatch(
@@ -2871,10 +2877,14 @@ run_MOSAIC <- function(config,
 
     # Dual metrics (both central tendencies) for summary.json cross-walk. These
     # are independent of central_method so median runs stay comparable.
-    mean_c_flat   <- as.numeric(ensemble$cases_mean)
-    mean_d_flat   <- as.numeric(ensemble$deaths_mean)
-    median_c_flat <- as.numeric(ensemble$cases_median)
-    median_d_flat <- as.numeric(ensemble$deaths_median)
+    mean_c_flat   <- as.numeric(.mosaic_mask_central_for_scoring(
+      ensemble$cases_mean,    "cases",  ensemble$artifact_mask))
+    mean_d_flat   <- as.numeric(.mosaic_mask_central_for_scoring(
+      ensemble$deaths_mean,   "deaths", ensemble$artifact_mask))
+    median_c_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+      ensemble$cases_median,  "cases",  ensemble$artifact_mask))
+    median_d_flat <- as.numeric(.mosaic_mask_central_for_scoring(
+      ensemble$deaths_median, "deaths", ensemble$artifact_mask))
     r2_cases_ensemble_mean    <- tryCatch(calc_model_R2(obs_c_flat, mean_c_flat),   error = function(e) NA_real_)
     r2_deaths_ensemble_mean   <- tryCatch(calc_model_R2(obs_d_flat, mean_d_flat),   error = function(e) NA_real_)
     r2_cases_ensemble_median  <- tryCatch(calc_model_R2(obs_c_flat, median_c_flat), error = function(e) NA_real_)
