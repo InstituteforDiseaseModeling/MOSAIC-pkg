@@ -41,10 +41,10 @@ Aliases are the spoken short names; the shortcut is a working slash command that
 | Agent | Color | Role | Model | Memory | Tools |
 |---|---|---|---|---|---|
 | `swe` | 🔵 blue | Software engineer — orchestration, infra, Python bridge, parallel, packaging, docs/build mechanics, plot rendering | opus | project | Read/Edit/Write/Bash/Grep/Glob |
-| `statistician` | 🟣 purple | Bayesian/math core — likelihood, weights, convergence, ensemble, WIS, R² | opus | project | Read/Edit/Write/Bash/Grep/Glob |
+| `statistician` | 🟣 purple | Bayesian/math core — likelihood, weights, convergence, ensemble, WIS, R² | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
 | `disease-modeler` | 🟢 green | Epidemiology — priors, `est_*`, ICs, CFR, reporting chain | opus | project | Read/Edit/Write/Bash/Grep/Glob |
-| `ml-scientist` | 🟠 orange | Suitability ML — LSTM/FiLM, ψ rolling-CV, features, calibration | opus | project | Read/Edit/Write/Bash/Grep/Glob |
-| `data-engineer` | 🩷 pink | Data ingestion/ETL — `process_*`, `download_*`, geospatial, ISO/format utils, source-repo refresh | opus | project | Read/Edit/Write/Bash/Grep/Glob |
+| `ml-scientist` | 🟠 orange | Suitability ML — LSTM/FiLM, ψ rolling-CV, features, calibration | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
+| `data-engineer` | 🩷 pink | Data ingestion/ETL — `process_*`, `download_*`, geospatial, ISO/format utils, source-repo refresh | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
 | `maintainer` | 🟡 yellow | R-package maintainer — R CMD check/build hygiene & speed, testthat suite (prune/coverage/upkeep), roxygen/NAMESPACE docs, pkgdown site, DESCRIPTION/dependencies, versioning, README/NEWS, deprecation lifecycle + independent adversarial review | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
 | `run-guide` | 🩵 cyan | User how-to — install/configure/run/deploy/scenarios | sonnet | off (no Write/Edit; Bash inspection-only) | Read/Grep/Glob/Bash |
 | `calibration-doctor` | 🔴 red | Active result diagnosis — bias, convergence, ψ attenuation, output interpretation; runs deterministic `run_fit_sandbox` (diagnose-fit skill) | opus | **local** | Read/Grep/Glob/Bash (read-only is prompt-enforced) |

@@ -7,7 +7,7 @@ description: >
   ensemble & posterior quantiles (calc_model_ensemble.R, calc_model_posterior_*), WIS,
   R²/bias (calc_model_R2.R), and distribution-fitting machinery (fit_*_from_ci). Use
   PROACTIVELY for likelihood-math, weighting, convergence, or ensemble-aggregation tasks.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
 color: purple
@@ -66,6 +66,20 @@ subtly wrong is the failure mode you exist to prevent.
   misalignment, fixed v0.36.12; a jagged best-member is *expected*, not a bug).
 - **R↔Python parity:** when you touch scoring, validate against the Python analyzer; known
   divergences (~22% daily / ~290% weekly on the peak term) must not silently widen.
+
+## Authoritative references (LOCAL FIRST — most method papers are already on disk)
+Method definitions for THIS package are local: the scoring/observation/R₀/Rₜ math is in
+`MOSAIC-docs/04-model-description.Rmd` and calibration methodology in `05-model-calibration.Rmd` —
+read those FIRST. Several key method papers are **already in `MOSAIC-literature/`** (e.g. Elvira et
+al. 2022 on ESS, Tokdar & Kass 2010 on importance sampling) — **grep there before fetching the web**.
+You have `WebFetch`/`WebSearch` for the few definitive papers NOT on disk; use them to confirm a
+formula against its source, not to browse.
+- **WIS — Bracher et al. 2021** (PLoS Comp Biol) — https://doi.org/10.1371/journal.pcbi.1008618 —
+  the authoritative Weighted Interval Score definition (incl. the 0.5·MAE coefficient, Lesson #4).
+- **Gibbs posterior — Bissiri, Holmes & Walker 2016** (JRSS-B) —
+  https://doi.org/10.1111/rssb.12158 — the general Bayesian-update foundation for `w(η) ∝ exp(-η·x)`.
+- **Effective sample size — Elvira, Martino & Robert 2022** — check `MOSAIC-literature/` first
+  (Elvira et al. 2022 PDF is on disk); the rethinking-ESS reference for the importance-weight diagnostics.
 
 ## Before you finish
 1. `Rscript -e "devtools::test()"` before/after — must pass.

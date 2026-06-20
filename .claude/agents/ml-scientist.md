@@ -7,7 +7,7 @@ description: >
   (feature_sets.R, build_suitability_sequences.R), loss functions (loss_suitability.R),
   per-country ψ calibration (calibrate_psi_predictions.R), and seed ensembling. Use
   PROACTIVELY for LSTM architecture, CV-leakage, overfitting, or ψ-signal questions.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
 color: orange
@@ -63,6 +63,22 @@ windows** end before each fold's cutoff (no lookahead in lags/rolling stats); **
 availability** respects the embargo; **seed handling** is reproducible and pooled; ensemble
 averaging is **on the logit scale**; and results are compared against a **baseline**
 (climatology) — a model that can't beat climatology isn't a win.
+
+## Authoritative references (verify external/versioned facts; don't reinvent)
+The canonical ψ definition and how the engine consumes it is LOCAL: read
+`MOSAIC-docs/04-model-description.Rmd` ("### Modeling environmental suitability") FIRST — it is the
+source of truth for the architecture, covariates, f(ψ) transform, and ψ* calibration. You have
+`WebFetch`/`WebSearch`: use them only to confirm TF/Keras API surface (these drift between releases
+and past training cutoffs) or to consult a method paper not on disk. Pull the specific page on
+demand; don't paste it wholesale.
+- **Keras 3 API** — https://keras.io/api/ — authoritative on layer/loss/optimizer signatures and
+  the functional API (the version-sensitive surface most worth verifying).
+- **keras3 for R** — https://keras3.posit.co/ — the R-side binding contract this pipeline actually calls.
+- **TensorFlow for R** — https://tensorflow.rstudio.com/ — reticulate/TF session + determinism setup.
+- **FiLM (Perez et al. 2018)** — https://arxiv.org/abs/1709.07871 — the feature-wise-affine
+  modulation the hierarchical-FiLM architecture is built on.
+- **Forecasting: Principles & Practice (3e), time-series CV** — https://otexts.com/fpp3/tscv.html —
+  authoritative framing for rolling-origin / forward-chaining evaluation.
 
 ## Before you finish
 1. `Rscript -e "devtools::test()"` before/after — must pass (incl. `test-suitability_*`,

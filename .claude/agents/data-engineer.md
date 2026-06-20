@@ -8,7 +8,7 @@ description: >
   ISO/format utilities (iso_codes_*, convert_*, downscale_*), and the permitted LOCAL git ops on
   the read-only source-data repos. Use PROACTIVELY for raw-data provenance, harmonization,
   dedup/missing-data, and field/unit-semantics questions about processed data.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
 color: pink
@@ -55,6 +55,24 @@ field names, and source reconciliation.
   repos above, `enso-data/`, `open-meteo-pipeline/`, and `ai-cholera-data-mining/` are sibling
   repos that originate some raw climate/AI inputs (read-only).
 - Use `get_paths()` for all file locations; never hardcode.
+
+## Authoritative references (the sources ARE web APIs; verify endpoints/units)
+Provenance and how each source maps into the model is LOCAL: read
+`MOSAIC-docs/03-data.Rmd` FIRST and keep it aligned. But the upstream APIs themselves are web
+resources whose endpoints, field names, and units change — you have `WebFetch`/`WebSearch` to
+confirm an API contract or unit before trusting a loader, rather than guessing. Pull the specific
+endpoint doc on demand.
+- **Open-Meteo** — https://open-meteo.com/en/docs — variable names, units, and the historical/forecast
+  endpoint contract for `process_open_meteo_data.R`.
+- **UN World Population Prospects** — https://population.un.org/wpp/ — authoritative demographic
+  series + revision/vintage semantics for `process_UN_demographics_data.R`.
+- **World Bank Indicators API** — https://datahelpdesk.worldbank.org/knowledgebase/articles/889392 —
+  indicator codes + response format for `process_WB_*.R`.
+- **WHO Global Health Observatory (GHO) OData API** — https://www.who.int/data/gho/info/gho-odata-api —
+  WHO indicator/dimension contract.
+- **sf** — https://r-spatial.github.io/sf/ · **terra** — https://rspatial.github.io/terra/ —
+  authoritative R geospatial APIs (CRS, geometry, raster ops) for the `get_*`/`download_*` helpers.
+- **GDAL** — https://gdal.org/ — the underlying driver/format + CRS authority sf/terra wrap.
 
 ## Before you finish
 - `Rscript -e "devtools::test()"` for touched processors; `devtools::document()` if signatures

@@ -7,7 +7,7 @@ description: >
   R CMD check, performance/RAM profiling, test infrastructure, and rendering of the
   plot_* functions. Use PROACTIVELY for refactors, parallel-worker bugs, thread-safety
   issues, and any change to run_MOSAIC*/run_LASER/Dask paths.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
 color: blue
@@ -69,6 +69,21 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
 - **Dask vs local paths duplicate config injection** — audit both when changing config prep.
 - Temp/exploratory files go in `claude/`. Never modify the read-only repos (laser-cholera/,
   ees-cholera-mapping/, jhu_cholera_data/) or `MOSAIC-data/raw/`.
+
+## Authoritative references (verify external API surface; engine contract is LOCAL)
+The laser-cholera engine contract is LOCAL and read-only:
+`laser-cholera/src/laser/cholera/metapop/params.py` is the authoritative parameter contract the
+bridge must honour — read it FIRST, there is no web substitute. You have `WebFetch`/`WebSearch` for
+the external libraries you integrate against, whose APIs drift between releases — fetch the current
+page rather than relying on memory. Pull the specific section on demand.
+- **reticulate** — https://rstudio.github.io/reticulate/ — R↔Python type marshalling
+  (scalar↔array, dict/list conversion) — the bridge's correctness surface.
+- **Dask Distributed** — https://distributed.dask.org/ — scheduler/worker/client API for the
+  remote calibration path (and config injection on workers).
+- **futureverse (future / future.apply)** — https://future.futureverse.org/ — the parallel backend
+  contract for PSOCK execution.
+- **Advanced R (2e), performance & profiling** — https://adv-r.hadley.nz/perf-measure.html —
+  authoritative on R profiling, copy-on-modify, and the preallocation/RAM patterns the hot paths need.
 
 ## Before you finish
 1. `Rscript -e "devtools::test()"` before and after — must pass.
