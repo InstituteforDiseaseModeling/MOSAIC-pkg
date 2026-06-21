@@ -16,6 +16,8 @@ calc_model_ensemble(
   sampling_args = list(),
   n_cases_warmup_mask = 2L,
   mask_final_deaths_step = TRUE,
+  score_idx_cases = 1L,
+  score_idx_deaths = 1L,
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
@@ -66,6 +68,12 @@ This value is NOT applied to any returned series here; it
 is recorded in the returned \code{artifact_mask} element for downstream
 scoring.}
 
+\item{score_idx_cases, score_idx_deaths}{Integer (1-based). Per-channel scored
+time-window START index (burn-in / deaths-era start). Columns strictly
+BEFORE these indices are unscored and recorded in \code{artifact_mask} so
+R2/bias scoring drops them. Default \code{1L} (no-op). NOT applied to the
+returned series here.}
+
 \item{parallel}{Logical. Use parallel cluster for simulations. Default \code{FALSE}.}
 
 \item{n_cores}{Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.}
@@ -104,9 +112,11 @@ selection) need not rely on positional alignment with an external vector.}
 \item{envelope_quantiles}{Quantiles used for CI envelopes.}
 \item{artifact_mask}{List recording the engine-artifact masking spec for
 downstream scoring: \code{$cases_warmup} (integer, leading cases timesteps
-to exclude) and \code{$deaths_final} (logical, exclude the final deaths
-timestep). The central/quantile/array fields above are RAW (unmasked); this
-spec is the contract scoring sites use to drop artifact positions.}
+to exclude), \code{$deaths_final} (logical, exclude the final deaths
+timestep), and \code{$score_idx_cases}/\code{$score_idx_deaths} (integer,
+1-based per-channel scored-window start; columns before are dropped). The
+central/quantile/array fields above are RAW (unmasked); this spec is the
+contract scoring sites use to drop artifact positions.}
 }
 }
 \description{

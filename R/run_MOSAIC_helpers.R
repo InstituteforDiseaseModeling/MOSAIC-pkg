@@ -149,6 +149,21 @@
   nc <- ncol(mat)
   if (is.null(nc) || nc < 1L) return(mat)
 
+  # Per-channel scored-window start (burn-in / deaths-era start). Columns
+  # strictly BEFORE score_idx_{cases,deaths} are unscored and NA'd here so the
+  # R2/bias sites drop them pairwise, exactly mirroring the likelihood-input
+  # slice. spec fallback (older ensembles) is 1L = no-op, so existing scoring is
+  # unchanged. This is a UNION with the engine-artifact masks below (warm-up /
+  # final-deaths); a burn-in that exceeds n_cases_warmup_mask supersedes it.
+  score_idx <- if (identical(chan, "cases")) spec$score_idx_cases else spec$score_idx_deaths
+  if (!is.null(score_idx)) {
+    si <- as.integer(score_idx)
+    if (length(si) == 1L && !is.na(si) && si > 1L) {
+      si <- min(si, nc + 1L)
+      mat[, seq_len(si - 1L)] <- NA_real_
+    }
+  }
+
   if (identical(chan, "cases")) {
     k <- as.integer(spec$cases_warmup)
     if (length(k) == 1L && !is.na(k) && k > 0L) {
@@ -161,6 +176,83 @@
     }
   }
   mat
+}
+
+# =============================================================================
+# Per-channel scored-window resolution (burn-in + deaths-era start)
+# =============================================================================
+
+#' Resolve the per-channel scored time window from control$likelihood
+#'
+#' MOSAIC seeds initial conditions at \code{date_start}; the seeded E/I
+#' discharge into reported cases over the first ~1-2 weeks, producing a day-1
+#' spike the forced steady state can't match. Separately, deaths are often
+#' unfittable before a per-country date (non-stationary observed CFR). Both are
+#' solved by NOT scoring part of the time axis: a per-channel scored start index
+#' (in time-step space, 1-based) computed from run-time-only knobs.
+#'
+#' \itemize{
+#'   \item \code{burn_in_days} -- integer >= 0 leading steps to drop from BOTH
+#'     channels (the IC transient). Default \code{0}.
+#'   \item \code{deaths_score_start} -- \code{NULL} (full window) or a
+#'     \code{Date}/\code{"YYYY-MM-DD"}; deaths are scored from \code{max(burn_in,
+#'     offset_to_this_date)}. Default \code{NULL}.
+#'   \item \code{score_start_cases} -- optional explicit cases start
+#'     (\code{Date}/\code{"YYYY-MM-DD"}); \code{NULL} => derived from
+#'     \code{burn_in_days}. Default \code{NULL}.
+#' }
+#'
+#' All defaults (\code{burn_in_days = 0}, both starts \code{NULL}) yield
+#' \code{idx_cases = idx_deaths = 1L} => NO slicing => scoring is bit-identical
+#' to the pre-feature behavior. Indices are clamped to \code{[1L, n_time]}.
+#'
+#' @param config The LASER config list (\code{date_start}, \code{reported_cases}).
+#' @param control The resolved control list (reads \code{control$likelihood}).
+#' @return \code{list(idx_cases, idx_deaths, n_time)} with integer indices.
+#' @noRd
+.mosaic_resolve_score_window <- function(config, control) {
+  lik <- control$likelihood
+  n_time <- if (is.matrix(config$reported_cases)) ncol(config$reported_cases) else
+              length(config$reported_cases)
+  n_time <- as.integer(n_time)
+  if (is.null(n_time) || is.na(n_time) || n_time < 1L) n_time <- 1L
+
+  # No knobs => no slicing (bit-identical default). NULL likelihood, or all
+  # knobs absent/at their defaults, returns idx = 1.
+  out <- list(idx_cases = 1L, idx_deaths = 1L, n_time = n_time)
+  if (is.null(lik)) return(out)
+
+  date_start <- tryCatch(as.Date(config$date_start), error = function(e) NA)
+
+  # Offset (in steps from date_start, 0-based) of a target date. Daily grid:
+  # one step per day. Returns 0L when the date is at/before date_start or
+  # unresolvable, so a start at/before the window scores the full window.
+  date_offset <- function(d) {
+    if (is.null(d) || is.na(date_start)) return(0L)
+    dd <- tryCatch(as.Date(d), error = function(e) NA)
+    if (is.na(dd)) return(0L)
+    off <- as.integer(round(as.numeric(dd - date_start)))
+    max(0L, off)
+  }
+
+  burn_in <- lik$burn_in_days
+  burn_in <- if (is.null(burn_in)) 0L else as.integer(round(as.numeric(burn_in)))
+  if (is.na(burn_in) || burn_in < 0L) burn_in <- 0L
+
+  # Cases start: explicit score_start_cases (date) overrides burn-in; otherwise
+  # burn_in_days. Index is offset + 1 (1-based scored start).
+  cases_off <- if (!is.null(lik$score_start_cases)) {
+    max(burn_in, date_offset(lik$score_start_cases))
+  } else {
+    burn_in
+  }
+  # Deaths start: never before the burn-in head; later if deaths_score_start set.
+  deaths_off <- max(burn_in, date_offset(lik$deaths_score_start))
+
+  idx_cases  <- min(max(1L, cases_off  + 1L), n_time)
+  idx_deaths <- min(max(1L, deaths_off + 1L), n_time)
+
+  list(idx_cases = idx_cases, idx_deaths = idx_deaths, n_time = n_time)
 }
 
 # =============================================================================
@@ -2110,7 +2202,11 @@
     "weight_peak_timing", "weight_peak_magnitude",
     "weight_cumulative_total", "weight_wis",
     "sigma_peak_time", "sigma_peak_log",
-    "epidemic_peaks"
+    "epidemic_peaks",
+    # Per-channel scored-window start indices (1-based). Default 1L => the
+    # Python worker takes the no-slice path. Injected by
+    # .mosaic_inject_likelihood_settings(); absent on the local path (no-op).
+    "score_idx_cases", "score_idx_deaths"
   )
   config[names(config) %in% keep]
 }

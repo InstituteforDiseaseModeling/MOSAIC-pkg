@@ -46,6 +46,14 @@
 #'   DISPLAY ONLY (raw arrays untouched). The legitimate leading
 #'   reporting-lag zeros in Deaths (from \code{delta_reporting_deaths}) are REAL
 #'   and are NOT masked by this argument. Set to \code{0L} to disable.
+#' @param score_idx_cases,score_idx_deaths Integer (1-based). Per-channel scored
+#'   time-window START index (burn-in / deaths-era start). Leading timesteps
+#'   strictly BEFORE the index are blanked (set to \code{NA}) in the exported CSV
+#'   and the rendered lines so the plot shows only the scored window. Default
+#'   \code{1L} (no blanking). When \code{NULL} (the typical caller pattern) the
+#'   value is read from \code{ensemble$artifact_mask$score_idx_*} so plots
+#'   automatically track the scored window the ensemble was built with. DISPLAY
+#'   ONLY (raw arrays untouched).
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return Invisibly returns a list with:
@@ -73,6 +81,8 @@ plot_model_ensemble <- function(ensemble,
                                 central_method   = "median",
                                 mask_final_deaths_step = TRUE,
                                 n_cases_warmup_mask    = 2L,
+                                score_idx_cases        = NULL,
+                                score_idx_deaths       = NULL,
                                 verbose          = TRUE) {
 
   # ---------------------------------------------------------------------------
@@ -208,7 +218,23 @@ plot_model_ensemble <- function(ensemble,
       n_cases_warmup_mask < 0L)
     stop("n_cases_warmup_mask must be a single non-negative integer")
 
-  if (isTRUE(mask_final_deaths_step) || n_cases_warmup_mask > 0L) {
+  # Per-channel scored-window starts. NULL => inherit from the ensemble's
+  # artifact_mask (so plots track the scored window the ensemble was built
+  # with); absent there => 1L (no blanking). Columns strictly before the index
+  # are blanked for DISPLAY ONLY.
+  .resolve_score_idx <- function(arg, field) {
+    if (!is.null(arg)) {
+      v <- as.integer(arg)
+    } else {
+      v <- tryCatch(as.integer(ensemble$artifact_mask[[field]]), error = function(e) NA_integer_)
+    }
+    if (length(v) != 1L || is.na(v) || v < 1L) 1L else v
+  }
+  score_idx_cases  <- .resolve_score_idx(score_idx_cases,  "score_idx_cases")
+  score_idx_deaths <- .resolve_score_idx(score_idx_deaths, "score_idx_deaths")
+
+  if (isTRUE(mask_final_deaths_step) || n_cases_warmup_mask > 0L ||
+      score_idx_cases > 1L || score_idx_deaths > 1L) {
     pred_cols <- c("predicted_central", "predicted_mean", "predicted_median")
     ci_cols   <- grep("^ci_[0-9]+_(lower|upper)$", names(plot_data), value = TRUE)
     mask_cols <- intersect(c(pred_cols, ci_cols), names(plot_data))
@@ -221,12 +247,25 @@ plot_model_ensemble <- function(ensemble,
 
     rows_to_mask <- logical(nrow(plot_data))
 
-    if (n_cases_warmup_mask > 0L) {
-      k <- min(n_cases_warmup_mask, n_time_points)
+    # Cases leading blank = max(warm-up, scored-window start - 1).
+    cases_head <- max(n_cases_warmup_mask, score_idx_cases - 1L)
+    if (cases_head > 0L) {
+      k <- min(cases_head, n_time_points)
       warmup_pos <- seq_len(k)
       for (loc_i in location_names) {
         sel <- which(plot_data$location == loc_i & is_cases)
         if (length(sel) >= 1L) rows_to_mask[sel[warmup_pos]] <- TRUE
+      }
+    }
+
+    # Deaths leading blank = scored-window start - 1 (deaths-era start).
+    deaths_head <- score_idx_deaths - 1L
+    if (deaths_head > 0L) {
+      k <- min(deaths_head, n_time_points)
+      deaths_pos <- seq_len(k)
+      for (loc_i in location_names) {
+        sel <- which(plot_data$location == loc_i & is_deaths)
+        if (length(sel) >= 1L) rows_to_mask[sel[deaths_pos]] <- TRUE
       }
     }
 
@@ -313,6 +352,13 @@ plot_model_ensemble <- function(ensemble,
     obs_d  <- .extract_loc(obs_deaths,   i)
     pred_c <- .extract_loc(cases_central, i)
     pred_d <- .extract_loc(deaths_central, i)
+
+    # Blank the unscored head of the central series so the displayed R2/bias
+    # annotations match the scored window (NA dropped pairwise downstream).
+    if (score_idx_cases > 1L)
+      pred_c[seq_len(min(score_idx_cases - 1L, length(pred_c)))] <- NA_real_
+    if (score_idx_deaths > 1L)
+      pred_d[seq_len(min(score_idx_deaths - 1L, length(pred_d)))] <- NA_real_
 
     r2_c   <- tryCatch(round(calc_model_R2(obs_c, pred_c), 3L), error = function(e) NA)
     r2_d   <- tryCatch(round(calc_model_R2(obs_d, pred_d), 3L), error = function(e) NA)

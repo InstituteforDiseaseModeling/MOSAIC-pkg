@@ -14,6 +14,8 @@ plot_model_ensemble(
   central_method = "median",
   mask_final_deaths_step = TRUE,
   n_cases_warmup_mask = 2L,
+  score_idx_cases = NULL,
+  score_idx_deaths = NULL,
   verbose = TRUE
 )
 }
@@ -66,6 +68,15 @@ SEIR dynamics settle), which is visually dominant for low-count countries.
 DISPLAY ONLY (raw arrays untouched). The legitimate leading
 reporting-lag zeros in Deaths (from \code{delta_reporting_deaths}) are REAL
 and are NOT masked by this argument. Set to \code{0L} to disable.}
+
+\item{score_idx_cases, score_idx_deaths}{Integer (1-based). Per-channel scored
+time-window START index (burn-in / deaths-era start). Leading timesteps
+strictly BEFORE the index are blanked (set to \code{NA}) in the exported CSV
+and the rendered lines so the plot shows only the scored window. Default
+\code{1L} (no blanking). When \code{NULL} (the typical caller pattern) the
+value is read from \code{ensemble$artifact_mask$score_idx_*} so plots
+automatically track the scored window the ensemble was built with. DISPLAY
+ONLY (raw arrays untouched).}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }

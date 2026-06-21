@@ -218,6 +218,17 @@
   config$weight_wis               <- likelihood_settings$weight_wis
   config$sigma_peak_time          <- likelihood_settings$sigma_peak_time
   config$sigma_peak_log           <- likelihood_settings$sigma_peak_log
+
+  # Per-channel scored-window start indices (1-based). Re-inject the RESOLVED
+  # values so a runtime override propagates to every worker. Default 1L => the
+  # Python worker takes the no-slice path (model.log_likelihood, bit-identical
+  # to the engine analyzer). The Python worker reads these from config and, when
+  # > 1, recomputes the likelihood on the sliced arrays (mirrors the local
+  # PSOCK slice). Absent .score_window_resolved (defensive) => 1L.
+  sw <- likelihood_settings$.score_window_resolved
+  config$score_idx_cases  <- if (is.null(sw)) 1L else as.integer(sw$idx_cases)
+  config$score_idx_deaths <- if (is.null(sw)) 1L else as.integer(sw$idx_deaths)
+
   ep <- MOSAIC::epidemic_peaks
   ep_df <- data.frame(
     iso_code  = as.character(ep$iso_code),
@@ -226,10 +237,19 @@
   )
   # laser-cholera v0.13+ asserts every iso_code in epidemic_peaks appears in
   # location_name. Also drop peaks outside the simulation window so the
-  # peak-shape likelihood terms don't snap to t=1/t=N boundaries.
+  # peak-shape likelihood terms don't snap to t=1/t=N boundaries. When the
+  # scored window slices off a leading prefix, advance the lower filter bound to
+  # the SLICED start so the Python worker's peak date_seq (which starts at the
+  # sliced date_start) doesn't snap an out-of-window peak to its t=1.
+  s_start <- if (is.null(sw)) 1L else as.integer(min(sw$idx_cases, sw$idx_deaths))
+  ds_filter <- config$date_start
+  if (s_start > 1L) {
+    ds0 <- tryCatch(as.Date(config$date_start), error = function(e) NA)
+    if (!is.na(ds0)) ds_filter <- ds0 + (s_start - 1L)
+  }
   config$epidemic_peaks <- .filter_epidemic_peaks(
     peaks          = ep_df,
-    date_start     = config$date_start,
+    date_start     = ds_filter,
     date_stop      = config$date_stop,
     location_names = config$location_name
   )
@@ -364,6 +384,59 @@
   # Pre-allocate simresults collector (validation mode only)
   simresults_raw <- if (!is.null(dir_cal_simresults)) vector("list", n_iterations) else NULL
 
+  # ---------------------------------------------------------------------------
+  # Per-channel scored-window slice (precomputed ONCE outside the hot loop).
+  #
+  # The shape terms in calc_model_likelihood() (peak timing/magnitude,
+  # cumulative) do NOT honor weights_time -- they scan/accumulate the raw
+  # series -- so the IC-transient head MUST be removed by SLICING the obs/est
+  # arrays, not just down-weighting it. We:
+  #   1. slice every array to s:n_time where s = min(idx_cases, idx_deaths),
+  #      removing the IC spike in [1, burn_in] < s for ALL shape terms and BOTH
+  #      channels with a single shared slice;
+  #   2. zero weights_obs_deaths on the residual prefix s:(idx_deaths-1) so the
+  #      later-starting deaths channel is not scored there (the region is
+  #      already spike-free, so peak/cumulative are safe);
+  #   3. pass the SLICED start date (date_start + (s-1)) as config$date_start so
+  #      the peak-index date_seq length matches the sliced n_time_steps (else the
+  #      length check fails over to weekly and mis-snaps peaks).
+  # All-default knobs => idx_cases = idx_deaths = 1 => s = 1 => NO slicing =>
+  # bit-identical to pre-feature scoring.
+  .sw <- likelihood_settings$.score_window_resolved
+  .slice_lik <- !is.null(.sw) && (.sw$idx_cases > 1L || .sw$idx_deaths > 1L)
+  .s_start   <- if (.slice_lik) min(.sw$idx_cases, .sw$idx_deaths) else 1L
+  .config_lik <- config
+  .wt_lik     <- likelihood_settings$.weights_time_resolved
+  if (.slice_lik) {
+    .n_time_sw <- .sw$n_time
+    .keep      <- .s_start:.n_time_sw
+    # Sliced peak date_seq start: keep config$date_start as a Date offset by s-1.
+    ds0 <- tryCatch(as.Date(config$date_start), error = function(e) NA)
+    if (!is.na(ds0)) .config_lik$date_start <- ds0 + (.s_start - 1L)
+    # Slice weights_time to the kept columns (length must match sliced arrays).
+    if (!is.null(.wt_lik)) .wt_lik <- .wt_lik[.keep]
+  }
+
+  # Per-cell confidence-weight matrices, sliced + deaths-prefix-zeroed once.
+  .wobs_cases_lik  <- config$reported_cases_weight
+  .wobs_deaths_lik <- config$reported_deaths_weight
+  if (.slice_lik) {
+    if (!is.null(.wobs_cases_lik))  .wobs_cases_lik  <- .wobs_cases_lik[,  .keep, drop = FALSE]
+    if (!is.null(.wobs_deaths_lik)) .wobs_deaths_lik <- .wobs_deaths_lik[, .keep, drop = FALSE]
+    # Zero deaths weights on the residual prefix s:(idx_deaths-1) (post-slice
+    # columns 1:(idx_deaths - s)). If no per-cell matrix exists, synthesize a
+    # ones matrix so the prefix can be zeroed (belt-and-suspenders; the deaths
+    # min_obs gate also protects this region).
+    .deaths_prefix <- .sw$idx_deaths - .s_start
+    if (.deaths_prefix > 0L) {
+      n_loc_sw <- if (is.matrix(config$reported_deaths)) nrow(config$reported_deaths) else 1L
+      if (is.null(.wobs_deaths_lik)) {
+        .wobs_deaths_lik <- matrix(1, nrow = n_loc_sw, ncol = length(.keep))
+      }
+      .wobs_deaths_lik[, seq_len(.deaths_prefix)] <- 0
+    }
+  }
+
   # Import laser-cholera (explicit check, no inherits)
   # Parallel mode: lc exists in worker global environment
   # Sequential mode: import here
@@ -416,18 +489,33 @@
         if (!is.null(obs_cases) && !is.null(est_cases) &&
             !is.null(obs_deaths) && !is.null(est_deaths)) {
 
+          # Slice obs/est to the scored window (s:n_time) so the spike-laden IC
+          # head is removed for every term (NB + non-weight-honoring shape
+          # terms). No-op when .slice_lik is FALSE (default knobs).
+          if (.slice_lik) {
+            if (!is.matrix(obs_cases))  obs_cases  <- matrix(obs_cases,  nrow = 1L)
+            if (!is.matrix(est_cases))  est_cases  <- matrix(est_cases,  nrow = 1L)
+            if (!is.matrix(obs_deaths)) obs_deaths <- matrix(obs_deaths, nrow = 1L)
+            if (!is.matrix(est_deaths)) est_deaths <- matrix(est_deaths, nrow = 1L)
+            obs_cases  <- obs_cases[,  .keep, drop = FALSE]
+            est_cases  <- est_cases[,  .keep, drop = FALSE]
+            obs_deaths <- obs_deaths[, .keep, drop = FALSE]
+            est_deaths <- est_deaths[, .keep, drop = FALSE]
+          }
+
           calc_model_likelihood(
-            config = config,
+            config = .config_lik,
             obs_cases = obs_cases,
             est_cases = est_cases,
             obs_deaths = obs_deaths,
             est_deaths = est_deaths,
-            weights_time = likelihood_settings$.weights_time_resolved,
+            weights_time = .wt_lik,
             weights_location = likelihood_settings$weights_location,
             # Per-observation confidence-weight matrices (config_default v4.1+).
-            # NULL on older configs that lack them -> no behavior change.
-            weights_obs_cases  = config$reported_cases_weight,
-            weights_obs_deaths = config$reported_deaths_weight,
+            # Sliced + deaths-prefix-zeroed above. NULL on older configs -> no
+            # behavior change.
+            weights_obs_cases  = .wobs_cases_lik,
+            weights_obs_deaths = .wobs_deaths_lik,
             nb_k_min_cases = likelihood_settings$nb_k_min_cases,
             nb_k_min_deaths = likelihood_settings$nb_k_min_deaths,
             weight_cases = likelihood_settings$weight_cases,
@@ -1110,6 +1198,22 @@ run_MOSAIC <- function(config,
     control$likelihood$.weights_time_resolved <- wt_raw / sum(wt_raw) * n_t_cfg
   } else {
     control$likelihood$.weights_time_resolved <- NULL
+  }
+
+  # Resolve the per-channel scored window (burn-in + deaths-era start) ONCE here
+  # so both backends and every worker read identical indices. All-default knobs
+  # => idx_cases = idx_deaths = 1 (no slicing, bit-identical). Stashed in a
+  # private slot parallel to .weights_time_resolved; not serialized to
+  # control.json (resolution happens after the inputs are written), so the
+  # resume guard byte-compares only the public knobs in control$likelihood.
+  control$likelihood$.score_window_resolved <-
+    .mosaic_resolve_score_window(config, control)
+  if (control$likelihood$.score_window_resolved$idx_cases > 1L ||
+      control$likelihood$.score_window_resolved$idx_deaths > 1L) {
+    log_msg("Scored window: cases from step %d, deaths from step %d (of %d) -- unscored head omitted",
+            control$likelihood$.score_window_resolved$idx_cases,
+            control$likelihood$.score_window_resolved$idx_deaths,
+            control$likelihood$.score_window_resolved$n_time)
   }
 
   # Resolve per-location (cross-location) influence weights. When the caller did
@@ -2324,6 +2428,8 @@ run_MOSAIC <- function(config,
         PATHS                    = PATHS,
         priors                   = priors,
         sampling_args            = sampling_args,
+        score_idx_cases          = control$likelihood$.score_window_resolved$idx_cases,
+        score_idx_deaths         = control$likelihood$.score_window_resolved$idx_deaths,
         parallel                 = control$parallel$enable,
         n_cores                  = control$parallel$n_cores,
         root_dir                 = root_dir,
@@ -2798,6 +2904,8 @@ run_MOSAIC <- function(config,
           configs                  = list(config_medoid),
           n_simulations_per_config = n_best_stochastic_per,
           envelope_quantiles       = c(0.025, 0.975),
+          score_idx_cases          = control$likelihood$.score_window_resolved$idx_cases,
+          score_idx_deaths         = control$likelihood$.score_window_resolved$idx_deaths,
           parallel                 = isTRUE(control$parallel$enable),
           n_cores                  = control$parallel$n_cores,
           root_dir                 = root_dir,
@@ -3536,7 +3644,16 @@ mosaic_control_defaults <- function(calibration = NULL,
     weights_time = NULL,             # Numeric vector of per-timestep weights (NULL = uniform)
     weights_location = NULL,         # Numeric vector of per-location weights (NULL = uniform)
     nb_k_min_cases = 3,              # Minimum NB dispersion floor (cases)
-    nb_k_min_deaths = 3              # Minimum NB dispersion floor (deaths)
+    nb_k_min_deaths = 3,             # Minimum NB dispersion floor (deaths)
+
+    # === Per-channel scored window (burn-in + deaths-era start) ===
+    # Run-time only; config_default stays the clean [date_start, date_stop]
+    # window. All defaults below yield idx_cases = idx_deaths = 1 (no slicing),
+    # so scoring is bit-identical to pre-feature runs. See
+    # .mosaic_resolve_score_window().
+    burn_in_days = 0L,               # Leading steps dropped from BOTH channels (IC transient)
+    deaths_score_start = NULL,       # NULL = full window, or Date/"YYYY-MM-DD" deaths-era start
+    score_start_cases = NULL         # NULL = derive from burn_in_days, or Date/"YYYY-MM-DD"
   )
 
   # Default parallel settings

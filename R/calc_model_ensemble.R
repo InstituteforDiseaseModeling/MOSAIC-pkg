@@ -101,6 +101,11 @@
 #'   This value is NOT applied to any returned series here; it
 #'   is recorded in the returned \code{artifact_mask} element for downstream
 #'   scoring.
+#' @param score_idx_cases,score_idx_deaths Integer (1-based). Per-channel scored
+#'   time-window START index (burn-in / deaths-era start). Columns strictly
+#'   BEFORE these indices are unscored and recorded in \code{artifact_mask} so
+#'   R2/bias scoring drops them. Default \code{1L} (no-op). NOT applied to the
+#'   returned series here.
 #' @param parallel Logical. Use parallel cluster for simulations. Default \code{FALSE}.
 #' @param n_cores Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.
 #' @param root_dir Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
@@ -134,9 +139,11 @@
 #'   \item{envelope_quantiles}{Quantiles used for CI envelopes.}
 #'   \item{artifact_mask}{List recording the engine-artifact masking spec for
 #'     downstream scoring: \code{$cases_warmup} (integer, leading cases timesteps
-#'     to exclude) and \code{$deaths_final} (logical, exclude the final deaths
-#'     timestep). The central/quantile/array fields above are RAW (unmasked); this
-#'     spec is the contract scoring sites use to drop artifact positions.}
+#'     to exclude), \code{$deaths_final} (logical, exclude the final deaths
+#'     timestep), and \code{$score_idx_cases}/\code{$score_idx_deaths} (integer,
+#'     1-based per-channel scored-window start; columns before are dropped). The
+#'     central/quantile/array fields above are RAW (unmasked); this spec is the
+#'     contract scoring sites use to drop artifact positions.}
 #' }
 #'
 #' @seealso \code{\link{plot_model_ensemble}} to render plots from this object.
@@ -153,6 +160,8 @@ calc_model_ensemble <- function(config,
                                 sampling_args = list(),
                                 n_cases_warmup_mask = 2L,
                                 mask_final_deaths_step = TRUE,
+                                score_idx_cases = 1L,
+                                score_idx_deaths = 1L,
                                 parallel = FALSE,
                                 n_cores = NULL,
                                 root_dir = NULL,
@@ -174,6 +183,16 @@ calc_model_ensemble <- function(config,
   if (length(mask_final_deaths_step) != 1L || is.na(mask_final_deaths_step) ||
       !is.logical(mask_final_deaths_step))
     stop("mask_final_deaths_step must be a single logical value")
+
+  # Per-channel scored-window start indices (1-based). Default 1L => no-op
+  # (existing ensembles/tests unchanged). Recorded in artifact_mask so the R2/
+  # bias scoring sites drop the unscored head via .mosaic_mask_central_for_scoring().
+  score_idx_cases  <- as.integer(score_idx_cases)
+  score_idx_deaths <- as.integer(score_idx_deaths)
+  if (length(score_idx_cases) != 1L || is.na(score_idx_cases) || score_idx_cases < 1L)
+    stop("score_idx_cases must be a single integer >= 1")
+  if (length(score_idx_deaths) != 1L || is.na(score_idx_deaths) || score_idx_deaths < 1L)
+    stop("score_idx_deaths must be a single integer >= 1")
 
   if (!is.null(configs)) {
     # Direct mode: pre-sampled configs provided
@@ -604,8 +623,10 @@ calc_model_ensemble <- function(config,
       date_stop                 = date_stop,
       envelope_quantiles        = envelope_quantiles,
       artifact_mask             = list(
-        cases_warmup = as.integer(n_cases_warmup_mask),
-        deaths_final = isTRUE(mask_final_deaths_step)
+        cases_warmup     = as.integer(n_cases_warmup_mask),
+        deaths_final     = isTRUE(mask_final_deaths_step),
+        score_idx_cases  = score_idx_cases,
+        score_idx_deaths = score_idx_deaths
       )
     ),
     class = "mosaic_ensemble"

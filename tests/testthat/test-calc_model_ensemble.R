@@ -166,8 +166,11 @@ test_that("mosaic_ensemble object has expected structure", {
   # Weights should be normalized
   expect_equal(sum(ens$parameter_weights), 1.0)
 
-  # artifact_mask carries the default resolved spec (defaults match plot_model_ensemble)
-  expect_equal(ens$artifact_mask, list(cases_warmup = 2L, deaths_final = TRUE))
+  # artifact_mask carries the default resolved spec (defaults match plot_model_ensemble).
+  # score_idx_* default to 1L (no scored-window slicing; bit-identical default).
+  expect_equal(ens$artifact_mask,
+               list(cases_warmup = 2L, deaths_final = TRUE,
+                    score_idx_cases = 1L, score_idx_deaths = 1L))
 })
 
 test_that("calc_model_ensemble records non-default artifact_mask without mutating raw series", {
@@ -203,7 +206,9 @@ test_that("calc_model_ensemble records non-default artifact_mask without mutatin
     verbose = FALSE
   )
 
-  expect_equal(ens$artifact_mask, list(cases_warmup = 3L, deaths_final = FALSE))
+  expect_equal(ens$artifact_mask,
+               list(cases_warmup = 3L, deaths_final = FALSE,
+                    score_idx_cases = 1L, score_idx_deaths = 1L))
 
   # Raw central series must NOT contain mask-induced NAs (spec is carried, not applied)
   expect_false(any(is.na(ens$cases_mean)))

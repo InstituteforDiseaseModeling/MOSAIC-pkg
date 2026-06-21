@@ -15,6 +15,7 @@ iterations within a sim get different stochastic LASER realizations.
 """
 
 import copy
+import datetime
 import gc
 import json
 import os
@@ -125,6 +126,112 @@ def _apply_sampled_params(base_config: dict, sampled_params_json: str) -> dict:
 
     config.update(sampled)
     return config
+
+
+def _score_window_likelihood(config: dict, model) -> float:
+    """Recompute the log-likelihood on the per-channel scored window.
+
+    Mirrors the R local-PSOCK slice in .mosaic_run_simulation_worker
+    (R/run_MOSAIC.R): when ``score_idx_cases`` / ``score_idx_deaths`` (1-based)
+    indicate a scored start later than 1, the IC-transient / deaths-era head is
+    SLICED off the obs/est arrays (the shape terms do not honor weights_time,
+    so down-weighting is insufficient), then the later-starting deaths channel
+    is zero-weighted on the residual prefix. The sliced ``date_start`` is passed
+    so the peak date_seq length matches the sliced n_time_steps.
+
+    Returns the recomputed scalar log-likelihood. Only called when slicing is
+    needed; the no-slice default path uses ``model.log_likelihood`` directly so
+    it is bit-identical to the engine analyzer.
+    """
+    from laser.cholera.calc_model_likelihood import calc_model_likelihood
+    import pandas as pd
+
+    idx_cases = int(config.get("score_idx_cases", 1))
+    idx_deaths = int(config.get("score_idx_deaths", 1))
+
+    obs_cases = np.asarray(config["reported_cases"], dtype=float)
+    obs_deaths = np.asarray(config["reported_deaths"], dtype=float)
+    est_cases = np.asarray(model.results.reported_cases, dtype=float)
+    est_deaths = np.asarray(model.results.reported_deaths, dtype=float)
+
+    if obs_cases.ndim == 1:
+        obs_cases = obs_cases[np.newaxis, :]
+    if obs_deaths.ndim == 1:
+        obs_deaths = obs_deaths[np.newaxis, :]
+    if est_cases.ndim == 1:
+        est_cases = est_cases[np.newaxis, :]
+    if est_deaths.ndim == 1:
+        est_deaths = est_deaths[np.newaxis, :]
+
+    # Match the engine analyzer's nreports trim (drop the initial-state column
+    # mismatch) BEFORE slicing, so the columns align with obs.
+    nreports = min(obs_cases.shape[1], est_cases.shape[1])
+    obs_cases = obs_cases[:, :nreports]
+    obs_deaths = obs_deaths[:, :nreports]
+    est_cases = est_cases[:, :nreports]
+    est_deaths = est_deaths[:, :nreports]
+
+    s = max(1, min(idx_cases, idx_deaths))   # shared slice start (1-based)
+    keep0 = s - 1                            # 0-based slice index
+
+    obs_cases = obs_cases[:, keep0:].copy()
+    obs_deaths = obs_deaths[:, keep0:].copy()
+    est_cases = est_cases[:, keep0:]
+    est_deaths = est_deaths[:, keep0:]
+
+    # Zero the later-starting deaths channel on the residual prefix
+    # s:(idx_deaths-1). The engine's Python calc_model_likelihood does NOT
+    # accept the per-cell weights_obs_* matrices (MOSAIC-R-only; the Dask path
+    # is already unweighted per Lesson #12), so we mirror the local
+    # weights_obs_deaths=0 prefix by setting the deaths OBS to NaN there: the NB
+    # term masks non-finite obs, and the (default-OFF) nan-aware shape terms
+    # ignore them. Cases are scored from s (= idx_cases when cases is the
+    # earlier channel).
+    deaths_prefix = idx_deaths - s
+    if deaths_prefix > 0:
+        obs_deaths[:, :deaths_prefix] = np.nan
+
+    # weights_time, sliced to the kept columns.
+    wt = config.get("weights_time", None)
+    if wt is not None:
+        wt = np.asarray(wt, dtype=float)
+        if wt.ndim == 0:
+            wt = np.full(nreports, float(wt))
+        wt = wt[:nreports][keep0:]
+
+    # Sliced start date for the peak date_seq.
+    date_start = config.get("date_start", None)
+    if isinstance(date_start, str):
+        date_start = datetime.datetime.strptime(date_start, "%Y-%m-%d")
+    if isinstance(date_start, datetime.datetime) and s > 1:
+        date_start = date_start + datetime.timedelta(days=int(s - 1))
+
+    epidemic_peaks = config.get("epidemic_peaks", None)
+    if epidemic_peaks is not None and not isinstance(epidemic_peaks, pd.DataFrame):
+        epidemic_peaks = pd.DataFrame(epidemic_peaks)
+
+    optional = {}
+    for key in ("weight_cases", "weight_deaths", "weights_location",
+                "nb_k_min_cases", "nb_k_min_deaths",
+                "weight_peak_timing", "weight_peak_magnitude",
+                "weight_cumulative_total", "weight_wis",
+                "sigma_peak_time", "sigma_peak_log"):
+        if key in config and config[key] is not None:
+            optional[key] = config[key]
+    if wt is not None:
+        optional["weights_time"] = wt
+    if epidemic_peaks is not None:
+        optional["epidemic_peaks"] = epidemic_peaks
+        optional["date_start"] = date_start
+        optional["date_stop"] = config.get("date_stop", None)
+
+    return float(calc_model_likelihood(
+        obs_cases=obs_cases,
+        est_cases=est_cases,
+        obs_deaths=obs_deaths,
+        est_deaths=est_deaths,
+        **optional,
+    ))
 
 
 # =============================================================================
@@ -243,6 +350,17 @@ def run_laser_sim(sim_id: int, n_iterations: int,
                     ),
                     "traceback": "",
                 }
+
+            # Per-channel scored window: when the resolved start indices are
+            # > 1 (burn-in / deaths-era start), the engine analyzer's full-window
+            # model.log_likelihood is wrong (it scores the IC-transient head and
+            # the deaths-era prefix). Recompute on the sliced arrays to mirror
+            # the local PSOCK path. Default (idx == 1) keeps model.log_likelihood
+            # untouched => bit-identical to the engine analyzer.
+            idx_c = int(config.get("score_idx_cases", 1))
+            idx_d = int(config.get("score_idx_deaths", 1))
+            if idx_c > 1 or idx_d > 1:
+                ll = _score_window_likelihood(config, model)
 
             iterations.append({
                 "iter":       j,

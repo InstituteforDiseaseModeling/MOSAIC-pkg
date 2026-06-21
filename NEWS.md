@@ -1,3 +1,12 @@
+# MOSAIC 0.47.0
+
+* **Per-channel scored time window (burn-in + deaths-era start).** New run-time-only knobs in `control$likelihood` exclude leading time steps from the likelihood and R²/bias scoring, without touching `config_default`, the builders, or `ic_t0`:
+    * `burn_in_days` (integer ≥ 0, default `0L`) — drops the leading IC-transient steps from **both** channels. MOSAIC seeds E/I by moment-matching at `date_start`; the seed discharges into reported cases over the first ~1–2 weeks, producing a day-1 spike the forced steady state can't match (verified on KEN: medoid day-3 cases 2761 vs observed 15, ~184× over observed; decays to ~observed by day 21). `burn_in_days=21` removes it from the scored series entirely (scored-window max 45 vs observed max 125).
+    * `deaths_score_start` (`NULL` or `Date`/`"YYYY-MM-DD"`, default `NULL`) — scores deaths only from a later date (non-stationary observed CFR makes deaths unfittable before ~2023 for several countries).
+    * `score_start_cases` (`NULL` or date, default `NULL`) — optional explicit cases start overriding the burn-in.
+* **Mechanism.** Resolved once to per-channel 1-based start indices (`.mosaic_resolve_score_window()`), the worker **slices** `obs`/`est` to `min(idx_cases, idx_deaths):n` (not merely down-weighting — the peak/cumulative shape terms don't honor `weights_time`), zeros the deaths residual prefix, and passes the **sliced start date** so the peak `date_seq` stays aligned. R²/bias sites drop the unscored head via a generalized `.mosaic_mask_central_for_scoring()`; `calc_model_ensemble()` records `score_idx_*` in `artifact_mask`; `plot_model_ensemble()` blanks the unscored head for display.
+* **Bit-identical at defaults.** All knobs at their defaults yield `idx_cases = idx_deaths = 1` ⇒ no slicing ⇒ scoring identical to pre-feature runs (new `test-burn_in_scoring_parity.R` + the unchanged tier-2/reference/obs-weights parity suites). Carried in `control$likelihood` ⇒ byte-compared by the resume guard ⇒ changing the window across a resume correctly errors. Dask path re-injects the resolved `score_idx_*` and filters `epidemic_peaks` at the sliced start (schema-parity test extended).
+
 # MOSAIC 0.46.4
 
 * **Hardening from the adversarial red-team of the 0.46.1–0.46.3 changes.**

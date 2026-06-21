@@ -246,6 +246,46 @@ test_that(".mosaic_write_one_shard_dask produces a valid parquet shard", {
 # nondeterminism: writing the same 4 mock results via serial lapply and
 # via mclapply must produce byte-identical parquet files.
 # =============================================================================
+# =============================================================================
+# TEST: scored-window fields (score_idx_*) injected + broadcast on the Dask path
+#
+# Per-channel scoring window (burn-in + deaths-era start). The resolved
+# score_idx_cases / score_idx_deaths must (1) be injected onto config by
+# .mosaic_inject_likelihood_settings(), and (2) survive .extract_base_config()
+# so they reach the worker (Lesson #12: Dask injection must stay in lockstep).
+# Default (resolved idx = 1) => the Python worker takes the no-slice path.
+# =============================================================================
+test_that("score_idx_* are injected and broadcast in the Dask base config", {
+  fx <- skip_if_no_data()
+  cfg <- fx$config
+
+  # Default (idx = 1) — bit-identical no-slice path.
+  ls_default <- list(.score_window_resolved = list(idx_cases = 1L, idx_deaths = 1L))
+  inj_default <- MOSAIC:::.mosaic_inject_likelihood_settings(cfg, ls_default)
+  expect_identical(inj_default$score_idx_cases, 1L)
+  expect_identical(inj_default$score_idx_deaths, 1L)
+
+  base_default <- MOSAIC:::.extract_base_config(inj_default)
+  expect_true(all(c("score_idx_cases", "score_idx_deaths") %in% names(base_default)))
+  expect_identical(base_default$score_idx_cases, 1L)
+  expect_identical(base_default$score_idx_deaths, 1L)
+
+  # Non-default window — resolved indices propagate verbatim.
+  ls_win <- list(.score_window_resolved = list(idx_cases = 15L, idx_deaths = 120L))
+  inj_win <- MOSAIC:::.mosaic_inject_likelihood_settings(cfg, ls_win)
+  expect_identical(inj_win$score_idx_cases, 15L)
+  expect_identical(inj_win$score_idx_deaths, 120L)
+  base_win <- MOSAIC:::.extract_base_config(inj_win)
+  expect_identical(base_win$score_idx_cases, 15L)
+  expect_identical(base_win$score_idx_deaths, 120L)
+
+  # Absent .score_window_resolved (defensive) => 1L (no slice).
+  inj_abs <- MOSAIC:::.mosaic_inject_likelihood_settings(cfg, list())
+  expect_identical(inj_abs$score_idx_cases, 1L)
+  expect_identical(inj_abs$score_idx_deaths, 1L)
+})
+
+
 test_that(".mosaic_sample_and_serialize captures errors instead of throwing", {
   fx <- skip_if_no_data()
 
