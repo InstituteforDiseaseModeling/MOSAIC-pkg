@@ -193,7 +193,8 @@
 #'
 #' \itemize{
 #'   \item \code{burn_in_days} -- integer >= 0 leading steps to drop from BOTH
-#'     channels (the IC transient). Default \code{0}.
+#'     channels (the IC transient). Package default \code{30} (set via
+#'     \code{mosaic_control_defaults()}); \code{0} disables slicing.
 #'   \item \code{deaths_score_start} -- \code{NULL} (full window) or a
 #'     \code{Date}/\code{"YYYY-MM-DD"}; deaths are scored from \code{max(burn_in,
 #'     offset_to_this_date)}. Default \code{NULL}.
@@ -202,9 +203,11 @@
 #'     \code{burn_in_days}. Default \code{NULL}.
 #' }
 #'
-#' All defaults (\code{burn_in_days = 0}, both starts \code{NULL}) yield
+#' The opt-out (\code{burn_in_days = 0}, both starts \code{NULL}) yields
 #' \code{idx_cases = idx_deaths = 1L} => NO slicing => scoring is bit-identical
-#' to the pre-feature behavior. Indices are clamped to \code{[1L, n_time]}.
+#' to the pre-feature behavior. (As of v0.47.3 the package default is \code{30},
+#' so this is the explicit opt-out, not the default.) Indices are clamped to
+#' \code{[1L, n_time]}.
 #'
 #' @param config The LASER config list (\code{date_start}, \code{reported_cases}).
 #' @param control The resolved control list (reads \code{control$likelihood}).

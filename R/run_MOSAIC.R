@@ -3648,10 +3648,14 @@ mosaic_control_defaults <- function(calibration = NULL,
 
     # === Per-channel scored window (burn-in + deaths-era start) ===
     # Run-time only; config_default stays the clean [date_start, date_stop]
-    # window. All defaults below yield idx_cases = idx_deaths = 1 (no slicing),
-    # so scoring is bit-identical to pre-feature runs. See
-    # .mosaic_resolve_score_window().
-    burn_in_days = 0L,               # Leading steps dropped from BOTH channels (IC transient)
+    # window. burn_in_days defaults to 30 (NOT 0): the seeded E/I discharge into
+    # cases settles by ~day 14-21, but the DEATHS IC transient lags (death-event
+    # + delta_reporting_deaths ~5d) and is still decaying to ~day 28-35, so 30
+    # clears both channels' transients while costing ~1-2.5% of a multi-year
+    # window. Set burn_in_days = 0L to disable (restores pre-v0.47.3 scoring,
+    # bit-identical). See .mosaic_resolve_score_window() and the optimal-window
+    # research. NOTE: on very short windows 30 may clamp to near n_time; set 0L.
+    burn_in_days = 30L,              # Leading steps dropped from BOTH channels (IC transient; 0L disables)
     deaths_score_start = NULL,       # NULL = full window, or Date/"YYYY-MM-DD" deaths-era start
     score_start_cases = NULL         # NULL = derive from burn_in_days, or Date/"YYYY-MM-DD"
   )

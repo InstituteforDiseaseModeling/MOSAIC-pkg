@@ -9,8 +9,9 @@
 # separately (not here).
 #
 # Non-negotiable: with burn_in_days = 0 and deaths_score_start = NULL (the
-# defaults), idx_cases == idx_deaths == 1 => NO slicing => scoring is
-# bit-identical to the pre-feature behavior.
+# explicit OPT-OUT; the package default is 30 as of v0.47.3), idx_cases ==
+# idx_deaths == 1 => NO slicing => scoring is bit-identical to the pre-feature
+# behavior.
 # =============================================================================
 
 # A small synthetic obs/est fixture: 1 location, 12 daily steps. The first
@@ -36,12 +37,23 @@
 
 
 # =============================================================================
-# TEST 1: bit-identical default — resolver returns idx = 1 and scoring matches
+# TEST 0: package default burn_in_days is 30 (v0.47.3 behavior change)
 # =============================================================================
-test_that("default knobs resolve to idx 1 and scoring is bit-identical", {
+test_that("mosaic_control_defaults() sets burn_in_days = 30", {
+  d <- MOSAIC::mosaic_control_defaults()$likelihood
+  expect_identical(as.integer(d$burn_in_days), 30L)
+  expect_null(d$deaths_score_start)
+  expect_null(d$score_start_cases)
+})
+
+
+# =============================================================================
+# TEST 1: opt-out (burn_in_days=0) — resolver returns idx = 1 and scoring matches
+# =============================================================================
+test_that("opt-out knobs resolve to idx 1 and scoring is bit-identical", {
   cfg <- .mk_config()
 
-  # Default likelihood (no knobs / explicit defaults) => idx_cases=idx_deaths=1.
+  # Explicit opt-out (burn_in_days = 0) => idx_cases=idx_deaths=1.
   ctrl_default <- list(likelihood = list(burn_in_days = 0L,
                                          deaths_score_start = NULL,
                                          score_start_cases = NULL))
