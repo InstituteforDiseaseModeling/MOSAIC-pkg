@@ -31,9 +31,20 @@ test_that("fit matrices cover all 40 modelled locations in canonical order", {
   cfg <- MOSAIC::config_default
   expect_identical(cfg$location_name, MOSAIC::iso_codes_mosaic)
   expect_equal(nrow(cfg$reported_cases), length(MOSAIC::iso_codes_mosaic))
-  # multi-source target: every modelled country has at least some case data
-  expect_true(all(rowSums(!is.na(cfg$reported_cases)) > 0),
-              info = "every country should have >=1 non-NA case cell under the multi-source target")
+  # Multi-source target: every modelled country should carry case data EXCEPT a
+  # documented set with no in-window surveillance signal. ERI has no 2023+
+  # surveillance under current sources (its pre-rebuild content was 365 all-zero
+  # documented_zero placeholder cells); it must remain in the canonical 40-location
+  # order for the metapop structure, and an all-NA fit row is handled safely by the
+  # min_obs_for_likelihood gate (0 contribution). Any OTHER country going empty is
+  # an unexpected coverage regression and still fails here.
+  no_surveillance_ok <- "ERI"
+  empty <- cfg$location_name[rowSums(!is.na(cfg$reported_cases)) == 0L]
+  expect_true(all(empty %in% no_surveillance_ok),
+              info = paste0("unexpected country(ies) with zero non-NA case cells: ",
+                            paste(setdiff(empty, no_surveillance_ok), collapse = ", "),
+                            " (only ", paste(no_surveillance_ok, collapse = ", "),
+                            " is a documented no-surveillance location)"))
 })
 
 test_that("weight matrices survive the JSON round-trip as aligned matrices", {
