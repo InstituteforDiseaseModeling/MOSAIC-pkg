@@ -17,7 +17,7 @@ plot_model_ensemble to render plots from the returned object."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.47.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,6 +72,8 @@ envelopes for cases and deaths.</p>
 <span>  sampling_args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  n_cases_warmup_mask <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  mask_final_deaths_step <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  score_idx_cases <span class="op">=</span> <span class="fl">1L</span>,</span>
+<span>  score_idx_deaths <span class="op">=</span> <span class="fl">1L</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  n_cores <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  root_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -146,6 +148,14 @@ then leading-trimmed, so the last slot is never written; laser issue #82).
 This value is NOT applied to any returned series here; it
 is recorded in the returned <code>artifact_mask</code> element for downstream
 scoring.</p></dd>
+
+
+<dt id="arg-score-idx-cases-score-idx-deaths">score_idx_cases, score_idx_deaths<a class="anchor" aria-label="anchor" href="#arg-score-idx-cases-score-idx-deaths"></a></dt>
+<dd><p>Integer (1-based). Per-channel scored
+time-window START index (burn-in / deaths-era start). Columns strictly
+BEFORE these indices are unscored and recorded in <code>artifact_mask</code> so
+R2/bias scoring drops them. Default <code>1L</code> (no-op). NOT applied to the
+returned series here.</p></dd>
 
 
 <dt id="arg-parallel">parallel<a class="anchor" aria-label="anchor" href="#arg-parallel"></a></dt>
@@ -232,9 +242,11 @@ selection) need not rely on positional alignment with an external vector.</p></d
 <dt>artifact_mask</dt>
 <dd><p>List recording the engine-artifact masking spec for
 downstream scoring: <code>$cases_warmup</code> (integer, leading cases timesteps
-to exclude) and <code>$deaths_final</code> (logical, exclude the final deaths
-timestep). The central/quantile/array fields above are RAW (unmasked); this
-spec is the contract scoring sites use to drop artifact positions.</p></dd>
+to exclude), <code>$deaths_final</code> (logical, exclude the final deaths
+timestep), and <code>$score_idx_cases</code>/<code>$score_idx_deaths</code> (integer,
+1-based per-channel scored-window start; columns before are dropped). The
+central/quantile/array fields above are RAW (unmasked); this spec is the
+contract scoring sites use to drop artifact positions.</p></dd>
 
 
 </dl></div>

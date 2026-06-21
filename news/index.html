@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.46.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.47.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,32 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.47.2" id="mosaic-0472">MOSAIC 0.47.2<a class="anchor" aria-label="anchor" href="#mosaic-0472"></a></h2>
+<ul><li>
+<strong><code>config_default</code> (v4.3) + <code>priors_default</code> (v15.13) rebuilt under the relaxed trust-tier gate, at the unchanged 2023-01-01 window.</strong> Following the v0.47.1 fourier-keep policy, the shipped fit-target matrices now retain <code>fourier_*</code> reconstructions at their lower per-week <code>confidence_weight</code> instead of NA-blanking them. 811 fourier weeks fall in the 2023+ window, so the change is material: <code>reported_cases_weight</code> cells in <code>(0,1)</code> rise from 10,062 → 17,073 (range 0.40–0.95), with the complementary drop in <code>==1</code> cells — those weeks now inform the fit as down-weighted real observations rather than being dropped. The simulation window is <strong>unchanged</strong> (<code>date_start = 2023-01-01</code>, <code>ncol = 1398</code>); only the per-observation weighting of previously-discarded weeks differs. priors <code>build_date_start = 2023-01-01</code>, <code>ic_t0 = 2023-02-01</code> (IC seeding epoch unchanged). <code>test-config_default_weights</code> (21/21) and <code>test-cfr-pipeline-consistency</code> (93/93) pass.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.47.1" id="mosaic-0471">MOSAIC 0.47.1<a class="anchor" aria-label="anchor" href="#mosaic-0471"></a></h2>
+<ul><li>
+<strong>Surveillance trust-tier gate relaxed: keep <code>fourier_*</code> reconstructions, down-weighted.</strong> <code><a href="../reference/process_cholera_surveillance_data.html">process_cholera_surveillance_data()</a></code> now NA-blanks <strong>only</strong> <code>assumed_zero</code> weeks (a pure surveillance-silence assumption). <code>fourier_*</code> rows — synthetic reconstructions of <em>real</em> annual/quarterly totals — previously hard-dropped are now kept and reach the daily fit target carrying their lower per-week <code>confidence_weight</code> (~0.4–0.5 vs ~0.9 for <code>observed</code>), which <code><a href="../reference/calc_model_likelihood.html">calc_model_likelihood()</a></code> consumes as a per-observation weight. So low-confidence-but-real-magnitude weeks (e.g. the 2019–2022 JHU→WHO handoff gap) inform the fit at reduced weight rather than being discarded. <code>observed</code>, <code>documented_zero</code>, and direct WHO/JHU/SUPP rows are unchanged. Code-only here; the shipped <code>config_default</code>/<code>priors_default</code> are rebuilt under this policy in a follow-up commit.</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.47.0" id="mosaic-0470">MOSAIC 0.47.0<a class="anchor" aria-label="anchor" href="#mosaic-0470"></a></h2>
+<ul><li>
+<strong>Per-channel scored time window (burn-in + deaths-era start).</strong> New run-time-only knobs in <code>control$likelihood</code> exclude leading time steps from the likelihood and R²/bias scoring, without touching <code>config_default</code>, the builders, or <code>ic_t0</code>:
+<ul><li>
+<code>burn_in_days</code> (integer ≥ 0, default <code>0L</code>) — drops the leading IC-transient steps from <strong>both</strong> channels. MOSAIC seeds E/I by moment-matching at <code>date_start</code>; the seed discharges into reported cases over the first ~1–2 weeks, producing a day-1 spike the forced steady state can’t match (verified on KEN: medoid day-3 cases 2761 vs observed 15, ~184× over observed; decays to ~observed by day 21). <code>burn_in_days=21</code> removes it from the scored series entirely (scored-window max 45 vs observed max 125).</li>
+<li>
+<code>deaths_score_start</code> (<code>NULL</code> or <code>Date</code>/<code>"YYYY-MM-DD"</code>, default <code>NULL</code>) — scores deaths only from a later date (non-stationary observed CFR makes deaths unfittable before ~2023 for several countries).</li>
+<li>
+<code>score_start_cases</code> (<code>NULL</code> or date, default <code>NULL</code>) — optional explicit cases start overriding the burn-in.</li>
+</ul></li>
+<li>
+<strong>Mechanism.</strong> Resolved once to per-channel 1-based start indices (<code>.mosaic_resolve_score_window()</code>), the worker <strong>slices</strong> <code>obs</code>/<code>est</code> to <code>min(idx_cases, idx_deaths):n</code> (not merely down-weighting — the peak/cumulative shape terms don’t honor <code>weights_time</code>), zeros the deaths residual prefix, and passes the <strong>sliced start date</strong> so the peak <code>date_seq</code> stays aligned. R²/bias sites drop the unscored head via a generalized <code>.mosaic_mask_central_for_scoring()</code>; <code><a href="../reference/calc_model_ensemble.html">calc_model_ensemble()</a></code> records <code>score_idx_*</code> in <code>artifact_mask</code>; <code><a href="../reference/plot_model_ensemble.html">plot_model_ensemble()</a></code> blanks the unscored head for display.</li>
+<li>
+<strong>Bit-identical at defaults.</strong> All knobs at their defaults yield <code>idx_cases = idx_deaths = 1</code> ⇒ no slicing ⇒ scoring identical to pre-feature runs (new <code>test-burn_in_scoring_parity.R</code> + the unchanged tier-2/reference/obs-weights parity suites). Carried in <code>control$likelihood</code> ⇒ byte-compared by the resume guard ⇒ changing the window across a resume correctly errors. Dask path re-injects the resolved <code>score_idx_*</code> and filters <code>epidemic_peaks</code> at the sliced start (schema-parity test extended).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.46.4" id="mosaic-0464">MOSAIC 0.46.4<a class="anchor" aria-label="anchor" href="#mosaic-0464"></a></h2>
 <ul><li>

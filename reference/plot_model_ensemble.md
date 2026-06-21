@@ -19,6 +19,8 @@ plot_model_ensemble(
   central_method = "median",
   mask_final_deaths_step = TRUE,
   n_cases_warmup_mask = 2L,
+  score_idx_cases = NULL,
+  score_idx_deaths = NULL,
   verbose = TRUE
 )
 ```
@@ -90,6 +92,17 @@ plot_model_ensemble(
   DISPLAY ONLY (raw arrays untouched). The legitimate leading
   reporting-lag zeros in Deaths (from `delta_reporting_deaths`) are REAL
   and are NOT masked by this argument. Set to `0L` to disable.
+
+- score_idx_cases, score_idx_deaths:
+
+  Integer (1-based). Per-channel scored time-window START index (burn-in
+  / deaths-era start). Leading timesteps strictly BEFORE the index are
+  blanked (set to `NA`) in the exported CSV and the rendered lines so
+  the plot shows only the scored window. Default `1L` (no blanking).
+  When `NULL` (the typical caller pattern) the value is read from
+  `ensemble$artifact_mask$score_idx_*` so plots automatically track the
+  scored window the ensemble was built with. DISPLAY ONLY (raw arrays
+  untouched).
 
 - verbose:
 

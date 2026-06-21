@@ -78,11 +78,15 @@ Invisibly returns `NULL`. Side effects:
 - Saves the combined weekly data to
   `PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv`.
 
-- Applies the trust-tier gate before downscaling: weeks tagged
-  `disaggregation_method` `fourier_*` (synthetic reconstructions) or
-  `assumed_zero` (surveillance silence) are NA-blanked (cases, deaths,
-  and weight) so they never reach the data-likelihood; `observed`,
-  `documented_zero`, and direct WHO/JHU/SUPP rows are kept.
+- Applies the trust-tier gate before downscaling: only weeks tagged
+  `disaggregation_method` `assumed_zero` (surveillance silence, a pure
+  assumption) are NA-blanked. `observed`, `documented_zero`, direct
+  WHO/JHU/SUPP rows, AND `fourier_*` (synthetic reconstructions of real
+  annual/quarterly totals) all reach the daily fit target carrying their
+  per-week `confidence_weight` (lower for fourier, ~0.4-0.5), which
+  [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
+  consumes as a per-observation weight – so low-confidence reconstructed
+  weeks inform the fit at reduced weight rather than being dropped.
 
 - Downscales weekly `cases` and `deaths` to daily counts, preserving
   square structure (keeping days with NA), and carries `source`,

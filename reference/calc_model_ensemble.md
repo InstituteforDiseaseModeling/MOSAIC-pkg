@@ -24,6 +24,8 @@ calc_model_ensemble(
   sampling_args = list(),
   n_cases_warmup_mask = 2L,
   mask_final_deaths_step = TRUE,
+  score_idx_cases = 1L,
+  score_idx_deaths = 1L,
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
@@ -101,6 +103,13 @@ calc_model_ensemble(
   last slot is never written; laser issue \#82). This value is NOT
   applied to any returned series here; it is recorded in the returned
   `artifact_mask` element for downstream scoring.
+
+- score_idx_cases, score_idx_deaths:
+
+  Integer (1-based). Per-channel scored time-window START index (burn-in
+  / deaths-era start). Columns strictly BEFORE these indices are
+  unscored and recorded in `artifact_mask` so R2/bias scoring drops
+  them. Default `1L` (no-op). NOT applied to the returned series here.
 
 - parallel:
 
@@ -207,10 +216,12 @@ S3 object of class `"mosaic_ensemble"` containing:
 - artifact_mask:
 
   List recording the engine-artifact masking spec for downstream
-  scoring: `$cases_warmup` (integer, leading cases timesteps to exclude)
-  and `$deaths_final` (logical, exclude the final deaths timestep). The
-  central/quantile/array fields above are RAW (unmasked); this spec is
-  the contract scoring sites use to drop artifact positions.
+  scoring: `$cases_warmup` (integer, leading cases timesteps to
+  exclude), `$deaths_final` (logical, exclude the final deaths
+  timestep), and `$score_idx_cases`/`$score_idx_deaths` (integer,
+  1-based per-channel scored-window start; columns before are dropped).
+  The central/quantile/array fields above are RAW (unmasked); this spec
+  is the contract scoring sites use to drop artifact positions.
 
 ## See also
 

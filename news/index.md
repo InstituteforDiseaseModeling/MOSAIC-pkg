@@ -1,5 +1,83 @@
 # Changelog
 
+## MOSAIC 0.47.2
+
+- **`config_default` (v4.3) + `priors_default` (v15.13) rebuilt under
+  the relaxed trust-tier gate, at the unchanged 2023-01-01 window.**
+  Following the v0.47.1 fourier-keep policy, the shipped fit-target
+  matrices now retain `fourier_*` reconstructions at their lower
+  per-week `confidence_weight` instead of NA-blanking them. 811 fourier
+  weeks fall in the 2023+ window, so the change is material:
+  `reported_cases_weight` cells in `(0,1)` rise from 10,062 → 17,073
+  (range 0.40–0.95), with the complementary drop in `==1` cells — those
+  weeks now inform the fit as down-weighted real observations rather
+  than being dropped. The simulation window is **unchanged**
+  (`date_start = 2023-01-01`, `ncol = 1398`); only the per-observation
+  weighting of previously-discarded weeks differs. priors
+  `build_date_start = 2023-01-01`, `ic_t0 = 2023-02-01` (IC seeding
+  epoch unchanged). `test-config_default_weights` (21/21) and
+  `test-cfr-pipeline-consistency` (93/93) pass.
+
+## MOSAIC 0.47.1
+
+- **Surveillance trust-tier gate relaxed: keep `fourier_*`
+  reconstructions, down-weighted.**
+  [`process_cholera_surveillance_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_cholera_surveillance_data.md)
+  now NA-blanks **only** `assumed_zero` weeks (a pure
+  surveillance-silence assumption). `fourier_*` rows — synthetic
+  reconstructions of *real* annual/quarterly totals — previously
+  hard-dropped are now kept and reach the daily fit target carrying
+  their lower per-week `confidence_weight` (~0.4–0.5 vs ~0.9 for
+  `observed`), which
+  [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
+  consumes as a per-observation weight. So
+  low-confidence-but-real-magnitude weeks (e.g. the 2019–2022 JHU→WHO
+  handoff gap) inform the fit at reduced weight rather than being
+  discarded. `observed`, `documented_zero`, and direct WHO/JHU/SUPP rows
+  are unchanged. Code-only here; the shipped
+  `config_default`/`priors_default` are rebuilt under this policy in a
+  follow-up commit.
+
+## MOSAIC 0.47.0
+
+- **Per-channel scored time window (burn-in + deaths-era start).** New
+  run-time-only knobs in `control$likelihood` exclude leading time steps
+  from the likelihood and R²/bias scoring, without touching
+  `config_default`, the builders, or `ic_t0`:
+  - `burn_in_days` (integer ≥ 0, default `0L`) — drops the leading
+    IC-transient steps from **both** channels. MOSAIC seeds E/I by
+    moment-matching at `date_start`; the seed discharges into reported
+    cases over the first ~1–2 weeks, producing a day-1 spike the forced
+    steady state can’t match (verified on KEN: medoid day-3 cases 2761
+    vs observed 15, ~184× over observed; decays to ~observed by day 21).
+    `burn_in_days=21` removes it from the scored series entirely
+    (scored-window max 45 vs observed max 125).
+  - `deaths_score_start` (`NULL` or `Date`/`"YYYY-MM-DD"`, default
+    `NULL`) — scores deaths only from a later date (non-stationary
+    observed CFR makes deaths unfittable before ~2023 for several
+    countries).
+  - `score_start_cases` (`NULL` or date, default `NULL`) — optional
+    explicit cases start overriding the burn-in.
+- **Mechanism.** Resolved once to per-channel 1-based start indices
+  (`.mosaic_resolve_score_window()`), the worker **slices** `obs`/`est`
+  to `min(idx_cases, idx_deaths):n` (not merely down-weighting — the
+  peak/cumulative shape terms don’t honor `weights_time`), zeros the
+  deaths residual prefix, and passes the **sliced start date** so the
+  peak `date_seq` stays aligned. R²/bias sites drop the unscored head
+  via a generalized `.mosaic_mask_central_for_scoring()`;
+  [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+  records `score_idx_*` in `artifact_mask`;
+  [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md)
+  blanks the unscored head for display.
+- **Bit-identical at defaults.** All knobs at their defaults yield
+  `idx_cases = idx_deaths = 1` ⇒ no slicing ⇒ scoring identical to
+  pre-feature runs (new `test-burn_in_scoring_parity.R` + the unchanged
+  tier-2/reference/obs-weights parity suites). Carried in
+  `control$likelihood` ⇒ byte-compared by the resume guard ⇒ changing
+  the window across a resume correctly errors. Dask path re-injects the
+  resolved `score_idx_*` and filters `epidemic_peaks` at the sliced
+  start (schema-parity test extended).
+
 ## MOSAIC 0.46.4
 
 - **Hardening from the adversarial red-team of the 0.46.1–0.46.3
