@@ -1,3 +1,7 @@
+# MOSAIC 0.47.1
+
+* **Surveillance trust-tier gate relaxed: keep `fourier_*` reconstructions, down-weighted.** `process_cholera_surveillance_data()` now NA-blanks **only** `assumed_zero` weeks (a pure surveillance-silence assumption). `fourier_*` rows — synthetic reconstructions of *real* annual/quarterly totals — previously hard-dropped are now kept and reach the daily fit target carrying their lower per-week `confidence_weight` (~0.4–0.5 vs ~0.9 for `observed`), which `calc_model_likelihood()` consumes as a per-observation weight. So low-confidence-but-real-magnitude weeks (e.g. the 2019–2022 JHU→WHO handoff gap) inform the fit at reduced weight rather than being discarded. `observed`, `documented_zero`, and direct WHO/JHU/SUPP rows are unchanged. Code-only here; the shipped `config_default`/`priors_default` are rebuilt under this policy in a follow-up commit.
+
 # MOSAIC 0.47.0
 
 * **Per-channel scored time window (burn-in + deaths-era start).** New run-time-only knobs in `control$likelihood` exclude leading time steps from the likelihood and R²/bias scoring, without touching `config_default`, the builders, or `ic_t0`:

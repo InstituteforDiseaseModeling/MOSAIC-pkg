@@ -42,11 +42,15 @@
 #'   \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 #'   \item Saves the combined weekly data to
 #'     \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
-#'   \item Applies the trust-tier gate before downscaling: weeks tagged
-#'     \code{disaggregation_method} \code{fourier_*} (synthetic reconstructions) or
-#'     \code{assumed_zero} (surveillance silence) are NA-blanked (cases, deaths, and
-#'     weight) so they never reach the data-likelihood; \code{observed},
-#'     \code{documented_zero}, and direct WHO/JHU/SUPP rows are kept.
+#'   \item Applies the trust-tier gate before downscaling: only weeks tagged
+#'     \code{disaggregation_method} \code{assumed_zero} (surveillance silence, a pure
+#'     assumption) are NA-blanked. \code{observed}, \code{documented_zero}, direct
+#'     WHO/JHU/SUPP rows, AND \code{fourier_*} (synthetic reconstructions of real
+#'     annual/quarterly totals) all reach the daily fit target carrying their
+#'     per-week \code{confidence_weight} (lower for fourier, ~0.4-0.5), which
+#'     \code{calc_model_likelihood()} consumes as a per-observation weight -- so
+#'     low-confidence reconstructed weeks inform the fit at reduced weight rather
+#'     than being dropped.
 #'   \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
 #'     preserving square structure (keeping days with NA), and carries \code{source},
 #'     \code{disaggregation_method}, and \code{confidence_weight} to each daily row
@@ -99,20 +103,19 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
      # The LSTM suitability path consumes the weight (loss_suitability.R
      # apply_cw_overlay, use_confidence_weight = TRUE -- production default), so AI /
      # synthetic-fourier rows are down-weighted there, NOT at parity with direct
-     # observations. As of the multi-source integration, the daily combined file
-     # applies a TRUST-TIER GATE (below) rather than blanket-blanking AI: AI
-     # `observed` and `documented_zero` weeks DO reach the calibration fit target
-     # (reported_cases/reported_deaths), while `fourier_*` (synthetic) and
-     # `assumed_zero` weeks are NA-blanked. The per-week confidence_weight is carried
-     # to the daily file so a per-observation weighting can consume it later; the
-     # current calibration likelihood does not yet multiply by it (tracked in a
-     # separate issue).
+     # observations. As of v0.47.1 the daily combined file applies a minimal
+     # TRUST-TIER GATE (below): AI `observed`, `documented_zero`, AND `fourier_*`
+     # (synthetic reconstructions of real annual/quarterly totals) all reach the
+     # calibration fit target (reported_cases/reported_deaths) carrying their per-week
+     # confidence_weight (lower for fourier); only `assumed_zero` (a pure assumption)
+     # is NA-blanked. calc_model_likelihood() consumes the per-cell confidence_weight,
+     # so low-confidence reconstructed weeks inform the fit at reduced weight.
      if (isTRUE(include_ai) && !is.null(d_ai)) {
           warning(sprintf(
-               paste0("include_ai=TRUE: %d AI rows merged. AI `observed`/`documented_zero` weeks ",
-                      "enter the fit target (trust-tier gate); `fourier_*`/`assumed_zero` are ",
-                      "NA-blanked. confidence_weight is carried to the daily file but not yet ",
-                      "consumed by the calibration likelihood (LSTM suitability does consume it)."),
+               paste0("include_ai=TRUE: %d AI rows merged. AI `observed`/`documented_zero`/`fourier_*` ",
+                      "weeks enter the fit target carrying their confidence_weight (fourier ~0.4-0.5, ",
+                      "down-weighted via calc_model_likelihood per-observation weights); only ",
+                      "`assumed_zero` is NA-blanked."),
                nrow(d_ai)), immediate. = TRUE)
      }
 
@@ -275,21 +278,24 @@ process_cholera_surveillance_data <- function(PATHS, include_ai = FALSE) {
           # Calibration consumers read this daily file (est_epidemic_peaks ->
           # calc_model_likelihood peak terms, est_initial_E_I, plotting, and -- once
           # re-pointed -- the reported_cases/reported_deaths fit matrices). We gate
-          # on disaggregation_method, NOT source: keep `observed` and
-          # `documented_zero` (informative true-absence), plus direct WHO/JHU/SUPP
-          # rows (disaggregation_method = NA), and NA-blank `fourier_*` (synthetic
-          # seasonal reconstructions) and `assumed_zero` (surveillance silence !=
-          # true absence) so neither modeled fill nor assumed zeros reach the
-          # data-likelihood. The weight is NA'd in lockstep so every surviving
-          # cell carries a finite confidence_weight.
-          meth <- df_iso$disaggregation_method
-          # Trust-tier gate: only `fourier_*` (synthetic reconstructions) and
-          # `assumed_zero` (surveillance silence != true absence) are NA-blanked --
-          # they are not data. `observed` and `documented_zero` (confirmed absence)
-          # flow into the daily fit target carrying their per-week confidence_weight,
+          # on disaggregation_method, NOT source: keep `observed`, `documented_zero`
+          # (informative true-absence), direct WHO/JHU/SUPP rows (method = NA), AND
+          # `fourier_*` (synthetic reconstructions of REAL annual/quarterly totals).
+          # The fourier rows are NOT hard-filtered: they enter the fit target carrying
+          # their lower per-week confidence_weight (~0.4-0.5 vs ~0.9 for observed),
           # which calc_model_likelihood() consumes as a per-observation weight so the
-          # lower-trust cells (incl. confirmed-absence zeros) inform without dominating.
-          drop_week <- !is.na(meth) & (grepl("^fourier", meth) | meth == "assumed_zero")
+          # reconstructed weeks inform the fit at reduced weight rather than being
+          # dropped (fills otherwise-empty eras, e.g. the 2019-2022 JHU->WHO handoff
+          # gap, with down-weighted real-magnitude data). Only `assumed_zero`
+          # (surveillance silence != true absence -- a pure assumption, not a
+          # reconstruction of real data) is NA-blanked. The weight is NA'd in lockstep
+          # so every surviving cell carries a finite confidence_weight.
+          meth <- df_iso$disaggregation_method
+          # Trust-tier gate (v0.47.1): NA-blank ONLY `assumed_zero`. fourier_* synthetic
+          # reconstructions are KEPT and down-weighted by their confidence_weight rather
+          # than dropped -- low-confidence-but-real-magnitude weeks inform the fit at
+          # reduced weight, per the per-observation weighting in calc_model_likelihood().
+          drop_week <- !is.na(meth) & (meth == "assumed_zero")
           df_iso$cases[drop_week]  <- NA
           df_iso$deaths[drop_week] <- NA
           if ("confidence_weight" %in% names(df_iso))

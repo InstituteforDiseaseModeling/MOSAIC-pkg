@@ -41,11 +41,15 @@ Invisibly returns \code{NULL}. Side effects:
 \item Creates truly square data structure with all country-week combinations from min to max date (missing data = NA).
 \item Saves the combined weekly data to
 \code{PATHS$DATA_CHOLERA_WEEKLY/cholera_surveillance_weekly_combined.csv}.
-\item Applies the trust-tier gate before downscaling: weeks tagged
-\code{disaggregation_method} \code{fourier_*} (synthetic reconstructions) or
-\code{assumed_zero} (surveillance silence) are NA-blanked (cases, deaths, and
-weight) so they never reach the data-likelihood; \code{observed},
-\code{documented_zero}, and direct WHO/JHU/SUPP rows are kept.
+\item Applies the trust-tier gate before downscaling: only weeks tagged
+\code{disaggregation_method} \code{assumed_zero} (surveillance silence, a pure
+assumption) are NA-blanked. \code{observed}, \code{documented_zero}, direct
+WHO/JHU/SUPP rows, AND \code{fourier_*} (synthetic reconstructions of real
+annual/quarterly totals) all reach the daily fit target carrying their
+per-week \code{confidence_weight} (lower for fourier, ~0.4-0.5), which
+\code{calc_model_likelihood()} consumes as a per-observation weight -- so
+low-confidence reconstructed weeks inform the fit at reduced weight rather
+than being dropped.
 \item Downscales weekly \code{cases} and \code{deaths} to daily counts,
 preserving square structure (keeping days with NA), and carries \code{source},
 \code{disaggregation_method}, and \code{confidence_weight} to each daily row
