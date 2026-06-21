@@ -1,5 +1,30 @@
 # Changelog
 
+## MOSAIC 0.47.3
+
+- **Default `control$likelihood$burn_in_days` changed from `0` to
+  `30`.** The per-channel scored window (v0.47.0) is now **on by
+  default**: the first 30 daily steps are excluded from the likelihood
+  and R²/bias scoring. Rationale from the optimal-window research: the
+  seeded E/I discharge into **cases** settles by ~day 14–21, but the
+  **deaths** IC transient lags (death event + `delta_reporting_deaths` ≈
+  5 d) and is still decaying out to ~day 28–35 — so a single 30-day
+  window clears both channels’ transients. On KEN this took cases-R²
+  0.338 → 0.56 and kept dropping the deaths bias well past 21 (3.26 →
+  2.50 at 21 → 2.22 at 28). Cost is ~1 % of a 2018 window / ~2.5 % of
+  the 2023 window, and it is a no-op where there is no start spike
+  (high-burden countries unaffected). **Behavior change, not
+  bit-identical:** like the `central_method` change, this alters the
+  scored target, so `config_best`/subset/medoid selection differs and
+  runs are **not comparable across this boundary**. Set
+  `control$likelihood$burn_in_days = 0L` to restore pre-v0.47.3 scoring.
+  **Note:** on very short windows 30 may clamp toward `n_time` (the
+  `min_obs_for_likelihood` gate then yields a 0-contribution, fail-safe)
+  — set `0L` for short-window/outbreak sims. The residual deaths-bias
+  floor (KEN ~1.6, COD ~1.27) is model deaths-baseline / implied-CFR,
+  NOT IC transient, and is unaffected by burn-in (that’s the
+  `deaths_score_start`/CFR lever).
+
 ## MOSAIC 0.47.2
 
 - **`config_default` (v4.3) + `priors_default` (v15.13) rebuilt under
