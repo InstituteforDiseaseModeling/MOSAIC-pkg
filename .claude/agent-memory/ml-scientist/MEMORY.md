@@ -1,0 +1,1 @@
+- [psi G red-team (config_default v4.0)](project_psi_G_redteam_v4.md) — BLOCKER: bias-correction lm corrupts GMB/ZAF/SEN/SWZ psi (collapse + 9.7x blowup); §8.2 amplitude guard does NOT exist; parallel_seeds=10 violates OOM constraint

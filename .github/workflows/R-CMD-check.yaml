@@ -94,7 +94,7 @@ jobs:
       - name: Install R package dependencies
         run: |
           Rscript -e 'if (!requireNamespace("remotes", quietly=TRUE)) install.packages("remotes")'
-          Rscript -e 'remotes::install_deps(dependencies = c("Depends", "Imports"), upgrade = "never")'
+          Rscript -e 'remotes::install_deps(dependencies = TRUE, upgrade = "never")'
 
       - name: Build source tarball
         run: R CMD build . --no-manual
