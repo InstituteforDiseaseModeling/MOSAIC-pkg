@@ -1,5 +1,37 @@
 # Changelog
 
+## MOSAIC 0.47.5
+
+- **Hardening of the config/priors manipulation ops behind the staged
+  metapop calibration** (independent `swe` + `maintainer` deep review on
+  the full 40-location structure). The staged round-trip
+  (`get_location_config` → `update_priors_from_posteriors` →
+  `inflate_priors` → `make_LASER_config`/`sample_parameters`) was
+  verified engineering-correct on the real 40-loc
+  `config_default`/`priors_default` and real Stage-1 posteriors (39/39
+  non-target-location invariance, exact lognormal `beta_j0_tot`
+  inflation, bit-perfect matrix round-trip). Two defensive gaps closed:
+  - `.validate_updated_priors()` now checks per-group location
+    **names**, not just counts — a name-drift that preserves cardinality
+    (e.g. a relabelled iso) previously passed validation silently (the
+    very misalignment class this validator exists to catch).
+  - [`get_location_priors()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_priors.md)
+    now returns locations in **canonical source order** (matching
+    [`get_location_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_location_config.md),
+    which selects via `which(location_name %in% iso)`) instead of
+    requested-argument order — removing a position-vs-name foot-gun for
+    multi-iso callers. Sampling is name-keyed, so this changes order
+    only, not values (no result change).
+- **New `test-staged_metapop_prior_ops.R`** exercises these on the real
+  40-loc objects (previously only 2-location toy fixtures): partial-fold
+  non-target invariance, validator name-drift detection,
+  `get_location_priors`/`get_location_config` order consistency, full-40
+  `inflate_priors` scope + lognormal mean/variance, and the
+  `convert_config_to_matrix`/`convert_matrix_to_config` 40-loc
+  round-trip. (Deferred, doc-only: `convert_config_to_dataframe` is not
+  param-set-equivalent to the matrix path — review item LOW-3, unused by
+  `run_MOSAIC`.)
+
 ## MOSAIC 0.47.3
 
 - **Default `control$likelihood$burn_in_days` changed from `0` to
