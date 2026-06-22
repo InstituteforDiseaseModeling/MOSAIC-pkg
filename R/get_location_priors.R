@@ -171,11 +171,16 @@ get_location_priors <- function(iso, priors = NULL) {
         param_filtered[[attr]] <- param[[attr]]
       }
       
-      # Extract only the requested locations
+      # Extract only the requested locations, iterating in the SOURCE
+      # (canonical) order rather than the requested-argument order so the
+      # output location order matches get_location_config() (which selects via
+      # which(location_name %in% iso)). This keeps the two extractors aligned
+      # for multi-iso calls and removes the positional-zip foot-gun. Sampling
+      # itself is name-keyed, so this changes order only, not values.
       if (!is.null(param$location)) {
-        for (loc in iso) {
+        for (loc in intersect(names(param$location), iso)) {
           if (!is.null(param$location[[loc]])) {
-            param_filtered$location[[loc]] <- 
+            param_filtered$location[[loc]] <-
               param$location[[loc]]
           }
         }

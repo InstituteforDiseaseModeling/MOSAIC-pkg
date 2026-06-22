@@ -458,6 +458,20 @@ update_priors_from_posteriors <- function(priors, posteriors, verbose = TRUE) {
         "Location count mismatch for %s: original %d, updated %d",
         param_base, n_orig, n_upd))
     }
+    # Check location NAMES match, not just the count -- a count-only check is
+    # blind to location name-drift that preserves cardinality (e.g. a relabelled
+    # iso), exactly the silent-misalignment failure class this validator exists
+    # to catch.
+    names_orig <- names(original$parameters_location[[param_base]]$location)
+    names_upd  <- names(updated$parameters_location[[param_base]]$location)
+    if (!identical(sort(names_orig), sort(names_upd))) {
+      dropped <- setdiff(names_orig, names_upd)
+      added   <- setdiff(names_upd, names_orig)
+      errors <- c(errors, sprintf(
+        "Location name mismatch for %s%s%s", param_base,
+        if (length(dropped)) sprintf(" [dropped: %s]", paste(dropped, collapse = ",")) else "",
+        if (length(added))   sprintf(" [added: %s]",   paste(added,   collapse = ",")) else ""))
+    }
   }
 
   if (length(errors) > 0) {
