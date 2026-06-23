@@ -12,6 +12,7 @@
   args$metadata <- NULL
   args$zeta_ratio <- NULL
   args$decay_days_spread <- NULL
+  args$CFR_target <- NULL   # B2 (v4.5): injected tracking field, not a signature arg
   args$reported_cases_weight <- NULL
   args$reported_deaths_weight <- NULL
   args$output_file_path <- NULL

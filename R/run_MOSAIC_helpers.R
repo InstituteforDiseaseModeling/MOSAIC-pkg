@@ -2169,17 +2169,38 @@
       lapply(sim_ids, worker_func)
     }
   } else {
-    # Parallel execution
-    if (isTRUE(show_progress)) {
-      # Simple progress bar with block character (no color codes)
-      # style = 1: Shows elapsed and remaining time with percentage
-      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
-      on.exit(pbapply::pboptions(pbo), add = TRUE)
-
-      pbapply::pblapply(sim_ids, worker_func, cl = cl)
-    } else {
-      parallel::parLapply(cl, sim_ids, worker_func)
-    }
+    # Parallel execution.
+    #
+    # Worker-death-robust gather: parLapply()/pblapply(cl=) collect results with a
+    # BLOCKING unserialize() that, on Linux, hangs the master FOREVER if a PSOCK
+    # worker PROCESS dies mid-task -- a fatal C-level abort in the embedded
+    # Python/numba/laser engine, or an OOM kill (NOT an R-level error, which the
+    # worker already turns into a FALSE record). Calibration runs 10,000s of sims
+    # per country, the highest-exposure parallel gather in the package, so route it
+    # through the same socketSelect()-timeout dispatch used by calc_model_ensemble()
+    # (.mosaic_cluster_lapply_robust): a dead worker degrades on the survivors with
+    # a warning; total silence past the idle timeout stop()s with a diagnostic
+    # instead of hanging.
+    #
+    # worker_func is `function(sim_id) .run_sim_worker(sim_id)`; `.run_sim_worker`
+    # is installed on each worker's .GlobalEnv (clusterCall in run_MOSAIC). Reparent
+    # the closure to globalenv() so the robust gather's per-task dispatch ships a
+    # tiny payload (not the heavy run_MOSAIC frame) while still resolving
+    # .run_sim_worker on the worker.
+    environment(worker_func) <- globalenv()
+    res <- .mosaic_cluster_lapply_robust(
+      cl, sim_ids, worker_func,
+      idle_timeout_sec = getOption("MOSAIC.ensemble_worker_timeout_sec", 1800),
+      progress = isTRUE(show_progress),
+      label = "run_MOSAIC simulation batch"
+    )
+    # A crashed worker yields a list(.mosaic_worker_died=TRUE, success=FALSE, ...)
+    # marker; the calibration success tally expects a scalar logical per sim
+    # (sum(unlist(success_indicators))). Coerce a dead-worker task to FALSE: it
+    # counts as a failed sim and the batch degrades gracefully (the lost sim_id is
+    # simply re-drawn on resume).
+    lapply(res, function(r)
+      if (is.list(r) && isTRUE(r$.mosaic_worker_died)) FALSE else r)
   }
 }
 

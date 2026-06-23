@@ -45,6 +45,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   config$metadata          <- NULL
   config$zeta_ratio        <- NULL
   config$decay_days_spread <- NULL
+  config$CFR_target        <- NULL   # B2 (v4.5): injected tracking field, not a signature arg
   config$reported_cases_weight  <- NULL
   config$reported_deaths_weight <- NULL
   config$output_file_path  <- NULL

@@ -1,7 +1,7 @@
 Package: MOSAIC
 Type: Package
 Title: Metapopulation Outbreak Simulation And Interventions for Cholera (MOSAIC)
-Version: 0.48.3
+Version: 0.49.2
 Date: 2026-06-23
 Authors@R: c(
           person("John R", "Giles",
@@ -115,4 +115,5 @@ Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: dask_worker_schema_parity, dask-psock-orchestrator,
   est_initial_R_parallel, optimize_ensemble_subset, rolling_cv_empty_val_skip,
-  calc_model_ensemble, est_initial_E_I, dask-local-separation
+  calc_model_ensemble, est_initial_E_I, dask-local-separation,
+  ensemble_cluster_robust

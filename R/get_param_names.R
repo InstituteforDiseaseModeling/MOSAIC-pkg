@@ -121,7 +121,8 @@ get_param_names <- function(object) {
         "decay_days_long",
         "decay_shape_1",
         "decay_shape_2",
-        "mu_j_baseline",      # Baseline per-symptomatic mortality hazard (CFR-derived)
+        "CFR_target",         # B2: per-country target reported CFR (drives mu_j_baseline derivation)
+        "mu_j_baseline",      # Baseline per-symptomatic mortality hazard (B2: derived from CFR_target * chain)
         "mu_j_slope",         # Temporal CFR trend
         "mu_j_epidemic_factor", # Epidemic-period CFR multiplier
         "epidemic_threshold", # Epidemic regime activation threshold
@@ -143,7 +144,8 @@ get_param_names <- function(object) {
         "beta_j0_env", "beta_j0_hum",
         "tau_i", "theta_j",
         "a_1", "a_2", "b_1", "b_2",
-        "mu_j_baseline",                 # Baseline mortality hazard (CFR-derived, daily)
+        "CFR_target",                    # B2: per-country target reported CFR
+        "mu_j_baseline",                 # Baseline mortality hazard (B2: derived from CFR_target * chain)
         "mu_j_slope",                    # Temporal CFR trend
         "mu_j_epidemic_factor",          # Epidemic-period CFR multiplier
         "epidemic_threshold",            # Per-location epidemic regime activation

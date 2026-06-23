@@ -59,6 +59,131 @@
   invisible(proj_gb)
 }
 
+# -----------------------------------------------------------------------------
+# Worker-death-robust parallel gather (PSOCK)
+# -----------------------------------------------------------------------------
+# `parallel::parLapply()` / `pbapply::pblapply(cl=)` gather results with a
+# BLOCKING `unserialize(node$con)`. If a PSOCK worker PROCESS dies mid-task --
+# a segfault / fatal C-level abort in the embedded Python (numba/laser) runtime,
+# an OOM kill, etc. (NOT an R-level error, which the worker's tryCatch already
+# turns into a `success = FALSE` record) -- the behaviour is platform-dependent:
+#   * macOS surfaces the half-closed socket as "error reading from connection";
+#   * Linux can BLOCK FOREVER on the dead peer's socket.
+# The Linux block is the observed "0 CPU on master AND all workers, frozen"
+# deadlock: a worker crashed, every other worker finished, and the master is
+# parked in unserialize() on the dead socket with no timeout.
+#
+# This helper replaces the blocking gather with a load-balanced dispatch that
+# waits on the worker sockets with `socketSelect(timeout=)`. If NO worker
+# produces a result within `idle_timeout_sec` of continuous silence (every
+# in-flight worker has gone unresponsive) it tears the cluster down and
+# `stop()`s with a diagnostic naming the stalled tasks -- surfacing the failure
+# instead of hanging the master indefinitely. A worker that dies but whose
+# socket reports readable (EOF / reset) is caught per-task and recorded as a
+# failed result so the run degrades gracefully on the survivors.
+#
+# `socketSelect` is base R. The PSOCK send/recv primitives are accessed via
+# `getFromNamespace()` (R CMD check clean; they are stable internal entry
+# points used by parallel's own clusterApplyLB).
+.mosaic_cluster_lapply_robust <- function(cl, X, fun, idle_timeout_sec = 1800,
+                                          progress = TRUE,
+                                          label = "calc_model_ensemble") {
+  n <- length(X)
+  if (n == 0L) return(list())
+
+  sendCall <- utils::getFromNamespace("sendCall", "parallel")
+  recvData <- utils::getFromNamespace("recvData", "parallel")
+
+  n_workers <- length(cl)
+  results <- vector("list", n)
+  # node_task[w] = index into X currently in flight on worker w (NA if idle).
+  node_task <- rep(NA_integer_, n_workers)
+  next_task <- 1L
+  n_done <- 0L
+  pb <- NULL
+  if (isTRUE(progress)) {
+    pb <- utils::txtProgressBar(min = 0, max = n, style = 3, char = "█")
+    on.exit(close(pb), add = TRUE)
+  }
+
+  # dead[w] = TRUE once worker w's process is known to have crashed; such a
+  # worker is never sent another task.
+  dead <- logical(n_workers)
+
+  dispatch_to_idle <- function() {
+    # Send queued tasks to any worker that is alive AND idle.
+    idle <- which(is.na(node_task) & !dead)
+    for (w in idle) {
+      if (next_task > n) break
+      sendCall(cl[[w]], fun, list(X[[next_task]]), tag = next_task)
+      node_task[w] <<- next_task
+      next_task <<- next_task + 1L
+    }
+  }
+
+  # Prime: one task per worker (load-balanced).
+  dispatch_to_idle()
+
+  while (n_done < n) {
+    busy_w <- which(!is.na(node_task))
+    if (length(busy_w) == 0L) {
+      # No worker holds a task but work remains -> every worker has died.
+      stop(sprintf(paste0(
+        "%s parallel gather: all %d worker(s) crashed with %d task(s) ",
+        "unfinished. A worker process died (fatal abort in the embedded Python/numba engine ",
+        "or an OOM kill), not an R-level error. Re-run with parallel = FALSE to surface the ",
+        "underlying engine error, or reduce n_cores to lower memory pressure."),
+        label, n_workers, n - n_done), call. = FALSE)
+    }
+    cons <- lapply(cl[busy_w], function(node) node$con)
+    # Wait for any busy worker's socket to become readable, with a finite
+    # timeout so a dead/silent peer cannot block the master forever. This is the
+    # core deadlock guard: a blocking unserialize() on a crashed worker's socket
+    # is what hangs the master indefinitely on Linux.
+    ready <- socketSelect(cons, write = FALSE, timeout = idle_timeout_sec)
+    if (!any(ready)) {
+      stalled <- node_task[busy_w]
+      stop(sprintf(paste0(
+        "%s parallel gather stalled: no worker produced a result ",
+        "within %d s. %d task(s) still in flight (indices: %s) on worker(s) that have gone ",
+        "unresponsive -- a worker process most likely crashed (a fatal abort in the embedded ",
+        "Python/numba engine or an OOM kill). The cluster is being torn down. Re-run with ",
+        "parallel = FALSE to surface the underlying engine error, or reduce n_cores to lower ",
+        "memory pressure."),
+        label, as.integer(idle_timeout_sec), length(stalled),
+        paste(stalled, collapse = ", ")),
+        call. = FALSE)
+    }
+    # Drain every ready worker this round. Read from each ready node SPECIFICALLY
+    # (recvData(node), not recvOneResult(cl)) so a failed read is attributed to
+    # the correct worker -- the in-flight task on THAT node.
+    for (k in which(ready)) {
+      w <- busy_w[k]
+      task_w <- node_task[w]
+      res <- tryCatch(recvData(cl[[w]]), error = function(e) e)
+      if (inherits(res, "error")) {
+        # Socket reported readable but the read failed (EOF / reset): the worker
+        # process died. Record the in-flight task as failed and retire the worker.
+        results[[task_w]] <- list(.mosaic_worker_died = TRUE,
+                                  success = FALSE,
+                                  error = conditionMessage(res))
+        node_task[w] <- NA_integer_
+        dead[w] <- TRUE
+        n_done <- n_done + 1L
+        if (!is.null(pb)) utils::setTxtProgressBar(pb, n_done)
+        next
+      }
+      results[[task_w]] <- res$value
+      node_task[w] <- NA_integer_
+      n_done <- n_done + 1L
+      if (!is.null(pb)) utils::setTxtProgressBar(pb, n_done)
+    }
+    # Feed all freed (alive) workers their next queued tasks.
+    dispatch_to_idle()
+  }
+  results
+}
+
 #' Compute Weighted Ensemble Predictions from Multiple Parameter Sets
 #'
 #' @description
@@ -447,16 +572,30 @@ calc_model_ensemble <- function(config,
         }, root_dir)
       }
 
-      parallel::clusterExport(cl, c("param_configs"), envir = environment())
+      # Export the configs AND the worker function to each worker's global env
+      # so the per-task dispatch closure (below) carries no payload -- it resolves
+      # both from the worker side. This keeps the robust load-balanced dispatcher
+      # from re-serializing all param_configs on every task.
+      parallel::clusterExport(cl, c("param_configs", "run_param_stoch_simulation"),
+                              envir = environment())
 
       if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
-      pbo <- pbapply::pboptions(type = "timer", char = "\u2588", style = 1)
-      on.exit(pbapply::pboptions(pbo), add = TRUE)
 
-      results_list <- pbapply::pblapply(
-        split(task_list, seq_len(nrow(task_list))),
-        function(row) run_param_stoch_simulation(row, param_configs),
-        cl = cl
+      # Worker-death-robust gather (see .mosaic_cluster_lapply_robust): a PSOCK
+      # worker that crashes its process (fatal Python/numba abort, OOM kill)
+      # would otherwise block the master forever in unserialize() on Linux.
+      # This dispatcher waits on the worker sockets with a finite timeout and
+      # surfaces a diagnostic stop() instead of hanging.
+      .ens_idle_timeout <- as.numeric(
+        getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
+      .ens_task_fun <- function(row) run_param_stoch_simulation(row, param_configs)
+      environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
+      results_list <- .mosaic_cluster_lapply_robust(
+        cl = cl,
+        X  = split(task_list, seq_len(nrow(task_list))),
+        fun = .ens_task_fun,
+        idle_timeout_sec = .ens_idle_timeout,
+        progress = isTRUE(verbose)
       )
     } else {
       if (verbose) message("Running ", total_sims, " simulations sequentially...")
@@ -472,6 +611,19 @@ calc_model_ensemble <- function(config,
         split(task_list, seq_len(nrow(task_list))),
         function(row) run_param_stoch_simulation(row, param_configs)
       )
+    }
+
+    # Surface any worker-process deaths recorded by the robust dispatcher (these
+    # carry no param_idx and are skipped by the success check below, but the user
+    # must be told a worker crashed rather than silently losing those slices).
+    n_worker_deaths <- sum(vapply(results_list,
+      function(r) isTRUE(r$.mosaic_worker_died), logical(1)))
+    if (n_worker_deaths > 0L) {
+      warning(sprintf(paste0(
+        "calc_model_ensemble: %d task(s) lost to worker-process crashes (fatal engine ",
+        "abort or OOM in a PSOCK worker); their predictions are dropped and the ensemble ",
+        "proceeds on the survivors. Re-run with parallel = FALSE to surface the underlying ",
+        "engine error."), n_worker_deaths), call. = FALSE)
     }
 
     # Fill arrays from results

@@ -60,7 +60,17 @@ survival; decay_days_long is derived as short + spread (default TRUE)
 \item sample_a_2_j: Seasonality (default TRUE)
 \item sample_b_1_j: Seasonality (default TRUE)
 \item sample_b_2_j: Seasonality (default TRUE)
-\item sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
+\item sample_CFR_target: Per-country target reported case-fatality ratio
+(B2 lognormal location prior). When the priors object carries a
+\code{CFR_target} location prior, this gates whether CFR_target is drawn
+(TRUE) or held at its config default / prior median (FALSE) (default TRUE)
+\item sample_mu_j_baseline: Under B2 (priors object has a \code{CFR_target}
+location prior) this gates the \emph{derivation} of \code{mu_j_baseline}
+from \code{CFR_target * gamma_1 * rho / (rho_deaths * chi)} rather than an
+independent draw; \code{mu_j_baseline} is no longer an independently
+sampled location parameter. Under a legacy priors object (no
+\code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
+(default TRUE)
 \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
 \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
 \item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)

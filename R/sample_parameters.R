@@ -45,7 +45,17 @@
 #'     \item sample_a_2_j: Seasonality (default TRUE)
 #'     \item sample_b_1_j: Seasonality (default TRUE)
 #'     \item sample_b_2_j: Seasonality (default TRUE)
-#'     \item sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
+#'     \item sample_CFR_target: Per-country target reported case-fatality ratio
+#'       (B2 lognormal location prior). When the priors object carries a
+#'       \code{CFR_target} location prior, this gates whether CFR_target is drawn
+#'       (TRUE) or held at its config default / prior median (FALSE) (default TRUE)
+#'     \item sample_mu_j_baseline: Under B2 (priors object has a \code{CFR_target}
+#'       location prior) this gates the \emph{derivation} of \code{mu_j_baseline}
+#'       from \code{CFR_target * gamma_1 * rho / (rho_deaths * chi)} rather than an
+#'       independent draw; \code{mu_j_baseline} is no longer an independently
+#'       sampled location parameter. Under a legacy priors object (no
+#'       \code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
+#'       (default TRUE)
 #'     \item sample_mu_j_slope: Location-specific temporal IFR trend (default TRUE)
 #'     \item sample_mu_j_epidemic_factor: Location-specific epidemic IFR multiplier (default TRUE)
 #'     \item sample_epidemic_threshold: Location-specific epidemic activation threshold (default TRUE)
@@ -156,6 +166,7 @@ sample_parameters <- function(
     sample_a_2_j = TRUE,
     sample_b_1_j = TRUE,
     sample_b_2_j = TRUE,
+    sample_CFR_target = TRUE,
     sample_mu_j_baseline = TRUE,
     sample_mu_j_slope = TRUE,
     sample_mu_j_epidemic_factor = TRUE,
@@ -580,6 +591,109 @@ sample_parameters <- function(
       cat("  - Derived beta_j0_env =", .format_verbose_value(config_sampled$beta_j0_env), "\n")
     }
   }
+
+  # ---------------------------------------------------------------------------
+  # B2: DERIVE mu_j_baseline from CFR_target and the sampled chain factor.
+  #
+  # Under B2 the priors object carries a `CFR_target` location prior (lognormal)
+  # in place of the old `mu_j_baseline` Gamma location prior. mu_j_baseline is
+  # NO LONGER an independently-sampled location parameter: it is derived from the
+  # already-sampled global chain factor via the v0.14.0 steady-state identity
+  #
+  #   mu_j_baseline[j] = CFR_target[j] * gamma_1 * rho / (rho_deaths * chi)
+  #   chi = 0.5 * (chi_endemic + chi_epidemic)
+  #
+  # Substituting into reported_CFR = mu * rho_deaths * chi / (gamma_1 * rho)
+  # cancels the entire chain factor, so realized implied CFR == CFR_target for
+  # every draw (drift-invariant; SPEC_B2.md §0). This subsumes the per-country
+  # ETH dwell stop-gap structurally.
+  #
+  # Gating contract (SPEC_B2.md §3.4):
+  #   - B2 is ACTIVE iff the priors object has a `CFR_target` location prior
+  #     (detected via `location_params$CFR_target`). When ACTIVE, mu_j_baseline
+  #     is NOT in the independent-draw loop above (the priors object has no
+  #     mu_j_baseline location prior), so its value here is the config default
+  #     until this block overwrites it.
+  #   - sample_mu_j_baseline (default TRUE) gates the DERIVATION. TRUE => derive;
+  #     FALSE => leave mu_j_baseline at the config default (engine default).
+  #   - sample_CFR_target (default TRUE) gates the CFR_target DRAW in the loop
+  #     above; when FALSE, CFR_target is held at its config default (prior median)
+  #     and mu_j_baseline is still derived from that frozen CFR (free chain).
+  #
+  # Version-skew guard (Lesson #12, SPEC_B2.md §5.3): if B2 derivation is
+  # requested (sample_mu_j_baseline=TRUE) but the priors object lacks a
+  # CFR_target prior AND lacks a legacy mu_j_baseline prior, fail loud rather
+  # than silently shipping the config-default mu_j_baseline. A legacy priors
+  # object (mu_j_baseline Gamma prior present, no CFR_target) is the bit-identical
+  # B2-OFF path: this block is skipped entirely and the loop above sampled
+  # mu_j_baseline exactly as pre-B2.
+  has_cfr_target_prior <- !is.null(location_params$CFR_target)
+  has_mu_baseline_prior <- !is.null(location_params$mu_j_baseline)
+  derive_mu <- isTRUE(sampling_flags[["mu_j_baseline"]])
+  if (is.null(sampling_flags[["mu_j_baseline"]])) derive_mu <- TRUE  # backward-compat default
+
+  if (has_cfr_target_prior) {
+    # B2 ACTIVE path.
+    if (derive_mu) {
+      required_chain <- c("gamma_1", "rho", "rho_deaths", "chi_endemic", "chi_epidemic")
+      missing_chain <- required_chain[!vapply(required_chain,
+        function(nm) !is.null(config_sampled[[nm]]) && length(config_sampled[[nm]]) >= 1,
+        logical(1))]
+      if (length(missing_chain) > 0) {
+        stop("B2 mu_j_baseline derivation requires chain factors in config_sampled but these are missing/empty: ",
+             paste(missing_chain, collapse = ", "),
+             ". The chain factors must be sampled (or carry config defaults) before the location loop.")
+      }
+      if (is.null(config_sampled$CFR_target)) {
+        stop("B2 mu_j_baseline derivation requested (sample_mu_j_baseline=TRUE) but config_sampled$CFR_target is absent. ",
+             "CFR_target must be drawn (or carried as a config default) before mu_j_baseline can be derived.")
+      }
+
+      g1   <- config_sampled$gamma_1[1]
+      rho  <- config_sampled$rho[1]
+      rhod <- config_sampled$rho_deaths[1]
+      chi  <- 0.5 * (config_sampled$chi_endemic[1] + config_sampled$chi_epidemic[1])
+      chain <- g1 * rho / (rhod * chi)   # scalar (all globals)
+
+      mu_derived <- config_sampled$CFR_target * chain
+
+      # Engine [0,1] bound (make_LASER_config L686): mu_j_baseline is a per-day
+      # mortality hazard probability and the engine rejects mu > 1. The wider B2
+      # lognormal CFR_target tail (sdlog 0.787) times a high-gamma_1 / low-chi
+      # chain draw can, for the highest-CFR countries (CIV/COG/MLI/TCD, CFR
+      # median up to ~0.089), push the product above 1 in a rare tail draw
+      # (P(mu>1) ~ 1e-5 at the highest real country; SPEC_B2.md §3.5). Clamp the
+      # derived value just below 1 so those rare draws do not hard-error in
+      # make_LASER_config(). The clamp acts only on the extreme upper tail and
+      # does not perturb the bulk of the distribution or the implied-CFR identity
+      # in the operating range.
+      .mu_ceiling <- 1 - 1e-9
+      n_clamped <- sum(mu_derived > .mu_ceiling, na.rm = TRUE)
+      if (n_clamped > 0) mu_derived[mu_derived > .mu_ceiling] <- .mu_ceiling
+
+      config_sampled$mu_j_baseline <- mu_derived
+
+      if (verbose) {
+        cat("\n  B2: deriving mu_j_baseline = CFR_target * gamma_1 * rho / (rho_deaths * chi)\n")
+        cat(sprintf("  - chain factor = %.4f * %.4f / (%.4f * %.4f) = %.5f\n",
+                    g1, rho, rhod, chi, chain))
+        if (n_clamped > 0)
+          cat(sprintf("  - clamped %d location(s) to the engine [0,1] mu ceiling\n", n_clamped))
+        cat("  - Derived mu_j_baseline =", .format_verbose_value(config_sampled$mu_j_baseline), "\n")
+      }
+    } else {
+      if (verbose) cat("\n  B2: sample_mu_j_baseline=FALSE -> leaving mu_j_baseline at config default\n")
+    }
+  } else if (derive_mu && !has_mu_baseline_prior) {
+    # B2 requested but neither a CFR_target NOR a legacy mu_j_baseline prior is
+    # present -> version skew (stale priors object / Coiled image). Fail loud.
+    stop("mu_j_baseline derivation/sampling requested (sample_mu_j_baseline=TRUE) but the priors object ",
+         "carries neither a CFR_target location prior (B2) nor a mu_j_baseline location prior (legacy). ",
+         "This indicates a stale or mismatched priors object (Lesson #12 version-skew guard, SPEC_B2.md §5.3). ",
+         "Rebuild priors_default (>= v15.15 for B2) and ship it to every worker.")
+  }
+  # else: legacy priors object (mu_j_baseline Gamma prior present, no CFR_target)
+  # -> bit-identical B2-OFF path; mu_j_baseline was sampled in the loop above.
 
   # Derive zeta_2 from zeta_1 and zeta_ratio (zeta_2 = zeta_1 / zeta_ratio).
   # zeta_2 > 0 is guaranteed (ratio of two positive lognormals). zeta_1 > zeta_2
