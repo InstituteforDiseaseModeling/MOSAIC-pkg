@@ -444,13 +444,17 @@ make_LASER_config(
 - alpha_1:
 
   FOI mixing exponent applied to the infectious term `(I/N)` (numeric in
-  \[0, 1\]; 1 = well-mixed contacts).
+  (0, 1\]; 1 = well-mixed contacts). Dual-mode (laser-cholera v0.16.0+):
+  a scalar applied uniformly across patches, or a per-location vector of
+  length `length(location_name)`.
 
 - alpha_2:
 
   Exponent on `N_jt` in the FOI denominator (numeric in \[0, 1\]).
   `alpha_2 = 1` is frequency-dependent transmission (FOI proportional to
   `I/N`); `alpha_2 = 0` is density-dependent (FOI proportional to `I`).
+  Dual-mode: scalar or a per-location vector of length
+  `length(location_name)`.
 
   ### Force of Infection (environment-to-human)
 

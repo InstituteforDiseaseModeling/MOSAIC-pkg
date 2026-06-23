@@ -21,7 +21,7 @@ The file extension determines which output format is used:
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.47.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.48.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -458,14 +458,17 @@ If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_t
 
 <dt id="arg-alpha-">alpha_1<a class="anchor" aria-label="anchor" href="#arg-alpha-"></a></dt>
 <dd><p>FOI mixing exponent applied to the infectious term <code>(I/N)</code>
-(numeric in [0, 1]; 1 = well-mixed contacts).</p></dd>
+(numeric in (0, 1]; 1 = well-mixed contacts). Dual-mode
+(laser-cholera v0.16.0+): a scalar applied uniformly across patches,
+or a per-location vector of length <code>length(location_name)</code>.</p></dd>
 
 
 <dt id="arg-alpha-">alpha_2<a class="anchor" aria-label="anchor" href="#arg-alpha-"></a></dt>
 <dd><p>Exponent on <code>N_jt</code> in the FOI denominator
 (numeric in [0, 1]). <code>alpha_2 = 1</code> is frequency-dependent
 transmission (FOI proportional to <code>I/N</code>); <code>alpha_2 = 0</code> is
-density-dependent (FOI proportional to <code>I</code>).</p><div class="section">
+density-dependent (FOI proportional to <code>I</code>). Dual-mode: scalar or a
+per-location vector of length <code>length(location_name)</code>.</p><div class="section">
 <h3 id="force-of-infection-environment-to-human-">Force of Infection (environment-to-human)<a class="anchor" aria-label="anchor" href="#force-of-infection-environment-to-human-"></a></h3>
 
 

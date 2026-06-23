@@ -1,5 +1,76 @@
 # Changelog
 
+## MOSAIC 0.48.0
+
+- **laser-cholera engine bumped to v0.16.0**
+  (`inst/python/environment.yml`; both the release tag and the wheel
+  filename). Two engine features are now integrated:
+  - **Dual-mode `alpha_1` / `alpha_2`.** The engine now accepts either a
+    global scalar (existing behaviour, bit-identical) **or** a
+    per-location (`length(location_name)`) vector for the FOI mixing
+    exponents, which `humantohuman.py` broadcasts/indexes via
+    `np.power`.
+    [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
+    validation now accepts both forms and enforces the engine’s range
+    invariants (`alpha_1 ∈ (0, 1]` strict-positive, `alpha_2 ∈ [0, 1]`);
+    the previous validator hard-required a scalar and used the looser
+    `[0, 1]` lower bound for `alpha_1`. **Default sampling/priors remain
+    global-scalar** — the per-location form is accepted for direct
+    [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)
+    configs; per-location *sampling* (per-iso priors) is intentionally
+    deferred. The scalar path is unchanged end-to-end (serialization,
+    local PSOCK, and Dask all already pass a scalar through untouched).
+  - **Dask/Coiled likelihood now honors the per-cell confidence weights
+    (parity fix).** laser-cholera v0.16.0’s `calc_model_likelihood`
+    gained the `weights_obs_cases` / `weights_obs_deaths` matrix
+    arguments (ported verbatim from MOSAIC’s R `calc_model_likelihood`).
+    The Dask worker (`inst/python/mosaic_dask_worker.py`) previously
+    could not apply them — it emulated only the deaths-prefix zero by
+    NaN-ing the deaths obs and otherwise ran **unweighted**, diverging
+    from the local PSOCK R score whenever
+    `reported_cases_weight`/`reported_deaths_weight` were non-trivial.
+    The worker now passes the real (sliced, deaths-prefix-zeroed) weight
+    matrices to the Python `calc_model_likelihood`, mirroring
+    `run_MOSAIC.R` exactly, and **recomputes on-worker whenever the
+    weights are non-trivial OR the scored window starts after t=1** (the
+    engine analyzer’s `model.log_likelihood` never sees `weights_obs_*`,
+    so it cannot be trusted in those cases). The pure-default path
+    (trivial weights, no slice) still uses `model.log_likelihood`,
+    bit-identical to the engine analyzer. A new
+    `_weights_obs_matrix_trivial()` helper gates the decision
+    (matrix-level analogue of R’s `.weights_obs_row_trivial`).
+  - **Worker peak-sourcing fix (shape-term parity).** The v0.16.0 Python
+    `calc_model_likelihood` matches `epidemic_peaks` rows by an integer
+    `loc_idx` column (`getattr(row, "loc_idx", None)`), silently
+    dropping any row that lacks it. The raw `config["epidemic_peaks"]`
+    scattered to workers carries only `iso_code`/`peak_date` (see
+    `.filter_epidemic_peaks()`), so the rewritten
+    `_score_window_likelihood()` would have zeroed **every**
+    peak-timing/peak-magnitude/cumulative shape term whenever shape
+    weights were on — diverging from the local PSOCK R scorer (which
+    dispatches by `iso_code`). The worker now sources peaks from
+    `model.params["epidemic_peaks"]`, which the engine’s `params.py`
+    enriches with `loc_idx` at model construction — identical to what
+    the engine analyzer reads. Verified to numerical tolerance against
+    the R local path for the full burn-in-slice + deaths-prefix +
+    per-cell-weights + peak-timing/magnitude/cumulative case. (Shape
+    weights default to 0, so this was latent.) Covered by the new
+    `test-dask_worker_score_window_parity.R`. **Known engine-side gap
+    (not fixed here):** v0.16.0’s `compute_wis_parametric_row` uses
+    `np.sum` rather than `np.nansum`, so a single `NA` observation
+    poisons the entire WIS row to `NaN` and the term is dropped
+    engine-side, while R’s `na.rm = TRUE` retains it — local and Dask
+    diverge on the WIS term when `weight_wis > 0` over gappy
+    surveillance data. WIS defaults to 0; a fix belongs in the read-only
+    laser-cholera engine.
+- **Resume safety:** v0.16.0 is intentionally **not** added to the
+  `.mosaic_lc_likelihood_compatible()` byte-identical allow-list
+  `{0.14.0, 0.15.0}`. Under non-trivial obs-weights a v0.16.0 Dask shard
+  differs from a 0.15.0 shard, and the version-keyed allow-list cannot
+  tell whether a given shard used trivial weights — so a 0.15.0 → 0.16.0
+  resume re-runs rather than risk pooling weighted and unweighted
+  likelihoods.
+
 ## MOSAIC 0.47.5
 
 - **Hardening of the config/priors manipulation ops behind the staged
