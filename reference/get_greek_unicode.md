@@ -39,7 +39,7 @@ plots.
 
 ## See also
 
-`ggplot2` for using the Unicode symbols in plot titles.
+ggplot2 for using the Unicode symbols in plot titles.
 
 ## Examples
 

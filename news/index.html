@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.48.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.48.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,18 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.48.2" id="mosaic-0482">MOSAIC 0.48.2<a class="anchor" aria-label="anchor" href="#mosaic-0482"></a></h2>
+<p>Pre-scale-up package-health audit (parallel <code>swe</code> + <code>maintainer</code> review of the v0.45–v0.48 burst). Two Dask/Coiled-path correctness fixes (local PSOCK was unaffected throughout) plus build/doc hygiene.</p>
+<ul><li>
+<strong>[CRITICAL] Dask path: per-cell weight matrices no longer leak into the per-sim JSON.</strong> <code>.extract_sampled_params()</code> (<code>run_MOSAIC_helpers.R</code>) did not exclude <code>reported_cases_weight</code>/<code>reported_deaths_weight</code>. Those matrices contain <code>NA</code> cells; on the Dask path <code>jsonlite::toJSON(digits=NA)</code> serializes <code>NA_real_</code> as the <strong>string <code>"NA"</code></strong>, and <code>config.update(sampled)</code> on the worker then overwrote the clean float64 base_config arrays with lists carrying <code>"NA"</code> — so <code>np.asarray(..., dtype=float)</code> in the v0.48.0 weighted scorer raised <code>could not convert string to float: 'NA'</code>, <strong>failing every Dask sim</strong>; it also re-serialized the ~1.5 MB matrices per sim (~30× JSON bloat at 40K-sim scale). The matrices are broadcast once (clean numpy) via <code>.extract_base_config()</code>, so they are now excluded from the per-sim set. Latent until v0.48.0 began <em>consuming</em> the weights; a textbook local/Dask divergence (Lesson <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/12" class="external-link">#12</a>) — local PSOCK has no JSON round-trip.</li>
+<li>
+<strong>[HIGH] Dask path: dtype parity for <code>as_ndarray</code> engine fields.</strong> The engine’s <code>as_ndarray()</code> returns an incoming numpy array unchanged but casts an incoming <em>list</em> to the declared dtype (<code>uint32</code> for IC counts, <code>float32</code> for seasonality/transmission vectors). The local PSOCK path ships these as lists (via <code><a href="https://rstudio.github.io/reticulate/reference/r-py-conversion.html" class="external-link">reticulate::r_to_py</a></code>), so the engine casts them correctly; the Dask worker pre-converted them to float64 numpy, so <code>as_ndarray()</code> left them float64 and the engine seeded its stochastic state in float64 instead of uint32 — a silent ~1–2% log-likelihood divergence from local at identical values + seed. A new <code>_AS_NDARRAY_FIELDS</code> registry keeps these fields as lists on the worker (and converts any base_config numpy copies back to lists), restoring bit-level dtype parity with local.</li>
+<li>
+<strong>Hygiene:</strong> rewrote a dead/empty dedup test in <code>test-get_location_priors.R</code> (guarded on a field path that no longer exists → 0 assertions; now 7 real assertions); fixed two roxygen Rd cross-reference WARNINGs (<code>calc_model_ensemble.Rd</code> <code>\link{i}</code>→<code>\code{}</code>; <code>get_greek_unicode.Rd</code> <code>\link{ggplot2}</code>→<code>\pkg{}</code>); added <code>__pycache__/</code>/<code>*.pyc</code> (and <code>vignettes/cache|figures</code>) to <code>.gitignore</code>/<code>.Rbuildignore</code> (the parity test’s <code>source_python</code> compiles a <code>.pyc</code> into <code>inst/python/</code>); converted non-ASCII glyphs in <code>plot_model_subset_optimization.R</code> to <code>\uXXXX</code> escapes.</li>
+<li>
+<strong>Known follow-ups (not blockers):</strong> (a) CI never pip-installs laser-cholera, so the engine-backed parity tests — including the v0.48.0 Dask loc_idx guard — only run locally/on the VM, never in CI; (b) <code>burn_in_days=30</code> (the default) silently clamps to <code>n_time</code> on short/outbreak windows, yielding degenerate 0-contribution scoring — set <code>burn_in_days=0L</code> for short-window sims (a guard-warning is a candidate change pending statistician/disease-modeler input); (c) upstream laser-cholera WIS <code>np.sum</code>→<code>np.nansum</code> gap (see <code>claude/wis_issue_draft.md</code>).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.48.1" id="mosaic-0481">MOSAIC 0.48.1<a class="anchor" aria-label="anchor" href="#mosaic-0481"></a></h2>
 <ul><li>

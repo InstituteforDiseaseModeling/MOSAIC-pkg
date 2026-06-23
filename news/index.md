@@ -1,5 +1,61 @@
 # Changelog
 
+## MOSAIC 0.48.2
+
+Pre-scale-up package-health audit (parallel `swe` + `maintainer` review
+of the v0.45–v0.48 burst). Two Dask/Coiled-path correctness fixes (local
+PSOCK was unaffected throughout) plus build/doc hygiene.
+
+- **\[CRITICAL\] Dask path: per-cell weight matrices no longer leak into
+  the per-sim JSON.** `.extract_sampled_params()`
+  (`run_MOSAIC_helpers.R`) did not exclude
+  `reported_cases_weight`/`reported_deaths_weight`. Those matrices
+  contain `NA` cells; on the Dask path `jsonlite::toJSON(digits=NA)`
+  serializes `NA_real_` as the **string `"NA"`**, and
+  `config.update(sampled)` on the worker then overwrote the clean
+  float64 base_config arrays with lists carrying `"NA"` — so
+  `np.asarray(..., dtype=float)` in the v0.48.0 weighted scorer raised
+  `could not convert string to float: 'NA'`, **failing every Dask sim**;
+  it also re-serialized the ~1.5 MB matrices per sim (~30× JSON bloat at
+  40K-sim scale). The matrices are broadcast once (clean numpy) via
+  `.extract_base_config()`, so they are now excluded from the per-sim
+  set. Latent until v0.48.0 began *consuming* the weights; a textbook
+  local/Dask divergence (Lesson
+  [\#12](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/12))
+  — local PSOCK has no JSON round-trip.
+- **\[HIGH\] Dask path: dtype parity for `as_ndarray` engine fields.**
+  The engine’s `as_ndarray()` returns an incoming numpy array unchanged
+  but casts an incoming *list* to the declared dtype (`uint32` for IC
+  counts, `float32` for seasonality/transmission vectors). The local
+  PSOCK path ships these as lists (via
+  [`reticulate::r_to_py`](https://rstudio.github.io/reticulate/reference/r-py-conversion.html)),
+  so the engine casts them correctly; the Dask worker pre-converted them
+  to float64 numpy, so `as_ndarray()` left them float64 and the engine
+  seeded its stochastic state in float64 instead of uint32 — a silent
+  ~1–2% log-likelihood divergence from local at identical values + seed.
+  A new `_AS_NDARRAY_FIELDS` registry keeps these fields as lists on the
+  worker (and converts any base_config numpy copies back to lists),
+  restoring bit-level dtype parity with local.
+- **Hygiene:** rewrote a dead/empty dedup test in
+  `test-get_location_priors.R` (guarded on a field path that no longer
+  exists → 0 assertions; now 7 real assertions); fixed two roxygen Rd
+  cross-reference WARNINGs (`calc_model_ensemble.Rd`
+  `\link{i}`→`\code{}`; `get_greek_unicode.Rd`
+  `\link{ggplot2}`→`\pkg{}`); added `__pycache__/`/`*.pyc` (and
+  `vignettes/cache|figures`) to `.gitignore`/`.Rbuildignore` (the parity
+  test’s `source_python` compiles a `.pyc` into `inst/python/`);
+  converted non-ASCII glyphs in `plot_model_subset_optimization.R` to
+  `\uXXXX` escapes.
+- **Known follow-ups (not blockers):** (a) CI never pip-installs
+  laser-cholera, so the engine-backed parity tests — including the
+  v0.48.0 Dask loc_idx guard — only run locally/on the VM, never in
+  CI; (b) `burn_in_days=30` (the default) silently clamps to `n_time` on
+  short/outbreak windows, yielding degenerate 0-contribution scoring —
+  set `burn_in_days=0L` for short-window sims (a guard-warning is a
+  candidate change pending statistician/disease-modeler input); (c)
+  upstream laser-cholera WIS `np.sum`→`np.nansum` gap (see
+  `claude/wis_issue_draft.md`).
+
 ## MOSAIC 0.48.1
 
 - **Test fix (post-v0.16.0 audit):**
