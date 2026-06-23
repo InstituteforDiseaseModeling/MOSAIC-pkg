@@ -1,5 +1,21 @@
 # Changelog
 
+## MOSAIC 0.48.1
+
+- **Test fix (post-v0.16.0 audit):**
+  `test-calc_model_likelihood_python_parity.R` test
+  [\#7](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/7)
+  had *pinned* a known R↔︎Python divergence in the zero-prediction
+  cumulative penalty (Python ~1.78× more negative than R, observed on
+  laser-cholera 0.13.1) with an explicit instruction to convert to an
+  exact-parity assertion once the engine aligned. laser-cholera
+  v0.16.0’s verbatim port of `calc_model_likelihood` **aligned** the
+  penalty (R and Python now agree to ~1e-12), which tripped the pinned
+  ratio — the single failure surfaced by the full-suite health audit.
+  The test now asserts exact parity. No production-code change; this is
+  the early-warning test doing its job. Full suite: 0 failures;
+  `R CMD check`: 0 errors / 0 warnings.
+
 ## MOSAIC 0.48.0
 
 - **laser-cholera engine bumped to v0.16.0**
