@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.49.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.49.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,15 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.49.3" id="mosaic-0493">MOSAIC 0.49.3<a class="anchor" aria-label="anchor" href="#mosaic-0493"></a></h2>
+<ul><li>
+<strong>laser-cholera engine 0.16.0 → 0.16.1</strong> — contract-neutral for MOSAIC: the only engine-source change (0.16.0→0.16.1) is a Python-side <code>compute_wis_parametric_row</code> NaN-poisoning fix (<a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/91" class="external-link">#91</a>) that MOSAIC’s R-side likelihood does not use; SEIR dynamics, parameters, and the result schema are unchanged, so simulated cases/deaths are identical. Pin updated in <code>inst/python/environment.yml</code>.</li>
+<li>
+<strong>B2 — dynamic <code>mu_j_baseline</code> ← <code>CFR_target</code> coupling</strong> (<code>priors_default</code> v15.15 / <code>config_default</code> v4.5): <code>mu_j_baseline</code> is now derived at sample time from <code>CFR_target * gamma_1 * rho / (rho_deaths * chi)</code>, so the implied CFR is invariant to <code>gamma_1</code> drift and the ETH dwell stop-gap is removed. (0.49.0)</li>
+<li>
+<strong>Worker-death-robust parallel gather</strong> (<code>.mosaic_cluster_lapply_robust</code>): a PSOCK worker <em>process</em> crash (laser/numba C-abort or OOM) during the calibration or ensemble gather previously hung the master forever on Linux (blocking <code><a href="https://rdrr.io/r/base/serialize.html" class="external-link">unserialize()</a></code>); it now degrades on the survivors with a warning, or <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code>s with a diagnostic past an idle timeout. Wired into both <code>.mosaic_run_batch</code> (calibration) and <code>calc_model_ensemble</code>. (0.49.1–0.49.2)</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.48.3" id="mosaic-0483">MOSAIC 0.48.3<a class="anchor" aria-label="anchor" href="#mosaic-0483"></a></h2>
 <ul><li>
