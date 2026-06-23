@@ -90,6 +90,25 @@ jobs:
           auto-activate-base: false
           miniforge-version: "latest"
 
+      - name: Install laser-cholera engine for reticulate (enables engine-backed tests)
+        # Without the engine, setup-python.R's probe leaves
+        # mosaic.test.has_likelihood = FALSE, so skip_if_no_python_likelihood()
+        # ALWAYS skips the engine-backed parity tests in CI -- including the
+        # Dask loc_idx + as_ndarray-dtype parity guards and the R<->Python
+        # calc_model_likelihood parity suite (the only automated guard for the
+        # Dask scoring path). A dedicated venv sidesteps PEP-668 externally-
+        # managed errors and unifies the interpreter across macOS/ubuntu; we
+        # override RETICULATE_PYTHON so reticulate uses it. Pin matches
+        # inst/python/environment.yml (laser-cholera v0.16.0 / laser-core 1.0.1).
+        # TensorFlow is intentionally omitted (keras tests stay self-skipped).
+        run: |
+          python3 -m venv "$HOME/r-mosaic-venv"
+          "$HOME/r-mosaic-venv/bin/python" -m pip install --upgrade pip
+          "$HOME/r-mosaic-venv/bin/python" -m pip install "numpy<2" pyarrow "laser-core==1.0.1" \
+            "https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.16.0/laser_cholera-0.16.0-py3-none-any.whl"
+          "$HOME/r-mosaic-venv/bin/python" -c "import laser.cholera.calc_model_likelihood, laser.cholera.metapop.model; print('laser-cholera engine import OK')"
+          echo "RETICULATE_PYTHON=$HOME/r-mosaic-venv/bin/python" >> "$GITHUB_ENV"
+
 
       - name: Install R package dependencies
         run: |

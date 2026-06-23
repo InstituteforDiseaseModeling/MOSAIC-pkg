@@ -240,6 +240,6 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
   expect_true(all(c("r2_cases_ensemble", "central_method_cases", "central_method_deaths",
                     "r2_cases_ensemble_mean", "r2_cases_ensemble_median")
                   %in% names(summ)))
-  expect_equal(summ$central_method_cases,  "mean")
-  expect_equal(summ$central_method_deaths, "mean")
+  expect_equal(summ$central_method_cases,  "median")
+  expect_equal(summ$central_method_deaths, "median")
 })
