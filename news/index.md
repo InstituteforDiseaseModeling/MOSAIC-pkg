@@ -13,8 +13,14 @@
   penalty (R and Python now agree to ~1e-12), which tripped the pinned
   ratio — the single failure surfaced by the full-suite health audit.
   The test now asserts exact parity. No production-code change; this is
-  the early-warning test doing its job. Full suite: 0 failures;
-  `R CMD check`: 0 errors / 0 warnings.
+  the early-warning test doing its job. `devtools::test()`: 0 failures.
+  (Note: the built-tarball `R CMD check` carries a known non-CRAN
+  baseline of standing ERRORs/WARNINGs/NOTEs —
+  CRAN-incoming/examples-need-data-root/relative-[`source()`](https://rdrr.io/r/base/source.html)
+  test paths — none from this change; MOSAIC is explicitly non-CRAN and
+  CI gates on
+  [`testthat::test_local()`](https://testthat.r-lib.org/reference/test_package.html),
+  which is green.)
 
 ## MOSAIC 0.48.0
 
