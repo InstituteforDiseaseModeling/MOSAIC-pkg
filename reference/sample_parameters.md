@@ -117,7 +117,19 @@ sample_parameters(
 
   - sample_b_2_j: Seasonality (default TRUE)
 
-  - sample_mu_j_baseline: Location-specific baseline IFR (default TRUE)
+  - sample_CFR_target: Per-country target reported case-fatality ratio
+    (B2 lognormal location prior). When the priors object carries a
+    `CFR_target` location prior, this gates whether CFR_target is drawn
+    (TRUE) or held at its config default / prior median (FALSE) (default
+    TRUE)
+
+  - sample_mu_j_baseline: Under B2 (priors object has a `CFR_target`
+    location prior) this gates the *derivation* of `mu_j_baseline` from
+    `CFR_target * gamma_1 * rho / (rho_deaths * chi)` rather than an
+    independent draw; `mu_j_baseline` is no longer an independently
+    sampled location parameter. Under a legacy priors object (no
+    `CFR_target` prior) it gates the old independent mu_j_baseline draw.
+    (default TRUE)
 
   - sample_mu_j_slope: Location-specific temporal IFR trend (default
     TRUE)
