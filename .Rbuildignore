@@ -26,3 +26,9 @@ pkgdown/
 ^\.Rhistory$
 ^.*\.DS_Store$
 ^tests/testthat/Rplots\.pdf$
+__pycache__$
+\.pyc$
+^vignettes/cache$
+^vignettes/figures$
+^vignettes/articles/cache$
+^vignettes/articles/figures$

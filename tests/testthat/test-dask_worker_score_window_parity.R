@@ -140,3 +140,79 @@ test_that("Dask worker passes loc_idx-bearing peaks so peak terms are non-zero",
   expect_true(is.finite(ll_on))
   expect_false(isTRUE(all.equal(ll_off, ll_on)))
 })
+
+test_that("Dask worker _apply_sampled_params preserves engine as_ndarray dtypes (local parity)", {
+  # Regression for the v0.48.0 review finding: the engine's as_ndarray() returns
+  # an incoming numpy array UNCHANGED (skipping its declared dtype cast) but
+  # casts an incoming LIST to the declared dtype (uint32 for IC counts, float32
+  # for seasonality/transmission vectors). The local PSOCK path ships these as
+  # lists (r_to_py), so the engine seeds uint32 state; if the worker pre-converts
+  # them to float64 numpy the engine seeds float64 state and the simulation
+  # silently diverges from local by ~1-2% LL at config_default scale even with
+  # identical values + seed. The worker must keep _AS_NDARRAY_FIELDS as lists.
+  skip_if_no_python_likelihood()
+  fx <- skip_if_no_data()
+  if (!reticulate::py_module_available("numpy")) testthat::skip("numpy not available")
+  lc <- tryCatch(reticulate::import("laser.cholera.metapop.model", convert = FALSE),
+                 error = function(e) NULL)
+  if (is.null(lc)) testthat::skip("laser.cholera.metapop.model not importable")
+
+  worker_path <- system.file("python", "mosaic_dask_worker.py", package = "MOSAIC")
+  if (!nzchar(worker_path)) worker_path <- "../../inst/python/mosaic_dask_worker.py"
+  if (!file.exists(worker_path)) testthat::skip("mosaic_dask_worker.py not found")
+  reticulate::source_python(worker_path)
+
+  cfg <- MOSAIC::get_location_config(iso = c("ETH", "KEN"), config = fx$config)
+
+  # Build the base_config + per-sim JSON exactly as the production Dask path does.
+  ctrl <- MOSAIC:::mosaic_control_defaults()
+  lik  <- ctrl$likelihood
+  lik$.score_window_resolved <- MOSAIC:::.mosaic_resolve_score_window(cfg, ctrl)
+  lik$.weights_time_resolved <- NULL
+  lik$weights_location       <- NULL
+  cfg_inj <- MOSAIC:::.mosaic_inject_likelihood_settings(cfg, lik)
+  base_py <- reticulate::r_to_py(MOSAIC:::.extract_base_config(cfg_inj))
+
+  ser <- MOSAIC:::.mosaic_sample_and_serialize(
+    sim_id = 1L, PATHS = MOSAIC::get_paths(), priors = fx$priors,
+    config = cfg, sampling_args = NULL
+  )
+  testthat::expect_null(ser$error)
+
+  # Worker config (numpy/list mix) and the local-path config (r_to_py lists).
+  config_w  <- reticulate::py$`_apply_sampled_params`(base_py, ser$json)
+  config_lp <- reticulate::r_to_py(
+    MOSAIC:::.mosaic_prepare_config_for_python(ser$params)
+  )
+
+  # Run the engine through dict_to_propertysetex on BOTH and compare the dtype
+  # the engine ends up assigning to each as_ndarray field. They must match.
+  params_mod <- reticulate::import("laser.cholera.metapop.params", convert = FALSE)
+  as_ndarray_fields <- c(
+    "N_j_initial", "S_j_initial", "E_j_initial", "I_j_initial", "R_j_initial",
+    "V1_j_initial", "V2_j_initial", "tau_i", "beta_j0_hum",
+    "a_1_j", "a_2_j", "b_1_j", "b_2_j", "beta_j0_env", "theta_j"
+  )
+  pw <- params_mod$dict_to_propertysetex(reticulate::py_to_r(config_w))
+  pl <- params_mod$dict_to_propertysetex(reticulate::py_to_r(config_lp))
+  for (fld in as_ndarray_fields) {
+    dt_w <- reticulate::py_to_r(reticulate::py_get_attr(pw, fld)$dtype$name)
+    dt_l <- reticulate::py_to_r(reticulate::py_get_attr(pl, fld)$dtype$name)
+    expect_identical(dt_w, dt_l,
+                     info = sprintf("engine dtype mismatch for %s: worker=%s local=%s",
+                                    fld, dt_w, dt_l))
+  }
+
+  # End-to-end: identical seed -> bit-identical engine output across backends.
+  e_w <- reticulate::py_run_string(paste0(
+    "import numpy as _np\n",
+    "import laser.cholera.metapop.model as _lc\n",
+    "def _run(cfg, seed):\n",
+    "    cfg=dict(cfg); cfg['seed']=int(seed); cfg['calc_likelihood']=False\n",
+    "    m=_lc.run_model(paramfile=cfg, quiet=True)\n",
+    "    return _np.asarray(m.results.reported_cases, dtype=float)\n"
+  ), convert = TRUE)
+  cases_w <- e_w$`_run`(config_w, 1L)
+  cases_l <- e_w$`_run`(config_lp, 1L)
+  expect_equal(max(abs(cases_w - cases_l)), 0)
+})

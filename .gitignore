@@ -22,6 +22,11 @@ deprecated/
 Rplots.pdf
 *.bak
 *.bak_*
+
+# Python bytecode (e.g. compiled inst/python worker, created by source_python)
+__pycache__/
+*.pyc
+
 .Rd2pdf*/
 MOSAIC.Rcheck/
 =

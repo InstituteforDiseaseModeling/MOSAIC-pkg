@@ -139,9 +139,13 @@ plot_model_subset_optimization <- function(subset_opt,
   # device cannot encode the Unicode glyphs at all). The PNG raster device
   # handles Unicode regardless, so we always pass it the glyph build.
   .build_plot <- function(glyphs = TRUE) {
-    glyph_r2    <- if (glyphs) "R²"    else "R2"
-    glyph_arrow <- if (glyphs) "→"     else "->"
-    glyph_delta <- if (glyphs) "Δ"     else "delta"
+    # Unicode glyphs written as \uXXXX escapes so the R source stays ASCII
+    # (R CMD check "non-ASCII characters in code" portability WARNING).
+    # \u00b2 = superscript two (so "R\u00b2" renders as R-squared),
+    # \u2192 = rightwards arrow, \u0394 = Greek capital delta.
+    glyph_r2    <- if (glyphs) "R\u00b2"  else "R2"
+    glyph_arrow <- if (glyphs) "\u2192"   else "->"
+    glyph_delta <- if (glyphs) "\u0394"   else "delta"
 
     panel_levels <- c(
       sprintf("Objective score (%s)", objective),
@@ -228,7 +232,7 @@ plot_model_subset_optimization <- function(subset_opt,
 }
 
 
-# ── Internal: probe whether cairo_pdf can actually open a device ────────────
+# -- Internal: probe whether cairo_pdf can actually open a device ------------
 # capabilities("cairo") only reports build-time support; on some macOS installs
 # the cairo DLL fails to dlopen at draw time (missing XQuartz libXrender). Open a
 # throwaway cairo_pdf to a tempfile and report whether it succeeds.

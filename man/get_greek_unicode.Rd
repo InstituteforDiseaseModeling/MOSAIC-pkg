@@ -42,5 +42,5 @@ ggplot() + labs(title = paste("Example with Greek letter", get_greek_unicode("Ps
 
 }
 \seealso{
-\code{\link{ggplot2}} for using the Unicode symbols in plot titles.
+\pkg{ggplot2} for using the Unicode symbols in plot titles.
 }

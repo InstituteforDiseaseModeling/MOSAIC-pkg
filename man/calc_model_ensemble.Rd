@@ -100,7 +100,7 @@ S3 object of class \code{"mosaic_ensemble"} containing:
 \item{deaths_array}{4-D array matching cases_array dimensions.}
 \item{parameter_weights}{Normalized weight vector.}
 \item{seeds}{Integer vector of per-member simulation seeds, aligned with the
-parameter dimension of \code{cases_array} (member i <-> seeds\link{i}). Bound to
+parameter dimension of \code{cases_array} (member \code{i} <-> \code{seeds[i]}). Bound to
 the parameter set that produced each member so consumers (e.g. medoid
 selection) need not rely on positional alignment with an external vector.}
 \item{n_param_sets}{Number of parameter sets.}

@@ -73,17 +73,16 @@ test_that("get_location_priors handles case insensitivity", {
 })
 
 test_that("get_location_priors removes duplicate locations", {
-     # Should handle duplicates gracefully
+     # Should handle duplicates gracefully: "ETH", "ETH", "eth" all collapse to a
+     # single ETH entry. Per-location priors are keyed by iso under
+     # parameters_location[[param]]$location (e.g. beta_j0_tot$location$ETH).
      priors_dup <- get_location_priors(iso = c("ETH", "ETH", "eth"))
-     
-     # Check only one ETH in result
-     if (length(priors_dup$parameters_location) > 0) {
-          first_param <- priors_dup$parameters_location[[1]]
-          if (!is.null(first_param$parameters$location)) {
-               expect_equal(length(first_param$parameters$location), 1)
-               expect_equal(names(first_param$parameters$location), "ETH")
-          }
-     }
+
+     expect_gt(length(priors_dup$parameters_location), 0)
+     first_param <- priors_dup$parameters_location[[1]]
+     expect_false(is.null(first_param$location))
+     expect_equal(length(first_param$location), 1)
+     expect_equal(names(first_param$location), "ETH")
 })
 
 test_that("get_location_priors works with custom priors object", {

@@ -2241,6 +2241,17 @@
   base_fields <- c(
     "b_jt", "d_jt", "mu_jt", "nu_1_jt", "nu_2_jt",
     "reported_cases", "reported_deaths",
+    # Per-cell confidence-weight matrices (config_default v4.1+). These are
+    # broadcast in base_config via .extract_base_config() and are NEVER modified
+    # by sample_parameters(), so they MUST be excluded here. If left in, two
+    # failures occur on the Dask path: (1) jsonlite::toJSON(digits=NA) serializes
+    # NA_real_ cells as the STRING "NA", and config.update(sampled) on the worker
+    # overwrites the clean float64 base_config arrays with Python lists carrying
+    # "NA" strings -> np.asarray(..., dtype=float) raises "could not convert
+    # string to float: 'NA'" in _weights_obs_matrix_trivial / the scorer, failing
+    # EVERY sim; (2) the full ~1.5 MB weight matrices are re-serialized per sim,
+    # ~30x bloating the per-sim JSON shipped to every worker at 40K-sim scale.
+    "reported_cases_weight", "reported_deaths_weight",
     "date_start", "date_stop", "location_name", "seed",
     "N_j_initial", "longitude", "latitude"
   )

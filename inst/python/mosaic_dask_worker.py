@@ -66,6 +66,44 @@ _VECTOR_FIELDS = frozenset([
     "mu_j_epidemic_factor",
 ])
 
+# Engine fields coerced via laser.cholera.metapop.params.as_ndarray (NOT
+# np.array). CRITICAL parity contract: as_ndarray() returns an incoming numpy
+# array UNCHANGED (it skips the declared dtype cast) but casts an incoming
+# *list* to the declared dtype. The integer-count fields below are declared
+# np.uint32 and the float fields np.float32 in params.dict_to_propertysetex().
+#
+# The local PSOCK path ships these via reticulate::r_to_py() as Python LISTS, so
+# the engine casts them to uint32 / float32 (its intended dtypes). If the Dask
+# worker pre-converts them to float64 numpy arrays (as _VECTOR_FIELDS otherwise
+# does), as_ndarray() returns them as float64 and the engine seeds the
+# stochastic state in float64 instead of uint32 (and reads seasonality coeffs at
+# float64 instead of float32) -- diverging the simulation from the local backend
+# by ~1-2% in log-likelihood at config_default scale even with identical values
+# and seed (root cause: float-vs-integer state seeding). These MUST stay as
+# lists on the worker so the engine applies its own dtype cast, matching local.
+# Fields coerced via np.array (e.g. beta_j0_tot, psi_star_*, prop_*_initial) are
+# ALWAYS recast to float32 regardless of input type, so they are parity-safe and
+# remain in _VECTOR_FIELDS.
+_AS_NDARRAY_FIELDS = frozenset([
+    "N_j_initial",
+    "S_j_initial",
+    "E_j_initial",
+    "I_j_initial",
+    "R_j_initial",
+    "V1_j_initial",
+    "V2_j_initial",
+    "longitude",
+    "latitude",
+    "tau_i",
+    "beta_j0_hum",
+    "a_1_j",
+    "a_2_j",
+    "b_1_j",
+    "b_2_j",
+    "beta_j0_env",
+    "theta_j",
+])
+
 # Fields in the base_config that LASER expects as 2-D numpy arrays
 # (shape: n_locations × n_time_steps). These come pre-converted from R via
 # reticulate::r_to_py() and are already numpy arrays — no conversion needed
@@ -108,11 +146,25 @@ def _apply_sampled_params(base_config: dict, sampled_params_json: str) -> dict:
 
     sampled = json.loads(sampled_params_json)
 
-    # Convert to numpy 1-D array for known vector fields.
+    # Convert to numpy 1-D array for known vector fields. EXCEPT the
+    # _AS_NDARRAY_FIELDS, which MUST stay as Python lists so the engine's
+    # as_ndarray() casts them to its declared dtype (uint32 for IC counts,
+    # float32 for seasonality/transmission vectors) -- exactly as the local
+    # PSOCK path (which ships lists). Converting them to float64 here would make
+    # as_ndarray() return them unchanged as float64 and silently diverge the
+    # backend from local (see _AS_NDARRAY_FIELDS docstring).
     # Single-location countries produce scalars (not lists) after JSON
     # deserialization, so we must handle both cases.
     for field, val in sampled.items():
-        if field in _VECTOR_FIELDS:
+        if field in _AS_NDARRAY_FIELDS:
+            # Keep as a list; wrap a single-location scalar into a 1-element list
+            # (mirrors as_ndarray's scalar handling and the local r_to_py list).
+            if isinstance(val, (int, float)):
+                sampled[field] = [val]
+            elif isinstance(val, tuple):
+                sampled[field] = list(val)
+            # already a list -> leave as-is
+        elif field in _VECTOR_FIELDS:
             if isinstance(val, (list, tuple)):
                 sampled[field] = np.array(val, dtype=float)
             elif isinstance(val, (int, float)):
@@ -123,6 +175,15 @@ def _apply_sampled_params(base_config: dict, sampled_params_json: str) -> dict:
     for field in _MATRIX_FIELDS:
         if field in sampled and isinstance(sampled[field], (list, tuple)):
             sampled[field] = np.array(sampled[field], dtype=float)
+
+    # base_config carries N_j_initial / longitude / latitude as numpy float64
+    # arrays (reticulate::r_to_py of .extract_base_config). Those are also
+    # as_ndarray fields, so convert any deep-copied numpy array back to a list
+    # for parity (only if not overridden by the sampled set above).
+    for field in _AS_NDARRAY_FIELDS:
+        v = config.get(field)
+        if isinstance(v, np.ndarray):
+            config[field] = v.tolist()
 
     config.update(sampled)
     return config
@@ -520,8 +581,25 @@ def run_laser_postca(task_id: int, seed: int,
             for key, val in extra_fields.items():
                 config[key] = val
 
+        # Keep the engine as_ndarray fields as LISTS so the engine casts them to
+        # its declared dtype (uint32 IC / float32 vectors), matching the local
+        # PSOCK path. Converting them to float64 numpy here would diverge the
+        # post-calibration ensemble from a local rerun (see _AS_NDARRAY_FIELDS).
+        # A scattered numpy array (from extra_fields) is converted back to a list.
+        for key in _AS_NDARRAY_FIELDS:
+            if key in config:
+                v = config[key]
+                if isinstance(v, np.ndarray):
+                    config[key] = v.tolist()
+                elif isinstance(v, (int, float)):
+                    config[key] = [v]
+                elif isinstance(v, tuple):
+                    config[key] = list(v)
+
         # Convert vector fields to numpy arrays (same logic as _apply_sampled_params)
         for key in _VECTOR_FIELDS:
+            if key in _AS_NDARRAY_FIELDS:
+                continue
             if key in config and not isinstance(config[key], np.ndarray):
                 val = config[key]
                 if isinstance(val, list):

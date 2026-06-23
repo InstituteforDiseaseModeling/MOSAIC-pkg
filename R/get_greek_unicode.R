@@ -30,7 +30,7 @@
 #' }
 #'
 #' @seealso
-#' \code{\link{ggplot2}} for using the Unicode symbols in plot titles.
+#' \pkg{ggplot2} for using the Unicode symbols in plot titles.
 #'
 #' @export
 

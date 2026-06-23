@@ -78,4 +78,31 @@ that forget to set burn_in_days=0L. Candidate: a one-time warning when
 (n_time - max(idx_cases,idx_deaths)) < min_obs_for_likelihood. Scoring semantics are
 disease-modeler/statistician territory, so propose-don't-impose.
 
+**CRITICAL Dask-path bug on the per-cell weights (maintainer caught it; my v0.48.0 feature).**
+`.extract_sampled_params` (run_MOSAIC_helpers.R) `base_fields` list MUST exclude
+`reported_cases_weight`/`reported_deaths_weight`. They live in `.extract_base_config`
+(broadcast ONCE as clean numpy). If left in the per-sim sampled set, the Dask path does
+`jsonlite::toJSON(digits=NA)` which serializes NA cells as the STRING "NA"
+(`[["NA",0.8]]`) -> `config.update(sampled)` on the worker overwrites the clean float64
+base_config arrays with Python lists carrying "NA" -> `np.asarray(...,dtype=float)` raises
+"could not convert string to float: 'NA'" in `_weights_obs_matrix_trivial`/the scorer ->
+EVERY Dask sim fails. Plus ~1.5 MB matrices re-serialized per sim (~30x JSON bloat at 40K).
+The weight matrices only started being CONSUMED in v0.48.0, so this latent the moment the
+feature shipped. Fix = add them to base_fields. Verified: sampled JSON drops from bloated
+to ~61KB, no string-NA. Lesson: any new matrix field added to config that carries NA AND is
+broadcast via base_config MUST also be excluded from .extract_sampled_params, else the
+toJSON(digits=NA) string-NA trap kills the Dask path. Local PSOCK was unaffected (no JSON
+round-trip) which is why local tests stayed green -- classic local/Dask divergence (CLAUDE.md
+Lesson #12 (ii): audit Dask/remote paths SEPARATELY from local PSOCK).
+
+**R CMD check baseline:** the built-tarball check is NOT 0/0/0 and isn't meant to be (non-CRAN).
+Standing baseline ~3E/3W/4N: CRAN-incoming, examples needing data root, and ~10 test files
+using `source("../../R/<fn>.R")` (resolves under devtools::test/test_local from the source
+tree, BREAKS under tarball R CMD check). CI uses `testthat::test_local()` so it's green.
+`devtools::check()` source-mode hides the example/test ERRORs -> do NOT claim "R CMD check
+0/0/0" from a devtools::check run. See maintainer note [[rcmdcheck-baseline-v048]].
+ALSO: engine-backed tests (incl test-dask_worker_score_window_parity.R) NEVER run in CI
+(CI never pip-installs laser-cholera) -> the loc_idx guard is local-only; run devtools::test()
+locally/on the VM before shipping engine-path changes. See [[engine-tests-ci-gap]].
+
 Related: [[cairo_pdf_glyph_trap]] (installed-capability-lies pattern), CLAUDE.md Lesson #12.

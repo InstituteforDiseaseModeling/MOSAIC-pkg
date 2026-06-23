@@ -29,3 +29,13 @@ keep-list) keeps `reported_cases`/`reported_deaths` but NOT the weight matrices.
 per-cell weighting into `calc_model_likelihood`, they MUST add both weight keys here or the Dask
 path computes UNWEIGHTED while the local PSOCK path computes weighted -> Lesson #12 local-vs-Dask
 divergence. Flag this on any PR touching the likelihood weight consumption.
+
+**RESOLVED (v0.48.x window, swe):** the landmine above was closed. Weights are now (a) KEPT in
+`.extract_base_config()` keep-list (broadcast once, lines ~2200-2204) AND (b) EXCLUDED from
+`.extract_sampled_params()` base_fields (lines ~2244-2254) so they are not re-serialized per sim.
+The per-sim exclusion is load-bearing for a SECOND reason discovered then: jsonlite toJSON(digits=NA)
+serializes NA_real_ weight cells as the STRING "NA", and worker-side config.update(sampled) would
+overwrite the clean float64 base arrays -> np.asarray(dtype=float) raises on "NA" -> every sim fails.
+Python v0.16.0 calc_model_likelihood now CONSUMES weights_obs_cases/deaths (engine ported R verbatim).
+The two lists are coherent — verify they STAY in lockstep on any future edit (broadcast-keep vs
+per-sim-exclude is the correct pattern; both must list both weight keys).
