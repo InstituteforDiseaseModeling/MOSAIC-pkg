@@ -19,6 +19,16 @@
 
 library(testthat)
 
+# These fixtures are self-contained: they supply explicit priors + config and
+# must NOT touch a MOSAIC root. sample_parameters() calls get_paths() only when
+# PATHS is NULL, so pass a non-NULL stub to keep the tests root-independent
+# (otherwise they error in get_paths() in any process/CI without a root set,
+# instead of exercising the B2 logic). PATHS is only carried through to the
+# returned config here; sampling itself does not read it.
+.b2_sample <- function(...) {
+  MOSAIC::sample_parameters(PATHS = list(), ...)
+}
+
 # Recompute the realized reported CFR from emitted parameters (the engine's
 # v0.14.0 steady-state identity). B2's whole point is that this == CFR_target.
 .b2_reported_cfr <- function(mu, gamma_1, rho, rho_deaths, chi_endemic, chi_epidemic) {
@@ -76,7 +86,7 @@ test_that("B2 derives mu_j_baseline exactly from CFR_target * chain", {
   cfg$chi_endemic <- chi_end; cfg$chi_epidemic <- chi_epi
   cfg$CFR_target <- rep(CFR_target, 2)
 
-  out <- sample_parameters(
+  out <- .b2_sample(
     priors = priors, config = cfg, seed = 123L, verbose = FALSE, validate = FALSE,
     sample_args = list(
       sample_gamma_1 = FALSE, sample_rho = FALSE, sample_rho_deaths = FALSE,
@@ -109,7 +119,7 @@ test_that("B2 implied reported CFR == CFR_target across the chain support", {
     cfg$gamma_1 <- grid$g1[i]; cfg$rho <- grid$rho[i]; cfg$rho_deaths <- grid$rhod[i]
     cfg$chi_endemic <- grid$ce[i]; cfg$chi_epidemic <- grid$ee[i]
     cfg$CFR_target <- rep(CFR_target, 2)
-    out <- sample_parameters(
+    out <- .b2_sample(
       priors = priors, config = cfg, seed = 1L, verbose = FALSE, validate = FALSE,
       sample_args = list(
         sample_gamma_1 = FALSE, sample_rho = FALSE, sample_rho_deaths = FALSE,
@@ -166,9 +176,9 @@ test_that("B2 composed spread: sd(log implied_CFR) ~ 0.787, Var(log mu) ~ 1.016"
 # Fixture 4 (SPEC §6.1 #4): make_LASER_config [0,1] bound. The RAW B2 product
 # (CFR_target * chain) CAN exceed 1 in the extreme upper tail for the highest-CFR
 # countries (P(mu>1) ~ 1e-5 at the highest real country, CFR median ~0.089;
-# SPEC_B2.md §3.5), so sample_parameters() CLAMPS the derived mu just below 1.
+# SPEC_B2.md §3.5), so .b2_sample() CLAMPS the derived mu just below 1.
 # This fixture asserts (a) the raw product can breach (documenting why the clamp
-# exists) and (b) the clamped derivation through sample_parameters() never does.
+# exists) and (b) the clamped derivation through .b2_sample() never does.
 # ---------------------------------------------------------------------------
 test_that("B2 raw product can breach 1 in the tail (documents the clamp need)", {
   set.seed(7L)
@@ -192,7 +202,7 @@ test_that("B2 sample_parameters clamps derived mu_j_baseline to the engine [0,1]
   # Force a high-chain draw: large gamma_1, small rho_deaths/chi -> chain large.
   cfg$gamma_1 <- 0.5; cfg$rho <- 0.7; cfg$rho_deaths <- 0.3
   cfg$chi_endemic <- 0.3; cfg$chi_epidemic <- 0.3
-  out <- sample_parameters(
+  out <- .b2_sample(
     priors = priors, config = cfg, seed = 1L, verbose = FALSE, validate = FALSE,
     sample_args = list(
       sample_gamma_1 = FALSE, sample_rho = FALSE, sample_rho_deaths = FALSE,
@@ -214,7 +224,7 @@ test_that("B2 sample_mu_j_baseline=FALSE leaves mu_j_baseline at the config defa
   priors <- .b2_make_priors()
   cfg <- .b2_make_config()
   cfg$mu_j_baseline <- c(0.0042, 0.0017)
-  out <- sample_parameters(
+  out <- .b2_sample(
     priors = priors, config = cfg, seed = 5L, verbose = FALSE, validate = FALSE,
     sample_args = list(sample_mu_j_baseline = FALSE, sample_initial_conditions = FALSE)
   )
@@ -226,7 +236,7 @@ test_that("B2 sample_CFR_target=FALSE freezes CFR but still derives mu from samp
   cfg <- .b2_make_config()
   cfg$CFR_target <- c(0.02, 0.01)
   # Freeze chain too, for a deterministic check of the frozen-CFR derivation.
-  out <- sample_parameters(
+  out <- .b2_sample(
     priors = priors, config = cfg, seed = 6L, verbose = FALSE, validate = FALSE,
     sample_args = list(
       sample_CFR_target = FALSE, sample_mu_j_baseline = TRUE,
@@ -271,10 +281,10 @@ test_that("B2-OFF legacy path is bit-identical and skips the B2 hook", {
   cfg <- .b2_make_config()
   cfg$CFR_target <- NULL  # legacy config has no CFR_target
 
-  a <- sample_parameters(priors = legacy, config = cfg, seed = 99L,
+  a <- .b2_sample(priors = legacy, config = cfg, seed = 99L,
                          verbose = FALSE, validate = FALSE,
                          sample_args = list(sample_initial_conditions = FALSE))
-  b <- sample_parameters(priors = legacy, config = cfg, seed = 99L,
+  b <- .b2_sample(priors = legacy, config = cfg, seed = 99L,
                          verbose = FALSE, validate = FALSE,
                          sample_args = list(sample_initial_conditions = FALSE))
   # Full bit-identical re-run.
@@ -302,7 +312,7 @@ test_that("B2 fails loud when neither CFR_target nor mu_j_baseline prior is pres
   cfg <- .b2_make_config()
   cfg$CFR_target <- NULL
   expect_error(
-    sample_parameters(priors = broken, config = cfg, seed = 1L,
+    .b2_sample(priors = broken, config = cfg, seed = 1L,
                       verbose = FALSE, validate = FALSE,
                       sample_args = list(sample_mu_j_baseline = TRUE,
                                          sample_initial_conditions = FALSE)),

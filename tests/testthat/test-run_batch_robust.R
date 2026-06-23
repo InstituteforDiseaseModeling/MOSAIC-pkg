@@ -15,6 +15,11 @@
 # PSOCK-only; skipped where a PSOCK cluster cannot be created.
 
 .skip_if_no_psock_rb <- function() {
+  # Spawning a PSOCK cluster (and SIGKILLing its workers) inside a testthat
+  # parallel worker collides with testthat's own result IPC and crashes the
+  # worker. Run serial-only (CLAUDE.md parallel-over-parallel nesting landmine);
+  # the serial devtools::test()/CI run still exercises these.
+  skip_if_testthat_parallel()
   ok <- tryCatch({
     cl <- parallel::makeCluster(1L, type = "PSOCK")
     parallel::stopCluster(cl)
