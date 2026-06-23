@@ -275,12 +275,15 @@ If beta_j0_tot and p_beta are provided, this will be validated against beta_j0_t
 \item{p}{Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.}
 
 \item{alpha_1}{FOI mixing exponent applied to the infectious term \code{(I/N)}
-(numeric in [0, 1]; 1 = well-mixed contacts).}
+(numeric in (0, 1]; 1 = well-mixed contacts). Dual-mode
+(laser-cholera v0.16.0+): a scalar applied uniformly across patches,
+or a per-location vector of length \code{length(location_name)}.}
 
 \item{alpha_2}{Exponent on \code{N_jt} in the FOI denominator
 (numeric in [0, 1]). \code{alpha_2 = 1} is frequency-dependent
 transmission (FOI proportional to \code{I/N}); \code{alpha_2 = 0} is
-density-dependent (FOI proportional to \code{I}).
+density-dependent (FOI proportional to \code{I}). Dual-mode: scalar or a
+per-location vector of length \code{length(location_name)}.
 \subsection{Force of Infection (environment-to-human)}{
 
 Environmental suitability, its calibration parameters, shedding rates, and

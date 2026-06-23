@@ -142,11 +142,14 @@
 #' @param b_2_j Vector of cosine amplitude coefficients (2nd harmonic) for each location. Numeric, length = length(location_name).
 #' @param p Period of the seasonal forcing function. Scalar numeric > 0. Default is 365 for daily annual seasonality.
 #' @param alpha_1 FOI mixing exponent applied to the infectious term `(I/N)`
-#'        (numeric in \[0, 1\]; 1 = well-mixed contacts).
+#'        (numeric in (0, 1\]; 1 = well-mixed contacts). Dual-mode
+#'        (laser-cholera v0.16.0+): a scalar applied uniformly across patches,
+#'        or a per-location vector of length `length(location_name)`.
 #' @param alpha_2 Exponent on `N_jt` in the FOI denominator
 #'        (numeric in \[0, 1\]). `alpha_2 = 1` is frequency-dependent
 #'        transmission (FOI proportional to `I/N`); `alpha_2 = 0` is
-#'        density-dependent (FOI proportional to `I`).
+#'        density-dependent (FOI proportional to `I`). Dual-mode: scalar or a
+#'        per-location vector of length `length(location_name)`.
 #'
 #' ## Force of Infection (environment-to-human)
 #' Environmental suitability, its calibration parameters, shedding rates, and
@@ -847,11 +850,22 @@ make_LASER_config <- function(output_file_path = NULL,
      if (!is.numeric(tau_i) || any(tau_i < 0 | tau_i > 1) || length(tau_i) != length(location_name)) {
           stop("tau_i must be a numeric vector of length equal to location_name and values between 0 and 1.")
      }
-     if (!is.numeric(alpha_1) || alpha_1 < 0 || alpha_1 > 1) {
-          stop("alpha_1 must be a numeric scalar between 0 and 1.")
+     # alpha_1 / alpha_2 are dual-mode (laser-cholera v0.16.0+): a global scalar
+     # OR a per-location vector of length(location_name). The engine broadcasts a
+     # scalar across patches and indexes a length-npatches array (np.power in
+     # humantohuman.py). Range invariants match the engine validate_parameters:
+     # alpha_1 in (0, 1] (strict > 0 -- 0 collapses the I-dependence to a
+     # constant), alpha_2 in [0, 1]. MOSAIC's default sampling keeps alpha global
+     # (scalar); the vector form is accepted for direct run_LASER configs.
+     if (!is.numeric(alpha_1) ||
+         !(length(alpha_1) == 1L || length(alpha_1) == length(location_name)) ||
+         any(alpha_1 <= 0 | alpha_1 > 1)) {
+          stop("alpha_1 must be numeric in (0, 1], either a scalar or a vector of length equal to location_name.")
      }
-     if (!is.numeric(alpha_2) || alpha_2 < 0 || alpha_2 > 1) {
-          stop("alpha_2 must be a numeric scalar between 0 and 1.")
+     if (!is.numeric(alpha_2) ||
+         !(length(alpha_2) == 1L || length(alpha_2) == length(location_name)) ||
+         any(alpha_2 < 0 | alpha_2 > 1)) {
+          stop("alpha_2 must be numeric in [0, 1], either a scalar or a vector of length equal to location_name.")
      }
 
      # Force of Infection (environment-to-human).

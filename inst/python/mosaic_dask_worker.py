@@ -128,20 +128,54 @@ def _apply_sampled_params(base_config: dict, sampled_params_json: str) -> dict:
     return config
 
 
+def _weights_obs_matrix_trivial(w, obs) -> bool:
+    """True if a per-cell confidence-weight matrix is trivial.
+
+    A matrix is trivial when it is ``None`` OR every cell with a finite
+    observation has ``w == 1.0`` and is finite -- in which case the unweighted
+    code path is bit-identical to passing the matrix, so the no-slice
+    ``model.log_likelihood`` (which the engine analyzer computes WITHOUT
+    weights_obs) is still correct. A non-finite weight on a finite-obs cell is
+    a real "no confidence" signal and is therefore NOT trivial. Matrix-level
+    analogue of R ``.weights_obs_row_trivial`` (R/calc_model_likelihood.R)
+    applied across all rows at once.
+    """
+    if w is None:
+        return True
+    w = np.asarray(w, dtype=float)
+    obs = np.asarray(obs, dtype=float)
+    if w.ndim == 1:
+        w = w[np.newaxis, :]
+    if obs.ndim == 1:
+        obs = obs[np.newaxis, :]
+    fin = np.isfinite(obs)
+    if not np.any(fin):
+        return True
+    wf = w[fin]
+    return bool(np.all(np.isfinite(wf) & (wf == 1.0)))
+
+
 def _score_window_likelihood(config: dict, model) -> float:
-    """Recompute the log-likelihood on the per-channel scored window.
+    """Recompute the log-likelihood with per-cell obs weights and/or a sliced window.
 
-    Mirrors the R local-PSOCK slice in .mosaic_run_simulation_worker
-    (R/run_MOSAIC.R): when ``score_idx_cases`` / ``score_idx_deaths`` (1-based)
-    indicate a scored start later than 1, the IC-transient / deaths-era head is
-    SLICED off the obs/est arrays (the shape terms do not honor weights_time,
-    so down-weighting is insufficient), then the later-starting deaths channel
-    is zero-weighted on the residual prefix. The sliced ``date_start`` is passed
-    so the peak date_seq length matches the sliced n_time_steps.
+    Mirrors the R local-PSOCK scorer in .mosaic_run_simulation_worker
+    (R/run_MOSAIC.R:387-529). Called whenever the engine analyzer's full-window,
+    unweighted ``model.log_likelihood`` would diverge from the local R score --
+    i.e. when EITHER:
+      * ``score_idx_cases`` / ``score_idx_deaths`` (1-based) indicate a scored
+        start later than 1: the IC-transient / deaths-era head is SLICED off the
+        obs/est arrays (the shape terms do not honor weights_time, so
+        down-weighting is insufficient), OR
+      * the per-cell confidence-weight matrices (``reported_cases_weight`` /
+        ``reported_deaths_weight``, config_default v4.1+) are non-trivial: the
+        engine analyzer never sees weights_obs (analyzer.py does not pass them),
+        so its ``model.log_likelihood`` is unweighted.
 
-    Returns the recomputed scalar log-likelihood. Only called when slicing is
-    needed; the no-slice default path uses ``model.log_likelihood`` directly so
-    it is bit-identical to the engine analyzer.
+    laser-cholera v0.16.0+ accepts the ``weights_obs_cases`` / ``weights_obs_deaths``
+    matrices, so we pass them directly (sliced + deaths-prefix-zeroed exactly as
+    the R path does) instead of the prior NaN-on-obs emulation. The sliced
+    ``date_start`` is passed so the peak date_seq length matches the sliced
+    n_time_steps.
     """
     from laser.cholera.calc_model_likelihood import calc_model_likelihood
     import pandas as pd
@@ -154,14 +188,23 @@ def _score_window_likelihood(config: dict, model) -> float:
     est_cases = np.asarray(model.results.reported_cases, dtype=float)
     est_deaths = np.asarray(model.results.reported_deaths, dtype=float)
 
-    if obs_cases.ndim == 1:
-        obs_cases = obs_cases[np.newaxis, :]
-    if obs_deaths.ndim == 1:
-        obs_deaths = obs_deaths[np.newaxis, :]
-    if est_cases.ndim == 1:
-        est_cases = est_cases[np.newaxis, :]
-    if est_deaths.ndim == 1:
-        est_deaths = est_deaths[np.newaxis, :]
+    # Per-cell confidence-weight matrices (config_default v4.1+); None on older
+    # configs (-> unweighted, matching the engine analyzer).
+    wobs_cases = config.get("reported_cases_weight", None)
+    wobs_deaths = config.get("reported_deaths_weight", None)
+    if wobs_cases is not None:
+        wobs_cases = np.asarray(wobs_cases, dtype=float)
+    if wobs_deaths is not None:
+        wobs_deaths = np.asarray(wobs_deaths, dtype=float)
+
+    def _as2d(a):
+        if a is not None and a.ndim == 1:
+            return a[np.newaxis, :]
+        return a
+
+    obs_cases, obs_deaths = _as2d(obs_cases), _as2d(obs_deaths)
+    est_cases, est_deaths = _as2d(est_cases), _as2d(est_deaths)
+    wobs_cases, wobs_deaths = _as2d(wobs_cases), _as2d(wobs_deaths)
 
     # Match the engine analyzer's nreports trim (drop the initial-state column
     # mismatch) BEFORE slicing, so the columns align with obs.
@@ -170,26 +213,34 @@ def _score_window_likelihood(config: dict, model) -> float:
     obs_deaths = obs_deaths[:, :nreports]
     est_cases = est_cases[:, :nreports]
     est_deaths = est_deaths[:, :nreports]
+    if wobs_cases is not None:
+        wobs_cases = wobs_cases[:, :nreports]
+    if wobs_deaths is not None:
+        wobs_deaths = wobs_deaths[:, :nreports]
 
     s = max(1, min(idx_cases, idx_deaths))   # shared slice start (1-based)
     keep0 = s - 1                            # 0-based slice index
 
-    obs_cases = obs_cases[:, keep0:].copy()
-    obs_deaths = obs_deaths[:, keep0:].copy()
+    obs_cases = obs_cases[:, keep0:]
+    obs_deaths = obs_deaths[:, keep0:]
     est_cases = est_cases[:, keep0:]
     est_deaths = est_deaths[:, keep0:]
+    if wobs_cases is not None:
+        wobs_cases = wobs_cases[:, keep0:].copy()
+    if wobs_deaths is not None:
+        wobs_deaths = wobs_deaths[:, keep0:].copy()
 
     # Zero the later-starting deaths channel on the residual prefix
-    # s:(idx_deaths-1). The engine's Python calc_model_likelihood does NOT
-    # accept the per-cell weights_obs_* matrices (MOSAIC-R-only; the Dask path
-    # is already unweighted per Lesson #12), so we mirror the local
-    # weights_obs_deaths=0 prefix by setting the deaths OBS to NaN there: the NB
-    # term masks non-finite obs, and the (default-OFF) nan-aware shape terms
-    # ignore them. Cases are scored from s (= idx_cases when cases is the
-    # earlier channel).
+    # s:(idx_deaths-1) via the WEIGHTS matrix (mirrors R run_MOSAIC.R:426-437).
+    # Synthesize a ones matrix when no per-cell deaths weights exist so the
+    # prefix can be zeroed (belt-and-suspenders; the deaths min_obs gate also
+    # protects this region). This replaces the prior NaN-on-obs emulation now
+    # that v0.16.0 calc_model_likelihood honors weights_obs_*.
     deaths_prefix = idx_deaths - s
     if deaths_prefix > 0:
-        obs_deaths[:, :deaths_prefix] = np.nan
+        if wobs_deaths is None:
+            wobs_deaths = np.ones((obs_deaths.shape[0], obs_deaths.shape[1]), dtype=float)
+        wobs_deaths[:, :deaths_prefix] = 0.0
 
     # weights_time, sliced to the kept columns.
     wt = config.get("weights_time", None)
@@ -206,7 +257,24 @@ def _score_window_likelihood(config: dict, model) -> float:
     if isinstance(date_start, datetime.datetime) and s > 1:
         date_start = date_start + datetime.timedelta(days=int(s - 1))
 
-    epidemic_peaks = config.get("epidemic_peaks", None)
+    # Source epidemic_peaks from model.params -- NOT the raw config dict. The
+    # engine's params.py (dict_to_propertysetex) appends the integer ``loc_idx``
+    # column that maps each ``iso_code`` row to its 0-based position in
+    # ``location_name``; the v0.16.0 calc_model_likelihood matches peaks by
+    # ``loc_idx`` (getattr(row, "loc_idx", None)) and SILENTLY DROPS every row
+    # that lacks it. The raw ``config["epidemic_peaks"]`` carries only
+    # iso_code/peak_date (see .filter_epidemic_peaks in R), so reading it here
+    # would zero out all peak/shape terms -- diverging from the local R scorer
+    # (which dispatches by iso_code) whenever shape weights are on. Reading
+    # model.params guarantees byte-parity with the engine analyzer's own peak set.
+    epidemic_peaks = None
+    try:
+        if "epidemic_peaks" in model.params:
+            epidemic_peaks = model.params["epidemic_peaks"]
+    except (TypeError, KeyError):
+        epidemic_peaks = None
+    if epidemic_peaks is None:
+        epidemic_peaks = config.get("epidemic_peaks", None)
     if epidemic_peaks is not None and not isinstance(epidemic_peaks, pd.DataFrame):
         epidemic_peaks = pd.DataFrame(epidemic_peaks)
 
@@ -224,6 +292,10 @@ def _score_window_likelihood(config: dict, model) -> float:
         optional["epidemic_peaks"] = epidemic_peaks
         optional["date_start"] = date_start
         optional["date_stop"] = config.get("date_stop", None)
+    if wobs_cases is not None:
+        optional["weights_obs_cases"] = wobs_cases
+    if wobs_deaths is not None:
+        optional["weights_obs_deaths"] = wobs_deaths
 
     return float(calc_model_likelihood(
         obs_cases=obs_cases,
@@ -351,15 +423,27 @@ def run_laser_sim(sim_id: int, n_iterations: int,
                     "traceback": "",
                 }
 
-            # Per-channel scored window: when the resolved start indices are
-            # > 1 (burn-in / deaths-era start), the engine analyzer's full-window
-            # model.log_likelihood is wrong (it scores the IC-transient head and
-            # the deaths-era prefix). Recompute on the sliced arrays to mirror
-            # the local PSOCK path. Default (idx == 1) keeps model.log_likelihood
+            # Recompute on-worker (mirroring the local PSOCK R score) when the
+            # engine analyzer's full-window, UNWEIGHTED model.log_likelihood
+            # would diverge from the local R score, i.e. when EITHER:
+            #   * the resolved start indices are > 1 (burn-in / deaths-era
+            #     start) -- the analyzer scores the IC-transient head + deaths
+            #     prefix it should slice off; OR
+            #   * the per-cell confidence-weight matrices are non-trivial -- the
+            #     analyzer never passes weights_obs_* to calc_model_likelihood,
+            #     so model.log_likelihood is unweighted while the local R path
+            #     applies the weights (parity fix, laser-cholera v0.16.0).
+            # Default (idx == 1 AND trivial weights) keeps model.log_likelihood
             # untouched => bit-identical to the engine analyzer.
             idx_c = int(config.get("score_idx_cases", 1))
             idx_d = int(config.get("score_idx_deaths", 1))
-            if idx_c > 1 or idx_d > 1:
+            need_wobs = (
+                not _weights_obs_matrix_trivial(
+                    config.get("reported_cases_weight"), config.get("reported_cases"))
+                or not _weights_obs_matrix_trivial(
+                    config.get("reported_deaths_weight"), config.get("reported_deaths"))
+            )
+            if idx_c > 1 or idx_d > 1 or need_wobs:
                 ll = _score_window_likelihood(config, model)
 
             iterations.append({

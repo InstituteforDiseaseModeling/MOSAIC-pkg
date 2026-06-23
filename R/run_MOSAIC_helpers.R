@@ -1264,6 +1264,17 @@
 #'     \code{X | None} type annotations, and the results schema
 #'     (reported_cases/reported_deaths) is unchanged.
 #' }
+#' v0.16.0 is intentionally NOT added to the {0.14.0, 0.15.0} set: it adds the
+#' per-cell \code{weights_obs_cases}/\code{weights_obs_deaths} arguments to
+#' \code{calc_model_likelihood.py}. When those weights are TRIVIAL (the default)
+#' the values are byte-identical to 0.15.0, but a v0.16.0 Dask shard scored with
+#' NON-trivial weights differs from a 0.15.0 shard (which could not apply them at
+#' all). Since this allow-list is version-keyed and cannot inspect whether the
+#' weights were trivial for a given shard, the conservative choice is to refuse
+#' pooling across the 0.15.0 -> 0.16.0 boundary (resume re-runs rather than
+#' silently mixing weighted and unweighted likelihoods). The engine OUTPUT schema
+#' (reported_cases/reported_deaths) and alpha dual-mode change are value-neutral
+#' for a scalar alpha, so only the likelihood-weighting motivates the exclusion.
 #' @return TRUE if the two versions produce comparable Dask likelihood values.
 #' @noRd
 .mosaic_lc_likelihood_compatible <- function(a, b) {
