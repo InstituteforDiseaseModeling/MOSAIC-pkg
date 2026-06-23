@@ -1,3 +1,9 @@
+# MOSAIC 0.49.3
+
+* **laser-cholera engine 0.16.0 → 0.16.1** — contract-neutral for MOSAIC: the only engine-source change (0.16.0→0.16.1) is a Python-side `compute_wis_parametric_row` NaN-poisoning fix (#91) that MOSAIC's R-side likelihood does not use; SEIR dynamics, parameters, and the result schema are unchanged, so simulated cases/deaths are identical. Pin updated in `inst/python/environment.yml`.
+* **B2 — dynamic `mu_j_baseline` ← `CFR_target` coupling** (`priors_default` v15.15 / `config_default` v4.5): `mu_j_baseline` is now derived at sample time from `CFR_target * gamma_1 * rho / (rho_deaths * chi)`, so the implied CFR is invariant to `gamma_1` drift and the ETH dwell stop-gap is removed. (0.49.0)
+* **Worker-death-robust parallel gather** (`.mosaic_cluster_lapply_robust`): a PSOCK worker *process* crash (laser/numba C-abort or OOM) during the calibration or ensemble gather previously hung the master forever on Linux (blocking `unserialize()`); it now degrades on the survivors with a warning, or `stop()`s with a diagnostic past an idle timeout. Wired into both `.mosaic_run_batch` (calibration) and `calc_model_ensemble`. (0.49.1–0.49.2)
+
 # MOSAIC 0.48.3
 
 * **`priors_default` v15.14 / `config_default` v4.4 — deaths-bias + cases-bias prior fixes from the Stage-1 metapop review** (validated on a 6-country dugong recalibration before shipping; cases:deaths weight 1.0:0.5, matching the Stage-1 fits).
