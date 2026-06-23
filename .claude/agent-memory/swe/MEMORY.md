@@ -1,4 +1,5 @@
 - [hedgehog-run infra](project_hedgehog_run_infra.md) — hedgehog VM run mechanics + two vm/ helper traps (broken ETH template, pull_results.sh does not compress)
+- [dugong VM](reference_dugong_vm.md) — 2nd run host (176c/1.5TiB, Ubuntu 24.04, persistent IP 52.183.44.192); libexpat-wrapper trap (not GLIBCXX); skill .claude/skills/dugong-run, doc vm/DUGONG.md, setup claude/dugong_setup/
 - [cairo_pdf glyph trap](cairo_pdf_glyph_trap.md) — capabilities("cairo") lies on this box; probe a real cairo_pdf device + fall back to ASCII labels for PDF Unicode glyphs
 - [optimize_subset levers](project_optimize_subset_levers.md) — optimize_ensemble_subset() A/B/C speedups; the ci=(i-1)*n_times+j scatter contract + byrow=TRUE parity trap; PSOCK-not-FORK; install-before-parallel-test
 - [single-location psi_jt nameless](project_single_location_psi_jt_nameless.md) — get_location_config psi_jt has NO colnames + date_start/stop are strings; align psi swaps positionally via seq.Date(), LOCF a bounded tail gap
