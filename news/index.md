@@ -1,5 +1,41 @@
 # Changelog
 
+## MOSAIC 0.48.3
+
+- **`priors_default` v15.14 / `config_default` v4.4 — deaths-bias +
+  cases-bias prior fixes from the Stage-1 metapop review** (validated on
+  a 6-country dugong recalibration before shipping; cases:deaths weight
+  1.0:0.5, matching the Stage-1 fits).
+  - **B1 — `mu_j_baseline` CFR→μ derivation re-anchored** to
+    posterior-consistent chain factors (`gamma_1` 0.1133→0.10, `chi`
+    0.639→0.70), scaling every country’s center **×0.805**
+    (cases-neutral). Corrects the systematic deaths over-prediction
+    traced (independent 4-agent review) to the derivation freezing
+    `gamma_1` at its prior mean while calibration consistently pulls it
+    below the anchor (implied CFR ∝ `1/gamma_1` inflated ~1.2–1.8×).
+    `mu_j_baseline` magnitude (the v0.13 `rho_deaths` correction) and
+    `rho_deaths` itself are **unchanged**. The ETH ×0.40 dwell stop-gap
+    is **retained** (held ≈0.00088): B1’s *uniform* ×0.805
+    under-corrects the low-`gamma_1` countries, so ETH keeps its
+    residual until the deferred Phase-2 dynamic per-country
+    `gamma_1`-coupled derivation (B2) subsumes it.
+  - **`beta_j0_tot` per-country recenter** — geometric-mean shrinkage
+    `new_meanlog = 0.5·log(prior) + 0.5·log(posterior_median)` (w=0.5,
+    **width kept**) toward the Stage-1 posteriors for the 18-country
+    data cohort, correcting the ~1.6× cases over-prediction (data halved
+    `beta` in most). Genuinely per-country (5 countries —
+    BDI/MWI/NGA/RWA/TZA — move *up*); COG’s deliberate override
+    **preserved**; LBR (unidentified) left at default. Width is
+    intentionally not tightened (the warm-start ×2 `beta_j0_tot`
+    inflation guard).
+  - **Validation (6-country dugong recalibration, 2018 window):** deaths
+    bias dropped in all 6 (NER 2.81→2.25, MOZ 1.76→1.23, SSD 2.27→2.10,
+    …), cases R² unchanged (≤0.01) — cases-neutral as designed. Residual
+    ~2× on COD/SSD is the by-design implied-CFR / median-ensemble floor
+    (`project_central_method_v038`), not a prior issue; the
+    low-`gamma_1` countries (e.g. MWI, ~unchanged under B1) are the
+    Phase-2 B2 case. Full `devtools::test()` green (FAIL 0).
+
 ## MOSAIC 0.48.2
 
 Pre-scale-up package-health audit (parallel `swe` + `maintainer` review

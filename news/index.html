@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.48.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.48.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,18 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.48.3" id="mosaic-0483">MOSAIC 0.48.3<a class="anchor" aria-label="anchor" href="#mosaic-0483"></a></h2>
+<ul><li>
+<strong><code>priors_default</code> v15.14 / <code>config_default</code> v4.4 — deaths-bias + cases-bias prior fixes from the Stage-1 metapop review</strong> (validated on a 6-country dugong recalibration before shipping; cases:deaths weight 1.0:0.5, matching the Stage-1 fits).
+<ul><li>
+<strong>B1 — <code>mu_j_baseline</code> CFR→μ derivation re-anchored</strong> to posterior-consistent chain factors (<code>gamma_1</code> 0.1133→0.10, <code>chi</code> 0.639→0.70), scaling every country’s center <strong>×0.805</strong> (cases-neutral). Corrects the systematic deaths over-prediction traced (independent 4-agent review) to the derivation freezing <code>gamma_1</code> at its prior mean while calibration consistently pulls it below the anchor (implied CFR ∝ <code>1/gamma_1</code> inflated ~1.2–1.8×). <code>mu_j_baseline</code> magnitude (the v0.13 <code>rho_deaths</code> correction) and <code>rho_deaths</code> itself are <strong>unchanged</strong>. The ETH ×0.40 dwell stop-gap is <strong>retained</strong> (held ≈0.00088): B1’s <em>uniform</em> ×0.805 under-corrects the low-<code>gamma_1</code> countries, so ETH keeps its residual until the deferred Phase-2 dynamic per-country <code>gamma_1</code>-coupled derivation (B2) subsumes it.</li>
+<li>
+<strong><code>beta_j0_tot</code> per-country recenter</strong> — geometric-mean shrinkage <code>new_meanlog = 0.5·log(prior) + 0.5·log(posterior_median)</code> (w=0.5, <strong>width kept</strong>) toward the Stage-1 posteriors for the 18-country data cohort, correcting the ~1.6× cases over-prediction (data halved <code>beta</code> in most). Genuinely per-country (5 countries — BDI/MWI/NGA/RWA/TZA — move <em>up</em>); COG’s deliberate override <strong>preserved</strong>; LBR (unidentified) left at default. Width is intentionally not tightened (the warm-start ×2 <code>beta_j0_tot</code> inflation guard).</li>
+<li>
+<strong>Validation (6-country dugong recalibration, 2018 window):</strong> deaths bias dropped in all 6 (NER 2.81→2.25, MOZ 1.76→1.23, SSD 2.27→2.10, …), cases R² unchanged (≤0.01) — cases-neutral as designed. Residual ~2× on COD/SSD is the by-design implied-CFR / median-ensemble floor (<code>project_central_method_v038</code>), not a prior issue; the low-<code>gamma_1</code> countries (e.g. MWI, ~unchanged under B1) are the Phase-2 B2 case. Full <code>devtools::test()</code> green (FAIL 0).</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.48.2" id="mosaic-0482">MOSAIC 0.48.2<a class="anchor" aria-label="anchor" href="#mosaic-0482"></a></h2>
 <p>Pre-scale-up package-health audit (parallel <code>swe</code> + <code>maintainer</code> review of the v0.45–v0.48 burst). Two Dask/Coiled-path correctness fixes (local PSOCK was unaffected throughout) plus build/doc hygiene.</p>
