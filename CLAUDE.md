@@ -72,16 +72,17 @@ Changing function signature of exported function - Modifying
 core loop - Unsure about approach (multiple valid solutions)
 
 **Agent roster & skills:** this package defines a Claude Code subagent
-roster + the `diagnose-fit`, `context-audit`, and `hedgehog-run` skills
-in **`.claude/`** (tracked in git) — see **`.claude/agents/README.md`**
-for the full roster, routing, colors, and aliases. The agents can
-read/write data and outputs in sibling repos under `~/MOSAIC`
-(e.g. country repos, the `output/` tree) via the session’s
-`additionalDirectories` grant. Shortcuts: `/swe` (engineering), `/stat`
-(Bayesian/likelihood), `/dm` (epi/priors), `/ml` (suitability), `/etl`
-(data ingestion), `/maint` (R-pkg maintenance + review), `/guide` (user
-how-to), `/doctor` + `/diagnose-fit` (calibration diagnosis), `/arch` +
-`/context-audit` (AI-context hygiene).
+roster + the `diagnose-fit`, `context-audit`, `hedgehog-run`, and
+`dugong-run` skills in **`.claude/`** (tracked in git) — see
+**`.claude/agents/README.md`** for the full roster, routing, colors, and
+aliases. The agents can read/write data and outputs in sibling repos
+under `~/MOSAIC` (e.g. country repos, the `output/` tree) via the
+session’s `additionalDirectories` grant. Shortcuts: `/swe`
+(engineering), `/stat` (Bayesian/likelihood), `/dm` (epi/priors), `/ml`
+(suitability), `/etl` (data ingestion), `/maint` (R-pkg maintenance +
+review), `/guide` (user how-to), `/doctor` + `/diagnose-fit`
+(calibration diagnosis), `/arch` + `/context-audit` (AI-context
+hygiene).
 
 ------------------------------------------------------------------------
 
