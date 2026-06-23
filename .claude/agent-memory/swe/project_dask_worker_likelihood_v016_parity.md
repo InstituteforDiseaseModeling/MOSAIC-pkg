@@ -58,4 +58,24 @@ ensemble scoring/R2 is in R via calc_model_ensemble. `_score_window_likelihood` 
 ONLY Dask likelihood path. Regression test: `test-dask_worker_score_window_parity.R`
 (engine-backed, skips like test-calc_model_likelihood_python_parity).
 
+**v0.16.0 ALSO aligned the zero-prediction cumulative penalty** (est==0 & obs>0 ->
+-obs*log(1e6)). Pre-v0.16 Python was ~1.78x more negative than R; v0.16.0's verbatim
+port made them exact-parity (ratio 1.0, ~1e-12). `test-calc_model_likelihood_python_parity.R`
+test #7 had PINNED the 1.78 ratio with "if engine aligns -> switch to expect_equal";
+the v0.16.0 bump tripped it (the only suite failure post-integration) -> updated to
+exact-parity assertion. Lesson: a deliberately-pinned divergence test IS the early-warning
+that an engine upgrade closed the gap; honor its instruction rather than re-pinning.
+
+**Scale-up foot-gun (flagged, not a bug): burn_in_days=30 is now the DEFAULT** (v0.47.3)
+AND config_default v4.3 ships non-trivial per-cell weights -> EVERY production sim now
+takes the worker's `_score_window_likelihood` recompute branch (and the local slice).
+Overhead measured ~0.2% of a sim (1.2ms vs 768ms) -> negligible. BUT
+`.mosaic_resolve_score_window` clamps idx to n_time with NO warning, so on a SHORT
+window (n_time < ~30) the 30-day burn-in eats the whole series -> min_obs_for_likelihood
+gate yields 0-contribution -> all sims score equal -> calibration silently does nothing.
+Safe for the default 1398-day (2023-2026) window; only bites outbreak/short-window sims
+that forget to set burn_in_days=0L. Candidate: a one-time warning when
+(n_time - max(idx_cases,idx_deaths)) < min_obs_for_likelihood. Scoring semantics are
+disease-modeler/statistician territory, so propose-don't-impose.
+
 Related: [[cairo_pdf_glyph_trap]] (installed-capability-lies pattern), CLAUDE.md Lesson #12.

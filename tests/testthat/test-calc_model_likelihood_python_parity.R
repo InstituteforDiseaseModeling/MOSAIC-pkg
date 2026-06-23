@@ -286,14 +286,16 @@ test_that("R and Python WIS agree within the known NA-masking tolerance", {
 # 7. Zero-prediction proportional penalty path: when est==0 and obs>0, the
 #    helper applies -obs * log(1e6). Force a row of zero estimates.
 # -----------------------------------------------------------------------------
-test_that("R and Python zero-prediction penalty differ by the known fixed ratio", {
+test_that("R and Python zero-prediction penalty are at exact parity", {
   skip_if_no_python_likelihood()
-  # KNOWN, TRACKED divergence (observed on laser-cholera 0.13.1): the
-  # zero-prediction cumulative penalty is scaled differently on the Python side
-  # — Python is ~1.78x more negative than R (R -28327.6 vs Python -50475.1 on
-  # this fixture). This is a STRUCTURAL disagreement, not numerical noise, so
-  # instead of a silent skip() we PIN the ratio: the test FAILS if the gap
-  # closes (engine aligned -> switch this to exact parity) OR widens (regression).
+  # HISTORY: on laser-cholera 0.13.1 the zero-prediction cumulative penalty was
+  # scaled differently on the Python side (Python ~1.78x more negative than R),
+  # a structural divergence that was PINNED here so the test would fail when the
+  # gap closed. laser-cholera v0.16.0 ported calc_model_likelihood verbatim from
+  # R, which ALIGNED the penalty -> the ratio collapsed to 1.0 (R and Python now
+  # agree to ~1e-12 on this fixture). Per the prior note's instruction, this is
+  # now an EXACT-PARITY assertion; a future regression that re-introduces the gap
+  # will fail here.
   inp <- make_parity_inputs()
   inp$est_c[1L, ] <- 0
   inp$est_d[1L, ] <- 0
@@ -306,7 +308,5 @@ test_that("R and Python zero-prediction penalty differ by the known fixed ratio"
   ll_py <- suppressWarnings(as.numeric(call_python_ll(inp, weight_cumulative_total = 0.25)))
 
   expect_true(is.finite(ll_r) && is.finite(ll_py))
-  # Pinned known ratio ~1.78 (Python more negative). If laser-cholera aligns the
-  # penalty (ratio -> ~1.0) this WILL fail -> replace with expect_equal parity.
-  expect_equal(ll_py / ll_r, 1.78, tolerance = 0.05)
+  expect_equal(ll_py, ll_r, tolerance = 1e-6)
 })
