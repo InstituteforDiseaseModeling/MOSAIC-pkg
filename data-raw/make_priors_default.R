@@ -111,14 +111,14 @@ dem_annual <- read.csv(
 
 priors_default <- list(
      metadata = list(
-          version = "15.13",
+          version = "15.14",
           date = Sys.Date(),
           # Build-time fit-window start these priors were derived against. Recorded so
           # make_config_default.R can assert its own date_start matches the priors it
           # sources from (cross-artifact desync guard: catches e.g. a 2015-priors /
           # 2023-config mismatch). Also fixes the IC seeding epoch (ic_t0) below.
           build_date_start = as.character(date_start),
-          description = "Default informative prior distributions for MOSAIC model parameters. v15.13 (2026-06-20): rebuilt at the 2023-01-01 production window alongside config_default v4.3 under the relaxed surveillance trust-tier gate (process_cholera_surveillance_data v0.47.1, fourier_* kept + down-weighted). epidemic_threshold and IC seeding (ic_t0 = 2023-02-01 for the 2023 build) re-derived against the regenerated multi-source combined weekly/daily surveillance with fourier reconstructions retained; build_date_start = 2023-01-01. v15.12 (2026-06-19): multi-source surveillance integration. (a) Initial-condition seeding epoch DECOUPLED from the fit-window date_start: all est_initial_* calls (V1_V2, E_I, R, S) and the population-at-t0 match now use ic_t0 = max(date_start, 2023-02-01). Empirically the 2015 IC lookback window has 0 active-case countries and late-2022 only ~6 (vs 11 at 2023-02-01), so seeding from an early window cold-starts ICs (near-zero E/I, R_eff<1, no ignition); the floor pins ICs to the proven data-rich anchor regardless of how early the fit window starts, and breaks the circular hazard whereby a <2023 config rebuild would poison the next priors rebuild's IC epoch. (b) epidemic_threshold now derives from the multi-source combined weekly file (include_ai=TRUE adds JHU/AI back-history) with AI rows EXCLUDED (source != 'AI') for parity with est_seasonal_dynamics; more outbreak weeks shift some per-country medians and may flip countries off the Zheng 0.7/100k fallback (MIN_OUTBREAK_WEEKS gate). v15.11 (2026-06-18): psi_star_b prior re-centred mean 0->+1.0 (sd kept 2.5) for all 40 countries to match the new per-capita D-scale suitability psi (target_D_rate_per_country_floored), which sits at a much lower level than the old transmission_intensity scale (per-country mean COD 0.93->0.43, global 0.14->0.10). At the prior center (a=1) the calc_psi_star transform is an odds-multiply psi*=sigma(logit(psi)+b). The +1.0 level shift acts on the delta (environmental decay) channel, NOT beta_env: beta_env (envtohuman.py:24) is self-normalized as beta_j0_env*(psi*/psi_bar*) so a uniform b ~cancels in the low-psi regime (no-op), whereas delta decay (environmental.py:150) reads psi* on its ABSOLUTE level via survival_days = days_short + pbeta(psi*|s1,s2)*(days_long-days_short), so a higher psi* lengthens modelled V. cholerae reservoir survival. The D scale pinned most countries near the days_short floor (~16d) at the old b=0 center; +1.0 raises psi* (COD mean 0.36->0.53, MOZ 0.12->0.21) so survival climbs toward the days_long ceiling at seasonal peaks while staying off the floor in low-burden countries. Validated against the spec eq:decay-priors envelope (claude/validate_psi_star_b_delta_survival.R, 2026-06-19): at the decay prior means (days_short=16, days_long=196, s1=s2=3) post-shift per-country survival lies entirely within ~16-196d (0/40 exceed the 196d ceiling, 0/40 below the 16d floor; median +4.9d/+17% to mean survival; survival is structurally bounded above by days_long since pbeta<=1, so the shift only moves countries ALONG the [16,196] curve and cannot breach the envelope). Gives calibration a sensible STARTING center, not a constraint (sd=2.5 retains both-direction freedom; the global decay days/shape params are also sampled). The MOZ-specific psi_star_b override (mean +0.4, fit on the old scale) is removed/folded into the general center. psi_star_a unchanged (a=1 identity is scale-invariant). v15.10 (2026-06-18): ETH-only mu_j_baseline dwell-mismatch STOP-GAP — scale Ethiopia's derived mu_j_baseline mean by 0.40 (Gamma rate 1816->4540, CV unchanged). The CFR->mu identity uses gamma_1 at its PRIOR MEAN (~0.114, 8.8d dwell), but ETH calibration drifts gamma_1 to the long-dwell tail (~0.076, ~14d); since per-case CFR scales as mu_j/gamma_1, realized reported CFR inflates to ~3.7% vs observed ~1.2% (deaths over-predict ~3.3x while cases stay near-unbiased). The x0.40 re-center returns deterministic reported CFR to ~1.5% (deaths bias ~1.3x) with cases unaffected (mu_j/rho_deaths do not enter the case channel; GTFCC treated-CFR target <1%). NOT a structural cure: the dwell mismatch affects all countries; the durable fix is a dwell-adjusted CFR->mu derivation and/or the run_MOSAIC best-subset weighting fix (the dAIC-4 truncation currently discards the deaths signal, so the ensemble reports near the prior center). Do not chase the exact x0.31 point estimate (overfits the broken weighting). See disease-modeler memory project_eth_deaths_cfr_dwell_mismatch. v15.9 (2026-06-16): laser-cholera v0.14.0 (issue #67) adjustments. (a) mu_j_baseline CFR->mu identity gains a gamma_1 (dwell) factor — mu = CFR * gamma_1 * rho / (rho_deaths * chi) — because v0.14.0 reports the new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state) instead of the Isym prevalence stock; per-country mu_j_baseline prior means drop ~9x (gamma_1 prior mean ~0.113) vs v15.8. (b) beta_j0_tot per-country medians recentred for the 14 cases-data countries from the v0.14.0 beta*mu magnitude sweep (e.g. ETH 1.75e-6->1.39e-5, SSD 2e-5->2.83e-4, NGA 2e-5->4.74e-6); the 26 no-data countries keep the 2e-5 global default (the sweep found no transferable beta shift, geomean ~1.2x / log-CV 1.5). Supersedes the v15.3 ETH-only override. See MOSAIC-pkg/claude/beta_percountry_sweep.R + beta_mu_percountry_sweep.R and memory project_laser_cholera_reported_cases_fix_67. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
+          description = "Default informative prior distributions for MOSAIC model parameters. v15.14 (2026-06-22): RECALIBRATION-GATED bundled Stage-1 prior fixes (statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_prior_fixes.md), from the 19-ISO single-location metapop review at /Users/johngiles/MOSAIC/output/full_metapop/stage1_individual/. (Fix 1) mu_j_baseline CFR->mu chain factor B1 STATIC RE-ANCHOR: the derivation balanced the realized-CFR chain factor (chi/gamma_1) at the prior centers, but calibration consistently pulls gamma_1 DOWN (posterior median ~0.092, 16/19 below 0.10) and chi UP (~0.70), inflating implied CFR by a median ~1.25x. Re-anchored the derivation inputs from the prior-mean gamma_1=0.1133 / chi=0.639 to posterior-consistent gamma_1=0.10 (lognormal median, the shipped config scalar) / chi=0.70, so cfr_to_mu_adjustment 0.1832->0.1474 and every per-country mu_j_baseline center scales x0.804 (~1.25x deaths/implied-CFR reduction; cases untouched, mu_j never enters the case channel). The mu_j_baseline magnitude and rho_deaths v0.13 factor are unchanged (project_mu_j_baseline_already_fixed); gamma_1 prior WIDTH not narrowed (deferred biology check). The v15.10 ETH-only dwell stop-gap is RETAINED on top of B1: B1 is a UNIFORM x0.804 fold calibrated to the cohort-median gamma_1, but ETH calibrates gamma_1 well below the cohort median (~0.076, long-dwell tail) so the uniform fold under-corrects ETH; removing the stop-gap would push ETH mu_j_baseline 0.00088->0.00177 (x2.01) and ETH deaths bias ~1.83->~3.7 (mu is a linear deaths lever). ETH is held at the SAME total correction DEPTH as v15.10 (x0.40 on the old prior-center adjustment 0.1832): since B1 already supplies x0.804 of that depth, the ETH residual on top of B1 is 0.40/0.804 ~ 0.497, keeping ETH mu_j_baseline ~0.00088 (NOT 0.00177). NOT applied to any other country. B1 under-corrects ETH specifically; B2 (dynamic per-country gamma_1-coupled CFR->mu derivation, Phase 2) will subsume the ETH stop-gap properly. Also fixed the stale inline comment (the adjustment was mislabelled ~0.115; the verified value at the current rho/chi/rho_deaths priors is 0.183 pre-re-anchor, 0.1474 post). (Fix 2) beta_j0_tot per-country PARTIAL-SHRINKAGE RECENTER (w=0.5 geometric mean of v15.9 prior center and Stage-1 posterior median: new_center = sqrt(prior*post_median)), beta_j0_tot weakly identified (Stage-1 ESS ~110-135). 18 of the 19-ISO cohort recentered (LBR EXCLUDED — unidentified, no transmission signal, stays at 2e-5 global default); recenter is SYMMETRIC (BDI/MWI/NGA/RWA/TZA move UP — the v15.9 sweep over-corrected them down). Prior WIDTH (sdlog 1.1748) KEPT for every country (Stage-3 warm-start inflation guard). beta_j0_hum/beta_j0_env are derived at sample time (p_beta*beta_j0_tot), not stored separately, so the recenter propagates to both. NOTE: the v15.9 COG beta_j0_tot override (4.6667e-6) is KEPT (COG is OUTSIDE the Stage-1 19-ISO cohort, so it is not recentered and must not be reset to the 2e-5 global default — doing so would be a ~4.3x unintended increase); COG is the only non-cohort country carrying a beta override. v15.13 (2026-06-20): rebuilt at the 2023-01-01 production window alongside config_default v4.3 under the relaxed surveillance trust-tier gate (process_cholera_surveillance_data v0.47.1, fourier_* kept + down-weighted). epidemic_threshold and IC seeding (ic_t0 = 2023-02-01 for the 2023 build) re-derived against the regenerated multi-source combined weekly/daily surveillance with fourier reconstructions retained; build_date_start = 2023-01-01. v15.12 (2026-06-19): multi-source surveillance integration. (a) Initial-condition seeding epoch DECOUPLED from the fit-window date_start: all est_initial_* calls (V1_V2, E_I, R, S) and the population-at-t0 match now use ic_t0 = max(date_start, 2023-02-01). Empirically the 2015 IC lookback window has 0 active-case countries and late-2022 only ~6 (vs 11 at 2023-02-01), so seeding from an early window cold-starts ICs (near-zero E/I, R_eff<1, no ignition); the floor pins ICs to the proven data-rich anchor regardless of how early the fit window starts, and breaks the circular hazard whereby a <2023 config rebuild would poison the next priors rebuild's IC epoch. (b) epidemic_threshold now derives from the multi-source combined weekly file (include_ai=TRUE adds JHU/AI back-history) with AI rows EXCLUDED (source != 'AI') for parity with est_seasonal_dynamics; more outbreak weeks shift some per-country medians and may flip countries off the Zheng 0.7/100k fallback (MIN_OUTBREAK_WEEKS gate). v15.11 (2026-06-18): psi_star_b prior re-centred mean 0->+1.0 (sd kept 2.5) for all 40 countries to match the new per-capita D-scale suitability psi (target_D_rate_per_country_floored), which sits at a much lower level than the old transmission_intensity scale (per-country mean COD 0.93->0.43, global 0.14->0.10). At the prior center (a=1) the calc_psi_star transform is an odds-multiply psi*=sigma(logit(psi)+b). The +1.0 level shift acts on the delta (environmental decay) channel, NOT beta_env: beta_env (envtohuman.py:24) is self-normalized as beta_j0_env*(psi*/psi_bar*) so a uniform b ~cancels in the low-psi regime (no-op), whereas delta decay (environmental.py:150) reads psi* on its ABSOLUTE level via survival_days = days_short + pbeta(psi*|s1,s2)*(days_long-days_short), so a higher psi* lengthens modelled V. cholerae reservoir survival. The D scale pinned most countries near the days_short floor (~16d) at the old b=0 center; +1.0 raises psi* (COD mean 0.36->0.53, MOZ 0.12->0.21) so survival climbs toward the days_long ceiling at seasonal peaks while staying off the floor in low-burden countries. Validated against the spec eq:decay-priors envelope (claude/validate_psi_star_b_delta_survival.R, 2026-06-19): at the decay prior means (days_short=16, days_long=196, s1=s2=3) post-shift per-country survival lies entirely within ~16-196d (0/40 exceed the 196d ceiling, 0/40 below the 16d floor; median +4.9d/+17% to mean survival; survival is structurally bounded above by days_long since pbeta<=1, so the shift only moves countries ALONG the [16,196] curve and cannot breach the envelope). Gives calibration a sensible STARTING center, not a constraint (sd=2.5 retains both-direction freedom; the global decay days/shape params are also sampled). The MOZ-specific psi_star_b override (mean +0.4, fit on the old scale) is removed/folded into the general center. psi_star_a unchanged (a=1 identity is scale-invariant). v15.10 (2026-06-18): ETH-only mu_j_baseline dwell-mismatch STOP-GAP — scale Ethiopia's derived mu_j_baseline mean by 0.40 (Gamma rate 1816->4540, CV unchanged). The CFR->mu identity uses gamma_1 at its PRIOR MEAN (~0.114, 8.8d dwell), but ETH calibration drifts gamma_1 to the long-dwell tail (~0.076, ~14d); since per-case CFR scales as mu_j/gamma_1, realized reported CFR inflates to ~3.7% vs observed ~1.2% (deaths over-predict ~3.3x while cases stay near-unbiased). The x0.40 re-center returns deterministic reported CFR to ~1.5% (deaths bias ~1.3x) with cases unaffected (mu_j/rho_deaths do not enter the case channel; GTFCC treated-CFR target <1%). NOT a structural cure: the dwell mismatch affects all countries; the durable fix is a dwell-adjusted CFR->mu derivation and/or the run_MOSAIC best-subset weighting fix (the dAIC-4 truncation currently discards the deaths signal, so the ensemble reports near the prior center). Do not chase the exact x0.31 point estimate (overfits the broken weighting). See disease-modeler memory project_eth_deaths_cfr_dwell_mismatch. v15.9 (2026-06-16): laser-cholera v0.14.0 (issue #67) adjustments. (a) mu_j_baseline CFR->mu identity gains a gamma_1 (dwell) factor — mu = CFR * gamma_1 * rho / (rho_deaths * chi) — because v0.14.0 reports the new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state) instead of the Isym prevalence stock; per-country mu_j_baseline prior means drop ~9x (gamma_1 prior mean ~0.113) vs v15.8. (b) beta_j0_tot per-country medians recentred for the 14 cases-data countries from the v0.14.0 beta*mu magnitude sweep (e.g. ETH 1.75e-6->1.39e-5, SSD 2e-5->2.83e-4, NGA 2e-5->4.74e-6); the 26 no-data countries keep the 2e-5 global default (the sweep found no transferable beta shift, geomean ~1.2x / log-CV 1.5). Supersedes the v15.3 ETH-only override. See MOSAIC-pkg/claude/beta_percountry_sweep.R + beta_mu_percountry_sweep.R and memory project_laser_cholera_reported_cases_fix_67. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
      ),
      parameters_global = list(),    # Single parameters used by all locations
      parameters_location = list()   # Location specific parameters
@@ -743,18 +743,52 @@ for (iso in j) {
 # v15.9 (2026-06-16): per-country beta_j0_tot medians recentred for laser-cholera
 # v0.14.0 (incidence-based reported_cases, issue #67) from the v0.14.0 beta*mu
 # magnitude sweep (single-LASER bias->1 against surveillance under config_default
-# defaults; see MOSAIC-pkg/claude/beta_percountry_sweep.R). These are the 14
+# defaults; see MOSAIC-pkg/claude/beta_percountry_sweep.R). These were the 14
 # cases-data countries with a solved beta* (NAM excluded: beta-insensitive, an
 # IC/suitability issue not a transmission one). The 26 no-data countries keep the
 # global default (2e-5): the sweep found NO transferable beta shift (geomean ~1.2x,
 # log-CV 1.5, bidirectional). Supersedes the v15.3 ETH-only override (1.75e-6,
 # v0.13-era; v0.14.0 needs ETH ~8x higher). NOTE: env-term medians are conditional
 # on the suitability-window mean (psi_bar); re-validate if date_start/stop shift.
+#
+# v15.14 PER-COUNTRY PARTIAL-SHRINKAGE RECENTER (Stage-1 metapop review, 2026-06-22):
+# beta_j0_tot is weakly identified (Stage-1 ESS ~110-135, second-lowest of all
+# params), so single-location posteriors give a reliable DIRECTION but a noisy
+# point value. We recenter each country's meanlog as a geometric mean (w=0.5) of
+# its current v15.9 prior center and its Stage-1 posterior median:
+#   new_center = exp(0.5*log(prior_center) + 0.5*log(post_median))
+#              = sqrt(prior_center * post_median)
+# w=0.5 is deliberately conservative: (i) the Stage-3 warm-start inflates
+# beta_j0_tot x2 (a single-patch estimate fed into a network that adds
+# transmission), so a full recenter to the point would fight the joint fit;
+# (ii) ESS ~130 is genuinely uncertain per country; (iii) the geometric midpoint
+# honors the direction without committing to the point. The recenter is symmetric:
+# five countries move UP (BDI, MWI, NGA, RWA, TZA) because the v15.9 sweep
+# over-corrected them down; this is NOT a flat cut. The prior WIDTH (sdlog 1.1748)
+# is KEPT for every country (do not tighten — Stage-3 inflation guard). Only
+# meanlog moves. beta_j0_hum/beta_j0_env are NOT stored separately: they are
+# derived at sample time as p_beta*beta_j0_tot and (1-p_beta)*beta_j0_tot
+# (sample_parameters.R), so this recenter propagates to both consistently with no
+# separate edit. LBR is NOT recentered — Stage-1 confirms LBR is unidentified
+# (1724 cases over 1107 nonzero days, max 4/day, no epidemic structure, r2_corr ~0
+# at every beta scale, 1 death); its posterior carries no transmission signal, so
+# it stays at the 2e-5 global default (flagged as a data limitation). Source:
+# Stage-1 single-location fits at
+# /Users/johngiles/MOSAIC/output/full_metapop/stage1_individual/<ISO>/2_calibration/
+# posterior/posterior_quantiles.csv; statistician spec
+# MOSAIC-pkg/claude/prior_fix_spec/SPEC_prior_fixes.md sec 3.3.
 beta_j0_tot_v0140 <- c(
-     RWA = 7.6683e-07, COG = 4.6667e-06, NGA = 4.7366e-06, TZA = 6.8399e-06,
-     ETH = 1.3943e-05, BDI = 1.4751e-05, AGO = 2.3553e-05, ZMB = 3.6863e-05,
-     COD = 3.7875e-05, MWI = 4.1308e-05, MOZ = 4.7650e-05, ZWE = 6.8069e-05,
-     SOM = 1.0127e-04, SSD = 2.8302e-04
+     AGO = 2.008e-05, BDI = 1.599e-05, CMR = 1.884e-05, COD = 3.525e-05,
+     ETH = 1.411e-05, KEN = 1.308e-05, MOZ = 4.041e-05, MWI = 4.515e-05,
+     NER = 1.571e-05, NGA = 5.911e-06, RWA = 1.197e-06, SOM = 8.756e-05,
+     SSD = 2.515e-04, TZA = 7.311e-06, UGA = 1.157e-05, ZAF = 1.420e-05,
+     ZMB = 3.077e-05, ZWE = 6.564e-05,
+     # COG is OUTSIDE the Stage-1 19-ISO cohort, so it is NOT recentered. It is
+     # carried over UNCHANGED at its existing v15.9 override (4.6667e-06) — the
+     # v15.14 cohort recenter must not reset non-cohort overrides to the 2e-5
+     # global default (doing so was a ~4.3x unintended increase). COG keeps its
+     # prior-derived low-incidence override until it enters a future fit cohort.
+     COG = 4.6667e-06
 )
 for (iso in names(beta_j0_tot_v0140)) {
      if (!is.null(priors_default$parameters_location$beta_j0_tot$location[[iso]])) {
@@ -1669,24 +1703,55 @@ if (file.exists(mu_file)) {
      recent_years <- 2021:2025
      mu_recent <- mu_data[mu_data$t %in% recent_years, ]
 
-     # Compute Beta-prior means inline so the conversion factor cannot
-     # silently desync from the actual rho/chi/rho_deaths priors above.
+     # Compute the rho/rho_deaths Beta-prior means inline so the conversion factor
+     # cannot silently desync from the actual rho/rho_deaths priors above. (chi and
+     # gamma_1 are NOT read from their priors here — under the v15.14 B1 re-anchor
+     # they are set to posterior-consistent static anchors below; see that block.)
      .beta_mean <- function(p) p$shape1 / (p$shape1 + p$shape2)
      rho_mean         <- .beta_mean(priors_default$parameters_global$rho$parameters)
      rho_deaths_mean  <- .beta_mean(priors_default$parameters_global$rho_deaths$parameters)
-     chi_end_mean     <- .beta_mean(priors_default$parameters_global$chi_endemic$parameters)
-     chi_epi_mean     <- .beta_mean(priors_default$parameters_global$chi_epidemic$parameters)
-     chi_mean         <- 0.5 * (chi_end_mean + chi_epi_mean)
      # v0.14.0: include the gamma_1 (dwell) factor — reported_cases is now the
      # new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state), not the
-     # Isym prevalence stock. gamma_1 prior mean (lognormal) ~0.113.
-     g1_par       <- priors_default$parameters_global$gamma_1$parameters
-     gamma_1_mean <- exp(g1_par$meanlog + 0.5 * g1_par$sdlog^2)
-     # cfr_to_mu_adjustment ≈ 0.115 under v0.14.0 (was ~1.015 v0.13, 0.43 pre-v0.13)
-     cfr_to_mu_adjustment <- gamma_1_mean * rho_mean / (rho_deaths_mean * chi_mean)
+     # Isym prevalence stock.
+     #
+     # v15.14 B1 STATIC RE-ANCHOR (Stage-1 metapop review, 2026-06-22):
+     # The derivation balances the realized-CFR chain factor (chi/gamma_1) at the
+     # PRIOR distribution centers. Stage-1 single-location fits (19 ISOs,
+     # /Users/johngiles/MOSAIC/output/full_metapop/stage1_individual/) show
+     # calibration consistently pulls gamma_1 DOWN (median posterior ~0.092,
+     # 16/19 below the 0.10 anchor) and chi UP (posterior-implied average ~0.70),
+     # so the realized chain factor drops below the prior chain factor and implied
+     # CFR inflates by a median ~1.25x (chainF median 0.80). To remove this
+     # systematic center bias we re-anchor the derivation inputs to
+     # posterior-consistent values:
+     #   gamma_1 -> 0.10 (the lognormal MEDIAN exp(meanlog), the already-shipped
+     #              config scalar; was the lognormal MEAN 0.1133)
+     #   chi     -> 0.70 (the posterior-implied endemic/epidemic average; was the
+     #              prior-mean average 0.639)
+     # This scales every per-country mu_j_baseline center by ~0.80 (a ~1.25x
+     # reduction in predicted deaths / implied CFR). Cases are untouched: mu_j
+     # never enters the case channel. The mu_j_baseline MAGNITUDE and the
+     # rho_deaths v0.13 factor remain correct and out of scope
+     # (project_mu_j_baseline_already_fixed). The gamma_1 PRIOR WIDTH is NOT
+     # narrowed (deferred pending a recovery-rate literature check).
+     # Biological sign-off: gamma_1 = 0.10 (1/0.10 = 10d mean symptomatic dwell)
+     # is the recovery-rate prior median already shipped to the engine and sits
+     # squarely in the cholera infectious-period literature (~7-14d, spec
+     # "### Recovery rates"). chi = 0.70 is the posterior-implied reporting-
+     # /care-cascade scaling average across the 19-ISO cohort and lies between the
+     # endemic (0.52) and epidemic (0.76) prior means, i.e. a defensible interior
+     # anchor, not an extrapolation.
+     g1_anchor  <- 0.10   # lognormal MEDIAN exp(meanlog), posterior-consistent (was lognormal mean 0.1133)
+     chi_anchor <- 0.70   # posterior-implied endemic/epidemic average (was prior-mean avg 0.639)
+     # cfr_to_mu_adjustment = gamma_1*rho/(rho_deaths*chi) ~ 0.10*0.431/(0.420*0.70)
+     # ~ 0.147 (was ~0.183 at the prior centers: gamma_1 lognormal mean 0.1133,
+     # chi prior-mean avg 0.639); the re-anchor scales every per-country center by
+     # ~0.147/0.183 = ~0.804 (rho/rho_deaths means recomputed inline each build, so
+     # the exact ratio tracks the shipped rho/rho_deaths priors).
+     cfr_to_mu_adjustment <- g1_anchor * rho_mean / (rho_deaths_mean * chi_anchor)
      message(sprintf(
-          "  CFR->mu_j_baseline adjustment: gamma_1*rho/(rho_deaths*chi) = %.3f*%.4f/(%.4f*%.4f) = %.4f",
-          gamma_1_mean, rho_mean, rho_deaths_mean, chi_mean, cfr_to_mu_adjustment
+          "  CFR->mu_j_baseline adjustment (B1 re-anchor): gamma_1*rho/(rho_deaths*chi) = %.3f*%.4f/(%.4f*%.3f) = %.4f",
+          g1_anchor, rho_mean, rho_deaths_mean, chi_anchor, cfr_to_mu_adjustment
      ))
 
      # Initialize mu_j_baseline prior structure
@@ -1752,21 +1817,38 @@ if (file.exists(mu_file)) {
                     # Beta parameters.
                     mean_mu <- mean_cfr * cfr_to_mu_adjustment
 
-                    # v15.10 ETH dwell-mismatch STOP-GAP: the identity above plugs in
-                    # gamma_1 at its PRIOR MEAN (~0.114, 8.8d dwell), but ETH calibration
-                    # drifts gamma_1 to the long-dwell tail (~0.076, ~14d). Per-case CFR
-                    # scales as mu_j/gamma_1, so the realized reported CFR inflates to
-                    # ~3.7% vs observed ~1.2% (deaths over-predict ~3.3x; cases unaffected,
-                    # as mu_j never enters the case channel). Scaling ETH's mean by 0.40
-                    # returns deterministic reported CFR to ~1.5% (deaths bias ~1.3x).
-                    # STOP-GAP only — the durable fix is a dwell-adjusted CFR->mu
-                    # derivation and/or the run_MOSAIC dAIC-4 weighting fix. See changelog.
-                    eth_dwell_stopgap <- 0.40
-                    if (identical(loc, "ETH")) mean_mu <- mean_mu * eth_dwell_stopgap
+                    # v15.14 (2026-06-22): ETH dwell-mismatch STOP-GAP RETAINED on top
+                    # of the B1 global re-anchor. The B1 re-anchor (gamma_1->0.10,
+                    # chi->0.70) is a UNIFORM x0.804 chain-factor correction calibrated
+                    # to the cohort-MEDIAN gamma_1 (~0.092). ETH calibrates gamma_1 well
+                    # BELOW that (long-dwell tail ~0.076, ~14d), carrying the cohort's
+                    # most extreme realized chain factor — so the uniform B1 fold is too
+                    # MILD for ETH. Per-case CFR scales as mu_j/gamma_1, so without an
+                    # ETH residual the B1-only mu (0.00177) inflates ETH reported CFR
+                    # back toward ~3% and deaths bias from ~1.83 to ~3.7 (mu is a linear
+                    # deaths lever; cases unaffected — mu_j never enters the case
+                    # channel). We hold ETH at the SAME total correction DEPTH as the
+                    # v15.10 stop-gap (x0.40 on the OLD prior-center adjustment 0.1832):
+                    # since B1 already supplies x0.804 of that depth, the ETH residual on
+                    # top of B1 is eth_dwell_stopgap/0.804 ~ 0.497. This keeps ETH's
+                    # mu_j_baseline center at its current shipped value (~0.00088,
+                    # deterministic reported CFR ~1.5%, deaths bias ~1.3-1.8x) rather than
+                    # regressing to 0.00177. The residual is expressed RELATIVE to the B1
+                    # fold so it tracks the build (B1 = cfr_to_mu_adjustment/0.1832).
+                    # NOT a structural cure and NOT applied to any other country: B1
+                    # under-corrects ETH specifically, and B2 (dynamic gamma_1-coupled
+                    # CFR->mu derivation, Phase 2) will subsume this ETH stop-gap properly
+                    # once mu is derived from the per-country calibrated gamma_1 rather
+                    # than a static cohort anchor. See disease-modeler memory
+                    # project_eth_deaths_cfr_dwell_mismatch.
+                    eth_dwell_stopgap <- 0.40            # depth on the OLD prior-center adjustment (v15.10)
+                    b1_fold           <- cfr_to_mu_adjustment / 0.1832  # ~0.804: depth already in B1
+                    eth_residual      <- eth_dwell_stopgap / b1_fold    # ~0.497: residual on top of B1
+                    if (identical(loc, "ETH")) mean_mu <- mean_mu * eth_residual
 
                     cat(sprintf("  %s: reported_CFR=%.3f%% -> mu_j_baseline=%.6f (adjustment=%.3f%s)\n",
                                 loc, mean_cfr * 100, mean_mu, cfr_to_mu_adjustment,
-                                if (identical(loc, "ETH")) sprintf(", ETH dwell stop-gap x%.2f", eth_dwell_stopgap) else ""))
+                                if (identical(loc, "ETH")) sprintf(", ETH dwell residual x%.3f on top of B1", eth_residual) else ""))
 
                     # Fit gamma using derived mean and a fixed target CV of 50%.
                     # The CFR data CIs are extremely tight (large Beta shape params)

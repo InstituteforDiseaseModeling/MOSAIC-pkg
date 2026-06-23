@@ -1,58 +1,67 @@
 ---
 name: project-eth-deaths-cfr-dwell-mismatch
-description: ETH-only mu_j_baseline x0.40 stop-gap (priors_default v15.10 / config_default v3.8) for the gamma_1 dwell mismatch that over-predicts ETH reported deaths ~3.3x
+description: ETH deaths over-prediction = systematic gamma_1/chi chain-factor drift; the v15.10 ETH x0.40 stop-gap was REMOVED and replaced by the B1 global re-anchor (priors_default v15.14 / config_default v4.4, recalibration-gated)
 metadata:
   type: project
 ---
 
-# ETH deaths over-prediction: gamma_1 dwell mismatch + x0.40 mu_j_baseline stop-gap
+# ETH deaths over-prediction: gamma_1/chi chain-factor drift -> B1 global re-anchor
 
-**The fact.** Ethiopia's deterministic-default reported deaths over-predict ~3.3x
-(realized reported CFR ~3.7% vs observed ~1.2%) while cases stay near-unbiased.
-The v0.14.0 CFR->mu identity is `mu_j_baseline = CFR * gamma_1 * rho / (rho_deaths * chi)`
-and plugs gamma_1 in at its PRIOR MEAN (~0.114, 8.8d infectious dwell). But ETH
-calibration drifts gamma_1 to the long-dwell tail (~0.076, ~14d). Per-case CFR
-scales as `mu_j / gamma_1`, so a lower realized gamma_1 inflates the realized
-reported CFR. cases are unaffected because mu_j (and rho_deaths) never enter the
-case channel. See [[reference_cfr_mu_j0_identity]] for the identity and the fact
-that the deaths likelihood only identifies the PRODUCT mu_j*rho_deaths.
+**The mechanism.** The realized reported CFR is
+`reported_CFR = mu_j_baseline * chi * rho_deaths / (gamma_1 * rho)` (see
+[[reference_cfr_mu_j0_identity]]; the deaths likelihood identifies the PRODUCT
+mu_j*rho_deaths, not the factors). The CFR->mu derivation in make_priors_default.R
+balances the chain factor (chi/gamma_1) at the PRIOR centers. But calibration pulls
+gamma_1 DOWN and chi UP, so the realized chain factor drops below the prior chain
+factor and implied CFR inflates. Cases are unaffected (mu_j and rho_deaths never
+enter the case channel). ETH was where it bit worst (chainF 0.68 => 1.47x inflation;
+deaths over-predicted ~3.3x, realized CFR ~3.7% vs observed ~1.2%).
 
-**The stop-gap.** Scale ETH's derived mu_j_baseline mean by 0.40 (CV unchanged):
-- priors_default v15.10 (1093e700): Gamma rate 1816.28 -> 4540.71, shape stays 4,
-  so Gamma mean 0.00220230 -> 0.00088092. Applied surgically in BOTH
-  data/priors_default.rda and inst/extdata/priors_default.json, and as an
-  `eth_dwell_stopgap <- 0.40` branch in data-raw/make_priors_default.R.
-- config_default v3.8 (this fix): config sources mu_j_baseline directly from the
-  priors_default Gamma means (make_config_default.R ~L199, `shape/rate`), so the
-  x0.40 flows through by construction. The shipped data/config_default.rda was
-  patched SURGICALLY (only ETH's entry + metadata version) to mirror the surgical
-  priors patch and avoid input drift on the other 39 countries; a full regen would
-  reproduce the same ETH value. No ETH special-casing is needed in
-  make_config_default.R itself (just a provenance comment).
+**CONFIRMED SYSTEMATIC, not ETH-specific (Stage-1 review, 2026-06-22).** 19
+single-location fits (`output/full_metapop/stage1_individual/`): gamma_1 pulled DOWN
+in 16/19 (posterior median ~0.092 vs the derivation's frozen lognormal-MEAN 0.1133),
+chi pulled UP (posterior-implied avg ~0.70 vs prior-mean avg 0.639). Median chainF
+~0.80 => median ~1.25x implied-CFR inflation purely from chain-factor drift. Implied
+CFR over-predicts observed by ~2.19x on the MEDIAN ensemble (central_method-
+independent); ~1.25x of that is the chain-factor drift, the residual ~1.8x is the
+deaths-vs-N structural under-identification + central_method unmasking
+([[project_central_method_v038]]) and is NOT chased.
 
-The x0.40 returns deterministic ETH reported CFR to ~1.5% (deaths bias ~1.3x).
-GTFCC treated-CFR target is <1%.
+**RESOLUTION — B1 static re-anchor (priors_default v15.14 / config_default v4.4,
+2026-06-22, recalibration-gated, NOT yet committed).** Per statistician spec
+`claude/prior_fix_spec/SPEC_prior_fixes.md`:
+- Re-anchored the CFR->mu derivation inputs from the prior centers to
+  posterior-consistent static anchors: gamma_1 0.1133 -> **0.10** (the lognormal
+  MEDIAN exp(meanlog), = the already-shipped config scalar), chi 0.639 -> **0.70**.
+- `cfr_to_mu_adjustment` 0.183 -> 0.147 => every per-country mu_j_baseline Gamma
+  center scales **x0.805** (~1.25x deaths/implied-CFR reduction; cases untouched).
+  The exact ratio tracks the shipped rho/rho_deaths means (they cancel in new/old).
+- **The v15.10 ETH-only x0.40 stop-gap is REMOVED** (subsumed; keeping both would
+  double-count). ETH's derived mu goes 0.00088 (stop-gapped) -> 0.00177 (the
+  unstopgapped baseline 0.0022 x 0.805). ETH still carries the most extreme chainF,
+  so recalibration should re-check whether a SMALL residual ETH factor (~0.85, NOT
+  0.40) is needed — flagged, NOT pre-applied.
+- Biological sign-off: gamma_1=0.10 => 10d dwell, the shipped recovery-rate prior
+  median, in the cholera infectious-period literature (~7-14d). chi=0.70 is an
+  interior cohort average between endemic (0.52) and epidemic (0.76) prior means.
+- gamma_1 prior WIDTH NOT narrowed (deferred recovery-rate biology check).
 
-**Why a stop-gap, not a cure.** The dwell mismatch is structural and affects ALL
-countries, not just ETH — ETH is just where it currently bites worst. The durable
-fixes are (a) a dwell-adjusted CFR->mu derivation (don't freeze gamma_1 at its
-prior mean), and/or (b) the run_MOSAIC best-subset weighting fix — the dAIC-4
-truncation currently discards the deaths signal so the ensemble reports near the
-prior center. Do NOT chase the exact x0.31 point estimate from the broken
-weighting; 0.40 is a deliberate round re-center, not an optimized fit.
+**B1 vs B2.** B1 is the static re-anchor (one constant, make_priors_default.R only).
+B2 (the durable end-state) would couple mu_j_baseline to the SAMPLED gamma_1/chi at
+sample time so implied CFR is drift-invariant — a sample_parameters.R refactor (swe),
+Phase 2, gated on Stage-C recalibration confirming B1 delivers the predicted CFR
+reduction. B1 first because it removes the dominant center bias cheaply and lets us
+validate the chain-factor hypothesis before paying for B2.
 
-**The drift bug this memory was created alongside.** v15.10 patched priors
-(.rda + .json) but NOT config_default.rda, desyncing the two objects and failing
-the Lesson-#12 drift guard test-cfr-pipeline-consistency.R
-("config_default$mu_j_baseline matches priors_default Gamma mean per country").
-The MOSAIC v0.44.12 fix syncs config_default to the prior mean. Both data objects
-now agree per country (tol 1e-6). The two objects are built by independent scripts,
-so any future mu_j_baseline edit MUST touch priors first, then rebuild/sync config.
+**Build/sync discipline (Lesson #12).** The two objects are built by independent
+scripts: ALWAYS rebuild priors first, `devtools::install`, then rebuild config
+(config sources mu_j_baseline + beta_j0_tot from the installed priors). The env-
+desync fail-loud assert in make_config_default.R guards the window match; the
+test-cfr-pipeline-consistency.R drift guard asserts config$mu_j_baseline == priors
+Gamma mean per country. Both pass at v15.14/v4.4.
 
-**Why:** ETH deterministic deaths were visibly over-predicting in best-subset
-smoke runs; a fast re-center was needed while the structural dwell fix is scoped.
-**How to apply:** if you change ETH's mu_j_baseline again, do it in priors_default
-first (the x0.40 currently lives in the Gamma rate), then re-sync config_default
-and confirm test-cfr-pipeline-consistency.R passes. When the dwell-adjusted
-derivation lands, REMOVE this x0.40 stop-gap (both the prior rate scaling and this
-note) — it is double-counting once gamma_1 enters the identity at its realized value.
+**How to apply:** if you change ETH's (or any country's) mu_j_baseline again, do it
+in priors_default first, then rebuild/sync config, then confirm
+test-cfr-pipeline-consistency.R passes. The B1 re-anchor is now the baseline — do
+NOT re-introduce the x0.40 ETH stop-gap. When B2 lands, the chain factor enters the
+identity at its realized value and even the B1 static anchor becomes unnecessary.
