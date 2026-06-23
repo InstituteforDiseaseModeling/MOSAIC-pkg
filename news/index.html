@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.49.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.49.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,16 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.49.4" id="mosaic-0494">MOSAIC 0.49.4<a class="anchor" aria-label="anchor" href="#mosaic-0494"></a></h2>
+<ul><li>
+<strong>Test hygiene (maintainer review of the 0.49.x burst):</strong> the three new 0.49.1 regression files were green only because the author’s session happened to satisfy their hidden environment assumptions — they false-passed elsewhere. Two fixes, no production-code change:
+<ul><li>
+<strong><code>test-ensemble_cluster_robust.R</code> / <code>test-run_batch_robust.R</code> now skip under the parallel testthat harness.</strong> Both spawn a PSOCK cluster and <code>SIGKILL</code> its workers; doing that <em>inside</em> a <code>Config/testthat/parallel</code> worker (a callr subprocess) collides with testthat’s own result IPC and crashed the harness. They now call <code>skip_if_testthat_parallel()</code> (the established package guard, matching <code>test-dask-psock-orchestrator.R</code> / <code>test-optimize_ensemble_subset.R</code>), so they run serial-only — exactly as covered by the serial <code>devtools::test()</code> and the CI engine-install run. The worker-death-robust gather logic itself is unchanged and verified correct (the dead-worker→scalar-<code>FALSE</code> coercion keeps the calibration <code>sum(unlist(success_indicators))</code> tally valid).</li>
+<li>
+<strong><code>test-sample_parameters_B2_mu.R</code> is now root-independent.</strong> 6 of its 9 blocks call <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code>, which calls <code><a href="../reference/get_paths.html">get_paths()</a></code> whenever <code>PATHS</code> is <code>NULL</code> — so in any process/CI without a MOSAIC root set they errored in <code><a href="../reference/get_paths.html">get_paths()</a></code> <em>before</em> reaching the B2 logic (including block 9, which left the B2 version-skew <code><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop()</a></code> guard with zero real coverage). The blocks now pass a <code>PATHS = list()</code> stub (honouring the file’s own “self-contained, no MOSAIC root needed” contract), exercising the B2 derivation and the version-skew guard directly. All 9 blocks pass with no root set.</li>
+</ul></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.49.3" id="mosaic-0493">MOSAIC 0.49.3<a class="anchor" aria-label="anchor" href="#mosaic-0493"></a></h2>
 <ul><li>
