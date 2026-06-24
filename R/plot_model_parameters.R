@@ -119,6 +119,7 @@ plot_model_parameters <- function(results,
      location_params_base <- c(
           "S_j_initial", "E_j_initial", "I_j_initial",
           "R_j_initial", "V1_j_initial", "V2_j_initial",  # Initial conditions
+          "alpha_1",                                      # Dual-mode: alpha_1_<ISO> -> Location-Specific (a bare scalar alpha_1 stays Global via global_params)
           "beta_j0_env", "beta_j0_hum", "beta_j0_tot",    # Transmission rates
           "tau_i", "theta_j",                             # Mobility rate
           "a_1_j", "a_2_j", "b_1_j", "b_2_j",            # Seasonal parameters

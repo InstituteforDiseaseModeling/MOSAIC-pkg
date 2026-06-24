@@ -113,21 +113,53 @@ test_that("get_location_config handles invalid config structure", {
 
 test_that("get_location_config preserves parameter structure", {
      eth_config <- get_location_config(iso = "ETH")
-     
-     # Check that global parameters are preserved
-     global_params <- c("seed", "phi_1", "phi_2", "omega_1", "omega_2", 
+
+     # Check that global parameters are preserved. NOTE: alpha_1 is now PER-LOCATION
+     # (config_default v4.7 stores a length-nL alpha_1), so it is subset, NOT
+     # preserved whole — it is exercised separately below. alpha_2 stays global.
+     global_params <- c("seed", "phi_1", "phi_2", "omega_1", "omega_2",
                        "gamma_1", "gamma_2", "epsilon", "rho", "sigma",
-                       "alpha_1", "alpha_2", "zeta_1", "zeta_ratio", "kappa",
+                       "alpha_2", "zeta_1", "zeta_ratio", "kappa",
                        "mobility_omega", "mobility_gamma", "iota",
-                       "decay_days_short", "decay_days_long", 
+                       "decay_days_short", "decay_days_long",
                        "decay_shape_1", "decay_shape_2")
-     
+
      for (param in global_params) {
           if (!is.null(config_default[[param]])) {
                expect_equal(eth_config[[param]], config_default[[param]],
                           info = paste("Global parameter", param, "should be preserved"))
           }
      }
+})
+
+test_that("get_location_config subsets a per-location (length-nL) alpha_1 by position", {
+     # alpha_1 is dual-mode (config_default v4.7): a length-nL vector subset by
+     # position to the requested ISOs; a scalar alpha_1 is left untouched
+     # (engine broadcast). alpha_2 always stays a global scalar.
+     skip_if(length(config_default$alpha_1) != length(config_default$location_name),
+             "installed config_default has a scalar alpha_1 (pre-v4.7)")
+
+     idx_ek <- which(config_default$location_name %in% c("ETH", "KEN"))
+     ek <- get_location_config(iso = c("ETH", "KEN"))
+     expect_equal(length(ek$alpha_1), 2L)
+     expect_equal(ek$alpha_1, config_default$alpha_1[idx_ek])
+     # alpha_2 untouched (global scalar)
+     expect_equal(ek$alpha_2, config_default$alpha_2)
+
+     # Single-ISO subset -> length-1 alpha_1
+     eth <- get_location_config(iso = "ETH")
+     expect_equal(length(eth$alpha_1), 1L)
+     expect_equal(eth$alpha_1, config_default$alpha_1[which(config_default$location_name == "ETH")])
+})
+
+test_that("get_location_config leaves a SCALAR alpha_1 untouched (back-compat broadcast)", {
+     # A legacy/scalar alpha_1 must NOT be position-subset (that would turn a
+     # scalar into NAs for nL>1); the engine broadcasts it.
+     cfg <- config_default
+     cfg$alpha_1 <- 0.27   # scalar
+     out <- get_location_config(iso = c("ETH", "KEN"), config = cfg)
+     expect_equal(length(out$alpha_1), 1L)
+     expect_equal(out$alpha_1, 0.27)
 })
 
 test_that("get_location_config correctly subsets location parameters", {

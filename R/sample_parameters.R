@@ -1168,7 +1168,7 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
       params = c("phi_1", "phi_2", "omega_1", "omega_2", "iota",
                 "gamma_1", "gamma_2", "epsilon", "chi_endemic", "chi_epidemic",
                 "rho", "rho_deaths", "sigma", "mobility_omega", "mobility_gamma",
-                "zeta_1", "zeta_ratio", "zeta_2", "kappa", "alpha_1", "alpha_2",
+                "zeta_1", "zeta_ratio", "zeta_2", "kappa", "alpha_2",
                 "decay_days_short", "decay_days_spread", "decay_days_long",
                 "decay_shape_1", "decay_shape_2",
                 "delta_reporting_cases", "delta_reporting_deaths"),
@@ -1180,6 +1180,15 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
                 "mu_j_baseline", "mu_j_slope", "mu_j_epidemic_factor",
                 "epidemic_threshold"),
       type = "vector"
+    ),
+    # alpha_1 is dual-mode (priors_default v15.16 / config_default v4.7): it is
+    # now sampled PER-LOCATION (length-nL vector) but a scalar alpha_1 remains
+    # engine-valid (broadcast across patches) for national/legacy configs.
+    # Validated as scalar OR length-nL so both forms pass. alpha_2 stays a strict
+    # global scalar above.
+    dual = list(
+      params = c("alpha_1"),
+      type = "scalar_or_vector"
     ),
     bounds = list(
       beta_j0_tot = c(0, Inf, FALSE),  # min, max, inclusive_min
@@ -1203,6 +1212,14 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
 
   for (param in schema$location$params) {
     issue <- .validate_parameter(config_sampled, param, "vector", n_locations)
+    if (!is.null(issue)) {
+      if (verbose) cat("  \u26A0", issue, "\n")
+      valid <- FALSE
+    }
+  }
+
+  for (param in schema$dual$params) {
+    issue <- .validate_parameter(config_sampled, param, "scalar_or_vector", n_locations)
     if (!is.null(issue)) {
       if (verbose) cat("  \u26A0", issue, "\n")
       valid <- FALSE
@@ -1250,6 +1267,19 @@ validate_sampled_config <- function(config_sampled, verbose = TRUE) {
   if (type == "scalar") {
     if (is.na(val) || is.null(val) || is.infinite(val)) {
       return(paste("Invalid value for", param, "=", val))
+    }
+  } else if (type == "scalar_or_vector") {
+    # Dual-mode parameter (e.g. alpha_1): accept either a scalar (broadcast) or
+    # a length-nL vector (per-location). Reject any other length.
+    if (is.null(val)) {
+      return(paste("Missing value for", param))
+    }
+    if (!(length(val) == 1L || length(val) == n_locations)) {
+      return(paste("Wrong length for", param,
+                  "(expected scalar or", n_locations, "got", length(val), ")"))
+    }
+    if (any(is.na(val) | is.infinite(val))) {
+      return(paste("Invalid values in", param))
     }
   } else {  # vector
     if (length(val) != n_locations) {

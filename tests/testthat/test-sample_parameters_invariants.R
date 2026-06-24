@@ -67,6 +67,24 @@ test_that("sample_parameters: initial-condition counts sum to population per loc
   expect_true(all(counts == floor(counts)))
 })
 
+test_that("sample_parameters: alpha_1 is sampled PER-LOCATION (length-nL, range (0,1])", {
+  skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
+  # As of priors_default v15.16 / config_default v4.7, alpha_1's prior lives in
+  # parameters_location (shared Beta(28.4, 71.6) per ISO), so a default draw must
+  # produce a length-nL alpha_1 vector with every value cleanly inside the engine
+  # (0, 1] range invariant. alpha_2 must remain a single global scalar.
+  cfg <- .cached_sampled_config(42L)
+  nL  <- length(cfg$location_name)
+  expect_equal(length(cfg$alpha_1), nL)
+  expect_true(all(cfg$alpha_1 > 0 & cfg$alpha_1 <= 1))
+  expect_true(all(is.finite(cfg$alpha_1)))
+  # Per-location draws should not be a single repeated value (independent ISOs)
+  expect_gt(length(unique(cfg$alpha_1)), 1L)
+  # alpha_2 stays a global scalar
+  expect_equal(length(cfg$alpha_2), 1L)
+  expect_true(cfg$alpha_2 >= 0 && cfg$alpha_2 <= 1)
+})
+
 test_that("sample_parameters is deterministic for a fixed seed", {
   skip_if(is.null(getOption("root_directory")), "MOSAIC root directory not set")
   a <- sample_parameters(seed = 7, verbose = FALSE)

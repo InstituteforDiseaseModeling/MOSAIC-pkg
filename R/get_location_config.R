@@ -125,6 +125,18 @@ get_location_config <- function(iso, config = NULL) {
 
      }
 
+     # alpha_1 is DUAL-MODE (config_default v4.7 / priors_default v15.16): a
+     # length-nL per-location vector OR a global scalar. Subset it by position
+     # ONLY when it is a full-length per-location vector (length == the FULL
+     # config location count); leave a scalar (or any non-full-length value,
+     # e.g. legacy configs) untouched so the engine broadcasts it. Subsetting a
+     # scalar with [sel] for nL>1 would produce NAs. (alpha_2 stays a global
+     # scalar and is never subset.)
+     if (!is.null(out$alpha_1) &&
+         length(out$alpha_1) == length(config$location_name)) {
+          out$alpha_1 <- out$alpha_1[sel]
+     }
+
 
      # Match only true location x time matrices ending in "_jt" — anchored
      # to exclude e.g. nu_jt_sources, a 1D character vector of compartment

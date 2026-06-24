@@ -212,3 +212,33 @@ test_that("get_param_names consistency between config and results matrix", {
     expect_true(length(config_result$all) > 0)
     expect_true(length(matrix_result$all) > 0)
 })
+
+test_that("get_param_names classifies alpha_1 dual-mode: length-nL -> location, scalar -> global", {
+    # alpha_1 was relocated to a per-location prior (v15.16) and config_default
+    # now ships a length-nL alpha_1 (v4.7). get_param_names() must classify a
+    # length-nL alpha_1 as PER-LOCATION (one entry per ISO) while a scalar
+    # alpha_1 (national nL=1 / legacy configs) routes to $global via the
+    # length-mismatch fallback.
+    base <- list(
+        seed = 1,
+        location_name = c("ETH", "KEN"),
+        N_j_initial = c(1e6, 5e5),
+        phi_1 = 0.5,
+        alpha_2 = 0.5          # alpha_2 stays a global scalar always
+    )
+
+    # Vector form -> location
+    cfg_vec <- base; cfg_vec$alpha_1 <- c(0.27, 0.31)
+    res_vec <- get_param_names(cfg_vec)
+    expect_true("alpha_1" %in% res_vec$location$ETH)
+    expect_true("alpha_1" %in% res_vec$location$KEN)
+    expect_false("alpha_1" %in% res_vec$global)
+    # alpha_2 (scalar) is global
+    expect_true("alpha_2" %in% res_vec$global)
+
+    # Scalar form -> global (fallback, back-compat)
+    cfg_sc <- base; cfg_sc$alpha_1 <- 0.27
+    res_sc <- get_param_names(cfg_sc)
+    expect_true("alpha_1" %in% res_sc$global)
+    expect_false("alpha_1" %in% res_sc$location$ETH)
+})

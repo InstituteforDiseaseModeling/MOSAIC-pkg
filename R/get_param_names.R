@@ -140,6 +140,7 @@ get_param_names <- function(object) {
         "S_j_initial", "E_j_initial", "I_j_initial",
         "R_j_initial", "V1_j_initial", "V2_j_initial",
         "N_j_initial",
+        "alpha_1",                       # Dual-mode (v4.7/v15.16): length-nL -> location, scalar -> global (fallback below)
         "beta_j0_tot", "p_beta",
         "beta_j0_env", "beta_j0_hum",
         "tau_i", "theta_j",

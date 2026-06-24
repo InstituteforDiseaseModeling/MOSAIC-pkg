@@ -32,6 +32,7 @@ import numpy as np
 # After JSON deserialization these arrive as Python lists and must be converted.
 _VECTOR_FIELDS = frozenset([
     "tau_i",
+    "alpha_1",
     "beta_j0_hum",
     "beta_j0_env",
     "beta_j0_tot",

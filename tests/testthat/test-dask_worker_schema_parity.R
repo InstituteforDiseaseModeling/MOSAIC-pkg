@@ -116,6 +116,49 @@ test_that("vector parameters carry ISO suffixes after worker round trip", {
 
 
 # =============================================================================
+# TEST 2b: alpha_1 specifically survives the worker round trip as alpha_1_<ISO>
+#
+# Lesson-#12 guard for the per-location alpha_1 relocation (priors_default
+# v15.16 / config_default v4.7). alpha_1 is now a per-location vector and is
+# listed in mosaic_dask_worker.py::_VECTOR_FIELDS (NOT _AS_NDARRAY_FIELDS — the
+# engine recasts it to float32 via np.asarray regardless of input type, so it is
+# parity-safe). Pin that every ISO gets an alpha_1_<ISO> column after the round
+# trip and that the local and Dask paths agree on the alpha_1 columns.
+# =============================================================================
+test_that("alpha_1 survives the worker round trip as per-ISO alpha_1_<ISO> columns", {
+  fx <- skip_if_no_data()
+  cfg <- fx$config
+
+  # sample_alpha_1 defaults TRUE; alpha_1's prior now lives in
+  # parameters_location, so the draw is a length-nL vector.
+  params_sim <- MOSAIC::sample_parameters(
+    PATHS = NULL, priors = fx$priors, config = cfg,
+    seed = 1L, sample_args = list(),
+    verbose = FALSE, validate = FALSE
+  )
+
+  iso_codes  <- as.character(cfg$location_name)
+  expect_gt(length(iso_codes), 1L)
+
+  local_cols <- .parquet_columns(params_sim)
+  reconstituted <- .simulate_worker_round_trip(params_sim, cfg)
+  dask_cols  <- .parquet_columns(reconstituted)
+
+  expected_alpha1 <- paste0("alpha_1_", iso_codes)
+  expect_true(all(expected_alpha1 %in% local_cols),
+              info = "local path must expand alpha_1 to per-ISO columns")
+  expect_true(all(expected_alpha1 %in% dask_cols),
+              info = "Dask round trip must preserve per-ISO alpha_1 columns")
+  # No scalar/numeric-suffix fallback leaked through either path.
+  expect_false("alpha_1" %in% c(local_cols, dask_cols))
+  expect_false("alpha_1_1" %in% c(local_cols, dask_cols))
+  # The alpha_1 column sets match exactly between the two paths.
+  expect_setequal(grep("^alpha_1_", local_cols, value = TRUE),
+                  grep("^alpha_1_", dask_cols, value = TRUE))
+})
+
+
+# =============================================================================
 # TEST 3: dropping location_name re-injection silently breaks suffixes
 #
 # Locks in the failure mode the production code defends against, so a future

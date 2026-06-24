@@ -33,15 +33,14 @@ organised into global (single-value) priors and location-specific
 the literature sources and derivation of each prior). Current version:
 \code{priors_default$metadata$version}.
 }
-\section{Global parameters (27)}{
+\section{Global parameters (26)}{
 
 
 Transmission and FOI structure:
 \itemize{
-\item \code{alpha_1} -- FOI mixing exponent on \code{(I/N)} (Beta; 0 = no
-mixing, 1 = well-mixed).
 \item \code{alpha_2} -- Exponent on \code{N_jt} in the FOI denominator (Beta).
-1 = frequency-dependent transmission; 0 = density-dependent.
+1 = frequency-dependent transmission; 0 = density-dependent. A single
+global scalar (\code{alpha_1} is now per-location -- see below).
 \item \code{kappa} -- Half-saturation V. cholerae concentration at which
 the environmental dose-response is 50\\% (Lognormal; \emph{not} a carrying
 capacity).
@@ -128,16 +127,21 @@ population-scaling exponents (Gamma).
 }
 }
 
-\section{Location-specific parameters (22)}{
+\section{Location-specific parameters (23)}{
 
 
 Each carries a per-iso prior under
 \verb{parameters_location$<param>$location$<ISO3>}. Distribution family is the
 same across isos for a given parameter (noted below); hyperparameters
-differ.
+differ (except \code{alpha_1}, which uses a shared marginal across isos).
 
 Transmission and contact:
 \itemize{
+\item \code{alpha_1} -- FOI mixing exponent on the infectious term
+(Beta; 0 = no mixing, 1 = well-mixed). Relocated from global to
+per-location (v15.16) with a shared informative \code{Beta(28.4, 71.6)} for
+every iso; the engine applies it elementwise per patch (a scalar
+\code{alpha_1} is still accepted and broadcast for national/legacy configs).
 \item \code{beta_j0_tot} -- Total baseline transmission rate per location
 (Lognormal). \code{beta_j0_hum} and \code{beta_j0_env} are \emph{derived} as
 \code{p_beta * beta_j0_tot} and \code{(1 - p_beta) * beta_j0_tot}; neither is

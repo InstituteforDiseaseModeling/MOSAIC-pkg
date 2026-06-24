@@ -113,3 +113,29 @@ test_that("convert_config_to_dataframe filters parameters correctly", {
      # Check extra parameter is not present
      expect_false("extra_param" %in% names(df))
 })
+
+test_that("convert_config_to_dataframe expands a length-nL alpha_1 to alpha_1_<ISO>", {
+     # alpha_1 is now PER-LOCATION (v15.16/v4.7): a length-nL alpha_1 expands to
+     # per-ISO columns; a scalar alpha_1 stays a single column. alpha_2 scalar.
+     test_config <- list(
+          seed = 1,
+          location_name = c("A", "B"),
+          beta_j0_env = c(0.1, 0.2),
+          alpha_1 = c(0.27, 0.31),
+          alpha_2 = 0.5
+     )
+     df <- convert_config_to_dataframe(test_config)
+     expect_true("alpha_1_A" %in% names(df))
+     expect_true("alpha_1_B" %in% names(df))
+     expect_false("alpha_1" %in% names(df))
+     expect_equal(df$alpha_1_A, 0.27)
+     expect_equal(df$alpha_1_B, 0.31)
+     # alpha_2 remains a single scalar column
+     expect_true("alpha_2" %in% names(df))
+
+     # Scalar alpha_1 -> single column (back-compat)
+     sc_config <- test_config; sc_config$alpha_1 <- 0.27
+     df_sc <- convert_config_to_dataframe(sc_config)
+     expect_true("alpha_1" %in% names(df_sc))
+     expect_false("alpha_1_A" %in% names(df_sc))
+})

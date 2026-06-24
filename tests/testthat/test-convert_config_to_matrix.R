@@ -50,6 +50,55 @@ test_that("convert_config_to_matrix handles location-specific parameters", {
      expect_equal(result["S_j_initial_KEN"], c(S_j_initial_KEN = 0.75))
 })
 
+test_that("convert_config_to_matrix expands a length-nL alpha_1 to alpha_1_<ISO>", {
+     # alpha_1 is now PER-LOCATION (v15.16/v4.7). A length-nL alpha_1 must expand
+     # to per-ISO columns; a scalar alpha_1 (national/legacy) stays a single
+     # global-style column. alpha_2 stays scalar.
+     vec_cfg <- list(
+          seed = 1,
+          location_name = c("ETH", "KEN"),
+          N_j_initial = c(1e6, 5e5),
+          alpha_1 = c(0.27, 0.31),
+          alpha_2 = 0.5
+     )
+     res_vec <- convert_config_to_matrix(vec_cfg)
+     expect_true("alpha_1_ETH" %in% names(res_vec))
+     expect_true("alpha_1_KEN" %in% names(res_vec))
+     expect_false("alpha_1" %in% names(res_vec))
+     expect_equal(unname(res_vec["alpha_1_ETH"]), 0.27)
+     expect_equal(unname(res_vec["alpha_1_KEN"]), 0.31)
+     # alpha_2 remains a single scalar column
+     expect_true("alpha_2" %in% names(res_vec))
+
+     # Scalar alpha_1 -> single column (back-compat)
+     sc_cfg <- vec_cfg; sc_cfg$alpha_1 <- 0.27
+     res_sc <- convert_config_to_matrix(sc_cfg)
+     expect_true("alpha_1" %in% names(res_sc))
+     expect_false("alpha_1_ETH" %in% names(res_sc))
+})
+
+test_that("convert_matrix_to_config round-trips per-ISO alpha_1 (seed carries length-nL)", {
+     # The round-trip writes alpha_1_<ISO> back into config$alpha_1[idx] ONLY if
+     # the seed config's alpha_1 already has length >= idx (a scalar seed silently
+     # drops idx 2..nL). config_default v4.7 ships a length-nL alpha_1, so the
+     # round-trip is robust. Mimic that here with a length-nL seed.
+     seed_cfg <- list(
+          seed = 1,
+          location_name = c("ETH", "KEN"),
+          N_j_initial = c(1e6, 5e5),
+          alpha_1 = c(0.27, 0.27),   # length-nL seed (D1)
+          alpha_2 = 0.5
+     )
+     m <- convert_config_to_matrix(seed_cfg)
+     # Calibration would update the per-ISO entries:
+     m["alpha_1_ETH"] <- 0.22
+     m["alpha_1_KEN"] <- 0.38
+     out <- convert_matrix_to_config(m, config_base = seed_cfg)
+     expect_equal(length(out$alpha_1), 2L)
+     expect_equal(out$alpha_1[1], 0.22)
+     expect_equal(out$alpha_1[2], 0.38)
+})
+
 test_that("convert_config_to_matrix handles logical values", {
      test_config <- list(
           seed = 789,
