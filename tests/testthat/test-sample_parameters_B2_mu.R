@@ -1,16 +1,24 @@
 # =============================================================================
 # test-sample_parameters_B2_mu.R
 #
-# Regression fixtures for B2: the dynamic per-country mu_j_baseline <-> sampled
-# gamma_1 coupling (priors_default v15.15 / config_default v4.5; statistician
-# spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_B2.md §6.1).
+# Regression fixtures for B2.1: the dynamic per-country mu_j_baseline <-> sampled
+# gamma_1 coupling (priors_default v15.15 / config_default v4.6; statistician
+# spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_B2.md §6.1, with the v0.50.0 B2.1
+# engine-correct chain-factor revision).
 #
-# Under B2, sample_parameters() DERIVES mu_j_baseline from a sampled CFR_target
-# location prior and the already-sampled global chain factor:
-#   mu_j_baseline[j] = CFR_target[j] * gamma_1 * rho / (rho_deaths * chi)
-#   chi = 0.5 * (chi_endemic + chi_epidemic)
-# so the realized implied reported CFR == CFR_target for every draw
-# (chain-factor invariant).
+# Under B2.1, sample_parameters() DERIVES mu_j_baseline from a sampled CFR_target
+# location prior and the already-sampled global chain factor using the
+# ENGINE-CORRECT identity (statistician memory b2-cfr-chain-factor-diagnosis):
+#   mu_j_baseline[j] = CFR_target[j] * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)
+# Two corrections vs OLD-B2 (which used gamma_1 and chi_blend):
+#   (1) dwell: engine reported_cases scales with INCIDENCE not prevalence-days, so
+#       the recovery-tick factor is (1 - exp(-gamma_1)), NOT gamma_1.
+#   (2) chi_eff: reported_cases is an Isym stock-read dominated by epidemic-regime
+#       ticks, so the effective PPV leans to chi_epidemic, NOT the
+#       0.5*(chi_endemic + chi_epidemic) blend.
+# so the realized implied reported CFR (under the engine's true read-back) == CFR_target
+# for every draw, up to the irreducible ~1.3-1.5x dynamics-dependent residual that
+# no closed form can absorb (it is a realized epidemic-fraction + spatial quantity).
 #
 # These fixtures are the math-correctness gate. Several are hand-computed and
 # self-contained (no MOSAIC root / data needed): they build a minimal priors +
@@ -29,11 +37,11 @@ library(testthat)
   MOSAIC::sample_parameters(PATHS = list(), ...)
 }
 
-# Recompute the realized reported CFR from emitted parameters (the engine's
-# v0.14.0 steady-state identity). B2's whole point is that this == CFR_target.
+# Recompute the realized reported CFR from emitted parameters using the B2.1
+# ENGINE-CORRECT read-back identity. B2.1's whole point is that this == CFR_target
+# (the inverse of the derivation mu = CFR_target * (1-exp(-g1)) * rho / (rho_deaths * chi_epi)).
 .b2_reported_cfr <- function(mu, gamma_1, rho, rho_deaths, chi_endemic, chi_epidemic) {
-  chi <- 0.5 * (chi_endemic + chi_epidemic)
-  mu * rho_deaths * chi / (gamma_1 * rho)
+  mu * rho_deaths * chi_epidemic / ((1 - exp(-gamma_1)) * rho)
 }
 
 # Build a minimal 2-location B2 priors object + matching config template.
@@ -72,11 +80,11 @@ library(testthat)
 # ---------------------------------------------------------------------------
 # Fixture 1 (SPEC §6.1 #1): exact at-sample derivation, hand-computed.
 # ---------------------------------------------------------------------------
-test_that("B2 derives mu_j_baseline exactly from CFR_target * chain", {
+test_that("B2.1 derives mu_j_baseline exactly from CFR_target * engine-correct chain", {
   CFR_target <- 0.02; g1 <- 0.09; rho <- 0.43; rhod <- 0.42
   chi_end <- 0.55; chi_epi <- 0.80
-  chi <- 0.5 * (chi_end + chi_epi)                       # 0.675
-  mu_expected <- CFR_target * g1 * rho / (rhod * chi)    # hand value
+  # B2.1 chain: (1-exp(-gamma_1)) and chi_epidemic (NOT gamma_1 and chi_blend).
+  mu_expected <- CFR_target * (1 - exp(-g1)) * rho / (rhod * chi_epi)   # hand value
 
   # Drive the hook via a fully-specified config (sample_CFR_target=FALSE keeps
   # CFR_target at the config default, so the result is deterministic).
@@ -97,7 +105,8 @@ test_that("B2 derives mu_j_baseline exactly from CFR_target * chain", {
   )
   expect_equal(out$mu_j_baseline, rep(mu_expected, 2), tolerance = 1e-12)
   # Recompute by hand to >= 10 sig figs (independent of the package formula).
-  expect_equal(mu_expected, 0.02 * 0.09 * 0.43 / (0.42 * 0.675), tolerance = 1e-12)
+  # B2.1: 0.02 * (1-exp(-0.09)) * 0.43 / (0.42 * 0.80) = 0.0022029518...
+  expect_equal(mu_expected, 0.0022029518055578499, tolerance = 1e-15)
 })
 
 # ---------------------------------------------------------------------------
@@ -155,8 +164,8 @@ test_that("B2 composed spread: sd(log implied_CFR) ~ 0.787, Var(log mu) ~ 1.016"
   rhod <- rbeta(N, 36.95, 51.02)
   ce   <- rbeta(N, 5.43, 5.01)
   ee   <- rbeta(N, 4.79, 1.53)
-  chi  <- 0.5 * (ce + ee)
-  chain <- g1 * rho / (rhod * chi)
+  # B2.1 chain: (1-exp(-gamma_1)) and chi_epidemic (= ee), not gamma_1 and the blend.
+  chain <- (1 - exp(-g1)) * rho / (rhod * ee)
 
   mu <- cfr * chain
   implied_cfr <- .b2_reported_cfr(mu, g1, rho, rhod, ce, ee)  # == cfr by construction
@@ -164,9 +173,10 @@ test_that("B2 composed spread: sd(log implied_CFR) ~ 0.787, Var(log mu) ~ 1.016"
   # Implied CFR spread == CFR_target spread (the chain cancels exactly).
   expect_equal(sd(log(implied_cfr)), sdlog_cfr, tolerance = 0.02)
   # Marginal mu is WIDER by design: Var(log mu) = Var(log cfr) + Var(log chain).
-  # Today's implied-CFR Var(log) = 0.6195; the chain Var(log) ~ 0.396 -> ~1.016.
+  # Today's implied-CFR Var(log) = 0.6195; under B2.1 the chain Var(log) ~ 0.42
+  # (dwell+chi_epidemic) -> Var(log mu) ~ 1.04 (slightly wider than OLD-B2's ~1.016).
   expect_gt(var(log(mu)), 0.90)
-  expect_lt(var(log(mu)), 1.15)
+  expect_lt(var(log(mu)), 1.20)
   # Sanity: marginal mu CV ~ 1.33 (well above the infeasible Gamma(4) CV=0.5).
   cv_mu <- sd(mu) / mean(mu)
   expect_gt(cv_mu, 1.0)
@@ -180,26 +190,28 @@ test_that("B2 composed spread: sd(log implied_CFR) ~ 0.787, Var(log mu) ~ 1.016"
 # This fixture asserts (a) the raw product can breach (documenting why the clamp
 # exists) and (b) the clamped derivation through .b2_sample() never does.
 # ---------------------------------------------------------------------------
-test_that("B2 raw product can breach 1 in the tail (documents the clamp need)", {
+test_that("B2.1 raw product can breach 1 in the tail (documents the clamp need)", {
   set.seed(7L)
   N <- 1e6
   # Highest REAL per-country CFR_target median is ~0.089 (MLI). At that center
-  # the upper tail breaches 1 with P ~ 1e-5.
+  # the upper tail breaches 1 with P ~ 7e-6 under B2.1 (slightly rarer than
+  # OLD-B2 because (1-exp(-g1)) < g1 shrinks the chain a touch).
   cfr <- rlnorm(N, meanlog = log(0.089), sdlog = 0.787)
   g1   <- rlnorm(N, meanlog = log(0.10), sdlog = 0.5)
   rho  <- rbeta(N, 5.38, 7.10)
   rhod <- rbeta(N, 36.95, 51.02)
-  chi  <- 0.5 * (rbeta(N, 5.43, 5.01) + rbeta(N, 4.79, 1.53))
-  mu <- cfr * g1 * rho / (rhod * chi)
+  chi_epi <- rbeta(N, 4.79, 1.53)
+  # B2.1 chain: (1-exp(-gamma_1)) and chi_epidemic.
+  mu <- cfr * (1 - exp(-g1)) * rho / (rhod * chi_epi)
   expect_gt(max(mu), 1.0)          # raw product breaches -> clamp is required
   expect_lt(mean(mu > 1), 1e-3)    # but only in the extreme tail
 })
 
-test_that("B2 sample_parameters clamps derived mu_j_baseline to the engine [0,1] bound", {
+test_that("B2.1 sample_parameters clamps derived mu_j_baseline to the engine [0,1] bound", {
   priors <- .b2_make_priors(cfr_meanlog = c(AAA = log(0.5), BBB = log(0.089)))
   cfg <- .b2_make_config()
   cfg$CFR_target <- c(0.5, 0.089)
-  # Force a high-chain draw: large gamma_1, small rho_deaths/chi -> chain large.
+  # Force a high-chain draw: large gamma_1, small rho_deaths/chi_epidemic -> chain large.
   cfg$gamma_1 <- 0.5; cfg$rho <- 0.7; cfg$rho_deaths <- 0.3
   cfg$chi_endemic <- 0.3; cfg$chi_epidemic <- 0.3
   out <- .b2_sample(
@@ -211,10 +223,11 @@ test_that("B2 sample_parameters clamps derived mu_j_baseline to the engine [0,1]
       sample_initial_conditions = FALSE
     )
   )
-  # chain = 0.5*0.7/(0.3*0.3) = 3.889; CFR 0.5 -> mu 1.944 (>1) clamped; 0.089 -> 0.346 (ok)
+  # B2.1 chain = (1-exp(-0.5))*0.7/(0.3*0.3) = 3.060; CFR 0.5 -> mu 1.530 (>1)
+  # clamped; 0.089 -> 0.272 (ok).
   expect_true(all(out$mu_j_baseline <= 1 & out$mu_j_baseline >= 0))
   expect_lt(out$mu_j_baseline[1], 1.0)   # clamped just under 1
-  expect_gt(out$mu_j_baseline[1], 0.99)  # but at the ceiling (raw was 1.944)
+  expect_gt(out$mu_j_baseline[1], 0.99)  # but at the ceiling (raw was 1.530)
 })
 
 # ---------------------------------------------------------------------------
@@ -245,8 +258,8 @@ test_that("B2 sample_CFR_target=FALSE freezes CFR but still derives mu from samp
       sample_initial_conditions = FALSE
     )
   )
-  chi <- 0.5 * (cfg$chi_endemic + cfg$chi_epidemic)
-  chain <- cfg$gamma_1 * cfg$rho / (cfg$rho_deaths * chi)
+  # B2.1 chain: (1-exp(-gamma_1)) and chi_epidemic.
+  chain <- (1 - exp(-cfg$gamma_1)) * cfg$rho / (cfg$rho_deaths * cfg$chi_epidemic)
   expect_equal(out$CFR_target, c(0.02, 0.01), tolerance = 1e-12)  # frozen
   expect_equal(out$mu_j_baseline, c(0.02, 0.01) * chain, tolerance = 1e-12)
 })

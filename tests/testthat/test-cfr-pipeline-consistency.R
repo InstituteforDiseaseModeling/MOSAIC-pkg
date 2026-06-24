@@ -8,14 +8,16 @@
 # that caused 38 of 40 countries to ship raw-CFR values as daily hazards before
 # v0.32.1 (see NEWS / CLAUDE.md Lesson #12).
 #
-# B2 (priors_default v15.15 / config_default v4.5): the per-country mu_j_baseline
+# B2.1 (priors_default v15.15 / config_default v4.6): the per-country mu_j_baseline
 # GAMMA location prior was REPLACED by a per-country CFR_target LOGNORMAL location
-# prior. mu_j_baseline is now DERIVED at sample time by sample_parameters() as
-#   mu_j_baseline = CFR_target * gamma_1 * rho / (rho_deaths * chi)
+# prior. mu_j_baseline is now DERIVED at sample time by sample_parameters() with the
+# ENGINE-CORRECT chain factor (v0.50.0 B2.1; statistician memory
+# b2-cfr-chain-factor-diagnosis):
+#   mu_j_baseline = CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)
 # config_default ships both a numeric CFR_target (the prior median) and a numeric
 # mu_j_baseline built as CFR_target * the STATIC chain anchor
-#   cfr_to_mu_adjustment = gamma_1_anchor * rho_mean / (rho_deaths_mean * chi_anchor)
-#   (gamma_1_anchor = 0.10, chi_anchor = 0.70)
+#   cfr_to_mu_adjustment = (1 - exp(-gamma_1_anchor)) * rho_mean / (rho_deaths_mean * chi_epidemic_anchor)
+#   (gamma_1_anchor = 0.10, chi_epidemic_anchor = 0.75)
 # so the two artifacts must agree by construction:
 #   config_default$CFR_target[iso]    == exp(meanlog) of the priors CFR_target lognormal
 #   config_default$mu_j_baseline[iso] == config_default$CFR_target[iso] * cfr_to_mu_adjustment
@@ -53,7 +55,7 @@ test_that("config_default$CFR_target matches priors_default CFR_target lognormal
   }
 })
 
-test_that("config_default$mu_j_baseline == CFR_target * static chain anchor (B2)", {
+test_that("config_default$mu_j_baseline == CFR_target * static chain anchor (B2.1)", {
   skip_if_not_installed("MOSAIC")
   cfg <- tryCatch(MOSAIC::config_default, error = function(e) NULL)
   pri <- tryCatch(MOSAIC::priors_default, error = function(e) NULL)
@@ -62,12 +64,13 @@ test_that("config_default$mu_j_baseline == CFR_target * static chain anchor (B2)
     skip("config_default missing CFR_target or mu_j_baseline (pre-B2 object?)")
   }
 
-  # Recompute the static chain anchor from the SHIPPED rho/rho_deaths Beta priors
-  # (the same formula make_config_default.R uses). gamma_1 = 0.10, chi = 0.70.
+  # Recompute the B2.1 static chain anchor from the SHIPPED rho/rho_deaths Beta
+  # priors (the same formula make_config_default.R uses): dwell = (1-exp(-0.10)),
+  # chi_epidemic = 0.75.
   beta_mean <- function(p) p$shape1 / (p$shape1 + p$shape2)
   rho_mean        <- beta_mean(pri$parameters_global$rho$parameters)
   rho_deaths_mean <- beta_mean(pri$parameters_global$rho_deaths$parameters)
-  adj <- 0.10 * rho_mean / (rho_deaths_mean * 0.70)
+  adj <- (1 - exp(-0.10)) * rho_mean / (rho_deaths_mean * 0.75)
 
   expected_mu <- cfg$CFR_target * adj
   expect_equal(unname(cfg$mu_j_baseline), unname(expected_mu), tolerance = 1e-8,

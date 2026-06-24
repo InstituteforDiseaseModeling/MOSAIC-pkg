@@ -51,7 +51,8 @@
 #'       (TRUE) or held at its config default / prior median (FALSE) (default TRUE)
 #'     \item sample_mu_j_baseline: Under B2 (priors object has a \code{CFR_target}
 #'       location prior) this gates the \emph{derivation} of \code{mu_j_baseline}
-#'       from \code{CFR_target * gamma_1 * rho / (rho_deaths * chi)} rather than an
+#'       from \code{CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)}
+#'       (the B2.1 engine-correct chain factor) rather than an
 #'       independent draw; \code{mu_j_baseline} is no longer an independently
 #'       sampled location parameter. Under a legacy priors object (no
 #'       \code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
@@ -598,14 +599,20 @@ sample_parameters <- function(
   # Under B2 the priors object carries a `CFR_target` location prior (lognormal)
   # in place of the old `mu_j_baseline` Gamma location prior. mu_j_baseline is
   # NO LONGER an independently-sampled location parameter: it is derived from the
-  # already-sampled global chain factor via the v0.14.0 steady-state identity
+  # already-sampled global chain factor via the B2.1 ENGINE-CORRECT identity
+  # (v0.50.0; statistician memory b2-cfr-chain-factor-diagnosis)
   #
-  #   mu_j_baseline[j] = CFR_target[j] * gamma_1 * rho / (rho_deaths * chi)
-  #   chi = 0.5 * (chi_endemic + chi_epidemic)
+  #   mu_j_baseline[j] = CFR_target[j] * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)
   #
-  # Substituting into reported_CFR = mu * rho_deaths * chi / (gamma_1 * rho)
-  # cancels the entire chain factor, so realized implied CFR == CFR_target for
-  # every draw (drift-invariant; SPEC_B2.md §0). This subsumes the per-country
+  # Two corrections vs the OLD-B2 form (gamma_1 and chi_blend): (1) reported_cases
+  # scales with INCIDENCE not prevalence-days so the recovery-tick factor is the
+  # survival complement (1-exp(-gamma_1)) not gamma_1; (2) reported_cases is an Isym
+  # stock-read dominated by epidemic-regime ticks so the effective PPV leans to
+  # chi_epidemic not the 0.5*(chi_endemic+chi_epidemic) blend. Substituting into the
+  # engine read-back reported_CFR = mu * rho_deaths * chi_epidemic / ((1-exp(-gamma_1)) * rho)
+  # cancels the chain factor, so realized implied CFR == CFR_target up to an
+  # irreducible ~1.3-1.5x dynamics-dependent residual (realized epidemic-fraction +
+  # spatial coupling) that no closed form can absorb. This subsumes the per-country
   # ETH dwell stop-gap structurally.
   #
   # Gating contract (SPEC_B2.md §3.4):
@@ -652,8 +659,17 @@ sample_parameters <- function(
       g1   <- config_sampled$gamma_1[1]
       rho  <- config_sampled$rho[1]
       rhod <- config_sampled$rho_deaths[1]
-      chi  <- 0.5 * (config_sampled$chi_endemic[1] + config_sampled$chi_epidemic[1])
-      chain <- g1 * rho / (rhod * chi)   # scalar (all globals)
+      # B2.1 (working-tree validation, uncommitted): engine-correct chain factor.
+      #   mu = CFR_target * rho * (1 - exp(-gamma_1)) / (rho_deaths * chi_eff)
+      # Two corrections vs OLD-B2 (which used gamma_1 and chi_blend):
+      #   (1) dwell: engine reported_cases scales with INCIDENCE not prevalence-days,
+      #       so the recovery-tick factor is (1 - exp(-gamma_1)), NOT gamma_1.
+      #   (2) chi_eff: reported_cases is an Isym stock-read dominated by epidemic-
+      #       regime ticks, so the effective PPV leans to chi_epidemic, NOT the
+      #       0.5*(chi_endemic+chi_epidemic) blend.
+      chi  <- config_sampled$chi_epidemic[1]
+      g1_dwell <- 1 - exp(-g1)
+      chain <- g1_dwell * rho / (rhod * chi)   # scalar (all globals)
 
       mu_derived <- config_sampled$CFR_target * chain
 
@@ -674,9 +690,9 @@ sample_parameters <- function(
       config_sampled$mu_j_baseline <- mu_derived
 
       if (verbose) {
-        cat("\n  B2: deriving mu_j_baseline = CFR_target * gamma_1 * rho / (rho_deaths * chi)\n")
+        cat("\n  B2.1: deriving mu_j_baseline = CFR_target * rho * (1-exp(-gamma_1)) / (rho_deaths * chi_epidemic)\n")
         cat(sprintf("  - chain factor = %.4f * %.4f / (%.4f * %.4f) = %.5f\n",
-                    g1, rho, rhod, chi, chain))
+                    g1_dwell, rho, rhod, chi, chain))
         if (n_clamped > 0)
           cat(sprintf("  - clamped %d location(s) to the engine [0,1] mu ceiling\n", n_clamped))
         cat("  - Derived mu_j_baseline =", .format_verbose_value(config_sampled$mu_j_baseline), "\n")

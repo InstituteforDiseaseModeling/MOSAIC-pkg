@@ -66,7 +66,8 @@ survival; decay_days_long is derived as short + spread (default TRUE)
 (TRUE) or held at its config default / prior median (FALSE) (default TRUE)
 \item sample_mu_j_baseline: Under B2 (priors object has a \code{CFR_target}
 location prior) this gates the \emph{derivation} of \code{mu_j_baseline}
-from \code{CFR_target * gamma_1 * rho / (rho_deaths * chi)} rather than an
+from \code{CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)}
+(the B2.1 engine-correct chain factor) rather than an
 independent draw; \code{mu_j_baseline} is no longer an independently
 sampled location parameter. Under a legacy priors object (no
 \code{CFR_target} prior) it gates the old independent mu_j_baseline draw.
