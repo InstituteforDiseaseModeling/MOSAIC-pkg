@@ -125,11 +125,11 @@ sample_parameters(
 
   - sample_mu_j_baseline: Under B2 (priors object has a `CFR_target`
     location prior) this gates the *derivation* of `mu_j_baseline` from
-    `CFR_target * gamma_1 * rho / (rho_deaths * chi)` rather than an
-    independent draw; `mu_j_baseline` is no longer an independently
-    sampled location parameter. Under a legacy priors object (no
-    `CFR_target` prior) it gates the old independent mu_j_baseline draw.
-    (default TRUE)
+    `CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)`
+    (the B2.1 engine-correct chain factor) rather than an independent
+    draw; `mu_j_baseline` is no longer an independently sampled location
+    parameter. Under a legacy priors object (no `CFR_target` prior) it
+    gates the old independent mu_j_baseline draw. (default TRUE)
 
   - sample_mu_j_slope: Location-specific temporal IFR trend (default
     TRUE)

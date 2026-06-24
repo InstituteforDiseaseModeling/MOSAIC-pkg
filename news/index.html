@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.49.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.50.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,25 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.50.0" id="mosaic-0500">MOSAIC 0.50.0<a class="anchor" aria-label="anchor" href="#mosaic-0500"></a></h2>
+<ul><li>
+<strong>B2.1 — engine-correct <code>CFR_target</code> → <code>mu_j_baseline</code> chain factor</strong> (<code>config_default</code> v4.6; <code>priors_default</code> <strong>unchanged</strong> at v15.15; statistician-validated). The B2 derivation (0.49.x) coupled <code>mu_j_baseline</code> to <code>CFR_target</code> via <code>gamma_1 * rho / (rho_deaths * chi_blend)</code> with <code>chi_blend = 0.5·(chi_endemic + chi_epidemic)</code>. A controlled-probe diagnosis of the laser-cholera deaths/<code>reported_cases</code> mechanism (statistician memory <code>b2-cfr-chain-factor-diagnosis</code>) showed the engine actually implies a <strong>different chain factor</strong>, fixed here in <code><a href="../reference/sample_parameters.html">sample_parameters()</a></code>:
+<ul><li>
+<strong>Dwell: <code>gamma_1</code> → <code>(1 - exp(-gamma_1))</code>.</strong> Since laser-cholera v0.14.0 (<a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/67" class="external-link">#67</a>) <code>reported_cases</code> is a thinning of daily <em>incidence</em>, not of symptomatic <em>prevalence-days</em>, so the recovery-tick factor relating the per-day mortality hazard <code>mu</code> to a per-incidence CFR is the survival complement <code>(1 - exp(-gamma_1))</code>, not <code>gamma_1</code>.</li>
+<li>
+<strong>PPV: <code>chi_blend</code> → <code>chi_epidemic</code>.</strong> <code>reported_cases</code> is an <code>Isym</code> stock-read dominated by epidemic-regime ticks, so the <em>effective</em> PPV leans to <code>chi_epidemic</code> rather than the endemic/epidemic blend.</li>
+<li>New derivation: <code>mu_j_baseline = CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)</code>. The <code>[0,1]</code> engine clamp and the Lesson-#12 version-skew guard are unchanged.</li>
+</ul></li>
+<li>
+<strong>Why:</strong> the OLD-B2 chain over-attributed deaths. B2.1 <strong>reduces realized deaths bias 16–28%</strong> on the problem countries (statistician validation) with <strong>no harm to the well-calibrated ones</strong> (COG slightly over-corrects to realized/target ≈ 0.91, within the residual). It removes the <em>derivable</em> part of the deaths-scale error; an <strong>irreducible ≈1.3–1.5× dynamics-dependent residual</strong> — driven by the realized epidemic-regime fraction and spatial coupling, which no closed form can capture — remains, and is expected.</li>
+<li>
+<strong><code>config_default</code> v4.6</strong> — the static <code>mu_j_baseline</code> anchor is re-derived to match: <code>cfr_to_mu_adjustment = (1 - exp(-0.10)) * rho_mean / (rho_deaths_mean * 0.75) ≈ 0.1303</code> (was <code>≈ 0.1467</code> under v4.5; every country’s config-default <code>mu_j_baseline = CFR_target × anchor</code> scales ×0.888). <code>CFR_target</code>, <code>psi_jt</code>, the surveillance fit target, and the calibration window are all <strong>identical to v4.5</strong> — patched surgically from the stored per-country <code>CFR_target</code> (no source-data regen, so no unrelated current-source drift). Per-episode CFRs for the high-N countries remain in <code>[0.5%, 15%]</code>. <code>priors_default</code> is <strong>untouched</strong> (B2.1 changes only the <em>derivation</em>, not the <code>CFR_target</code> prior).</li>
+<li>
+<strong>Docs:</strong> <code>MOSAIC-docs/04-model-description.Rmd</code> <code>mu_{j,0}</code> derivation (eq. <code>mu-baseline-derivation</code>) corrected to the incidence-based <code>(1 - exp(-gamma_1))</code> dwell factor and epidemic-leaning <code>chi^{epi}</code>, with the residual noted.</li>
+<li>
+<strong>Tests:</strong> the B2 regression fixtures (<code>test-sample_parameters_B2_mu.R</code>), the implied-CFR consistency guard (<code>test-cfr-pipeline-consistency.R</code>), and the hand-computed Fixture-1 <code>mu</code> (0.00273 → 0.00220) updated to the B2.1 identity. The engine read-back diagnostic (<code>test-implied-cfr.R</code> / <code>calc_implied_cfr.R</code>) is unchanged — it recomputes from the <em>emitted</em> <code>mu</code>, which is the point.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.49.4" id="mosaic-0494">MOSAIC 0.49.4<a class="anchor" aria-label="anchor" href="#mosaic-0494"></a></h2>
 <ul><li>

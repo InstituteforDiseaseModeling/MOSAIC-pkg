@@ -11,7 +11,7 @@ explicit control over which parameters to sample."><meta property="og:image" con
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.49.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.50.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -124,7 +124,8 @@ survival; decay_days_long is derived as short + spread (default TRUE)</p></li>
 (TRUE) or held at its config default / prior median (FALSE) (default TRUE)</p></li>
 <li><p>sample_mu_j_baseline: Under B2 (priors object has a <code>CFR_target</code>
 location prior) this gates the <em>derivation</em> of <code>mu_j_baseline</code>
-from <code>CFR_target * gamma_1 * rho / (rho_deaths * chi)</code> rather than an
+from <code>CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)</code>
+(the B2.1 engine-correct chain factor) rather than an
 independent draw; <code>mu_j_baseline</code> is no longer an independently
 sampled location parameter. Under a legacy priors object (no
 <code>CFR_target</code> prior) it gates the old independent mu_j_baseline draw.
