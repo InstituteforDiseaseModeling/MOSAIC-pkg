@@ -1,5 +1,60 @@
 # Changelog
 
+## MOSAIC 0.51.0
+
+- **Per-location `alpha_1`** (within-metapopulation population-mixing
+  exponent). `alpha_1` is now driven **end-to-end as a per-location
+  quantity** (length-`nL` vector) — sampling → priors → config
+  validation → reticulate → engine, **including the Dask worker path**.
+  The laser-cholera engine is already dual-mode (a scalar `alpha_1` is
+  broadcast to all patches; a length-`(num_nodes,)` array is applied
+  elementwise per patch in the force of infection), so **no engine
+  change** was required. **`alpha_2` stays a single global scalar**
+  (weakly identified given ψ absorbs the environmental signal — by
+  design).
+  - **Prior (`priors_default` v15.16):** `alpha_1` relocated from a
+    single global `Beta` to a **per-location** prior carrying a **shared
+    informative `Beta(28.4, 71.6)`** for every ISO (mean 0.284, sd ≈
+    0.045, 95% CI ≈ \[0.20, 0.38\], cleanly within the engine `(0, 1]`
+    invariant). The tight shared prior emulates hierarchical shrinkage
+    (MOSAIC’s independent-per-ISO sampler cannot express a true
+    hierarchy) and starves the `alpha_1`↔︎`beta_j0_tot` degeneracy while
+    still letting real per-location signal move it. `alpha_2` prior
+    unchanged.
+  - **Seed config (`config_default` v4.7):** `alpha_1` now stored as a
+    length-`nL` vector (`rep(0.27, nL)`) so the
+    `convert_matrix_to_config` round-trip preserves per-ISO calibrated
+    values (a scalar seed silently dropped indices 2..`nL`). `alpha_2`
+    remains a scalar (`0.50`).
+  - **Three silent-corruption sites fixed in lockstep:** (a)
+    [`validate_sampled_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/validate_sampled_config.md)
+    now treats `alpha_1` as **dual-mode** (scalar OR length-`nL`) rather
+    than a rigid global scalar that hard-errored on a vector; (b)
+    [`get_param_names()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_param_names.md)
+    classifies a length-`nL` `alpha_1` as **per-location** (scalar
+    `alpha_1` still routes to `$global` via the length-mismatch
+    fallback); (c) the `convert_matrix_to_config` round-trip is now
+    robust because the seed config carries a length-`nL` `alpha_1`.
+  - **Dask parity:** `alpha_1` added to
+    `mosaic_dask_worker.py::_VECTOR_FIELDS` (NOT `_AS_NDARRAY_FIELDS` —
+    the engine recasts it to float32 via `np.asarray` regardless of
+    input type, so it is parity-safe and does not trigger the
+    float64-vs-float32 state-seeding divergence the `_AS_NDARRAY_FIELDS`
+    header warns about).
+- **Scalar back-compat preserved.** A scalar-`alpha_1` config (national
+  `nL=1` and legacy configs) still validates and runs unchanged (engine
+  broadcast); regression tests pin this.
+- **Tests:** per-location `alpha_1` sampling invariants (length-`nL`,
+  range `(0,1]`); `make_LASER_config` dual-mode validation (scalar /
+  length-`nL` accepted, wrong-length / out-of-range rejected);
+  `get_param_names` dual-mode classification;
+  `convert_config_to_matrix`/`convert_config_to_dataframe`
+  `alpha_1_<ISO>` expansion + round-trip; Dask schema-parity
+  `alpha_1_<ISO>` assertion; `validate_sampled_config` dual-mode cases.
+- **Note:** the logged sampled-parameter count rises by `nL` (e.g. +40
+  continental) now that `alpha_1` is per-location; no ESS/budget code
+  change.
+
 ## MOSAIC 0.50.0
 
 - **B2.1 — engine-correct `CFR_target` → `mu_j_baseline` chain factor**

@@ -17,7 +17,7 @@ priors_default$metadata$version."><meta property="og:image" content="https://ins
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.50.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.51.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -86,14 +86,13 @@ the distribution-specific hyperparameters (e.g. <code>shape1</code>/<code>shape2
 <code>meanlog</code>/<code>sdlog</code> for lognormal, <code>mean</code>/<code>sd</code>/<code>a</code>/<code>b</code> for truncated normal).</p>
     </div>
     <div class="section level2">
-    <h2 id="global-parameters-">Global parameters (27)<a class="anchor" aria-label="anchor" href="#global-parameters-"></a></h2>
+    <h2 id="global-parameters-">Global parameters (26)<a class="anchor" aria-label="anchor" href="#global-parameters-"></a></h2>
 
 
 
-<p>Transmission and FOI structure:</p><ul><li><p><code>alpha_1</code> – FOI mixing exponent on <code>(I/N)</code> (Beta; 0 = no
-mixing, 1 = well-mixed).</p></li>
-<li><p><code>alpha_2</code> – Exponent on <code>N_jt</code> in the FOI denominator (Beta).
-1 = frequency-dependent transmission; 0 = density-dependent.</p></li>
+<p>Transmission and FOI structure:</p><ul><li><p><code>alpha_2</code> – Exponent on <code>N_jt</code> in the FOI denominator (Beta).
+1 = frequency-dependent transmission; 0 = density-dependent. A single
+global scalar (<code>alpha_1</code> is now per-location – see below).</p></li>
 <li><p><code>kappa</code> – Half-saturation V. cholerae concentration at which
 the environmental dose-response is 50\<!-- % (Lognormal; \emph{not} a carrying -->
 capacity).</p></li>
@@ -155,15 +154,20 @@ literature spread retained intentionally).</p></li>
 population-scaling exponents (Gamma).</p></li>
 </ul></div>
     <div class="section level2">
-    <h2 id="location-specific-parameters-">Location-specific parameters (22)<a class="anchor" aria-label="anchor" href="#location-specific-parameters-"></a></h2>
+    <h2 id="location-specific-parameters-">Location-specific parameters (23)<a class="anchor" aria-label="anchor" href="#location-specific-parameters-"></a></h2>
 
 
 
 <p>Each carries a per-iso prior under
 <code>parameters_location$&lt;param&gt;$location$&lt;ISO3&gt;</code>. Distribution family is the
 same across isos for a given parameter (noted below); hyperparameters
-differ.</p>
-<p>Transmission and contact:</p><ul><li><p><code>beta_j0_tot</code> – Total baseline transmission rate per location
+differ (except <code>alpha_1</code>, which uses a shared marginal across isos).</p>
+<p>Transmission and contact:</p><ul><li><p><code>alpha_1</code> – FOI mixing exponent on the infectious term
+(Beta; 0 = no mixing, 1 = well-mixed). Relocated from global to
+per-location (v15.16) with a shared informative <code>Beta(28.4, 71.6)</code> for
+every iso; the engine applies it elementwise per patch (a scalar
+<code>alpha_1</code> is still accepted and broadcast for national/legacy configs).</p></li>
+<li><p><code>beta_j0_tot</code> – Total baseline transmission rate per location
 (Lognormal). <code>beta_j0_hum</code> and <code>beta_j0_env</code> are <em>derived</em> as
 <code>p_beta * beta_j0_tot</code> and <code>(1 - p_beta) * beta_j0_tot</code>; neither is
 directly sampled.</p></li>

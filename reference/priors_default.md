@@ -40,15 +40,13 @@ the distribution-specific hyperparameters (e.g. `shape1`/`shape2` for
 beta, `meanlog`/`sdlog` for lognormal, `mean`/`sd`/`a`/`b` for truncated
 normal).
 
-## Global parameters (27)
+## Global parameters (26)
 
 Transmission and FOI structure:
 
-- `alpha_1` – FOI mixing exponent on `(I/N)` (Beta; 0 = no mixing, 1 =
-  well-mixed).
-
 - `alpha_2` – Exponent on `N_jt` in the FOI denominator (Beta). 1 =
-  frequency-dependent transmission; 0 = density-dependent.
+  frequency-dependent transmission; 0 = density-dependent. A single
+  global scalar (`alpha_1` is now per-location – see below).
 
 - `kappa` – Half-saturation V. cholerae concentration at which the
   environmental dose-response is 50\\ capacity).
@@ -139,14 +137,21 @@ Mobility (gravity-model exponents):
 - `mobility_gamma`, `mobility_omega` – Distance-decay and
   population-scaling exponents (Gamma).
 
-## Location-specific parameters (22)
+## Location-specific parameters (23)
 
 Each carries a per-iso prior under
 `parameters_location$<param>$location$<ISO3>`. Distribution family is
 the same across isos for a given parameter (noted below);
-hyperparameters differ.
+hyperparameters differ (except `alpha_1`, which uses a shared marginal
+across isos).
 
 Transmission and contact:
+
+- `alpha_1` – FOI mixing exponent on the infectious term (Beta; 0 = no
+  mixing, 1 = well-mixed). Relocated from global to per-location
+  (v15.16) with a shared informative `Beta(28.4, 71.6)` for every iso;
+  the engine applies it elementwise per patch (a scalar `alpha_1` is
+  still accepted and broadcast for national/legacy configs).
 
 - `beta_j0_tot` – Total baseline transmission rate per location
   (Lognormal). `beta_j0_hum` and `beta_j0_env` are *derived* as

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.50.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.51.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,26 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.51.0" id="mosaic-0510">MOSAIC 0.51.0<a class="anchor" aria-label="anchor" href="#mosaic-0510"></a></h2>
+<ul><li>
+<strong>Per-location <code>alpha_1</code></strong> (within-metapopulation population-mixing exponent). <code>alpha_1</code> is now driven <strong>end-to-end as a per-location quantity</strong> (length-<code>nL</code> vector) — sampling → priors → config validation → reticulate → engine, <strong>including the Dask worker path</strong>. The laser-cholera engine is already dual-mode (a scalar <code>alpha_1</code> is broadcast to all patches; a length-<code>(num_nodes,)</code> array is applied elementwise per patch in the force of infection), so <strong>no engine change</strong> was required. <strong><code>alpha_2</code> stays a single global scalar</strong> (weakly identified given ψ absorbs the environmental signal — by design).
+<ul><li>
+<strong>Prior (<code>priors_default</code> v15.16):</strong> <code>alpha_1</code> relocated from a single global <code>Beta</code> to a <strong>per-location</strong> prior carrying a <strong>shared informative <code>Beta(28.4, 71.6)</code></strong> for every ISO (mean 0.284, sd ≈ 0.045, 95% CI ≈ [0.20, 0.38], cleanly within the engine <code>(0, 1]</code> invariant). The tight shared prior emulates hierarchical shrinkage (MOSAIC’s independent-per-ISO sampler cannot express a true hierarchy) and starves the <code>alpha_1</code>↔︎<code>beta_j0_tot</code> degeneracy while still letting real per-location signal move it. <code>alpha_2</code> prior unchanged.</li>
+<li>
+<strong>Seed config (<code>config_default</code> v4.7):</strong> <code>alpha_1</code> now stored as a length-<code>nL</code> vector (<code>rep(0.27, nL)</code>) so the <code>convert_matrix_to_config</code> round-trip preserves per-ISO calibrated values (a scalar seed silently dropped indices 2..<code>nL</code>). <code>alpha_2</code> remains a scalar (<code>0.50</code>).</li>
+<li>
+<strong>Three silent-corruption sites fixed in lockstep:</strong> (a) <code><a href="../reference/validate_sampled_config.html">validate_sampled_config()</a></code> now treats <code>alpha_1</code> as <strong>dual-mode</strong> (scalar OR length-<code>nL</code>) rather than a rigid global scalar that hard-errored on a vector; (b) <code><a href="../reference/get_param_names.html">get_param_names()</a></code> classifies a length-<code>nL</code> <code>alpha_1</code> as <strong>per-location</strong> (scalar <code>alpha_1</code> still routes to <code>$global</code> via the length-mismatch fallback); (c) the <code>convert_matrix_to_config</code> round-trip is now robust because the seed config carries a length-<code>nL</code> <code>alpha_1</code>.</li>
+<li>
+<strong>Dask parity:</strong> <code>alpha_1</code> added to <code>mosaic_dask_worker.py::_VECTOR_FIELDS</code> (NOT <code>_AS_NDARRAY_FIELDS</code> — the engine recasts it to float32 via <code>np.asarray</code> regardless of input type, so it is parity-safe and does not trigger the float64-vs-float32 state-seeding divergence the <code>_AS_NDARRAY_FIELDS</code> header warns about).</li>
+</ul></li>
+<li>
+<strong>Scalar back-compat preserved.</strong> A scalar-<code>alpha_1</code> config (national <code>nL=1</code> and legacy configs) still validates and runs unchanged (engine broadcast); regression tests pin this.</li>
+<li>
+<strong>Tests:</strong> per-location <code>alpha_1</code> sampling invariants (length-<code>nL</code>, range <code>(0,1]</code>); <code>make_LASER_config</code> dual-mode validation (scalar / length-<code>nL</code> accepted, wrong-length / out-of-range rejected); <code>get_param_names</code> dual-mode classification; <code>convert_config_to_matrix</code>/<code>convert_config_to_dataframe</code> <code>alpha_1_&lt;ISO&gt;</code> expansion + round-trip; Dask schema-parity <code>alpha_1_&lt;ISO&gt;</code> assertion; <code>validate_sampled_config</code> dual-mode cases.</li>
+<li>
+<strong>Note:</strong> the logged sampled-parameter count rises by <code>nL</code> (e.g. +40 continental) now that <code>alpha_1</code> is per-location; no ESS/budget code change.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.50.0" id="mosaic-0500">MOSAIC 0.50.0<a class="anchor" aria-label="anchor" href="#mosaic-0500"></a></h2>
 <ul><li>
