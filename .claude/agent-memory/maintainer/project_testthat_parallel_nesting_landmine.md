@@ -22,8 +22,19 @@ serialization stream.
 - `test-dask-psock-orchestrator.R` "B2: PSOCK plumbing..." (PSOCK makeCluster)
 - `test-dask-local-separation.R` "B1: ...forks inherit it" (mclapply)
 - `test-dask_worker_schema_parity.R` 3 tests at the mclapply lines (~372/424/486)
+- `test-ensemble_cluster_robust.R` + `test-run_batch_robust.R` (added v0.49.1 for
+  `.mosaic_cluster_lapply_robust`): spawn PSOCK clusters AND `tools::pskill(SIGKILL)`
+  their workers — these CRASHED the parallel harness on the author's run because they
+  shipped WITHOUT the guard. Fixed v0.49.4: guard placed inside the file-local
+  `.skip_if_no_psock*()` helper (every test_that calls it first), one edit covers all
+  blocks. Being in `Config/testthat/start-first` is NOT a substitute for the guard.
 NOTE: `test-est_initial_R_parallel.R` and `test-calc_model_ensemble.R` look like they
 spawn clusters but do NOT (R_parallel only checks docs/detectCores; ensemble uses mocks).
+
+**Review trigger:** any NEW test that calls `parallel::makeCluster`, `mclapply`,
+`tools::pskill`, or otherwise spawns inner parallelism MUST carry
+`skip_if_testthat_parallel()`. Grep new test diffs for `makeCluster|mclapply|pskill`
+and confirm the guard is present — a missing guard is a latent parallel-harness crash.
 
 **How to apply:** gate each with `skip_if_testthat_parallel()` (helper-skips.R). The
 reliable "am I a parallel worker?" signal is `nzchar(Sys.getenv("CALLR_IS_RUNNING"))`

@@ -17,7 +17,10 @@ the 2026-06-22/23 thread.
   **libexpat** (NOT hedgehog's GLIBCXX): bare `Rscript` → PSOCK workers die with
   `undefined symbol: XML_SetAllocTrackerActivationThreshold`. `check_dependencies()`
   passes WITHOUT the wrapper (skips the laser worker path), which masks the bug.
-- **Backend:** local PSOCK only (omit `dask_spec`); Coiled hybrid is #113-invalid.
+- **Backend:** local PSOCK (omit `dask_spec`) **OR Coiled hybrid as the Dask CLIENT**
+  (validated 2026-06-24, see [[project_coiled_dugong_client_validated]]). dugong dask/distributed
+  = 2026.6.0 matches the rebuilt worker image, so the client↔image skew that stalled the laptop
+  client (dask 2026.3.0) is gone here. **Coiled needs an LD_PRELOAD fix**, see that note.
 - **Results:** `~/MOSAIC/output/<DIR>/`; tar then `scp`, or `HEDGEHOG_HOST=dugong
   vm/pull_results.sh` (the helper is parameterized — works for dugong unchanged).
 
