@@ -2230,24 +2230,17 @@ run_MOSAIC <- function(config,
   jsonlite::write_json(diagnostics, diagnostics_file, pretty = TRUE, auto_unbox = TRUE, digits = NA)
   log_msg("Saved %s", diagnostics_file)
 
-  if (control$paths$plots) {
-    log_msg("Generating convergence diagnostic plots...")
-    plot_model_convergence_status(
+  # Convergence-status table (data layer): write convergence_status.csv
+  # unconditionally so a finished run is self-describing regardless of plots.
+  # The figure is rendered later by render_MOSAIC_figures() when plots = TRUE.
+  tryCatch(
+    calc_model_convergence_status(
       results_dir = dirs$cal_diag,
-      plots_dir = dirs$res_fig_diag,
-      verbose = control$logging$verbose
-    )
-
-    tryCatch({
-      plot_model_likelihood(
-        results    = results,
-        output_dir = dirs$res_fig_diag,
-        verbose    = control$logging$verbose
-      )
-    }, error = function(e) {
-      log_warn("likelihood curve plot failed: %s", e$message)
-    })
-  }
+      output_dir  = dirs$res_fig_diag,
+      verbose     = control$logging$verbose
+    ),
+    error = function(e) log_warn("convergence-status table failed: %s", e$message)
+  )
 
   # ===========================================================================
   # BUILD POSTERIOR ENSEMBLE (must run BEFORE posterior quantile construction
@@ -2444,7 +2437,7 @@ run_MOSAIC <- function(config,
 
     if (!is.null(ensemble)) {
       ensemble_rds <- file.path(dirs$calibration, "ensemble_candidate.rds")
-      saveRDS(ensemble, ensemble_rds)
+      saveRDS(.mosaic_stamp_artifact(ensemble), ensemble_rds)
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
     }
   } else {
@@ -2544,9 +2537,17 @@ run_MOSAIC <- function(config,
 
       # Save the optimized ensemble. The tier ensemble is already on disk as
       # ensemble_candidate.rds from the earlier ensemble-build block.
-      saveRDS(subset_opt$ensemble_optimized,
+      saveRDS(.mosaic_stamp_artifact(subset_opt$ensemble_optimized),
               file.path(dirs$calibration, "ensemble_optimized.rds"))
       log_msg("Saved 2_calibration/ensemble_optimized.rds")
+
+      # Persist the full subset-optimization result (Phase 1b / G4) so the
+      # renderer can reconstruct plot_model_subset_optimization() from disk.
+      tryCatch({
+        saveRDS(.mosaic_stamp_artifact(subset_opt),
+                file.path(dirs$calibration, "subset_opt.rds"))
+        log_msg("Saved 2_calibration/subset_opt.rds")
+      }, error = function(e) log_warn("subset_opt.rds save failed: %s", e$message))
 
       # Record TIER ensemble metrics for comparison in summary.json, then
       # replace `ensemble` with the optimized one so all downstream work uses it.
@@ -2576,20 +2577,9 @@ run_MOSAIC <- function(config,
       utils::write.csv(subset_opt$evaluation_table, diag_path, row.names = FALSE)
       log_msg("Saved 3_results/figures/diagnostics/optimization_diagnostics.csv")
 
-      # Render the optimization diagnostic figure (objective / R^2 / bias / ESS
-      # vs subset size N). Gated on plots being enabled; the surrounding block
-      # already guarantees optimize_subset = TRUE.
-      if (isTRUE(control$paths$plots)) {
-        tryCatch({
-          plot_model_subset_optimization(
-            subset_opt  = subset_opt,
-            output_dir  = dirs$res_fig_diag,
-            file_prefix = "subset_optimization",
-            verbose     = control$logging$verbose
-          )
-          log_msg("Saved 3_results/figures/diagnostics/subset_optimization_diagnostic.{pdf,png}")
-        }, error = function(e) log_warn("subset optimization plot failed: %s", e$message))
-      }
+      # (The optimization-diagnostic figure is rendered later by
+      # render_MOSAIC_figures() from subset_opt.rds; the evaluation_table CSV is
+      # already written above, independent of plots.)
 
       # Patch convergence_diagnostics.json with the optimizer-selected subset size
       conv_diag_file <- file.path(dirs$cal_diag, "convergence_diagnostics.json")
@@ -2691,14 +2681,6 @@ run_MOSAIC <- function(config,
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posterior_quantiles.csv"))
 
-  if (control$paths$plots) {
-    plot_model_posterior_quantiles(
-      csv_files = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
-      output_dir = dirs$res_fig_post,
-      verbose = control$logging$verbose
-    )
-  }
-
   # Calculate posterior distributions
   log_msg("Calculating posterior distributions")
   calc_model_posterior_distributions(
@@ -2710,54 +2692,22 @@ run_MOSAIC <- function(config,
   )
   log_msg("Saved %s", file.path(dirs$cal_posterior, "posteriors.json"))
 
-  if (control$paths$plots) {
-    plot_model_distributions(
-      json_files = c(file.path(dirs$inputs, "priors.json"),
-                    file.path(dirs$cal_posterior, "posteriors.json")),
-      method_names = c("Prior", "Posterior"),
-      output_dir = dirs$res_fig_post
-    )
-    plot_model_posteriors_detail(
-      quantiles_file = file.path(dirs$cal_posterior, "posterior_quantiles.csv"),
+  # ===========================================================================
+  # PARAMETER SENSITIVITY (data layer)
+  # ===========================================================================
+  # Compute HSIC sensitivity + write parameter_sensitivity.csv unconditionally
+  # so the table exists regardless of plots. The figure (and the correlation
+  # figure) are rendered later by render_MOSAIC_figures().
+  tryCatch(
+    calc_model_parameter_sensitivity(
       results_file = file.path(dirs$calibration, "samples.parquet"),
-      priors_file = file.path(dirs$inputs, "priors.json"),
-      posteriors_file = file.path(dirs$cal_posterior, "posteriors.json"),
-      output_dir = dirs$res_fig_post_detail,
-      subset_col = active_cols$subset_col,
-      weight_col = active_cols$weight_col,
-      verbose = control$logging$verbose
-    )
-  }
-
-  # ===========================================================================
-  # PARAMETER SENSITIVITY AND CORRELATION
-  # ===========================================================================
-
-  if (control$paths$plots) {
-    log_msg("Generating parameter sensitivity and correlation plots...")
-
-    tryCatch(
-      plot_model_parameter_sensitivity(
-        results_file = file.path(dirs$calibration, "samples.parquet"),
-        priors_file = file.path(dirs$inputs, "priors.json"),
-        output_dir = dirs$res_fig_diag,
-        subset_col = active_cols$subset_col,
-        verbose = control$logging$verbose
-      ),
-      error = function(e) log_warn("parameter sensitivity plot failed: %s", e$message)
-    )
-
-    tryCatch(
-      plot_model_parameter_correlation(
-        results_file = file.path(dirs$calibration, "samples.parquet"),
-        priors_file = file.path(dirs$inputs, "priors.json"),
-        output_dir = dirs$res_fig_diag,
-        subset_col = active_cols$subset_col,
-        verbose = control$logging$verbose
-      ),
-      error = function(e) log_warn("parameter correlation plot failed: %s", e$message)
-    )
-  }
+      priors_file  = file.path(dirs$inputs, "priors.json"),
+      output_dir   = dirs$res_fig_diag,
+      subset_col   = active_cols$subset_col,
+      verbose      = control$logging$verbose
+    ),
+    error = function(e) log_warn("parameter sensitivity computation failed: %s", e$message)
+  )
 
   # ===========================================================================
   # POSTERIOR PREDICTIVE CHECKS (medoid representative model)
@@ -2919,6 +2869,19 @@ run_MOSAIC <- function(config,
       )
 
       if (!is.null(medoid_ensemble)) {
+        # Persist the medoid ensemble object (Phase 1a / G3) unconditionally so
+        # render_MOSAIC_figures() can reconstruct the medoid prediction plot
+        # from disk without re-simulating (invariant P5). The posterior ensemble
+        # is already serialized (ensemble_candidate.rds / ensemble_optimized.rds);
+        # the medoid was the one ensemble plot exposed to accidental local
+        # re-simulation.
+        medoid_ensemble <- .mosaic_stamp_artifact(medoid_ensemble)
+        tryCatch({
+          saveRDS(medoid_ensemble,
+                  file.path(dirs$calibration, "medoid_ensemble.rds"))
+          log_msg("Saved 2_calibration/medoid_ensemble.rds")
+        }, error = function(e) log_warn("medoid_ensemble.rds save failed: %s", e$message))
+
         med_c_flat <- as.numeric(.mosaic_mask_central_for_scoring(
           .central(medoid_ensemble, "cases"), "cases", medoid_ensemble$artifact_mask))
         med_d_flat <- as.numeric(.mosaic_mask_central_for_scoring(
@@ -2936,21 +2899,21 @@ run_MOSAIC <- function(config,
                 .fmt_num(r2_cases_med,    4L), .fmt_num(bias_cases_med,  2L),
                 .fmt_num(r2_deaths_med,   4L), .fmt_num(bias_deaths_med, 2L))
 
-        if (control$paths$plots) {
-          tryCatch(
-            plot_model_ensemble(
-              ensemble         = medoid_ensemble,
-              output_dir       = dirs$res_fig_pred,
-              data_dir         = dirs$res_predictions,
-              file_prefix      = "medoid",
-              title_label      = "Medoid Model",
-              save_predictions = TRUE,
-              central_method   = central_method,
-              verbose          = control$logging$verbose
-            ),
-            error = function(e) log_warn("medoid prediction plot failed: %s", e$message)
+        # Medoid prediction CSVs (data layer): assemble + write unconditionally
+        # so the medoid predictions exist regardless of plots. The figure is
+        # rendered later by render_MOSAIC_figures() from medoid_ensemble.rds.
+        tryCatch({
+          medoid_table <- .mosaic_assemble_prediction_table(
+            ensemble       = medoid_ensemble,
+            central_method = central_method
           )
-        }
+          .mosaic_write_prediction_csvs(
+            prediction_table = medoid_table,
+            data_dir         = dirs$res_predictions,
+            file_prefix      = "medoid",
+            verbose          = control$logging$verbose
+          )
+        }, error = function(e) log_warn("medoid prediction CSV write failed: %s", e$message))
       }
     }
   }, error = function(e) {
@@ -3075,30 +3038,24 @@ run_MOSAIC <- function(config,
               full_row$bias_cases, last_row$window, last_row$bias_cases)
     }
 
-    if (control$paths$plots) {
-      wm_plot_path <- file.path(dirs$res_fig_diag, "model_fit_windows.png")
-      tryCatch({
-        .mosaic_plot_windowed_metrics(windowed_metrics, wm_plot_path,
-                                      location = paste(config$location_name, collapse = ", "))
-        log_msg("Saved 3_results/figures/diagnostics/model_fit_windows.png")
-      }, error = function(e) {
-        log_warn("windowed metrics plot failed: %s", e$message)
-      })
-    }
+    # (The windowed-metrics figure is rendered later by render_MOSAIC_figures()
+    # from model_fit_windows.csv, which is written above independent of plots.)
 
-    if (control$paths$plots) {
-      log_msg("Generating posterior ensemble plots (source=%s)...", active_cols$source)
-      plot_model_ensemble(
-        ensemble         = ensemble,
-        output_dir       = dirs$res_fig_pred,
+    # Posterior-ensemble prediction CSVs (data layer): assemble + write
+    # unconditionally (independent of plots). The figure is rendered later by
+    # render_MOSAIC_figures() from the persisted ensemble .rds.
+    tryCatch({
+      ensemble_table <- .mosaic_assemble_prediction_table(
+        ensemble       = ensemble,
+        central_method = central_method
+      )
+      .mosaic_write_prediction_csvs(
+        prediction_table = ensemble_table,
         data_dir         = dirs$res_predictions,
         file_prefix      = "ensemble",
-        title_label      = "Posterior Ensemble",
-        save_predictions = TRUE,
-        central_method   = central_method,
         verbose          = control$logging$verbose
       )
-    }
+    }, error = function(e) log_warn("ensemble prediction CSV write failed: %s", e$message))
 
   } else {
     log_warn("ensemble is NULL \u2014 skipping ensemble R\u00b2 and predictive plots")
@@ -3138,30 +3095,8 @@ run_MOSAIC <- function(config,
     }
   }
 
-  # ===========================================================================
-  # POSTERIOR PREDICTIVE CHECKS (PPC plots)
-  # ===========================================================================
-
-  if (control$paths$plots) {
-    # Robust call handling both old and new plot_model_ppc signatures
-    ppc_result <- tryCatch(
-      {
-        plot_model_ppc(
-          predictions_dir = dirs$res_predictions,
-          output_dir = dirs$res_figures,
-          verbose = control$logging$verbose
-        )
-      },
-      error = function(e) {
-        if (grepl("unused argument", e$message)) {
-          log_warn("plot_model_ppc using legacy signature (package may need reinstallation)")
-          NULL
-        } else {
-          stop(e)
-        }
-      }
-    )
-  }
+  # (Posterior-predictive-check figures are rendered later by
+  # render_MOSAIC_figures() from the now-unconditional prediction CSVs.)
 
   runtime <- difftime(Sys.time(), start_time, units = "mins")
   log_msg("Calibration complete: %d batches, %d simulations, %.2f min",
@@ -3176,16 +3111,25 @@ run_MOSAIC <- function(config,
   .mosaic_write_parameter_estimates(dirs)
   log_msg("  Saved 3_results/posterior/parameter_estimates.csv")
 
-  # psi_star diagnostic plot (raw LSTM psi vs calibrated psi*)
-  if (control$paths$plots) {
+  # (The psi_star diagnostic figure is rendered later by render_MOSAIC_figures()
+  # from parameter_estimates.csv + config.json + the suitability inputs.)
+
+  # ===========================================================================
+  # RENDER FIGURES (visualization layer)
+  # ===========================================================================
+  # All pipeline figures are now produced by a single pass over the finished
+  # run directory. Every numeric artifact the figures consume has been written
+  # unconditionally above (invariants P1/P2), so plots gate ONLY rendering. The
+  # renderer is a pure read-render (P5): it never re-simulates.
+  if (isTRUE(control$paths$plots)) {
+    log_msg("Rendering figures from run directory...")
     tryCatch(
-      plot_psi_star_diagnostic(
-        dirs           = dirs,
-        PATHS          = PATHS,
-        location_names = location_names,
-        verbose        = control$logging$verbose
+      render_MOSAIC_figures(
+        dir_output = dir_output,
+        plots      = TRUE,
+        verbose    = control$logging$verbose
       ),
-      error = function(e) log_warn("psi_star diagnostic plot failed: %s", e$message)
+      error = function(e) log_warn("render_MOSAIC_figures failed: %s", e$message)
     )
   }
 

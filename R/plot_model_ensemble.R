@@ -1,3 +1,217 @@
+#' Assemble the masked prediction table from a mosaic_ensemble object
+#'
+#' Pure helper extracted from \code{plot_model_ensemble()}. Builds the tidy
+#' per-location prediction table (central series + dynamic CI pairs + observed)
+#' and applies the DISPLAY-ONLY boundary-artifact mask. This is the single
+#' source of truth for both the exported \code{predictions_*.csv} files and the
+#' lines drawn by \code{plot_model_ensemble()}, so the CSV and the plot are
+#' guaranteed identical.
+#'
+#' The returned data.frame schema (verbatim, in order) is:
+#' \code{location, date, metric, observed, predicted_central, predicted_mean,
+#' predicted_median, central_method, ci_<k>_lower, ci_<k>_upper} (dynamic CI
+#' pairs, one per envelope quantile pair). \code{metric} is a factor with levels
+#' \code{c("Suspected Cases", "Deaths")}.
+#'
+#' DISPLAY ONLY: the raw ensemble arrays / \code{*_mean} / \code{*_median}
+#' matrices on \code{ensemble} are never mutated, so any R2/bias/likelihood
+#' computed upstream from the raw object is unaffected by the mask.
+#'
+#' @param ensemble A \code{mosaic_ensemble} object from \code{calc_model_ensemble()}.
+#' @param central_method Central tendency for \code{predicted_central}. Scalar
+#'   or per-channel \code{c(cases=, deaths=)}; resolved via
+#'   \code{.mosaic_resolve_central_method()}. Default \code{"median"}.
+#' @param n_cases_warmup_mask Integer. Leading Suspected-Cases timesteps blanked
+#'   to \code{NA}. Default \code{2L}.
+#' @param mask_final_deaths_step Logical. Blank the final Deaths timestep.
+#'   Default \code{TRUE}.
+#' @param score_idx_cases,score_idx_deaths Integer (1-based) scored-window start
+#'   per channel. \code{NULL} (default) reads from \code{ensemble$artifact_mask}.
+#'
+#' @return A data.frame with the schema above.
+#' @noRd
+.mosaic_assemble_prediction_table <- function(ensemble,
+                                              central_method         = "median",
+                                              n_cases_warmup_mask    = 2L,
+                                              mask_final_deaths_step = TRUE,
+                                              score_idx_cases        = NULL,
+                                              score_idx_deaths       = NULL) {
+
+  if (!inherits(ensemble, "mosaic_ensemble"))
+    stop("ensemble must be a mosaic_ensemble object from calc_model_ensemble()")
+
+  central_method <- .mosaic_resolve_central_method(central_method)
+
+  cases_median  <- ensemble$cases_median
+  deaths_median <- ensemble$deaths_median
+  cases_mean    <- ensemble$cases_mean
+  deaths_mean   <- ensemble$deaths_mean
+  if (is.null(cases_mean))  cases_mean  <- cases_median
+  if (is.null(deaths_mean)) deaths_mean <- deaths_median
+  cases_central  <- if (central_method[["cases"]]  == "mean") cases_mean  else cases_median
+  deaths_central <- if (central_method[["deaths"]] == "mean") deaths_mean else deaths_median
+
+  obs_cases          <- ensemble$obs_cases
+  obs_deaths         <- ensemble$obs_deaths
+  location_names     <- ensemble$location_names
+  n_locations        <- ensemble$n_locations
+  n_time_points      <- ensemble$n_time_points
+  envelope_quantiles <- ensemble$envelope_quantiles
+  date_start         <- ensemble$date_start
+  date_stop          <- ensemble$date_stop
+  ci_bounds_cases    <- ensemble$ci_bounds$cases
+  ci_bounds_deaths   <- ensemble$ci_bounds$deaths
+
+  # Date axis (matches plot_model_ensemble()'s resolution exactly).
+  if (!is.null(date_start) && !is.null(date_stop)) {
+    dates <- seq(as.Date(date_start), as.Date(date_stop), length.out = n_time_points)
+  } else if (!is.null(date_start)) {
+    dates <- seq(as.Date(date_start), length.out = n_time_points, by = "week")
+  } else {
+    dates <- seq_len(n_time_points)
+  }
+
+  .extract_loc <- function(data, i) if (is.matrix(data)) data[i, ] else data
+
+  n_ci_pairs <- length(envelope_quantiles) / 2L
+
+  plot_data <- do.call(rbind, lapply(seq_len(n_locations), function(i) {
+    loc_df <- data.frame(
+      location          = location_names[i],
+      date              = rep(dates, 2L),
+      metric            = c(rep("Suspected Cases", n_time_points),
+                            rep("Deaths",          n_time_points)),
+      observed          = c(.extract_loc(obs_cases,    i),
+                            .extract_loc(obs_deaths,   i)),
+      predicted_central = c(.extract_loc(cases_central, i),
+                            .extract_loc(deaths_central, i)),
+      predicted_mean    = c(.extract_loc(cases_mean,   i),
+                            .extract_loc(deaths_mean,  i)),
+      predicted_median  = c(.extract_loc(cases_median, i),
+                            .extract_loc(deaths_median, i)),
+      central_method    = c(rep(central_method[["cases"]],  n_time_points),
+                            rep(central_method[["deaths"]], n_time_points)),
+      stringsAsFactors = FALSE
+    )
+
+    for (ci_idx in seq_len(n_ci_pairs)) {
+      lower_col <- paste0("ci_", ci_idx, "_lower")
+      upper_col <- paste0("ci_", ci_idx, "_upper")
+      loc_df[[lower_col]] <- c(ci_bounds_cases[[ci_idx]]$lower[i, ],
+                                ci_bounds_deaths[[ci_idx]]$lower[i, ])
+      loc_df[[upper_col]] <- c(ci_bounds_cases[[ci_idx]]$upper[i, ],
+                                ci_bounds_deaths[[ci_idx]]$upper[i, ])
+    }
+    loc_df
+  }))
+
+  plot_data$metric <- factor(plot_data$metric,
+                              levels = c("Suspected Cases", "Deaths"))
+
+  # ---------------------------------------------------------------------------
+  # Boundary-artifact mask (DISPLAY ONLY)
+  # ---------------------------------------------------------------------------
+  # Artifact 1 (mask_final_deaths_step): reported_deaths is written at [tick] on
+  #   an array of length nticks+1, so the final slot is never written and reads
+  #   as a drop-to-zero. Cases write at [tick+1] and are fine.
+  # Artifact 2 (n_cases_warmup_mask): the first ~1-2 reported cases steps are an
+  #   IC warm-up transient. The legitimate leading reporting-lag zeros in Deaths
+  #   (delta_reporting_deaths) are REAL and are deliberately NOT masked.
+
+  n_cases_warmup_mask <- as.integer(n_cases_warmup_mask)
+  if (length(n_cases_warmup_mask) != 1L || is.na(n_cases_warmup_mask) ||
+      n_cases_warmup_mask < 0L)
+    stop("n_cases_warmup_mask must be a single non-negative integer")
+
+  .resolve_score_idx <- function(arg, field) {
+    if (!is.null(arg)) {
+      v <- as.integer(arg)
+    } else {
+      v <- tryCatch(as.integer(ensemble$artifact_mask[[field]]), error = function(e) NA_integer_)
+    }
+    if (length(v) != 1L || is.na(v) || v < 1L) 1L else v
+  }
+  score_idx_cases  <- .resolve_score_idx(score_idx_cases,  "score_idx_cases")
+  score_idx_deaths <- .resolve_score_idx(score_idx_deaths, "score_idx_deaths")
+
+  if (isTRUE(mask_final_deaths_step) || n_cases_warmup_mask > 0L ||
+      score_idx_cases > 1L || score_idx_deaths > 1L) {
+    pred_cols <- c("predicted_central", "predicted_mean", "predicted_median")
+    ci_cols   <- grep("^ci_[0-9]+_(lower|upper)$", names(plot_data), value = TRUE)
+    mask_cols <- intersect(c(pred_cols, ci_cols), names(plot_data))
+
+    is_cases  <- plot_data$metric == "Suspected Cases"
+    is_deaths <- plot_data$metric == "Deaths"
+
+    rows_to_mask <- logical(nrow(plot_data))
+
+    cases_head <- max(n_cases_warmup_mask, score_idx_cases - 1L)
+    if (cases_head > 0L) {
+      k <- min(cases_head, n_time_points)
+      warmup_pos <- seq_len(k)
+      for (loc_i in location_names) {
+        sel <- which(plot_data$location == loc_i & is_cases)
+        if (length(sel) >= 1L) rows_to_mask[sel[warmup_pos]] <- TRUE
+      }
+    }
+
+    deaths_head <- score_idx_deaths - 1L
+    if (deaths_head > 0L) {
+      k <- min(deaths_head, n_time_points)
+      deaths_pos <- seq_len(k)
+      for (loc_i in location_names) {
+        sel <- which(plot_data$location == loc_i & is_deaths)
+        if (length(sel) >= 1L) rows_to_mask[sel[deaths_pos]] <- TRUE
+      }
+    }
+
+    if (isTRUE(mask_final_deaths_step) && n_time_points >= 1L) {
+      for (loc_i in location_names) {
+        sel <- which(plot_data$location == loc_i & is_deaths)
+        if (length(sel) >= 1L) rows_to_mask[sel[length(sel)]] <- TRUE
+      }
+    }
+
+    if (any(rows_to_mask)) {
+      for (cc in mask_cols) plot_data[rows_to_mask, cc] <- NA_real_
+    }
+  }
+
+  plot_data
+}
+
+#' Write per-location ensemble prediction CSVs
+#'
+#' Writes the assembled prediction table (one CSV per location) into
+#' \code{data_dir} as \code{predictions_<file_prefix>_<LOC>.csv}. This is the
+#' unconditional data-write path used by \code{run_MOSAIC()} (independent of
+#' plotting). The table is produced by \code{.mosaic_assemble_prediction_table()}.
+#'
+#' @param prediction_table data.frame from \code{.mosaic_assemble_prediction_table()}.
+#' @param data_dir Directory to write CSVs into (created if absent).
+#' @param file_prefix Filename prefix (e.g. \code{"ensemble"}, \code{"medoid"}).
+#' @param verbose Logical; print progress messages.
+#' @return Invisibly, the character vector of written file paths.
+#' @noRd
+.mosaic_write_prediction_csvs <- function(prediction_table, data_dir,
+                                          file_prefix = "ensemble",
+                                          verbose = TRUE) {
+  if (is.null(prediction_table) || nrow(prediction_table) == 0L)
+    return(invisible(character(0)))
+  if (!dir.exists(data_dir))
+    dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+  locs <- unique(as.character(prediction_table$location))
+  written <- character(0)
+  for (loc in locs) {
+    loc_df  <- prediction_table[as.character(prediction_table$location) == loc, ]
+    csv_out <- file.path(data_dir, paste0("predictions_", file_prefix, "_", loc, ".csv"))
+    utils::write.csv(loc_df, csv_out, row.names = FALSE)
+    written <- c(written, csv_out)
+    if (verbose) message("  Saved: ", csv_out)
+  }
+  invisible(written)
+}
+
 #' Plot Ensemble Predictions from a mosaic_ensemble Object
 #'
 #' @description
@@ -10,21 +224,21 @@
 #'   \code{\link{calc_model_ensemble}}.
 #' @param output_dir Character. Directory where plots are saved (and CSVs,
 #'   when \code{data_dir} is not provided). Created if it does not exist.
-#' @param data_dir Character. Directory where per-location prediction CSVs
-#'   are written when \code{save_predictions = TRUE}. Defaults to
-#'   \code{output_dir} for backwards compatibility. Pass a separate path
-#'   (e.g. \code{3_results/predictions}) to keep CSVs out of the figures
-#'   tree. Created if it does not exist.
+#' @param data_dir Character. Retained for back-compat. Formerly the directory
+#'   where per-location prediction CSVs were written; CSV writing has moved out
+#'   of this function (see \code{save_predictions}). Ignored.
 #' @param file_prefix Character. Prefix used in output filenames:
 #'   \code{predictions_<prefix>_<LOC>.pdf/csv} for per-location outputs and
 #'   \code{predictions_<prefix>_cases_all.pdf} / \code{_deaths_all.pdf} for
 #'   multi-location overview plots. Default \code{"ensemble"}.
 #' @param title_label Character. Leading label used in plot titles
 #'   (\code{"<title_label>: <LOC>"}). Default \code{"Posterior Ensemble"}.
-#' @param save_predictions Logical. Save per-location prediction CSVs. Default
-#'   \code{FALSE}. CSVs carry \code{predicted_central} (the plotted series),
-#'   \code{predicted_mean}, \code{predicted_median}, and a \code{central_method}
-#'   column so the choice is never ambiguous.
+#' @param save_predictions Logical. \strong{Deprecated} and now a no-op.
+#'   Prediction CSVs are written unconditionally by \code{run_MOSAIC()} via
+#'   \code{.mosaic_assemble_prediction_table()} /
+#'   \code{.mosaic_write_prediction_csvs()} (independent of plotting) and can be
+#'   regenerated by \code{\link{render_MOSAIC_figures}}. Passing \code{TRUE}
+#'   emits a one-time deprecation warning. Default \code{FALSE}.
 #' @param central_method Central tendency for the plotted/scored line:
 #'   \code{"median"} (default; lower calibration bias) or \code{"mean"}
 #'   (unbiased for expected counts, never collapses on sparse deaths, unmasks
@@ -54,6 +268,12 @@
 #'   value is read from \code{ensemble$artifact_mask$score_idx_*} so plots
 #'   automatically track the scored window the ensemble was built with. DISPLAY
 #'   ONLY (raw arrays untouched).
+#' @param prediction_table Optional precomputed prediction table (a data.frame
+#'   from \code{.mosaic_assemble_prediction_table()}). When supplied, the plotter
+#'   uses it directly instead of re-assembling from \code{ensemble}, guaranteeing
+#'   the rendered lines match an already-written CSV (the renderer path). When
+#'   \code{NULL} (default) the table is assembled internally with the masking
+#'   arguments above.
 #' @param verbose Logical. Print progress messages. Default \code{TRUE}.
 #'
 #' @return Invisibly returns a list with:
@@ -83,6 +303,7 @@ plot_model_ensemble <- function(ensemble,
                                 n_cases_warmup_mask    = 2L,
                                 score_idx_cases        = NULL,
                                 score_idx_deaths       = NULL,
+                                prediction_table       = NULL,
                                 verbose          = TRUE) {
 
   # ---------------------------------------------------------------------------
@@ -98,14 +319,21 @@ plot_model_ensemble <- function(ensemble,
   if (!dir.exists(output_dir))
     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
+  # save_predictions is deprecated: prediction CSVs are now written
+  # unconditionally by run_MOSAIC() via .mosaic_assemble_prediction_table() /
+  # .mosaic_write_prediction_csvs(), independent of plotting. The argument is
+  # retained as a no-op for back-compat; passing TRUE warns once.
+  if (isTRUE(save_predictions)) {
+    warning("`save_predictions` is deprecated and now a no-op. Prediction CSVs ",
+            "are written unconditionally by run_MOSAIC() (and can be regenerated ",
+            "by render_MOSAIC_figures()); plot_model_ensemble() no longer writes ",
+            "them. See .mosaic_assemble_prediction_table().", call. = FALSE)
+  }
+
   # Unpack ensemble fields
+  central_method     <- .mosaic_resolve_central_method(central_method)
   cases_median       <- ensemble$cases_median
   deaths_median      <- ensemble$deaths_median
-  # Central trajectory plotted + scored: mean or median per channel. The mean is
-  # the unbiased estimator of expected counts and never collapses on sparse
-  # deaths; the median reproduces historical plots. Both are kept for the CSV
-  # cross-walk. Fall back to median if an older ensemble lacks the *_mean field.
-  central_method     <- .mosaic_resolve_central_method(central_method)
   cases_mean         <- ensemble$cases_mean
   deaths_mean        <- ensemble$deaths_mean
   if (is.null(cases_mean))  cases_mean  <- cases_median
@@ -123,8 +351,6 @@ plot_model_ensemble <- function(ensemble,
   envelope_quantiles <- ensemble$envelope_quantiles
   date_start         <- ensemble$date_start
   date_stop          <- ensemble$date_stop
-  ci_bounds_cases    <- ensemble$ci_bounds$cases
-  ci_bounds_deaths   <- ensemble$ci_bounds$deaths
 
   # ---------------------------------------------------------------------------
   # Handle dates
@@ -148,80 +374,35 @@ plot_model_ensemble <- function(ensemble,
   .extract_loc <- function(data, i) if (is.matrix(data)) data[i, ] else data
 
   # ---------------------------------------------------------------------------
-  # Build tidy plot_data frame
+  # Build (or reuse) tidy plot_data frame
   # ---------------------------------------------------------------------------
+  # The masked prediction table is assembled by the pure helper
+  # .mosaic_assemble_prediction_table() so the plotted lines and the exported
+  # CSVs are guaranteed identical (single source of truth). A precomputed table
+  # may be passed via `prediction_table` (the renderer path); otherwise it is
+  # built here from the ensemble with the same masking arguments.
 
   if (verbose) message("Building plot data...")
 
+  if (!is.null(prediction_table)) {
+    plot_data <- prediction_table
+    plot_data$metric <- factor(as.character(plot_data$metric),
+                               levels = c("Suspected Cases", "Deaths"))
+  } else {
+    plot_data <- .mosaic_assemble_prediction_table(
+      ensemble               = ensemble,
+      central_method         = central_method,
+      n_cases_warmup_mask    = n_cases_warmup_mask,
+      mask_final_deaths_step = mask_final_deaths_step,
+      score_idx_cases        = score_idx_cases,
+      score_idx_deaths       = score_idx_deaths
+    )
+  }
+
   n_ci_pairs <- length(envelope_quantiles) / 2L
 
-  plot_data <- do.call(rbind, lapply(seq_len(n_locations), function(i) {
-    loc_df <- data.frame(
-      location         = location_names[i],
-      date             = rep(dates, 2L),
-      metric           = c(rep("Suspected Cases", n_time_points),
-                           rep("Deaths",          n_time_points)),
-      observed          = c(.extract_loc(obs_cases,    i),
-                            .extract_loc(obs_deaths,   i)),
-      # Canonical plotted/scored series (mean or median per channel).
-      predicted_central = c(.extract_loc(cases_central, i),
-                            .extract_loc(deaths_central, i)),
-      # Both tendencies retained so consumers can cross-walk regardless of choice;
-      # predicted_median stays the TRUE median (never mislabeled).
-      predicted_mean    = c(.extract_loc(cases_mean,   i),
-                            .extract_loc(deaths_mean,  i)),
-      predicted_median  = c(.extract_loc(cases_median, i),
-                            .extract_loc(deaths_median, i)),
-      central_method    = c(rep(central_method[["cases"]],  n_time_points),
-                            rep(central_method[["deaths"]], n_time_points)),
-      stringsAsFactors = FALSE
-    )
-
-    # Add CI bounds dynamically
-    for (ci_idx in seq_len(n_ci_pairs)) {
-      lower_col <- paste0("ci_", ci_idx, "_lower")
-      upper_col <- paste0("ci_", ci_idx, "_upper")
-      loc_df[[lower_col]] <- c(ci_bounds_cases[[ci_idx]]$lower[i, ],
-                                ci_bounds_deaths[[ci_idx]]$lower[i, ])
-      loc_df[[upper_col]] <- c(ci_bounds_cases[[ci_idx]]$upper[i, ],
-                                ci_bounds_deaths[[ci_idx]]$upper[i, ])
-    }
-    loc_df
-  }))
-
-  plot_data$metric <- factor(plot_data$metric,
-                              levels = c("Suspected Cases", "Deaths"))
-
-  # ---------------------------------------------------------------------------
-  # Boundary-artifact mask (DISPLAY ONLY)
-  # ---------------------------------------------------------------------------
-  #
-  # Two known laser-cholera engine boundary artifacts are blanked here so they
-  # do not appear in the exported predictions CSV or the rendered lines. This is
-  # purely cosmetic: it acts on the local plot_data frame ONLY. The raw ensemble
-  # arrays (cases_array/deaths_array) and the *_mean/*_median matrices on the
-  # `ensemble` object are NOT modified, so any R2/bias/likelihood computed by the
-  # caller from the raw object (e.g. run_MOSAIC's summary.json metrics) is
-  # provably unchanged whether the mask is on or off. The caption R2/bias below
-  # are likewise computed from the unmasked matrices, not from plot_data.
-  #
-  # Artifact 1 (mask_final_deaths_step): reported_deaths is written at [tick] on
-  #   an array of length nticks+1, so the final slot is never written and reads
-  #   as a drop-to-zero. Cases write at [tick+1] and are fine.
-  # Artifact 2 (n_cases_warmup_mask): the first ~1-2 reported cases steps are an
-  #   IC warm-up transient. The legitimate leading reporting-lag zeros in Deaths
-  #   (delta_reporting_deaths) are REAL and are deliberately NOT masked.
-  # Upstream laser-cholera issue tracks the engine-side fix.
-
-  n_cases_warmup_mask <- as.integer(n_cases_warmup_mask)
-  if (length(n_cases_warmup_mask) != 1L || is.na(n_cases_warmup_mask) ||
-      n_cases_warmup_mask < 0L)
-    stop("n_cases_warmup_mask must be a single non-negative integer")
-
-  # Per-channel scored-window starts. NULL => inherit from the ensemble's
-  # artifact_mask (so plots track the scored window the ensemble was built
-  # with); absent there => 1L (no blanking). Columns strictly before the index
-  # are blanked for DISPLAY ONLY.
+  # Re-derive the per-channel scored-window starts for the in-plot annotation
+  # masking below (the table itself is already masked by the helper).
   .resolve_score_idx <- function(arg, field) {
     if (!is.null(arg)) {
       v <- as.integer(arg)
@@ -232,71 +413,6 @@ plot_model_ensemble <- function(ensemble,
   }
   score_idx_cases  <- .resolve_score_idx(score_idx_cases,  "score_idx_cases")
   score_idx_deaths <- .resolve_score_idx(score_idx_deaths, "score_idx_deaths")
-
-  if (isTRUE(mask_final_deaths_step) || n_cases_warmup_mask > 0L ||
-      score_idx_cases > 1L || score_idx_deaths > 1L) {
-    pred_cols <- c("predicted_central", "predicted_mean", "predicted_median")
-    ci_cols   <- grep("^ci_[0-9]+_(lower|upper)$", names(plot_data), value = TRUE)
-    mask_cols <- intersect(c(pred_cols, ci_cols), names(plot_data))
-
-    # Per-(location, metric) the rows are in time order (rep(dates, 2L)), so the
-    # k-th row of a metric block is timestep k. Mask by relative position within
-    # each location x metric group rather than by date value.
-    is_cases  <- plot_data$metric == "Suspected Cases"
-    is_deaths <- plot_data$metric == "Deaths"
-
-    rows_to_mask <- logical(nrow(plot_data))
-
-    # Cases leading blank = max(warm-up, scored-window start - 1).
-    cases_head <- max(n_cases_warmup_mask, score_idx_cases - 1L)
-    if (cases_head > 0L) {
-      k <- min(cases_head, n_time_points)
-      warmup_pos <- seq_len(k)
-      for (loc_i in location_names) {
-        sel <- which(plot_data$location == loc_i & is_cases)
-        if (length(sel) >= 1L) rows_to_mask[sel[warmup_pos]] <- TRUE
-      }
-    }
-
-    # Deaths leading blank = scored-window start - 1 (deaths-era start).
-    deaths_head <- score_idx_deaths - 1L
-    if (deaths_head > 0L) {
-      k <- min(deaths_head, n_time_points)
-      deaths_pos <- seq_len(k)
-      for (loc_i in location_names) {
-        sel <- which(plot_data$location == loc_i & is_deaths)
-        if (length(sel) >= 1L) rows_to_mask[sel[deaths_pos]] <- TRUE
-      }
-    }
-
-    if (isTRUE(mask_final_deaths_step) && n_time_points >= 1L) {
-      for (loc_i in location_names) {
-        sel <- which(plot_data$location == loc_i & is_deaths)
-        if (length(sel) >= 1L) rows_to_mask[sel[length(sel)]] <- TRUE
-      }
-    }
-
-    if (any(rows_to_mask)) {
-      for (cc in mask_cols) plot_data[rows_to_mask, cc] <- NA_real_
-    }
-  }
-
-  # ---------------------------------------------------------------------------
-  # Save per-location prediction CSVs
-  # ---------------------------------------------------------------------------
-
-  if (save_predictions) {
-    csv_dir <- if (!is.null(data_dir) && nzchar(data_dir)) data_dir else output_dir
-    if (!dir.exists(csv_dir)) dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
-    if (verbose) message("Saving prediction CSVs to ", csv_dir, "...")
-    for (i in seq_len(n_locations)) {
-      loc     <- location_names[i]
-      loc_df  <- plot_data[plot_data$location == loc, ]
-      csv_out <- file.path(csv_dir, paste0("predictions_", file_prefix, "_", loc, ".csv"))
-      utils::write.csv(loc_df, csv_out, row.names = FALSE)
-      if (verbose) message("  Saved: ", csv_out)
-    }
-  }
 
   # ---------------------------------------------------------------------------
   # Plotting helpers

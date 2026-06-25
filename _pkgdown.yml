@@ -38,6 +38,7 @@ reference:
     contents:
     - run_LASER
     - run_MOSAIC
+    - render_MOSAIC_figures
     - make_LASER_config
     - sample_parameters
     - check_dependencies

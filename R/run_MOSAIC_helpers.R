@@ -13,6 +13,42 @@
 .MOSAIC_MAX_SIMULATIONS <- 100000000L
 
 # =============================================================================
+# Persisted-artifact schema stamping (Phase 1c)
+# =============================================================================
+
+# Schema version stamped on every persisted .rds run_MOSAIC() writes for the
+# standalone renderer (render_MOSAIC_figures()). Bump when the on-disk object
+# layout the renderer depends on changes incompatibly, so the renderer can
+# warn + skip rather than mis-render an old run directory.
+.MOSAIC_ARTIFACT_SCHEMA_VERSION <- 1L
+
+#' Stamp a persisted artifact with the renderer schema version
+#'
+#' Adds a \code{mosaic_schema_version} attribute (and class tag) so
+#' \code{render_MOSAIC_figures()} can validate compatibility of an on-disk
+#' \code{.rds} before consuming it. Pass-through for \code{NULL}.
+#'
+#' @param x The object to stamp (typically a \code{mosaic_ensemble} or
+#'   subset-optimization result list).
+#' @return \code{x} with \code{attr(x, "mosaic_schema_version")} set.
+#' @noRd
+.mosaic_stamp_artifact <- function(x) {
+  if (is.null(x)) return(x)
+  attr(x, "mosaic_schema_version") <- .MOSAIC_ARTIFACT_SCHEMA_VERSION
+  x
+}
+
+#' Read the renderer schema version off a persisted artifact
+#'
+#' @param x An object loaded from an \code{.rds}.
+#' @return Integer schema version, or \code{NA_integer_} when unstamped.
+#' @noRd
+.mosaic_artifact_schema_version <- function(x) {
+  v <- attr(x, "mosaic_schema_version")
+  if (is.null(v)) NA_integer_ else as.integer(v)
+}
+
+# =============================================================================
 # Transmission-parameter guardrail
 # =============================================================================
 

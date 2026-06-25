@@ -85,10 +85,13 @@ raw_metrics <- function(ens, channel = c("cases", "deaths")) {
   )
 }
 
-read_loc_csv <- function(dir, loc, prefix = "ensemble") {
-  f <- file.path(dir, paste0("predictions_", prefix, "_", loc, ".csv"))
-  expect_true(file.exists(f), info = paste("expected CSV:", f))
-  utils::read.csv(f, stringsAsFactors = FALSE)
+# The masking regression now exercises the pure assembly helper
+# .mosaic_assemble_prediction_table() directly (the masking lives there; the
+# CSV is just .mosaic_write_prediction_csvs() of its output). This avoids the
+# deprecated plot_model_ensemble(save_predictions=) and tests the data layer
+# the way run_MOSAIC() now uses it.
+assemble <- function(ens, ...) {
+  MOSAIC:::.mosaic_assemble_prediction_table(ens, ...)
 }
 
 # ---------------------------------------------------------------------------
@@ -96,37 +99,21 @@ read_loc_csv <- function(dir, loc, prefix = "ensemble") {
 # ---------------------------------------------------------------------------
 
 test_that("R2/bias from the raw ensemble are byte-identical with mask on vs off", {
-  skip_if_not_installed("ggplot2")
   ens <- make_test_ensemble()
 
-  # Metrics computed from the raw object BEFORE any plotting.
   m_cases_before  <- raw_metrics(ens, "cases")
   m_deaths_before <- raw_metrics(ens, "deaths")
 
-  out_dir <- file.path(tempdir(), "mask_test_metrics")
+  # Mask ON (default) and OFF -- neither touches the ensemble object.
+  invisible(assemble(ens, mask_final_deaths_step = TRUE,  n_cases_warmup_mask = 2L))
+  invisible(assemble(ens, mask_final_deaths_step = FALSE, n_cases_warmup_mask = 0L))
 
-  # Mask ON (default)
-  invisible(plot_model_ensemble(ens, output_dir = out_dir,
-                                save_predictions = FALSE,
-                                mask_final_deaths_step = TRUE,
-                                n_cases_warmup_mask = 2L,
-                                verbose = FALSE))
-
-  # Mask OFF
-  invisible(plot_model_ensemble(ens, output_dir = out_dir,
-                                save_predictions = FALSE,
-                                mask_final_deaths_step = FALSE,
-                                n_cases_warmup_mask = 0L,
-                                verbose = FALSE))
-
-  # The ensemble object itself must be untouched (matrices identical to fixture).
   ens_ref <- make_test_ensemble()
   expect_identical(ens$cases_mean,   ens_ref$cases_mean)
   expect_identical(ens$deaths_mean,  ens_ref$deaths_mean)
   expect_identical(ens$cases_median, ens_ref$cases_median)
   expect_identical(ens$deaths_median, ens_ref$deaths_median)
 
-  # Metrics recomputed from the raw object AFTER plotting are identical.
   m_cases_after  <- raw_metrics(ens, "cases")
   m_deaths_after <- raw_metrics(ens, "deaths")
 
@@ -137,54 +124,40 @@ test_that("R2/bias from the raw ensemble are byte-identical with mask on vs off"
 })
 
 # ---------------------------------------------------------------------------
-# (i) Boundary cells are NA in the exported predictions
+# (i) Boundary cells are NA in the assembled table
 # (iii)/(iv) Deaths reporting-lag zeros + interior values, and cases interior,
 #            are untouched
 # ---------------------------------------------------------------------------
 
-test_that("mask blanks deaths-final + cases-warmup in CSV and leaves the rest intact", {
-  skip_if_not_installed("ggplot2")
+test_that("mask blanks deaths-final + cases-warmup and leaves the rest intact", {
   ens <- make_test_ensemble()
   n_t <- ens$n_time_points
   warmup <- 2L
 
-  out_dir  <- file.path(tempdir(), "mask_test_csv_on")
-  data_dir <- file.path(out_dir, "predictions")
-
-  invisible(plot_model_ensemble(ens, output_dir = out_dir, data_dir = data_dir,
-                                save_predictions = TRUE,
-                                mask_final_deaths_step = TRUE,
-                                n_cases_warmup_mask = warmup,
-                                verbose = FALSE))
+  tbl <- assemble(ens, mask_final_deaths_step = TRUE, n_cases_warmup_mask = warmup)
 
   pred_cols <- c("predicted_central", "predicted_mean", "predicted_median",
                  "ci_1_lower", "ci_1_upper")
 
   for (loc in ens$location_names) {
-    df <- read_loc_csv(data_dir, loc)
+    df <- tbl[tbl$location == loc, ]
     cases  <- df[df$metric == "Suspected Cases", ]
     deaths <- df[df$metric == "Deaths", ]
 
-    # (i) cases warm-up steps blanked
     for (cc in pred_cols) {
       expect_true(all(is.na(cases[[cc]][seq_len(warmup)])),
                   info = paste("cases warm-up not NA:", loc, cc))
-      # (iv) cases interior untouched (finite)
       expect_true(all(is.finite(cases[[cc]][(warmup + 1L):n_t])),
                   info = paste("cases interior altered:", loc, cc))
     }
 
-    # (i) deaths final step blanked
     for (cc in pred_cols) {
       expect_true(is.na(deaths[[cc]][n_t]),
                   info = paste("deaths final not NA:", loc, cc))
     }
 
-    # (iii) deaths leading reporting-lag zeros are REAL and untouched.
-    # Fixture deaths = c(0,0,0,0,0, d6, d7, 0); steps 1-5 are legit zeros.
     expect_equal(deaths$predicted_central[1:5], rep(0, 5),
                  info = paste("deaths leading reporting-lag zeros masked:", loc))
-    # (iii) deaths interior non-final values untouched (steps 6,7 finite & >0)
     expect_true(all(is.finite(deaths$predicted_central[6:7])),
                 info = paste("deaths interior altered:", loc))
     expect_true(all(deaths$predicted_central[6:7] > 0))
@@ -192,39 +165,57 @@ test_that("mask blanks deaths-final + cases-warmup in CSV and leaves the rest in
 })
 
 test_that("mask is a no-op when both knobs are disabled", {
-  skip_if_not_installed("ggplot2")
   ens <- make_test_ensemble()
   n_t <- ens$n_time_points
 
-  out_dir  <- file.path(tempdir(), "mask_test_csv_off")
-  data_dir <- file.path(out_dir, "predictions")
-
-  invisible(plot_model_ensemble(ens, output_dir = out_dir, data_dir = data_dir,
-                                save_predictions = TRUE,
-                                mask_final_deaths_step = FALSE,
-                                n_cases_warmup_mask = 0L,
-                                verbose = FALSE))
+  tbl <- assemble(ens, mask_final_deaths_step = FALSE, n_cases_warmup_mask = 0L)
 
   for (loc in ens$location_names) {
-    df <- read_loc_csv(data_dir, loc)
+    df <- tbl[tbl$location == loc, ]
     cases  <- df[df$metric == "Suspected Cases", ]
     deaths <- df[df$metric == "Deaths", ]
-    # Nothing blanked: every predicted_central cell is finite (the fixture has
-    # no NA inputs).
     expect_true(all(is.finite(cases$predicted_central)))
     expect_true(all(is.finite(deaths$predicted_central)))
-    # The engine artifact (deaths final 0) is present, unmasked.
     expect_equal(deaths$predicted_central[n_t], 0)
   }
 })
 
 test_that("n_cases_warmup_mask validates its argument", {
-  skip_if_not_installed("ggplot2")
   ens <- make_test_ensemble()
-  out_dir <- file.path(tempdir(), "mask_test_validate")
   expect_error(
-    plot_model_ensemble(ens, output_dir = out_dir, verbose = FALSE,
-                        n_cases_warmup_mask = -1L),
+    assemble(ens, n_cases_warmup_mask = -1L),
     "non-negative integer"
   )
+})
+
+test_that("CSV written by .mosaic_write_prediction_csvs matches the assembled table", {
+  ens <- make_test_ensemble()
+  td  <- withr::local_tempdir()
+  tbl <- assemble(ens, mask_final_deaths_step = TRUE, n_cases_warmup_mask = 2L)
+  written <- MOSAIC:::.mosaic_write_prediction_csvs(tbl, data_dir = td,
+                                                    file_prefix = "ensemble",
+                                                    verbose = FALSE)
+  expect_length(written, length(ens$location_names))
+  for (loc in ens$location_names) {
+    f <- file.path(td, paste0("predictions_ensemble_", loc, ".csv"))
+    expect_true(file.exists(f))
+    df <- utils::read.csv(f, stringsAsFactors = FALSE)
+    ref <- tbl[as.character(tbl$location) == loc, ]
+    # Schema (column order) is the canonical CSV header.
+    expect_identical(names(df), names(ref))
+    expect_equal(df$predicted_central, ref$predicted_central)
+  }
+})
+
+test_that("deprecated save_predictions arg warns and writes no CSV", {
+  skip_if_not_installed("ggplot2")
+  ens <- make_test_ensemble()
+  td  <- withr::local_tempdir()
+  expect_warning(
+    plot_model_ensemble(ens, output_dir = td, save_predictions = TRUE,
+                        verbose = FALSE),
+    "deprecated"
+  )
+  # No CSV written by the plotter anymore.
+  expect_length(list.files(td, pattern = "\\.csv$"), 0L)
 })

@@ -13,9 +13,20 @@
 #' Significance is assessed via an asymptotic Gamma approximation of the null
 #' distribution (valid when n >= 100). Bars are coloured by significance level.
 #'
+#' The HSIC computation and the \code{parameter_sensitivity.csv} write live in
+#' \code{\link{calc_model_parameter_sensitivity}}; this function renders the
+#' ranked bar chart from that result. Pass a precomputed \code{sensitivity}
+#' object to avoid recomputing, or let the function compute it from
+#' \code{results_file}.
+#'
 #' @param results_file Path to samples.parquet file containing calibration results.
 #' @param priors_file Path to priors.json (used for parameter descriptions in labels).
-#' @param output_dir Directory to write the output figure and CSV.
+#' @param output_dir Directory to write the output figure. The CSV is written by
+#'   \code{\link{calc_model_parameter_sensitivity}}, not here.
+#' @param sensitivity Optional precomputed result list from
+#'   \code{\link{calc_model_parameter_sensitivity}} (\code{$sens_df},
+#'   \code{$subset_label}, \code{$n_used}). When supplied the recomputation is
+#'   skipped and the CSV is not (re)written.
 #' @param max_params Maximum number of parameters to display. Default 30.
 #' @param n_samples Maximum number of posterior draws to use. Samples are drawn with
 #'   replacement using importance weights. Default 2000.
@@ -32,7 +43,7 @@
 #'
 #' @return A data.frame with columns \code{parameter}, \code{hsic_r2},
 #'   \code{p_value}, \code{sig}, and \code{description} (invisibly). Writes a PNG
-#'   and CSV to \code{output_dir}.
+#'   to \code{output_dir}.
 #'
 #' @references
 #' Da Veiga S (2015). Global sensitivity analysis with dependence measures.
@@ -47,6 +58,7 @@
 plot_model_parameter_sensitivity <- function(results_file,
                                              priors_file = NULL,
                                              output_dir = ".",
+                                             sensitivity = NULL,
                                              max_params = 30,
                                              n_samples = 2000,
                                              kernel = "rbf",
@@ -54,202 +66,30 @@ plot_model_parameter_sensitivity <- function(results_file,
                                              subset_col = "is_best_subset",
                                              verbose = TRUE) {
 
-  if (!file.exists(results_file)) {
-    warning("Results file not found: ", results_file)
-    return(invisible(NULL))
-  }
-
-  results <- arrow::read_parquet(results_file)
-
-  # -----------------------------------------------------------------------
-  # Identify parameter columns
-  # -----------------------------------------------------------------------
-  meta_cols <- c("sim", "iter", "seed_sim", "seed_iter", "likelihood",
-                 "is_finite", "is_valid", "is_outlier", "is_retained",
-                 "is_best_subset", "is_best_subset_opt", "is_best_model",
-                 "weight_all", "weight_retained", "weight_best", "weight_best_opt",
-                 "N_j_initial")
-
-  param_cols <- setdiff(names(results), meta_cols)
-
-  # Filter to valid simulations with finite likelihood
-  sims <- results[results$is_finite == TRUE & is.finite(results$likelihood), ]
-  n_total <- nrow(sims)
-
-  if (n_total < 10) {
-    warning("Fewer than 10 valid simulations. Cannot compute sensitivity.")
-    return(invisible(NULL))
-  }
-
-  # Remove zero-variance columns (frozen / unsampled parameters)
-  vars <- apply(sims[, param_cols, drop = FALSE], 2, stats::var, na.rm = TRUE)
-  param_cols_active <- names(vars[vars > 0 & !is.na(vars)])
-  p <- length(param_cols_active)
-
-  if (p < 2) {
-    warning("Fewer than 2 active parameters. Cannot compute sensitivity.")
-    return(invisible(NULL))
-  }
-
-  # -----------------------------------------------------------------------
-  # Sample selection: prefer best_subset when weights are degenerate
-  # -----------------------------------------------------------------------
-  # Compute ESS of weight_retained to detect degenerate posteriors.
-  # ESS = (sum w)^2 / sum(w^2). When one sample dominates (ESS << n),
-  # importance-weighted resampling just replicates that sample, inflating
-  # all R2-HSIC values uniformly. In that case use is_best_subset directly.
-  .compute_ess <- function(w) {
-    w <- w[is.finite(w) & w > 0]
-    if (length(w) == 0) return(0)
-    calc_model_ess(w, method = "kish")
-  }
-
-  has_best_subset <- subset_col %in% names(results) &&
-                     any(as.logical(results[[subset_col]]), na.rm = TRUE)
-
-  w_retained <- if ("weight_retained" %in% names(sims)) sims$weight_retained else NULL
-  ess_retained <- if (!is.null(w_retained)) .compute_ess(w_retained) else 0
-  ess_threshold <- max(10, n_samples * 0.05)   # ESS must be >= 5% of requested n
-
-  if (ess_retained < ess_threshold && has_best_subset) {
-    # Degenerate weights: fall back to best_subset samples
-    sims_sub <- results[as.logical(results[[subset_col]]), ]
-    n_use <- nrow(sims_sub)
-    label_name <- if (identical(subset_col, "is_best_subset_opt")) "best_subset_opt" else "best_subset"
-    subset_label <- sprintf("%s (ESS of retained = %.0f < threshold %.0f)",
-                            label_name, ess_retained, ess_threshold)
-    # Use U-statistic at small n: V-stat positive bias is non-trivial when n < 200
-    estimator_type <- if (n_use < 200) "U-stat" else "V-stat"
-    if (verbose) {
-      log_msg(paste0("Warning: ESS of weight_retained = %.0f (n = %d). ",
-                     "Falling back to best_subset (n = %d, estimator = %s)."),
-              ess_retained, n_total, n_use, estimator_type)
-    }
-  } else {
-    # Normal path: importance-weighted resampling
-    weight_col <- if (!is.null(w_retained) && ess_retained >= ess_threshold) {
-      "weight_retained"
-    } else if ("weight_all" %in% names(sims) &&
-               any(is.finite(sims$weight_all) & sims$weight_all > 0)) {
-      "weight_all"
-    } else {
-      NULL
-    }
-
-    n_use <- min(n_samples, n_total)
-
-    if (!is.null(weight_col)) {
-      w <- sims[[weight_col]]
-      w[!is.finite(w) | w < 0] <- 0
-      idx <- sample(n_total, size = n_use, prob = w + .Machine$double.eps, replace = TRUE)
-    } else {
-      idx <- sample(n_total, size = n_use, replace = FALSE)
-    }
-
-    sims_sub <- sims[idx, ]
-    subset_label <- if (!is.null(weight_col)) "importance-weighted" else "uniform"
-    estimator_type <- "V-stat"
-  }
-
-  # Remove zero-variance columns again after subset selection (some params may
-  # be frozen in the best_subset that were variable in the full sample)
-  vars2 <- apply(sims_sub[, param_cols_active, drop = FALSE], 2,
-                 stats::var, na.rm = TRUE)
-  param_cols_active <- names(vars2[vars2 > 0 & !is.na(vars2)])
-  p <- length(param_cols_active)
-
-  if (p < 2) {
-    warning("Fewer than 2 active parameters after subset selection.")
-    return(invisible(NULL))
-  }
-
-  params_df <- as.data.frame(sims_sub[, param_cols_active, drop = FALSE])
-  y_vec     <- sims_sub$likelihood
-
-  if (verbose) {
-    log_msg("Computing HSIC sensitivity (n=%d, p=%d params, kernel=%s, estimator=%s)",
-            nrow(params_df), p, kernel, estimator_type)
-  }
-
-  # -----------------------------------------------------------------------
-  # Load parameter descriptions from priors.json
-  # -----------------------------------------------------------------------
-  descriptions <- stats::setNames(rep("", p), param_cols_active)
-
-  if (!is.null(priors_file) && file.exists(priors_file)) {
-    priors <- jsonlite::fromJSON(priors_file, simplifyVector = FALSE)
-
-    for (nm in param_cols_active) {
-      if (!is.null(priors$parameters_global[[nm]]$description)) {
-        descriptions[nm] <- priors$parameters_global[[nm]]$description
-      }
-      for (loc in names(priors$parameters_location)) {
-        if (!is.null(priors$parameters_location[[loc]][[nm]]$description)) {
-          descriptions[nm] <- priors$parameters_location[[loc]][[nm]]$description
-        }
-      }
-    }
-  }
-
-  # -----------------------------------------------------------------------
-  # Compute HSIC sensitivity indices
-  # -----------------------------------------------------------------------
-  hsic_result <- tryCatch({
-    res <- sensitivity::sensiHSIC(
-      model          = NULL,
-      X              = params_df,
-      kernelX        = kernel,
-      kernelY        = "rbf",
-      paramX         = NA,
-      paramY         = NA,
-      estimator.type = estimator_type,
-      test.method    = "No"   # significance computed separately via testHSIC
+  # Compute (and write the CSV) via the data-layer helper unless a precomputed
+  # result was supplied. The plot is a pure consumer of `sens_df`.
+  if (is.null(sensitivity)) {
+    sensitivity <- calc_model_parameter_sensitivity(
+      results_file = results_file,
+      priors_file  = priors_file,
+      output_dir   = output_dir,
+      n_samples    = n_samples,
+      kernel       = kernel,
+      test_method  = test_method,
+      subset_col   = subset_col,
+      verbose      = verbose
     )
-    res <- sensitivity::tell(res, y_vec)  # must capture return value
-    res
-  }, error = function(e) {
-    warning("HSIC computation failed: ", e$message)
-    NULL
-  })
+  }
 
-  if (is.null(hsic_result)) return(invisible(NULL))
+  if (is.null(sensitivity) || is.null(sensitivity$sens_df) ||
+      nrow(sensitivity$sens_df) == 0L) {
+    return(invisible(NULL))
+  }
 
-  # -----------------------------------------------------------------------
-  # Extract R²-HSIC indices  (res$S is a data.frame, column "original")
-  # -----------------------------------------------------------------------
-  hsic_r2_vals <- stats::setNames(hsic_result$S[, "original"], param_cols_active)
-
-  # -----------------------------------------------------------------------
-  # Significance testing  (testHSIC returns $pval data.frame, column 1)
-  # -----------------------------------------------------------------------
-  p_vals <- tryCatch({
-    test_res <- sensitivity::testHSIC(hsic_result, test.method = test_method)
-    stats::setNames(test_res$pval[, 1], param_cols_active)
-  }, error = function(e) {
-    warning("HSIC significance test failed: ", e$message,
-            ". Proceeding without p-values.")
-    stats::setNames(rep(NA_real_, p), param_cols_active)
-  })
-
-  sig_stars <- ifelse(is.na(p_vals), "",
-               ifelse(p_vals < 0.001, "***",
-               ifelse(p_vals < 0.01,  "**",
-               ifelse(p_vals < 0.05,  "*", ""))))
-
-  # -----------------------------------------------------------------------
-  # Build results data.frame
-  # -----------------------------------------------------------------------
-  sens_df <- data.frame(
-    parameter   = param_cols_active,
-    hsic_r2     = unname(hsic_r2_vals),
-    p_value     = unname(p_vals),
-    sig         = unname(sig_stars),
-    description = unname(descriptions[param_cols_active]),
-    stringsAsFactors = FALSE
-  )
-
-  sens_df <- sens_df[is.finite(sens_df$hsic_r2), ]
-  sens_df <- sens_df[order(-sens_df$hsic_r2), ]
+  sens_df      <- sensitivity$sens_df
+  subset_label <- sensitivity$subset_label %||% "importance-weighted"
+  n_used       <- sensitivity$n_used %||% nrow(sens_df)
+  p            <- nrow(sens_df)
 
   top_n <- min(max_params, nrow(sens_df))
   sens_top <- sens_df[seq_len(top_n), ]
@@ -320,7 +160,7 @@ plot_model_parameter_sensitivity <- function(results_file,
       title    = "Parameter Sensitivity (HSIC)",
       subtitle = sprintf(
         "Top %d of %d parameters by R\u00b2-HSIC with log-likelihood (%s, n = %d); %s",
-        top_n, p, subset_label, nrow(params_df), sig_note
+        top_n, p, subset_label, n_used, sig_note
       ),
       x = expression(R^2 * "-HSIC  (kernel independence measure)"),
       y = NULL
@@ -342,16 +182,6 @@ plot_model_parameter_sensitivity <- function(results_file,
                   dpi = 150, bg = "white")
 
   if (verbose) log_msg("Saved %s", out_file)
-
-  # -----------------------------------------------------------------------
-  # CSV output
-  # -----------------------------------------------------------------------
-  csv_file <- file.path(output_dir, "parameter_sensitivity.csv")
-  utils::write.csv(
-    sens_df[, c("parameter", "hsic_r2", "p_value", "sig", "description")],
-    csv_file, row.names = FALSE
-  )
-  if (verbose) log_msg("Saved %s", csv_file)
 
   invisible(sens_df)
 }

@@ -153,51 +153,40 @@ test_that("optimizer WIS objective is invariant to central_method (quantile-base
   expect_equal(w_med$evaluation_table$score, w_mn$evaluation_table$score)
 })
 
-# ---- Plot CSV labelling -----------------------------------------------------
+# ---- Prediction-table central_method labelling ------------------------------
+# Exercises the pure assembly helper (the single source of truth for both the
+# exported CSV and the plotted line), the way run_MOSAIC() now writes them.
 
-read_pred_csv <- function(dir, prefix, loc) {
-  utils::read.csv(file.path(dir, paste0("predictions_", prefix, "_", loc, ".csv")),
-                  stringsAsFactors = FALSE)
+assemble_pred <- function(ens, ...) {
+  MOSAIC:::.mosaic_assemble_prediction_table(ens, ...)
 }
 
-test_that("plot CSV: central_method='mean' makes predicted_central == predicted_mean", {
+test_that("table: central_method='mean' makes predicted_central == predicted_mean", {
   ens <- make_skew_ensemble(n_locs = 1)
-  td  <- withr::local_tempdir()
-  plot_model_ensemble(ens, output_dir = td, data_dir = td, file_prefix = "t",
-                      save_predictions = TRUE, central_method = "mean", verbose = FALSE)
-  df <- read_pred_csv(td, "t", "LOC1")
+  df  <- assemble_pred(ens, central_method = "mean")
   expect_true(all(c("predicted_central", "predicted_mean", "predicted_median",
                     "central_method") %in% names(df)))
   expect_equal(df$predicted_central, df$predicted_mean)
   expect_equal(unique(df$central_method), "mean")
   # predicted_median stays the TRUE median (deaths collapse), never mislabeled.
-  # na.rm: plot_model_ensemble masks the final deaths timestep (engine
-  # off-by-one) by default, so the last cell is NA in the CSV; that masked cell
-  # is irrelevant to the mean-vs-median routing check.
+  # na.rm: the helper masks the final deaths timestep (engine off-by-one) by
+  # default, so the last cell is NA; that masked cell is irrelevant here.
   deaths_rows <- df[df$metric == "Deaths", ]
   expect_true(any(deaths_rows$predicted_median == 0, na.rm = TRUE))
   expect_gt(sum(deaths_rows$predicted_central, na.rm = TRUE),
             sum(deaths_rows$predicted_median, na.rm = TRUE))
 })
 
-test_that("plot CSV: central_method='median' makes predicted_central == predicted_median", {
+test_that("table: central_method='median' makes predicted_central == predicted_median", {
   ens <- make_skew_ensemble(n_locs = 1)
-  td  <- withr::local_tempdir()
-  plot_model_ensemble(ens, output_dir = td, data_dir = td, file_prefix = "t",
-                      save_predictions = TRUE, central_method = "median", verbose = FALSE)
-  df <- read_pred_csv(td, "t", "LOC1")
+  df  <- assemble_pred(ens, central_method = "median")
   expect_equal(df$predicted_central, df$predicted_median)
   expect_equal(unique(df$central_method), "median")
 })
 
-test_that("plot CSV: per-channel central_method routes cases/deaths independently", {
+test_that("table: per-channel central_method routes cases/deaths independently", {
   ens <- make_skew_ensemble(n_locs = 1)
-  td  <- withr::local_tempdir()
-  plot_model_ensemble(ens, output_dir = td, data_dir = td, file_prefix = "t",
-                      save_predictions = TRUE,
-                      central_method = c(cases = "median", deaths = "mean"),
-                      verbose = FALSE)
-  df <- read_pred_csv(td, "t", "LOC1")
+  df  <- assemble_pred(ens, central_method = c(cases = "median", deaths = "mean"))
   cas <- df[df$metric == "Suspected Cases", ]
   dea <- df[df$metric == "Deaths", ]
   expect_equal(cas$predicted_central, cas$predicted_median)
@@ -206,29 +195,24 @@ test_that("plot CSV: per-channel central_method routes cases/deaths independentl
   expect_equal(unique(dea$central_method), "mean")
 })
 
-test_that("plot multi-location faceted paths run and label central correctly", {
+test_that("plot renders from a precomputed table and emits faceted PDFs (>1 loc)", {
+  skip_if_not_installed("ggplot2")
   ens <- make_skew_ensemble(n_locs = 3)
   td  <- withr::local_tempdir()
+  tbl <- assemble_pred(ens, central_method = "mean")
   expect_no_error(
-    plot_model_ensemble(ens, output_dir = td, data_dir = td, file_prefix = "m",
-                        save_predictions = TRUE, central_method = "mean", verbose = FALSE)
+    plot_model_ensemble(ens, output_dir = td, file_prefix = "m",
+                        central_method = "mean", prediction_table = tbl,
+                        verbose = FALSE)
   )
-  # faceted PDFs emitted for >1 location
   expect_true(file.exists(file.path(td, "predictions_m_cases_all.pdf")))
   expect_true(file.exists(file.path(td, "predictions_m_deaths_all.pdf")))
-  df <- read_pred_csv(td, "m", "LOC2")
-  expect_equal(df$predicted_central, df$predicted_mean)
 })
 
-test_that("plot falls back to median when ensemble lacks *_mean field", {
+test_that("table falls back to median when ensemble lacks *_mean field", {
   ens <- make_skew_ensemble(n_locs = 1)
   ens$cases_mean <- NULL; ens$deaths_mean <- NULL
-  td  <- withr::local_tempdir()
-  expect_no_error(
-    plot_model_ensemble(ens, output_dir = td, data_dir = td, file_prefix = "f",
-                        save_predictions = TRUE, central_method = "mean", verbose = FALSE)
-  )
-  df <- read_pred_csv(td, "f", "LOC1")
+  df <- assemble_pred(ens, central_method = "mean")
   # mean unavailable -> central + mean columns fall back to the median series
   expect_equal(df$predicted_central, df$predicted_median)
 })

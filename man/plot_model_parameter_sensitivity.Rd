@@ -8,6 +8,7 @@ plot_model_parameter_sensitivity(
   results_file,
   priors_file = NULL,
   output_dir = ".",
+  sensitivity = NULL,
   max_params = 30,
   n_samples = 2000,
   kernel = "rbf",
@@ -21,7 +22,13 @@ plot_model_parameter_sensitivity(
 
 \item{priors_file}{Path to priors.json (used for parameter descriptions in labels).}
 
-\item{output_dir}{Directory to write the output figure and CSV.}
+\item{output_dir}{Directory to write the output figure. The CSV is written by
+\code{\link{calc_model_parameter_sensitivity}}, not here.}
+
+\item{sensitivity}{Optional precomputed result list from
+\code{\link{calc_model_parameter_sensitivity}} (\code{$sens_df},
+\code{$subset_label}, \code{$n_used}). When supplied the recomputation is
+skipped and the CSV is not (re)written.}
 
 \item{max_params}{Maximum number of parameters to display. Default 30.}
 
@@ -45,7 +52,7 @@ optimizer-refined subset.}
 \value{
 A data.frame with columns \code{parameter}, \code{hsic_r2},
 \code{p_value}, \code{sig}, and \code{description} (invisibly). Writes a PNG
-and CSV to \code{output_dir}.
+to \code{output_dir}.
 }
 \description{
 Computes R²-HSIC (Hilbert-Schmidt Independence Criterion) between each sampled
@@ -61,6 +68,12 @@ log-likelihood is a deterministic function of that parameter alone.
 
 Significance is assessed via an asymptotic Gamma approximation of the null
 distribution (valid when n >= 100). Bars are coloured by significance level.
+
+The HSIC computation and the \code{parameter_sensitivity.csv} write live in
+\code{\link{calc_model_parameter_sensitivity}}; this function renders the
+ranked bar chart from that result. Pass a precomputed \code{sensitivity}
+object to avoid recomputing, or let the function compute it from
+\code{results_file}.
 }
 \references{
 Da Veiga S (2015). Global sensitivity analysis with dependence measures.

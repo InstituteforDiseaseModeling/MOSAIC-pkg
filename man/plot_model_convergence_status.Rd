@@ -4,13 +4,22 @@
 \alias{plot_model_convergence_status}
 \title{Plot model convergence status table}
 \usage{
-plot_model_convergence_status(results_dir, plots_dir = NULL, verbose = TRUE)
+plot_model_convergence_status(
+  results_dir,
+  plots_dir = NULL,
+  status = NULL,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{results_dir}{Path to results directory containing convergence diagnostics
 (expects either "convergence_diagnostics.json" or "convergence_diagnostics_loss.json")}
 
 \item{plots_dir}{Path to plots directory (default: "../plots" relative to results_dir)}
+
+\item{status}{Optional precomputed result list from
+\code{\link{calc_model_convergence_status}}. When supplied the recomputation
+and CSV write are skipped.}
 
 \item{verbose}{Logical indicating whether to print messages}
 }
@@ -23,6 +32,11 @@ pass/warn/fail indicators for each metric. Works with both likelihood-based
 and loss-based calibration methods by auto-detecting the appropriate diagnostics file.
 }
 \details{
+The status-table assembly and the \code{convergence_status.csv} write live in
+\code{\link{calc_model_convergence_status}}; this function renders the PDF
+table from that result. Pass a precomputed \code{status} object to skip
+recomputation (and the CSV write).
+
 The function automatically detects whether to use likelihood-based or loss-based
 diagnostics by checking for the presence of diagnostics files in this order:
 \itemize{

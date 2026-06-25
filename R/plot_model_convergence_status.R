@@ -4,9 +4,17 @@
 #' pass/warn/fail indicators for each metric. Works with both likelihood-based
 #' and loss-based calibration methods by auto-detecting the appropriate diagnostics file.
 #'
+#' The status-table assembly and the \code{convergence_status.csv} write live in
+#' \code{\link{calc_model_convergence_status}}; this function renders the PDF
+#' table from that result. Pass a precomputed \code{status} object to skip
+#' recomputation (and the CSV write).
+#'
 #' @param results_dir Path to results directory containing convergence diagnostics
 #'   (expects either "convergence_diagnostics.json" or "convergence_diagnostics_loss.json")
 #' @param plots_dir Path to plots directory (default: "../plots" relative to results_dir)
+#' @param status Optional precomputed result list from
+#'   \code{\link{calc_model_convergence_status}}. When supplied the recomputation
+#'   and CSV write are skipped.
 #' @param verbose Logical indicating whether to print messages
 #'
 #' @return Invisible NULL. Creates a PDF file with the convergence status table.
@@ -34,6 +42,7 @@
 #' }
 plot_model_convergence_status <- function(results_dir,
                                          plots_dir = NULL,
+                                         status = NULL,
                                          verbose = TRUE) {
 
     # --- I/O checks -------------------------------------------------------------
@@ -44,383 +53,30 @@ plot_model_convergence_status <- function(results_dir,
         if (verbose) message("Created plots directory: ", plots_dir)
     }
 
-    # Auto-detect diagnostics file (try likelihood-based first, then loss-based)
-    diagnostics_files <- c(
-        file.path(results_dir, "convergence_diagnostics.json"),          # Likelihood-based (calibration_test_10.R)
-        file.path(results_dir, "convergence_diagnostics_loss.json")      # Loss-based (older methods)
-    )
-
-    diagnostics_file <- NULL
-    for (file in diagnostics_files) {
-        if (file.exists(file)) {
-            diagnostics_file <- file
-            break
-        }
-    }
-
-    if (is.null(diagnostics_file)) {
-        stop("No convergence diagnostics file found. Expected one of:\n  - ",
-             paste(basename(diagnostics_files), collapse = "\n  - "))
-    }
-
-    if (verbose) message("Reading convergence diagnostics from: ", diagnostics_file)
-
-    # --- Read diagnostics -------------------------------------------------------
-    diagnostics <- jsonlite::read_json(diagnostics_file)
-
-    # --- Prepare data for table -------------------------------------------------
-    # Extract metrics with their status
-    metrics_data <- data.frame(
-        Metric = character(),
-        Description = character(),
-        Target = character(),
-        Value = character(),
-        Status = character(),
-        stringsAsFactors = FALSE
-    )
-
-    # Store display expressions separately since data.frame can't hold expressions properly
-    metric_expressions <- list()
-
-    # First add the custom rows as requested
-    # Row 1: N_sim - Total simulations that completed successfully
-    n_valid <- if (!is.null(diagnostics$summary$total_simulations_original)) {
-        # Count is_valid simulations from the summary
-        if (!is.null(diagnostics$summary$n_successful)) {
-            diagnostics$summary$n_successful
-        } else {
-            diagnostics$summary$total_simulations_original
-        }
-    } else {
-        NA
-    }
-
-    if (!is.na(n_valid)) {
-        metrics_data <- rbind(metrics_data, data.frame(
-            Metric = "N_sim",
-            Description = "Total number of simulations that completed successfully",
-            Target = "-",
-            Value = format(n_valid, big.mark = ","),
-            Status = "info",
-            stringsAsFactors = FALSE
-        ))
-        metric_expressions[[length(metric_expressions) + 1]] <- expression(bold(N[sim]))
-    }
-
-    # Row 2: N_retained - Number retained after removing non-finite and outliers
-    if (!is.null(diagnostics$summary$retained_simulations)) {
-        n_retained <- diagnostics$summary$retained_simulations
-        # No target for N_retained, just informational
-        target_retained <- "-"
-        # No status for N_retained, just a dash
-        status_retained <- "-"
-
-        metrics_data <- rbind(metrics_data, data.frame(
-            Metric = "N_retained",
-            Description = "Number of simulations retained after removing non-finite and outliers",
-            Target = target_retained,
-            Value = format(n_retained, big.mark = ","),
-            Status = status_retained,
-            stringsAsFactors = FALSE
-        ))
-        metric_expressions[[length(metric_expressions) + 1]] <- expression(bold(N[retained]))
-    }
-
-    # Note: Subset Selection row will be added after ESS_retained in the metric processing loop
-
-
-    # Process metrics in specific order for better table organization
-    # Order: ESS_retained, Subset Selection, B_size, ESS_best, A_B, cvw_B
-    if (verbose) message("Processing metrics in specified order...")
-
-    metric_order <- c("ess_retained", "B_size", "ess_best", "A_B", "cvw_B")
-
-    for (metric_name in metric_order) {
-        # Skip if metric doesn't exist
-        if (!(metric_name %in% names(diagnostics$metrics))) {
-            if (verbose) message("  Metric not found, skipping: ", metric_name)
-            next
-        }
-
-        metric <- diagnostics$metrics[[metric_name]]
-        if (verbose) message("  Processing metric: ", metric_name)
-
-        # Safety check: ensure metric has required structure
-        if (is.null(metric) || (!is.list(metric) && !is.atomic(metric))) {
-            if (verbose) message("    Skipping metric with invalid structure: ", metric_name)
-            next
-        }
-
-        # Ensure metric has a value field (create if missing)
-        if (is.null(metric$value)) {
-            if (verbose) message("    Metric missing value field, using metric as value: ", metric_name)
-            metric <- list(value = metric, status = "info", description = metric_name)
-        }
-
-        # Get corresponding target if exists
-        target_value <- NA
-        if (metric_name %in% c("ess_all", "ess_retained")) {
-            # No target for ESS_retained (informational only)
-            target_value <- "-"
-            # Status comes from diagnostics (should be "-")
-        } else if (metric_name == "ess_best") {
-            # ESS_best uses ess_best target
-            target_value <- paste(">=", diagnostics$targets$ess_best$value)
-        } else if (metric_name == "A_B") {
-            # A_B uses A_best target
-            target_value <- paste(">=", diagnostics$targets$A_best$value)
-        } else if (metric_name == "cvw_B") {
-            # cvw_B uses cvw_best target
-            target_value <- paste("<=", diagnostics$targets$cvw_best$value)
-        } else if (metric_name == "B_size") {
-            # B_size uses ess_best target (same as ESS_B)
-            target_value <- paste(">=", diagnostics$targets$ess_best$value)
-        } else {
-            target_value <- "-"
-        }
-
-        # Format value
-        formatted_value <- if (is.numeric(metric$value)) {
-            if (metric$value >= 100) {
-                format(round(metric$value, 0), scientific = FALSE)
-            } else if (metric$value >= 1) {
-                format(round(metric$value, 2), scientific = FALSE)
-            } else {
-                format(round(metric$value, 4), scientific = FALSE)
-            }
-        } else {
-            as.character(metric$value)
-        }
-
-        # Create display name with better descriptions (method-agnostic)
-        display_name <- switch(metric_name,
-            "ess_all" = "ESS_retained",
-            "ess_retained" = "ESS_retained",
-            "ess_best" = "ESS_B",
-            "A_B" = "A_B",
-            "cvw_B" = "CV_B",
-            "B_size" = "Best Subset (B)",
-            metric_name
+    # --- Assemble the status table (data layer) ---------------------------------
+    # The table assembly + convergence_status.csv write live in
+    # calc_model_convergence_status(). The plot is a pure consumer. A precomputed
+    # `status` skips recomputation (and the CSV write).
+    if (is.null(status)) {
+        status <- calc_model_convergence_status(
+            results_dir = results_dir,
+            output_dir  = plots_dir,
+            verbose     = verbose
         )
-
-        # Create corresponding expression for rendering
-        display_expression <- switch(metric_name,
-            "ess_all" = expression(bold(ESS[retained])),
-            "ess_retained" = expression(bold(ESS[retained])),
-            "ess_best" = expression(bold(ESS[B])),
-            "A_B" = expression(bold(A[B])),
-            "cvw_B" = expression(bold(CV[B])),
-            "B_size" = expression(bold("Best Subset (B)")),
-            NULL
-        )
-
-        # Override with clearer descriptions (method-agnostic)
-        better_description <- switch(metric_name,
-            "ess_all" = "Effective sample size across retained simulations",
-            "ess_retained" = "Effective sample size across retained simulations",
-            "ess_best" = "Effective sample size in best subset",
-            "A_B" = "Agreement between simulations in best subset",
-            "cvw_B" = "Variability of weights in best subset",
-            "B_size" = "Number of simulations in best performing subset (lower bound)",
-            # Fallback to provided description or metric name
-            if (!is.null(metric$description)) metric$description else metric_name
-        )
-
-        # Ensure all variables are non-null and have content
-        if (is.null(display_name) || length(display_name) == 0) display_name <- metric_name
-        if (is.null(better_description) || length(better_description) == 0) better_description <- metric_name
-        if (is.null(target_value) || length(target_value) == 0) target_value <- "-"
-        if (is.null(formatted_value) || length(formatted_value) == 0) formatted_value <- "N/A"
-        if (is.null(metric$status) || length(metric$status) == 0) metric$status <- "info"
-
-        # Create new row with error handling
-        tryCatch({
-            new_row <- data.frame(
-                Metric = display_name,
-                Description = better_description,
-                Target = target_value,
-                Value = formatted_value,
-                Status = metric$status,
-                stringsAsFactors = FALSE
-            )
-            metrics_data <- rbind(metrics_data, new_row)
-
-            # Add the expression to the list if available
-            if (!is.null(display_expression)) {
-                metric_expressions[[length(metric_expressions) + 1]] <- display_expression
-            }
-        }, error = function(e) {
-            if (verbose) {
-                message("    Error creating row for metric: ", metric_name)
-                message("    display_name: ", paste(display_name, collapse=", "))
-                message("    better_description: ", paste(better_description, collapse=", "))
-                message("    target_value: ", paste(target_value, collapse=", "))
-                message("    formatted_value: ", paste(formatted_value, collapse=", "))
-                message("    status: ", paste(metric$status, collapse=", "))
-                message("    Error: ", e$message)
-            }
-        })
-
-        # Add Subset Selection row after ESS_retained
-        if (metric_name == "ess_retained" && !is.null(diagnostics$summary$percentile_used)) {
-            percentile_val <- diagnostics$summary$percentile_used
-            tier_used <- diagnostics$summary$convergence_tier
-
-            # Get target for max percentile from diagnostics
-            # Check for both old and new target names for backward compatibility
-            target_percentile <- if (!is.null(diagnostics$targets$percentile_max$value)) {
-                diagnostics$targets$percentile_max$value  # Backward compat (old percentile-based)
-            } else if (!is.null(diagnostics$targets$max_percentile$value)) {
-                diagnostics$targets$max_percentile$value  # Backward compat (old percentile-based)
-            } else if (!is.null(diagnostics$targets$max_best_subset$value)) {
-                # NEW: Convert max_best_subset (absolute count) to percentile
-                n_retained <- diagnostics$summary$retained_simulations
-                (diagnostics$targets$max_best_subset$value / n_retained) * 100
-            } else {
-                5.0  # Default 5%
-            }
-
-            # Format the display value
-            percentile_display <- sprintf("%.1f%%", percentile_val)
-
-            # Calculate status based ONLY on percentile vs target (no tier logic)
-            # This ensures status reflects quality of result, not which criteria set was used
-            percentile_status <- if (percentile_val <= target_percentile) {
-                "pass"
-            } else if (percentile_val <= target_percentile * 1.5) {
-                "warn"
-            } else {
-                "fail"
-            }
-
-            metrics_data <- rbind(metrics_data, data.frame(
-                Metric = "Subset Selection",
-                Description = "Percentile of likelihood distribution used for best subset",
-                Target = sprintf("<=%.1f%%", target_percentile),
-                Value = percentile_display,
-                Status = percentile_status,
-                stringsAsFactors = FALSE
-            ))
-            metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Subset Selection"))
-        }
     }
 
-    # Add Parameter ESS summary row
-    # Initialize variables for parameter table (used later regardless of path)
-    param_ess_data <- NULL
-    n_params <- NA
-    n_pass <- NA
-
-    # Check if param_ess is in diagnostics.metrics (new format)
-    if (!is.null(diagnostics$metrics$param_ess)) {
-        param_metric <- diagnostics$metrics$param_ess
-
-        # Get targets from diagnostics
-        target_ess_param <- diagnostics$targets$ess_param$value
-        target_ess_param_prop <- diagnostics$targets$ess_param_prop$value
-
-        # Format display value
-        pct_pass_display <- sprintf("%.0f%% (%d/%d >= %.0f)",
-                                   param_metric$value * 100,
-                                   param_metric$n_pass,
-                                   param_metric$n_total,
-                                   target_ess_param)
-
-        # Status comes from diagnostics (no local calculation)
-        param_ess_status <- param_metric$status
-
-        # Also load CSV file for parameter table if it exists
-        param_ess_file <- file.path(results_dir, "parameter_ess.csv")
-        if (file.exists(param_ess_file)) {
-            param_ess_data <- read.csv(param_ess_file, stringsAsFactors = FALSE)
-            n_params <- param_metric$n_total
-            n_pass <- param_metric$n_pass
-        }
-
-        metrics_data <- rbind(metrics_data, data.frame(
-            Metric = "Parameter ESS",
-            Description = "Proportion of parameters with adequate effective sample size",
-            Target = sprintf(">=%.0f%%", target_ess_param_prop * 100),
-            Value = pct_pass_display,
-            Status = param_ess_status,
-            stringsAsFactors = FALSE
-        ))
-        metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Parameter ESS"))
-
-        if (verbose) message("Added Parameter ESS summary from diagnostics: ", pct_pass_display)
-
-    } else {
-        # Backward compatibility: Try to read parameter_ess.csv file if it exists
-        param_ess_file <- file.path(results_dir, "parameter_ess.csv")
-
-        if (file.exists(param_ess_file)) {
-            param_ess_data <- read.csv(param_ess_file, stringsAsFactors = FALSE)
-
-            # Get targets from diagnostics
-            target_ess_param <- if (!is.null(diagnostics$targets$ess_param$value)) {
-                diagnostics$targets$ess_param$value
-            } else {
-                100  # Default target
-            }
-
-            target_ess_param_prop <- if (!is.null(diagnostics$targets$ess_param_prop$value)) {
-                diagnostics$targets$ess_param_prop$value
-            } else {
-                0.90  # Default 90%
-            }
-
-            # Calculate summary statistics (for backward compatibility)
-            n_params <- nrow(param_ess_data)
-            n_pass <- sum(param_ess_data$ess_marginal >= target_ess_param, na.rm = TRUE)
-            pct_pass <- (n_pass / n_params) * 100
-
-            # Format display value
-            param_ess_display <- sprintf("%.0f%% (%d/%d >= %.0f)",
-                                        pct_pass, n_pass, n_params, target_ess_param)
-
-            # Calculate status (for backward compatibility)
-            param_ess_status <- if (pct_pass/100 >= target_ess_param_prop) "pass"
-                               else if (pct_pass/100 >= target_ess_param_prop * 0.8) "warn"
-                               else "fail"
-
-            metrics_data <- rbind(metrics_data, data.frame(
-                Metric = "Parameter ESS",
-                Description = "Proportion of parameters with adequate effective sample size",
-                Target = sprintf(">=%.0f%%", target_ess_param_prop * 100),
-                Value = param_ess_display,
-                Status = param_ess_status,
-                stringsAsFactors = FALSE
-            ))
-            metric_expressions[[length(metric_expressions) + 1]] <- expression(bold("Parameter ESS"))
-
-            if (verbose) message("Added Parameter ESS summary from file (legacy): ", param_ess_display)
-        } else {
-            if (verbose) message("Parameter ESS not found in diagnostics or file")
-        }
-    }
-
-    # Check if we have any data to plot
-    if (nrow(metrics_data) == 0) {
-        if (verbose) {
-            message("No metrics data to plot. Available metrics in diagnostics:")
-            message("  ", paste(names(diagnostics$metrics), collapse = ", "))
-        }
+    if (is.null(status) || is.null(status$metrics_data) ||
+        nrow(status$metrics_data) == 0) {
         stop("No valid metrics found to create convergence status plot")
     }
 
-    if (verbose) message("Successfully processed ", nrow(metrics_data), " metrics")
-
-    # Save companion CSV
-    csv_out <- data.frame(
-        metric = metrics_data$Metric,
-        description = metrics_data$Description,
-        value = metrics_data$Value,
-        target = metrics_data$Target,
-        status = metrics_data$Status,
-        stringsAsFactors = FALSE
-    )
-    csv_file <- file.path(plots_dir, "convergence_status.csv")
-    utils::write.csv(csv_out, csv_file, row.names = FALSE)
+    metrics_data       <- status$metrics_data
+    metric_expressions <- status$metric_expressions
+    diagnostics        <- status$diagnostics
+    param_ess_data     <- status$param_ess_data
+    n_params           <- status$n_params
+    n_pass             <- status$n_pass
+    target_ess_param   <- status$target_ess_param
 
     # --- Create plot ------------------------------------------------------------
     # Increased height to accommodate parameter table, new B_size_upper row, and footer
