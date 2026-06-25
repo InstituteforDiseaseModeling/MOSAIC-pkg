@@ -48,6 +48,58 @@
   if (is.null(v)) NA_integer_ else as.integer(v)
 }
 
+#' Persist the engine spatial-structure arrays for the "spatial" figure group
+#'
+#' Extracts the element-wise-median spatial arrays carried on a
+#' \code{mosaic_ensemble} (\code{spatial_hazard_ensemble} J x T,
+#' \code{coupling_ensemble} J x J, \code{pi_ij_ensemble} J x J; aggregated
+#' across the posterior-ensemble members, DM#5) and writes them to
+#' \code{2_calibration/} as schema-stamped \code{.rds} objects in config order.
+#' Each array is wrapped with its \code{location_name} labels and an
+#' \code{estimator} tag (\code{"ensemble_median"} vs \code{"medoid_single"}).
+#' Missing arrays (engine without \code{DerivedValues}) are silently skipped.
+#'
+#' @param ensemble A \code{mosaic_ensemble} object.
+#' @param dirs The directory list from \code{.mosaic_ensure_dir_tree()}.
+#' @param log_msg,log_warn Logging callbacks.
+#' @param estimator Character label recorded on each artifact.
+#' @return Invisibly \code{TRUE} if anything was written, else \code{FALSE}.
+#' @noRd
+.mosaic_persist_spatial_artifacts <- function(ensemble, dirs, log_msg, log_warn,
+                                              estimator = "ensemble_median") {
+  if (is.null(ensemble)) return(invisible(FALSE))
+  wrote <- FALSE
+
+  .write_one <- function(arr, file, kind) {
+    if (is.null(arr)) return(invisible(FALSE))
+    obj <- list(
+      array         = arr,
+      location_name = ensemble$location_names,
+      estimator     = estimator,
+      kind          = kind,
+      date_start    = ensemble$date_start,
+      date_stop     = ensemble$date_stop,
+      n_members     = ensemble$n_param_sets
+    )
+    tryCatch({
+      saveRDS(.mosaic_stamp_artifact(obj), file.path(dirs$calibration, file))
+      log_msg("Saved 2_calibration/%s", file)
+      TRUE
+    }, error = function(e) {
+      log_warn("%s save failed: %s", file, e$message); FALSE
+    })
+  }
+
+  if (.write_one(ensemble$spatial_hazard_ensemble,
+                 "spatial_hazard_ensemble.rds", "spatial_hazard")) wrote <- TRUE
+  if (.write_one(ensemble$coupling_ensemble,
+                 "coupling_ensemble.rds", "coupling")) wrote <- TRUE
+  if (.write_one(ensemble$pi_ij_ensemble,
+                 "pi_ij_ensemble.rds", "pi_ij")) wrote <- TRUE
+
+  invisible(wrote)
+}
+
 # =============================================================================
 # Transmission-parameter guardrail
 # =============================================================================
@@ -948,7 +1000,8 @@
     res_fig_post       = file.path(dir_output, "3_results/figures/posterior"),
     res_fig_post_detail = file.path(dir_output, "3_results/figures/posterior/detail"),
     res_fig_pred       = file.path(dir_output, "3_results/figures/predictions"),
-    res_fig_ppc        = file.path(dir_output, "3_results/figures/ppc")
+    res_fig_ppc        = file.path(dir_output, "3_results/figures/ppc"),
+    res_fig_spatial    = file.path(dir_output, "3_results/figures/spatial")
   )
 
   if (clean_output && dir.exists(d$root)) {
@@ -2999,6 +3052,16 @@
       r <- raw[[i]]
       meta <- task_meta[[i]]
       if (isTRUE(r$success)) {
+        # Rebuild a nested-list array returned by the Dask worker
+        # (numpy.tolist()) into an R matrix; NULL when the worker omitted the
+        # field (engine without DerivedValues). spatial_hazard is J x T,
+        # coupling/pi_ij are J x J -- each is a list of `nrow` row-lists, so
+        # byrow = TRUE reproduces the engine orientation, matching the local
+        # PSOCK path (F1 lockstep).
+        .relist <- function(x) {
+          if (is.null(x) || length(x) == 0L) return(NULL)
+          matrix(unlist(x), nrow = length(x), byrow = TRUE)
+        }
         list(
           param_idx = meta$param_idx,
           stoch_idx = meta$stoch_idx,
@@ -3007,6 +3070,9 @@
                                   nrow = length(r$reported_cases), byrow = TRUE),
           reported_deaths = matrix(unlist(r$reported_deaths),
                                   nrow = length(r$reported_deaths), byrow = TRUE),
+          spatial_hazard = .relist(r$spatial_hazard),
+          coupling       = .relist(r$coupling),
+          pi_ij          = .relist(r$pi_ij),
           success = TRUE
         )
       } else {

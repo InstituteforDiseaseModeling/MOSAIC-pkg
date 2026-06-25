@@ -28,7 +28,8 @@
 #' @param which Character vector selecting figure groups to render, or
 #'   \code{NULL} (default) for all. Valid groups: \code{"convergence"},
 #'   \code{"posterior"}, \code{"predictions"}, \code{"ppc"},
-#'   \code{"sensitivity"}, \code{"psi_star"}, \code{"parameters"}.
+#'   \code{"sensitivity"}, \code{"psi_star"}, \code{"parameters"},
+#'   \code{"spatial"}.
 #' @param plots Logical. Master switch. When \code{FALSE} the function returns
 #'   immediately without rendering (mirrors \code{control$paths$plots}). Default
 #'   \code{TRUE}.
@@ -57,7 +58,7 @@ render_MOSAIC_figures <- function(dir_output,
     stop("dir_output does not exist: ", dir_output)
 
   valid_groups <- c("convergence", "posterior", "predictions", "ppc",
-                    "sensitivity", "psi_star", "parameters")
+                    "sensitivity", "psi_star", "parameters", "spatial")
   if (is.null(which)) {
     which <- valid_groups
   } else {
@@ -426,6 +427,175 @@ render_MOSAIC_figures <- function(dir_output,
     }
   }
 
+  # ===========================================================================
+  # SPATIAL (mobility figs 1-4 from config.json; hazard/coupling figs 5-6 from
+  # persisted engine arrays). Pure read-render (P5): config + .rds + a packaged
+  # basemap only -- never a simulation or a GeoBoundaries API call.
+  # ===========================================================================
+  if ("spatial" %in% which) {
+    attempted["spatial"] <- TRUE
+    .vmsg("Rendering spatial-structure figures...")
+
+    out_dir <- dirs$res_fig_spatial
+    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+    .save_fig <- function(p, file, width = 8, height = 6) {
+      tryCatch(
+        ggplot2::ggsave(file.path(out_dir, file), plot = p,
+                        width = width, height = height, dpi = 200),
+        error = function(e) warning("spatial: failed to save ", file, " (",
+                                    conditionMessage(e), ")", call. = FALSE))
+    }
+
+    # --- Load config.json -----------------------------------------------------
+    cfg <- NULL
+    cj <- file.path(dirs$inputs, "config.json")
+    if (file.exists(cj)) {
+      cfg <- tryCatch(jsonlite::fromJSON(cj, simplifyVector = TRUE),
+                      error = function(e) NULL)
+    }
+
+    if (is.null(cfg)) {
+      warning("spatial: 1_inputs/config.json missing or unreadable; ",
+              "skipping mobility figures.", call. = FALSE)
+    } else {
+      mf <- tryCatch(calc_mobility_flux(cfg), error = function(e) {
+        warning("spatial: calc_mobility_flux failed (", conditionMessage(e),
+                "); skipping mobility figures.", call. = FALSE)
+        NULL
+      })
+
+      if (!is.null(mf)) {
+        # Fig 1: pi_ij. Prefer the persisted ENGINE pi_ij over the R recompute
+        # when present (F4); reconcile its diagonal to NA for display.
+        pi_disp <- mf$pi
+        pij_art <- .load_rds(file.path(dirs$calibration, "pi_ij_ensemble.rds"),
+                             "engine pi_ij")
+        if (!is.null(pij_art) && is.list(pij_art) && !is.null(pij_art$array)) {
+          pe <- pij_art$array
+          if (is.matrix(pe) && all(dim(pe) == dim(mf$pi))) {
+            diag(pe) <- NA_real_
+            ln <- pij_art$location_name %||% mf$location_name
+            dimnames(pe) <- list(ln, ln)
+            pi_disp <- pe
+          }
+        }
+        pi_lat <- mf$coords[, "latitude"]
+        tryCatch(.save_fig(plot_diffusion_pi(pi_disp,
+                                             rownames(pi_disp) %||% mf$location_name,
+                                             latitude = pi_lat),
+                           "diffusion_pi.png", width = 9, height = 9),
+                 error = function(e) warning("spatial: diffusion_pi failed: ",
+                                             conditionMessage(e), call. = FALSE))
+
+        # Fig 2: departure tau (+ CI if artifact present).
+        tau_ci <- NULL
+        tau_ci_file <- file.path(dirs$inputs, "mobility_tau_ci.csv")
+        if (file.exists(tau_ci_file)) {
+          tau_ci <- tryCatch(utils::read.csv(tau_ci_file, stringsAsFactors = FALSE),
+                             error = function(e) NULL)
+        } else {
+          warning("spatial: mobility_tau_ci.csv not found; tau plot is ",
+                  "point-only.", call. = FALSE)
+        }
+        tryCatch(.save_fig(plot_departure_tau(mf$tau, mf$N, mf$location_name, ci = tau_ci),
+                           "departure_tau.png", width = 7, height = 9),
+                 error = function(e) warning("spatial: departure_tau failed: ",
+                                             conditionMessage(e), call. = FALSE))
+
+        # Fig 3: modeled flux matrix.
+        tryCatch(.save_fig(plot_mobility_flux_matrix(mf$flux, mf$location_name,
+                                                     latitude = mf$coords[, "latitude"]),
+                           "mobility_flux_matrix.png", width = 9, height = 9),
+                 error = function(e) warning("spatial: flux_matrix failed: ",
+                                             conditionMessage(e), call. = FALSE))
+
+        # Fig 4: mobility network over the packaged Africa basemap (or
+        # centroid-only when no basemap matches). Never an API call (P5).
+        basemap <- .mosaic_load_spatial_basemap(mf$location_name, verbose)
+        tryCatch(.save_fig(plot_mobility_flux_network(mf$flux, mf$coords,
+                                                      mf$location_name,
+                                                      basemap = basemap),
+                           "mobility_flux_network.png", width = 9, height = 9),
+                 error = function(e) warning("spatial: flux_network failed: ",
+                                             conditionMessage(e), call. = FALSE))
+      }
+    }
+
+    # --- Fig 5: spatial hazard (engine array, element-wise median) ------------
+    sh_art <- .load_rds(file.path(dirs$calibration, "spatial_hazard_ensemble.rds"),
+                        "spatial hazard")
+    if (!is.null(sh_art) && is.list(sh_art) && !is.null(sh_art$array)) {
+      H <- sh_art$array
+      if (is.matrix(H)) {
+        if (is.null(rownames(H)) && !is.null(sh_art$location_name) &&
+            nrow(H) == length(sh_art$location_name))
+          rownames(H) <- sh_art$location_name
+        tryCatch(.save_fig(plot_spatial_hazard(H), "spatial_hazard.png",
+                           width = 10, height = 7),
+                 error = function(e) warning("spatial: hazard plot failed: ",
+                                             conditionMessage(e), call. = FALSE))
+      }
+    }
+
+    # --- Fig 6: coupling C_ij (engine array, element-wise median; NaN-masked) -
+    cpl_art <- .load_rds(file.path(dirs$calibration, "coupling_ensemble.rds"),
+                         "coupling")
+    if (!is.null(cpl_art) && is.list(cpl_art) && !is.null(cpl_art$array)) {
+      C <- cpl_art$array
+      if (is.matrix(C)) {
+        if (is.null(rownames(C)) && !is.null(cpl_art$location_name) &&
+            nrow(C) == length(cpl_art$location_name))
+          dimnames(C) <- list(cpl_art$location_name, cpl_art$location_name)
+        tryCatch(.save_fig(plot_spatial_correlation_heatmap(C),
+                           "spatial_coupling.png", width = 7, height = 6),
+                 error = function(e) warning("spatial: coupling plot failed: ",
+                                             conditionMessage(e), call. = FALSE))
+      }
+    }
+  }
+
   if (verbose) message("render_MOSAIC_figures complete.")
   invisible(attempted)
+}
+
+#' Load the spatial-figure network basemap (Natural Earth, offline)
+#'
+#' Returns an \pkg{sf} polygon layer for the mobility-network backdrop, or
+#' \code{NULL} for the centroid-only fallback. Uses
+#' \code{rnaturalearth::ne_countries(continent = "Africa", scale = 50)}, which is
+#' served \strong{offline} from the bundled \pkg{rnaturalearthdata} (public
+#' domain) — it never downloads and never calls a GeoBoundaries /
+#' \code{get_country_shp()} API (P5). The \strong{full} continent is returned
+#' (all African countries) so neighbors render as reference outlines; the plotter
+#' (\code{\link{plot_mobility_flux_network}}) crops the view to the network
+#' countries' bounding box. The Natural Earth \code{iso_a3} field is exposed as
+#' \code{iso3}. Returns \code{NULL} (centroid-only fallback) when \pkg{sf} or
+#' \pkg{rnaturalearth} is unavailable or the layer cannot be built.
+#'
+#' @param location_name Character vector of the run's locations (config order).
+#'   Retained for signature stability; the full basemap is returned regardless.
+#' @param verbose Logical.
+#' @return An \pkg{sf} object (the full Africa basemap with an \code{iso3}
+#'   column), or \code{NULL}.
+#' @noRd
+.mosaic_load_spatial_basemap <- function(location_name, verbose = TRUE) {
+  if (!requireNamespace("sf", quietly = TRUE) ||
+      !requireNamespace("rnaturalearth", quietly = TRUE)) {
+    if (verbose)
+      message("spatial: 'sf'/'rnaturalearth' unavailable; centroid-only network.")
+    return(NULL)
+  }
+  bm <- tryCatch(
+    rnaturalearth::ne_countries(continent = "Africa", scale = 50,
+                                returnclass = "sf"),
+    error = function(e) NULL)
+  if (is.null(bm) || !nrow(bm)) return(NULL)
+
+  # Expose the Natural Earth ISO3 ("iso_a3") as `iso3` for the plotter's crop.
+  # iso_a3 covers every African country incl. SSD/TZA/RWA (adm0_a3 does not).
+  iso_field <- intersect(c("iso_a3", "iso_a3_eh"), names(bm))[1]
+  if (is.na(iso_field)) return(NULL)
+  bm$iso3 <- as.character(bm[[iso_field]])
+  bm[, "iso3"]
 }

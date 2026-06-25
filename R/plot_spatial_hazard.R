@@ -44,10 +44,12 @@ plot_spatial_hazard <- function(H) {
           use_date  <- FALSE
      }
 
-     # get location labels and sort them alphanumerically
+     # Location labels in the row order of `H` (config order). Do NOT re-sort
+     # alphabetically: the fill is mapped via as.vector(H) against rep(loc_vals,
+     # times = Tt), so the labels MUST follow rownames(H) exactly or every row
+     # is silently mislabelled when H is not already alphabetical (F3).
      rn <- rownames(H)
      loc_vals <- if (!is.null(rn)) rn else paste0("loc_", seq_len(J))
-     loc_vals <- sort(loc_vals)
 
      # build long data.frame
      df <- data.frame(
@@ -56,8 +58,9 @@ plot_spatial_hazard <- function(H) {
           hazard   = as.vector(H),
           stringsAsFactors = FALSE
      )
-     # ensure factor levels follow the sorted order
-     df$location <- factor(df$location, levels = loc_vals)
+     # Factor levels follow config (row) order; reverse so the first config
+     # location renders at the top of the y-axis (ggplot draws bottom-up).
+     df$location <- factor(df$location, levels = rev(loc_vals))
 
      # choose x-scale
      if (use_date) {

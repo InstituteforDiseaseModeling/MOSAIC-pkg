@@ -1110,6 +1110,39 @@ run_MOSAIC <- function(config,
   .mosaic_write_json(config, file.path(dirs$inputs, "config.json"), control$io)
   log_msg("  Saved %s", "config.json")
 
+  # tau_i 95% CI artifact (Phase B) for the "spatial" figure group (fig 2).
+  # The per-location credible interval comes from the upstream fit_prob_travel()
+  # Beta posterior (MODEL_INPUT/mobility_travel_prob_params.csv), which is NOT in
+  # the config. Copy the per-location CI columns into 1_inputs in config order so
+  # plot_departure_tau() can draw interval bars; absence => point-only tau plot.
+  # Gated by io (unconditional artifact, not gated by plots).
+  if (isTRUE(control$io)) {
+    tryCatch({
+      tp_file <- file.path(PATHS$MODEL_INPUT, "mobility_travel_prob_params.csv")
+      if (file.exists(tp_file)) {
+        tp <- utils::read.csv(tp_file, stringsAsFactors = FALSE)
+        lo_col <- intersect(c("Q2.5", "q2.5", "lower", "ci_lower"), names(tp))[1]
+        hi_col <- intersect(c("Q97.5", "q97.5", "upper", "ci_upper"), names(tp))[1]
+        if ("iso3" %in% names(tp) && !is.na(lo_col) && !is.na(hi_col)) {
+          locs <- as.character(config$location_name)
+          m    <- match(locs, tp$iso3)
+          ci_df <- data.frame(
+            location = locs,
+            lower    = tp[[lo_col]][m],
+            upper    = tp[[hi_col]][m],
+            stringsAsFactors = FALSE
+          )
+          tau_ci_path <- file.path(dirs$inputs, "mobility_tau_ci.csv")
+          tmp_path <- paste0(tau_ci_path, ".tmp")
+          utils::write.csv(ci_df, tmp_path, row.names = FALSE)
+          file.rename(tmp_path, tau_ci_path)
+          log_msg("  Saved %s", "1_inputs/mobility_tau_ci.csv")
+        }
+      }
+    }, error = function(e)
+      log_warn("mobility_tau_ci.csv write skipped: %s", e$message))
+  }
+
   # ===========================================================================
   # PARAMETER NAME DETECTION
   # ===========================================================================
@@ -2439,6 +2472,15 @@ run_MOSAIC <- function(config,
       ensemble_rds <- file.path(dirs$calibration, "ensemble_candidate.rds")
       saveRDS(.mosaic_stamp_artifact(ensemble), ensemble_rds)
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
+
+      # Persist the engine spatial-structure arrays for the "spatial" figure
+      # group (figs 5-6). These are the element-wise median across the FULL
+      # posterior-ensemble members (DM#5) -- the canonical member set -- carried
+      # on the candidate ensemble before any prediction-quality subset
+      # refinement. Unconditional (gated by io, not plots); schema-stamped;
+      # config order with location_name attached. Absent arrays (engine without
+      # DerivedValues) are silently skipped.
+      .mosaic_persist_spatial_artifacts(ensemble, dirs, log_msg, log_warn)
     }
   } else {
     log_warn("no best subset \u2014 skipping posterior ensemble")

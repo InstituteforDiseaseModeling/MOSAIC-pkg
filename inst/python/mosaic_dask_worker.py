@@ -619,12 +619,31 @@ def run_laser_postca(task_id: int, seed: int,
 
         model = lc.run_model(paramfile=config, quiet=True)
 
+        # Extract the engine spatial-structure arrays (J x T hazard, J x J
+        # coupling, J x J pi_ij) BEFORE `del model` below (F1). These are filled
+        # by the engine DerivedValues component at the final tick and are
+        # otherwise lost on discard. Returned alongside cases/deaths in lockstep
+        # with the local PSOCK path (R/calc_model_ensemble.R) so Dask and local
+        # produce identical per-member arrays. Guard each extraction so an engine
+        # build without DerivedValues simply omits the field (warn+skip in R).
+        def _to_list(getter):
+            try:
+                arr = getter()
+                if arr is None:
+                    return None
+                return np.array(arr).tolist()
+            except Exception:  # noqa: BLE001
+                return None
+
         result = {
             "task_id": task_id,
             "seed": seed,
             "success": True,
             "reported_cases": np.array(model.results.reported_cases).tolist(),
             "reported_deaths": np.array(model.results.reported_deaths).tolist(),
+            "spatial_hazard": _to_list(lambda: model.results.spatial_hazard),
+            "coupling": _to_list(lambda: model.results.coupling),
+            "pi_ij": _to_list(lambda: model.results.pi_ij),
         }
 
         del model

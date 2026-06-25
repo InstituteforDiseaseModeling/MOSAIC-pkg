@@ -4,7 +4,7 @@
 \alias{get_distance_matrix}
 \title{Build distance matrix from longitude/latitude coordinates}
 \usage{
-get_distance_matrix(x, y, id, method = c("spherical", "planar"))
+get_distance_matrix(x, y, id, method = c("spherical", "planar"), sort = TRUE)
 }
 \arguments{
 \item{x}{Numeric vector of longitudes (degrees).}
@@ -16,10 +16,18 @@ get_distance_matrix(x, y, id, method = c("spherical", "planar"))
 \item{method}{Character string, either \code{"spherical"} (default) for
 Haversine distances on a sphere of radius 6371 km, or \code{"planar"}
 for Euclidean distances in degree‐space converted by 111.35 km/deg.}
+
+\item{sort}{Logical. When \code{TRUE} (default, preserving historical
+behavior) the returned matrix is sorted alphabetically by \code{id}. When
+\code{FALSE} the rows/columns are kept in the order of \code{id} (config order),
+so the axes stay aligned to any value vector indexed the same way.
+Set \code{FALSE} for the spatial-figures path, where labels must follow
+config order rather than be silently re-sorted (F3).}
 }
 \value{
 A square matrix of pairwise distances (km) among locations,
-with row and column names from \code{id}, sorted alphabetically.
+with row and column names from \code{id}. By default sorted alphabetically;
+when \code{sort = FALSE}, kept in \code{id} (input) order.
 }
 \description{
 This function builds the pairwise distance matrix (in kilometers)

@@ -10,9 +10,16 @@
 ##' @param method Character string, either `"spherical"` (default) for
 ##'   Haversine distances on a sphere of radius 6371 km, or `"planar"`
 ##'   for Euclidean distances in degree‐space converted by 111.35 km/deg.
+##' @param sort Logical. When `TRUE` (default, preserving historical
+##'   behavior) the returned matrix is sorted alphabetically by `id`. When
+##'   `FALSE` the rows/columns are kept in the order of `id` (config order),
+##'   so the axes stay aligned to any value vector indexed the same way.
+##'   Set `FALSE` for the spatial-figures path, where labels must follow
+##'   config order rather than be silently re-sorted (F3).
 ##'
 ##' @return A square matrix of pairwise distances (km) among locations,
-##'   with row and column names from `id`, sorted alphabetically.
+##'   with row and column names from `id`. By default sorted alphabetically;
+##'   when `sort = FALSE`, kept in `id` (input) order.
 ##'
 ##' @examples
 ##' \dontrun{
@@ -38,7 +45,8 @@
 get_distance_matrix <- function(x,
                                 y,
                                 id,
-                                method = c("spherical", "planar")) {
+                                method = c("spherical", "planar"),
+                                sort   = TRUE) {
 
      method <- match.arg(method)
 
@@ -86,6 +94,9 @@ get_distance_matrix <- function(x,
      }
 
      dimnames(out) <- list(origin = id, destination = id)
-     out[order(dimnames(out)$origin), order(dimnames(out)$destination)]
+     if (isTRUE(sort)) {
+          out <- out[order(dimnames(out)$origin), order(dimnames(out)$destination)]
+     }
+     out
 
 }

@@ -27,6 +27,11 @@ plot_spatial_correlation_heatmap <- function(C) {
      )
 
      # -------- plot ----------------------------------------------------------
+     # Mask NaN/non-finite cells explicitly (DM#4): coupling C_ij is NaN by
+     # design for zero-variance (never-infected) locations -- render those as a
+     # distinct "n/a" color, never coerced to 0.
+     df$corr[!is.finite(df$corr)] <- NA_real_
+
      ggplot2::ggplot(df, ggplot2::aes(x = loc_j, y = loc_i, fill = corr)) +
           ggplot2::geom_tile() +
           ggplot2::scale_fill_gradient2(low = "firebrick",
@@ -34,6 +39,7 @@ plot_spatial_correlation_heatmap <- function(C) {
                                         high = "steelblue",
                                         limits = c(-1, 1),
                                         midpoint = 0,
+                                        na.value = "grey80",
                                         name = expression(C[ij])) +
           ggplot2::labs(title = "Spatial correlation matrix",
                         x = "Location j", y = "Location i") +

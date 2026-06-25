@@ -527,9 +527,20 @@ calc_model_ensemble <- function(config,
           paramfile = MOSAIC:::.mosaic_prepare_config_for_python(param_config),
           quiet = TRUE
         )
+        # Extract the engine's spatial-structure arrays (J x T hazard, J x J
+        # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
+        # are computed by the engine's DerivedValues component at the final tick
+        # and otherwise lost when the model object is gc'd. tryCatch each so an
+        # engine that drops DerivedValues simply yields NULL (warn+skip downstream).
+        sh  <- tryCatch(model$results$spatial_hazard, error = function(e) NULL)
+        cpl <- tryCatch(model$results$coupling,       error = function(e) NULL)
+        pij <- tryCatch(model$results$pi_ij,          error = function(e) NULL)
         result <- list(param_idx = param_idx, stoch_idx = stoch_idx,
                        reported_cases = model$results$reported_cases,
                        reported_deaths = model$results$reported_deaths,
+                       spatial_hazard = sh,
+                       coupling       = cpl,
+                       pi_ij          = pij,
                        success = TRUE)
         gc(verbose = FALSE)
         reticulate::import("gc")$collect()
@@ -655,6 +666,81 @@ calc_model_ensemble <- function(config,
   }
 
   # ===========================================================================
+  # Spatial-structure aggregation (figs 5-6): element-wise MEDIAN across the
+  # posterior-ensemble members (DM#5). The engine arrays spatial_hazard (J x T),
+  # coupling (J x J), and pi_ij (J x J) are extracted inside each worker before
+  # the model is discarded (F1) and carried on every result record on BOTH the
+  # local PSOCK/sequential path (results_list) and the Dask path
+  # (precomputed_results). The member set is exactly the set of successful
+  # records, identical across paths, so Dask and local produce the same
+  # aggregate. pi_ij is deterministic across members (function of N/omega/gamma),
+  # so its median equals any member's; persisting it lets the renderer prefer the
+  # engine pi_ij over an R recompute (F4).
+  # ===========================================================================
+
+  spatial_source <- if (!is.null(precomputed_results)) precomputed_results else
+    if (exists("results_list", inherits = FALSE)) results_list else NULL
+
+  spatial_hazard_ensemble <- NULL
+  coupling_ensemble       <- NULL
+  pi_ij_ensemble          <- NULL
+
+  if (!is.null(spatial_source)) {
+    .as_mat <- function(x) {
+      if (is.null(x)) return(NULL)
+      m <- suppressWarnings(as.matrix(x))
+      if (!is.numeric(m) || any(dim(m) == 0L)) return(NULL)
+      m
+    }
+    .elementwise_median <- function(mats) {
+      mats <- Filter(Negate(is.null), mats)
+      if (length(mats) == 0L) return(NULL)
+      d0 <- dim(mats[[1L]])
+      mats <- Filter(function(m) identical(dim(m), d0), mats)
+      if (length(mats) == 0L) return(NULL)
+      stk <- array(unlist(mats, use.names = FALSE),
+                   dim = c(d0[1L], d0[2L], length(mats)))
+      # Element-wise median over the member dimension; preserve NaN/NA cells
+      # that are NaN/NA across all members (DM#4 coupling masking downstream).
+      out <- apply(stk, c(1L, 2L), function(v) {
+        v <- v[is.finite(v)]
+        if (length(v) == 0L) NaN else stats::median(v)
+      })
+      dim(out) <- d0
+      out
+    }
+
+    sh_list  <- lapply(spatial_source, function(r) if (isTRUE(r$success)) .as_mat(r$spatial_hazard) else NULL)
+    cpl_list <- lapply(spatial_source, function(r) if (isTRUE(r$success)) .as_mat(r$coupling)       else NULL)
+    pij_list <- lapply(spatial_source, function(r) if (isTRUE(r$success)) .as_mat(r$pi_ij)          else NULL)
+
+    spatial_hazard_ensemble <- .elementwise_median(sh_list)
+    coupling_ensemble       <- .elementwise_median(cpl_list)
+    pi_ij_ensemble          <- .elementwise_median(pij_list)
+
+    # Attach config-order labels (F3). Hazard is J x T: rows = locations.
+    if (!is.null(spatial_hazard_ensemble) &&
+        nrow(spatial_hazard_ensemble) == n_locations) {
+      rownames(spatial_hazard_ensemble) <- location_names
+      # Column (time) labels from the run's date span when shapes line up.
+      if (!is.null(date_start) && !is.null(date_stop)) {
+        dseq <- tryCatch(
+          seq(as.Date(date_start), as.Date(date_stop), by = "day"),
+          error = function(e) NULL)
+        if (!is.null(dseq) && length(dseq) == ncol(spatial_hazard_ensemble))
+          colnames(spatial_hazard_ensemble) <- as.character(dseq)
+      }
+    }
+    for (nm in c("coupling_ensemble", "pi_ij_ensemble")) {
+      m <- get(nm)
+      if (!is.null(m) && nrow(m) == n_locations && ncol(m) == n_locations) {
+        dimnames(m) <- list(location_names, location_names)
+        assign(nm, m)
+      }
+    }
+  }
+
+  # ===========================================================================
   # Weighted statistics aggregation
   # ===========================================================================
 
@@ -774,6 +860,9 @@ calc_model_ensemble <- function(config,
       date_start                = date_start,
       date_stop                 = date_stop,
       envelope_quantiles        = envelope_quantiles,
+      spatial_hazard_ensemble   = spatial_hazard_ensemble,
+      coupling_ensemble         = coupling_ensemble,
+      pi_ij_ensemble            = pi_ij_ensemble,
       artifact_mask             = list(
         cases_warmup     = as.integer(n_cases_warmup_mask),
         deaths_final     = isTRUE(mask_final_deaths_step),
