@@ -33,6 +33,7 @@
 #' }
 #'
 #' @examples
+#' \dontrun{
 #' # Example usage
 #' PATHS <- list(
 #'   DATA_DEMOGRAPHICS = "path/to/demographics",
@@ -41,6 +42,7 @@
 #' )
 #'
 #' processed_data <- process_WHO_vaccination_data(PATHS)
+#' }
 #'
 #' @importFrom glue glue
 #' @importFrom utils read.csv write.csv

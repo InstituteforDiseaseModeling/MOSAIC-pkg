@@ -48,6 +48,7 @@ This function performs the following steps:
 }
 }
 \examples{
+\dontrun{
 # Example usage
 PATHS <- list(
   DATA_DEMOGRAPHICS = "path/to/demographics",
@@ -55,5 +56,6 @@ PATHS <- list(
 )
 
 processed_data <- process_GTFCC_vaccination_data(PATHS)
+}
 
 }

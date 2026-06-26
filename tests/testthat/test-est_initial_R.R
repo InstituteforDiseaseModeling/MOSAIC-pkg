@@ -362,16 +362,6 @@ test_that("est_initial_R output structure matches priors_default", {
     unlink(file.path(PATHS$DATA_PROCESSED), recursive = TRUE)
 })
 
-test_that("est_initial_R handles disaggregate parameter correctly", {
-    skip("Requires full data setup - integration test")
-    
-    # Similar setup as above but test both disaggregate = TRUE and FALSE
-    # Would verify that:
-    # 1. disaggregate = TRUE uses Fourier coefficients
-    # 2. disaggregate = FALSE uses mid-year point estimate
-    # 3. Results differ but are both reasonable
-})
-
 test_that("Surveillance cascade math is correct", {
     # Test the fundamental equation: I = (C × χ) / (ρ × σ)
     

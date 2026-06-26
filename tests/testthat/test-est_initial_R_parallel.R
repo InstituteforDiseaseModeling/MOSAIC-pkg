@@ -41,9 +41,15 @@ test_that("est_initial_R parameter documentation updated", {
   # Test that documentation has been updated for parallel processing
   # This is a meta-test to ensure we updated the docs
   
-  # Read the function source to check documentation
-  func_source <- readLines("../../R/est_initial_R.R")
-  
+  # Read the function source to check documentation.
+  # This meta-test inspects the roxygen source, which is only present in the
+  # package source tree (not in an installed/checked package), so skip when the
+  # source file is unavailable (e.g. under R CMD check).
+  src_path <- "../../R/est_initial_R.R"
+  skip_if_not(file.exists(src_path),
+              message = "R/est_initial_R.R source not available (installed package)")
+  func_source <- readLines(src_path)
+
   # Find the line with @param parallel and the next few lines
   parallel_start <- grep("@param parallel", func_source)
   expect_length(parallel_start, 1)
