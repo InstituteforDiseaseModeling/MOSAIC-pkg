@@ -615,7 +615,7 @@ sample_parameters <- function(
   # spatial coupling) that no closed form can absorb. This subsumes the per-country
   # ETH dwell stop-gap structurally.
   #
-  # Gating contract (SPEC_B2.md §3.4):
+  # Gating contract (SPEC_B2.md sec 3.4):
   #   - B2 is ACTIVE iff the priors object has a `CFR_target` location prior
   #     (detected via `location_params$CFR_target`). When ACTIVE, mu_j_baseline
   #     is NOT in the independent-draw loop above (the priors object has no
@@ -627,7 +627,7 @@ sample_parameters <- function(
   #     above; when FALSE, CFR_target is held at its config default (prior median)
   #     and mu_j_baseline is still derived from that frozen CFR (free chain).
   #
-  # Version-skew guard (Lesson #12, SPEC_B2.md §5.3): if B2 derivation is
+  # Version-skew guard (Lesson #12, SPEC_B2.md sec 5.3): if B2 derivation is
   # requested (sample_mu_j_baseline=TRUE) but the priors object lacks a
   # CFR_target prior AND lacks a legacy mu_j_baseline prior, fail loud rather
   # than silently shipping the config-default mu_j_baseline. A legacy priors
@@ -678,7 +678,7 @@ sample_parameters <- function(
       # lognormal CFR_target tail (sdlog 0.787) times a high-gamma_1 / low-chi
       # chain draw can, for the highest-CFR countries (CIV/COG/MLI/TCD, CFR
       # median up to ~0.089), push the product above 1 in a rare tail draw
-      # (P(mu>1) ~ 1e-5 at the highest real country; SPEC_B2.md §3.5). Clamp the
+      # (P(mu>1) ~ 1e-5 at the highest real country; SPEC_B2.md sec 3.5). Clamp the
       # derived value just below 1 so those rare draws do not hard-error in
       # make_LASER_config(). The clamp acts only on the extreme upper tail and
       # does not perturb the bulk of the distribution or the implied-CFR identity
@@ -705,7 +705,7 @@ sample_parameters <- function(
     # present -> version skew (stale priors object / Coiled image). Fail loud.
     stop("mu_j_baseline derivation/sampling requested (sample_mu_j_baseline=TRUE) but the priors object ",
          "carries neither a CFR_target location prior (B2) nor a mu_j_baseline location prior (legacy). ",
-         "This indicates a stale or mismatched priors object (Lesson #12 version-skew guard, SPEC_B2.md §5.3). ",
+         "This indicates a stale or mismatched priors object (Lesson #12 version-skew guard, SPEC_B2.md sec 5.3). ",
          "Rebuild priors_default (>= v15.15 for B2) and ship it to every worker.")
   }
   # else: legacy priors object (mu_j_baseline Gamma prior present, no CFR_target)

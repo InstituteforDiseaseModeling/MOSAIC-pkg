@@ -10,14 +10,14 @@
 # OOMs a 32 GB box, whereas a 2023 window (~1398 cols, ~13 GB) is fine.
 #
 # This is a WARN-ONLY guard (immediate.): it never changes behavior, perf, or
-# allocation for any width — it merely projects the footprint and, when it would
+# allocation for any width -- it merely projects the footprint and, when it would
 # exceed ~80% of probed system RAM, emits a loud warning naming the projected GB
 # and the knobs to dial down. When RAM cannot be probed portably (non-mac/Linux)
 # the projection is skipped. Reuses the package RAM probe .psi_total_system_ram_gb().
 #
 # Projection: two dense arrays (cases + deaths) at 8 bytes/double, PLUS the
 # gathered results list which holds the same payload a second time as per-result
-# matrices (cases + deaths) before the arrays are filled — so the concurrent
+# matrices (cases + deaths) before the arrays are filled -- so the concurrent
 # peak is ~2x the dense-array footprint. We use a factor of 2 for the list term
 # (conservative; the arrays and list co-exist during the fill loop).
 .MOSAIC_ENSEMBLE_RAM_FRACTION <- 0.80
@@ -139,7 +139,7 @@
   n_done <- 0L
   pb <- NULL
   if (isTRUE(progress)) {
-    pb <- utils::txtProgressBar(min = 0, max = n, style = 3, char = "█")
+    pb <- utils::txtProgressBar(min = 0, max = n, style = 3, char = "\u2588")
     on.exit(close(pb), add = TRUE)
   }
 
@@ -424,7 +424,7 @@ calc_model_ensemble <- function(config,
       # slice it fills; those slices must densely cover 1:n_param_sets so every
       # prediction pairs with its OWN parameter weight. A gap means configs were
       # dropped upstream while weights were not (the v0.35.1 misalignment class)
-      # — warn loudly. Overflow is an outright contract violation (error).
+      # -- warn loudly. Overflow is an outright contract violation (error).
       pidx <- vapply(precomputed_results, function(r) {
         if (is.null(r$param_idx)) NA_integer_ else as.integer(r$param_idx)
       }, integer(1))
@@ -474,7 +474,7 @@ calc_model_ensemble <- function(config,
 
       # Drop failed re-samples AND their seeds/weights in lockstep, then let the
       # validation block below renormalize. Degrades gracefully to the survivors
-      # instead of erroring on the length mismatch — one transient sampling
+      # instead of erroring on the length mismatch -- one transient sampling
       # failure must not discard the entire posterior ensemble.
       keep <- !vapply(param_configs, is.null, logical(1))
       param_configs <- param_configs[keep]
