@@ -60,6 +60,7 @@ This function performs the following steps:
 ## Examples
 
 ``` r
+if (FALSE) { # \dontrun{
 # Example usage
 PATHS <- list(
   DATA_DEMOGRAPHICS = "path/to/demographics",
@@ -68,7 +69,5 @@ PATHS <- list(
 )
 
 processed_data <- process_WHO_vaccination_data(PATHS)
-#> Loading vaccination and population data
-#> Warning: cannot open file 'path/to/demographics/demographics_africa_2000_2023.csv': No such file or directory
-#> Error in file(file, "rt"): cannot open the connection
+} # }
 ```
