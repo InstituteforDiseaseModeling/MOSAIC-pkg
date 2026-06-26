@@ -10,7 +10,8 @@ These are the facts skills/CLAUDE.md keep stating wrong:
 
 - **No `config_best.json`.** `run_MOSAIC()` intentionally produces no best-likelihood model
   (`R/run_MOSAIC.R:2880`). Any file claiming "best model saved to config_best.json" is stale.
-  KNOWN STALE: root `MOSAIC/CLAUDE.md:141` still says this — contradicts the run-mosaic skill.
+  (The previously-flagged stale root `MOSAIC/CLAUDE.md` reference was FIXED in Phase 1 — grep both
+  CLAUDE.md files for `config_best` now returns nothing; run-mosaic + forecast-cv state it correctly.)
 - **`config_medoid.json` lives in `2_calibration/best_model/`**, NOT `3_results/`. The dir map is
   `dirs$cal_best_model = file.path(dir_output, "2_calibration/best_model")`
   (`R/run_MOSAIC_helpers.R:1052`); written at `R/run_MOSAIC.R:2916`. `R/run_fit_sandbox.R:23` doc

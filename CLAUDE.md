@@ -60,7 +60,7 @@ Rscript -e "MOSAIC::check_dependencies()"                        # Verify Python
 - Unsure about approach (multiple valid solutions)
 
 **Agent roster & skills:** this package defines a Claude Code subagent roster + the `run-mosaic`,
-`est-suitability`, `diagnose-fit`, `context-audit`, `hedgehog-run`, and `dugong-run` skills in **`.claude/`** (tracked in git) — see **`.claude/agents/README.md`**
+`est-suitability`, `forecast-cv`, `diagnose-fit`, `context-audit`, `hedgehog-run`, and `dugong-run` skills in **`.claude/`** (tracked in git) — see **`.claude/agents/README.md`**
 for the full roster, routing, colors, and aliases. The agents can read/write data and outputs in
 sibling repos under `~/MOSAIC` (e.g. country repos, the `output/` tree) via the session's
 `additionalDirectories` grant. Shortcuts: `/swe` (engineering), `/stat` (Bayesian/likelihood),

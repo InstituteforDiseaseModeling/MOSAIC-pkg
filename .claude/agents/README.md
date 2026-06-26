@@ -116,6 +116,10 @@ exported signatures / the `run_MOSAIC()` core loop.
   → `compile_suitability_data` → `est_suitability`). Covers the date-window/leakage args, the
   side-effect-CSV contract, the forecast-horizon ceiling, and the TF-threading/RAM/determinism
   gotchas. Prerequisite for `forecast-cv`.
+- **`forecast-cv`** (`.claude/skills/forecast-cv/`) — systematic rolling-origin OOS forecast validation
+  via `run_rolling_cv()` (per cutoff: re-fit ψ → inject → calibrate ≤T → project). Covers leakage-strict
+  args (embargo, horizons), the raw-ψ vs post-ψ\* attenuation check, per-cutoff ESS gating, and post-hoc
+  WIS/R²/coverage scoring. Composes `run-mosaic` + `est-suitability`. Invoke via the `Skill` tool.
 - **`diagnose-fit`** (`.claude/skills/diagnose-fit/`) — active model-fit diagnosis. Drives fast
   deterministic single-LASER experiments (`MOSAIC::run_fit_sandbox`) scored by
   `MOSAIC::calc_fit_diagnostics` to find what parameter changes improve fit, then writes a

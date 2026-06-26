@@ -1,3 +1,3 @@
 - [Skill refs must resolve on HEAD, not just in git](feedback_skill_refs_must_be_on_branch.md) — verify cited sibling docs are ancestors of HEAD; a doc on an unmerged branch = dangling ref
-- [Canonical output-tree paths](reference_output_tree_canonical_paths.md) — no config_best.json; config_medoid.json is in 2_calibration/best_model/ NOT 3_results/; root CLAUDE.md:141 still stale; grep dirs$ map in run_MOSAIC_helpers.R
+- [Canonical output-tree paths](reference_output_tree_canonical_paths.md) — no config_best.json; config_medoid.json is in 2_calibration/best_model/ NOT 3_results/; both CLAUDE.md clean as of Phase 1; grep dirs$ map in run_MOSAIC_helpers.R
 - [Skill constants rot despite hedge](feedback_skill_constants_rot_despite_hedge.md) — "reference don't transcribe" header does NOT excuse a wrong ENUM/preset/path in the body; verify enumerated arg values against the fn signature regardless
