@@ -15,6 +15,17 @@ skip_if_not(
     message = "Python laser.cholera package not available"
 )
 
+# SLOW-TIER (runtime): this file runs a REAL, FULL LASER simulation on the
+# 40-location default config at top level (~16s) to validate the engine's
+# beta_jt_human / R0 / seasonality outputs against the analytic formulas. That
+# is a genuine engine-integration check, not a unit test of R logic -- so gate
+# it to the slow tier. (It was previously only skipped by accident: the
+# config_default.json path below is cwd-relative and fails to resolve under
+# testthat::test_dir, so this never ran in that profiler. Under devtools::test()
+# / R CMD check the cwd IS tests/testthat's package root and the full sim ran,
+# silently adding ~16s to every suite run.)
+skip_if_slow()
+
 library(reticulate)
 library(reshape2)
 library(MOSAIC)

@@ -143,6 +143,11 @@ testthat::test_that("errors when a required predictor is missing", {
 
 
 testthat::test_that("is deterministic on the same input (no hidden randomness)", {
+     # SLOW-TIER (runtime): this block fits the GAM TWICE just to compare
+     # outputs (~3s of the file's ~18s). Determinism is also implicitly covered
+     # by the recovery test's stable AUC; gate the double-fit behind the slow
+     # tier so the default fast run pays one GAM fit here, not three.
+     skip_if_slow()
      d <- .mk_synth_suitability(seed = 11L)
      a <- MOSAIC::impute_flood_probability(d, diagnostics = FALSE, verbose = FALSE)
      b <- MOSAIC::impute_flood_probability(d, diagnostics = FALSE, verbose = FALSE)
@@ -151,6 +156,11 @@ testthat::test_that("is deterministic on the same input (no hidden randomness)",
 
 
 testthat::test_that("diagnostics writes the four expected artefacts", {
+     # SLOW-TIER (runtime): the diagnostics path adds a GAM fit PLUS PNG/txt
+     # rendering and (where folds qualify) rolling-year CV -- the heaviest block
+     # in this file. The non-diagnostics path is already covered by every other
+     # test here; gate the artefact-writing path to the slow tier.
+     skip_if_slow()
      d <- .mk_synth_suitability(seed = 13L)
      tmp <- withr::local_tempdir()
      # The diagnostics path includes a rolling-year CV. On this tiny 2-ISO x

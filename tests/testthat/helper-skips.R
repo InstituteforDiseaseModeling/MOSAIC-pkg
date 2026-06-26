@@ -27,9 +27,23 @@ skip_if_no_python_likelihood <- function() {
 
 # Skip when the Python tensorflow module is unavailable (e.g. the worker image
 # strips it). Keeps the suite portable; a no-op where TF is installed.
+#
+# LAZY PROBE: importing tensorflow costs ~10s, so setup-python.R deliberately
+# does NOT probe it at startup (no fast-tier test reads the flag). The probe is
+# performed here on first call and cached in options(mosaic.test.has_tensorflow)
+# so subsequent calls in the same process are free. Only tests that actually need
+# TF pay the cost, and only when they run.
 skip_without_tensorflow <- function() {
   testthat::skip_if_not_installed("reticulate")
-  if (!isTRUE(getOption("mosaic.test.has_tensorflow"))) {
+  has_tf <- getOption("mosaic.test.has_tensorflow")  # NULL until first probe
+  if (is.null(has_tf)) {
+    has_tf <- isTRUE(tryCatch(
+      reticulate::py_available(initialize = TRUE) &&
+        reticulate::py_module_available("tensorflow"),
+      error = function(e) FALSE))
+    options(mosaic.test.has_tensorflow = has_tf)
+  }
+  if (!isTRUE(has_tf)) {
     testthat::skip("Python tensorflow module not available")
   }
 }

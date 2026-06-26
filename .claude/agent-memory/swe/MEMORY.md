@@ -1,3 +1,4 @@
+- [testthat runtime lane](project_testthat_runtime_lane.md) — suite runtime profile; 3 big costs = TF probe (10s, 0 readers, made lazy), lasik full-sim (16s, accidentally-skipped, now skip_if_slow), impute GAM fits; fresh-proc profiling over-counts; 106→80s
 - [per-location alpha_1 wiring](project_per_location_alpha1_wiring.md) — alpha_1 made per-location length-nL end-to-end (v0.51.0); dual-mode gotchas + the get_location_config sibling the plan missed; installed-wheel vs stale src
 - [hedgehog-run infra](project_hedgehog_run_infra.md) — hedgehog VM run mechanics + two vm/ helper traps (broken ETH template, pull_results.sh does not compress)
 - [dugong VM](reference_dugong_vm.md) — 2nd run host (176c/1.5TiB, Ubuntu 24.04, persistent IP 52.183.44.192); libexpat-wrapper trap (not GLIBCXX); skill .claude/skills/dugong-run, doc vm/DUGONG.md, setup claude/dugong_setup/
