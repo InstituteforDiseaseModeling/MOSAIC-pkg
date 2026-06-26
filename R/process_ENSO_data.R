@@ -10,33 +10,45 @@
 #'   \item \strong{ENSO_DATA_REPO}: Path to the enso-data repository.
 #'   \item \strong{DATA_ENSO}: Path to the output directory for processed ENSO data.
 #' }
+#' @param source Character; which enso-data forecast source to read. One of
+#'   \code{"bom"} (Australian Bureau of Meteorology, ~6-month forecast horizon;
+#'   the default) or \code{"nmme"} (NOAA North American Multi-Model Ensemble,
+#'   ~8-month horizon). Both are resolved from the same enso-data repository via
+#'   \code{downloads/<source>/LATEST}. Defaults to \code{"bom"} so existing
+#'   callers are unaffected; pass \code{"nmme"} to use the longer-horizon feed.
 #'
 #' @return Invisibly returns the path to the output directory. Writes three CSV files:
 #' \code{enso_daily.csv}, \code{enso_weekly.csv}, \code{enso_monthly.csv}.
 #'
 #' @details
-#' The function reads from the most recent BOM compiled download (resolved via
-#' the \code{downloads/bom/LATEST} pointer file). The BOM compiled output contains
-#' four ENSO/IOD variables (ENSO3, ENSO34, ENSO4, IOD) with continuous coverage
-#' from 1970 through ~6 months ahead, combining NOAA historical, BOM observed,
-#' and BOM forecast data.
+#' The function reads from the most recent compiled download for the chosen
+#' \code{source} (resolved via the \code{downloads/<source>/LATEST} pointer file).
+#' Both sources emit the same four ENSO/IOD variables (ENSO3, ENSO34, ENSO4, IOD)
+#' with continuous coverage from 1970 through the forecast horizon, combining NOAA
+#' historical, observed, and source-specific forecast data.
 #'
 #' The \code{value_adj} column (baseline-corrected to NOAA 1991-2020) is selected
 #' and renamed to \code{value}. The \code{data_source} column is retained with
-#' values: \code{historical}, \code{observed}, \code{forecast}.
+#' values: \code{historical}, \code{observed}, \code{forecast}. The NMME source
+#' carries an extra \code{model} provenance column (e.g. \code{ENSMEAN}); it is
+#' dropped here so the written schema is identical regardless of \code{source}.
 #'
 #' @export
-process_enso_data <- function(PATHS) {
+process_enso_data <- function(PATHS, source = c("bom", "nmme")) {
 
-     # Resolve latest download path
-     latest_file <- file.path(PATHS$ENSO_DATA_REPO, "downloads", "bom", "LATEST")
+     source  <- match.arg(source)
+     src_tag <- toupper(source)
+
+     # Resolve latest download path for the chosen source
+     latest_file <- file.path(PATHS$ENSO_DATA_REPO, "downloads", source, "LATEST")
      if (!file.exists(latest_file)) {
           stop("Cannot find LATEST file at: ", latest_file,
-               "\nEnsure the enso-data repository is cloned at PATHS$ENSO_DATA_REPO")
+               "\nEnsure the enso-data repository is cloned at PATHS$ENSO_DATA_REPO",
+               " and that the '", source, "' source has been compiled.")
      }
 
      latest_rel <- trimws(readLines(latest_file, n = 1, warn = FALSE))
-     compiled_dir <- file.path(PATHS$ENSO_DATA_REPO, "downloads", "bom", latest_rel, "compiled")
+     compiled_dir <- file.path(PATHS$ENSO_DATA_REPO, "downloads", source, latest_rel, "compiled")
 
      if (!dir.exists(compiled_dir)) {
           stop("Compiled directory not found: ", compiled_dir)
@@ -51,10 +63,10 @@ process_enso_data <- function(PATHS) {
 
      for (freq in frequencies) {
 
-          src_file <- file.path(compiled_dir, paste0("compiled_ENSO_BOM_", freq, ".csv"))
+          src_file <- file.path(compiled_dir, paste0("compiled_ENSO_", src_tag, "_", freq, ".csv"))
 
           if (!file.exists(src_file)) {
-               warning("Missing BOM compiled file: ", src_file)
+               warning("Missing ", src_tag, " compiled file: ", src_file)
                next
           }
 
@@ -64,6 +76,10 @@ process_enso_data <- function(PATHS) {
           d$value <- d$value_adj
           d$value_org <- NULL
           d$value_adj <- NULL
+
+          # Drop source-specific provenance column so the output schema is
+          # identical across sources (NMME carries `model`, BOM does not).
+          d$model <- NULL
 
           # Write output
           out_file <- file.path(PATHS$DATA_ENSO, paste0("enso_", freq, ".csv"))

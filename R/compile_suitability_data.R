@@ -222,6 +222,13 @@ compile_suitability_data <- function(PATHS, cutoff, use_epidemic_peaks = FALSE,
      # in pivot_wider and silently loses IOD data after the ENSO34 filter at line 210
      enso_data$data_source <- NULL
 
+     # Defensive: NMME-sourced ENSO carries a `model` provenance column.
+     # process_enso_data() already strips it, but drop it here too so a
+     # directly-supplied NMME file cannot turn `model` into a pivot row-key
+     # (which would duplicate rows and silently lose IOD, the same failure
+     # mode the data_source drop above prevents). No-op for BOM-sourced data.
+     enso_data$model <- NULL
+
      # Convert ENSO data to wide format (IOD, ENSO3, ENSO34, ENSO4 as new
      # columns). values_fn = mean: same defensive pattern as the climate
      # pivot above -- protects against any residual duplicate (year, week,
