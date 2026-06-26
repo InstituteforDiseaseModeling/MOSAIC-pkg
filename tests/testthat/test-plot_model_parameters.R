@@ -1,7 +1,7 @@
 # test-plot_model_parameters.R
 
 # Load the function
-source("../../R/plot_model_parameters.R")
+if (file.exists("../../R/plot_model_parameters.R")) source("../../R/plot_model_parameters.R")
 
 test_that("plot_model_parameters infers n_sim and n_iter correctly", {
     

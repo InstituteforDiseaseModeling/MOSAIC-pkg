@@ -1,7 +1,7 @@
 library(MOSAIC)
 
 # Source the function directly for testing to get the latest version
-source("../../R/get_location_config.R")
+if (file.exists("../../R/get_location_config.R")) source("../../R/get_location_config.R")
 
 test_that("get_location_config works with default config and single location", {
      # Extract config for single location

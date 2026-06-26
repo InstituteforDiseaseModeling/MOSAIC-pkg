@@ -2,7 +2,7 @@
 # Just the core mathematical functionality
 
 library(testthat)
-source("../../R/est_initial_E_I.R")
+if (file.exists("../../R/est_initial_E_I.R")) source("../../R/est_initial_E_I.R")
 
 test_that("Basic E/I estimation works", {
   # Minimal test case

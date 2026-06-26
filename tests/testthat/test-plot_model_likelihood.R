@@ -1,7 +1,7 @@
 # test-plot_model_likelihood.R
 
 # Load the function
-source("../../R/plot_model_likelihood.R")
+if (file.exists("../../R/plot_model_likelihood.R")) source("../../R/plot_model_likelihood.R")
 
 test_that("plot_model_likelihood creates valid plot", {
     

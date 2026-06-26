@@ -3,7 +3,7 @@
 library(testthat)
 
 # Load the function
-source("../../R/est_initial_R.R")
+if (file.exists("../../R/est_initial_R.R")) source("../../R/est_initial_R.R")
 
 test_that("est_initial_R has parallel parameter", {
   # Check that the function has the parallel parameter in signature

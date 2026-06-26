@@ -3,7 +3,7 @@
 library(testthat)
 
 # Source the function
-source("../../R/sample_from_prior.R")
+if (file.exists("../../R/sample_from_prior.R")) source("../../R/sample_from_prior.R")
 
 # Helper to check if rgompertz exists (from fit_gompertz_from_ci.R)
 if (file.exists("../../R/fit_gompertz_from_ci.R")) {

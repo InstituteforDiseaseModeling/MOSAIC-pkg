@@ -45,11 +45,13 @@ The function performs intelligent campaign matching using the following approach
 }
 }
 \examples{
-# Example usage
+\dontrun{
+# Example usage (requires set_root_directory() + the MOSAIC-data repo)
 PATHS <- get_paths()
 combined_data <- combine_vaccination_data(PATHS)
 
 # With custom tolerance settings
 combined_data <- combine_vaccination_data(PATHS, date_tolerance = 30, dose_tolerance = 0.1)
+}
 
 }

@@ -4,8 +4,8 @@
 library(testthat)
 
 # Load the functions by sourcing the R files
-source("../../R/fit_beta_from_ci.R")
-source("../../R/est_initial_E_I.R")
+if (file.exists("../../R/fit_beta_from_ci.R")) source("../../R/fit_beta_from_ci.R")
+if (file.exists("../../R/est_initial_E_I.R")) source("../../R/est_initial_E_I.R")
 
 # Mock data and helper functions for testing
 create_mock_surveillance_data <- function(n_days = 60, base_cases = 5) {

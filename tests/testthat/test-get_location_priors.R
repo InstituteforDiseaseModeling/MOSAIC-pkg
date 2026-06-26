@@ -1,7 +1,7 @@
 library(MOSAIC)
 
 # Source the function directly for testing to get the latest version
-source("../../R/get_location_priors.R")
+if (file.exists("../../R/get_location_priors.R")) source("../../R/get_location_priors.R")
 
 test_that("get_location_priors works with default priors and single location", {
      # Extract priors for single location
