@@ -96,23 +96,14 @@ It also returns the combined data as a data frame for further use in R.</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Example usage</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+<span class="r-in"><span><span class="co"># Example usage (requires set_root_directory() + the MOSAIC-data repo)</span></span></span>
 <span class="r-in"><span><span class="va">PATHS</span> <span class="op">&lt;-</span> <span class="fu"><a href="get_paths.html">get_paths</a></span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error in get_paths():</span> Cannot find root_directory</span>
 <span class="r-in"><span><span class="va">combined_data</span> <span class="op">&lt;-</span> <span class="fu">combine_vaccination_data</span><span class="op">(</span><span class="va">PATHS</span><span class="op">)</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ==========================================</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Combining WHO and GTFCC Vaccination Data</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ==========================================</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Loading processed vaccination data...</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'PATHS' not found</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># With custom tolerance settings</span></span></span>
 <span class="r-in"><span><span class="va">combined_data</span> <span class="op">&lt;-</span> <span class="fu">combine_vaccination_data</span><span class="op">(</span><span class="va">PATHS</span>, date_tolerance <span class="op">=</span> <span class="fl">30</span>, dose_tolerance <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ==========================================</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Combining WHO and GTFCC Vaccination Data</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ==========================================</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Loading processed vaccination data...</span>
-<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'PATHS' not found</span>
+<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

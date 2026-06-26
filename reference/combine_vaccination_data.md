@@ -64,21 +64,12 @@ approach:
 ## Examples
 
 ``` r
-# Example usage
+if (FALSE) { # \dontrun{
+# Example usage (requires set_root_directory() + the MOSAIC-data repo)
 PATHS <- get_paths()
-#> Error in get_paths(): Cannot find root_directory
 combined_data <- combine_vaccination_data(PATHS)
-#> ==========================================
-#> Combining WHO and GTFCC Vaccination Data
-#> ==========================================
-#> Loading processed vaccination data...
-#> Error: object 'PATHS' not found
 
 # With custom tolerance settings
 combined_data <- combine_vaccination_data(PATHS, date_tolerance = 30, dose_tolerance = 0.1)
-#> ==========================================
-#> Combining WHO and GTFCC Vaccination Data
-#> ==========================================
-#> Loading processed vaccination data...
-#> Error: object 'PATHS' not found
+} # }
 ```
