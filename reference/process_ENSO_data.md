@@ -8,7 +8,7 @@ column for downstream forecast validation.
 ## Usage
 
 ``` r
-process_enso_data(PATHS, source = c("bom", "nmme"))
+process_enso_data(PATHS, source = c("nmme", "bom"))
 ```
 
 ## Arguments
@@ -25,13 +25,15 @@ process_enso_data(PATHS, source = c("bom", "nmme"))
 
 - source:
 
-  Character; which enso-data forecast source to read. One of `"bom"`
-  (Australian Bureau of Meteorology, ~6-month forecast horizon; the
-  default) or `"nmme"` (NOAA North American Multi-Model Ensemble,
-  ~8-month horizon). Both are resolved from the same enso-data
-  repository via `downloads/<source>/LATEST`. Defaults to `"bom"` so
-  existing callers are unaffected; pass `"nmme"` to use the
-  longer-horizon feed.
+  Character; which enso-data forecast source to read. One of `"nmme"`
+  (NOAA North American Multi-Model Ensemble, ENSMEAN; ~9-month forecast
+  horizon and four ENSO/IOD indices; **the default**) or `"bom"`
+  (Australian Bureau of Meteorology, ~6-month horizon). Both are
+  resolved from the same enso-data repository via
+  `downloads/<source>/LATEST`. NMME is the operational default as of
+  MOSAIC v0.55.5 (the IRI feed it replaces shut down; NMME provides the
+  longer horizon and direct IOD coverage); pass `"bom"` for the legacy
+  source.
 
 ## Value
 

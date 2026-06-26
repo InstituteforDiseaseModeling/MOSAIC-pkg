@@ -15,7 +15,7 @@ suitability (psi) based on the climate covariates."><meta property="og:image" co
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -111,11 +111,12 @@ the suitability CSV (schema-drift guard).</p></dd>
 
 <dt id="arg-response-var">response_var<a class="anchor" aria-label="anchor" href="#arg-response-var"></a></dt>
 <dd><p>Training target column, shared by both architectures
-(default <code>"transmission_intensity"</code>, the v0.34 default). For the lstm_v2 path
-this maps internally to the sandbox <code>"intensity"</code> recipe
-(<code>log1p(cases)/log1p(cases_99th)</code> with a TRAIN-ONLY <code>cases_99th</code> anchor).
-Alternatively name a pre-computed <code>[0,1]</code> <code>target_*</code> column present in the
-suitability CSV (e.g. <code>"target_C_rate_global"</code>).</p></dd>
+(default <code>"target_D_rate_per_country_floored"</code> — per-capita, per-country anchor;
+see the architecture notes above for why it was selected over <code>"transmission_intensity"</code>).
+Naming <code>"transmission_intensity"</code> maps (lstm_v2 path) to the sandbox <code>"intensity"</code> recipe
+(<code>log1p(cases)/log1p(cases_99th)</code> with a TRAIN-ONLY <code>cases_99th</code> anchor); otherwise name a
+pre-computed <code>[0,1]</code> <code>target_*</code> column present in the suitability CSV
+(e.g. <code>"target_C_rate_global"</code>).</p></dd>
 
 
 <dt id="arg-bias-correct">bias_correct<a class="anchor" aria-label="anchor" href="#arg-bias-correct"></a></dt>

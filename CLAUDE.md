@@ -72,17 +72,18 @@ Changing function signature of exported function - Modifying
 core loop - Unsure about approach (multiple valid solutions)
 
 **Agent roster & skills:** this package defines a Claude Code subagent
-roster + the `diagnose-fit`, `context-audit`, `hedgehog-run`, and
-`dugong-run` skills in **`.claude/`** (tracked in git) — see
-**`.claude/agents/README.md`** for the full roster, routing, colors, and
-aliases. The agents can read/write data and outputs in sibling repos
-under `~/MOSAIC` (e.g. country repos, the `output/` tree) via the
-session’s `additionalDirectories` grant. Shortcuts: `/swe`
-(engineering), `/stat` (Bayesian/likelihood), `/dm` (epi/priors), `/ml`
-(suitability), `/etl` (data ingestion), `/maint` (R-pkg maintenance +
-review), `/guide` (user how-to), `/doctor` + `/diagnose-fit`
-(calibration diagnosis), `/arch` + `/context-audit` (AI-context
-hygiene).
+roster + the `run-mosaic`, `est-suitability`, `forecast-cv`,
+`diagnose-fit`, `context-audit`, `hedgehog-run`, and `dugong-run` skills
+in **`.claude/`** (tracked in git) — see **`.claude/agents/README.md`**
+for the full roster, routing, colors, and aliases. The agents can
+read/write data and outputs in sibling repos under `~/MOSAIC`
+(e.g. country repos, the `output/` tree) via the session’s
+`additionalDirectories` grant. Shortcuts: `/swe` (engineering), `/stat`
+(Bayesian/likelihood), `/dm` (epi/priors), `/ml` (suitability), `/etl`
+(data ingestion), `/maint` (R-pkg maintenance + review), `/guide`
+(run/config how-to → the `run-mosaic` skill; `run-guide` agent retired),
+`/doctor` + `/diagnose-fit` (calibration diagnosis), `/arch` +
+`/context-audit` (AI-context hygiene).
 
 ------------------------------------------------------------------------
 
@@ -178,8 +179,9 @@ of LASER sims until convergence (R² target, ESS thresholds) 2.
 **Predictive batches** — model-based batch sizing with ESS re-evaluation
 until convergence
 
-**Post-calibration:** - Best model identified, config saved to
-`config_best.json` -
+**Post-calibration:** - Medoid model identified, config saved to
+`2_calibration/best_model/config_medoid.json` (no `config_best.json` is
+produced) -
 [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
 computes posterior-weighted predictions (weighted median/mean across
 parameter sets × stochastic reruns) - R² and bias ratio computed from
@@ -229,8 +231,9 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 **Core packages:** laser-cholera, laser-core, numpy, h5py, pyarrow
 **Check:**
 [`MOSAIC::check_dependencies()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/check_dependencies.md)
-**Troubleshoot:** `MOSAIC::remove_MOSAIC_python_env()` then
-`MOSAIC::install_dependencies(force = TRUE)`
+**Troubleshoot:**
+[`MOSAIC::remove_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.md)
+then `MOSAIC::install_dependencies(force = TRUE)`
 
 ## Key Files
 
@@ -249,8 +252,9 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 
 ## Troubleshooting
 
-**Python environment broken:** `MOSAIC::remove_MOSAIC_python_env()` →
-`MOSAIC::install_dependencies(force = TRUE)` → restart R
+**Python environment broken:**
+[`MOSAIC::remove_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.md)
+→ `MOSAIC::install_dependencies(force = TRUE)` → restart R
 
 **Parallel worker deadlock:** BLAS/Numba threading conflict. Ensure all
 6 thread env vars set to “1” (built into
