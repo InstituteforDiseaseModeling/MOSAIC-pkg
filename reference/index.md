@@ -238,8 +238,6 @@ Processing and downloading data
   and Fit Beta Distributions (2014-2024)
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
   : Process EM-DAT Flood Events Into a Country-Week Panel
-- [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
-  : Process ENSO Data from enso-data Repository
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
@@ -273,6 +271,8 @@ Processing and downloading data
   Truly Square Data Structure
 - [`process_country_similarity_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_country_similarity_data.md)
   : Process Country Similarity Data for African Countries
+- [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_enso_data.md)
+  : Process ENSO Data from enso-data Repository
 - [`process_open_meteo_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_open_meteo_data.md)
   : Process Open-Meteo Climate Data from open-meteo-pipeline Repository
 - [`download_africa_shapefile()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/download_africa_shapefile.md)
@@ -1043,8 +1043,6 @@ Other exported functions and internal helpers
   and Fit Beta Distributions (2014-2024)
 - [`process_EMDAT_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_EMDAT_data.md)
   : Process EM-DAT Flood Events Into a Country-Week Panel
-- [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_ENSO_data.md)
-  : Process ENSO Data from enso-data Repository
 - [`process_GTFCC_vaccination_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_GTFCC_vaccination_data.md)
   : Process GTFCC Vaccination Data for MOSAIC Model
 - [`process_JHU_weekly_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_JHU_weekly_data.md)
@@ -1078,6 +1076,8 @@ Other exported functions and internal helpers
   Truly Square Data Structure
 - [`process_country_similarity_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_country_similarity_data.md)
   : Process Country Similarity Data for African Countries
+- [`process_enso_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_enso_data.md)
+  : Process ENSO Data from enso-data Repository
 - [`process_open_meteo_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/process_open_meteo_data.md)
   : Process Open-Meteo Climate Data from open-meteo-pipeline Repository
 - [`qgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/qgompertz.md)
