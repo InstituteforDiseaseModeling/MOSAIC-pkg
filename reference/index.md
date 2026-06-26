@@ -10,6 +10,8 @@ Main functions for running MOSAIC simulations
 - [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   [`run_mosaic()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
   : Run MOSAIC Calibration Workflow
+- [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+  : Render all MOSAIC figures from a finished run directory
 - [`make_LASER_config()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/make_LASER_config.md)
   : Create a Configuration File for LASER
 - [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md)
@@ -183,11 +185,15 @@ Calculation functions
   : Calculate log-likelihood for Poisson-distributed count data
 - [`calc_log_mean_exp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_mean_exp.md)
   : Stable log-mean-exp computation
+- [`calc_mobility_flux()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_mobility_flux.md)
+  : Compute the model-implied mobility flux from a run configuration
 - [`calc_model_R2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_R2.md)
   : Coefficient of Determination (R-squared) Between Observed and
   Estimated Series
 - [`calc_model_agreement_index()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
   : Agreement index A based on entropy of weights
+- [`calc_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md)
+  : Assemble the model convergence-status table
 - [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
 - [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
@@ -200,6 +206,8 @@ Calculation functions
   : Calculate Parameter-Specific ESS
 - [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
   : Compute the total model likelihood
+- [`calc_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md)
+  : Compute Parameter Sensitivity Ranking (R2-HSIC)
 - [`calc_model_posterior_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_posterior_distributions.md)
   : Calculate Model Posterior Distributions from Quantiles
 - [`calc_model_posterior_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_posterior_quantiles.md)
@@ -295,6 +303,11 @@ Plotting functions
   : Plot Combined Cholera Surveillance Data
 - [`plot_climate_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_climate_data.md)
   : Plot Weekly Climate Data for a Given Country and Save to File
+- [`plot_departure_tau()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_departure_tau.md)
+  : Plot the model-implied departure probability (\\\tau_i\\) and daily
+  travelers
+- [`plot_diffusion_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_diffusion_pi.md)
+  : Plot the model-implied diffusion connectivity matrix (\\\pi\_{ij}\\)
 - [`plot_effective_range()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_effective_range.md)
   : Plot Effective Range Function
 - [`plot_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_epidemic_peaks.md)
@@ -303,6 +316,10 @@ Plotting functions
   : Plot Generation Time as Gamma Distribution for Days and Weeks
 - [`plot_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.md)
   : Plot Mobility Data, Mobility Network, and Results
+- [`plot_mobility_flux_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_flux_matrix.md)
+  : Plot the model-implied daily mobility flux matrix (\\M\_{ij}\\)
+- [`plot_mobility_flux_network()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_flux_network.md)
+  : Plot the model-implied mobility flux network
 - [`plot_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_convergence_status.md)
   : Plot model convergence status table
 - [`plot_model_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_distributions.md)
@@ -326,6 +343,8 @@ Plotting functions
 - [`plot_model_subset_optimization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_subset_optimization.md)
   : Plot Best-Subset Optimization Diagnostic from a
   mosaic_subset_optimization Object
+- [`plot_model_trajectories()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_trajectories.md)
+  : Plot comprehensive model trajectories for one location
 - [`plot_mosaic_country_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_country_map.md)
   : Plot MOSAIC Country Map
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
@@ -591,11 +610,15 @@ Other exported functions and internal helpers
   : Calculate log-likelihood for Poisson-distributed count data
 - [`calc_log_mean_exp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_log_mean_exp.md)
   : Stable log-mean-exp computation
+- [`calc_mobility_flux()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_mobility_flux.md)
+  : Compute the model-implied mobility flux from a run configuration
 - [`calc_model_R2()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_R2.md)
   : Coefficient of Determination (R-squared) Between Observed and
   Estimated Series
 - [`calc_model_agreement_index()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_agreement_index.md)
   : Agreement index A based on entropy of weights
+- [`calc_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md)
+  : Assemble the model convergence-status table
 - [`calc_model_cor()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cor.md)
   : Pearson (or Rank) Correlation Between Observed and Estimated Series
 - [`calc_model_cvw()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_cvw.md)
@@ -608,6 +631,8 @@ Other exported functions and internal helpers
   : Calculate Parameter-Specific ESS
 - [`calc_model_likelihood()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_likelihood.md)
   : Compute the total model likelihood
+- [`calc_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md)
+  : Compute Parameter Sensitivity Ranking (R2-HSIC)
 - [`calc_model_posterior_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_posterior_distributions.md)
   : Calculate Model Posterior Distributions from Quantiles
 - [`calc_model_posterior_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_posterior_quantiles.md)
@@ -921,6 +946,11 @@ Other exported functions and internal helpers
   : Plot Combined Cholera Surveillance Data
 - [`plot_climate_data()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_climate_data.md)
   : Plot Weekly Climate Data for a Given Country and Save to File
+- [`plot_departure_tau()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_departure_tau.md)
+  : Plot the model-implied departure probability (\\\tau_i\\) and daily
+  travelers
+- [`plot_diffusion_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_diffusion_pi.md)
+  : Plot the model-implied diffusion connectivity matrix (\\\pi\_{ij}\\)
 - [`plot_effective_range()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_effective_range.md)
   : Plot Effective Range Function
 - [`plot_epidemic_peaks()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_epidemic_peaks.md)
@@ -929,6 +959,10 @@ Other exported functions and internal helpers
   : Plot Generation Time as Gamma Distribution for Days and Weeks
 - [`plot_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.md)
   : Plot Mobility Data, Mobility Network, and Results
+- [`plot_mobility_flux_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_flux_matrix.md)
+  : Plot the model-implied daily mobility flux matrix (\\M\_{ij}\\)
+- [`plot_mobility_flux_network()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_flux_network.md)
+  : Plot the model-implied mobility flux network
 - [`plot_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_convergence_status.md)
   : Plot model convergence status table
 - [`plot_model_distributions()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_distributions.md)
@@ -952,6 +986,8 @@ Other exported functions and internal helpers
 - [`plot_model_subset_optimization()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_subset_optimization.md)
   : Plot Best-Subset Optimization Diagnostic from a
   mosaic_subset_optimization Object
+- [`plot_model_trajectories()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_trajectories.md)
+  : Plot comprehensive model trajectories for one location
 - [`plot_mosaic_country_map()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_country_map.md)
   : Plot MOSAIC Country Map
 - [`plot_mosaic_palette()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mosaic_palette.md)
@@ -1058,6 +1094,8 @@ Other exported functions and internal helpers
   : Pull latest data from external scraper repos and report coverage
 - [`remove_python_env()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/remove_python_env.md)
   : Remove the MOSAIC Python Environment
+- [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+  : Render all MOSAIC figures from a finished run directory
 - [`rgompertz()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/rgompertz.md)
   : Generate Random Gompertz Variates
 - [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md)

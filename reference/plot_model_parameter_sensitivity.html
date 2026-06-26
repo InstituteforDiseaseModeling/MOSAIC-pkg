@@ -15,7 +15,7 @@ samples where parameters are correlated (Da Veiga 2015)."><meta property="og:ima
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.51.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,6 +61,7 @@ samples where parameters are correlated (Da Veiga 2015).</p>
 <span>  <span class="va">results_file</span>,</span>
 <span>  priors_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  output_dir <span class="op">=</span> <span class="st">"."</span>,</span>
+<span>  sensitivity <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  max_params <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>  n_samples <span class="op">=</span> <span class="fl">2000</span>,</span>
 <span>  kernel <span class="op">=</span> <span class="st">"rbf"</span>,</span>
@@ -83,7 +84,15 @@ samples where parameters are correlated (Da Veiga 2015).</p>
 
 
 <dt id="arg-output-dir">output_dir<a class="anchor" aria-label="anchor" href="#arg-output-dir"></a></dt>
-<dd><p>Directory to write the output figure and CSV.</p></dd>
+<dd><p>Directory to write the output figure. The CSV is written by
+<code><a href="calc_model_parameter_sensitivity.html">calc_model_parameter_sensitivity</a></code>, not here.</p></dd>
+
+
+<dt id="arg-sensitivity">sensitivity<a class="anchor" aria-label="anchor" href="#arg-sensitivity"></a></dt>
+<dd><p>Optional precomputed result list from
+<code><a href="calc_model_parameter_sensitivity.html">calc_model_parameter_sensitivity</a></code> (<code>$sens_df</code>,
+<code>$subset_label</code>, <code>$n_used</code>). When supplied the recomputation is
+skipped and the CSV is not (re)written.</p></dd>
 
 
 <dt id="arg-max-params">max_params<a class="anchor" aria-label="anchor" href="#arg-max-params"></a></dt>
@@ -121,7 +130,7 @@ optimizer-refined subset.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data.frame with columns <code>parameter</code>, <code>hsic_r2</code>,
 <code>p_value</code>, <code>sig</code>, and <code>description</code> (invisibly). Writes a PNG
-and CSV to <code>output_dir</code>.</p>
+to <code>output_dir</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -130,6 +139,11 @@ statistically independent (under the RBF kernel), and equals one if the
 log-likelihood is a deterministic function of that parameter alone.</p>
 <p>Significance is assessed via an asymptotic Gamma approximation of the null
 distribution (valid when n &gt;= 100). Bars are coloured by significance level.</p>
+<p>The HSIC computation and the <code>parameter_sensitivity.csv</code> write live in
+<code><a href="calc_model_parameter_sensitivity.html">calc_model_parameter_sensitivity</a></code>; this function renders the
+ranked bar chart from that result. Pass a precomputed <code>sensitivity</code>
+object to avoid recomputing, or let the function compute it from
+<code>results_file</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

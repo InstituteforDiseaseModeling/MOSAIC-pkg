@@ -8,7 +8,12 @@ the appropriate diagnostics file.
 ## Usage
 
 ``` r
-plot_model_convergence_status(results_dir, plots_dir = NULL, verbose = TRUE)
+plot_model_convergence_status(
+  results_dir,
+  plots_dir = NULL,
+  status = NULL,
+  verbose = TRUE
+)
 ```
 
 ## Arguments
@@ -23,6 +28,12 @@ plot_model_convergence_status(results_dir, plots_dir = NULL, verbose = TRUE)
 
   Path to plots directory (default: "../plots" relative to results_dir)
 
+- status:
+
+  Optional precomputed result list from
+  [`calc_model_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md).
+  When supplied the recomputation and CSV write are skipped.
+
 - verbose:
 
   Logical indicating whether to print messages
@@ -32,6 +43,11 @@ plot_model_convergence_status(results_dir, plots_dir = NULL, verbose = TRUE)
 Invisible NULL. Creates a PDF file with the convergence status table.
 
 ## Details
+
+The status-table assembly and the `convergence_status.csv` write live in
+[`calc_model_convergence_status`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md);
+this function renders the PDF table from that result. Pass a precomputed
+`status` object to skip recomputation (and the CSV write).
 
 The function automatically detects whether to use likelihood-based or
 loss-based diagnostics by checking for the presence of diagnostics files

@@ -30,6 +30,11 @@ calc_model_ensemble(
   n_cores = NULL,
   root_dir = NULL,
   precomputed_results = NULL,
+  capture_trajectories = FALSE,
+  trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
+  trajectory_n_lines = 150L,
+  trajectory_scratch_dir = NULL,
+  reduce_trajectories = TRUE,
   verbose = TRUE
 )
 ```
@@ -128,6 +133,46 @@ calc_model_ensemble(
   Optional list of pre-gathered LASER results (e.g. from Dask). Each
   element must have `$param_idx`, `$stoch_idx`, `$reported_cases`,
   `$reported_deaths`, and `$success`.
+
+- capture_trajectories:
+
+  Logical. When `TRUE`, harvest the comprehensive internal-state
+  channels (`trajectory_channels`) from each member and attach a compact
+  `$trajectories` (`mosaic_trajectories`) object – per-channel weighted
+  median + a uniform-thinned set of actual member trajectories + derived
+  series (I_total, mass_balance, CFR, epidemic frac). Default `FALSE`
+  ([`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  enables it for the posterior ensemble; never for the medoid).
+  RAM/payload is linear in `length(trajectory_channels)`.
+
+- trajectory_channels:
+
+  Character vector of `model$results` channels to capture when
+  `capture_trajectories = TRUE`. Default
+  `.MOSAIC_TRAJECTORY_CHANNELS_DEFAULT` (the comprehensive set). The
+  documented RAM lever – shorten it to reduce capture cost.
+
+- trajectory_n_lines:
+
+  Integer. Number of uniform-thinned member trajectories retained per
+  location for the spaghetti display. Default 150.
+
+- trajectory_scratch_dir:
+
+  Character or `NULL`. Directory for the per-sim trajectory-channel
+  scratch spill (stream-to-disk capture). When `NULL` and capturing, a
+  temporary directory is created. When provided, the CALLER owns its
+  lifecycle (it is not auto-deleted) – used by
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  to reduce over the optimized subset post-optimization.
+
+- reduce_trajectories:
+
+  Logical. When `TRUE` (default) the trajectory reduction runs here over
+  all members and is attached as `$trajectories`. When `FALSE`, the
+  channels are spilled to scratch but NOT reduced; the scratch handle is
+  returned in `$trajectory_scratch` so the caller can reduce over a
+  final (e.g. optimized) subset without re-simulating.
 
 - verbose:
 

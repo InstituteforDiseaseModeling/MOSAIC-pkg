@@ -8,7 +8,7 @@ column for downstream forecast validation.
 ## Usage
 
 ``` r
-process_enso_data(PATHS)
+process_enso_data(PATHS, source = c("bom", "nmme"))
 ```
 
 ## Arguments
@@ -23,6 +23,16 @@ process_enso_data(PATHS)
 
   - **DATA_ENSO**: Path to the output directory for processed ENSO data.
 
+- source:
+
+  Character; which enso-data forecast source to read. One of `"bom"`
+  (Australian Bureau of Meteorology, ~6-month forecast horizon; the
+  default) or `"nmme"` (NOAA North American Multi-Model Ensemble,
+  ~8-month horizon). Both are resolved from the same enso-data
+  repository via `downloads/<source>/LATEST`. Defaults to `"bom"` so
+  existing callers are unaffected; pass `"nmme"` to use the
+  longer-horizon feed.
+
 ## Value
 
 Invisibly returns the path to the output directory. Writes three CSV
@@ -30,12 +40,15 @@ files: `enso_daily.csv`, `enso_weekly.csv`, `enso_monthly.csv`.
 
 ## Details
 
-The function reads from the most recent BOM compiled download (resolved
-via the `downloads/bom/LATEST` pointer file). The BOM compiled output
-contains four ENSO/IOD variables (ENSO3, ENSO34, ENSO4, IOD) with
-continuous coverage from 1970 through ~6 months ahead, combining NOAA
-historical, BOM observed, and BOM forecast data.
+The function reads from the most recent compiled download for the chosen
+`source` (resolved via the `downloads/<source>/LATEST` pointer file).
+Both sources emit the same four ENSO/IOD variables (ENSO3, ENSO34,
+ENSO4, IOD) with continuous coverage from 1970 through the forecast
+horizon, combining NOAA historical, observed, and source-specific
+forecast data.
 
 The `value_adj` column (baseline-corrected to NOAA 1991-2020) is
 selected and renamed to `value`. The `data_source` column is retained
-with values: `historical`, `observed`, `forecast`.
+with values: `historical`, `observed`, `forecast`. The NMME source
+carries an extra `model` provenance column (e.g. `ENSMEAN`); it is
+dropped here so the written schema is identical regardless of `source`.

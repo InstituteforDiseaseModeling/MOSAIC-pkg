@@ -7,7 +7,7 @@ approximation or great-circle (Haversine) formula.
 ## Usage
 
 ``` r
-get_distance_matrix(x, y, id, method = c("spherical", "planar"))
+get_distance_matrix(x, y, id, method = c("spherical", "planar"), sort = TRUE)
 ```
 
 ## Arguments
@@ -30,10 +30,20 @@ get_distance_matrix(x, y, id, method = c("spherical", "planar"))
   distances on a sphere of radius 6371 km, or `"planar"` for Euclidean
   distances in degree‐space converted by 111.35 km/deg.
 
+- sort:
+
+  Logical. When `TRUE` (default, preserving historical behavior) the
+  returned matrix is sorted alphabetically by `id`. When `FALSE` the
+  rows/columns are kept in the order of `id` (config order), so the axes
+  stay aligned to any value vector indexed the same way. Set `FALSE` for
+  the spatial-figures path, where labels must follow config order rather
+  than be silently re-sorted (F3).
+
 ## Value
 
 A square matrix of pairwise distances (km) among locations, with row and
-column names from `id`, sorted alphabetically.
+column names from `id`. By default sorted alphabetically; when
+`sort = FALSE`, kept in `id` (input) order.
 
 ## Examples
 

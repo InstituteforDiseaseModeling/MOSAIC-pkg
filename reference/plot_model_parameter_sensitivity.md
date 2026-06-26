@@ -14,6 +14,7 @@ plot_model_parameter_sensitivity(
   results_file,
   priors_file = NULL,
   output_dir = ".",
+  sensitivity = NULL,
   max_params = 30,
   n_samples = 2000,
   kernel = "rbf",
@@ -35,7 +36,16 @@ plot_model_parameter_sensitivity(
 
 - output_dir:
 
-  Directory to write the output figure and CSV.
+  Directory to write the output figure. The CSV is written by
+  [`calc_model_parameter_sensitivity`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md),
+  not here.
+
+- sensitivity:
+
+  Optional precomputed result list from
+  [`calc_model_parameter_sensitivity`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md)
+  (`$sens_df`, `$subset_label`, `$n_used`). When supplied the
+  recomputation is skipped and the CSV is not (re)written.
 
 - max_params:
 
@@ -71,7 +81,7 @@ plot_model_parameter_sensitivity(
 ## Value
 
 A data.frame with columns `parameter`, `hsic_r2`, `p_value`, `sig`, and
-`description` (invisibly). Writes a PNG and CSV to `output_dir`.
+`description` (invisibly). Writes a PNG to `output_dir`.
 
 ## Details
 
@@ -83,6 +93,12 @@ parameter alone.
 Significance is assessed via an asymptotic Gamma approximation of the
 null distribution (valid when n \>= 100). Bars are coloured by
 significance level.
+
+The HSIC computation and the `parameter_sensitivity.csv` write live in
+[`calc_model_parameter_sensitivity`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md);
+this function renders the ranked bar chart from that result. Pass a
+precomputed `sensitivity` object to avoid recomputing, or let the
+function compute it from `results_file`.
 
 ## References
 

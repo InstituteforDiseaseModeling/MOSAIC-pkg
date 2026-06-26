@@ -1,7 +1,276 @@
 # Changelog
 
-## MOSAIC 0.51.0
+## MOSAIC 0.55.3
 
+### Model-trajectory figures (new)
+
+- **New `"trajectories"` figure group in
+  [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)**
+  — a multi-panel “Model trajectories” figure per location reconstructed
+  from a finished run directory: the comprehensive set of internal LASER
+  channels over time (compartments S/E/Isym/Iasym/R/V1/V2/W/N, force of
+  infection Λ/Ψ + per-time transmission rates β_jt, incidence &
+  infection flows, burden channels) plus derived series (I_total,
+  mass_balance, CFR(t), epidemic fraction). Each panel shows a
+  uniform-thinned set of **actual** posterior member trajectories (the
+  spaghetti) with the weighted central line overlaid; observed
+  surveillance points are drawn only on the
+  `reported_cases`/`reported_deaths` panels. Pure read-render (P5):
+  consumes the persisted artifact only — never a LASER replay. Output to
+  `3_results/figures/trajectories/` as `trajectories_<ISO>.pdf` +
+  `trajectories_<ISO>_p1.png`.
+- **New exported plotter
+  `plot_model_trajectories(trajectories, location, output_dir)`** —
+  renders one location from a `mosaic_trajectories` artifact. No LASER,
+  no re-simulation, no re-weighting. Multi-location aware (the renderer
+  loops one figure per location). `incidence` is correctly labelled the
+  **S→E new-infection flow** (distinct from the `new_symptomatic` E→I
+  progression); Λ/Ψ are labelled per-capita/day hazards; the
+  deaths-observable overlay uses `reported_deaths` (not
+  `disease_deaths`).
+- **Capture-at-sim-time, STREAM-TO-DISK (capture-don’t-replay; no second
+  simulation).** A new `capture_trajectories` argument to
+  [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md)
+  (default `FALSE`;
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  defaults it **ON** for the posterior ensemble) harvests the
+  comprehensive channels from each member where `model$results` is
+  already in hand — at zero marginal simulation cost. Channels are
+  **spilled to a per-sim scratch file during the run** (new args
+  `trajectory_scratch_dir`, `reduce_trajectories`), then reduced **on
+  the master, channel-by-channel** (one transient
+  `[n_loc×n_time×n_param×n_stoch]` array at a time → freed before the
+  next channel). Peak RAM is bounded to ONE dense array regardless of
+  the channel count (the scratch *disk* footprint, not RAM, scales with
+  `trajectory_channels`), so capture scales to 40-location runs on both
+  laptops and large-memory VMs. Members are the **best subset** only;
+  the full sample is never used. `epidemic_frac` reconstructs the
+  engine’s internal epidemic flag (`Isym[t-δ] > threshold·N_eff`,
+  `N_eff` = inline people-sum) via a streaming weighted-mean pass.
+- **Deviation-#1 (optimized-subset weighting), exact.** The reduction is
+  deferred (`reduce_trajectories = FALSE`) and run by
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  over the FINAL displayed subset *after*
+  [`optimize_ensemble_subset()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/optimize_ensemble_subset.md)
+  — with **no re-simulation**: when `optimize_subset = TRUE` the
+  optimized members are mapped back to their candidate scratch files by
+  seed (with a duplicate-seed guard that falls back to the positional
+  candidate path), and `reported_cases`/`reported_deaths` are taken from
+  the optimized `cases_array`/`deaths_array`. The reported\_\* central
+  line follows `control$predictions$central_method` **per channel**
+  (weighted median or weighted mean), so it is **bit-identical** to the
+  cases/deaths prediction plots under both modes; all other channels use
+  the conventional weighted median. When `optimize_subset = FALSE`, the
+  candidate subset (`is_best_subset`/`weight_best`) is used.
+- **Comprehensive channel capture in lockstep across both backends** —
+  the local PSOCK worker (`calc_model_ensemble.R`), the Dask Python
+  worker (`mosaic_dask_worker.py`), and the Dask R harvest
+  (`run_MOSAIC_helpers.R`) capture the same channel set.
+  `capture_trajectories = FALSE` now gates the Dask Python worker
+  itself, so it cuts the on-wire payload (not merely discarded R-side).
+  Capture is post-calibration only (`run_laser_postca`); calibration is
+  untouched. `trajectory_channels` is the documented RAM/disk lever;
+  `.mosaic_ensemble_ram_projection_gb()` includes the capture term (and,
+  on the Dask client path, the gathered-channel term) so the OOM warning
+  fires honestly.
+- **Capability check (no silent backend skew).** When
+  `capture_trajectories = TRUE` but no worker returns the channels
+  (e.g. a client running a MOSAIC build that predates this feature), the
+  reduction emits a loud
+  [`warning()`](https://rdrr.io/r/base/warning.html) and skips the
+  artifact rather than silently producing trajectories on one backend
+  and not the other. The Dask worker script (`mosaic_dask_worker.py`) is
+  uploaded to the Coiled workers at runtime via `client$upload_file()`,
+  so **no Coiled image rebuild is required** — reinstalling MOSAIC on
+  the client is sufficient for the Dask backend to return the new
+  channels.
+- **New artifact `2_calibration/trajectories_ensemble.rds`**
+  (`mosaic_trajectories`, schema-stamped) — per-channel weighted central
+  series + uniform-thinned actual member lines + observed series +
+  per-location endemic/epidemic CFR reference levels (`cfr_refs`). The
+  medoid ensemble never captures trajectories. New directory key
+  `res_fig_trajectories`. The transient scratch dir is removed on normal
+  completion **and on any error/interrupt** (`on.exit`), so a failed run
+  cannot orphan multi-GB of scratch.
+- **CFR(t) panel** carries dashed endemic/epidemic regime reference
+  lines (weighted-median `cfr_baseline`/`cfr_epidemic` from the
+  `calc_implied_cfr()` sample columns over the best subset), with a
+  caption noting the rolling window is `min(28, series length)` so a
+  sparse panel on short series is not mistaken for a bug.
+- **Robustness:** `.rec_mat` trims `tick+1` flow channels (recorded one
+  time-column long) instead of silently dropping the FOI/incidence
+  panels, and warns per-channel on an unrecoverable mismatch;
+  display-line thinning uses
+  [`withr::with_seed()`](https://withr.r-lib.org/reference/with_seed.html)
+  (no global `.Random.seed` mutation); the reducer closes its
+  per-channel connections on any exit; and the per-channel
+  present-member count is surfaced so a compartment central computed
+  over fewer members than its `reported_*` neighbour is visible rather
+  than read as a model inconsistency.
+
+## MOSAIC 0.53.0
+
+- **New `"spatial"` figure group in
+  [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)**
+  — six spatial-dynamics figures reconstructed from a finished run
+  directory, in two families (mobility and transmission). Pure
+  read-render (P5): config + persisted `.rds` arrays + a packaged
+  basemap only — never a simulation or a GeoBoundaries /
+  [`get_country_shp()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_country_shp.md)
+  API call. Figures: π_ij diffusion heatmap, τ_i departure (forest + N·τ
+  daily travelers), modeled flux matrix M, mobility network, spatial
+  importation hazard 𝓗_jt, and Keeling–Rohani coupling 𝓒_ij. Output to
+  `3_results/figures/spatial/`.
+  - **New pure helper `calc_mobility_flux(config)`** — single source of
+    truth for the four mobility figures. Returns
+    `{location_name, coords, N, tau, omega, gamma, D, pi, flux}` with
+    the model-implied daily flux `M_ij = N_i·τ_i·π_ij` (diagonal `NA`),
+    all in **config order** with axis labels aligned element-wise (no
+    internal re-sort). Satisfies the identity
+    `rowSums(M, na.rm=TRUE) == N·τ`. Uses only
+    [`get_distance_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_distance_matrix.md) +
+    [`calc_diffusion_matrix_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_diffusion_matrix_pi.md)
+    — no disk, estimation, or API. This is the *model-implied* sibling
+    of
+    [`plot_mobility()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility.md)’s
+    *observed-OAG* panels (distinct quantities; not a fork).
+  - **New exported plotters**
+    [`plot_diffusion_pi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_diffusion_pi.md),
+    [`plot_departure_tau()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_departure_tau.md)
+    (CI bars only when supplied),
+    [`plot_mobility_flux_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_flux_matrix.md),
+    [`plot_mobility_flux_network()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_mobility_flux_network.md)
+    (centroid network over an optional `sf` basemap). All match docs
+    aesthetics via `mosaic_colors`/`theme_mosaic`.
+  - **Engine spatial arrays now extracted & persisted.** Both simulation
+    workers previously `del`/`gc`’d the model object and returned only
+    cases/deaths. The engine’s `spatial_hazard` (J×T), `coupling` (J×J),
+    and `pi_ij` (J×J) (filled by the engine `DerivedValues` component)
+    are now extracted **inside each worker before discard, on both the
+    local PSOCK path (`calc_model_ensemble.R`) and the Dask path
+    (`mosaic_dask_worker.py`) in lockstep**, aggregated as the
+    **element-wise median across the posterior-ensemble members**, and
+    persisted to
+    `2_calibration/{spatial_hazard,coupling,pi_ij}_ensemble.rds`
+    (schema-stamped, config order, `location_name` attached). A
+    Dask↔︎PSOCK serialization round-trip parity test asserts the
+    `numpy.tolist()`→R reconstruction is bit-identical (incl. `NaN`
+    cells). The coupling figure **masks `NaN`**
+    (zero-variance/never-infected locations) explicitly. The renderer
+    prefers the persisted engine `pi_ij` over an R recompute when
+    present.
+  - **τ-CI artifact (`1_inputs/mobility_tau_ci.csv`)** —
+    [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    copies the per-location 95% CI from
+    `MODEL_INPUT/mobility_travel_prob_params.csv` (the upstream
+    `fit_prob_travel()` Beta posterior) into the run directory in config
+    order;
+    [`plot_departure_tau()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_departure_tau.md)
+    draws interval bars when present, point-only otherwise.
+    Unconditional (gated by `io`, not `plots`).
+  - **Packaged basemap** `inst/extdata/africa_adm0_lowres.geojson` (~40
+    KB, derived from the per-country ADM0 shapefiles in
+    `MOSAIC-data/processed/shapefiles`) provides the continental network
+    backdrop without any API call. Subnational geographies fall back to
+    a centroid-only network.
+  - **F3 label-ordering fix.**
+    [`get_distance_matrix()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_distance_matrix.md)
+    gains `sort = TRUE` (default, historical behavior preserved);
+    `sort = FALSE` keeps input/config order so axes stay aligned to
+    value vectors.
+    [`plot_spatial_hazard()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_spatial_hazard.md)
+    no longer re-sorts location labels alphabetically — it now follows
+    `rownames(H)` (config order), preventing a silent row-mislabel when
+    `H` is non-alphabetical. File `plot_spatial_correlation_matrix.R`
+    renamed to `plot_spatial_correlation_heatmap.R` (exported function
+    name unchanged).
+  - **Engine-pool note (DM#3):** the rendered hazard is the engine array
+    (single source of truth), which uses an S-only susceptible pool
+    `S*_jt=(1-τ_j)S_jt`; the standalone R
+    [`calc_spatial_hazard()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_spatial_hazard.md)
+    uses a non-canonical `S+V1+V2` pool and is **not** reconciled to the
+    engine figure.
+  - Files: `R/calc_mobility_flux.R` (new), `R/plot_diffusion_pi.R` /
+    `R/plot_departure_tau.R` / `R/plot_mobility_flux_matrix.R` /
+    `R/plot_mobility_flux_network.R` (new),
+    `R/plot_spatial_correlation_heatmap.R` (renamed + NaN-mask),
+    `R/plot_spatial_hazard.R`, `R/get_distance_matrix.R`,
+    `R/render_MOSAIC_figures.R`, `R/calc_model_ensemble.R`,
+    `R/run_MOSAIC.R`, `R/run_MOSAIC_helpers.R`,
+    `inst/python/mosaic_dask_worker.py`,
+    `inst/extdata/africa_adm0_lowres.geojson` (new). Tests:
+    `test-calc_mobility_flux.R`, `test-render_spatial_group.R`,
+    `test-spatial_arrays_dask_psock_parity.R`.
+
+## MOSAIC 0.52.0
+
+- **Visualization separated from modeling in
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)**
+  — the pipeline now produces a *complete, self-describing*
+  `dir_output/` (every data artifact) **independent of plotting**, and
+  all figures are rendered by a single standalone pass over the finished
+  directory. Directly attacks the recurring “computation gated behind
+  `plots=TRUE`” bug class (CLAUDE.md lessons
+  [\#2](https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/issues/2)/#9/#10).
+  - **New exported
+    `render_MOSAIC_figures(dir_output, which = NULL, plots = TRUE, verbose = TRUE)`**
+    reconstructs every pipeline figure **from disk artifacts** (`.rds`
+    ensembles, `samples.parquet`, posterior/diagnostic CSVs, prediction
+    CSVs, `priors.json`). It is a **pure read-render**: it never calls
+    [`calc_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_ensemble.md),
+    [`run_LASER()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_LASER.md),
+    or
+    [`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md);
+    a missing / corrupt / schema-incompatible artifact is
+    warned-and-skipped (never rebuilt, which would trigger local
+    re-simulation). `which=` selects figure groups (`convergence` /
+    `posterior` / `predictions` / `ppc` / `sensitivity` / `psi_star` /
+    `parameters`); each figure is `tryCatch`-wrapped. Usable post-hoc,
+    on another machine, or repeatedly.
+  - **Data writes are now unconditional** (gated by `io`, not `plots`):
+    prediction CSVs (`predictions_{ensemble,medoid}_*.csv`),
+    `parameter_sensitivity.csv`, and `convergence_status.csv` are
+    written by
+    [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+    regardless of `plots`. `run_MOSAIC(plots = FALSE)` and
+    `run_MOSAIC(plots = TRUE)` now emit **identical data artifacts**;
+    only the `*.png/*.pdf` figures differ.
+  - **New pure helper `.mosaic_assemble_prediction_table()`** (extracted
+    from
+    [`plot_model_ensemble()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_ensemble.md))
+    is the single source of truth for the masked prediction table, so
+    the exported CSV and the plotted line are guaranteed identical. CSV
+    schema is unchanged
+    (`location, date, metric, observed, predicted_central, predicted_mean, predicted_median, central_method, ci_<k>_lower/upper`).
+  - **New exported
+    [`calc_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md)
+    and
+    [`calc_model_convergence_status()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_convergence_status.md)**
+    hold the HSIC computation and the convergence-status-table assembly
+    (and their CSV writes); the corresponding `plot_*` functions are now
+    pure consumers (accept a precomputed result, no longer own the CSV).
+  - **In-memory objects persisted** for the renderer:
+    `medoid_ensemble.rds` (G3 — the one ensemble previously
+    unserialized), `subset_opt.rds` (G4). Every persisted `.rds` carries
+    a `mosaic_schema_version` stamp so the renderer can warn-and-skip
+    incompatible old run directories.
+  - **`plot_model_parameters` wired in** as a renderer diagnostic
+    (`parameters` group) — previously orphaned.
+    `plot_model_ensemble(save_predictions=)` is **deprecated to a no-op
+    with a warning** (not silently removed); the masking regression
+    tests migrate onto `.mosaic_assemble_prediction_table()`.
+  - **Tests:** engine-free P4 regression
+    (`test-plots-false-still-writes-data.R`) asserts the data CSVs
+    exist + match plotted content without any calibration; renderer
+    round-trip (`test-render_MOSAIC_figures.R`) asserts figures appear
+    and **no simulation is triggered** (P5, via mocked re-sim entry
+    points), plus warn-and-skip on missing / schema-incompatible
+    artifacts. Files: `R/render_MOSAIC_figures.R` (new),
+    `R/calc_model_parameter_sensitivity.R` (new),
+    `R/calc_model_convergence_status.R` (new),
+    `R/plot_model_ensemble.R`, `R/plot_model_parameter_sensitivity.R`,
+    `R/plot_model_convergence_status.R`, `R/run_MOSAIC.R`,
+    `R/run_MOSAIC_helpers.R`. \# MOSAIC 0.51.0
 - **Per-location `alpha_1`** (within-metapopulation population-mixing
   exponent). `alpha_1` is now driven **end-to-end as a per-location
   quantity** (length-`nL` vector) — sampling → priors → config

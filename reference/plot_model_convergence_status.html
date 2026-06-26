@@ -11,7 +11,7 @@ and loss-based calibration methods by auto-detecting the appropriate diagnostics
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.51.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,7 +51,12 @@ and loss-based calibration methods by auto-detecting the appropriate diagnostics
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_model_convergence_status</span><span class="op">(</span><span class="va">results_dir</span>, plots_dir <span class="op">=</span> <span class="cn">NULL</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_model_convergence_status</span><span class="op">(</span></span>
+<span>  <span class="va">results_dir</span>,</span>
+<span>  plots_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  status <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -67,6 +72,12 @@ and loss-based calibration methods by auto-detecting the appropriate diagnostics
 <dd><p>Path to plots directory (default: "../plots" relative to results_dir)</p></dd>
 
 
+<dt id="arg-status">status<a class="anchor" aria-label="anchor" href="#arg-status"></a></dt>
+<dd><p>Optional precomputed result list from
+<code><a href="calc_model_convergence_status.html">calc_model_convergence_status</a></code>. When supplied the recomputation
+and CSV write are skipped.</p></dd>
+
+
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>Logical indicating whether to print messages</p></dd>
 
@@ -77,7 +88,11 @@ and loss-based calibration methods by auto-detecting the appropriate diagnostics
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function automatically detects whether to use likelihood-based or loss-based
+    <p>The status-table assembly and the <code>convergence_status.csv</code> write live in
+<code><a href="calc_model_convergence_status.html">calc_model_convergence_status</a></code>; this function renders the PDF
+table from that result. Pass a precomputed <code>status</code> object to skip
+recomputation (and the CSV write).</p>
+<p>The function automatically detects whether to use likelihood-based or loss-based
 diagnostics by checking for the presence of diagnostics files in this order:</p><ul><li><p><code>convergence_diagnostics.json</code> (likelihood-based, e.g., calibration_test_10.R)</p></li>
 <li><p><code>convergence_diagnostics_loss.json</code> (loss-based, older methods)</p></li>
 </ul></div>

@@ -17,7 +17,7 @@ plot_model_ensemble to render plots from the returned object."><meta property="o
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.51.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,6 +78,11 @@ envelopes for cases and deaths.</p>
 <span>  n_cores <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  root_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  precomputed_results <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  capture_trajectories <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  trajectory_channels <span class="op">=</span> <span class="va">.MOSAIC_TRAJECTORY_CHANNELS_DEFAULT</span>,</span>
+<span>  trajectory_n_lines <span class="op">=</span> <span class="fl">150L</span>,</span>
+<span>  trajectory_scratch_dir <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  reduce_trajectories <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -174,6 +179,45 @@ returned series here.</p></dd>
 <dd><p>Optional list of pre-gathered LASER results (e.g. from Dask).
 Each element must have <code>$param_idx</code>, <code>$stoch_idx</code>,
 <code>$reported_cases</code>, <code>$reported_deaths</code>, and <code>$success</code>.</p></dd>
+
+
+<dt id="arg-capture-trajectories">capture_trajectories<a class="anchor" aria-label="anchor" href="#arg-capture-trajectories"></a></dt>
+<dd><p>Logical. When <code>TRUE</code>, harvest the
+comprehensive internal-state channels (<code>trajectory_channels</code>) from each
+member and attach a compact <code>$trajectories</code> (<code>mosaic_trajectories</code>)
+object – per-channel weighted median + a uniform-thinned set of actual
+member trajectories + derived series (I_total, mass_balance, CFR, epidemic
+frac). Default <code>FALSE</code> (<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> enables it for the posterior
+ensemble; never for the medoid). RAM/payload is linear in
+<code>length(trajectory_channels)</code>.</p></dd>
+
+
+<dt id="arg-trajectory-channels">trajectory_channels<a class="anchor" aria-label="anchor" href="#arg-trajectory-channels"></a></dt>
+<dd><p>Character vector of <code>model$results</code> channels to
+capture when <code>capture_trajectories = TRUE</code>. Default
+<code>.MOSAIC_TRAJECTORY_CHANNELS_DEFAULT</code> (the comprehensive set). The
+documented RAM lever – shorten it to reduce capture cost.</p></dd>
+
+
+<dt id="arg-trajectory-n-lines">trajectory_n_lines<a class="anchor" aria-label="anchor" href="#arg-trajectory-n-lines"></a></dt>
+<dd><p>Integer. Number of uniform-thinned member
+trajectories retained per location for the spaghetti display. Default 150.</p></dd>
+
+
+<dt id="arg-trajectory-scratch-dir">trajectory_scratch_dir<a class="anchor" aria-label="anchor" href="#arg-trajectory-scratch-dir"></a></dt>
+<dd><p>Character or <code>NULL</code>. Directory for the
+per-sim trajectory-channel scratch spill (stream-to-disk capture). When
+<code>NULL</code> and capturing, a temporary directory is created. When provided,
+the CALLER owns its lifecycle (it is not auto-deleted) – used by
+<code><a href="run_MOSAIC.html">run_MOSAIC()</a></code> to reduce over the optimized subset post-optimization.</p></dd>
+
+
+<dt id="arg-reduce-trajectories">reduce_trajectories<a class="anchor" aria-label="anchor" href="#arg-reduce-trajectories"></a></dt>
+<dd><p>Logical. When <code>TRUE</code> (default) the trajectory
+reduction runs here over all members and is attached as <code>$trajectories</code>.
+When <code>FALSE</code>, the channels are spilled to scratch but NOT reduced; the
+scratch handle is returned in <code>$trajectory_scratch</code> so the caller can
+reduce over a final (e.g. optimized) subset without re-simulating.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
