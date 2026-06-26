@@ -45,11 +45,12 @@
 #'   schema-guarded feature selector. Errors if a `"v7.3"` feature is absent from
 #'   the suitability CSV (schema-drift guard).
 #' @param response_var Training target column, shared by both architectures
-#'   (default `"transmission_intensity"`, the v0.34 default). For the lstm_v2 path
-#'   this maps internally to the sandbox `"intensity"` recipe
-#'   (`log1p(cases)/log1p(cases_99th)` with a TRAIN-ONLY `cases_99th` anchor).
-#'   Alternatively name a pre-computed `[0,1]` `target_*` column present in the
-#'   suitability CSV (e.g. `"target_C_rate_global"`).
+#'   (default `"target_D_rate_per_country_floored"` — per-capita, per-country anchor;
+#'   see the architecture notes above for why it was selected over `"transmission_intensity"`).
+#'   Naming `"transmission_intensity"` maps (lstm_v2 path) to the sandbox `"intensity"` recipe
+#'   (`log1p(cases)/log1p(cases_99th)` with a TRAIN-ONLY `cases_99th` anchor); otherwise name a
+#'   pre-computed `[0,1]` `target_*` column present in the suitability CSV
+#'   (e.g. `"target_C_rate_global"`).
 #' @param bias_correct Logical (default `TRUE`), shared by both architectures.
 #'   Apply a post-hoc per-country affine bias correction
 #'   (\code{\link{calibrate_psi_predictions}}), fit on the training window and

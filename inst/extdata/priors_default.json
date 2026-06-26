@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "version": "15.16",
-    "date": "2026-06-24",
+    "version": "15.17",
+    "date": "2026-06-26",
     "build_date_start": "2023-01-01",
-    "description": "Default informative prior distributions for MOSAIC model parameters. v15.16 (2026-06-24): alpha_1 (within-metapop population-mixing exponent) RELOCATED from a single global scalar prior to a PER-LOCATION prior — parameters_location$alpha_1$location[[iso]] now carries a SHARED informative marginal Beta(shape1=28.4, shape2=71.6) for EVERY ISO (mean 0.284, sd ~0.045, 95% CI ~[0.20,0.38], cleanly within the engine (0,1] range invariant). This lets the per-location sampler draw a length-nL alpha_1 vector that the dual-mode laser-cholera engine applies elementwise per patch in the FOI (humantohuman.py power(effective_i, alpha_1)), while the tight shared prior emulates hierarchical shrinkage (MOSAIC's independent-per-ISO sampler cannot express a true hierarchy) and starves the alpha_1<->beta_j0_tot degeneracy. alpha_2 (frequency-driven transmission degree) is DELIBERATELY KEPT as a single GLOBAL SCALAR prior (weakly identified given psi absorbs environmental signal; user decision). Scalar-alpha_1 configs remain valid (engine broadcasts a scalar to all patches), so national nL=1 and legacy configs are unaffected. v15.15 (2026-06-23): B2 DYNAMIC per-country mu_j_baseline <-> sampled gamma_1 coupling (RECALIBRATION-GATED; statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_B2.md, the durable Phase-2 replacement for the v15.14 B1 static re-anchor). The per-country mu_j_baseline GAMMA LOCATION PRIOR is REMOVED and replaced by a per-country CFR_target LOGNORMAL location prior (meanlog = log(mean_cfr) [the same WHO hierarchical-GAM CFR the B1 build used; the CFR is now the prior MEDIAN], sdlog = 0.787 global). sample_parameters() now DERIVES mu_j_baseline at sample time from the already-sampled chain factor: mu_j_baseline = CFR_target * gamma_1 * rho / (rho_deaths * chi), chi = 0.5*(chi_endemic+chi_epidemic). Substituting into the v0.14.0 reported-CFR identity cancels the entire chain factor, so the realized implied reported CFR == CFR_target for EVERY draw, regardless of where gamma_1/chi/rho/rho_deaths land — gamma_1 stays fully free for the cases fit and the deaths channel no longer absorbs chain-factor drift (the structural cure for the B1 defect that a static gamma_1/chi anchor only approximated at the cohort median). The v15.10/v15.14 ETH-only x0.497 dwell stop-gap is REMOVED: B2 subsumes it structurally (ETH's mu is derived from ETH's OWN sampled gamma_1 every draw, so ETH implied CFR is pinned to CFR_target_ETH with no hand-tuned residual). CV SIZING (statistician SPEC_B2 §2): sdlog_cfr=0.787 PRESERVES today's implied-CFR prior spread (Var(log)=Var(log mu_Gamma4)+Var(log chain)=0.2231+0.3964=0.6195 -> sd 0.787, CV~0.93). The brief's 'match marginal mu Gamma(4) CV=0.5' target is INFEASIBLE (the now-sampled chain factor alone has Var(log)=0.396 > 0.223), so B2 necessarily WIDENS the marginal mu prior to CV~1.33 by design — harmless because mu is a latent nuisance and the data identifies the implied CFR (== CFR_target). FLAG for disease-modeler: confirm CFR_target per-country centers (the WHO-GAM mean_cfr) are biologically sane as the model's TARGET reported CFR; FLAG for statistician: sdlog_cfr=0.787 sizing. v15.14 (2026-06-22): RECALIBRATION-GATED bundled Stage-1 prior fixes (statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_prior_fixes.md), from the 19-ISO single-location metapop review at /Users/johngiles/MOSAIC/output/full_metapop/stage1_individual/. (Fix 1) mu_j_baseline CFR->mu chain factor B1 STATIC RE-ANCHOR: the derivation balanced the realized-CFR chain factor (chi/gamma_1) at the prior centers, but calibration consistently pulls gamma_1 DOWN (posterior median ~0.092, 16/19 below 0.10) and chi UP (~0.70), inflating implied CFR by a median ~1.25x. Re-anchored the derivation inputs from the prior-mean gamma_1=0.1133 / chi=0.639 to posterior-consistent gamma_1=0.10 (lognormal median, the shipped config scalar) / chi=0.70, so cfr_to_mu_adjustment 0.1832->0.1474 and every per-country mu_j_baseline center scales x0.804 (~1.25x deaths/implied-CFR reduction; cases untouched, mu_j never enters the case channel). The mu_j_baseline magnitude and rho_deaths v0.13 factor are unchanged (project_mu_j_baseline_already_fixed); gamma_1 prior WIDTH not narrowed (deferred biology check). The v15.10 ETH-only dwell stop-gap is RETAINED on top of B1: B1 is a UNIFORM x0.804 fold calibrated to the cohort-median gamma_1, but ETH calibrates gamma_1 well below the cohort median (~0.076, long-dwell tail) so the uniform fold under-corrects ETH; removing the stop-gap would push ETH mu_j_baseline 0.00088->0.00177 (x2.01) and ETH deaths bias ~1.83->~3.7 (mu is a linear deaths lever). ETH is held at the SAME total correction DEPTH as v15.10 (x0.40 on the old prior-center adjustment 0.1832): since B1 already supplies x0.804 of that depth, the ETH residual on top of B1 is 0.40/0.804 ~ 0.497, keeping ETH mu_j_baseline ~0.00088 (NOT 0.00177). NOT applied to any other country. B1 under-corrects ETH specifically; B2 (dynamic per-country gamma_1-coupled CFR->mu derivation, Phase 2) will subsume the ETH stop-gap properly. Also fixed the stale inline comment (the adjustment was mislabelled ~0.115; the verified value at the current rho/chi/rho_deaths priors is 0.183 pre-re-anchor, 0.1474 post). (Fix 2) beta_j0_tot per-country PARTIAL-SHRINKAGE RECENTER (w=0.5 geometric mean of v15.9 prior center and Stage-1 posterior median: new_center = sqrt(prior*post_median)), beta_j0_tot weakly identified (Stage-1 ESS ~110-135). 18 of the 19-ISO cohort recentered (LBR EXCLUDED — unidentified, no transmission signal, stays at 2e-5 global default); recenter is SYMMETRIC (BDI/MWI/NGA/RWA/TZA move UP — the v15.9 sweep over-corrected them down). Prior WIDTH (sdlog 1.1748) KEPT for every country (Stage-3 warm-start inflation guard). beta_j0_hum/beta_j0_env are derived at sample time (p_beta*beta_j0_tot), not stored separately, so the recenter propagates to both. NOTE: the v15.9 COG beta_j0_tot override (4.6667e-6) is KEPT (COG is OUTSIDE the Stage-1 19-ISO cohort, so it is not recentered and must not be reset to the 2e-5 global default — doing so would be a ~4.3x unintended increase); COG is the only non-cohort country carrying a beta override. v15.13 (2026-06-20): rebuilt at the 2023-01-01 production window alongside config_default v4.3 under the relaxed surveillance trust-tier gate (process_cholera_surveillance_data v0.47.1, fourier_* kept + down-weighted). epidemic_threshold and IC seeding (ic_t0 = 2023-02-01 for the 2023 build) re-derived against the regenerated multi-source combined weekly/daily surveillance with fourier reconstructions retained; build_date_start = 2023-01-01. v15.12 (2026-06-19): multi-source surveillance integration. (a) Initial-condition seeding epoch DECOUPLED from the fit-window date_start: all est_initial_* calls (V1_V2, E_I, R, S) and the population-at-t0 match now use ic_t0 = max(date_start, 2023-02-01). Empirically the 2015 IC lookback window has 0 active-case countries and late-2022 only ~6 (vs 11 at 2023-02-01), so seeding from an early window cold-starts ICs (near-zero E/I, R_eff<1, no ignition); the floor pins ICs to the proven data-rich anchor regardless of how early the fit window starts, and breaks the circular hazard whereby a <2023 config rebuild would poison the next priors rebuild's IC epoch. (b) epidemic_threshold now derives from the multi-source combined weekly file (include_ai=TRUE adds JHU/AI back-history) with AI rows EXCLUDED (source != 'AI') for parity with est_seasonal_dynamics; more outbreak weeks shift some per-country medians and may flip countries off the Zheng 0.7/100k fallback (MIN_OUTBREAK_WEEKS gate). v15.11 (2026-06-18): psi_star_b prior re-centred mean 0->+1.0 (sd kept 2.5) for all 40 countries to match the new per-capita D-scale suitability psi (target_D_rate_per_country_floored), which sits at a much lower level than the old transmission_intensity scale (per-country mean COD 0.93->0.43, global 0.14->0.10). At the prior center (a=1) the calc_psi_star transform is an odds-multiply psi*=sigma(logit(psi)+b). The +1.0 level shift acts on the delta (environmental decay) channel, NOT beta_env: beta_env (envtohuman.py:24) is self-normalized as beta_j0_env*(psi*/psi_bar*) so a uniform b ~cancels in the low-psi regime (no-op), whereas delta decay (environmental.py:150) reads psi* on its ABSOLUTE level via survival_days = days_short + pbeta(psi*|s1,s2)*(days_long-days_short), so a higher psi* lengthens modelled V. cholerae reservoir survival. The D scale pinned most countries near the days_short floor (~16d) at the old b=0 center; +1.0 raises psi* (COD mean 0.36->0.53, MOZ 0.12->0.21) so survival climbs toward the days_long ceiling at seasonal peaks while staying off the floor in low-burden countries. Validated against the spec eq:decay-priors envelope (claude/validate_psi_star_b_delta_survival.R, 2026-06-19): at the decay prior means (days_short=16, days_long=196, s1=s2=3) post-shift per-country survival lies entirely within ~16-196d (0/40 exceed the 196d ceiling, 0/40 below the 16d floor; median +4.9d/+17% to mean survival; survival is structurally bounded above by days_long since pbeta<=1, so the shift only moves countries ALONG the [16,196] curve and cannot breach the envelope). Gives calibration a sensible STARTING center, not a constraint (sd=2.5 retains both-direction freedom; the global decay days/shape params are also sampled). The MOZ-specific psi_star_b override (mean +0.4, fit on the old scale) is removed/folded into the general center. psi_star_a unchanged (a=1 identity is scale-invariant). v15.10 (2026-06-18): ETH-only mu_j_baseline dwell-mismatch STOP-GAP — scale Ethiopia's derived mu_j_baseline mean by 0.40 (Gamma rate 1816->4540, CV unchanged). The CFR->mu identity uses gamma_1 at its PRIOR MEAN (~0.114, 8.8d dwell), but ETH calibration drifts gamma_1 to the long-dwell tail (~0.076, ~14d); since per-case CFR scales as mu_j/gamma_1, realized reported CFR inflates to ~3.7% vs observed ~1.2% (deaths over-predict ~3.3x while cases stay near-unbiased). The x0.40 re-center returns deterministic reported CFR to ~1.5% (deaths bias ~1.3x) with cases unaffected (mu_j/rho_deaths do not enter the case channel; GTFCC treated-CFR target <1%). NOT a structural cure: the dwell mismatch affects all countries; the durable fix is a dwell-adjusted CFR->mu derivation and/or the run_MOSAIC best-subset weighting fix (the dAIC-4 truncation currently discards the deaths signal, so the ensemble reports near the prior center). Do not chase the exact x0.31 point estimate (overfits the broken weighting). See disease-modeler memory project_eth_deaths_cfr_dwell_mismatch. v15.9 (2026-06-16): laser-cholera v0.14.0 (issue #67) adjustments. (a) mu_j_baseline CFR->mu identity gains a gamma_1 (dwell) factor — mu = CFR * gamma_1 * rho / (rho_deaths * chi) — because v0.14.0 reports the new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state) instead of the Isym prevalence stock; per-country mu_j_baseline prior means drop ~9x (gamma_1 prior mean ~0.113) vs v15.8. (b) beta_j0_tot per-country medians recentred for the 14 cases-data countries from the v0.14.0 beta*mu magnitude sweep (e.g. ETH 1.75e-6->1.39e-5, SSD 2e-5->2.83e-4, NGA 2e-5->4.74e-6); the 26 no-data countries keep the 2e-5 global default (the sweep found no transferable beta shift, geomean ~1.2x / log-CV 1.5). Supersedes the v15.3 ETH-only override. See MOSAIC-pkg/claude/beta_percountry_sweep.R + beta_mu_percountry_sweep.R and memory project_laser_cholera_reported_cases_fix_67. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
+    "description": "Default informative prior distributions for MOSAIC model parameters. v15.17 (2026-06-26): rebuild combining (a) a DOC reconciliation and (b) a data-driven initial-condition refresh. (a) DOC: corrected five stale comment/string spots that quoted the continuous-time `gamma_1`/chi-blend approximation of the B2 mu_j_baseline derivation; the shipped sample-time code (sample_parameters.R B2.1) uses the engine-correct discrete form `CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic)`. (b) DATA REFRESH: re-derived against current surveillance — the initial-condition compartment priors (prop_S_initial / prop_R_initial across all 40 ISOs, prop_E_initial / prop_I_initial across the 12 active-case ISOs) were re-seeded at ic_t0 from updated case data, shifting their Beta shape parameters (208 scalar updates; max relative shape shift ~4x on small-mean compartments, IC means remain within plausible compartment ranges). No global parameters, derivation logic, or sampling behavior changed; CALIBRATION-AFFECTING via IC seeding only. v15.16 (2026-06-24): alpha_1 (within-metapop population-mixing exponent) RELOCATED from a single global scalar prior to a PER-LOCATION prior — parameters_location$alpha_1$location[[iso]] now carries a SHARED informative marginal Beta(shape1=28.4, shape2=71.6) for EVERY ISO (mean 0.284, sd ~0.045, 95% CI ~[0.20,0.38], cleanly within the engine (0,1] range invariant). This lets the per-location sampler draw a length-nL alpha_1 vector that the dual-mode laser-cholera engine applies elementwise per patch in the FOI (humantohuman.py power(effective_i, alpha_1)), while the tight shared prior emulates hierarchical shrinkage (MOSAIC's independent-per-ISO sampler cannot express a true hierarchy) and starves the alpha_1<->beta_j0_tot degeneracy. alpha_2 (frequency-driven transmission degree) is DELIBERATELY KEPT as a single GLOBAL SCALAR prior (weakly identified given psi absorbs environmental signal; user decision). Scalar-alpha_1 configs remain valid (engine broadcasts a scalar to all patches), so national nL=1 and legacy configs are unaffected. v15.15 (2026-06-23): B2 DYNAMIC per-country mu_j_baseline <-> sampled gamma_1 coupling (RECALIBRATION-GATED; statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_B2.md, the durable Phase-2 replacement for the v15.14 B1 static re-anchor). The per-country mu_j_baseline GAMMA LOCATION PRIOR is REMOVED and replaced by a per-country CFR_target LOGNORMAL location prior (meanlog = log(mean_cfr) [the same WHO hierarchical-GAM CFR the B1 build used; the CFR is now the prior MEDIAN], sdlog = 0.787 global). sample_parameters() now DERIVES mu_j_baseline at sample time from the already-sampled chain factor: mu_j_baseline = CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic) [the B2.1 engine-correct chain factor: the recovery-tick dwell factor is the per-tick recovery probability (1 - exp(-gamma_1)), NOT the continuous-rate gamma_1, and the effective PPV is chi_epidemic, NOT the 0.5*(chi_endemic+chi_epidemic) blend, because the engine's reported_cases is an Isym stock-read dominated by epidemic-regime ticks]. Substituting into the v0.14.0 reported-CFR identity cancels the entire chain factor, so the realized implied reported CFR == CFR_target for EVERY draw, regardless of where gamma_1/chi/rho/rho_deaths land — gamma_1 stays fully free for the cases fit and the deaths channel no longer absorbs chain-factor drift (the structural cure for the B1 defect that a static gamma_1/chi anchor only approximated at the cohort median). The v15.10/v15.14 ETH-only x0.497 dwell stop-gap is REMOVED: B2 subsumes it structurally (ETH's mu is derived from ETH's OWN sampled gamma_1 every draw, so ETH implied CFR is pinned to CFR_target_ETH with no hand-tuned residual). CV SIZING (statistician SPEC_B2 §2): sdlog_cfr=0.787 PRESERVES today's implied-CFR prior spread (Var(log)=Var(log mu_Gamma4)+Var(log chain)=0.2231+0.3964=0.6195 -> sd 0.787, CV~0.93). The brief's 'match marginal mu Gamma(4) CV=0.5' target is INFEASIBLE (the now-sampled chain factor alone has Var(log)=0.396 > 0.223), so B2 necessarily WIDENS the marginal mu prior to CV~1.33 by design — harmless because mu is a latent nuisance and the data identifies the implied CFR (== CFR_target). FLAG for disease-modeler: confirm CFR_target per-country centers (the WHO-GAM mean_cfr) are biologically sane as the model's TARGET reported CFR; FLAG for statistician: sdlog_cfr=0.787 sizing. v15.14 (2026-06-22): RECALIBRATION-GATED bundled Stage-1 prior fixes (statistician spec MOSAIC-pkg/claude/prior_fix_spec/SPEC_prior_fixes.md), from the 19-ISO single-location metapop review at /Users/johngiles/MOSAIC/output/full_metapop/stage1_individual/. (Fix 1) mu_j_baseline CFR->mu chain factor B1 STATIC RE-ANCHOR: the derivation balanced the realized-CFR chain factor (chi/gamma_1) at the prior centers, but calibration consistently pulls gamma_1 DOWN (posterior median ~0.092, 16/19 below 0.10) and chi UP (~0.70), inflating implied CFR by a median ~1.25x. Re-anchored the derivation inputs from the prior-mean gamma_1=0.1133 / chi=0.639 to posterior-consistent gamma_1=0.10 (lognormal median, the shipped config scalar) / chi=0.70, so cfr_to_mu_adjustment 0.1832->0.1474 and every per-country mu_j_baseline center scales x0.804 (~1.25x deaths/implied-CFR reduction; cases untouched, mu_j never enters the case channel). The mu_j_baseline magnitude and rho_deaths v0.13 factor are unchanged (project_mu_j_baseline_already_fixed); gamma_1 prior WIDTH not narrowed (deferred biology check). The v15.10 ETH-only dwell stop-gap is RETAINED on top of B1: B1 is a UNIFORM x0.804 fold calibrated to the cohort-median gamma_1, but ETH calibrates gamma_1 well below the cohort median (~0.076, long-dwell tail) so the uniform fold under-corrects ETH; removing the stop-gap would push ETH mu_j_baseline 0.00088->0.00177 (x2.01) and ETH deaths bias ~1.83->~3.7 (mu is a linear deaths lever). ETH is held at the SAME total correction DEPTH as v15.10 (x0.40 on the old prior-center adjustment 0.1832): since B1 already supplies x0.804 of that depth, the ETH residual on top of B1 is 0.40/0.804 ~ 0.497, keeping ETH mu_j_baseline ~0.00088 (NOT 0.00177). NOT applied to any other country. B1 under-corrects ETH specifically; B2 (dynamic per-country gamma_1-coupled CFR->mu derivation, Phase 2) will subsume the ETH stop-gap properly. Also fixed the stale inline comment (the adjustment was mislabelled ~0.115; the verified value at the current rho/chi/rho_deaths priors is 0.183 pre-re-anchor, 0.1474 post). (Fix 2) beta_j0_tot per-country PARTIAL-SHRINKAGE RECENTER (w=0.5 geometric mean of v15.9 prior center and Stage-1 posterior median: new_center = sqrt(prior*post_median)), beta_j0_tot weakly identified (Stage-1 ESS ~110-135). 18 of the 19-ISO cohort recentered (LBR EXCLUDED — unidentified, no transmission signal, stays at 2e-5 global default); recenter is SYMMETRIC (BDI/MWI/NGA/RWA/TZA move UP — the v15.9 sweep over-corrected them down). Prior WIDTH (sdlog 1.1748) KEPT for every country (Stage-3 warm-start inflation guard). beta_j0_hum/beta_j0_env are derived at sample time (p_beta*beta_j0_tot), not stored separately, so the recenter propagates to both. NOTE: the v15.9 COG beta_j0_tot override (4.6667e-6) is KEPT (COG is OUTSIDE the Stage-1 19-ISO cohort, so it is not recentered and must not be reset to the 2e-5 global default — doing so would be a ~4.3x unintended increase); COG is the only non-cohort country carrying a beta override. v15.13 (2026-06-20): rebuilt at the 2023-01-01 production window alongside config_default v4.3 under the relaxed surveillance trust-tier gate (process_cholera_surveillance_data v0.47.1, fourier_* kept + down-weighted). epidemic_threshold and IC seeding (ic_t0 = 2023-02-01 for the 2023 build) re-derived against the regenerated multi-source combined weekly/daily surveillance with fourier reconstructions retained; build_date_start = 2023-01-01. v15.12 (2026-06-19): multi-source surveillance integration. (a) Initial-condition seeding epoch DECOUPLED from the fit-window date_start: all est_initial_* calls (V1_V2, E_I, R, S) and the population-at-t0 match now use ic_t0 = max(date_start, 2023-02-01). Empirically the 2015 IC lookback window has 0 active-case countries and late-2022 only ~6 (vs 11 at 2023-02-01), so seeding from an early window cold-starts ICs (near-zero E/I, R_eff<1, no ignition); the floor pins ICs to the proven data-rich anchor regardless of how early the fit window starts, and breaks the circular hazard whereby a <2023 config rebuild would poison the next priors rebuild's IC epoch. (b) epidemic_threshold now derives from the multi-source combined weekly file (include_ai=TRUE adds JHU/AI back-history) with AI rows EXCLUDED (source != 'AI') for parity with est_seasonal_dynamics; more outbreak weeks shift some per-country medians and may flip countries off the Zheng 0.7/100k fallback (MIN_OUTBREAK_WEEKS gate). v15.11 (2026-06-18): psi_star_b prior re-centred mean 0->+1.0 (sd kept 2.5) for all 40 countries to match the new per-capita D-scale suitability psi (target_D_rate_per_country_floored), which sits at a much lower level than the old transmission_intensity scale (per-country mean COD 0.93->0.43, global 0.14->0.10). At the prior center (a=1) the calc_psi_star transform is an odds-multiply psi*=sigma(logit(psi)+b). The +1.0 level shift acts on the delta (environmental decay) channel, NOT beta_env: beta_env (envtohuman.py:24) is self-normalized as beta_j0_env*(psi*/psi_bar*) so a uniform b ~cancels in the low-psi regime (no-op), whereas delta decay (environmental.py:150) reads psi* on its ABSOLUTE level via survival_days = days_short + pbeta(psi*|s1,s2)*(days_long-days_short), so a higher psi* lengthens modelled V. cholerae reservoir survival. The D scale pinned most countries near the days_short floor (~16d) at the old b=0 center; +1.0 raises psi* (COD mean 0.36->0.53, MOZ 0.12->0.21) so survival climbs toward the days_long ceiling at seasonal peaks while staying off the floor in low-burden countries. Validated against the spec eq:decay-priors envelope (claude/validate_psi_star_b_delta_survival.R, 2026-06-19): at the decay prior means (days_short=16, days_long=196, s1=s2=3) post-shift per-country survival lies entirely within ~16-196d (0/40 exceed the 196d ceiling, 0/40 below the 16d floor; median +4.9d/+17% to mean survival; survival is structurally bounded above by days_long since pbeta<=1, so the shift only moves countries ALONG the [16,196] curve and cannot breach the envelope). Gives calibration a sensible STARTING center, not a constraint (sd=2.5 retains both-direction freedom; the global decay days/shape params are also sampled). The MOZ-specific psi_star_b override (mean +0.4, fit on the old scale) is removed/folded into the general center. psi_star_a unchanged (a=1 identity is scale-invariant). v15.10 (2026-06-18): ETH-only mu_j_baseline dwell-mismatch STOP-GAP — scale Ethiopia's derived mu_j_baseline mean by 0.40 (Gamma rate 1816->4540, CV unchanged). The CFR->mu identity uses gamma_1 at its PRIOR MEAN (~0.114, 8.8d dwell), but ETH calibration drifts gamma_1 to the long-dwell tail (~0.076, ~14d); since per-case CFR scales as mu_j/gamma_1, realized reported CFR inflates to ~3.7% vs observed ~1.2% (deaths over-predict ~3.3x while cases stay near-unbiased). The x0.40 re-center returns deterministic reported CFR to ~1.5% (deaths bias ~1.3x) with cases unaffected (mu_j/rho_deaths do not enter the case channel; GTFCC treated-CFR target <1%). NOT a structural cure: the dwell mismatch affects all countries; the durable fix is a dwell-adjusted CFR->mu derivation and/or the run_MOSAIC best-subset weighting fix (the dAIC-4 truncation currently discards the deaths signal, so the ensemble reports near the prior center). Do not chase the exact x0.31 point estimate (overfits the broken weighting). See disease-modeler memory project_eth_deaths_cfr_dwell_mismatch. v15.9 (2026-06-16): laser-cholera v0.14.0 (issue #67) adjustments. (a) mu_j_baseline CFR->mu identity gains a gamma_1 (dwell) factor — mu = CFR * gamma_1 * rho / (rho_deaths * chi) — because v0.14.0 reports the new_symptomatic INCIDENCE flow (= gamma_1 * Isym at steady state) instead of the Isym prevalence stock; per-country mu_j_baseline prior means drop ~9x (gamma_1 prior mean ~0.113) vs v15.8. (b) beta_j0_tot per-country medians recentred for the 14 cases-data countries from the v0.14.0 beta*mu magnitude sweep (e.g. ETH 1.75e-6->1.39e-5, SSD 2e-5->2.83e-4, NGA 2e-5->4.74e-6); the 26 no-data countries keep the 2e-5 global default (the sweep found no transferable beta shift, geomean ~1.2x / log-CV 1.5). Supersedes the v15.3 ETH-only override. See MOSAIC-pkg/claude/beta_percountry_sweep.R + beta_mu_percountry_sweep.R and memory project_laser_cholera_reported_cases_fix_67. v15.8 (2026-06-03): rho (cases-side care-seeking) re-derived as Beta(5.38, 7.10), mean 0.423, 95% CI [0.19, 0.70], ESS ~12.5, from random-effects pooling of TWO Wiens et al. 2025 (PMC12013865) case-definition strata: general diarrhea (29.9% [25.3, 35.1], n=122 obs) and severe diarrhea + cholera (58.6% [39.9, 75.2], n=22 obs). Pooling both strata captures the severity spectrum of symptomatic cholera (mild-to-moderate + severe), avoiding the upward bias of the severe-only stratum (dominated by outbreak-response settings) and the downward bias of the general stratum (broader population including many self-resolving episodes). The 12 GEMS Nasrin 2013 pediatric MSD entries previously included alongside Wiens were dropped because (a) GEMS measures pediatric MSD, a different population than MOSAIC's all-ages cholera; (b) the 12-strata-to-1 pooling was upside-down dimensionally; (c) Wiens already includes GEMS-derived data at the population level (6 of its Study IDs are tagged GEMS/HUAS). The prior mean moves from 0.276 to 0.423 - a moderate shift in the direction implied by the cholera-specific evidence while staying within clinical plausibility (per-episode CFR sanity check passes for all high-N test countries: MOZ 3.4%, ETH 9.1%, KEN 9.9%, COD 14.6%). See MOSAIC-pkg/R/get_rho_care_seeking_params.R for the full rationale. v15.7 (2026-06-02): rho_deaths switched back to the informative variant Beta(36.95, 51.02) (pooled-mean CI fit, ESS ~88, sd ~0.05). Rationale: MOSAIC's deaths likelihood identifies the product mu_j_baseline * rho_deaths per country, leaving a flat (sloppy) factorization direction. The narrow rho_deaths prior pins it near 0.42 during calibration sampling so mu_j_baseline posteriors carry the cross-country CFR signal cleanly. The wider prediction-interval variant Beta(6.30, 8.52) is retained for sensitivity analysis (see SYNTHESIS_REPORT.md sec 3.2). v15.6 (2026-06-02): mu_j_baseline derivation corrected for laser-cholera v0.13+ schema: cfr_to_mu_adjustment = rho / (rho_deaths * chi) (was rho/chi pre-v0.13). Per-country Gamma priors derived directly from the data-informed CFR (hierarchical GAM) using the steady-state identity mu_j_baseline = CFR * rho / (rho_deaths * chi); the rho, rho_deaths, chi means are computed inline from their actual Beta priors so the conversion factor stays in sync. Per-country prior means are ~2.36x their pre-v15.6 values (this corrects the pre-v0.13 under-scaling where mu_j_baseline implicitly absorbed 1/rho_deaths). MOZ-specific mu_j_baseline override Gamma(2, 1176) and mu_j_epidemic_factor override Gamma(1.5, 0.5) dropped — both were calibrated under the pre-v0.13 misspecified likelihood and are superseded by the universal data-driven prior. v15.5 (2026-06-02): (a) rho_deaths switched from informative Beta(36.95, 51.02) -> recommended Beta(6.30, 8.52) per SYNTHESIS_REPORT.md sec 3.4; both share centre ~0.42, but Beta(6.30, 8.52) fits the 95% prediction interval and is the production default (encodes both pooled mean precision AND between-study heterogeneity); informative variant retained for sensitivity. (b) delta_reporting_deaths description corrected from 'Symptom-onset-to-death-report' to 'Death-event-to-death-report' to match laser-cholera v0.13+ engine semantics (the symptom-onset-to-death lag is implicit in gamma_1^-1 in the SEIR dynamics, not in this parameter). v15.4 (2026-06-01): rho_deaths replaced (Beta(3, 2) -> Beta(36.95, 51.02)) using random-effects meta-analysis (DerSimonian-Laird, logit scale) on three SSA studies (Routh 2017 Tanzania, Shikanga 2009 Kenya, Bwire 2013 Uganda); the informative variant is fit to the 95% CI of the pooled mean. New prior: mean 0.42, 95% CI [0.32, 0.52]. The previous Beta(3, 2) attribution to Finger 2024 was incorrect (editorial, no quantitative anchor); see MOSAIC-pkg/claude/rho_deaths_research/SYNTHESIS_REPORT.md. v15.3 (2026-06-01): beta_j0_tot location prior for ETH recentred from the global median 2e-5 to 1.75e-6 (Ethiopia is low-incidence; the global value over-predicts reported cases ~8x). Derived from fixed-ensemble fitting against current ETH surveillance + raw LSTM suitability; conditional on the suitability-window mean. v15.2 (2026-05-29): removed 2x sd variance-inflation step on epsilon (sd back to 2.0e-4 from 4.0e-4); the inflation had pushed the upper-tail natural-immunity duration to ~53 yr with no documented rationale. v15.1 (2026-04-29): rho_deaths added as a first-class global prior, Beta(3, 2), reflecting ~60% surveillance capture of true cholera deaths (Finger et al. 2024; laser-cholera#49). v15.0 (2026-04-23): zeta_1, zeta_2, and zeta_ratio re-estimated from literature meta-analysis (~6 OOM scale shift on zeta_1). zeta_2 added as first-class prior."
   },
   "parameters_global": {
     "alpha_2": {
@@ -3376,8 +3376,8 @@
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 11.8775793375507,
-            "shape2": 9036955.09165074
+            "shape1": 9.22317555491498,
+            "shape2": 5164598.35437686
           }
         },
         "BEN": {
@@ -3425,8 +3425,8 @@
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.03078668119133,
-            "shape2": 228943.721362392
+            "shape1": 1.98020508149829,
+            "shape2": 207026.191541142
           }
         },
         "COG": {
@@ -3446,8 +3446,8 @@
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 39.5072254871893,
-            "shape2": 93592722.0882978
+            "shape1": 29.5281958424665,
+            "shape2": 51369593.3538126
           }
         },
         "GAB": {
@@ -3495,8 +3495,8 @@
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 31.3195496401406,
-            "shape2": 7728252.38810377
+            "shape1": 29.8063260499488,
+            "shape2": 6976077.76006617
           }
         },
         "LBR": {
@@ -3516,8 +3516,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 8.05786708260214,
-            "shape2": 705935.212169701
+            "shape1": 7.68092273762591,
+            "shape2": 632540.676716291
           }
         },
         "MRT": {
@@ -3530,8 +3530,8 @@
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.68542466392569,
-            "shape2": 8860.96891382515
+            "shape1": 1.64652794885706,
+            "shape2": 7881.65836169238
           }
         },
         "NAM": {
@@ -3551,8 +3551,8 @@
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 24.4397373763894,
-            "shape2": 20174413.8257945
+            "shape1": 28.8882693264707,
+            "shape2": 28558718.048369
           }
         },
         "RWA": {
@@ -3579,15 +3579,15 @@
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.34578786540777,
-            "shape2": 60377.8866006422
+            "shape1": 1.32599095422754,
+            "shape2": 53660.8385330844
           }
         },
         "SSD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 3.09680841308503,
-            "shape2": 8992464.96108615
+            "shape1": 2.56512283495258,
+            "shape2": 5010221.31336258
           }
         },
         "SWZ": {
@@ -3628,22 +3628,22 @@
         "ZAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 69.1704425976109,
-            "shape2": 4688261306.33268
+            "shape1": 80.0012216626957,
+            "shape2": 6296330193.37228
           }
         },
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 105.838443618147,
-            "shape2": 207700931.034097
+            "shape1": 84.7011680215598,
+            "shape2": 132391335.819093
           }
         },
         "ZWE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 5.29376320354037,
-            "shape2": 1393353.78657131
+            "shape1": 4.62705174322706,
+            "shape2": 994210.404408549
           }
         }
       }
@@ -3661,8 +3661,8 @@
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 10.4166777066731,
-            "shape2": 6772561.04585725
+            "shape1": 9.08329529787884,
+            "shape2": 4990387.92805218
           }
         },
         "BEN": {
@@ -3710,8 +3710,8 @@
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.06358388072298,
-            "shape2": 243744.309552823
+            "shape1": 2.03901527656911,
+            "shape2": 232613.528205844
           }
         },
         "COG": {
@@ -3731,8 +3731,8 @@
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 35.6064219874643,
-            "shape2": 75591155.7088094
+            "shape1": 23.307249135015,
+            "shape2": 31408662.0271782
           }
         },
         "GAB": {
@@ -3780,8 +3780,8 @@
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 37.2087464272499,
-            "shape2": 11022079.0413435
+            "shape1": 36.2240445836629,
+            "shape2": 10430734.2208242
           }
         },
         "LBR": {
@@ -3801,8 +3801,8 @@
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 6.40371750697588,
-            "shape2": 413800.134432067
+            "shape1": 8.52294169965766,
+            "shape2": 802039.685704403
           }
         },
         "MRT": {
@@ -3815,8 +3815,8 @@
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.63360936434821,
-            "shape2": 7569.03142940896
+            "shape1": 1.50998736151053,
+            "shape2": 4895.61223712482
           }
         },
         "NAM": {
@@ -3836,8 +3836,8 @@
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 26.374123421804,
-            "shape2": 23641640.2184967
+            "shape1": 23.9455498752773,
+            "shape2": 19332693.3874637
           }
         },
         "RWA": {
@@ -3864,15 +3864,15 @@
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.33820392190732,
-            "shape2": 57757.9044387977
+            "shape1": 1.2652458692266,
+            "shape2": 35520.3615548088
           }
         },
         "SSD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.8528858376647,
-            "shape2": 7021957.13628262
+            "shape1": 2.46221753135297,
+            "shape2": 4373041.43812754
           }
         },
         "SWZ": {
@@ -3913,22 +3913,22 @@
         "ZAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 73.8104502295567,
-            "shape2": 5348194021.36841
+            "shape1": 53.653551203519,
+            "shape2": 2796882851.93029
           }
         },
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 174.406561769924,
-            "shape2": 568237121.945952
+            "shape1": 154.794029097718,
+            "shape2": 446968848.38818
           }
         },
         "ZWE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 5.47401734998984,
-            "shape2": 1512807.45265768
+            "shape1": 5.50419152313138,
+            "shape2": 1533283.70131973
           }
         }
       }
@@ -3939,281 +3939,281 @@
         "AGO": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2704806915101,
-            "shape2": 17.0263459812913
+            "shape1": 1.29661947519905,
+            "shape2": 20.3178828003539
           }
         },
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.31765959919901,
-            "shape2": 43.4802337722851
+            "shape1": 1.22691637827259,
+            "shape2": 26.7757664796326
           }
         },
         "BEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.33196569630871,
-            "shape2": 38.5609172961309
+            "shape1": 1.32970111777891,
+            "shape2": 40.7820344495909
           }
         },
         "BFA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.04610276530235,
-            "shape2": 55.8586200887764
+            "shape1": 1.13148130199308,
+            "shape2": 166.937080233973
           }
         },
         "BWA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1744256543154,
-            "shape2": 3811.97125949779
+            "shape1": 1.28560213572397,
+            "shape2": 6437.97848371238
           }
         },
         "CAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.05464285976226,
-            "shape2": 104.226984102754
+            "shape1": 1.07341457439727,
+            "shape2": 142.374834892107
           }
         },
         "CIV": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0866676984712,
-            "shape2": 43.2034931270201
+            "shape1": 1.04802882691897,
+            "shape2": 25.5866889941777
           }
         },
         "CMR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.29133713285763,
-            "shape2": 11.3098732790289
+            "shape1": 1.52425515132486,
+            "shape2": 19.5644029418561
           }
         },
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.45140542524067,
-            "shape2": 28.4728038512046
+            "shape1": 1.83987170131442,
+            "shape2": 18.1529557816292
           }
         },
         "COG": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.18368568709822,
-            "shape2": 14.5858105533732
+            "shape1": 1.27282106872779,
+            "shape2": 21.6983340409441
           }
         },
         "ERI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.02519802296658,
-            "shape2": 170.552720014427
+            "shape1": 1.01652731237552,
+            "shape2": 109.432764482196
           }
         },
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.04151230023815,
-            "shape2": 6.82217838890767
+            "shape1": 1.07335776066594,
+            "shape2": 12.5906249315342
           }
         },
         "GAB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.05156467356476,
-            "shape2": 67.8579347613365
+            "shape1": 1.12989089657512,
+            "shape2": 219.150546940343
           }
         },
         "GHA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.2842119550136,
-            "shape2": 17.21166822685
+            "shape1": 1.35378731498722,
+            "shape2": 23.3034907811107
           }
         },
         "GIN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.29065856971441,
-            "shape2": 20.6416553801446
+            "shape1": 1.17477859323177,
+            "shape2": 13.3750358167453
           }
         },
         "GMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.0213921355375,
-            "shape2": 71.1661174475278
+            "shape1": 1.03093896416916,
+            "shape2": 103.355735671058
           }
         },
         "GNB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 4.74243984267108,
-            "shape2": 30.2272193998892
+            "shape1": 7.8014491575404,
+            "shape2": 40.7624037413928
           }
         },
         "GNQ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.27640573727951,
-            "shape2": 24.2949389010574
+            "shape1": 1.23375579505338,
+            "shape2": 22.9787122747839
           }
         },
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.41647201305033,
-            "shape2": 36.8501141311958
+            "shape1": 1.32160623998789,
+            "shape2": 26.3016446777823
           }
         },
         "LBR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.19937384080442,
-            "shape2": 31.3001399135409
+            "shape1": 1.85741098647999,
+            "shape2": 17.912685095199
           }
         },
         "MLI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.03094788839637,
-            "shape2": 12.3976138554022
+            "shape1": 1.06245113834908,
+            "shape2": 30.1331089891988
           }
         },
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 2.05947605154866,
-            "shape2": 27.6629728024126
+            "shape1": 2.04166857621958,
+            "shape2": 30.5123083217625
           }
         },
         "MRT": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.12093007157886,
-            "shape2": 21.8542061483046
+            "shape1": 1.15544967022048,
+            "shape2": 27.5962374299622
           }
         },
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.66510451540024,
-            "shape2": 18.7662535915666
+            "shape1": 1.94974626086185,
+            "shape2": 28.786490882857
           }
         },
         "NAM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.14060674424234,
-            "shape2": 19.9496056527898
+            "shape1": 1.09999816199454,
+            "shape2": 16.5728659505747
           }
         },
         "NER": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.25698101617082,
-            "shape2": 23.8147309943577
+            "shape1": 1.30754386730842,
+            "shape2": 27.5342633654456
           }
         },
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.38008688477214,
-            "shape2": 17.0807853998424
+            "shape1": 1.89382573380391,
+            "shape2": 42.5206260146912
           }
         },
         "RWA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.11008787742968,
-            "shape2": 47.579323709175
+            "shape1": 1.21004951952528,
+            "shape2": 86.1121325211694
           }
         },
         "SEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.26120238427721,
-            "shape2": 26.3977742051543
+            "shape1": 1.21667563246455,
+            "shape2": 22.6866822168769
           }
         },
         "SLE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.22448390419544,
-            "shape2": 6.63158033333507
+            "shape1": 1.64827207555605,
+            "shape2": 21.3765437812825
           }
         },
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.41830119896431,
-            "shape2": 3.07021914816364
+            "shape1": 1.17538647285926,
+            "shape2": 1.5071312581566
           }
         },
         "SSD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.33944168148419,
-            "shape2": 12.3235122302836
+            "shape1": 1.47592897176541,
+            "shape2": 16.7448196923967
           }
         },
         "SWZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.30809352220062,
-            "shape2": 17.8302565936842
+            "shape1": 1.42039496316925,
+            "shape2": 24.997507552636
           }
         },
         "TCD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.21499014408706,
-            "shape2": 15.2753456382545
+            "shape1": 1.28775675673192,
+            "shape2": 21.8191052907149
           }
         },
         "TGO": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.1744281234556,
-            "shape2": 40.604202726546
+            "shape1": 1.10385495109828,
+            "shape2": 21.6316340726133
           }
         },
         "TZA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.21010469143987,
-            "shape2": 17.8496550127013
+            "shape1": 1.27204884312191,
+            "shape2": 21.7103028735738
           }
         },
         "UGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.09708656435281,
-            "shape2": 12.9985175125313
+            "shape1": 1.0890165279009,
+            "shape2": 9.70515423029189
           }
         },
         "ZAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.07062297512185,
-            "shape2": 8.37099886945112
+            "shape1": 1.05398075362706,
+            "shape2": 7.04681917918573
           }
         },
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.34730242644585,
-            "shape2": 24.6241179511186
+            "shape1": 1.50924697122839,
+            "shape2": 36.5286656654745
           }
         },
         "ZWE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 1.91678365544152,
-            "shape2": 18.7825391543948
+            "shape1": 1.78389361563084,
+            "shape2": 16.6393826096886
           }
         }
       }
@@ -4224,287 +4224,287 @@
         "AGO": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 22.7697374310509,
-            "shape2": 3.11382262727124
+            "shape1": 27.1354269683893,
+            "shape2": 3.23741116886021
           }
         },
         "BDI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 126770.259281935,
-            "shape2": 5327.47680985113
+            "shape1": 105692.751264236,
+            "shape2": 6348.37396643174
           }
         },
         "BEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 56.2998724904583,
-            "shape2": 4.09687230710368
+            "shape1": 59.9732322618292,
+            "shape2": 4.208773543596
           }
         },
         "BFA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 150505.090031007,
-            "shape2": 5070.63914966292
+            "shape1": 154013.418996797,
+            "shape2": 3435.69524344191
           }
         },
         "BWA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 100.959420050269,
-            "shape2": 3.00387097235821
+            "shape1": 101.254077355658,
+            "shape2": 3.015096298091
           }
         },
         "CAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 25570.2552409569,
-            "shape2": 677.535989888038
+            "shape1": 23562.3540810723,
+            "shape2": 567.013701983265
           }
         },
         "CIV": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 58.9217033501082,
-            "shape2": 3.40374605309405
+            "shape1": 34.2309491021274,
+            "shape2": 2.88285375414053
           }
         },
         "CMR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 17.581948895209,
-            "shape2": 8.04564098077465
+            "shape1": 21.0825702271377,
+            "shape2": 8.12463742556742
           }
         },
         "COD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 20782.2498813232,
-            "shape2": 2934.54851880917
+            "shape1": 13733.7547331081,
+            "shape2": 2253.03150276003
           }
         },
         "COG": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 60880.7546739501,
-            "shape2": 6481.38369984218
+            "shape1": 86914.9567971133,
+            "shape2": 6772.41467465847
           }
         },
         "ERI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 32477.2886508607,
-            "shape2": 702.725051181642
+            "shape1": 33670.222091329,
+            "shape2": 842.918689881772
           }
         },
         "ETH": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 109919.031853135,
-            "shape2": 21315.7741061389
+            "shape1": 204128.987536348,
+            "shape2": 24787.5366052556
           }
         },
         "GAB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 133.510303772894,
-            "shape2": 5.2427468564855
+            "shape1": 154.577034906049,
+            "shape2": 4.25854541239133
           }
         },
         "GHA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 30.6813107986748,
-            "shape2": 3.32511089812964
+            "shape1": 37.7917013496107,
+            "shape2": 3.39554959392039
           }
         },
         "GIN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 64195.9886230809,
-            "shape2": 4131.2945788272
+            "shape1": 41804.6703004297,
+            "shape2": 3632.3071981489
           }
         },
         "GMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 152994.57442304,
-            "shape2": 5143.80109073434
+            "shape1": 172038.030747946,
+            "shape2": 5037.72384233872
           }
         },
         "GNB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 24443.7669971343,
-            "shape2": 4016.91987276117
+            "shape1": 30722.6015998737,
+            "shape2": 6050.47788412123
           }
         },
         "GNQ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 57635.8597112916,
-            "shape2": 4366.76308312432
+            "shape1": 72817.9369643044,
+            "shape2": 5186.87982622892
           }
         },
         "KEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 62.7380044072394,
-            "shape2": 6.31450800409679
+            "shape1": 42.5354800430918,
+            "shape2": 5.16965021947434
           }
         },
         "LBR": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 431288.780446039,
-            "shape2": 41996.2426496824
+            "shape1": 232182.595615122,
+            "shape2": 33035.7243628752
           }
         },
         "MLI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 19141.1819898152,
-            "shape2": 1915.16938446206
+            "shape1": 38140.0308667581,
+            "shape2": 2054.51244468291
           }
         },
         "MOZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 41073.8192595521,
-            "shape2": 4984.22689766626
+            "shape1": 45050.5505675745,
+            "shape2": 5107.27577376567
           }
         },
         "MRT": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 25096.7998885528,
-            "shape2": 1669.30960472103
+            "shape1": 31559.804627657,
+            "shape2": 1805.78583483929
           }
         },
         "MWI": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 18.4153501655094,
-            "shape2": 7.3347711419454
+            "shape1": 21.7918673680923,
+            "shape2": 7.93844875681156
           }
         },
         "NAM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 48.9158358826874,
-            "shape2": 4.53478977594311
+            "shape1": 38.7211953020216,
+            "shape2": 4.05696429099756
           }
         },
         "NER": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 51839.555576169,
-            "shape2": 7034.1672929492
+            "shape1": 57099.8754445103,
+            "shape2": 7521.2121564246
           }
         },
         "NGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 29.1431828101402,
-            "shape2": 3.79420050286872
+            "shape1": 71.5838026795799,
+            "shape2": 5.60517384377728
           }
         },
         "RWA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 94.3178589047058,
-            "shape2": 4.55409774258753
+            "shape1": 187.073939713525,
+            "shape2": 6.32063732745428
           }
         },
         "SEN": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 69.103805247522,
-            "shape2": 5.12863460331843
+            "shape1": 54.8514993444847,
+            "shape2": 4.71147530863674
           }
         },
         "SLE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 85097.9248153,
-            "shape2": 19730.818533624
+            "shape1": 263166.978672885,
+            "shape2": 31146.5407687525
           }
         },
         "SOM": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 480.104324678808,
-            "shape2": 385.288310154778
+            "shape1": 217.529888936842,
+            "shape2": 310.26856372401
           }
         },
         "SSD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 3236.26087261228,
-            "shape2": 954.553143713199
+            "shape1": 4734.5652448496,
+            "shape2": 1298.04872395375
           }
         },
         "SWZ": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 24.4386374436179,
-            "shape2": 3.07715645994868
+            "shape1": 36.9487190040715,
+            "shape2": 3.55781117388622
           }
         },
         "TCD": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 11806.7703369177,
-            "shape2": 998.338977374522
+            "shape1": 16881.3651058435,
+            "shape2": 1116.07464897463
           }
         },
         "TGO": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 143529.816948444,
-            "shape2": 6013.69534190695
+            "shape1": 90517.8196995975,
+            "shape2": 6159.38232496637
           }
         },
         "TZA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 29.4995027994782,
-            "shape2": 2.86660631391202
+            "shape1": 35.7932207118733,
+            "shape2": 2.90621762307227
           }
         },
         "UGA": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 17.1771594782421,
-            "shape2": 2.7852575255333
+            "shape1": 12.7155583392469,
+            "shape2": 2.61139976406096
           }
         },
         "ZAF": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 11.3861539442834,
-            "shape2": 2.81222465735957
+            "shape1": 9.57026193612632,
+            "shape2": 2.67735063556337
           }
         },
         "ZMB": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 31.3939923668307,
-            "shape2": 8.1992097257688
+            "shape1": 38.0462179258416,
+            "shape2": 9.24754551550592
           }
         },
         "ZWE": {
           "distribution": "beta",
           "parameters": {
-            "shape1": 25910.0031343308,
-            "shape2": 4316.58976199898
+            "shape1": 33753.7307879258,
+            "shape2": 6027.49364712891
           }
         }
       }
     },
     "CFR_target": {
-      "description": "Per-country target reported case-fatality ratio (proportion of reported cases that are reported deaths) from the WHO hierarchical-GAM CFR estimate. B2 (v15.15): sample_parameters() DERIVES mu_j_baseline = CFR_target * gamma_1 * rho / (rho_deaths * chi) at sample time, so the realized implied reported CFR equals CFR_target for every draw (chain-factor-invariant). Lognormal, meanlog = log(mean_cfr) (median), sdlog = 0.787 (preserves the pre-B2 implied-CFR prior spread).",
+      "description": "Per-country target reported case-fatality ratio (proportion of reported cases that are reported deaths) from the WHO hierarchical-GAM CFR estimate. B2 (v15.15): sample_parameters() DERIVES mu_j_baseline = CFR_target * (1 - exp(-gamma_1)) * rho / (rho_deaths * chi_epidemic) at sample time (the B2.1 engine-correct chain factor), so the realized implied reported CFR equals CFR_target for every draw (chain-factor-invariant). Lognormal, meanlog = log(mean_cfr) (median), sdlog = 0.787 (preserves the pre-B2 implied-CFR prior spread).",
       "location": {
         "AGO": {
           "distribution": "lognormal",

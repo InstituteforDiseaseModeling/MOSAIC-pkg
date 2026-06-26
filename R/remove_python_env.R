@@ -1,7 +1,7 @@
 #' Remove the MOSAIC Python Environment
 #'
 #' @description
-#' This function checks whether the MOSAIC Python conda environment exists at "~/.MOSAIC_conda_env".
+#' This function checks whether the MOSAIC Python environment exists at \code{~/.virtualenvs/r-mosaic}.
 #' If it exists, it unlinks it from \code{reticulate}, removes the directory, and resets the RETICULATE_PYTHON global variable.
 #'
 #' @param force Logical. If TRUE, removes the environment without prompting for confirmation. Default is FALSE.

@@ -193,7 +193,7 @@ install_dependencies <- function(force = FALSE) {
           cli::cli_abort("Failed to activate the conda environment at {paths$env}.\nActivated Python: {config$python}")
      }
 
-     cli::cli_text("To remove the current installation, run {.run MOSAIC::remove_MOSAIC_python_env()}.")
+     cli::cli_text("To remove the current installation, run {.run MOSAIC::remove_python_env()}.")
      cli::cli_text("To check setup, run {.run MOSAIC::check_dependencies()}.")
 
 }

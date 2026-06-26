@@ -39,7 +39,7 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
 - **Orchestration:** `run_MOSAIC.R`, `run_MOSAIC_helpers.R`, `run_MOSAIC_infrastructure.R`
 - **Engine bridge:** `run_LASER.R`, `make_LASER_config.R`, reticulate/env files
   (`attach_mosaic_env.R`, `check_python_env.R`, `install_dependencies.R`,
-  `remove_MOSAIC_python_env.R`, `use_mosaic_env.R`)
+  `remove_python_env.R`, `use_mosaic_env.R`)
 - **Parallel/cluster:** `make_mosaic_cluster.R`, `check_coiled.R`, Dask worker plumbing,
   `run_rolling_cv.R` (general calibration CV plumbing — *not* the suitability CV)
 - **Package plumbing:** `get_paths.R`, `presets.R`, `globals.R`, `zzz.R`, the Dask-test harness, and

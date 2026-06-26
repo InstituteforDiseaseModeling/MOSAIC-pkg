@@ -1,10 +1,12 @@
 ---
-description: Route to the run-guide agent (user how-to — RG / GUIDE)
+description: MOSAIC run/config how-to — use the run-mosaic skill (user how-to — GUIDE)
 argument-hint: "[question]"
 ---
-Use the **run-guide** subagent — the MOSAIC run/usage guide (install & environment setup,
-configuring control parameters for run_MOSAIC(), running deterministic sims via run_LASER(),
-deployment, building outbreak scenarios). Read-only: it advises and runs light diagnostics but
-does not edit source. Question:
+The `run-guide` agent has been retired; its scope now lives in the **`run-mosaic`** skill
+(install & environment, assembling/modifying config + priors + control, launching `run_MOSAIC()`,
+single `run_LASER()` sims, deployment, outbreak scenarios). Invoke the **`run-mosaic`** skill via the
+`Skill` tool to answer this, and consult its hand-offs for ψ work (`est-suitability`), systematic
+forecast cross-validation (`forecast-cv`), failed-run diagnosis (`diagnose-fit` / `calibration-doctor`),
+or VM execution (`hedgehog-run` / `dugong-run`). Question:
 
 $ARGUMENTS

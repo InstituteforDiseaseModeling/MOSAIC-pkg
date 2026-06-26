@@ -1,7 +1,7 @@
 # MOSAIC Claude Code subagent roster
 
-Claude Code **subagents** for the MOSAIC workspace — nine agents (six development & maintenance
-specialists, two user-facing agents, and one AI-context architect) so domain work routes to a
+Claude Code **subagents** for the MOSAIC workspace — eight agents (six development & maintenance
+specialists, one user-facing diagnostic agent, and one AI-context architect) so domain work routes to a
 focused system prompt with the right tool scope. They load `CLAUDE.md` automatically, so the
 Lessons-Learned gotchas reach every agent.
 
@@ -32,7 +32,6 @@ Aliases are the spoken short names; the shortcut is a working slash command that
 | 🟠 orange | `ml-scientist` | **ML**, DS | `/ml` | ML / data scientist — LSTM/FiLM suitability, ψ rolling-CV, features |
 | 🩷 pink | `data-engineer` | **ETL**, DE | `/etl` | Data ingestion — `process_*`, `download_*`, geospatial, source reconciliation |
 | 🟡 yellow | `maintainer` | **MAINT**, REV | `/maint` | R-package maintainer — R CMD check/build hygiene, testthat suite, roxygen/NAMESPACE/pkgdown docs, DESCRIPTION/deps, versioning + independent review |
-| 🩵 cyan | `run-guide` | **RG**, GUIDE | `/guide` | User how-to — install / configure / run / deploy / scenarios |
 | 🔴 red | `calibration-doctor` | **DOC**, DR | `/doctor`, `/diagnose-fit` | Active result diagnosis — bias/convergence/ψ; runs `run_fit_sandbox` |
 | ⚪ white | `ai-architect` | **AA**, ARCH | `/arch`, `/context-audit` | AI-context hygiene — prunes CLAUDE.md/memory/roster/skills/settings for bloat & drift |
 
@@ -46,7 +45,6 @@ Aliases are the spoken short names; the shortcut is a working slash command that
 | `ml-scientist` | 🟠 orange | Suitability ML — LSTM/FiLM, ψ rolling-CV, features, calibration | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
 | `data-engineer` | 🩷 pink | Data ingestion/ETL — `process_*`, `download_*`, geospatial, ISO/format utils, source-repo refresh | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
 | `maintainer` | 🟡 yellow | R-package maintainer — R CMD check/build hygiene & speed, testthat suite (prune/coverage/upkeep), roxygen/NAMESPACE docs, pkgdown site, DESCRIPTION/dependencies, versioning, README/NEWS, deprecation lifecycle + independent adversarial review | opus | project | Read/Edit/Write/Bash/Grep/Glob/WebFetch/WebSearch |
-| `run-guide` | 🩵 cyan | User how-to — install/configure/run/deploy/scenarios | sonnet | off (no Write/Edit; Bash inspection-only) | Read/Grep/Glob/Bash |
 | `calibration-doctor` | 🔴 red | Active result diagnosis — bias, convergence, ψ attenuation, output interpretation; runs deterministic `run_fit_sandbox` (diagnose-fit skill) | opus | **local** | Read/Grep/Glob/Bash (read-only is prompt-enforced) |
 | `ai-architect` | ⚪ white | AI-context hygiene — prunes the CLAUDE.md pair, memory store, agent roster, skills, commands, settings for bloat/duplication/contradiction/stale refs (context-audit skill) | opus | project | Read/Edit/Write/Bash/Grep/Glob |
 
@@ -82,7 +80,7 @@ exported signatures / the `run_MOSAIC()` core loop.
 | LSTM suitability, FiLM, rolling-origin CV for ψ, feature engineering, ψ calibration, leakage/overfit | `ml-scientist` |
 | Raw data ingestion/ETL — `process_*`, `download_*`, geospatial, ISO/format utils, source-repo refresh, data provenance/semantics | `data-engineer` |
 | "Review this change", pre-commit audit, "is it complete & wired in?", R-package maintenance (R CMD check/build speed, tests, docs/pkgdown, DESCRIPTION/deps, versioning) | `maintainer` |
-| "How do I install / configure / run / deploy / build a scenario?" | `run-guide` |
+| "How do I install / configure / run / deploy / build a scenario?" | **`run-mosaic`** skill (formerly the `run-guide` agent) |
 | "My run came out wrong / what does this diagnostic mean / why didn't it converge?" | `calibration-doctor` |
 | CLAUDE.md/memory/agent/skill/command/settings hygiene — bloat, duplication, contradiction, stale refs, roster overlap, "Claude is ignoring a rule" | `ai-architect` |
 
@@ -101,13 +99,23 @@ exported signatures / the `run_MOSAIC()` core loop.
 | "What does parameter X mean / where does a model term come from?" | docs definition → `disease-modeler` | `04-model-description.Rmd` owns symbol→meaning; route to `statistician` (scoring / R₀ / generation-time math) or `ml-scientist` (ψ internals) only for the *math/internals*, not the definition |
 | Prior/config artifact rebuild or versioning fails | `swe` (with `disease-modeler` review) | packaging/data-artifact workflow |
 | Suitability affects calibration behavior | `ml-scientist` first, then `calibration-doctor` for run-level triage | separate ψ signal quality from run diagnosis |
-| `reported_deaths` / `disease_deaths` confusion | `statistician` (scoring), `disease-modeler` (meaning), `data-engineer` (processed-data semantics), `run-guide` (user output) | make the field convention explicit everywhere |
-| Vignettes / user docs | `run-guide` **drafts** usage text; `swe` **edits** the `.Rmd`/build | run-guide proposes the prose; swe commits it |
-| A user-support agent uncovers a real code bug | state it + hand off to the owning dev agent | run-guide/doctor don't edit source |
+| `reported_deaths` / `disease_deaths` confusion | `statistician` (scoring), `disease-modeler` (meaning), `data-engineer` (processed-data semantics) | make the field convention explicit everywhere |
+| Vignettes / user docs | usage how-to → **`run-mosaic`** skill; `.Rmd`/build edits → `swe` | the skill is the operator-facing how-to; swe commits doc changes |
+| A user-facing skill/agent uncovers a real code bug | state it + hand off to the owning dev agent | the `run-mosaic` skill and `calibration-doctor` don't edit source |
 | `.claude/` context hygiene vs. code review | meta-layer **incl. Lessons-Learned placement** → `ai-architect`; R-code correctness → `maintainer` | architect prunes/owns the *context surface* (CLAUDE.md structure/budget incl. where Lessons entries sit, memory, roster, skills, settings); maintainer reviews code correctness and **drafts** the Lessons content |
 
 ## Skills
 
+- **`run-mosaic`** (`.claude/skills/run-mosaic/`) — assemble/modify a config + priors + control and
+  launch a `run_MOSAIC()` calibration (or a single `run_LASER()` sim): install/env, config & `psi_jt`,
+  the prior pin-vs-sample lever, the control object (canonical names, Lesson-#13 silent-drop, io
+  presets), where to run, and the output tree (`config_medoid.json`, not `config_best`). **Absorbs the
+  retired `run-guide` agent's scope.** Invoke via the `Skill` tool or `/guide`.
+- **`est-suitability`** (`.claude/skills/est-suitability/`) — fit the production ψ LSTM and predict ψ
+  for a specific time frame, and refresh its climate+ENSO inputs (open-meteo → `process_open_meteo_data`
+  → `compile_suitability_data` → `est_suitability`). Covers the date-window/leakage args, the
+  side-effect-CSV contract, the forecast-horizon ceiling, and the TF-threading/RAM/determinism
+  gotchas. Prerequisite for `forecast-cv`.
 - **`diagnose-fit`** (`.claude/skills/diagnose-fit/`) — active model-fit diagnosis. Drives fast
   deterministic single-LASER experiments (`MOSAIC::run_fit_sandbox`) scored by
   `MOSAIC::calc_fit_diagnostics` to find what parameter changes improve fit, then writes a
@@ -139,10 +147,10 @@ exported signatures / the `run_MOSAIC()` core loop.
 - **Automatic:** describe the task; the main session delegates based on the descriptions above.
 - **Explicit:** `@statistician why is the WIS term off by a factor of two?`, or
   "use the calibration-doctor agent to diagnose this run".
-- **Shortcuts (slash commands):** `/swe`, `/stat`, `/dm`, `/ml`, `/etl`, `/maint`, `/guide`, `/doctor`,
-  `/arch` each route a request to the matching agent; `/diagnose-fit <run-dir>` runs the active
-  fit-diagnostic workflow and `/context-audit` runs the AI-context hygiene audit. These live in
-  `.claude/commands/`.
+- **Shortcuts (slash commands):** `/swe`, `/stat`, `/dm`, `/ml`, `/etl`, `/maint`, `/doctor`,
+  `/arch` each route a request to the matching agent. `/guide` points to the **`run-mosaic`** skill
+  (the `run-guide` agent was retired); `/diagnose-fit <run-dir>` runs the active fit-diagnostic
+  workflow and `/context-audit` runs the AI-context hygiene audit. These live in `.claude/commands/`.
 - Manage/inspect with the `/agents` command.
 
 ## Memory
@@ -150,29 +158,26 @@ exported signatures / the `run_MOSAIC()` core loop.
 - `memory: project` (the six dev/maintenance specialists + `ai-architect`) → `.claude/agent-memory/<name>/`.
 - `memory: local` (`calibration-doctor`) → `.claude/agent-memory-local/<name>/`, **not**
   version-controlled — appropriate for diagnostics that touch country-specific/unpublished data.
-- `run-guide` has memory **off**, so it has no Write/Edit tools. (Bash remains a theoretical write
-  vector; its prompt restricts Bash to inspection/execution only — read-only is therefore
-  prompt-enforced, not a hard sandbox.)
 - Enabling memory auto-grants Write/Edit; the doctor's read-only-source guarantee is likewise
   prompt-enforced. See `.claude/agent-memory/README.md` for the storage policy.
 
 ## Verification (repeatable checklist)
 
 1. Restart the session (or create via `/agents`) so file-based agents load; `/agents` shows all
-   **nine** with correct tools/model/memory/color.
+   **eight** with correct tools/model/memory/color.
 2. **Frontmatter:** YAML parses; required `name`/`description` present; valid model aliases,
    colors, tool names; `name` values unique (duplicates are silently discarded).
 3. **Positive route matrix:** "Why is WIS off by 2×?" → statistician; "Port the FiLM embedding into
    est_suitability" → ml-scientist; "Was mu_j_baseline already rho_deaths-corrected?" →
    disease-modeler; "The WHO weekly counts look wrong after reprocessing" → data-engineer;
    "Review my diff before commit" → maintainer; "A Dask worker deadlocks" → swe;
-   "Set control params for a 500-sim run" → run-guide; "My run over-predicts 3×, diagnose it" →
+   "Set control params for a 500-sim run" → `run-mosaic` skill; "My run over-predicts 3×, diagnose it" →
    calibration-doctor.
 4. **Negative route matrix:** "The WIS diagnostic plot label overlaps" → swe (not statistician);
-   "This run looks biased, why?" → calibration-doctor (not run-guide).
+   "This run looks biased, why?" → calibration-doctor (not the `run-mosaic` skill).
 5. **Inheritance:** ask any agent the post-v0.13 deaths-field rule → must answer `reported_deaths`.
-6. **Read-only enforcement:** ask `run-guide` and `calibration-doctor` to edit a source file →
-   both must refuse and (for the doctor) confirm writes are confined to its memory dir.
+6. **Read-only enforcement:** ask `calibration-doctor` to edit a source file → it must refuse and
+   confirm writes are confined to its memory dir.
 
 ## Using this roster (and MOSAIC-pkg files) from an adjacent repo
 
