@@ -9,6 +9,7 @@
   mosaic_worker,
   param_configs = NULL,
   n_stochastic_per = 10L,
+  capture_trajectories = TRUE,
   log_msg = message
 )
 }

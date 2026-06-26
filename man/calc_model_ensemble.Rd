@@ -22,6 +22,11 @@ calc_model_ensemble(
   n_cores = NULL,
   root_dir = NULL,
   precomputed_results = NULL,
+  capture_trajectories = FALSE,
+  trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
+  trajectory_n_lines = 150L,
+  trajectory_scratch_dir = NULL,
+  reduce_trajectories = TRUE,
   verbose = TRUE
 )
 }
@@ -83,6 +88,35 @@ returned series here.}
 \item{precomputed_results}{Optional list of pre-gathered LASER results (e.g. from Dask).
 Each element must have \code{$param_idx}, \code{$stoch_idx},
 \code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.}
+
+\item{capture_trajectories}{Logical. When \code{TRUE}, harvest the
+comprehensive internal-state channels (\code{trajectory_channels}) from each
+member and attach a compact \code{$trajectories} (\code{mosaic_trajectories})
+object -- per-channel weighted median + a uniform-thinned set of actual
+member trajectories + derived series (I_total, mass_balance, CFR, epidemic
+frac). Default \code{FALSE} (\code{run_MOSAIC()} enables it for the posterior
+ensemble; never for the medoid). RAM/payload is linear in
+\code{length(trajectory_channels)}.}
+
+\item{trajectory_channels}{Character vector of \code{model$results} channels to
+capture when \code{capture_trajectories = TRUE}. Default
+\code{.MOSAIC_TRAJECTORY_CHANNELS_DEFAULT} (the comprehensive set). The
+documented RAM lever -- shorten it to reduce capture cost.}
+
+\item{trajectory_n_lines}{Integer. Number of uniform-thinned member
+trajectories retained per location for the spaghetti display. Default 150.}
+
+\item{trajectory_scratch_dir}{Character or \code{NULL}. Directory for the
+per-sim trajectory-channel scratch spill (stream-to-disk capture). When
+\code{NULL} and capturing, a temporary directory is created. When provided,
+the CALLER owns its lifecycle (it is not auto-deleted) -- used by
+\code{run_MOSAIC()} to reduce over the optimized subset post-optimization.}
+
+\item{reduce_trajectories}{Logical. When \code{TRUE} (default) the trajectory
+reduction runs here over all members and is attached as \code{$trajectories}.
+When \code{FALSE}, the channels are spilled to scratch but NOT reduced; the
+scratch handle is returned in \code{$trajectory_scratch} so the caller can
+reduce over a final (e.g. optimized) subset without re-simulating.}
 
 \item{verbose}{Logical. Print progress messages. Default \code{TRUE}.}
 }

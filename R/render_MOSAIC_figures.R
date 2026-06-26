@@ -29,7 +29,7 @@
 #'   \code{NULL} (default) for all. Valid groups: \code{"convergence"},
 #'   \code{"posterior"}, \code{"predictions"}, \code{"ppc"},
 #'   \code{"sensitivity"}, \code{"psi_star"}, \code{"parameters"},
-#'   \code{"spatial"}.
+#'   \code{"spatial"}, \code{"trajectories"}.
 #' @param plots Logical. Master switch. When \code{FALSE} the function returns
 #'   immediately without rendering (mirrors \code{control$paths$plots}). Default
 #'   \code{TRUE}.
@@ -58,7 +58,8 @@ render_MOSAIC_figures <- function(dir_output,
     stop("dir_output does not exist: ", dir_output)
 
   valid_groups <- c("convergence", "posterior", "predictions", "ppc",
-                    "sensitivity", "psi_star", "parameters", "spatial")
+                    "sensitivity", "psi_star", "parameters", "spatial",
+                    "trajectories")
   if (is.null(which)) {
     which <- valid_groups
   } else {
@@ -552,6 +553,44 @@ render_MOSAIC_figures <- function(dir_output,
                  error = function(e) warning("spatial: coupling plot failed: ",
                                              conditionMessage(e), call. = FALSE))
       }
+    }
+  }
+
+  # ===========================================================================
+  # TRAJECTORIES (comprehensive internal-state channels: compartments, FOI,
+  # incidence, burden + derived). Pure read-render (P5): loads the persisted
+  # trajectories_ensemble.rds and renders one figure per location -- never a
+  # LASER replay. Warned-and-skipped when the artifact is absent (capture was
+  # off, or the run predates the feature / an old worker image dropped it).
+  # ===========================================================================
+  if ("trajectories" %in% which) {
+    attempted["trajectories"] <- TRUE
+    .vmsg("Rendering trajectory figures...")
+
+    traj <- .load_rds(file.path(dirs$calibration, "trajectories_ensemble.rds"),
+                      "trajectories")
+    if (!is.null(traj) && inherits(traj, "mosaic_trajectories")) {
+      locs <- traj$location_names
+      if (is.null(locs) || !length(locs)) {
+        warning("trajectories: artifact carries no location_names; skipping.",
+                call. = FALSE)
+      } else {
+        for (loc in locs) {
+          tryCatch(
+            plot_model_trajectories(
+              trajectories = traj,
+              location     = loc,
+              output_dir   = dirs$res_fig_trajectories,
+              verbose      = verbose
+            ),
+            error = function(e) warning("trajectories plot failed for ", loc,
+                                        ": ", conditionMessage(e), call. = FALSE)
+          )
+        }
+      }
+    } else if (!is.null(traj)) {
+      warning("trajectories: trajectories_ensemble.rds is not a ",
+              "mosaic_trajectories; skipping.", call. = FALSE)
     }
   }
 

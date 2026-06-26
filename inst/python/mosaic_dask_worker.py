@@ -120,10 +120,32 @@ _MATRIX_FIELDS = frozenset([
     "reported_deaths",
 ])
 
+# Comprehensive internal-state channels captured for the trajectory figures
+# (post-calibration only, via run_laser_postca). reported_cases/reported_deaths
+# are NOT here -- they are sourced from the ensemble arrays R-side. MUST stay in
+# lockstep with .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT in R/calc_model_ensemble.R.
+_TRAJ_CHANNELS = (
+    "S", "E", "Isym", "Iasym", "R", "V1", "V2", "W", "N",
+    "Lambda", "Psi", "beta_jt_human", "beta_jt_env",
+    "incidence", "incidence_human", "incidence_env", "new_symptomatic",
+    "expected_cases", "disease_deaths",
+)
+
 
 # =============================================================================
 # HELPERS
 # =============================================================================
+
+def _cfg_list(config: dict, key: str):
+    """Return config[key] as a JSON-serializable list (or None), for the
+    per-member epidemic-flag inputs carried on postca results (DM F5)."""
+    try:
+        v = config.get(key, None)
+        if v is None:
+            return None
+        return np.atleast_1d(np.asarray(v, dtype=float)).tolist()
+    except Exception:  # noqa: BLE001
+        return None
 
 def _apply_sampled_params(base_config: dict, sampled_params_json: str) -> dict:
     """
@@ -541,7 +563,8 @@ def run_laser_sim(sim_id: int, n_iterations: int,
 
 
 def run_laser_postca(task_id: int, seed: int,
-                     config_json: str, extra_fields: dict) -> dict:
+                     config_json: str, extra_fields: dict,
+                     capture_trajectories: bool = True) -> dict:
     """Run a single LASER simulation for post-calibration (ensemble / stochastic).
 
     Unlike run_laser_sim(), this takes a complete config as JSON (not base +
@@ -645,6 +668,28 @@ def run_laser_postca(task_id: int, seed: int,
             "coupling": _to_list(lambda: model.results.coupling),
             "pi_ij": _to_list(lambda: model.results.pi_ij),
         }
+
+        # Comprehensive internal-state channels for the trajectory figures, ONLY
+        # when the R dispatcher requests them (capture_trajectories=True for the
+        # posterior ensemble; False for the medoid and for capture_trajectories=
+        # FALSE runs). Gating here -- not just discarding R-side -- is what makes
+        # the escape hatch actually cut the ~10x on-wire payload at 40-loc scale.
+        # Each captured defensively -> omitted if the engine build lacks it.
+        # Lockstep with the local PSOCK path (R/calc_model_ensemble.R worker) -- a
+        # missed channel here silently drops it on the Dask backend, keep in sync.
+        if capture_trajectories:
+            traj = {}
+            for ch in _TRAJ_CHANNELS:
+                v = _to_list(lambda ch=ch: getattr(model.results, ch))
+                if v is not None:
+                    traj[ch] = v
+            result["traj"] = traj
+            # Per-member epidemic-flag inputs (sampled per set) so epidemic_frac is
+            # reconstructable on the master regardless of backend (DM F5).
+            result["traj_epi"] = {
+                "delta_reporting_cases": _cfg_list(config, "delta_reporting_cases"),
+                "epidemic_threshold": _cfg_list(config, "epidemic_threshold"),
+            }
 
         del model
         gc.collect()

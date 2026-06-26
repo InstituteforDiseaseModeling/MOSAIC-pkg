@@ -100,6 +100,68 @@
   invisible(wrote)
 }
 
+#' Weighted per-location endemic/epidemic CFR reference levels for the CFR panel
+#'
+#' Computes the best-subset weighted median of the implied surveillance CFR
+#' (\code{cfr_baseline_<iso>} / \code{cfr_epidemic_<iso>} columns written by
+#' \code{calc_implied_cfr()}) per location, for the dashed regime reference lines
+#' on the trajectory CFR(t) panel (DM F4). Uses the candidate best subset
+#' (\code{is_best_subset} / \code{weight_best}) to match the trajectory weighting.
+#' Returns \code{NULL} when neither column family is present (e.g. gamma_1 absent).
+#'
+#' @param results The samples/results data.frame (from samples.parquet).
+#' @param location_names Character vector of locations (config order).
+#' @return A data.frame \code{location, cfr_baseline, cfr_epidemic} (weighted
+#'   medians; \code{NA} where a column is absent), or \code{NULL}.
+#' @noRd
+.mosaic_compute_cfr_refs <- function(results, location_names) {
+  if (is.null(results) || !is.data.frame(results) ||
+      !("is_best_subset" %in% names(results))) return(NULL)
+  sub <- results[results$is_best_subset %in% TRUE, , drop = FALSE]
+  if (nrow(sub) == 0L) return(NULL)
+  w <- sub$weight_best
+  if (is.null(w) || all(!is.finite(w)) || sum(w, na.rm = TRUE) == 0) return(NULL)
+  bcols <- paste0("cfr_baseline_", location_names)
+  ecols <- paste0("cfr_epidemic_", location_names)
+  if (!any(c(bcols, ecols) %in% names(sub))) return(NULL)  # no CFR columns at all
+  .wmed <- function(col) if (col %in% names(sub))
+    weighted_quantiles(sub[[col]], w, 0.5) else NA_real_
+  data.frame(
+    location     = location_names,
+    cfr_baseline = vapply(bcols, .wmed, numeric(1)),
+    cfr_epidemic = vapply(ecols, .wmed, numeric(1)),
+    row.names    = NULL, stringsAsFactors = FALSE)
+}
+
+#' Persist the compact trajectory artifact for the "trajectories" figure group
+#'
+#' Writes the \code{mosaic_trajectories} object carried on a
+#' \code{mosaic_ensemble} (\code{$trajectories}; comprehensive internal-state
+#' channels — per-channel weighted median + uniform-thinned actual member lines +
+#' derived series) to \code{2_calibration/trajectories_ensemble.rds},
+#' schema-stamped. Persisted off the CANDIDATE ensemble (PLAN sec 14.B B-PERSIST:
+#' the optimized rebuild drops attached fields), so the trajectories reflect the
+#' candidate best subset / \code{weight_best}. A \code{NULL} \code{$trajectories}
+#' (capture off, or the capability check warned-and-skipped) is silently skipped.
+#'
+#' @param ensemble A \code{mosaic_ensemble} object.
+#' @param dirs Directory list from \code{.mosaic_ensure_dir_tree()}.
+#' @param log_msg,log_warn Logging callbacks.
+#' @return Invisibly \code{TRUE} if written, else \code{FALSE}.
+#' @noRd
+.mosaic_persist_trajectory_artifact <- function(ensemble, dirs, log_msg, log_warn) {
+  if (is.null(ensemble) || is.null(ensemble$trajectories)) return(invisible(FALSE))
+  tryCatch({
+    saveRDS(.mosaic_stamp_artifact(ensemble$trajectories),
+            file.path(dirs$calibration, "trajectories_ensemble.rds"))
+    log_msg("Saved 2_calibration/trajectories_ensemble.rds")
+    invisible(TRUE)
+  }, error = function(e) {
+    log_warn("trajectories_ensemble.rds save failed: %s", e$message)
+    invisible(FALSE)
+  })
+}
+
 # =============================================================================
 # Transmission-parameter guardrail
 # =============================================================================
@@ -1001,7 +1063,8 @@
     res_fig_post_detail = file.path(dir_output, "3_results/figures/posterior/detail"),
     res_fig_pred       = file.path(dir_output, "3_results/figures/predictions"),
     res_fig_ppc        = file.path(dir_output, "3_results/figures/ppc"),
-    res_fig_spatial    = file.path(dir_output, "3_results/figures/spatial")
+    res_fig_spatial    = file.path(dir_output, "3_results/figures/spatial"),
+    res_fig_trajectories = file.path(dir_output, "3_results/figures/trajectories")
   )
 
   if (clean_output && dir.exists(d$root)) {
@@ -2982,6 +3045,7 @@
 .mosaic_postca_dask <- function(client, mosaic_worker,
                                 param_configs = NULL,
                                 n_stochastic_per = 10L,
+                                capture_trajectories = TRUE,
                                 log_msg = message) {
 
   # Helper: serialize config to JSON + extract large matrix fields
@@ -3033,7 +3097,8 @@
           as.integer(idx),
           stoch_seed,
           preps[[p]]$json,
-          matrix_futures[[p]]
+          matrix_futures[[p]],
+          isTRUE(capture_trajectories)
         )
         task_meta[[idx]] <- list(param_idx = p, stoch_idx = s, param_seed = cfg_seed)
       }
@@ -3062,6 +3127,23 @@
           if (is.null(x) || length(x) == 0L) return(NULL)
           matrix(unlist(x), nrow = length(x), byrow = TRUE)
         }
+        # Trajectory channels (post-calibration capture; lockstep with the local
+        # PSOCK worker in R/calc_model_ensemble.R and the Dask Python worker). Each
+        # J x T channel is relisted to the engine orientation; traj_epi carries the
+        # per-member epidemic-flag inputs (numeric vectors). NULL when the worker
+        # image predates the feature -> capability check warns+skips downstream.
+        traj <- NULL
+        if (isTRUE(capture_trajectories) && is.list(r$traj) && length(r$traj) > 0L) {
+          traj <- lapply(r$traj, .relist)
+          traj <- traj[!vapply(traj, is.null, logical(1))]
+        }
+        traj_epi <- if (isTRUE(capture_trajectories) && is.list(r$traj_epi)) list(
+          delta_reporting_cases = if (!is.null(r$traj_epi$delta_reporting_cases))
+            as.numeric(unlist(r$traj_epi$delta_reporting_cases)) else NULL,
+          epidemic_threshold = if (!is.null(r$traj_epi$epidemic_threshold))
+            as.numeric(unlist(r$traj_epi$epidemic_threshold)) else NULL
+        ) else NULL
+
         list(
           param_idx = meta$param_idx,
           stoch_idx = meta$stoch_idx,
@@ -3073,6 +3155,8 @@
           spatial_hazard = .relist(r$spatial_hazard),
           coupling       = .relist(r$coupling),
           pi_ij          = .relist(r$pi_ij),
+          traj           = traj,
+          traj_epi       = traj_epi,
           success = TRUE
         )
       } else {

@@ -15,7 +15,7 @@ directory (the one containing \code{1_inputs/}, \code{2_calibration/},
 \code{NULL} (default) for all. Valid groups: \code{"convergence"},
 \code{"posterior"}, \code{"predictions"}, \code{"ppc"},
 \code{"sensitivity"}, \code{"psi_star"}, \code{"parameters"},
-\code{"spatial"}.}
+\code{"spatial"}, \code{"trajectories"}.}
 
 \item{plots}{Logical. Master switch. When \code{FALSE} the function returns
 immediately without rendering (mirrors \code{control$paths$plots}). Default

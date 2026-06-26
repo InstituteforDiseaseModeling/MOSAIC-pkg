@@ -2343,6 +2343,7 @@ run_MOSAIC <- function(config,
         mosaic_worker    = mosaic_worker,
         param_configs    = stoch_param_configs,
         n_stochastic_per = n_stochastic_per,
+        capture_trajectories = .traj_enabled,
         log_msg          = log_msg
       )
 
@@ -2420,6 +2421,17 @@ run_MOSAIC <- function(config,
 
   param_seeds <- NULL   # initialised here; assigned inside block below if best subset exists
 
+  # Trajectory-capture flags (defined here so the post-optimize fallback below can
+  # see them regardless of which branch ran). Deviation-#1 fix (PLAN 14.B): the
+  # persisted trajectories must reflect the FINAL displayed member set & weights.
+  .traj_enabled     <- isTRUE(control$predictions$capture_trajectories)
+  .optimize_enabled <- isTRUE(control$predictions$optimize_subset)
+  .traj_channels    <- control$predictions$trajectory_channels %||%
+                         .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT
+  .traj_n_lines     <- as.integer(control$predictions$trajectory_n_lines %||% 150L)
+  traj_scratch_handle <- NULL   # scratch descriptor from the candidate capture run
+  cand_member_seeds   <- NULL   # candidate per-member seeds (scratch-key -> seed map)
+
   if (sum(results$is_best_subset) > 0) {
     if (!is.null(postca_dask)) {
       # Dask precomputed path: reuse the SAME seeds/weights that were dispatched
@@ -2444,6 +2456,21 @@ run_MOSAIC <- function(config,
     log_msg("Computing weighted posterior ensemble (%d param sets x %d stochastic)...",
             length(param_seeds), n_ensemble_stochastic_per)
 
+    # Trajectory capture is STREAM-TO-DISK at sim time (capture-don't-replay,
+    # PLAN 14.G): the candidate ensemble run ALWAYS captures (whether or not
+    # optimization is on), spilling per-sim channels to a scratch dir. The
+    # reduction is DEFERRED (reduce_trajectories = FALSE) so it can run over the
+    # FINAL displayed subset (optimized weights) AFTER optimize_ensemble_subset(),
+    # with NO re-simulation (deviation-#1 fix, PLAN 14.B). run_MOSAIC owns the
+    # scratch lifecycle (reduced + unlinked in the unified block below).
+    traj_scratch_dir <- file.path(dirs$cal_state, "traj_scratch")
+    # Guarantee the (potentially multi-GB) scratch is removed even if an uncaught
+    # error or interrupt fires anywhere in the candidate -> optimize -> reduce
+    # window (RUN_FATAL on.exit only LOGS, it does not unlink). The explicit
+    # unlink in the unified reduce block below then becomes idempotent.
+    if (.traj_enabled)
+      on.exit(unlink(traj_scratch_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
     ensemble <- tryCatch(
       calc_model_ensemble(
         config                   = config,
@@ -2460,6 +2487,11 @@ run_MOSAIC <- function(config,
         n_cores                  = control$parallel$n_cores,
         root_dir                 = root_dir,
         precomputed_results      = postca_dask$stochastic_results,
+        capture_trajectories     = .traj_enabled,
+        trajectory_channels      = .traj_channels,
+        trajectory_n_lines       = .traj_n_lines,
+        trajectory_scratch_dir   = if (.traj_enabled) traj_scratch_dir else NULL,
+        reduce_trajectories      = FALSE,
         verbose                  = control$logging$verbose
       ),
       error = function(e) {
@@ -2481,6 +2513,15 @@ run_MOSAIC <- function(config,
       # config order with location_name attached. Absent arrays (engine without
       # DerivedValues) are silently skipped.
       .mosaic_persist_spatial_artifacts(ensemble, dirs, log_msg, log_warn)
+
+      # Trajectory channels were spilled to scratch during this candidate run
+      # (reduce deferred). Capture the scratch handle + the candidate per-member
+      # seeds NOW, before `ensemble` may be replaced by the optimized rebuild
+      # (which drops attached fields, PLAN 14.B). The unified reduce+persist block
+      # after the optimize section reduces from scratch over the FINAL displayed
+      # subset (optimized when available) and unlinks the scratch.
+      traj_scratch_handle <- ensemble$trajectory_scratch
+      cand_member_seeds   <- ensemble$seeds
     }
   } else {
     log_warn("no best subset \u2014 skipping posterior ensemble")
@@ -2613,6 +2654,10 @@ run_MOSAIC <- function(config,
         calc_bias_ratio(obs_d_flat_tier, cen_d_tier_flat), error = function(e) NA_real_)
 
       ensemble <- subset_opt$ensemble_optimized
+      # Trajectory reduction over the OPTIMIZED subset is handled by the unified
+      # stream-to-disk reduce+persist block AFTER this optimize section -- it reads
+      # the candidate run's scratch (no re-simulation) over the optimized member
+      # seeds + weights (deviation-#1 fix, PLAN 14.B).
 
       # Persist evaluation table for post-hoc inspection
       diag_path <- file.path(dirs$res_fig_diag, "optimization_diagnostics.csv")
@@ -2639,6 +2684,80 @@ run_MOSAIC <- function(config,
         }
       }
     }
+  }
+
+  # ===========================================================================
+  # UNIFIED TRAJECTORY REDUCE + PERSIST (stream-to-disk, no re-simulation).
+  # Reduce the channels spilled to scratch during the candidate run over the
+  # FINAL displayed subset & weights, so the trajectory medians are consistent
+  # with the prediction plots (deviation-#1 fix, PLAN 14.B):
+  #   * optimize ON  -> the OPTIMIZED subset: map ensemble_optimized's per-member
+  #     seeds back to the candidate scratch keys (param_idx) via the candidate
+  #     member seeds; weights = optimal_weights. reported_* are taken from the
+  #     optimized cases/deaths arrays -> BIT-IDENTICAL to the prediction plots.
+  #   * optimize OFF -> the candidate subset (all members, weight_best).
+  # Then inject the per-location endemic/epidemic CFR reference levels and persist;
+  # finally unlink the scratch dir. NULL handle (capture off / no best subset) is
+  # a no-op.
+  # ===========================================================================
+  if (.traj_enabled && !is.null(traj_scratch_handle) && !is.null(ensemble)) {
+    final_pidx    <- NULL
+    final_weights <- NULL
+    if (!is.null(subset_opt) && isTRUE(.optimize_enabled)) {
+      # Optimized: ensemble == ensemble_optimized. Map its per-member seeds to the
+      # candidate scratch param_idx (seed-based, robust to the likelihood sort).
+      opt_seeds <- ensemble$seeds
+      # Seed-based map requires unique candidate seeds (true in normal operation:
+      # one sampling seed per member). If seeds were ever duplicated, match() would
+      # bind channel panels to the wrong member's draws -> fall through to the
+      # positional candidate path instead (anyNA below does not catch duplicates).
+      if (!is.null(opt_seeds) && !is.null(cand_member_seeds) &&
+          !anyDuplicated(cand_member_seeds)) {
+        final_pidx    <- match(opt_seeds, cand_member_seeds)
+        final_weights <- ensemble$parameter_weights
+      }
+    }
+    if (is.null(final_pidx) || anyNA(final_pidx)) {
+      # Candidate (optimize off, or seed-mapping fell through): scratch keys are
+      # 1:n_param in candidate order.
+      final_pidx    <- seq_len(ensemble$n_param_sets)
+      final_weights <- ensemble$parameter_weights
+    }
+
+    traj <- tryCatch(
+      .mosaic_build_trajectories(
+        scratch_dir         = traj_scratch_handle$dir,
+        subset_orig_pidx    = final_pidx,
+        subset_weights      = final_weights,
+        cases_array         = ensemble$cases_array,
+        deaths_array        = ensemble$deaths_array,
+        n_stoch             = ensemble$n_simulations_per_config,
+        n_locations         = ensemble$n_locations,
+        n_time_points       = ensemble$n_time_points,
+        location_names      = ensemble$location_names,
+        date_start          = ensemble$date_start,
+        date_stop           = ensemble$date_stop,
+        n_successful        = ensemble$n_successful,
+        obs_cases           = ensemble$obs_cases,
+        obs_deaths          = ensemble$obs_deaths,
+        trajectory_channels = traj_scratch_handle$trajectory_channels,
+        # reported_* central line follows the canonical central_method so it is
+        # bit-identical to the prediction plots' predicted_central (median or mean).
+        central_method      = central_method,
+        n_lines             = traj_scratch_handle$n_lines %||% 150L,
+        verbose             = control$logging$verbose
+      ),
+      error = function(e) {
+        log_warn("trajectory reduction failed: %s", e$message); NULL
+      })
+
+    if (!is.null(traj)) {
+      traj$cfr_refs <- .mosaic_compute_cfr_refs(results, traj$location_names)
+      ensemble$trajectories <- traj
+      .mosaic_persist_trajectory_artifact(ensemble, dirs, log_msg, log_warn)
+    }
+    # Stream-to-disk scratch is transient -- always clean it up.
+    unlink(traj_scratch_handle$dir, recursive = TRUE, force = TRUE)
   }
 
   # ===========================================================================
@@ -2845,6 +2964,7 @@ run_MOSAIC <- function(config,
           mosaic_worker    = mosaic_worker,
           param_configs    = list(config_medoid),
           n_stochastic_per = n_best_stochastic_per,
+          capture_trajectories = FALSE,   # medoid never captures (B-MEDOID)
           log_msg          = log_msg
         )
         medoid_precomputed <- .pruneOrNull(medoid_result$stochastic_results)
@@ -2902,6 +3022,9 @@ run_MOSAIC <- function(config,
           n_cores                  = control$parallel$n_cores,
           root_dir                 = root_dir,
           precomputed_results      = medoid_precomputed,
+          capture_trajectories     = FALSE,  # PLAN 14.H B-MEDOID: a median over
+          # ~100 identically-weighted reruns is meaningless and nothing consumes a
+          # medoid trajectory artifact -- never capture for the medoid.
           verbose                  = control$logging$verbose
         ),
         error = function(e) {
@@ -3697,13 +3820,25 @@ mosaic_control_defaults <- function(calibration = NULL,
                                           # speed; set 1 for a bit-identical exhaustive
                                           # search. (The optimize_ensemble_subset()
                                           # function default stays 1L for parity.)
-    central_method     = "median"        # Ensemble central tendency: "median" (default,
+    central_method     = "median",       # Ensemble central tendency: "median" (default,
                                           # lower calibration bias; cases ~1.0, deaths
                                           # ~0.7-2.1 on the v0456 5-country smoke) or
                                           # "mean" (unbiased E[sum], unmasks implied-CFR
                                           # bias). Scalar or per-channel
                                           # c(cases=, deaths=). Drives predictions,
                                           # plots, *_ensemble metrics, medoid, subset.
+    capture_trajectories = TRUE,          # Capture comprehensive internal-state channels
+                                          # (compartments + FOI + incidence + burden) from
+                                          # the POSTERIOR ensemble and persist
+                                          # 2_calibration/trajectories_ensemble.rds for the
+                                          # "trajectories" figure group. RAM/payload is
+                                          # LINEAR in trajectory_channels; set FALSE to
+                                          # disable for cost-sensitive large remote runs.
+    trajectory_channels = NULL,           # NULL => calc_model_ensemble's comprehensive
+                                          # default set (the RAM lever; shorten to reduce
+                                          # capture cost).
+    trajectory_n_lines  = 150L            # Uniform-thinned actual member trajectories per
+                                          # location for the spaghetti display.
   )
 
   # Default weight calculation settings
