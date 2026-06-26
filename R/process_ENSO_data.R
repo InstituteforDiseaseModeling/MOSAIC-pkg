@@ -11,11 +11,13 @@
 #'   \item \strong{DATA_ENSO}: Path to the output directory for processed ENSO data.
 #' }
 #' @param source Character; which enso-data forecast source to read. One of
-#'   \code{"bom"} (Australian Bureau of Meteorology, ~6-month forecast horizon;
-#'   the default) or \code{"nmme"} (NOAA North American Multi-Model Ensemble,
-#'   ~8-month horizon). Both are resolved from the same enso-data repository via
-#'   \code{downloads/<source>/LATEST}. Defaults to \code{"bom"} so existing
-#'   callers are unaffected; pass \code{"nmme"} to use the longer-horizon feed.
+#'   \code{"nmme"} (NOAA North American Multi-Model Ensemble, ENSMEAN; ~9-month
+#'   forecast horizon and four ENSO/IOD indices; \strong{the default}) or
+#'   \code{"bom"} (Australian Bureau of Meteorology, ~6-month horizon). Both are
+#'   resolved from the same enso-data repository via
+#'   \code{downloads/<source>/LATEST}. NMME is the operational default as of
+#'   MOSAIC v0.55.5 (the IRI feed it replaces shut down; NMME provides the longer
+#'   horizon and direct IOD coverage); pass \code{"bom"} for the legacy source.
 #'
 #' @return Invisibly returns the path to the output directory. Writes three CSV files:
 #' \code{enso_daily.csv}, \code{enso_weekly.csv}, \code{enso_monthly.csv}.
@@ -34,7 +36,7 @@
 #' dropped here so the written schema is identical regardless of \code{source}.
 #'
 #' @export
-process_enso_data <- function(PATHS, source = c("bom", "nmme")) {
+process_enso_data <- function(PATHS, source = c("nmme", "bom")) {
 
      source  <- match.arg(source)
      src_tag <- toupper(source)

@@ -74,7 +74,7 @@ refresh_data_repos <- function(root       = NULL,
           "ees-cholera-mapping"    = "WHO surveillance (AWD weekly + GHO annual + GTFCC)",
           "jhu_cholera_data"       = "JHU public cholera surveillance dataset",
           "ai-cholera-data-mining" = "AI-mined gap-filling cholera observations (historic, no cron)",
-          "enso-data"              = "ENSO/IOD: NOAA historical + BOM observed + BOM forecast",
+          "enso-data"              = "ENSO/IOD: NOAA historical + NMME forecast (default) + BOM (legacy)",
           "open-meteo-pipeline"    = "Climate: ERA5 historical + MRI projections"
      )
 
