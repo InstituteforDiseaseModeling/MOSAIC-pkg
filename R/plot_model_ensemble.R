@@ -422,30 +422,34 @@ plot_model_ensemble <- function(ensemble,
   # unreadable ticks over an 11-year (2015) window. Choose a break interval that
   # targets ~10-15 ticks given the actual date span, walking a ladder of
   # human-friendly intervals (month -> 3 months -> 6 months -> year -> multi-year).
-  .date_break_interval <- function(d) {
-    if (!inherits(d, "Date") || length(d) < 2L) return("3 months")
-    span_days <- as.numeric(max(d) - min(d))
-    span_mo   <- span_days / 30.4375
-    target    <- 12  # aim for ~10-15 ticks
+  # Returns the chosen break interval IN MONTHS (integer). Targets ~10-15 ticks
+  # over the actual date span, walking a ladder of human-friendly intervals
+  # (month -> 3 months -> 6 months -> year -> multi-year).
+  .date_break_months <- function(d) {
+    if (!inherits(d, "Date") || length(d) < 2L) return(3L)
+    span_mo    <- as.numeric(max(d) - min(d)) / 30.4375
+    target     <- 12  # aim for ~10-15 ticks
     candidates <- c(1, 3, 6, 12, 24, 36, 60, 120)  # interval lengths in months
-    # pick the smallest interval that yields <= target ticks
-    ticks <- span_mo / candidates
-    pick  <- candidates[which(ticks <= target)[1L]]
+    # smallest interval that yields <= target ticks
+    pick <- candidates[which((span_mo / candidates) <= target)[1L]]
     if (is.na(pick)) pick <- candidates[length(candidates)]
-    if (pick < 12)        sprintf("%d months", pick)
-    else if (pick %% 12 == 0) {
-      yrs <- pick %/% 12
-      if (yrs == 1L) "1 year" else sprintf("%d years", yrs)
-    } else sprintf("%d months", pick)
+    pick
   }
 
   .add_date_scale <- function(p) {
-    if (use_date_axis) {
-      brk <- .date_break_interval(dates)
-      # Use a coarser label format for multi-year spans so ticks stay legible.
-      lbl <- if (as.numeric(max(dates) - min(dates)) > 2 * 365) "%Y" else "%b %Y"
-      p + ggplot2::scale_x_date(date_breaks = brk, date_labels = lbl)
-    } else p
+    if (!use_date_axis) return(p)
+    m   <- .date_break_months(dates)
+    brk <- if (m %% 12 == 0) {
+             yrs <- m %/% 12
+             if (yrs == 1L) "1 year" else sprintf("%d years", yrs)
+           } else sprintf("%d months", m)
+    # Label format is keyed to the BREAK INTERVAL, not the overall span. With
+    # sub-annual breaks (e.g. 6 months over a multi-year window) a year-only
+    # label renders two identical year ticks per year ("2026", "2026"), which
+    # reads as a duplicate/inaccurate axis. So show the month whenever breaks are
+    # finer than a year; use year-only for annual-or-coarser breaks.
+    lbl <- if (m >= 12) "%Y" else "%b %Y"
+    p + ggplot2::scale_x_date(date_breaks = brk, date_labels = lbl)
   }
 
   ribbon_alphas <- seq(0.2, 0.5, length.out = n_ci_pairs)
