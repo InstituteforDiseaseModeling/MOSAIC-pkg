@@ -1,3 +1,9 @@
+# MOSAIC 0.55.16
+
+## Bug fixes
+
+* **Dask path: `run_MOSAIC()` now nulls an empty re-injected `epidemic_peaks`** (`.mosaic_inject_likelihood_settings`). The Dask/Coiled path *overwrites* `config$epidemic_peaks` with a fresh `.filter_epidemic_peaks()` against `MOSAIC::epidemic_peaks` — so the v0.55.15 `get_location_config()` guard was insufficient (the input value is discarded). For a no-peak location the re-injected frame is 0-row, JSON-round-trips to the worker without its `iso_code` column, and crashes laser `params.py:303` (every sim erroring). This is the fix that actually resolves the BFA/CIV/GHA/LBR/NAM/ZAF Coiled failures. Regression test added (`test-epidemic_peaks_dask_inject.R`).
+
 # MOSAIC 0.55.15
 
 ## Bug fixes

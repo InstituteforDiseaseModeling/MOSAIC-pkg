@@ -253,6 +253,14 @@
     date_stop      = config$date_stop,
     location_names = config$location_name
   )
+  # Drop an empty result. A 0-row epidemic_peaks (a no-peak location, e.g. BFA,
+  # or a filter that matched nothing) JSON-round-trips to the Dask worker WITHOUT
+  # its iso_code column and crashes laser params.py:303 (`.iso_code` on a
+  # column-less DataFrame -> "'DataFrame' object has no attribute 'iso_code'"),
+  # erroring every sim. Nulling it makes the engine skip the epidemic_peaks block.
+  if (!is.null(config$epidemic_peaks) && NROW(config$epidemic_peaks) == 0L) {
+    config$epidemic_peaks <- NULL
+  }
   config
 }
 
@@ -3463,7 +3471,8 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 #'     \item \code{sample_iota}: Sample importation rate (default: TRUE)
 #'     \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-#'     \item \code{sample_alpha_1}: Sample first dose efficacy (default: TRUE)
+#'     \item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: TRUE)
+#'     \item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
 #'     \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
 #'   }
 #'
@@ -3680,9 +3689,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     sample_mobility_gamma = TRUE,    # Gravity model exponent
     sample_mobility_omega = TRUE,    # Mobility rate
 
-    # Vaccine efficacy
-    sample_alpha_1 = TRUE,           # Vaccine efficacy (1 dose)
-    sample_alpha_2 = TRUE,           # Vaccine efficacy (2 doses)
+    # Transmission mixing exponents
+    sample_alpha_1 = TRUE,           # Within-metapop population mixing exponent (sampled)
+    sample_alpha_2 = FALSE,          # Frequency-dependence degree: PINNED by default (weakly identified; psi absorbs the signal)
     sample_omega_1 = TRUE,           # Waning rate (1 dose)
     sample_omega_2 = TRUE,           # Waning rate (2 doses)
     sample_phi_1 = TRUE,             # Vaccine coverage (1 dose)
