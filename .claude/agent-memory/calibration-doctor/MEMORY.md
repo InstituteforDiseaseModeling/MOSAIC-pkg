@@ -1,0 +1,1 @@
+- [epi_threshold + epi_factor deaths-bias levers (NMME 4-country)](project_epi_threshold_epifactor_deaths_levers.md) — how much these 2 levers move deaths bias vs the CFR_target floor; epi_factor=0 floors (NGA 1.60/COD 1.98/MOZ 1.23), COD inert, MOZ medoid-tail, NGA threshold win-win, ETH degenerate medoid
