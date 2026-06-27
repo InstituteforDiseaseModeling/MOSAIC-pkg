@@ -109,7 +109,9 @@
 .psi_check_parallel_seeds_ram <- function(parallel_seeds, n_seeds) {
      ps <- as.integer(parallel_seeds %||% 1L)
      if (is.na(ps) || ps <= 1L) return(invisible(NULL))   # serial path: no risk
-     nc <- parallel::detectCores()
+     # Match .psi_fit_seeds_parallel: honor a per-process core budget if set.
+     nc <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_CORE_BUDGET", "")))
+     if (is.na(nc) || nc < 1L) nc <- parallel::detectCores()
      if (is.na(nc) || nc < 1L) nc <- 2L
      n_workers <- max(1L, min(ps, as.integer(n_seeds %||% ps), nc - 2L))
      if (n_workers <= 1L) return(invisible(NULL))         # clamps to serial anyway

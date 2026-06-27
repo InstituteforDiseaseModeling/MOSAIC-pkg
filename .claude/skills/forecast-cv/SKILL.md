@@ -12,6 +12,18 @@ description: >
 
 # forecast-cv — systematic rolling-origin forecast validation
 
+## SOURCE OF TRUTH — the experiment script
+The reproducible experiment is defined in **`inst/examples/forecast_cv_experiment.R`** (git-tracked).
+Its `SPEC` block is the single place that defines the experiment: **units (countries / coupled
+vectors), start date, explicit cutoff dates, horizons, embargo, psi `n_seeds`**. Edit the SPEC, not
+the engine. `FORECAST_CV_DRYRUN=1` (default) validates the SPEC + the D5 placement and prints the
+unit×cutoff matrix with NO compute; `FORECAST_CV_DRYRUN=0` executes (heavy → hedgehog/dugong).
+The locked design decisions D1–D5 live in the script header and in **`claude/plan_forecast_cv/PLAN.md`**
+(the red-teamed dev plan + pending-upgrade ledger). **The covariate decision (D4): OOS psi uses
+realized climate/ENSO, so results are HINDCAST / conditional MODEL skill — never call them forecast
+skill.** Today the script drives existing `run_rolling_cv()`+`evaluate_rolling_cv()` one
+(unit×cutoff) at a time; it collapses to one `run_forecast_cv_suite()` call once PLAN Phase 1–2 land.
+
 Documents existing, tested machinery — invents nothing. Backbone: the exported `run_rolling_cv()`
 (`R/run_rolling_cv.R`, with `tests/testthat/test-run_rolling_cv.R`) + `compile_rolling_cv_predictions()`,
 `evaluate_rolling_cv()`, `plot_rolling_cv()`. Primary doc = **`?run_rolling_cv`** (roxygen is current and
@@ -101,6 +113,22 @@ calling R process, not on Dask** — size RAM accordingly. Because it runs laser
 `r-mosaic-Rscript` wrapper on dugong** (a standalone TF psi fit would not). Cross-link `hedgehog-run` /
 `dugong-run`; apply the TF-thread caps from est-suitability since each cutoff's psi fit has the same
 oversubscription risk.
+
+**Full-parallel pattern (two-phase, the contention-free way).** est_suitability sets NO tf.config thread
+cap, so a TF fit auto-sizes its intra-op pool to the whole box — launching P per-cell processes that each
+hit their psi fit at once oversubscribes (OMP/TF_* env caps are best-effort only). **The right axis is NOT
+"parallelize across cutoffs" — it's "serialize the few psi fits, then parallelize the whole calibration
+grid."** psi is fit GLOBALLY per cutoff (one fit covers ALL units jointly), so there are only `n_cutoffs`
+fits, not `n_units × n_cutoffs`. The clean path: **(1) pre-fit psi ONCE per cutoff SERIALLY, each fit using
+the whole box (a single fit still spreads its `n_seeds` across cores via `parallel_seeds`, so the box isn't
+idle); freeze each to a cache (daily-psi CSV).** Then **(2) run ALL calibrations FULLY PARALLEL across BOTH
+units AND cutoffs from the frozen cache — the parallel phase has NO TensorFlow at all**, so per-process
+`control$parallel$n_cores` + the BLAS/numba=1 pins fully control core use. This is strictly better than
+parallelizing across cutoffs only (it frees the unit dimension too) and avoids the global-psi-CSV write race
+(every cell would otherwise refit/overwrite the same `pred_psi_suitability_day.csv`). This is exactly
+PLAN.md Phase 1 (`prefit_rolling_cv_psi()` + `psi_cache`); build it before the big pilot. Interim (no cache yet): `forecast_cv_experiment.R` single-cell env launch
+(`FORECAST_CV_UNIT/CUTOFF/CORES`, `parallel_seeds=1`, `plots=FALSE`) works but risks psi-phase
+oversubscription if all cells start together — stagger launches or pre-fit psi first.
 
 ## Composition / hand-offs
 - **Prerequisite:** fresh climate→ψ inputs — see **`est-suitability`** (the harness re-fits psi per cutoff,

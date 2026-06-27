@@ -7,8 +7,13 @@
 # per-country daily SMOOTHING + cross-seed aggregation (pure R, in the parent).
 # Seeds are independent, so the fit can run serially (default) or across
 # thread-pinned PSOCK workers (arch_control$parallel_seeds > 1; see §7 of the
-# plan). Parallel and serial give identical per-seed results (each seed is its
-# own seeded pipeline), so determinism is unaffected.
+# plan). Reproducibility is at the POOLED-ensemble level, NOT per seed: the
+# pooled psi (logit-median over seeds) is statistically equivalent across
+# execution modes, but the PER-SEED draws are NOT bitwise-identical between
+# serial and parallel (or between different worker/thread counts). Changing the
+# TF thread count changes the float reduction order, which compounds the
+# recurrent_dropout non-determinism — so two seeds with the "same" integer seed
+# can diverge across modes. Pool >=10 seeds (D2) and rely on the aggregate.
 #
 # Option-A output diagnostics emitted in the long table (per iso x date):
 #   pred_raw    — cross-seed logit-MEDIAN of the daily forward-filled,
@@ -82,15 +87,38 @@
 #' @noRd
 .psi_fit_seeds_parallel <- function(seeds, parallel_seeds, fit_predict_fn,
                                     data_bundle, hyperparams, verbose = TRUE) {
-     nc <- parallel::detectCores()
+     # Core pool for THIS process: a caller-supplied per-process budget
+     # (MOSAIC_PSI_CORE_BUDGET) when set -- so parallel callers can hand each
+     # process a slice -- else the whole box. Unset => unchanged legacy behavior.
+     budget_env <- Sys.getenv("MOSAIC_PSI_CORE_BUDGET", "")
+     nc <- suppressWarnings(as.integer(budget_env))
+     if (is.na(nc) || nc < 1L) nc <- parallel::detectCores()
      if (is.na(nc) || nc < 1L) nc <- 2L   # detectCores() may return NA on some platforms
+     # Cross-process oversubscription guard: when this is a parallel-seed run on a
+     # big box and the per-process budget env is UNSET, every cell-process here
+     # sizes its TF intra-op pool to the whole box (nc = detectCores()), so K
+     # concurrent processes request K*nc threads -> loadavg >> cores. Warn so the
+     # caller sets MOSAIC_PSI_CORE_BUDGET to a per-process slice (see plan §7).
+     if (as.integer(parallel_seeds) > 1L && !nzchar(budget_env) &&
+         isTRUE(parallel::detectCores() > 32L)) {
+          warning("est_suitability parallel_seeds>1 with MOSAIC_PSI_CORE_BUDGET unset on a ",
+                  parallel::detectCores(), "-core host: each cell-process will size TF ",
+                  "intra-op to the whole box (cross-process thread oversubscription risk). ",
+                  "Set MOSAIC_PSI_CORE_BUDGET to cores/(parallel_seeds x runs) per process.",
+                  call. = FALSE)
+     }
      n_workers <- max(1L, min(as.integer(parallel_seeds), length(seeds), nc - 2L))
      if (n_workers <= 1L) return(NULL)   # nothing to gain; caller runs serial
-     if (verbose) message(sprintf("  [ensemble] parallel seed fitting: %d PSOCK worker(s)", n_workers))
+     # Focus each worker's TF intra-op pool to its core slice so n_workers x
+     # tf_intra ~ nc (saturate the box, no oversubscription). The fit
+     # (.psi_fit_predict_lstm) reads MOSAIC_PSI_TF_INTRAOP and applies the cap.
+     tf_intra <- max(1L, nc %/% n_workers)
+     if (verbose) message(sprintf("  [ensemble] parallel seed fitting: %d PSOCK worker(s), %d TF intra-op threads each",
+                                  n_workers, tf_intra))
      retpy <- Sys.getenv("RETICULATE_PYTHON")
      cl <- parallel::makeCluster(n_workers, type = "PSOCK")
      on.exit(parallel::stopCluster(cl), add = TRUE)
-     parallel::clusterExport(cl, "retpy", envir = environment())
+     parallel::clusterExport(cl, c("retpy", "tf_intra"), envir = environment())
      parallel::clusterEvalQ(cl, {
           if (nzchar(retpy)) Sys.setenv(RETICULATE_PYTHON = retpy)
           suppressMessages(library(MOSAIC))
@@ -98,6 +126,15 @@
           # clamp), set BEFORE keras3/TF import so TF reads the pinned env.
           # Matches every other PSOCK worker in the package.
           MOSAIC:::.mosaic_set_blas_threads(1L)
+          # Focus TF's intra-op pool to this worker's slice (BLAS pin above does
+          # NOT govern TF's Eigen pool); read by .psi_fit_predict_lstm.
+          # GUARD: no TF op may precede this threading cap. tf.config.threading
+          # set_intra/inter_op (applied downstream from these env vars) are SILENT
+          # no-ops once the TF runtime has initialised its thread pools at the
+          # first op. We only set env vars here and defer library(keras3)/TF import
+          # until after — so the cap is established before any op runs.
+          Sys.setenv(MOSAIC_PSI_TF_INTRAOP = as.character(tf_intra),
+                     MOSAIC_PSI_TF_INTEROP = "1")
           suppressMessages(library(keras3))
           NULL
      })
@@ -183,7 +220,10 @@
           # A broken worker environment (e.g. namespace/closure resolution under
           # an uninstalled package) yields all-NULL outs. Treat "no usable
           # results" or a short/mismatched return as a parallel failure and re-run
-          # serial — identical per-seed results, just slower.
+          # serial. The serial re-run is statistically equivalent at the POOLED
+          # level (not bitwise-identical per seed: the thread count differs, so
+          # the float reduction order — and hence the recurrent_dropout draws —
+          # differ); reproducibility is the pooled psi, just produced more slowly.
           if (!is.null(seed_fits)) {
                n_ok <- sum(vapply(seed_fits, function(x) !is.null(x$out), logical(1)))
                if (length(seed_fits) != length(seeds) || n_ok == 0L) {

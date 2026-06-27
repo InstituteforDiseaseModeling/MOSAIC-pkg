@@ -20,6 +20,7 @@ run_rolling_cv(
   n_reps_best_medoid = 50L,
   central_method = "median",
   est_suitability_spec = list(),
+  psi_cache = NULL,
   dask_spec = NULL,
   dir_output,
   verbose = TRUE
@@ -93,7 +94,17 @@ through to \code{\link{est_suitability}} (e.g. \code{architecture},
 lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
 Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
 accepted but ignored with a per-cutoff deprecation message — prefer
-\code{arch_control} for lstm_v2 knobs.}
+\code{arch_control} for lstm_v2 knobs. When \code{psi_cache} is supplied this
+spec is used \emph{only} to recompute the cache spec-hash for validation; the
+per-cutoff \code{est_suitability()} fit is skipped entirely.}
+
+\item{psi_cache}{NULL (default) or a directory produced by
+\code{\link{prefit_rolling_cv_psi}}. When NULL the per-cutoff psi is re-fit
+in-place (original behavior). When set, the per-cutoff \code{est_suitability()}
+call is skipped and the frozen \code{psi_<T>.csv} is loaded from this cache
+directory instead. The run \strong{hard-errors} if a requested cutoff is
+absent from the cache manifest, or if the run's \code{est_suitability_spec}
+hash does not match the manifest \code{spec_hash} recorded for that cutoff.}
 
 \item{dask_spec}{Optional Dask/Coiled spec passed to \code{run_MOSAIC}.}
 

@@ -7,9 +7,12 @@
 evaluate_rolling_cv(
   predictions,
   horizons_months = c(1, 3, 5),
-  baselines = c("seasonal", "persistence"),
+  baselines = c("seasonal", "persistence", "persistence_last"),
   metrics = c("cases", "deaths"),
   trusted_only = TRUE,
+  embargo_weeks = 0,
+  ess_min = 0,
+  min_cells_ci = 5L,
   n_boot = 1000L,
   seed = 1L
 )
@@ -20,11 +23,23 @@ evaluate_rolling_cv(
 
 \item{horizons_months}{Cumulative OOS horizons in months (default \code{c(1,3,5)}).}
 
-\item{baselines}{Baselines for skill scores (default \code{c("seasonal","persistence")}).}
+\item{baselines}{Baselines for skill scores (default
+\code{c("seasonal","persistence","persistence_last")}).}
 
 \item{metrics}{Metrics to evaluate (default \code{c("cases","deaths")}).}
 
 \item{trusted_only}{Drop rows with \code{observed_source == "AI"} (default TRUE).}
+
+\item{embargo_weeks}{Channel-specific OOS embargo, in weeks, after the cutoff
+before scoring begins. A scalar applies to all metrics; a named vector
+(e.g. \code{c(cases = 4, deaths = 6)}) applies per metric. Default \code{0}.}
+
+\item{ess_min}{Minimum importance-weight ESS for a cell to enter the summary
+aggregation. Default \code{0} (gate off). See Details.}
+
+\item{min_cells_ci}{Minimum number of finite cells in a (model, metric,
+window) group required to emit a bootstrap CI; below this the CI is
+suppressed (lo = hi = NA) and \code{ci_suppressed = TRUE}. Default \code{5}.}
 
 \item{n_boot}{Bootstrap resamples over cells for the skill CI (default 1000).}
 
@@ -38,35 +53,65 @@ single \code{"ensemble"} model (back-compatible).}
 \value{
 A list with:
 \describe{
-\item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline skill.}
-\item{summary}{Aggregated across cells per (model x metric x window): cell
-count, mean/median of each metric, and mean baseline skill with bootstrap CI.}
+\item{cells}{Per (cutoff x model x iso x metric x window) metrics + per-baseline
+mae_skill and wis_skill, the cell \code{ess} and \code{ess_ok} flag.}
+\item{summary}{Aggregated across \code{ess_ok} cells per (model x metric x
+window): \code{n_cells_used} / \code{n_cells_total}, mean/median of each
+metric, and mean baseline skills with bootstrap CI (suppressed when fewer
+than \code{min_cells_ci} finite cells), plus \code{ess_gated} and
+\code{ci_suppressed} flags.}
 }
 }
 \description{
 Reads a \code{\link{run_rolling_cv}} predictions artifact and computes
 out-of-sample forecast skill: per-cell metrics (R2 correlation & SSE, bias
 ratio, 50/95\\% PI coverage, WIS) for the in-sample fit and for cumulative OOS
-horizons, plus skill (MAE ratio) versus seasonal-climatology and persistence
-baselines, aggregated across cutoffs and countries with bootstrap CIs.
+horizons, plus MAE-skill and WIS-skill versus seasonal-climatology and
+persistence baselines, aggregated across cutoffs and countries with bootstrap
+CIs (suppressed at small cell counts).
 }
 \details{
 This is the post-hoc companion to \code{run_rolling_cv()} — the harness emits
 predictions only; all judgement (metrics, baselines, skill) lives here.
 
 Horizons are \strong{cumulative} (\eqn{\le h} months): the \eqn{\le h} window
-is every OOS point within \code{h} months of the forecast origin, computed from
-\code{date} and \code{cutoff_date} (not the disjoint \code{horizon_bucket}
-label), so the \eqn{\le}max-horizon window equals the full scored OOS set.
-An \code{IS} window (training fit, \eqn{\le} cutoff) is always reported.
+is every OOS point within \code{h} months of the per-metric OOS-scoring
+origin, computed from \code{date} and \code{cutoff_date} (not the disjoint
+\code{horizon_bucket} label), so the \eqn{\le}max-horizon window equals the
+full scored OOS set. An \code{IS} window (training fit, \eqn{\le} cutoff) is
+always reported.
 
 Scoring uses \strong{trusted observed only}: rows whose \code{observed_source}
 is missing or not \code{"AI"} (when \code{trusted_only = TRUE}).
 
-Baselines, fit per (cutoff, country, metric) on the IS observed history:
-\code{"persistence"} (trailing 4-point mean carried forward) and
-\code{"seasonal"} (week-of-year mean of IS observations). Skill is the MAE
-ratio \eqn{1 - MAE_{model}/MAE_{baseline}} (positive = model beats baseline).
+\strong{Channel-specific embargo.} \code{embargo_weeks} may be a scalar (all
+metrics) or a named vector such as \code{c(cases = 4, deaths = 6)}. For each
+metric the OOS scoring start is re-derived as
+\code{cutoff_date + embargo_weeks[metric] * 7}; only OOS rows at or after that
+per-metric boundary are scored, independent of the single \code{segment} label
+baked into predictions. Default (\code{0}) reproduces the prior behavior of
+scoring the entire \code{segment == "OOS"} block.
+
+\strong{Baselines}, fit per (cutoff, country, metric) on the IS observed
+history. \code{"seasonal"} (week-of-year climatology) is the \strong{primary}
+baseline and \strong{requires \eqn{\ge 2} years of in-sample history}; with
+less, the seasonal baseline (and its skill) is \code{NA} (no grand-mean
+fallback). \code{"persistence"} (trailing 4-point mean carried forward) and
+\code{"persistence_last"} (the single last observed value) are secondary
+nulls. Each baseline is also given 50/95\\% predictive intervals from empirical
+quantiles of its in-sample residuals, so a genuine \strong{WIS-skill} exists:
+\eqn{1 - WIS_{model}/WIS_{baseline}}. \code{mae_skill} is the analogous
+MAE ratio. Positive = model beats the baseline; \code{NA} when the baseline
+(or its interval) cannot be formed.
+
+\strong{Weight-ESS gate.} If the predictions carry an \code{ess} column (the
+cutoff calibration's importance-weight ESS, constant per cutoff), each cell is
+flagged \code{ess_ok = (!is.na(ess) & ess >= ess_min)}. Cells failing the gate
+remain in \code{$cells} (flagged) but are \strong{excluded} from the
+\code{$summary} aggregation. With \code{ess_min = 0} (default) the gate is off
+(NA ess still flags \code{ess_ok = FALSE}, but the gate threshold 0 admits any
+finite ess). When the \code{ess} column is absent, \code{ess_ok = TRUE} for all
+cells (back-compat) and \code{$summary$ess_gated = FALSE}.
 }
 \seealso{
 \code{\link{run_rolling_cv}}, \code{\link{calc_model_R2}}, \code{\link{calc_bias_ratio}}

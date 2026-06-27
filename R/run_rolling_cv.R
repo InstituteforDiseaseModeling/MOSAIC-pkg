@@ -100,7 +100,16 @@
 #'   lstm_v2 \code{arch_control} list). Date arguments are ignored (harness-owned).
 #'   Deprecated v0.33 keys (\code{n_splits}, \code{exclude_covariates}) are
 #'   accepted but ignored with a per-cutoff deprecation message — prefer
-#'   \code{arch_control} for lstm_v2 knobs.
+#'   \code{arch_control} for lstm_v2 knobs. When \code{psi_cache} is supplied this
+#'   spec is used \emph{only} to recompute the cache spec-hash for validation; the
+#'   per-cutoff \code{est_suitability()} fit is skipped entirely.
+#' @param psi_cache NULL (default) or a directory produced by
+#'   \code{\link{prefit_rolling_cv_psi}}. When NULL the per-cutoff psi is re-fit
+#'   in-place (original behavior). When set, the per-cutoff \code{est_suitability()}
+#'   call is skipped and the frozen \code{psi_<T>.csv} is loaded from this cache
+#'   directory instead. The run \strong{hard-errors} if a requested cutoff is
+#'   absent from the cache manifest, or if the run's \code{est_suitability_spec}
+#'   hash does not match the manifest \code{spec_hash} recorded for that cutoff.
 #' @param dask_spec Optional Dask/Coiled spec passed to \code{run_MOSAIC}.
 #' @param dir_output Directory for the experiment artifact (created if needed).
 #' @param verbose Logical (default TRUE).
@@ -129,6 +138,7 @@ run_rolling_cv <- function(PATHS,
                            n_reps_best_medoid  = 50L,
                            central_method       = "median",
                            est_suitability_spec = list(),
+                           psi_cache            = NULL,
                            dask_spec            = NULL,
                            dir_output,
                            verbose              = TRUE) {
@@ -175,6 +185,31 @@ run_rolling_cv <- function(PATHS,
      central_method <- .mosaic_resolve_central_method(central_method)
      control$predictions$central_method <- central_method
 
+     # ---- frozen-psi cache (optional) ----
+     # When psi_cache is set, the per-cutoff est_suitability() fit is skipped and
+     # the frozen psi_<T>.csv is loaded from the cache. The cache manifest is read
+     # once and the run's modeling spec hash is validated per cutoff below.
+     use_psi_cache <- !is.null(psi_cache)
+     psi_cache_man <- NULL
+     if (use_psi_cache) {
+          if (!is.character(psi_cache) || length(psi_cache) != 1L || !nzchar(psi_cache))
+               stop("psi_cache must be a single cache-directory path or NULL.")
+          man_path <- file.path(psi_cache, "psi_manifest.json")
+          if (!file.exists(man_path))
+               stop("psi_cache has no psi_manifest.json: ", psi_cache,
+                    " (build it with prefit_rolling_cv_psi()).")
+          psi_cache_man <- .rcv_psi_read_manifest(man_path)
+          if (!length(psi_cache_man$cutoffs))
+               stop("psi_cache manifest records no cutoffs: ", man_path)
+          # Validate the WHOLE requested schedule against the cache up front so a
+          # missing cutoff or spec_hash mismatch is a fatal configuration error
+          # (aborts the run) rather than a per-cutoff "failed" record swallowed by
+          # the loop's tryCatch. .rcv_psi_cache_lookup() hard-errors on either.
+          for (T_chk in cutoffs)
+               invisible(.rcv_psi_cache_lookup(psi_cache, psi_cache_man, T_chk,
+                                               est_suitability_spec))
+     }
+
      dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
      runs_dir <- file.path(dir_output, "runs")
      dir.create(runs_dir, showWarnings = FALSE)
@@ -198,17 +233,26 @@ run_rolling_cv <- function(PATHS,
                       dir = file.path("runs", run_id), status = "pending")
 
           res <- tryCatch({
-               # 1. Re-fit psi on data <= T (leakage-clean) — done EVERY cutoff;
-               #    this per-cutoff refit is the point of the rolling-CV test. The
-               #    harness owns the date args; est_suitability_spec controls only
-               #    modeling knobs (e.g. architecture, feature_set, arch_control).
-               es_args <- .rcv_merge_est_args(est_suitability_spec, list(
-                    PATHS          = PATHS,
-                    fit_date_stop  = T_k,
-                    pred_date_start= cfg_start,
-                    pred_date_stop = cfg_stop))
-               do.call(MOSAIC::est_suitability, es_args)
-               psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
+               # 1. Obtain leakage-clean psi for this cutoff. Two modes:
+               #    (a) psi_cache=NULL  -> re-fit psi on data <= T in-place (the
+               #        per-cutoff refit is the point of the rolling-CV test). The
+               #        harness owns the date args; est_suitability_spec controls
+               #        only modeling knobs (architecture, feature_set, arch_control).
+               #    (b) psi_cache=<dir> -> skip the fit and load the FROZEN
+               #        psi_<T>.csv from the cache, after asserting the cutoff is
+               #        present and the modeling-spec hash matches the manifest.
+               if (use_psi_cache) {
+                    psi_csv <- .rcv_psi_cache_lookup(
+                         psi_cache, psi_cache_man, T_k, est_suitability_spec)
+               } else {
+                    es_args <- .rcv_merge_est_args(est_suitability_spec, list(
+                         PATHS          = PATHS,
+                         fit_date_stop  = T_k,
+                         pred_date_start= cfg_start,
+                         pred_date_stop = cfg_stop))
+                    do.call(MOSAIC::est_suitability, es_args)
+                    psi_csv <- file.path(PATHS$MODEL_INPUT, "pred_psi_suitability_day.csv")
+               }
 
                # 2. build cutoff config: subset loc, swap psi, mask obs > T
                cfg <- MOSAIC::get_location_config(iso = iso, config = base_config)
@@ -282,7 +326,8 @@ run_rolling_cv <- function(PATHS,
                # array), which would break compile_rolling_cv_predictions()'s
                # read-back. A named list serializes as a JSON object.
                central_method   = as.list(central_method),
-               est_suitability_spec = est_suitability_spec),
+               est_suitability_spec = est_suitability_spec,
+               psi_cache        = if (use_psi_cache) psi_cache else NULL),
           runs = run_records)
      .rcv_write_json(manifest, file.path(dir_output, "manifest.json"))
      .rcv_write_readme(dir_output)
@@ -525,6 +570,44 @@ compile_rolling_cv_predictions <- function(dir_output,
      matrix(x, nrow = n_loc, ncol = n_t, byrow = (n_loc == 1L))
 }
 
+#' Resolve and validate one cutoff's frozen psi CSV from a prefit cache.
+#'
+#' Hard-errors when the cutoff is absent from the manifest, when the recorded
+#' \code{psi_<T>.csv} is missing on disk, or when the run's modeling-spec hash
+#' (date keys stripped, mirroring \code{prefit_rolling_cv_psi}) does not match the
+#' \code{spec_hash} the cache recorded for that cutoff. Returns the CSV path.
+#' @keywords internal
+#' @noRd
+.rcv_psi_cache_lookup <- function(psi_cache, manifest, cutoff, est_suitability_spec) {
+     T_chr <- as.character(as.Date(cutoff))
+     cuts  <- manifest$cutoffs
+     keys  <- vapply(cuts, function(e) as.character(e$cutoff), character(1))
+     idx   <- match(T_chr, keys)
+     if (is.na(idx))
+          stop("psi_cache is missing cutoff ", T_chr,
+               " — present cutoffs: ", paste(keys, collapse = ", "),
+               ". Re-run prefit_rolling_cv_psi() for this cutoff.", call. = FALSE)
+     entry <- cuts[[idx]]
+     csv   <- file.path(psi_cache, entry$csv %||%
+                        sprintf("psi_%s.csv", T_chr))
+     if (!file.exists(csv))
+          stop("psi_cache entry for ", T_chr, " points to a missing file: ", csv,
+               call. = FALSE)
+     # Recompute the spec hash with the SAME contract prefit used (strip date keys
+     # first) and require an exact match — a mismatch means the run's modeling spec
+     # differs from what produced the frozen psi; that is an error, not a silent NA.
+     run_spec  <- .rcv_strip_date_keys(est_suitability_spec)
+     run_hash  <- .rcv_psi_spec_hash(cutoff, run_spec)
+     cache_hash <- entry$spec_hash
+     if (is.null(cache_hash) || !identical(run_hash, as.character(cache_hash)))
+          stop("psi_cache spec_hash mismatch for cutoff ", T_chr,
+               ": run est_suitability_spec hashes to ", run_hash,
+               " but the cache recorded ", cache_hash %||% "<none>",
+               ". The frozen psi was produced with a different modeling spec.",
+               call. = FALSE)
+     csv
+}
+
 #' Merge user est_suitability_spec with harness-owned date args (harness wins)
 #' @keywords internal
 #' @noRd
@@ -602,7 +685,32 @@ compile_rolling_cv_predictions <- function(dir_output,
 
      parts <- Filter(Negate(is.null), parts)
      if (!length(parts)) return(NULL)
-     do.call(rbind, parts)
+     out <- do.call(rbind, parts)
+     # Attach the per-cutoff importance-weight ESS (metrics$ess_best$value from the
+     # calibration convergence diagnostics) as a single numeric column carried on
+     # EVERY row of this cutoff. NA_real_ when the file/key is absent. This is the
+     # weight-ESS gating contract for the downstream scoring layer.
+     out$ess <- .rcv_read_ess_best(run_dir)
+     out
+}
+
+#' Read metrics$ess_best$value from a run's convergence diagnostics.
+#'
+#' Returns the importance-weight effective sample size for the calibration, or
+#' \code{NA_real_} if the diagnostics file or the key is missing. Never errors —
+#' a missing diagnostic is a benign NA on the row, not a fatal condition.
+#' @keywords internal
+#' @noRd
+.rcv_read_ess_best <- function(run_dir) {
+     diag_path <- file.path(run_dir, "2_calibration", "diagnostics",
+                            "convergence_diagnostics.json")
+     if (!file.exists(diag_path)) return(NA_real_)
+     val <- tryCatch({
+          d <- jsonlite::read_json(diag_path, simplifyVector = TRUE)
+          d$metrics$ess_best$value
+     }, error = function(e) NULL)
+     if (is.null(val) || length(val) != 1L || !is.numeric(val)) return(NA_real_)
+     as.numeric(val)
 }
 
 #' Re-simulate a single config to a prediction object matching the ensemble shape

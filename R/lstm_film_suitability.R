@@ -33,6 +33,18 @@
 .psi_fit_predict_lstm <- function(data_bundle, seed = 11L, hyperparams = list()) {
      set.seed(seed)
      tf <- reticulate::import("tensorflow", convert = FALSE)
+     # Focus TF's intra/inter-op thread pools (env-driven) BEFORE any op is built
+     # so N parallel seed workers don't each size their pool to the whole box --
+     # the OMP/BLAS pin does NOT govern TF's Eigen intra-op pool. The per-worker
+     # budget is set by .psi_fit_seeds_parallel(); a serial fit reads the whole-
+     # process budget. tryCatch is silent because the call errors (no-op) once the
+     # runtime is initialized, e.g. a 2nd seed fit in the same process.
+     .tf_intra <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTRAOP", "")))
+     .tf_inter <- suppressWarnings(as.integer(Sys.getenv("MOSAIC_PSI_TF_INTEROP", "")))
+     if (!is.na(.tf_intra) && .tf_intra > 0L)
+          try(tf$config$threading$set_intra_op_parallelism_threads(.tf_intra), silent = TRUE)
+     if (!is.na(.tf_inter) && .tf_inter > 0L)
+          try(tf$config$threading$set_inter_op_parallelism_threads(.tf_inter), silent = TRUE)
      tf$random$set_seed(as.integer(seed))
      np <- reticulate::import("numpy", convert = FALSE)
      np$random$seed(as.integer(seed))
