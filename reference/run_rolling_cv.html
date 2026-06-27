@@ -15,7 +15,7 @@ up to T, and (4) projects forward over the out-of-sample (OOS) window."><meta pr
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.11</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.12</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,6 +73,7 @@ up to <code>T</code>, and (4) projects forward over the out-of-sample (OOS) wind
 <span>  n_reps_best_medoid <span class="op">=</span> <span class="fl">50L</span>,</span>
 <span>  central_method <span class="op">=</span> <span class="st">"median"</span>,</span>
 <span>  est_suitability_spec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  psi_cache <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  dask_spec <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">dir_output</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -179,7 +180,19 @@ through to <code><a href="est_suitability.html">est_suitability</a></code> (e.g.
 lstm_v2 <code>arch_control</code> list). Date arguments are ignored (harness-owned).
 Deprecated v0.33 keys (<code>n_splits</code>, <code>exclude_covariates</code>) are
 accepted but ignored with a per-cutoff deprecation message — prefer
-<code>arch_control</code> for lstm_v2 knobs.</p></dd>
+<code>arch_control</code> for lstm_v2 knobs. When <code>psi_cache</code> is supplied this
+spec is used <em>only</em> to recompute the cache spec-hash for validation; the
+per-cutoff <code><a href="est_suitability.html">est_suitability()</a></code> fit is skipped entirely.</p></dd>
+
+
+<dt id="arg-psi-cache">psi_cache<a class="anchor" aria-label="anchor" href="#arg-psi-cache"></a></dt>
+<dd><p>NULL (default) or a directory produced by
+<code><a href="prefit_rolling_cv_psi.html">prefit_rolling_cv_psi</a></code>. When NULL the per-cutoff psi is re-fit
+in-place (original behavior). When set, the per-cutoff <code><a href="est_suitability.html">est_suitability()</a></code>
+call is skipped and the frozen <code>psi_&lt;T&gt;.csv</code> is loaded from this cache
+directory instead. The run <strong>hard-errors</strong> if a requested cutoff is
+absent from the cache manifest, or if the run's <code>est_suitability_spec</code>
+hash does not match the manifest <code>spec_hash</code> recorded for that cutoff.</p></dd>
 
 
 <dt id="arg-dask-spec">dask_spec<a class="anchor" aria-label="anchor" href="#arg-dask-spec"></a></dt>

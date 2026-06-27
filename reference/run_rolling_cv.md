@@ -26,6 +26,7 @@ run_rolling_cv(
   n_reps_best_medoid = 50L,
   central_method = "median",
   est_suitability_spec = list(),
+  psi_cache = NULL,
   dask_spec = NULL,
   dir_output,
   verbose = TRUE
@@ -134,7 +135,23 @@ run_rolling_cv(
   and the lstm_v2 `arch_control` list). Date arguments are ignored
   (harness-owned). Deprecated v0.33 keys (`n_splits`,
   `exclude_covariates`) are accepted but ignored with a per-cutoff
-  deprecation message — prefer `arch_control` for lstm_v2 knobs.
+  deprecation message — prefer `arch_control` for lstm_v2 knobs. When
+  `psi_cache` is supplied this spec is used *only* to recompute the
+  cache spec-hash for validation; the per-cutoff
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  fit is skipped entirely.
+
+- psi_cache:
+
+  NULL (default) or a directory produced by
+  [`prefit_rolling_cv_psi`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prefit_rolling_cv_psi.md).
+  When NULL the per-cutoff psi is re-fit in-place (original behavior).
+  When set, the per-cutoff
+  [`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  call is skipped and the frozen `psi_<T>.csv` is loaded from this cache
+  directory instead. The run **hard-errors** if a requested cutoff is
+  absent from the cache manifest, or if the run's `est_suitability_spec`
+  hash does not match the manifest `spec_hash` recorded for that cutoff.
 
 - dask_spec:
 

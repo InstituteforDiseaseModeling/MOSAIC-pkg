@@ -1029,6 +1029,9 @@ Other exported functions and internal helpers
   : Plot Vaccine Effectiveness Decay and Prior Distributions
 - [`plot_vibrio_decay_rate()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_vibrio_decay_rate.md)
   : Plot Vibrio Decay Rate as a Function of Environmental Suitability
+- [`prefit_rolling_cv_psi()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/prefit_rolling_cv_psi.md)
+  : Pre-fit and freeze the environmental-suitability (psi) cache for
+  rolling CV
 - [`print(`*`<mosaic_initial_conditions_S>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_initial_conditions_S.md)
   : Print method for S compartment initial conditions
 - [`print(`*`<mosaic_priors>`*`)`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/print.mosaic_priors.md)
