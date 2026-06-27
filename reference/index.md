@@ -333,7 +333,7 @@ Plotting functions
 - [`plot_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_sensitivity.md)
   : Plot Parameter Sensitivity Ranking (HSIC)
 - [`plot_model_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameters.md)
-  : Plot Model Parameters vs Likelihood
+  : Plot Model Parameters vs Likelihood (Deprecated)
 - [`plot_model_posterior_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posterior_quantiles.md)
   : Plot Model Posterior Quantiles
 - [`plot_model_posteriors_detail()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posteriors_detail.md)
@@ -976,7 +976,7 @@ Other exported functions and internal helpers
 - [`plot_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameter_sensitivity.md)
   : Plot Parameter Sensitivity Ranking (HSIC)
 - [`plot_model_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameters.md)
-  : Plot Model Parameters vs Likelihood
+  : Plot Model Parameters vs Likelihood (Deprecated)
 - [`plot_model_posterior_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posterior_quantiles.md)
   : Plot Model Posterior Quantiles
 - [`plot_model_posteriors_detail()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_posteriors_detail.md)

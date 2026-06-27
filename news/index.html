@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.11</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.55.11" id="mosaic-05511">MOSAIC 0.55.11<a class="anchor" aria-label="anchor" href="#mosaic-05511"></a></h2>
+<div class="section level3">
+<h3 id="deprecations-0-55-11">Deprecations<a class="anchor" aria-label="anchor" href="#deprecations-0-55-11"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/plot_model_parameters.html">plot_model_parameters()</a></code> is deprecated and unwired from <code><a href="../reference/render_MOSAIC_figures.html">render_MOSAIC_figures()</a></code>.</strong> The parameter-vs-likelihood scatter (the <code>"parameters"</code> figure group, wired in during the v0.52.0 visualization/modeling split) was a revived orphan that is redundant with the <code>"sensitivity"</code> group (<code><a href="../reference/calc_model_parameter_sensitivity.html">calc_model_parameter_sensitivity()</a></code> / HSIC importance) and the <code>"posterior"</code> group (prior/posterior densities per parameter), and it dominated render time — a per-facet LOESS over the full retained sample (tens of thousands of simulations across all parameters) could run for 10+ minutes on a single country. It is removed from the render pipeline and <code>valid_groups</code>; the exported function remains as a deprecation shim (<code><a href="https://rdrr.io/r/base/Deprecated.html" class="external-link">.Deprecated()</a></code>) and will be removed in a future release.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.55.3" id="mosaic-0553">MOSAIC 0.55.3<a class="anchor" aria-label="anchor" href="#mosaic-0553"></a></h2>
 <div class="section level3">

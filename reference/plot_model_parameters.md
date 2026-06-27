@@ -1,8 +1,17 @@
-# Plot Model Parameters vs Likelihood
+# Plot Model Parameters vs Likelihood (Deprecated)
 
-Creates faceted plots showing the relationship between model parameters
-and likelihood values from calibration results. Generates separate plots
-for global and location-specific parameters.
+**Deprecated.** This parameter-vs-likelihood scatter is redundant with
+the principled parameter diagnostics already produced by
+[`render_MOSAIC_figures`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md):
+the `"sensitivity"` group
+([`calc_model_parameter_sensitivity`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md)
+/ HSIC importance) and the `"posterior"` group (prior/posterior
+densities per parameter). It also scales poorly — a per-facet LOESS over
+the full retained sample (tens of thousands of simulations across all
+parameters) makes it the dominant cost of a render pass. It is therefore
+no longer wired into
+[`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md)
+and will be removed in a future release.
 
 ## Usage
 
@@ -38,6 +47,10 @@ Invisibly returns a list containing the plot objects:
 - `location`: Named list of ggplot objects for each location
 
 ## Details
+
+Creates faceted plots showing the relationship between model parameters
+and likelihood values from calibration results. Generates separate plots
+for global and location-specific parameters.
 
 This function creates publication-quality faceted plots showing how each
 parameter relates to the model likelihood. Points are colored by

@@ -31,8 +31,8 @@ render_MOSAIC_figures(dir_output, which = NULL, plots = TRUE, verbose = TRUE)
 
   Character vector selecting figure groups to render, or `NULL`
   (default) for all. Valid groups: `"convergence"`, `"posterior"`,
-  `"predictions"`, `"ppc"`, `"sensitivity"`, `"psi_star"`,
-  `"parameters"`, `"spatial"`, `"trajectories"`.
+  `"predictions"`, `"ppc"`, `"sensitivity"`, `"psi_star"`, `"spatial"`,
+  `"trajectories"`.
 
 - plots:
 

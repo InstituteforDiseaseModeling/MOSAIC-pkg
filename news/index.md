@@ -1,5 +1,25 @@
 # Changelog
 
+## MOSAIC 0.55.11
+
+### Deprecations
+
+- **[`plot_model_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_model_parameters.md)
+  is deprecated and unwired from
+  [`render_MOSAIC_figures()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/render_MOSAIC_figures.md).**
+  The parameter-vs-likelihood scatter (the `"parameters"` figure group,
+  wired in during the v0.52.0 visualization/modeling split) was a
+  revived orphan that is redundant with the `"sensitivity"` group
+  ([`calc_model_parameter_sensitivity()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_model_parameter_sensitivity.md)
+  / HSIC importance) and the `"posterior"` group (prior/posterior
+  densities per parameter), and it dominated render time — a per-facet
+  LOESS over the full retained sample (tens of thousands of simulations
+  across all parameters) could run for 10+ minutes on a single country.
+  It is removed from the render pipeline and `valid_groups`; the
+  exported function remains as a deprecation shim
+  ([`.Deprecated()`](https://rdrr.io/r/base/Deprecated.html)) and will
+  be removed in a future release.
+
 ## MOSAIC 0.55.3
 
 ### Model-trajectory figures (new)
