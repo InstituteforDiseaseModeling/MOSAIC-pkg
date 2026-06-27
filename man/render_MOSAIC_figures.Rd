@@ -14,7 +14,7 @@ directory (the one containing \code{1_inputs/}, \code{2_calibration/},
 \item{which}{Character vector selecting figure groups to render, or
 \code{NULL} (default) for all. Valid groups: \code{"convergence"},
 \code{"posterior"}, \code{"predictions"}, \code{"ppc"},
-\code{"sensitivity"}, \code{"psi_star"}, \code{"parameters"},
+\code{"sensitivity"}, \code{"psi_star"},
 \code{"spatial"}, \code{"trajectories"}.}
 
 \item{plots}{Logical. Master switch. When \code{FALSE} the function returns

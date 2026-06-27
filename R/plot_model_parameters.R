@@ -1,4 +1,14 @@
-#' Plot Model Parameters vs Likelihood
+#' Plot Model Parameters vs Likelihood (Deprecated)
+#'
+#' \strong{Deprecated.} This parameter-vs-likelihood scatter is redundant with
+#' the principled parameter diagnostics already produced by
+#' \code{\link{render_MOSAIC_figures}}: the \code{"sensitivity"} group
+#' (\code{\link{calc_model_parameter_sensitivity}} / HSIC importance) and the
+#' \code{"posterior"} group (prior/posterior densities per parameter). It also
+#' scales poorly --- a per-facet LOESS over the full retained sample (tens of
+#' thousands of simulations across all parameters) makes it the dominant cost of
+#' a render pass. It is therefore no longer wired into
+#' \code{render_MOSAIC_figures()} and will be removed in a future release.
 #'
 #' Creates faceted plots showing the relationship between model parameters and
 #' likelihood values from calibration results. Generates separate plots for
@@ -53,6 +63,11 @@
 plot_model_parameters <- function(results,
                                   output_dir,
                                   verbose = TRUE) {
+
+     .Deprecated(msg = paste0(
+          "plot_model_parameters() is deprecated and no longer part of the ",
+          "render_MOSAIC_figures() pipeline. Use the 'sensitivity' group ",
+          "(calc_model_parameter_sensitivity) and 'posterior' group instead."))
 
      # ============================================================================
      # Input validation

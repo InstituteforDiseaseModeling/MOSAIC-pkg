@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_model_parameters.R
 \name{plot_model_parameters}
 \alias{plot_model_parameters}
-\title{Plot Model Parameters vs Likelihood}
+\title{Plot Model Parameters vs Likelihood (Deprecated)}
 \usage{
 plot_model_parameters(results, output_dir, verbose = TRUE)
 }
@@ -26,11 +26,21 @@ Invisibly returns a list containing the plot objects:
 }
 }
 \description{
+\strong{Deprecated.} This parameter-vs-likelihood scatter is redundant with
+the principled parameter diagnostics already produced by
+\code{\link{render_MOSAIC_figures}}: the \code{"sensitivity"} group
+(\code{\link{calc_model_parameter_sensitivity}} / HSIC importance) and the
+\code{"posterior"} group (prior/posterior densities per parameter). It also
+scales poorly --- a per-facet LOESS over the full retained sample (tens of
+thousands of simulations across all parameters) makes it the dominant cost of
+a render pass. It is therefore no longer wired into
+\code{render_MOSAIC_figures()} and will be removed in a future release.
+}
+\details{
 Creates faceted plots showing the relationship between model parameters and
 likelihood values from calibration results. Generates separate plots for
 global and location-specific parameters.
-}
-\details{
+
 This function creates publication-quality faceted plots showing how each
 parameter relates to the model likelihood. Points are colored by density,
 with a LOESS smooth curve showing the trend. The best parameter value

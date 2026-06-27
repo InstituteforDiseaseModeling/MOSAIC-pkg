@@ -1,10 +1,36 @@
 # test-plot_model_parameters.R
+#
+# plot_model_parameters() is DEPRECATED (v0.55.11): removed from the
+# render_MOSAIC_figures() pipeline in favour of the "sensitivity"
+# (calc_model_parameter_sensitivity) and "posterior" groups. These tests assert
+# the deprecation warning fires and that the function still produces output for
+# back-compat callers. Behaviour calls are wrapped in suppressWarnings() to mute
+# the (expected) .Deprecated() warning.
 
 # Load the function
 if (file.exists("../../R/plot_model_parameters.R")) source("../../R/plot_model_parameters.R")
 
+test_that("plot_model_parameters emits a deprecation warning", {
+
+    set.seed(123)
+    results <- data.frame(
+        likelihood = rnorm(10, mean = -1000, sd = 100),
+        phi_1 = runif(10, 0.5, 0.9)
+    )
+    test_dir <- file.path(tempdir(), "test_plot_params_deprecated")
+
+    expect_warning(
+        suppressMessages(
+            plot_model_parameters(results, output_dir = test_dir, verbose = FALSE)
+        ),
+        "deprecated"
+    )
+
+    unlink(test_dir, recursive = TRUE)
+})
+
 test_that("plot_model_parameters infers n_sim and n_iter correctly", {
-    
+
     # Create mock results data with sim and iter columns
     set.seed(123)
     results <- data.frame(
@@ -15,27 +41,27 @@ test_that("plot_model_parameters infers n_sim and n_iter correctly", {
         omega_1 = runif(15, 0.01, 0.1),
         beta_j0_env_ETH = runif(15, 0.1, 0.5)
     )
-    
+
     # Create temporary directory for output
     temp_dir <- tempdir()
     test_dir <- file.path(temp_dir, "test_plot_params")
-    
-    # Run function (suppress output)
-    plots <- suppressMessages(
+
+    # Run function (suppress output + deprecation warning)
+    plots <- suppressWarnings(suppressMessages(
         plot_model_parameters(results, output_dir = test_dir, verbose = FALSE)
-    )
-    
+    ))
+
     # Check that plots were created
     expect_type(plots, "list")
     expect_true("global" %in% names(plots))
     expect_true("location" %in% names(plots))
-    
+
     # Clean up
     unlink(test_dir, recursive = TRUE)
 })
 
 test_that("plot_model_parameters works without sim/iter columns", {
-    
+
     # Create mock results without sim/iter columns
     set.seed(123)
     results <- data.frame(
@@ -44,24 +70,24 @@ test_that("plot_model_parameters works without sim/iter columns", {
         omega_1 = runif(20, 0.01, 0.1),
         beta_j0_env_ETH = runif(20, 0.1, 0.5)
     )
-    
+
     # Create temporary directory for output
     temp_dir <- tempdir()
     test_dir <- file.path(temp_dir, "test_plot_params_no_sim")
-    
+
     # Run function (should still work)
     expect_no_error({
-        plots <- suppressMessages(
+        plots <- suppressWarnings(suppressMessages(
             plot_model_parameters(results, output_dir = test_dir, verbose = FALSE)
-        )
+        ))
     })
-    
+
     # Clean up
     unlink(test_dir, recursive = TRUE)
 })
 
 test_that("plot_model_parameters handles multiple locations", {
-    
+
     # Create mock results with multiple locations
     set.seed(123)
     n <- 30
@@ -74,27 +100,27 @@ test_that("plot_model_parameters handles multiple locations", {
         beta_j0_env_KEN = runif(n, 0.1, 0.5),
         beta_j0_env_UGA = runif(n, 0.1, 0.5)
     )
-    
+
     # Create temporary directory for output
     temp_dir <- tempdir()
     test_dir <- file.path(temp_dir, "test_plot_params_multi")
-    
+
     # Run function
-    plots <- suppressMessages(
+    plots <- suppressWarnings(suppressMessages(
         plot_model_parameters(results, output_dir = test_dir, verbose = FALSE)
-    )
-    
+    ))
+
     # Check that location plots were created for each location
     expect_true("location" %in% names(plots))
     expect_equal(length(plots$location), 3)  # ETH, KEN, UGA
     expect_true(all(c("ETH", "KEN", "UGA") %in% names(plots$location)))
-    
+
     # Clean up
     unlink(test_dir, recursive = TRUE)
 })
 
 test_that("plot_model_parameters handles NA likelihood values", {
-    
+
     # Create mock results with some NA likelihoods (failed simulations)
     set.seed(123)
     results <- data.frame(
@@ -104,70 +130,70 @@ test_that("plot_model_parameters handles NA likelihood values", {
         phi_1 = runif(10, 0.5, 0.9),
         omega_1 = runif(10, 0.01, 0.1)
     )
-    
+
     # Create temporary directory for output
     temp_dir <- tempdir()
     test_dir <- file.path(temp_dir, "test_plot_params_na")
-    
+
     # Run function (should handle NAs gracefully)
     expect_no_error({
-        plots <- suppressMessages(
+        plots <- suppressWarnings(suppressMessages(
             plot_model_parameters(results, output_dir = test_dir, verbose = FALSE)
-        )
+        ))
     })
-    
+
     # Clean up
     unlink(test_dir, recursive = TRUE)
 })
 
 test_that("plot_model_parameters creates output directory if needed", {
-    
+
     # Create mock results
     set.seed(123)
     results <- data.frame(
         likelihood = rnorm(10, mean = -1000, sd = 100),
         phi_1 = runif(10, 0.5, 0.9)
     )
-    
+
     # Use non-existent directory
     temp_dir <- tempdir()
     test_dir <- file.path(temp_dir, "new_dir_that_doesnt_exist")
-    
+
     # Ensure directory doesn't exist
     unlink(test_dir, recursive = TRUE)
     expect_false(dir.exists(test_dir))
-    
+
     # Run function
-    plots <- suppressMessages(
+    plots <- suppressWarnings(suppressMessages(
         plot_model_parameters(results, output_dir = test_dir, verbose = FALSE)
-    )
-    
+    ))
+
     # Check that directory was created
     expect_true(dir.exists(test_dir))
-    
+
     # Clean up
     unlink(test_dir, recursive = TRUE)
 })
 
 test_that("plot_model_parameters validates inputs", {
-    
+
     # Test with non-dataframe
     expect_error(
-        plot_model_parameters(list(a = 1), output_dir = "test"),
+        suppressWarnings(plot_model_parameters(list(a = 1), output_dir = "test")),
         "results must be a data frame"
     )
-    
+
     # Test without likelihood column
     results_no_ll <- data.frame(phi_1 = runif(10))
     expect_error(
-        plot_model_parameters(results_no_ll, output_dir = "test"),
+        suppressWarnings(plot_model_parameters(results_no_ll, output_dir = "test")),
         "results must contain a 'likelihood' column"
     )
-    
+
     # Test without output_dir
     results <- data.frame(likelihood = rnorm(10))
     expect_error(
-        plot_model_parameters(results),
+        suppressWarnings(plot_model_parameters(results)),
         "output_dir is required"
     )
 })

@@ -28,7 +28,7 @@
 #' @param which Character vector selecting figure groups to render, or
 #'   \code{NULL} (default) for all. Valid groups: \code{"convergence"},
 #'   \code{"posterior"}, \code{"predictions"}, \code{"ppc"},
-#'   \code{"sensitivity"}, \code{"psi_star"}, \code{"parameters"},
+#'   \code{"sensitivity"}, \code{"psi_star"},
 #'   \code{"spatial"}, \code{"trajectories"}.
 #' @param plots Logical. Master switch. When \code{FALSE} the function returns
 #'   immediately without rendering (mirrors \code{control$paths$plots}). Default
@@ -58,7 +58,7 @@ render_MOSAIC_figures <- function(dir_output,
     stop("dir_output does not exist: ", dir_output)
 
   valid_groups <- c("convergence", "posterior", "predictions", "ppc",
-                    "sensitivity", "psi_star", "parameters", "spatial",
+                    "sensitivity", "psi_star", "spatial",
                     "trajectories")
   if (is.null(which)) {
     which <- valid_groups
@@ -283,26 +283,6 @@ render_MOSAIC_figures <- function(dir_output,
       )
     } else {
       warning("sensitivity: ", files$samples, " not found; skipping.",
-              call. = FALSE)
-    }
-  }
-
-  # ===========================================================================
-  # PARAMETERS (parameter-vs-likelihood scatter; wired-in orphan, 2d)
-  # ===========================================================================
-  if ("parameters" %in% which) {
-    attempted["parameters"] <- TRUE
-    .vmsg("Rendering parameter-vs-likelihood figures...")
-
-    if (file.exists(files$samples)) {
-      tryCatch({
-        results <- arrow::read_parquet(files$samples)
-        plot_model_parameters(results = results, output_dir = dirs$res_fig_post,
-                              verbose = verbose)
-      }, error = function(e) warning("parameter-vs-likelihood plot failed: ",
-                                     conditionMessage(e), call. = FALSE))
-    } else {
-      warning("parameters: ", files$samples, " not found; skipping.",
               call. = FALSE)
     }
   }
