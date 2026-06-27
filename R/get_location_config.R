@@ -169,5 +169,14 @@ get_location_config <- function(iso, config = NULL) {
           )
      }
 
+     # Drop an empty (0-row) epidemic_peaks. A 0-row frame -- e.g. a no-peak
+     # location, or a filter that matched nothing -- JSON-round-trips to a Dask
+     # worker WITHOUT its iso_code column, crashing laser params.py:303
+     # (`.iso_code` on a column-less DataFrame, "object has no attribute
+     # 'iso_code'"). Nulling it makes the engine skip the epidemic_peaks block.
+     if (!is.null(out$epidemic_peaks) && NROW(out$epidemic_peaks) == 0L) {
+          out$epidemic_peaks <- NULL
+     }
+
      return(out)
 }

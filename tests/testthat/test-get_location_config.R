@@ -242,3 +242,16 @@ test_that("get_location_config works with sampled parameters", {
      eth_idx <- which(config_sampled$location_name == "ETH")
      expect_equal(eth_sampled$beta_j0_env, config_sampled$beta_j0_env[eth_idx])
 })
+
+test_that("get_location_config never returns an empty (0-row) epidemic_peaks", {
+     # Regression: a 0-row epidemic_peaks (no-peak location, or filter matched
+     # nothing) JSON-round-trips to a Dask worker WITHOUT its iso_code column and
+     # crashes laser params.py:303 (.iso_code on a column-less DataFrame). The
+     # fix nulls an empty result; the invariant is "NULL or nrow > 0", never 0-row.
+     for (iso in c("ETH", "KEN", "BFA", "LBR", "NAM", "ZAF")) {
+          cfg <- get_location_config(iso = iso)
+          ep  <- cfg$epidemic_peaks
+          expect_true(is.null(ep) || NROW(ep) > 0L,
+                      info = sprintf("epidemic_peaks for %s must be NULL or non-empty", iso))
+     }
+})

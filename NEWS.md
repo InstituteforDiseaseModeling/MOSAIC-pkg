@@ -1,3 +1,9 @@
+# MOSAIC 0.55.15
+
+## Bug fixes
+
+* **`get_location_config()` now nulls an empty `epidemic_peaks`.** A 0-row `epidemic_peaks` (a no-peak location, or a filter that matched nothing) JSON-round-trips to a Dask/Coiled worker without its `iso_code` column and crashes the laser engine at `params.py:303` (`.iso_code` on a column-less DataFrame → `'DataFrame' object has no attribute 'iso_code'`, every sim erroring → "No simulation results to process"). The fix drops the key when the filtered result is empty so the engine skips the `epidemic_peaks` block entirely. Surfaced by 6 no-peak countries (BFA/CIV/GHA/LBR/NAM/ZAF) failing a Coiled full-metapop batch where they had succeeded on the in-process (local) path. Regression test added.
+
 # MOSAIC 0.55.11
 
 ## Deprecations
