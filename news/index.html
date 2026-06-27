@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.13</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.15</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.55.15" id="mosaic-05515">MOSAIC 0.55.15<a class="anchor" aria-label="anchor" href="#mosaic-05515"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-55-15">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-55-15"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/get_location_config.html">get_location_config()</a></code> now nulls an empty <code>epidemic_peaks</code>.</strong> A 0-row <code>epidemic_peaks</code> (a no-peak location, or a filter that matched nothing) JSON-round-trips to a Dask/Coiled worker without its <code>iso_code</code> column and crashes the laser engine at <code>params.py:303</code> (<code>.iso_code</code> on a column-less DataFrame → <code>'DataFrame' object has no attribute 'iso_code'</code>, every sim erroring → “No simulation results to process”). The fix drops the key when the filtered result is empty so the engine skips the <code>epidemic_peaks</code> block entirely. Surfaced by 6 no-peak countries (BFA/CIV/GHA/LBR/NAM/ZAF) failing a Coiled full-metapop batch where they had succeeded on the in-process (local) path. Regression test added.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.55.11" id="mosaic-05511">MOSAIC 0.55.11<a class="anchor" aria-label="anchor" href="#mosaic-05511"></a></h2>
 <div class="section level3">
