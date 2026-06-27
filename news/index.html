@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.15</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.16</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.55.16" id="mosaic-05516">MOSAIC 0.55.16<a class="anchor" aria-label="anchor" href="#mosaic-05516"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-0-55-16">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-55-16"></a></h3>
+<ul><li>
+<strong>Dask path: <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> now nulls an empty re-injected <code>epidemic_peaks</code></strong> (<code>.mosaic_inject_likelihood_settings</code>). The Dask/Coiled path <em>overwrites</em> <code>config$epidemic_peaks</code> with a fresh <code>.filter_epidemic_peaks()</code> against <code><a href="../reference/epidemic_peaks.html">MOSAIC::epidemic_peaks</a></code> — so the v0.55.15 <code><a href="../reference/get_location_config.html">get_location_config()</a></code> guard was insufficient (the input value is discarded). For a no-peak location the re-injected frame is 0-row, JSON-round-trips to the worker without its <code>iso_code</code> column, and crashes laser <code>params.py:303</code> (every sim erroring). This is the fix that actually resolves the BFA/CIV/GHA/LBR/NAM/ZAF Coiled failures. Regression test added (<code>test-epidemic_peaks_dask_inject.R</code>).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.55.15" id="mosaic-05515">MOSAIC 0.55.15<a class="anchor" aria-label="anchor" href="#mosaic-05515"></a></h2>
 <div class="section level3">
