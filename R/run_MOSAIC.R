@@ -2291,6 +2291,17 @@ run_MOSAIC <- function(config,
   # The client was disconnected before R-heavy post-processing. Now reconnect
   # to the same (still-alive) cluster to dispatch stochastic param sims.
 
+  # Trajectory-capture flags — hoisted ABOVE the post-cal Dask reconnect dispatch
+  # below (which passes `capture_trajectories = .traj_enabled`). They were
+  # previously defined ~80 lines later, so the reconnect dispatch hit
+  # "object '.traj_enabled' not found" and forced the local-execution fallback
+  # (silent + OK for 1-loc, but HANGS the multi-loc regional post-cal ensemble).
+  .traj_enabled     <- isTRUE(control$predictions$capture_trajectories)
+  .optimize_enabled <- isTRUE(control$predictions$optimize_subset)
+  .traj_channels    <- control$predictions$trajectory_channels %||%
+                         .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT
+  .traj_n_lines     <- as.integer(control$predictions$trajectory_n_lines %||% 150L)
+
   postca_dask <- NULL
 
   if (use_dask && !is.null(dask_cluster)) {
@@ -2429,14 +2440,10 @@ run_MOSAIC <- function(config,
 
   param_seeds <- NULL   # initialised here; assigned inside block below if best subset exists
 
-  # Trajectory-capture flags (defined here so the post-optimize fallback below can
-  # see them regardless of which branch ran). Deviation-#1 fix (PLAN 14.B): the
-  # persisted trajectories must reflect the FINAL displayed member set & weights.
-  .traj_enabled     <- isTRUE(control$predictions$capture_trajectories)
-  .optimize_enabled <- isTRUE(control$predictions$optimize_subset)
-  .traj_channels    <- control$predictions$trajectory_channels %||%
-                         .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT
-  .traj_n_lines     <- as.integer(control$predictions$trajectory_n_lines %||% 150L)
+  # Trajectory-capture flags are now hoisted ABOVE the post-cal Dask reconnect
+  # block (the .traj_enabled/.optimize_enabled/.traj_channels/.traj_n_lines defs
+  # before `postca_dask <- NULL`), so both the reconnect dispatch and this
+  # post-optimize fallback see them. Only the scratch handles remain here.
   traj_scratch_handle <- NULL   # scratch descriptor from the candidate capture run
   cand_member_seeds   <- NULL   # candidate per-member seeds (scratch-key -> seed map)
 
