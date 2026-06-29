@@ -1,5 +1,21 @@
 # Changelog
 
+## MOSAIC 0.55.17
+
+### Bug fixes
+
+- **Dask post-cal: hoist `.traj_enabled` above the reconnect dispatch.**
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  referenced `.traj_enabled` in the post-calibration Dask reconnect
+  dispatch (`capture_trajectories = .traj_enabled`) ~80 lines before it
+  was defined, so the dispatch threw “object ‘.traj_enabled’ not found”
+  and fell back to LOCAL execution for the ensemble/stochastic sims.
+  Silent + harmless for single-location runs (local ensemble is fast),
+  but it HANGS a multi-location (regional) post-cal ensemble. Hoisted
+  the `.traj_*`/`.optimize_*` flag definitions above the reconnect block
+  so post-cal stays on the Coiled cluster. Found by the first regional
+  (5-loc) smoke.
+
 ## MOSAIC 0.55.16
 
 ### Bug fixes
