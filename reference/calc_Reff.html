@@ -29,7 +29,7 @@ or zeta_*."><meta property="og:image" content="https://institutefordiseasemodeli
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -143,14 +143,15 @@ posterior series. Set <code>0</code> for the pure Cori convention.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A tidy long <code>data.frame</code> (<code>reproductive_numbers</code> schema) with
 columns <code>location</code>, <code>date</code>, <code>t</code>, <code>estimand</code>
-(<code>"R_eff"</code>), <code>central</code> (the medoid point estimate = renewal on the
-weighted-median incidence), and one column per requested quantile
-(<code>q2.5</code>, <code>q25</code>, <code>q50</code>, <code>q75</code>, <code>q97.5</code>, ...) from the
-posterior reduction over members via <code><a href="weighted_quantiles.html">weighted_quantiles</a></code>. The
-wide \(nL \times T\) central matrix is attached as attribute
-<code>"central_matrix"</code>. Provenance attributes: <code>kernel</code>
-(<code>"moment_matched"</code>), <code>series</code> (<code>"infection_incidence"</code>),
-<code>kernel_params</code>, <code>ci_source</code>, and <code>caveat</code>.</p>
+(<code>"R_eff"</code>), <code>central</code> (<strong>this direct path</strong>: renewal on the
+weighted-MEDIAN incidence – see the caveat below), and one column per
+requested quantile (<code>q2.5</code>, <code>q25</code>, <code>q50</code>, <code>q75</code>,
+<code>q97.5</code>, ...) from the posterior reduction over members via
+<code><a href="weighted_quantiles.html">weighted_quantiles</a></code>. The wide \(nL \times T\) central matrix
+is attached as attribute <code>"central_matrix"</code>. Provenance attributes:
+<code>kernel</code> (<code>"moment_matched"</code>), <code>series</code>
+(<code>"infection_incidence"</code>), <code>kernel_params</code>, <code>ci_source</code>, and
+<code>caveat</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -171,9 +172,20 @@ is therefore a <strong>lower-mean-\(\mathcal{G}\) approximation</strong>: it wil
 slightly closer to 1 (less extreme in either direction) than a three-clock
 kernel would. The pooled <code>incidence</code> series itself does include both the
 human and environmental S-&gt;E routes; only the kernel timing is two-clock.</p>
-<p><strong>Point estimate (central).</strong> The headline per-location series is the
-renewal estimator applied to <code>summary$incidence$median</code> (the full daily
-weighted-median incidence), consistent with every other medoid-based diagnostic.</p>
+<p><strong>Central definition differs from the production (re-simulation) path.</strong>
+This cheap direct path sets <code>central</code> = the renewal estimator applied to
+<code>summary$incidence$median</code> (the full daily weighted-MEDIAN incidence). The
+<strong>production</strong> path used by <code><a href="add_reproductive_numbers.html">add_reproductive_numbers</a>(
+recompute_ci = TRUE)</code> (<code>.mosaic_reff_resim_ci</code>) instead sets
+<code>central</code> = the <strong>MEDOID trajectory's R_t</strong> (a single coherent
+member's series) because the per-day cross-member median – and, equivalently,
+the renewal on the median incidence – is FLATTENED toward 1 by phase
+misalignment of member peaks and does NOT represent the epidemic's peak R_t.
+On this direct path the same caveat applies: the weighted-median incidence is a
+phase-smoothed series, so its renewal <code>central</code> is a calendar-date
+descriptor, not the coherent peak R_t. Use the re-simulation path
+(<code>recompute_ci = TRUE</code>) for the phase-coherent headline and the
+<code>peak_Rt</code> explosivity statistic.</p>
 <p><strong>Posterior credible interval.</strong> Each retained member's daily R_eff series
 is reconstructed from the per-member <code>incidence</code> <code>lines</code> and the
 kernel, then reduced per <code>(location, t)</code> cell with

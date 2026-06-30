@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,22 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.59.0" id="mosaic-0590">MOSAIC 0.59.0<a class="anchor" aria-label="anchor" href="#mosaic-0590"></a></h2>
+<div class="section level3">
+<h3 id="cori-r_eff-phase-coherent-headline--per-member-peak-underestimation-fix-0-59-0">Cori R_eff: phase-coherent headline + per-member peak (underestimation fix)<a class="anchor" aria-label="anchor" href="#cori-r_eff-phase-coherent-headline--per-member-peak-underestimation-fix-0-59-0"></a></h3>
+<p>Investigation of “R_t sits near 1 everywhere” found the headline <code>central</code> was a per-calendar-day cross-member weighted MEDIAN of per-member R_t. Because members’ R_t peaks are phase-misaligned (peak-day SD ~hundreds of days), that statistic regresses to ~1 even when individual trajectories are explosive — it was an aggregation artifact, not the biology and not a renewal-math bug (Euler-Lotka cross-checks pass; posterior weighting is near-uniform so not a factor).</p>
+<ul><li>
+<strong><code>central</code> is now the MEDOID trajectory’s R_t</strong> — a single coherent member, selected with run_MOSAIC’s exact medoid criterion (per-channel <code>central_method</code>, default median) computed on the saved <code>cases_array</code>. Phase-coherent, so it shows real peaks (e.g. MOZ 1.46 -&gt; 4.58, COD 1.50 -&gt; 2.23).</li>
+<li>
+<strong>New <code>peak_Rt</code> attribute</strong> — per-location posterior-weighted q2.5/q50/q97.5 of each member’s post-burn-in time-MAX R_t (burn-in masked before the max so the IC seeding transient cannot dominate). The explosivity statistic.</li>
+<li>The per-calendar-day cross-member quantiles (<code>q2.5/q50/q97.5</code>) are retained as a calendar-date <em>envelope</em> (no longer the headline) with attr <code>band_definition = "per_calendar_day_cross_member_weighted_quantiles"</code>; attr <code>central_definition = "medoid_trajectory"</code>; <code>medoid_member</code> records the selection.</li>
+<li>
+<strong><code><a href="../reference/plot_Reff.html">plot_Reff()</a></code></strong> now draws the purple medoid line, a faint envelope captioned to explain it is NOT the epidemic peak (phase-misaligned), and a per-member peak R_t annotation.</li>
+<li>
+<code><a href="../reference/add_reproductive_numbers.html">add_reproductive_numbers()</a></code> / <code>.mosaic_reff_resim_ci()</code> gain a <code>burn_in_days</code> arg (from <code>control$likelihood$burn_in_days</code>) and honor <code>control$predictions$central_method</code> for the medoid target (closes a lockstep gap; default median matches existing behavior).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.58.1" id="mosaic-0581">MOSAIC 0.58.1<a class="anchor" aria-label="anchor" href="#mosaic-0581"></a></h2>
 <div class="section level3">

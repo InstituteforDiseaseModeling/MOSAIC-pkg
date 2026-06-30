@@ -80,10 +80,10 @@ calc_Reff(
 ## Value
 
 A tidy long `data.frame` (`reproductive_numbers` schema) with columns
-`location`, `date`, `t`, `estimand` (`"R_eff"`), `central` (the medoid
-point estimate = renewal on the weighted-median incidence), and one
-column per requested quantile (`q2.5`, `q25`, `q50`, `q75`, `q97.5`,
-...) from the posterior reduction over members via
+`location`, `date`, `t`, `estimand` (`"R_eff"`), `central` (**this
+direct path**: renewal on the weighted-MEDIAN incidence – see the caveat
+below), and one column per requested quantile (`q2.5`, `q25`, `q50`,
+`q75`, `q97.5`, ...) from the posterior reduction over members via
 [`weighted_quantiles`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles.md).
 The wide \\nL \times T\\ central matrix is attached as attribute
 `"central_matrix"`. Provenance attributes: `kernel`
@@ -113,10 +113,21 @@ closer to 1 (less extreme in either direction) than a three-clock kernel
 would. The pooled `incidence` series itself does include both the human
 and environmental S-\>E routes; only the kernel timing is two-clock.
 
-**Point estimate (central).** The headline per-location series is the
-renewal estimator applied to `summary$incidence$median` (the full daily
-weighted-median incidence), consistent with every other medoid-based
-diagnostic.
+**Central definition differs from the production (re-simulation) path.**
+This cheap direct path sets `central` = the renewal estimator applied to
+`summary$incidence$median` (the full daily weighted-MEDIAN incidence).
+The **production** path used by
+[`add_reproductive_numbers`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)`( recompute_ci = TRUE)`
+(`.mosaic_reff_resim_ci`) instead sets `central` = the **MEDOID
+trajectory's R_t** (a single coherent member's series) because the
+per-day cross-member median – and, equivalently, the renewal on the
+median incidence – is FLATTENED toward 1 by phase misalignment of member
+peaks and does NOT represent the epidemic's peak R_t. On this direct
+path the same caveat applies: the weighted-median incidence is a
+phase-smoothed series, so its renewal `central` is a calendar-date
+descriptor, not the coherent peak R_t. Use the re-simulation path
+(`recompute_ci = TRUE`) for the phase-coherent headline and the
+`peak_Rt` explosivity statistic.
 
 **Posterior credible interval.** Each retained member's daily R_eff
 series is reconstructed from the per-member `incidence` `lines` and the
