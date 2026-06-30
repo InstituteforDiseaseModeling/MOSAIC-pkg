@@ -366,6 +366,294 @@ calc_Reff <- function(ensemble,
   paste0("q", lab)
 }
 
+#' Re-simulate the saved posterior ensemble and build a per-member R_eff CI
+#'
+#' Faithful re-simulation path for the Cori R_eff posterior credible interval.
+#' The persisted production artifacts do NOT carry daily-consecutive per-member
+#' infection-incidence (\code{trajectories_ensemble.rds} thins \code{lines} on a
+#' stride, and \code{ensemble_candidate.rds} holds DAILY arrays only for reported
+#' cases/deaths, not the \code{incidence} S->E flow). To compute a member-level
+#' R_eff CI we therefore RE-RUN the exact posterior members the calibration ran
+#' and capture daily \code{incidence} per member.
+#'
+#' \strong{Faithfulness.} Each member's config is rebuilt with the same recipe
+#' \code{calc_model_ensemble()} uses for its local worker: \code{sample_parameters(
+#' PATHS, priors, config = base, seed = parameter_seeds[p], sample_args)} then
+#' \code{.mosaic_clamp_transmission_params()}; the per-(param, stoch) LASER seed
+#' is the same deterministic \code{param_idx * 1000L + stoch_idx} the worker sets;
+#' the engine is invoked through \code{.mosaic_prepare_config_for_python()} +
+#' \code{lc$run_model(quiet = TRUE)}. The captured \code{reported_cases} per
+#' (param, stoch) are compared against the saved \code{cases_array} from the
+#' ensemble object (the FAITHFULNESS GATE): if they do not match, the re-sim is
+#' not reproducing the calibration and the function stops rather than shipping a
+#' wrong CI.
+#'
+#' Each (param_idx, stoch_idx) pair is one ensemble member with weight
+#' \code{parameter_weights[param_idx] / n_simulations_per_config} (matching the
+#' \code{sim_weights} convention used throughout \code{calc_model_ensemble()}).
+#' Each member's R_eff series uses its OWN moment-matched generation-interval
+#' kernel built from that member's sampled \code{iota/gamma_1/gamma_2/sigma}.
+#'
+#' @param ensemble A \code{mosaic_ensemble} object (read from
+#'   \code{2_calibration/ensemble_candidate.rds}) carrying \code{seeds}
+#'   (= the per-member \code{parameter_seeds}), \code{parameter_weights},
+#'   \code{cases_array}, \code{n_param_sets}, \code{n_simulations_per_config},
+#'   \code{location_names}, \code{date_start}.
+#' @param base_config The base \code{config} list (medoid \code{config.json}) the
+#'   members were sampled from.
+#' @param priors The priors object (\code{1_inputs/priors.json}).
+#' @param sampling_args The \code{control$sampling} list used at calibration.
+#' @param PATHS \code{get_paths()} result (required by \code{sample_parameters}).
+#' @param max_days Generation-interval kernel truncation (days). Default 56.
+#' @param probs Quantile probabilities. Default \code{c(0.025, 0.5, 0.975)}.
+#' @param infectiousness_floor Passed to \code{.cori_reff}. Default 1.
+#' @param gate_rel_tol Numeric. Statistical-equivalence faithfulness gate:
+#'   maximum allowed relative total-case error between the re-simulated
+#'   \code{reported_cases} and the saved \code{cases_array}, applied to BOTH the
+#'   \code{gate_frac}-percentile per-member error AND the ensemble-weighted
+#'   aggregate error. Default \code{0.05} (5\%). A bitwise (exact) gate is NOT
+#'   used because the LASER engine is bitwise-deterministic only WITHIN a process;
+#'   the same seed + config re-run in a fresh process yields a
+#'   statistically-equivalent (not identical) stochastic realization (numba RNG
+#'   cross-process non-determinism).
+#' @param gate_frac Numeric in (0, 1]. The per-member relative-error percentile
+#'   used by the gate. Default \code{0.95} -- i.e. up to 5\% of members may be
+#'   near-critical/bistable outliers (a tiny RNG difference flips
+#'   outbreak/no-outbreak) without failing the gate, while a systematic
+#'   reconstruction failure (which moves the BULK of members) still fails.
+#' @param gate_cor_min Numeric. Statistical-equivalence faithfulness gate:
+#'   minimum allowed MEDIAN per-member Pearson correlation between the
+#'   re-simulated and saved \code{reported_cases} time profiles. Default
+#'   \code{0.95}.
+#' @param verbose Logical; emit progress. Default TRUE.
+#'
+#' @return A list with \code{qmats} (\code{nL x T x length(probs)} array of
+#'   weighted quantiles), \code{central_mat} (\code{nL x T} weighted-median of the
+#'   per-member R_eff), \code{probs}, the gate diagnostics
+#'   (\code{gate_rel_err_pct}, \code{gate_rel_err_max}, \code{gate_agg_rel_err},
+#'   \code{gate_cor_median}, \code{gate_cor_min}, \code{gate_max_abs_diff},
+#'   \code{gate_n_outliers}, \code{gate_frac}), \code{n_members}, and
+#'   \code{kernel_params} (the medoid kernel, for provenance).
+#'
+#' @keywords internal
+#' @noRd
+.mosaic_reff_resim_ci <- function(ensemble, base_config, priors, sampling_args,
+                                  PATHS, max_days = 56L,
+                                  probs = c(0.025, 0.5, 0.975),
+                                  infectiousness_floor = 1,
+                                  gate_rel_tol = 0.05, gate_frac = 0.95,
+                                  gate_cor_min = 0.95, verbose = TRUE) {
+  if (!inherits(ensemble, "mosaic_ensemble"))
+    stop(".mosaic_reff_resim_ci: `ensemble` must be a mosaic_ensemble object.")
+  for (nm in c("seeds", "parameter_weights", "cases_array", "n_param_sets",
+               "n_simulations_per_config", "location_names"))
+    if (is.null(ensemble[[nm]]))
+      stop(".mosaic_reff_resim_ci: ensemble is missing `", nm, "`.")
+
+  # Pin BLAS/Numba threads to 1. This path drives LASER directly (outside
+  # run_MOSAIC(), which is otherwise the only place threads are pinned), so
+  # without this many concurrent re-sims (e.g. a multi-model batch on a
+  # many-core host) would each spawn full thread pools and thrash the machine.
+  # Must run before the laser/numba import below (numba reads its thread count
+  # at import time).
+  .mosaic_set_blas_threads(1L)
+  Sys.setenv(OMP_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+             OPENBLAS_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1",
+             TBB_NUM_THREADS = "1", NUMBA_NUM_THREADS = "1")
+
+  parameter_seeds <- as.integer(ensemble$seeds)
+  pw    <- as.numeric(ensemble$parameter_weights)
+  nP    <- as.integer(ensemble$n_param_sets)
+  nS    <- as.integer(ensemble$n_simulations_per_config)
+  locs  <- as.character(ensemble$location_names)
+  nL    <- length(locs)
+  ca    <- ensemble$cases_array          # [nL, T, nP, nS]
+  Tn    <- dim(ca)[2L]
+  if (length(parameter_seeds) != nP)
+    stop(".mosaic_reff_resim_ci: seeds length != n_param_sets.")
+
+  # --- Reconstruct member configs (same recipe as the ensemble worker) -------
+  if (verbose) message("  Re-sampling ", nP, " posterior member configs...")
+  member_cfgs <- vector("list", nP)
+  for (p in seq_len(nP)) {
+    member_cfgs[[p]] <- .mosaic_clamp_transmission_params(
+      sample_parameters(PATHS = PATHS, priors = priors, config = base_config,
+                        seed = parameter_seeds[p], sample_args = sampling_args,
+                        verbose = FALSE))
+  }
+
+  # --- Load the engine (same import as the worker) ---------------------------
+  if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
+    lc <- reticulate::import("laser.cholera.metapop.model")
+    .mosaic_strip_laser_file_handler()
+  } else {
+    lc <- get("lc", envir = .GlobalEnv)
+  }
+
+  # --- Re-simulate each member, capturing daily incidence + reported_cases ---
+  # Member index m = (s - 1) * nP + p ; weight = pw[p] / nS.
+  n_members <- nP * nS
+  # Per-member R_eff series [n_members x Tn], member weight, plus the gate diff.
+  reff_by_member <- matrix(NA_real_, nrow = n_members, ncol = Tn * nL)  # dummy; reshaped below
+  # Easier: keep a per-location list of [n_members x Tn] R_eff matrices.
+  reff_loc <- lapply(seq_len(nL), function(i) matrix(NA_real_, n_members, Tn))
+  member_w <- numeric(n_members)
+  # Statistical-equivalence gate (see rationale below). The LASER engine is
+  # bitwise-deterministic WITHIN a process but NOT across cold processes (numba
+  # RNG state differs), so a re-sim of an identical seed + config is
+  # statistically equivalent, not bitwise identical. We therefore record, per
+  # member, the relative total-case error and the cases correlation vs the saved
+  # cases_array, and gate on ROBUST statistics of those (NOT the single worst
+  # member): a tiny fraction of near-critical/bistable members can flip
+  # outbreak/no-outbreak on an RNG difference and blow up one member's relative
+  # error without the posterior being wrong. A systematic reconstruction failure
+  # would instead push the BULK of members off, which the percentile/aggregate
+  # checks below catch. (Cross-process non-determinism: cf. the est_suitability
+  # finding -- accept on statistical equivalence, never bitwise parity.)
+  re_vec  <- rep(NA_real_, n_members)   # per-member relative total-case error
+  cc_vec  <- rep(NA_real_, n_members)   # per-member cases correlation
+  ssum_v  <- rep(NA_real_, n_members)   # per-member saved total
+  rsum_v  <- rep(NA_real_, n_members)   # per-member resim total
+  max_abs <- 0
+  if (verbose) message("  Re-simulating ", n_members, " members (", nP, " x ", nS, ")...")
+  for (p in seq_len(nP)) {
+    cfg <- member_cfgs[[p]]
+    g   <- .mosaic_generation_time_pmf(
+      iota = as.numeric(cfg$iota)[1], gamma_1 = as.numeric(cfg$gamma_1)[1],
+      gamma_2 = as.numeric(cfg$gamma_2)[1], sigma = as.numeric(cfg$sigma)[1],
+      max_days = max_days)
+    for (s in seq_len(nS)) {
+      m <- (s - 1L) * nP + p
+      member_w[m] <- pw[p] / nS
+      run_cfg <- cfg
+      run_cfg$seed <- (p * 1000L) + s
+      model <- lc$run_model(
+        paramfile = .mosaic_prepare_config_for_python(run_cfg), quiet = TRUE)
+      inc <- model$results$incidence       # [nL, T] (or [T] when nL == 1)
+      rc  <- model$results$reported_cases
+      inc_m <- .mosaic_reff_to_mat(inc, nL, Tn)
+      rc_m  <- .mosaic_reff_to_mat(rc,  nL, Tn)
+      # Statistical-equivalence diagnostics vs saved cases_array (this (p, s)).
+      saved <- matrix(as.numeric(ca[, , p, s, drop = FALSE]), nrow = nL, ncol = Tn)
+      rv <- as.numeric(rc_m); sv <- as.numeric(saved)
+      ok <- is.finite(rv) & is.finite(sv)
+      if (any(ok)) {
+        ssum <- sum(sv[ok]); rsum <- sum(rv[ok])
+        re_vec[m]  <- if (ssum > 0) abs(rsum - ssum) / ssum else abs(rsum - ssum)
+        cc_vec[m]  <- suppressWarnings(stats::cor(rv[ok], sv[ok]))
+        ssum_v[m]  <- ssum; rsum_v[m] <- rsum
+        max_abs    <- max(max_abs, max(abs(rv[ok] - sv[ok])))
+      }
+      for (i in seq_len(nL))
+        reff_loc[[i]][m, ] <- .cori_reff(inc_m[i, ], g,
+                                         infectiousness_floor = infectiousness_floor)
+      reticulate::import("gc")$collect()
+    }
+    if (verbose && (p %% 10L == 0L || p == nP))
+      message(sprintf("    members done: %d/%d | rel_err med=%.4f p%.0f=%.4f | cor med=%.4f",
+                      p, nP, stats::median(re_vec, na.rm = TRUE), gate_frac * 100,
+                      stats::quantile(re_vec, gate_frac, na.rm = TRUE, names = FALSE),
+                      stats::median(cc_vec, na.rm = TRUE)))
+  }
+
+  # FAITHFULNESS GATE (robust statistical equivalence). Pass requires:
+  #   (1) the gate_frac-percentile per-member relative total-case error <= gate_rel_tol
+  #       (tolerates up to (1 - gate_frac) bistable outlier members),
+  #   (2) the ensemble-WEIGHTED aggregate total-case relative error <= gate_rel_tol
+  #       (the posterior-relevant burden must match), and
+  #   (3) the MEDIAN per-member cases correlation >= gate_cor_min.
+  # A systematic reconstruction bug fails all three; a lone near-critical member
+  # fails none. Worst-member stats are reported for provenance but not gated.
+  n_compared <- sum(is.finite(re_vec))
+  if (n_compared == 0L)
+    stop(".mosaic_reff_resim_ci: FAITHFULNESS GATE FAILED -- no overlapping ",
+         "reported_cases cells to compare against the saved cases_array.")
+  rel_err_pct  <- stats::quantile(re_vec, gate_frac, na.rm = TRUE, names = FALSE)
+  rel_err_max  <- max(re_vec, na.rm = TRUE)
+  cor_median   <- stats::median(cc_vec, na.rm = TRUE)
+  cor_min      <- min(cc_vec, na.rm = TRUE)
+  # Per-member weight aligned to member index m = (s-1)*nP + p.
+  agg_saved <- sum(ssum_v * member_w, na.rm = TRUE)
+  agg_resim <- sum(rsum_v * member_w, na.rm = TRUE)
+  agg_rel_err <- if (agg_saved > 0) abs(agg_resim - agg_saved) / agg_saved else
+    abs(agg_resim - agg_saved)
+  n_outliers <- sum(re_vec > gate_rel_tol, na.rm = TRUE)
+
+  gate_pass <- is.finite(rel_err_pct) && rel_err_pct <= gate_rel_tol &&
+    is.finite(agg_rel_err) && agg_rel_err <= gate_rel_tol &&
+    is.finite(cor_median) && cor_median >= gate_cor_min
+  if (verbose)
+    message(sprintf(paste0("  Faithfulness gate: p%.0f rel_err=%.4f (tol %.3f), ",
+                          "ensemble-agg rel_err=%.4f, median cor=%.4f (min %.3f), ",
+                          "%d/%d member outliers (worst rel_err=%.3f)."),
+                    gate_frac * 100, rel_err_pct, gate_rel_tol, agg_rel_err,
+                    cor_median, gate_cor_min, n_outliers, n_compared, rel_err_max))
+  if (!gate_pass)
+    stop(sprintf(paste0(".mosaic_reff_resim_ci: FAITHFULNESS GATE FAILED. ",
+                        "Re-simulated reported_cases are not statistically ",
+                        "equivalent to the saved cases_array: p%.0f per-member ",
+                        "relative total-case error = %.4f (tol %.4f), ",
+                        "ensemble-aggregate relative error = %.4f (tol %.4f), ",
+                        "median per-member correlation = %.4f (min %.4f); ",
+                        "%d/%d members exceed the per-member tolerance (worst ",
+                        "rel_err = %.3f). This indicates a systematic ",
+                        "reconstruction failure (not a lone bistable member); ",
+                        "refusing to ship an untrustworthy R_eff CI."),
+                 gate_frac * 100, rel_err_pct, gate_rel_tol, agg_rel_err,
+                 gate_rel_tol, cor_median, gate_cor_min, n_outliers, n_compared,
+                 rel_err_max))
+
+  # --- Weighted-quantile reduction per (location, t) -------------------------
+  qmats   <- array(NA_real_, dim = c(nL, Tn, length(probs)))
+  central <- matrix(NA_real_, nrow = nL, ncol = Tn)
+  for (i in seq_len(nL)) {
+    M <- reff_loc[[i]]
+    for (t in seq_len(Tn)) {
+      vals <- M[, t]
+      qs <- weighted_quantiles(vals, member_w, probs)
+      qmats[i, t, ] <- qs
+      central[i, t] <- weighted_quantiles(vals, member_w, 0.5)
+    }
+  }
+
+  list(qmats = qmats, central_mat = central, probs = probs,
+       gate_rel_err_pct = rel_err_pct, gate_rel_err_max = rel_err_max,
+       gate_agg_rel_err = agg_rel_err, gate_cor_median = cor_median,
+       gate_cor_min = cor_min, gate_max_abs_diff = max_abs,
+       gate_n_outliers = n_outliers, gate_frac = gate_frac,
+       n_members = n_members,
+       kernel_params = c(
+         iota    = as.numeric(base_config$iota)[1],
+         gamma_1 = as.numeric(base_config$gamma_1)[1],
+         gamma_2 = as.numeric(base_config$gamma_2)[1],
+         sigma   = as.numeric(base_config$sigma)[1]))
+}
+
+#' Coerce an engine channel to an nL-by-Tn matrix (orientation-robust)
+#' @keywords internal
+#' @noRd
+.mosaic_reff_to_mat <- function(val, nL, Tn) {
+  m <- suppressWarnings(as.numeric(unlist(val, use.names = FALSE)))
+  L <- length(m); target <- nL * Tn
+  if (L == target) {
+    # Engine returns [nL, T]; unlist is column-major over an [nL, T] R matrix.
+    if (nL == 1L) return(matrix(m, nrow = 1L, ncol = Tn))
+    return(matrix(m, nrow = nL, ncol = Tn))
+  }
+  if (L %% nL == 0L) {
+    t_eff <- L %/% nL
+    mm <- matrix(m, nrow = nL, ncol = t_eff)
+    if (t_eff >= Tn) return(mm[, seq_len(Tn), drop = FALSE])
+    out <- matrix(NA_real_, nL, Tn); out[, seq_len(t_eff)] <- mm
+    return(out)
+  }
+  if (nL == 1L) {
+    out <- rep(NA_real_, Tn); n <- min(L, Tn); out[seq_len(n)] <- m[seq_len(n)]
+    return(matrix(out, nrow = 1L))
+  }
+  matrix(NA_real_, nL, Tn)
+}
+
 #' Per-member posterior reduction of R_eff via weighted_quantiles
 #'
 #' Reconstructs each retained member's daily R_eff series from the per-member

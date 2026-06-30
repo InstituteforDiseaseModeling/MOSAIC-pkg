@@ -4,7 +4,7 @@
 \alias{plot_Reff}
 \title{Plot Cori effective reproductive number (R_eff) over time}
 \usage{
-plot_Reff(reff, show_iqr = TRUE, title = NULL, ncol = NULL, base_size = 12)
+plot_Reff(reff, show_iqr = FALSE, title = NULL, ncol = NULL, base_size = 12)
 }
 \arguments{
 \item{reff}{A \code{reproductive_numbers} \code{data.frame} from
@@ -16,8 +16,10 @@ non-finite \code{central} are dropped per location so no gap artifact is
 plotted.}
 
 \item{show_iqr}{Logical. Draw the inner 50\\% (\code{q25}-\code{q75}) ribbon in
-addition to the 95\\% ribbon when those columns are populated. Default
-\code{TRUE}.}
+addition to the 95\\% ribbon. Default \code{FALSE} (the plot shows ONLY the
+median line and the 95\\% credible-interval ribbon). Retained for
+back-compatibility; set \code{TRUE} to re-enable the inner band when the
+\code{q25}/\code{q75} columns are populated.}
 
 \item{title}{Character or \code{NULL}. Plot title. \code{NULL} (default) uses
 \code{"Effective reproductive number"} for multi-location input and
@@ -36,12 +38,14 @@ A \code{ggplot} object (not printed or saved). The driver
 \description{
 Renders the per-location, time-varying Cori (2013) instantaneous
 \strong{infection} effective reproductive number \eqn{R_{jt}} produced by
-\code{\link{calc_Reff}}. Draws the \code{central} (medoid) series as a line
-over date with a horizontal reference line at \eqn{R_{\mathrm{eff}} = 1}; when
-the posterior credible-interval columns are populated it overlays the
-95\\% (\code{q2.5}-\code{q97.5}) and optionally the 50\\% (\code{q25}-\code{q75})
-ribbons. Multi-location input is faceted by location; a single (national)
-location is rendered as one panel titled with the location.
+\code{\link{calc_Reff}}. Draws the posterior median series (\code{q50} when the
+re-simulated CI is present, else the \code{central} medoid series) as a purple
+line over date with a horizontal reference line at \eqn{R_{\mathrm{eff}} = 1};
+when the posterior credible-interval columns are populated it overlays the
+95\\% (\code{q2.5}-\code{q97.5}) ribbon (and optionally the 50\\%
+\code{q25}-\code{q75} band when \code{show_iqr = TRUE}). Multi-location input is
+faceted by location; a single (national) location is rendered as one panel
+titled with the location.
 }
 \details{
 \strong{Graceful CI handling.} On production-default trajectory artifacts the

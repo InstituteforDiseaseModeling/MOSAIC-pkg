@@ -31,6 +31,22 @@
 #' @param output_dir Character. Path to ONE MOSAIC model output directory (the
 #'   directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 #'   \code{3_results/}). No path is hardcoded; all I/O is relative to this.
+#' @param recompute_ci Logical. When \code{TRUE}, build a proper posterior
+#'   credible interval by \strong{re-simulating} the saved posterior ensemble
+#'   (\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
+#'   then weighted quantiles (median + 95\% interval). This captures the daily
+#'   S->E infection \code{incidence} channel that the persisted trajectory
+#'   artifact does not retain at a daily grid. A faithfulness gate confirms the
+#'   re-sim reproduces the saved \code{cases_array} before any CI is written.
+#'   When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
+#'   the medoid weighted-median incidence from \code{trajectories_ensemble.rds};
+#'   CI columns are populated only if the artifact carries daily-consecutive
+#'   per-member lines, otherwise NA).
+#' @param burn_in_days Integer or \code{NULL}. Number of leading days to exclude
+#'   from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
+#'   reads \code{control$likelihood$burn_in_days} from
+#'   \code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
+#'   \code{30} days. Only consumed on the \code{recompute_ci = TRUE} path.
 #' @param infectiousness_floor Numeric scalar \eqn{\ge 0}. Passed to
 #'   \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness
 #'   required to report \eqn{R_t} (guards the initial-condition seed spike and
@@ -75,6 +91,8 @@
 #' @importFrom utils write.csv
 #' @importFrom ggplot2 ggsave
 add_reproductive_numbers <- function(output_dir,
+                                     recompute_ci = FALSE,
+                                     burn_in_days = NULL,
                                      infectiousness_floor = 1,
                                      plots     = TRUE,
                                      overwrite = TRUE,
@@ -157,15 +175,24 @@ add_reproductive_numbers <- function(output_dir,
   }
 
   # --- Compute R_eff ---------------------------------------------------------
-  reff <- tryCatch(
-    calc_Reff(traj, cfg, infectiousness_floor = infectiousness_floor,
-              verbose = verbose),
-    error = function(e) e)
+  if (isTRUE(recompute_ci)) {
+    reff <- tryCatch(
+      .add_reff_recompute_ci(output_dir = output_dir, base_config = cfg,
+                             burn_in_days = burn_in_days,
+                             infectiousness_floor = infectiousness_floor,
+                             verbose = verbose),
+      error = function(e) e)
+  } else {
+    reff <- tryCatch(
+      calc_Reff(traj, cfg, infectiousness_floor = infectiousness_floor,
+                verbose = verbose),
+      error = function(e) e)
+  }
   if (inherits(reff, "error")) {
-    warning("add_reproductive_numbers: calc_Reff() failed for ", output_dir,
+    warning("add_reproductive_numbers: R_eff computation failed for ", output_dir,
             ": ", conditionMessage(reff), call. = FALSE)
     return(invisible(.status("error",
-                             message = paste0("calc_Reff failed: ",
+                             message = paste0("R_eff failed: ",
                                               conditionMessage(reff)))))
   }
 
@@ -238,4 +265,125 @@ add_reproductive_numbers <- function(output_dir,
   invisible(.status("ok", n_locations = n_loc, ci_available = ci_available,
                     csv = csv_written, rds = rds_written, plot = plot_written,
                     message = paste0("ci_source=", ci_source)))
+}
+
+# -----------------------------------------------------------------------------
+# Re-simulation driver: build a faithful posterior R_eff CI for ONE output dir.
+# -----------------------------------------------------------------------------
+#' Re-simulate the saved posterior ensemble and assemble a R_eff CI table
+#'
+#' Loads \code{2_calibration/ensemble_candidate.rds}, \code{1_inputs/priors.json},
+#' and the calibration \code{control$sampling} + \code{burn_in_days} from
+#' \code{1_inputs/control.json}, re-simulates the posterior members via
+#' \code{\link{.mosaic_reff_resim_ci}} (faithfulness-gated against the saved
+#' \code{cases_array}), computes per-member R_eff with each member's own kernel,
+#' reduces to weighted quantiles (q2.5/q50/q97.5), and returns a tidy
+#' \code{reproductive_numbers} data.frame with the same schema as
+#' \code{\link{calc_Reff}}. The leading \code{burn_in_days} are set to \code{NA}
+#' in every output column.
+#'
+#' @keywords internal
+#' @noRd
+.add_reff_recompute_ci <- function(output_dir, base_config, burn_in_days = NULL,
+                                   infectiousness_floor = 1, verbose = TRUE) {
+  ens_path <- file.path(output_dir, "2_calibration", "ensemble_candidate.rds")
+  pri_path <- file.path(output_dir, "1_inputs", "priors.json")
+  ctl_path <- file.path(output_dir, "1_inputs", "control.json")
+  if (!file.exists(ens_path))
+    stop("recompute_ci: missing ensemble_candidate.rds at ", ens_path)
+  if (!file.exists(pri_path))
+    stop("recompute_ci: missing priors.json at ", pri_path)
+  if (!file.exists(ctl_path))
+    stop("recompute_ci: missing control.json at ", ctl_path)
+
+  ens    <- readRDS(ens_path)
+  priors <- jsonlite::fromJSON(pri_path, simplifyVector = FALSE)
+  ctl    <- jsonlite::fromJSON(ctl_path)
+  control <- if (!is.null(ctl$control)) ctl$control else ctl
+  sampling_args <- control$sampling
+
+  # Resolve burn_in_days: arg > control$likelihood$burn_in_days > 30 default.
+  bid <- burn_in_days
+  if (is.null(bid)) {
+    bid <- tryCatch(as.integer(control$likelihood$burn_in_days),
+                    error = function(e) NA_integer_)
+  }
+  bid <- suppressWarnings(as.integer(bid))
+  if (length(bid) != 1L || is.na(bid) || bid <= 0L) {
+    if (verbose)
+      message("  burn_in_days resolved to 0/absent; defaulting to 30 days.")
+    bid <- 30L
+  }
+  if (verbose) message("  Excluding first ", bid, " day(s) as burn-in.")
+
+  PATHS <- get_paths()
+
+  res <- .mosaic_reff_resim_ci(
+    ensemble = ens, base_config = base_config, priors = priors,
+    sampling_args = sampling_args, PATHS = PATHS,
+    probs = c(0.025, 0.5, 0.975),
+    infectiousness_floor = infectiousness_floor, verbose = verbose)
+
+  if (verbose)
+    message(sprintf(paste0("  Faithfulness gate PASSED (robust statistical ",
+                          "equivalence): p%.0f rel_err = %.4f, ensemble-agg ",
+                          "rel_err = %.4f, median cor = %.4f, %d/%d member ",
+                          "outliers (worst rel_err = %.3f) over %d members."),
+                    res$gate_frac * 100, res$gate_rel_err_pct, res$gate_agg_rel_err,
+                    res$gate_cor_median, res$gate_n_outliers, res$n_members,
+                    res$gate_rel_err_max, res$n_members))
+
+  nL    <- length(ens$location_names)
+  Tn    <- dim(ens$cases_array)[2L]
+  locs  <- as.character(ens$location_names)
+  probs <- res$probs
+  prob_cols <- .mosaic_reff_prob_colnames(probs)   # "q2.5","q50","q97.5"
+
+  d0    <- tryCatch(as.Date(ens$date_start), error = function(e) NA)
+  dates <- if (!is.na(d0)) d0 + (seq_len(Tn) - 1L) else as.Date(NA) + seq_len(Tn)
+
+  burn_idx <- if (bid >= 1L) seq_len(min(bid, Tn)) else integer(0)
+
+  central <- res$central_mat
+  qmats   <- res$qmats
+  if (length(burn_idx)) {
+    central[, burn_idx] <- NA_real_
+    qmats[, burn_idx, ] <- NA_real_
+  }
+
+  parts <- vector("list", nL)
+  for (i in seq_len(nL)) {
+    df <- data.frame(
+      location = locs[i], date = dates, t = seq_len(Tn),
+      estimand = "R_eff", central = central[i, ],
+      stringsAsFactors = FALSE)
+    for (k in seq_along(probs)) df[[prob_cols[k]]] <- qmats[i, , k]
+    parts[[i]] <- df
+  }
+  out <- do.call(rbind, parts)
+  rownames(out) <- NULL
+
+  attr(out, "location_names") <- locs
+  attr(out, "dates")          <- dates
+  attr(out, "kernel")         <- "moment_matched_per_member"
+  attr(out, "series")         <- "infection_incidence"
+  attr(out, "kernel_params")  <- res$kernel_params
+  attr(out, "probs")          <- probs
+  attr(out, "ci_source")      <- "weighted_quantiles_resimulated"
+  attr(out, "burn_in_days")     <- bid
+  attr(out, "gate_rel_err_pct") <- res$gate_rel_err_pct
+  attr(out, "gate_rel_err_max") <- res$gate_rel_err_max
+  attr(out, "gate_agg_rel_err") <- res$gate_agg_rel_err
+  attr(out, "gate_cor_median")  <- res$gate_cor_median
+  attr(out, "gate_cor_min")     <- res$gate_cor_min
+  attr(out, "gate_max_abs_diff") <- res$gate_max_abs_diff
+  attr(out, "gate_n_outliers")  <- res$gate_n_outliers
+  attr(out, "n_members")        <- res$n_members
+  attr(out, "caveat")         <- paste0(
+    "Cori R_eff computed on RE-SIMULATED posterior-member infection incidence; ",
+    "per-member weighted quantiles (median + 95% CI). Burn-in (", bid,
+    " days) excluded. Descriptor of the model trajectory, not a ",
+    "first-principles R0.")
+  class(out) <- c("reproductive_numbers", "data.frame")
+  out
 }

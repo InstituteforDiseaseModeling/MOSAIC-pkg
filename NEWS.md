@@ -1,3 +1,32 @@
+# MOSAIC 0.58.0
+
+## New features (Cori R_eff — posterior credible interval)
+
+* **`add_reproductive_numbers(..., recompute_ci = TRUE)`** computes a proper
+  posterior credible interval for R_eff by faithfully re-simulating the saved
+  posterior ensemble (`ensemble_candidate.rds`): each member config is rebuilt
+  with the same recipe and seeds as the production ensemble worker
+  (`sample_parameters()` + transmission clamp + deterministic LASER seed), the
+  daily infection-`incidence` channel is captured, R_eff is computed per member
+  with that member's own generation-interval kernel, and the members are reduced
+  to weighted quantiles (median + 95%) via `weighted_quantiles()`. This recovers
+  the CI that the time-strided trajectory `lines` cannot. A statistical-
+  equivalence faithfulness gate validates the re-sim against the saved
+  `cases_array` (numba RNG is not bitwise-reproducible across cold processes, so
+  an exact gate is unachievable; the gate checks p95 per-member relative error,
+  weighted-aggregate error, and median per-member correlation).
+* **`burn_in_days`** argument (read from the run's `control.json`, overridable)
+  excludes the initialization transient from the R_eff output and plot.
+* **Thread safety:** the re-simulation path now pins BLAS/Numba threads to 1
+  (it drives LASER outside `run_MOSAIC()`), so it is safe to run many models
+  concurrently on a many-core host.
+* **`plot_Reff()`** now draws the purple median + 95% ribbon only (`show_iqr`
+  defaults FALSE) and excludes the burn-in period.
+* **Trajectory-capture grid fix:** `.mosaic_build_trajectories()` now uses
+  `seq.int(1L, n, by = line_stride)` instead of `which(seq_len(n) %% line_stride
+  == 1L)`. Byte-identical at the default `line_stride = 7L`; fixes the
+  previously-broken `line_stride = 1` (which produced an empty/non-daily grid).
+
 # MOSAIC 0.57.0
 
 ## New features (Cori R_eff — Phase 3)

@@ -6,6 +6,8 @@
 \usage{
 add_reproductive_numbers(
   output_dir,
+  recompute_ci = FALSE,
+  burn_in_days = NULL,
   infectiousness_floor = 1,
   plots = TRUE,
   overwrite = TRUE,
@@ -16,6 +18,24 @@ add_reproductive_numbers(
 \item{output_dir}{Character. Path to ONE MOSAIC model output directory (the
 directory that contains \code{1_inputs/}, \code{2_calibration/}, and
 \code{3_results/}). No path is hardcoded; all I/O is relative to this.}
+
+\item{recompute_ci}{Logical. When \code{TRUE}, build a proper posterior
+credible interval by \strong{re-simulating} the saved posterior ensemble
+(\code{2_calibration/ensemble_candidate.rds}) and computing R_eff per member,
+then weighted quantiles (median + 95\\% interval). This captures the daily
+S->E infection \code{incidence} channel that the persisted trajectory
+artifact does not retain at a daily grid. A faithfulness gate confirms the
+re-sim reproduces the saved \code{cases_array} before any CI is written.
+When \code{FALSE} (default) the cheap point-estimate path is used (renewal on
+the medoid weighted-median incidence from \code{trajectories_ensemble.rds};
+CI columns are populated only if the artifact carries daily-consecutive
+per-member lines, otherwise NA).}
+
+\item{burn_in_days}{Integer or \code{NULL}. Number of leading days to exclude
+from the R_eff output (set to \code{NA} in the table). \code{NULL} (default)
+reads \code{control$likelihood$burn_in_days} from
+\code{1_inputs/control.json}; if that is \code{0} or absent it defaults to
+\code{30} days. Only consumed on the \code{recompute_ci = TRUE} path.}
 
 \item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Passed to
 \code{\link{calc_Reff}}; minimum generation-weighted past infectiousness

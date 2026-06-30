@@ -94,6 +94,38 @@ test_that("plot_Reff honors show_iqr = FALSE (only 95% ribbon)", {
   expect_equal(n_ribbon(p_noiqr), 1L)
 })
 
+test_that("plot_Reff defaults to median + 95% only (purple, no 50% band)", {
+  reff <- make_reff_df(ci = TRUE)
+  p <- plot_Reff(reff)   # show_iqr defaults FALSE now
+  n_ribbon <- sum(grepl("Ribbon",
+    vapply(p$layers, function(l) class(l$geom)[1], character(1))))
+  expect_equal(n_ribbon, 1L)   # only the 95% ribbon
+  # The median line is purple (#762A83) and present.
+  line_layers <- Filter(function(l) inherits(l$geom, "GeomLine"), p$layers)
+  expect_true(length(line_layers) >= 1L)
+  cols <- vapply(line_layers, function(l) {
+    cc <- l$aes_params$colour
+    if (is.null(cc)) NA_character_ else as.character(cc)
+  }, character(1))
+  expect_true("#762A83" %in% cols)
+})
+
+test_that("plot_Reff plots q50 as the median when present", {
+  reff <- make_reff_df(ci = TRUE)
+  # Make q50 distinguishable from central so we can confirm q50 is plotted.
+  reff$q50 <- reff$central + 0.25
+  p <- plot_Reff(reff)
+  built <- ggplot2::ggplot_build(p)
+  # The purple median line layer's y should track q50 (central + 0.25), not central.
+  line_idx <- which(vapply(p$layers,
+    function(l) inherits(l$geom, "GeomLine"), logical(1)))
+  ld <- built$data[[line_idx[length(line_idx)]]]
+  ld <- ld[is.finite(ld$y), , drop = FALSE]
+  pd <- reff[order(reff$date), , drop = FALSE]
+  pd <- pd[is.finite(pd$central), , drop = FALSE]
+  expect_equal(unname(ld$y), unname(pd$q50), tolerance = 1e-6)
+})
+
 test_that("plot_Reff validates input", {
   expect_error(plot_Reff(list(a = 1)), "data.frame")
   expect_error(plot_Reff(data.frame(x = 1)), "missing required column")

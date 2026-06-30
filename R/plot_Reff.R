@@ -14,12 +14,14 @@
 #'
 #' Renders the per-location, time-varying Cori (2013) instantaneous
 #' \strong{infection} effective reproductive number \eqn{R_{jt}} produced by
-#' \code{\link{calc_Reff}}. Draws the \code{central} (medoid) series as a line
-#' over date with a horizontal reference line at \eqn{R_{\mathrm{eff}} = 1}; when
-#' the posterior credible-interval columns are populated it overlays the
-#' 95\% (\code{q2.5}-\code{q97.5}) and optionally the 50\% (\code{q25}-\code{q75})
-#' ribbons. Multi-location input is faceted by location; a single (national)
-#' location is rendered as one panel titled with the location.
+#' \code{\link{calc_Reff}}. Draws the posterior median series (\code{q50} when the
+#' re-simulated CI is present, else the \code{central} medoid series) as a purple
+#' line over date with a horizontal reference line at \eqn{R_{\mathrm{eff}} = 1};
+#' when the posterior credible-interval columns are populated it overlays the
+#' 95\% (\code{q2.5}-\code{q97.5}) ribbon (and optionally the 50\%
+#' \code{q25}-\code{q75} band when \code{show_iqr = TRUE}). Multi-location input is
+#' faceted by location; a single (national) location is rendered as one panel
+#' titled with the location.
 #'
 #' \strong{Graceful CI handling.} On production-default trajectory artifacts the
 #' per-member \code{lines} are time-strided, so \code{calc_Reff()} cannot compute
@@ -37,8 +39,10 @@
 #'   non-finite \code{central} are dropped per location so no gap artifact is
 #'   plotted.
 #' @param show_iqr Logical. Draw the inner 50\% (\code{q25}-\code{q75}) ribbon in
-#'   addition to the 95\% ribbon when those columns are populated. Default
-#'   \code{TRUE}.
+#'   addition to the 95\% ribbon. Default \code{FALSE} (the plot shows ONLY the
+#'   median line and the 95\% credible-interval ribbon). Retained for
+#'   back-compatibility; set \code{TRUE} to re-enable the inner band when the
+#'   \code{q25}/\code{q75} columns are populated.
 #' @param title Character or \code{NULL}. Plot title. \code{NULL} (default) uses
 #'   \code{"Effective reproductive number"} for multi-location input and
 #'   \code{"Effective reproductive number: <LOC>"} for a single location.
@@ -70,7 +74,7 @@
 #' @importFrom ggplot2 ggplot aes geom_ribbon geom_hline geom_line facet_wrap
 #'   scale_x_date scale_y_continuous labs
 plot_Reff <- function(reff,
-                      show_iqr  = TRUE,
+                      show_iqr  = FALSE,
                       title     = NULL,
                       ncol      = NULL,
                       base_size = 12) {
@@ -122,7 +126,12 @@ plot_Reff <- function(reff,
   draw_outer <- .has_ci("q2.5", "q97.5")
   draw_inner <- isTRUE(show_iqr) && .has_ci("q25", "q75")
 
-  reff_color  <- unname(mosaic_colors("cases"))
+  # Median series: prefer the populated q50 (re-simulated posterior median),
+  # fall back to the medoid `central` when q50 is absent/all-NA.
+  pd$.median <- if ("q50" %in% names(pd) && any(is.finite(pd$q50)))
+    pd$q50 else pd$central
+
+  reff_color  <- "#762A83"   # purple (ColorBrewer PRGn dark purple)
   ref_color   <- unname(mosaic_colors("reference"))
 
   # ---------------------------------------------------------------------------
@@ -144,7 +153,7 @@ plot_Reff <- function(reff,
   p <- p +
     ggplot2::geom_hline(yintercept = 1, linetype = "dashed",
                         color = ref_color, linewidth = 0.6) +
-    ggplot2::geom_line(ggplot2::aes(y = .data$central),
+    ggplot2::geom_line(ggplot2::aes(y = .data$.median),
                        color = reff_color, linewidth = 0.7, na.rm = TRUE)
 
   if (n_loc > 1L) {
@@ -156,9 +165,11 @@ plot_Reff <- function(reff,
   # Caption / title
   # ---------------------------------------------------------------------------
   ci_note <- if (draw_outer) {
-    paste0("Ribbon: 95%",
+    src <- if (identical(ci_source, "weighted_quantiles_resimulated"))
+      " (re-simulated posterior)" else ""
+    paste0("Median line + 95%",
            if (draw_inner) " and 50%" else "",
-           " posterior credible interval")
+           " posterior credible interval", src)
   } else if (identical(ci_source, "unavailable_strided_lines")) {
     paste0("Posterior CI unavailable for this artifact (per-member trajectory ",
            "lines are time-strided); central (medoid) series shown.")

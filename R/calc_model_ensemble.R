@@ -1194,7 +1194,12 @@ calc_model_ensemble <- function(config,
     ps_thin <- ps_ok[keep, , drop = FALSE]
   } else ps_thin <- ps_ok
   n_thin     <- nrow(ps_thin)
-  t_idx      <- which(seq_len(n_time_points) %% line_stride == 1L)
+  # Time-stride grid: every `line_stride`-th day starting at day 1. Using
+  # seq.int (NOT `seq_len(n) %% line_stride == 1L`) so stride = 1 yields the FULL
+  # daily-consecutive grid (the modulo form yielded an EMPTY set at stride 1 and
+  # was never daily-consecutive at stride > 1 -- it broke any daily renewal
+  # convolution downstream, e.g. the calc_Reff posterior CI). Phase-2 fix.
+  t_idx      <- seq.int(1L, n_time_points, by = max(1L, as.integer(line_stride)))
   member_ids <- (ps_thin[, 2L] - 1L) * n_disp + ps_thin[, 1L]
   member_w   <- subset_weights[ps_thin[, 1L]] / n_stoch
 
