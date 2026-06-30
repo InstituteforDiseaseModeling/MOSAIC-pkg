@@ -1,5 +1,31 @@
 # Changelog
 
+## MOSAIC 0.58.1
+
+### Bug fixes (suitability — Class-A psi flat-tail in the lstm_v2 path)
+
+- **[`est_suitability()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/est_suitability.md)
+  (lstm_v2 path) no longer emits a flat carry-forward psi tail.**
+  `.psi_weekly_to_daily_smooth()`
+  [`zoo::na.locf`](https://rdrr.io/pkg/zoo/man/na.locf.html)-fills the
+  daily psi grid out to `pred_date_stop`, so days past a country’s last
+  covariate-supported weekly prediction carried the last genuine value
+  forward as a flat constant (~99 days, e.g. 2026-10-29 -\> 2027-02-04
+  for 29/40 ISOs). That flat psi tail flattens the environmental force
+  of infection and produces an artificial end-of-series drop in
+  downstream LASER predictions. The v0.44.14 fix
+  (`.drop_filled_prediction_tail`) existed only in the legacy path; it
+  is now applied in the lstm_v2 writer too. `.psi_run_seed_ensemble()`
+  captures each country’s last genuine weekly prediction date
+  (`genuine_last_pred`) from the weekly grid **before** the daily
+  na.locf fill, and the writer truncates daily and weekly rows beyond it
+  per country. Keyed on the explicit genuine date (the na.locf fill is
+  non-NA, so the NA-keyed contract of the helper alone would not catch
+  it). `make_config_default()`’s common-coverage truncation propagates
+  the per-country horizon into the simulation `date_stop`. Class-B
+  floor-clamp (genuine constant-at-floor psi from the LSTM bias
+  correction) is unchanged.
+
 ## MOSAIC 0.58.0
 
 ### New features (Cori R_eff — posterior credible interval)

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,14 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.58.1" id="mosaic-0581">MOSAIC 0.58.1<a class="anchor" aria-label="anchor" href="#mosaic-0581"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-suitability--class-a-psi-flat-tail-in-the-lstm_v2-path-0-58-1">Bug fixes (suitability — Class-A psi flat-tail in the lstm_v2 path)<a class="anchor" aria-label="anchor" href="#bug-fixes-suitability--class-a-psi-flat-tail-in-the-lstm_v2-path-0-58-1"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/est_suitability.html">est_suitability()</a></code> (lstm_v2 path) no longer emits a flat carry-forward psi tail.</strong> <code>.psi_weekly_to_daily_smooth()</code> <code><a href="https://rdrr.io/pkg/zoo/man/na.locf.html" class="external-link">zoo::na.locf</a></code>-fills the daily psi grid out to <code>pred_date_stop</code>, so days past a country’s last covariate-supported weekly prediction carried the last genuine value forward as a flat constant (~99 days, e.g. 2026-10-29 -&gt; 2027-02-04 for 29/40 ISOs). That flat psi tail flattens the environmental force of infection and produces an artificial end-of-series drop in downstream LASER predictions. The v0.44.14 fix (<code>.drop_filled_prediction_tail</code>) existed only in the legacy path; it is now applied in the lstm_v2 writer too. <code>.psi_run_seed_ensemble()</code> captures each country’s last genuine weekly prediction date (<code>genuine_last_pred</code>) from the weekly grid <strong>before</strong> the daily na.locf fill, and the writer truncates daily and weekly rows beyond it per country. Keyed on the explicit genuine date (the na.locf fill is non-NA, so the NA-keyed contract of the helper alone would not catch it). <code>make_config_default()</code>’s common-coverage truncation propagates the per-country horizon into the simulation <code>date_stop</code>. Class-B floor-clamp (genuine constant-at-floor psi from the LSTM bias correction) is unchanged.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.58.0" id="mosaic-0580">MOSAIC 0.58.0<a class="anchor" aria-label="anchor" href="#mosaic-0580"></a></h2>
 <div class="section level3">
