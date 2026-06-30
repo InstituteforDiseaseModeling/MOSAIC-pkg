@@ -70,6 +70,7 @@ reference:
     desc: Calculation functions
     contents:
     - matches("^calc_")
+    - matches("^add_")
 
   - title: "Data Processing"
     desc: Processing and downloading data

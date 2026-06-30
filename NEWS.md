@@ -1,3 +1,22 @@
+# MOSAIC 0.57.0
+
+## New features (Cori R_eff — Phase 3)
+
+* **`plot_Reff()`** — visualizes the Cori effective reproductive number from a
+  `reproductive_numbers` object: per-location R_eff(t) with a dashed R_eff = 1
+  reference line, faceted for multiple locations and single-panel-titled for
+  one. Draws the 95% (and, with `show_iqr`, the 50%) posterior ribbon only when
+  the quantile columns are present; on strided-line artifacts where the CI is
+  unavailable it draws just the central line and captions the limitation.
+  Leading warm-up NAs are trimmed; interior floor-gated NAs break the line.
+* **`add_reproductive_numbers()`** — post-hoc driver that applies R_eff to an
+  existing MOSAIC output directory: reads `2_calibration/trajectories_ensemble.rds`
+  + `1_inputs/config.json`, runs `calc_Reff()`, writes
+  `3_results/posterior/reproductive_numbers.{csv,rds}`, and (when `plots=TRUE`)
+  saves `3_results/figures/reproductive_number/*.{png,pdf}`. Every failure mode
+  (missing artifacts, no `incidence` channel, write errors) returns a status row
+  rather than crashing, so it is safe to map over many run directories.
+
 # MOSAIC 0.56.1
 
 ## Bug fixes / refinements (Cori R_eff red-team remediation)
