@@ -4,7 +4,14 @@
 \alias{plot_Reff}
 \title{Plot Cori effective reproductive number (R_eff) over time}
 \usage{
-plot_Reff(reff, show_iqr = FALSE, title = NULL, ncol = NULL, base_size = 12)
+plot_Reff(
+  reff,
+  show_iqr = FALSE,
+  smooth_days = 14L,
+  title = NULL,
+  ncol = NULL,
+  base_size = 12
+)
 }
 \arguments{
 \item{reff}{A \code{reproductive_numbers} \code{data.frame} from
@@ -20,6 +27,13 @@ the annotation and caption. Leading warm-up rows with a non-finite
 addition to the faint 95\\% band. Default \code{FALSE} (the plot shows the
 medoid line and the faint 95\\% cross-member band only). Retained for
 back-compatibility.}
+
+\item{smooth_days}{Integer. Centered rolling-mean window (in days) applied to
+the medoid \code{central} line for display. The daily Cori R_t on a single
+trajectory is very noisy; smoothing yields a readable trend while the raw
+daily series is kept as a faint background and the true per-member daily
+peak is reported in the annotation. Default \code{14}; set \code{1} to plot
+the raw daily line only.}
 
 \item{title}{Character or \code{NULL}. Plot title. \code{NULL} (default) uses
 \code{"Effective reproductive number"} for multi-location input and

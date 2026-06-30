@@ -1,3 +1,15 @@
+# MOSAIC 0.59.1
+
+## plot_Reff readability
+
+* The medoid `central` is a daily series and is very noisy (the instantaneous
+  Cori R_t on one trajectory swings sharply day-to-day); at full line weight it
+  rendered as a solid mass that buried the band. `plot_Reff()` now draws a
+  centered rolling-mean trend (`smooth_days`, default 14) as a thin headline line
+  with the raw daily series kept faint behind it, and the cross-member envelope
+  ribbon at higher alpha so it is visible. The per-member daily peak is unchanged
+  (still reported in the annotation). `smooth_days = 1` restores the raw line.
+
 # MOSAIC 0.59.0
 
 ## Cori R_eff: phase-coherent headline + per-member peak (underestimation fix)

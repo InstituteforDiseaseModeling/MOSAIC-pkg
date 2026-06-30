@@ -57,6 +57,12 @@
 #'   addition to the faint 95\% band. Default \code{FALSE} (the plot shows the
 #'   medoid line and the faint 95\% cross-member band only). Retained for
 #'   back-compatibility.
+#' @param smooth_days Integer. Centered rolling-mean window (in days) applied to
+#'   the medoid \code{central} line for display. The daily Cori R_t on a single
+#'   trajectory is very noisy; smoothing yields a readable trend while the raw
+#'   daily series is kept as a faint background and the true per-member daily
+#'   peak is reported in the annotation. Default \code{14}; set \code{1} to plot
+#'   the raw daily line only.
 #' @param title Character or \code{NULL}. Plot title. \code{NULL} (default) uses
 #'   \code{"Effective reproductive number"} for multi-location input and
 #'   \code{"Effective reproductive number: <LOC>"} for a single location.
@@ -88,10 +94,11 @@
 #' @importFrom ggplot2 ggplot aes geom_ribbon geom_hline geom_line geom_text
 #'   facet_wrap scale_x_date scale_y_continuous labs
 plot_Reff <- function(reff,
-                      show_iqr  = FALSE,
-                      title     = NULL,
-                      ncol      = NULL,
-                      base_size = 12) {
+                      show_iqr    = FALSE,
+                      smooth_days = 14L,
+                      title       = NULL,
+                      ncol        = NULL,
+                      base_size   = 12) {
 
   # ---------------------------------------------------------------------------
   # Validate input
@@ -127,6 +134,24 @@ plot_Reff <- function(reff,
     stop("plot_Reff: no finite `central` values to plot (all warm-up/NA).")
   rownames(pd) <- NULL
 
+  # ---------------------------------------------------------------------------
+  # The medoid `central` is a DAILY series and is very noisy (the instantaneous
+  # Cori R_t on a single trajectory swings sharply day-to-day). Plotting it raw
+  # at full weight produces an unreadable solid mass that buries the band. We
+  # therefore show a centered rolling-mean trend (`smooth_days`) as the headline
+  # line, with the raw daily series kept as a faint background so the explosive
+  # day-level spikes remain visible; the true per-member daily peak is reported
+  # in the peak_Rt annotation. smooth_days <= 1 disables smoothing.
+  # ---------------------------------------------------------------------------
+  sd_k <- suppressWarnings(as.integer(smooth_days))
+  if (length(sd_k) != 1L || is.na(sd_k) || sd_k < 1L) sd_k <- 1L
+  pd <- do.call(rbind, lapply(split(pd, pd$location), function(d) {
+    d <- d[order(d$date), , drop = FALSE]
+    d$central_smooth <- .reff_roll_mean(d$central, sd_k)
+    d
+  }))
+  rownames(pd) <- NULL
+
   use_date_axis <- inherits(pd$date, "Date") && any(is.finite(pd$date))
   locs <- unique(as.character(pd$location))
   n_loc <- length(locs)
@@ -150,22 +175,32 @@ plot_Reff <- function(reff,
   p <- ggplot2::ggplot(pd, ggplot2::aes(x = .data$date))
 
   if (draw_outer) {
-    # FAINT: this is the per-calendar-date cross-member range, NOT the peak.
+    # This is the per-calendar-date cross-member range, NOT the peak.
     p <- p + ggplot2::geom_ribbon(
       ggplot2::aes(ymin = .data$q2.5, ymax = .data$q97.5),
-      fill = mosaic_color_variant(reff_color, "lighten", 0.65), alpha = 0.22)
+      fill = mosaic_color_variant(reff_color, "lighten", 0.6), alpha = 0.35)
   }
   if (draw_inner) {
     p <- p + ggplot2::geom_ribbon(
       ggplot2::aes(ymin = .data$q25, ymax = .data$q75),
-      fill = mosaic_color_variant(reff_color, "lighten", 0.45), alpha = 0.25)
+      fill = mosaic_color_variant(reff_color, "lighten", 0.4), alpha = 0.4)
   }
 
   p <- p +
     ggplot2::geom_hline(yintercept = 1, linetype = "dashed",
-                        color = ref_color, linewidth = 0.6) +
-    ggplot2::geom_line(ggplot2::aes(y = .data$central),
-                       color = reff_color, linewidth = 1.0, na.rm = TRUE)
+                        color = ref_color, linewidth = 0.6)
+
+  # Raw daily medoid R_t: faint background so day-level spikes stay visible.
+  if (sd_k > 1L) {
+    p <- p + ggplot2::geom_line(
+      ggplot2::aes(y = .data$central),
+      color = reff_color, linewidth = 0.2, alpha = 0.25, na.rm = TRUE)
+  }
+  # Headline line: smoothed trend (or raw if smoothing disabled), thin.
+  yvar <- if (sd_k > 1L) "central_smooth" else "central"
+  p <- p + ggplot2::geom_line(
+    ggplot2::aes(y = .data[[yvar]]),
+    color = reff_color, linewidth = 0.45, na.rm = TRUE)
 
   if (n_loc > 1L) {
     nc <- if (is.null(ncol)) min(3L, n_loc) else as.integer(ncol)
@@ -265,6 +300,29 @@ plot_Reff <- function(reff,
 # when the attribute is absent, malformed, or has no usable rows (so the caller
 # omits the annotation rather than erroring).
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Centered, NA-aware rolling mean (window k days). Each point averages the finite
+# values in [i - (k-1)/2, i + (k-1)/2]; positions with no finite neighbour stay
+# NA so genuine gaps are preserved. k <= 1 returns x unchanged.
+# -----------------------------------------------------------------------------
+.reff_roll_mean <- function(x, k) {
+  k <- as.integer(k)
+  n <- length(x)
+  if (is.na(k) || k <= 1L || n == 0L) return(x)
+  half <- (k - 1L) %/% 2L
+  fin  <- is.finite(x)
+  xf   <- ifelse(fin, x, 0)
+  cs   <- c(0, cumsum(xf))
+  cw   <- c(0, cumsum(as.numeric(fin)))
+  out  <- rep(NA_real_, n)
+  for (i in seq_len(n)) {
+    lo <- max(1L, i - half); hi <- min(n, i + half)
+    w  <- cw[hi + 1L] - cw[lo]
+    if (w > 0) out[i] <- (cs[hi + 1L] - cs[lo]) / w
+  }
+  out
+}
+
 .reff_peak_table <- function(peak_Rt, locs) {
   if (is.null(peak_Rt) || !is.data.frame(peak_Rt) || nrow(peak_Rt) == 0L)
     return(NULL)

@@ -65,9 +65,10 @@ make_reff_df <- function(locs = "LOC1", Tn = 60L, ci = TRUE,
 
 test_that("plot_Reff renders the medoid central line as the headline", {
   reff <- make_reff_df(ci = TRUE)
-  p <- plot_Reff(reff)
+  # smooth_days = 1 -> headline line is the raw medoid `central` (no smoothing),
+  # so we can assert it tracks `central` exactly rather than a rolling mean.
+  p <- plot_Reff(reff, smooth_days = 1L)
   expect_s3_class(p, "ggplot")
-  # The bold purple line tracks `central` (the medoid), not q50.
   line_idx <- which(vapply(p$layers,
     function(l) inherits(l$geom, "GeomLine"), logical(1)))
   expect_true(length(line_idx) >= 1L)
@@ -81,6 +82,22 @@ test_that("plot_Reff renders the medoid central line as the headline", {
   expect_gt(max(ld$y), max(src$q50) + 0.5)
 })
 
+test_that("plot_Reff smooths the headline line by default but keeps raw daily", {
+  reff <- make_reff_df(ci = TRUE)
+  p <- plot_Reff(reff, smooth_days = 14L)
+  line_idx <- which(vapply(p$layers,
+    function(l) inherits(l$geom, "GeomLine"), logical(1)))
+  # Two line geoms: faint raw daily `central` + bold smoothed `central_smooth`.
+  expect_gte(length(line_idx), 2L)
+  built <- ggplot2::ggplot_build(p)
+  headline <- built$data[[line_idx[length(line_idx)]]]
+  headline <- headline[is.finite(headline$y), , drop = FALSE]
+  src <- reff[order(reff$date), , drop = FALSE]
+  src <- src[is.finite(src$central), , drop = FALSE]
+  # Smoothed peak is strictly lower than the raw daily peak.
+  expect_lt(max(headline$y), max(src$central))
+})
+
 test_that("plot_Reff draws the faint 95% band and an explanatory caption", {
   reff <- make_reff_df(ci = TRUE)
   p <- plot_Reff(reff)
@@ -91,7 +108,7 @@ test_that("plot_Reff draws the faint 95% band and an explanatory caption", {
   alphas <- vapply(rib, function(l) {
     a <- l$aes_params$alpha; if (is.null(a)) NA_real_ else as.numeric(a)
   }, numeric(1))
-  expect_true(any(is.finite(alphas) & alphas <= 0.3))
+  expect_true(any(is.finite(alphas) & alphas <= 0.4))
   # Caption makes clear the band is the per-date cross-member range, not peak.
   expect_match(p$labels$caption, "ACROSS members", ignore.case = TRUE)
   expect_match(p$labels$caption, "peak", ignore.case = TRUE)
