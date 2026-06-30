@@ -1,5 +1,135 @@
 # Changelog
 
+## MOSAIC 0.58.0
+
+### New features (Cori R_eff — posterior credible interval)
+
+- **`add_reproductive_numbers(..., recompute_ci = TRUE)`** computes a
+  proper posterior credible interval for R_eff by faithfully
+  re-simulating the saved posterior ensemble (`ensemble_candidate.rds`):
+  each member config is rebuilt with the same recipe and seeds as the
+  production ensemble worker
+  ([`sample_parameters()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/sample_parameters.md) +
+  transmission clamp + deterministic LASER seed), the daily
+  infection-`incidence` channel is captured, R_eff is computed per
+  member with that member’s own generation-interval kernel, and the
+  members are reduced to weighted quantiles (median + 95%) via
+  [`weighted_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles.md).
+  This recovers the CI that the time-strided trajectory `lines` cannot.
+  A statistical- equivalence faithfulness gate validates the re-sim
+  against the saved `cases_array` (numba RNG is not bitwise-reproducible
+  across cold processes, so an exact gate is unachievable; the gate
+  checks p95 per-member relative error, weighted-aggregate error, and
+  median per-member correlation).
+- **`burn_in_days`** argument (read from the run’s `control.json`,
+  overridable) excludes the initialization transient from the R_eff
+  output and plot.
+- **Thread safety:** the re-simulation path now pins BLAS/Numba threads
+  to 1 (it drives LASER outside
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)),
+  so it is safe to run many models concurrently on a many-core host.
+- **[`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)**
+  now draws the purple median + 95% ribbon only (`show_iqr` defaults
+  FALSE) and excludes the burn-in period.
+- **Trajectory-capture grid fix:** `.mosaic_build_trajectories()` now
+  uses `seq.int(1L, n, by = line_stride)` instead of
+  `which(seq_len(n) %% line_stride == 1L)`. Byte-identical at the
+  default `line_stride = 7L`; fixes the previously-broken
+  `line_stride = 1` (which produced an empty/non-daily grid).
+
+## MOSAIC 0.57.0
+
+### New features (Cori R_eff — Phase 3)
+
+- **[`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)**
+  — visualizes the Cori effective reproductive number from a
+  `reproductive_numbers` object: per-location R_eff(t) with a dashed
+  R_eff = 1 reference line, faceted for multiple locations and
+  single-panel-titled for one. Draws the 95% (and, with `show_iqr`, the
+  50%) posterior ribbon only when the quantile columns are present; on
+  strided-line artifacts where the CI is unavailable it draws just the
+  central line and captions the limitation. Leading warm-up NAs are
+  trimmed; interior floor-gated NAs break the line.
+- **[`add_reproductive_numbers()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/add_reproductive_numbers.md)**
+  — post-hoc driver that applies R_eff to an existing MOSAIC output
+  directory: reads `2_calibration/trajectories_ensemble.rds`
+  - `1_inputs/config.json`, runs
+    [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md),
+    writes `3_results/posterior/reproductive_numbers.{csv,rds}`, and
+    (when `plots=TRUE`) saves
+    `3_results/figures/reproductive_number/*.{png,pdf}`. Every failure
+    mode (missing artifacts, no `incidence` channel, write errors)
+    returns a status row rather than crashing, so it is safe to map over
+    many run directories.
+
+## MOSAIC 0.56.1
+
+### Bug fixes / refinements (Cori R_eff red-team remediation)
+
+- **Mean-preserving generation-interval kernel.**
+  `.mosaic_generation_time_pmf()` now discretizes via the EpiEstim
+  `discr_si` (Cori 2013 / Cauchemez) formula instead of a naive
+  CDF-difference, which had inflated the effective mean by ~0.5 day
+  (+~10% for the low-shape cholera kernel) and biased R_eff upward
+  during growth. Recovered discrete mean now matches the target (5.400
+  d). Docs `eq:gen-time-discr` updated to match.
+- **Initial-condition warm-up gate.**
+  [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
+  / `.cori_reff()` gained an `infectiousness_floor` argument (default 1
+  effective past infection): a step whose generation-weighted
+  denominator falls below the floor returns NA. This suppresses the
+  spurious R_eff spike at the start of a series (an IC seed gave R≈3600+
+  at t=2) and cleans deep inter-epidemic troughs.
+  `infectiousness_floor = 0` recovers the pure Cori convention.
+- **Posterior weights indexed by member id.**
+  `.mosaic_reff_member_quantiles()` now looks up a supplied `weights`
+  vector by member id, not per-location position, fixing silent
+  cross-location CI misalignment when a member is dropped in one
+  location. The `weights = NULL` default path is unchanged.
+- **Honest CI/estimand documentation.** Removed the incorrect claim that
+  re-capturing with `line_stride = 1` enables the posterior CI (the
+  trajectory builder cannot currently produce a daily-consecutive
+  series; the CI ribbon requires a Phase-2 builder change). Added an
+  estimand caveat that the kernel is the two-clock (latent + infectious,
+  human-route) generation interval and excludes the environmental-delay
+  clock, so R_eff is a lower-mean-G approximation in
+  waterborne-dominated locations.
+- **Test rigor.** Added a continuous-truth Euler–Lotka regression
+  (Gamma-MGF value, independent of the discretized kernel — catches
+  kernel-mean bias the prior self-consistency test could not), plus
+  internal-NA and t_min\>1 CI-window tests.
+  `test-reproductive_numbers.R` now 75 expectations, all passing.
+
+## MOSAIC 0.56.0
+
+### New features
+
+- **Cori effective reproductive number,
+  [`calc_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/calc_Reff.md)
+  (R_eff) — Phase 1.** New `calc_Reff(ensemble, config)` computes the
+  time-varying Cori et al. (2013) instantaneous effective reproductive
+  number per location, as an *infection* R_eff:
+  `R[t] = I*[t] / Σ_Δt g(Δt) I*[t-Δt]`. The renewal series is
+  **infection incidence** (the `incidence` channel =
+  `incidence_human + incidence_env`, a flow), with symptomatic and
+  asymptomatic infections counted with **equal weight** — not the
+  infectious-compartment stocks and not shedding-weighted (see the
+  corrected spec in `MOSAIC-docs/04-model-description.Rmd`). The
+  generation-interval kernel is the moment-matched two-clock Gamma with
+  the over-dispersed σ-mixture infectious-period variance, exposed as a
+  new in-memory helper `.mosaic_generation_time_pmf()` (normalized so Σg
+  = 1). Posterior median + credible interval via
+  [`weighted_quantiles()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/weighted_quantiles.md),
+  plus a medoid point estimate. The pure renewal core
+  `.cori_reff(incidence, g)` is unit-tested against an Euler–Lotka
+  exponential-growth fixture.
+  [`get_generation_time_distribution()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/get_generation_time_distribution.md)
+  and its CSV outputs are unchanged. Not yet wired into
+  [`run_MOSAIC()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/run_MOSAIC.md)
+  (Phase 2) and no
+  [`plot_Reff()`](https://institutefordiseasemodeling.github.io/MOSAIC-pkg/reference/plot_Reff.md)
+  yet (Phase 3). See `claude/plan_r0_rt/PLAN.md`.
+
 ## MOSAIC 0.55.17
 
 ### Bug fixes

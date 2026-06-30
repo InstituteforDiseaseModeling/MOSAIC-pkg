@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.55.17</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.58.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,59 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.58.0" id="mosaic-0580">MOSAIC 0.58.0<a class="anchor" aria-label="anchor" href="#mosaic-0580"></a></h2>
+<div class="section level3">
+<h3 id="new-features-cori-r_eff--posterior-credible-interval-0-58-0">New features (Cori R_eff — posterior credible interval)<a class="anchor" aria-label="anchor" href="#new-features-cori-r_eff--posterior-credible-interval-0-58-0"></a></h3>
+<ul><li>
+<strong><code>add_reproductive_numbers(..., recompute_ci = TRUE)</code></strong> computes a proper posterior credible interval for R_eff by faithfully re-simulating the saved posterior ensemble (<code>ensemble_candidate.rds</code>): each member config is rebuilt with the same recipe and seeds as the production ensemble worker (<code><a href="../reference/sample_parameters.html">sample_parameters()</a></code> + transmission clamp + deterministic LASER seed), the daily infection-<code>incidence</code> channel is captured, R_eff is computed per member with that member’s own generation-interval kernel, and the members are reduced to weighted quantiles (median + 95%) via <code><a href="../reference/weighted_quantiles.html">weighted_quantiles()</a></code>. This recovers the CI that the time-strided trajectory <code>lines</code> cannot. A statistical- equivalence faithfulness gate validates the re-sim against the saved <code>cases_array</code> (numba RNG is not bitwise-reproducible across cold processes, so an exact gate is unachievable; the gate checks p95 per-member relative error, weighted-aggregate error, and median per-member correlation).</li>
+<li>
+<strong><code>burn_in_days</code></strong> argument (read from the run’s <code>control.json</code>, overridable) excludes the initialization transient from the R_eff output and plot.</li>
+<li>
+<strong>Thread safety:</strong> the re-simulation path now pins BLAS/Numba threads to 1 (it drives LASER outside <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code>), so it is safe to run many models concurrently on a many-core host.</li>
+<li>
+<strong><code><a href="../reference/plot_Reff.html">plot_Reff()</a></code></strong> now draws the purple median + 95% ribbon only (<code>show_iqr</code> defaults FALSE) and excludes the burn-in period.</li>
+<li>
+<strong>Trajectory-capture grid fix:</strong> <code>.mosaic_build_trajectories()</code> now uses <code>seq.int(1L, n, by = line_stride)</code> instead of <code>which(seq_len(n) %% line_stride == 1L)</code>. Byte-identical at the default <code>line_stride = 7L</code>; fixes the previously-broken <code>line_stride = 1</code> (which produced an empty/non-daily grid).</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.57.0" id="mosaic-0570">MOSAIC 0.57.0<a class="anchor" aria-label="anchor" href="#mosaic-0570"></a></h2>
+<div class="section level3">
+<h3 id="new-features-cori-r_eff--phase-0-57-0">New features (Cori R_eff — Phase 3)<a class="anchor" aria-label="anchor" href="#new-features-cori-r_eff--phase-0-57-0"></a></h3>
+<ul><li>
+<strong><code><a href="../reference/plot_Reff.html">plot_Reff()</a></code></strong> — visualizes the Cori effective reproductive number from a <code>reproductive_numbers</code> object: per-location R_eff(t) with a dashed R_eff = 1 reference line, faceted for multiple locations and single-panel-titled for one. Draws the 95% (and, with <code>show_iqr</code>, the 50%) posterior ribbon only when the quantile columns are present; on strided-line artifacts where the CI is unavailable it draws just the central line and captions the limitation. Leading warm-up NAs are trimmed; interior floor-gated NAs break the line.</li>
+<li>
+<strong><code><a href="../reference/add_reproductive_numbers.html">add_reproductive_numbers()</a></code></strong> — post-hoc driver that applies R_eff to an existing MOSAIC output directory: reads <code>2_calibration/trajectories_ensemble.rds</code>
+<ul><li>
+<code>1_inputs/config.json</code>, runs <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code>, writes <code>3_results/posterior/reproductive_numbers.{csv,rds}</code>, and (when <code>plots=TRUE</code>) saves <code>3_results/figures/reproductive_number/*.{png,pdf}</code>. Every failure mode (missing artifacts, no <code>incidence</code> channel, write errors) returns a status row rather than crashing, so it is safe to map over many run directories.</li>
+</ul></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.56.1" id="mosaic-0561">MOSAIC 0.56.1<a class="anchor" aria-label="anchor" href="#mosaic-0561"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes--refinements-cori-r_eff-red-team-remediation-0-56-1">Bug fixes / refinements (Cori R_eff red-team remediation)<a class="anchor" aria-label="anchor" href="#bug-fixes--refinements-cori-r_eff-red-team-remediation-0-56-1"></a></h3>
+<ul><li>
+<strong>Mean-preserving generation-interval kernel.</strong> <code>.mosaic_generation_time_pmf()</code> now discretizes via the EpiEstim <code>discr_si</code> (Cori 2013 / Cauchemez) formula instead of a naive CDF-difference, which had inflated the effective mean by ~0.5 day (+~10% for the low-shape cholera kernel) and biased R_eff upward during growth. Recovered discrete mean now matches the target (5.400 d). Docs <code>eq:gen-time-discr</code> updated to match.</li>
+<li>
+<strong>Initial-condition warm-up gate.</strong> <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> / <code>.cori_reff()</code> gained an <code>infectiousness_floor</code> argument (default 1 effective past infection): a step whose generation-weighted denominator falls below the floor returns NA. This suppresses the spurious R_eff spike at the start of a series (an IC seed gave R≈3600+ at t=2) and cleans deep inter-epidemic troughs. <code>infectiousness_floor = 0</code> recovers the pure Cori convention.</li>
+<li>
+<strong>Posterior weights indexed by member id.</strong> <code>.mosaic_reff_member_quantiles()</code> now looks up a supplied <code>weights</code> vector by member id, not per-location position, fixing silent cross-location CI misalignment when a member is dropped in one location. The <code>weights = NULL</code> default path is unchanged.</li>
+<li>
+<strong>Honest CI/estimand documentation.</strong> Removed the incorrect claim that re-capturing with <code>line_stride = 1</code> enables the posterior CI (the trajectory builder cannot currently produce a daily-consecutive series; the CI ribbon requires a Phase-2 builder change). Added an estimand caveat that the kernel is the two-clock (latent + infectious, human-route) generation interval and excludes the environmental-delay clock, so R_eff is a lower-mean-G approximation in waterborne-dominated locations.</li>
+<li>
+<strong>Test rigor.</strong> Added a continuous-truth Euler–Lotka regression (Gamma-MGF value, independent of the discretized kernel — catches kernel-mean bias the prior self-consistency test could not), plus internal-NA and t_min&gt;1 CI-window tests. <code>test-reproductive_numbers.R</code> now 75 expectations, all passing.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.56.0" id="mosaic-0560">MOSAIC 0.56.0<a class="anchor" aria-label="anchor" href="#mosaic-0560"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-56-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-56-0"></a></h3>
+<ul><li>
+<strong>Cori effective reproductive number, <code><a href="../reference/calc_Reff.html">calc_Reff()</a></code> (R_eff) — Phase 1.</strong> New <code>calc_Reff(ensemble, config)</code> computes the time-varying Cori et al. (2013) instantaneous effective reproductive number per location, as an <em>infection</em> R_eff: <code>R[t] = I*[t] / Σ_Δt g(Δt) I*[t-Δt]</code>. The renewal series is <strong>infection incidence</strong> (the <code>incidence</code> channel = <code>incidence_human + incidence_env</code>, a flow), with symptomatic and asymptomatic infections counted with <strong>equal weight</strong> — not the infectious-compartment stocks and not shedding-weighted (see the corrected spec in <code>MOSAIC-docs/04-model-description.Rmd</code>). The generation-interval kernel is the moment-matched two-clock Gamma with the over-dispersed σ-mixture infectious-period variance, exposed as a new in-memory helper <code>.mosaic_generation_time_pmf()</code> (normalized so Σg = 1). Posterior median + credible interval via <code><a href="../reference/weighted_quantiles.html">weighted_quantiles()</a></code>, plus a medoid point estimate. The pure renewal core <code>.cori_reff(incidence, g)</code> is unit-tested against an Euler–Lotka exponential-growth fixture. <code><a href="../reference/get_generation_time_distribution.html">get_generation_time_distribution()</a></code> and its CSV outputs are unchanged. Not yet wired into <code><a href="../reference/run_MOSAIC.html">run_MOSAIC()</a></code> (Phase 2) and no <code><a href="../reference/plot_Reff.html">plot_Reff()</a></code> yet (Phase 3). See <code>claude/plan_r0_rt/PLAN.md</code>.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.55.17" id="mosaic-05517">MOSAIC 0.55.17<a class="anchor" aria-label="anchor" href="#mosaic-05517"></a></h2>
 <div class="section level3">
