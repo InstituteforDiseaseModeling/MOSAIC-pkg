@@ -163,7 +163,9 @@
 #' @param parallel_seeds Integer; >1 fits seeds across PSOCK workers (default 1L
 #'   serial). Falls back to serial if the cluster cannot be set up.
 #' @return list(ensemble_long, by_country, seeds_by_country, fit_info,
-#'   rw_diagnostics, ensemble \[target headline\], seeds \[target headline\]).
+#'   rw_diagnostics, genuine_last_pred \[per-iso last covariate-supported weekly
+#'   prediction date, pre-fill\], ensemble \[target headline\],
+#'   seeds \[target headline\]).
 #' @keywords internal
 #' @noRd
 .psi_run_seed_ensemble <- function(fit_predict_fn, data_bundle,
@@ -191,6 +193,20 @@
           start <- min(data_bundle$dates_pred[idx])
           seq.Date(start, pred_end, by = "day")
      })
+
+     # Per-country LAST GENUINE (covariate-supported) weekly prediction date,
+     # captured from the weekly prediction grid BEFORE the daily na.locf
+     # forward-fill in .psi_weekly_to_daily_smooth. Days in the daily grid beyond
+     # this date are present only via carry-forward fill (a flat constant tail
+     # that suppresses environmental FOI downstream), so the lstm_v2 writer drops
+     # them via .drop_filled_prediction_tail. Mirrors the legacy path's
+     # genuine_last_pred (R/est_suitability.R). Seed-independent.
+     genuine_last_pred <- data.frame(
+          iso_code = isos_pred,
+          last_genuine_date = as.Date(vapply(isos_pred, function(iso) {
+               as.character(max(data_bundle$dates_pred[data_bundle$countries_pred == iso]))
+          }, character(1))),
+          stringsAsFactors = FALSE)
 
      # ---- Phase A: fit every seed (serial or parallel) ---------------------
      fit_one_seed <- function(seed) {
@@ -361,6 +377,7 @@
           seeds_by_country  = seeds_by_country,
           ensemble_long     = ensemble_long,
           fit_info          = fit_info,
-          rw_diagnostics    = rw_diag_by_seed
+          rw_diagnostics    = rw_diag_by_seed,
+          genuine_last_pred = genuine_last_pred
      )
 }

@@ -334,7 +334,27 @@
                             out_daily$date <= pred_date_stop, ]
      out_daily <- out_daily[order(out_daily$iso_code, out_daily$date), ]
 
+     # Drop trailing carry-forward-filled prediction rows so the saved series ends
+     # at each location's last genuine (covariate-supported) weekly prediction
+     # date. .psi_weekly_to_daily_smooth na.locf-fills the daily grid out to
+     # pred_date_stop, producing a flat constant psi tail that suppresses the
+     # environmental FOI and creates an artificial end-of-series drop in LASER
+     # output. genuine_last_pred is captured from the weekly grid BEFORE that fill
+     # (see .psi_run_seed_ensemble). Downstream, make_config_default truncates the
+     # simulation window to the common coverage across modeled locations. Mirrors
+     # the legacy path (R/est_suitability.R). The fill is non-NA, so this keys on
+     # the explicit last-genuine date, NOT on is.na(pred).
+     n_daily_before <- nrow(out_daily)
+     out_daily <- .drop_filled_prediction_tail(out_daily, ens$genuine_last_pred)
+     out_daily <- out_daily[order(out_daily$iso_code, out_daily$date), ]
+     if (verbose) message(sprintf(
+          "Dropped %d trailing carry-forward-filled daily prediction rows (kept %d across %d locations).",
+          n_daily_before - nrow(out_daily), nrow(out_daily),
+          length(unique(out_daily$iso_code))))
+
      # Weekly = daily sampled at the observed weekly dates (diagnostic only).
+     # Built from the already-truncated out_daily, so the weekly series inherits
+     # the per-country genuine-horizon truncation.
      wk_keys <- unique(bundle$obs_all[, c("iso_code", "date")])
      out_weekly <- merge(out_daily, wk_keys, by = c("iso_code", "date"))
      out_weekly <- out_weekly[order(out_weekly$iso_code, out_weekly$date), ]
