@@ -70,3 +70,97 @@ get_generation_time_distribution <- function(PATHS, mean_generation_time) {
      message("Generation time distribution also saved to:", PATHS$DOCS_TABLES)
 
 }
+
+
+#' Two-clock moment-matched generation-interval pmf (in memory)
+#'
+#' Internal helper returning the daily generation-INTERVAL probability mass
+#' function as a normalized numeric vector. The interval is the
+#' infection-to-infection generation time \eqn{\mathcal{G} = \text{latent} +
+#' \text{infectious}}, approximated by a moment-matched \eqn{\mathrm{Gamma}(s, r)}
+#' whose first two moments are derived from the engine timing parameters
+#' \code{iota}, \code{gamma_1}, \code{gamma_2}, \code{sigma} (canonical theory:
+#' \code{MOSAIC-docs/04-model-description.Rmd}, eqs. gamma-eff /
+#' generation-time-moments / infectious-period-variance / gamma-shape-rate).
+#'
+#' Moments (two clocks: latent + infectious):
+#' \itemize{
+#'   \item \eqn{\gamma_{\mathrm{eff}} = [\sigma/\gamma_1 + (1-\sigma)/\gamma_2]^{-1}}
+#'         (reciprocal of the \eqn{\sigma}-weighted mean infectious *duration*).
+#'   \item \eqn{E[\mathcal{G}] = 1/\iota + 1/\gamma_{\mathrm{eff}}}.
+#'   \item \eqn{V_{\mathrm{inf}} = \sigma/\gamma_1^2 + (1-\sigma)/\gamma_2^2 +
+#'         \sigma(1-\sigma)(1/\gamma_1 - 1/\gamma_2)^2} (the over-dispersed
+#'         \eqn{\sigma}-mixture variance; NOT \eqn{1/\gamma_{\mathrm{eff}}^2}).
+#'   \item \eqn{V[\mathcal{G}] = 1/\iota^2 + V_{\mathrm{inf}}}.
+#'   \item shape \eqn{s = E^2/V}, rate \eqn{r = E/V}.
+#' }
+#'
+#' The pmf is tabulated over daily bins \eqn{d = 1 \ldots \texttt{max\_days}} as
+#' the Gamma-CDF difference \eqn{F(d) - F(d-1)} and renormalized so it sums to 1
+#' after truncation. This is the kernel \eqn{g(\Delta t)} consumed by the Cori
+#' renewal estimator in \code{\link{calc_Reff}}. It is deliberately separate from
+#' the legacy fixed \eqn{\mathrm{Gamma}(0.5, 0.1)} CSV path of
+#' \code{get_generation_time_distribution()} (left fully intact).
+#'
+#' @param iota Numeric scalar > 0. Latent-period rate (\eqn{1/\iota} = mean latent days).
+#' @param gamma_1 Numeric scalar > 0. Symptomatic recovery rate.
+#' @param gamma_2 Numeric scalar > 0. Asymptomatic recovery rate.
+#' @param sigma Numeric scalar in the unit interval. Symptomatic proportion of new infections.
+#' @param max_days Integer. Daily truncation horizon (kernel length). Default 56.
+#'
+#' @return A numeric vector of length \code{max_days} that sums to 1; element
+#'   \code{g[d]} is the probability the generation interval falls in day \code{d}.
+#'   Carries attributes \code{shape}, \code{rate}, \code{mean} (\eqn{E[\mathcal{G}]}),
+#'   and \code{var} (\eqn{V[\mathcal{G}]}) for provenance/testing.
+#'
+#' @keywords internal
+#' @noRd
+.mosaic_generation_time_pmf <- function(iota, gamma_1, gamma_2, sigma,
+                                        max_days = 56L) {
+  stopifnot(
+    is.numeric(iota), length(iota) == 1L, is.finite(iota), iota > 0,
+    is.numeric(gamma_1), length(gamma_1) == 1L, is.finite(gamma_1), gamma_1 > 0,
+    is.numeric(gamma_2), length(gamma_2) == 1L, is.finite(gamma_2), gamma_2 > 0,
+    is.numeric(sigma), length(sigma) == 1L, is.finite(sigma),
+    sigma >= 0, sigma <= 1
+  )
+  max_days <- as.integer(max_days)
+  if (length(max_days) != 1L || is.na(max_days) || max_days < 1L)
+    stop(".mosaic_generation_time_pmf: max_days must be a positive integer scalar")
+
+  # Effective removal rate = reciprocal of the sigma-weighted mean DURATION
+  # (NOT a harmonic mean of the rates). doc eq:gamma-eff.
+  mean_inf_dur <- sigma / gamma_1 + (1 - sigma) / gamma_2
+  gamma_eff    <- 1 / mean_inf_dur
+
+  # First two moments of G = latent + infectious (two independent clocks).
+  E_G <- 1 / iota + 1 / gamma_eff
+
+  # Over-dispersed sigma-mixture infectious-period variance. doc
+  # eq:infectious-period-variance -- the third (between-class) term is what
+  # 1/gamma_eff^2 omits.
+  V_inf <- sigma / gamma_1^2 + (1 - sigma) / gamma_2^2 +
+    sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2
+  V_G   <- 1 / iota^2 + V_inf
+
+  # Moment-matched Gamma(shape s, rate r). doc eq:gamma-shape-rate.
+  s <- E_G^2 / V_G
+  r <- E_G / V_G
+
+  # Daily-binned pmf via the Gamma CDF difference over [d-1, d], d = 1..max_days.
+  d   <- seq_len(max_days)
+  pmf <- stats::pgamma(d, shape = s, rate = r) -
+    stats::pgamma(d - 1, shape = s, rate = r)
+
+  total <- sum(pmf)
+  if (!is.finite(total) || total <= 0)
+    stop(".mosaic_generation_time_pmf: degenerate kernel (mass <= 0); check ",
+         "iota/gamma_1/gamma_2/sigma")
+  g <- pmf / total
+
+  attr(g, "shape") <- s
+  attr(g, "rate")  <- r
+  attr(g, "mean")  <- E_G
+  attr(g, "var")   <- V_G
+  g
+}

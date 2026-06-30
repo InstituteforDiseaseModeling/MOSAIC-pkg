@@ -1,3 +1,24 @@
+# MOSAIC 0.56.0
+
+## New features
+
+* **Cori effective reproductive number, `calc_Reff()` (R_eff) — Phase 1.** New
+  `calc_Reff(ensemble, config)` computes the time-varying Cori et al. (2013)
+  instantaneous effective reproductive number per location, as an *infection*
+  R_eff: `R[t] = I*[t] / Σ_Δt g(Δt) I*[t-Δt]`. The renewal series is **infection
+  incidence** (the `incidence` channel = `incidence_human + incidence_env`, a
+  flow), with symptomatic and asymptomatic infections counted with **equal
+  weight** — not the infectious-compartment stocks and not shedding-weighted
+  (see the corrected spec in `MOSAIC-docs/04-model-description.Rmd`). The
+  generation-interval kernel is the moment-matched two-clock Gamma with the
+  over-dispersed σ-mixture infectious-period variance, exposed as a new in-memory
+  helper `.mosaic_generation_time_pmf()` (normalized so Σg = 1). Posterior
+  median + credible interval via `weighted_quantiles()`, plus a medoid point
+  estimate. The pure renewal core `.cori_reff(incidence, g)` is unit-tested
+  against an Euler–Lotka exponential-growth fixture. `get_generation_time_distribution()`
+  and its CSV outputs are unchanged. Not yet wired into `run_MOSAIC()` (Phase 2)
+  and no `plot_Reff()` yet (Phase 3). See `claude/plan_r0_rt/PLAN.md`.
+
 # MOSAIC 0.55.17
 
 ## Bug fixes

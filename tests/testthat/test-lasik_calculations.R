@@ -668,10 +668,11 @@ testthat::test_that("UN population trends", {
 })
 
 
-# TODO: reproductive number
-# testthat::test_that("reproductive number calculations match", {})
-
-# TODO: r-effective
-# testthat::test_that("r_effective calculations match", {})
+# Reproductive-number / R-effective calculations (the former TODO stubs here)
+# are now realized as the Cori R_eff implementation and live, un-skipped tests:
+#   - calc_Reff() / .cori_reff() / .mosaic_generation_time_pmf()
+#   - tests/testthat/test-reproductive_numbers.R
+# (Phase 1 of claude/plan_r0_rt/PLAN.md). They are covered there rather than in
+# this file, whose laser/ggExtra file-level skip gates would render them inert.
 
 
