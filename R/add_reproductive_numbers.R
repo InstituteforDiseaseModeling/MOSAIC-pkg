@@ -277,10 +277,27 @@ add_reproductive_numbers <- function(output_dir,
 #' \code{1_inputs/control.json}, re-simulates the posterior members via
 #' \code{\link{.mosaic_reff_resim_ci}} (faithfulness-gated against the saved
 #' \code{cases_array}), computes per-member R_eff with each member's own kernel,
-#' reduces to weighted quantiles (q2.5/q50/q97.5), and returns a tidy
-#' \code{reproductive_numbers} data.frame with the same schema as
-#' \code{\link{calc_Reff}}. The leading \code{burn_in_days} are set to \code{NA}
-#' in every output column.
+#' and returns a tidy \code{reproductive_numbers} data.frame with the same schema
+#' as \code{\link{calc_Reff}}. The leading \code{burn_in_days} are set to
+#' \code{NA} in every output column.
+#'
+#' \strong{Column semantics (phase-coherent headline).}
+#' \describe{
+#'   \item{\code{central}}{The MEDOID trajectory's R_t -- a single coherent
+#'     member's series (\code{attr "central_definition" = "medoid_trajectory"},
+#'     or \code{"member_with_median_peak_Rt"} on the documented fallback). This is
+#'     the headline; it captures the explosive single-trajectory peak.}
+#'   \item{\code{q2.5}/\code{q50}/\code{q97.5}}{The per-calendar-day cross-member
+#'     weighted quantiles (\code{attr "band_definition" =
+#'     "per_calendar_day_cross_member_weighted_quantiles"}). This calendar-date
+#'     envelope does NOT represent the epidemic's peak R_t: members are
+#'     phase-misaligned so the per-day median regresses toward 1.}
+#' }
+#' The explosivity statistic -- the posterior-weighted quantiles of each member's
+#' TIME-MAX R_t (post-burn-in, floor-gated) -- is carried in attribute
+#' \code{"peak_Rt"} (a per-location \code{data.frame} with \code{location},
+#' \code{q2.5}/\code{q50}/\code{q97.5}, and \code{n_members}; schema pinned with
+#' \code{plot_Reff()}).
 #'
 #' @keywords internal
 #' @noRd
@@ -316,13 +333,21 @@ add_reproductive_numbers <- function(output_dir,
   }
   if (verbose) message("  Excluding first ", bid, " day(s) as burn-in.")
 
+  # Match run_MOSAIC's medoid target: the cases central_method (default median).
+  cases_cm <- tryCatch(
+    .mosaic_resolve_central_method(control$predictions$central_method)[["cases"]],
+    error = function(e) "median")
+  if (length(cases_cm) != 1L || is.na(cases_cm)) cases_cm <- "median"
+
   PATHS <- get_paths()
 
   res <- .mosaic_reff_resim_ci(
     ensemble = ens, base_config = base_config, priors = priors,
     sampling_args = sampling_args, PATHS = PATHS,
     probs = c(0.025, 0.5, 0.975),
-    infectiousness_floor = infectiousness_floor, verbose = verbose)
+    infectiousness_floor = infectiousness_floor, burn_in_days = bid,
+    cases_central_method = cases_cm,
+    verbose = verbose)
 
   if (verbose)
     message(sprintf(paste0("  Faithfulness gate PASSED (robust statistical ",
@@ -370,6 +395,11 @@ add_reproductive_numbers <- function(output_dir,
   attr(out, "kernel_params")  <- res$kernel_params
   attr(out, "probs")          <- probs
   attr(out, "ci_source")      <- "weighted_quantiles_resimulated"
+  attr(out, "central_definition") <- res$central_definition
+  attr(out, "band_definition")    <-
+    "per_calendar_day_cross_member_weighted_quantiles"
+  attr(out, "peak_Rt")          <- res$peak_Rt
+  attr(out, "medoid_member")    <- res$medoid_member
   attr(out, "burn_in_days")     <- bid
   attr(out, "gate_rel_err_pct") <- res$gate_rel_err_pct
   attr(out, "gate_rel_err_max") <- res$gate_rel_err_max

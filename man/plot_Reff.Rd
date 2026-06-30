@@ -9,17 +9,17 @@ plot_Reff(reff, show_iqr = FALSE, title = NULL, ncol = NULL, base_size = 12)
 \arguments{
 \item{reff}{A \code{reproductive_numbers} \code{data.frame} from
 \code{\link{calc_Reff}} with columns \code{location}, \code{date}, \code{t},
-\code{estimand}, \code{central}, and the quantile columns (\code{q2.5},
-\code{q25}, \code{q50}, \code{q75}, \code{q97.5}). The \code{ci_source}
-attribute (if present) is used for the caption. Leading warm-up rows with a
-non-finite \code{central} are dropped per location so no gap artifact is
-plotted.}
+\code{estimand}, \code{central} (the medoid trajectory R_t), and the
+per-calendar-date quantile columns (\code{q2.5}, \code{q25}, \code{q50},
+\code{q75}, \code{q97.5}). The \code{peak_Rt}, \code{central_definition},
+\code{band_definition} and \code{ci_source} attributes (when present) drive
+the annotation and caption. Leading warm-up rows with a non-finite
+\code{central} are dropped per location so no gap artifact is plotted.}
 
-\item{show_iqr}{Logical. Draw the inner 50\\% (\code{q25}-\code{q75}) ribbon in
-addition to the 95\\% ribbon. Default \code{FALSE} (the plot shows ONLY the
-median line and the 95\\% credible-interval ribbon). Retained for
-back-compatibility; set \code{TRUE} to re-enable the inner band when the
-\code{q25}/\code{q75} columns are populated.}
+\item{show_iqr}{Logical. Draw the inner 50\\% (\code{q25}-\code{q75}) band in
+addition to the faint 95\\% band. Default \code{FALSE} (the plot shows the
+medoid line and the faint 95\\% cross-member band only). Retained for
+back-compatibility.}
 
 \item{title}{Character or \code{NULL}. Plot title. \code{NULL} (default) uses
 \code{"Effective reproductive number"} for multi-location input and
@@ -38,23 +38,34 @@ A \code{ggplot} object (not printed or saved). The driver
 \description{
 Renders the per-location, time-varying Cori (2013) instantaneous
 \strong{infection} effective reproductive number \eqn{R_{jt}} produced by
-\code{\link{calc_Reff}}. Draws the posterior median series (\code{q50} when the
-re-simulated CI is present, else the \code{central} medoid series) as a purple
-line over date with a horizontal reference line at \eqn{R_{\mathrm{eff}} = 1};
-when the posterior credible-interval columns are populated it overlays the
-95\\% (\code{q2.5}-\code{q97.5}) ribbon (and optionally the 50\\%
-\code{q25}-\code{q75} band when \code{show_iqr = TRUE}). Multi-location input is
-faceted by location; a single (national) location is rendered as one panel
-titled with the location.
+\code{\link{calc_Reff}}. The headline line is the \strong{medoid trajectory}
+R_t (\code{central}) drawn as a bold purple line over date, with a horizontal
+reference line at \eqn{R_{\mathrm{eff}} = 1}. Because the medoid is a single
+coherent member trajectory it preserves the timing and height of the
+epidemic's R_t peak (typically 2-3.3), unlike a per-calendar-day cross-member
+median which flattens phase-misaligned peaks toward 1.
 }
 \details{
-\strong{Graceful CI handling.} On production-default trajectory artifacts the
-per-member \code{lines} are time-strided, so \code{calc_Reff()} cannot compute
-a daily renewal CI and returns the \code{q*} columns as all-\code{NA} with
-\code{attr(reff, "ci_source") = "unavailable_strided_lines"}. This function
-detects an all-\code{NA} CI per ribbon level and simply omits that ribbon
-(drawing the central line only), adding a caption noting the CI is unavailable
-for the artifact. It never errors when the CI is missing.
+\strong{Faint posterior band.} The 95\\% ribbon (\code{q2.5}-\code{q97.5}) is
+the per-calendar-date posterior range \emph{across members} and is rendered
+faintly. The caption makes explicit that this band does \emph{not} represent
+the epidemic's peak R_t (member peaks are phase-misaligned in calendar time);
+that explosivity statistic is shown by the medoid line and the per-member peak
+R_t annotation. The inner 50\\% band (\code{q25}-\code{q75}) is drawn only when
+\code{show_iqr = TRUE} and those columns are populated.
+
+\strong{Per-member peak R_t annotation.} When the input carries an
+\code{attr(reff, "peak_Rt")} data.frame (per-location posterior-weighted
+\code{q2.5}/\code{q50}/\code{q97.5} of each member's time-max R_t), the plot
+annotates it: for a single location in the subtitle, for multi-location input
+as a per-facet in-panel label. Older artifacts that lack the attribute are
+handled gracefully (the annotation is simply omitted).
+
+\strong{Graceful CI handling.} If the quantile columns are absent or all
+\code{NA} (e.g. an older artifact with strided trajectory lines, attr
+\code{ci_source = "unavailable_strided_lines"}), the band is omitted (medoid
+line only) and the caption notes the missing CI. The function never errors
+when the band or peak annotation is missing.
 }
 \examples{
 \dontrun{

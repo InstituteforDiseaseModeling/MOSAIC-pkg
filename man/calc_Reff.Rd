@@ -50,14 +50,15 @@ posterior series. Set \code{0} for the pure Cori convention.}
 \value{
 A tidy long \code{data.frame} (\code{reproductive_numbers} schema) with
 columns \code{location}, \code{date}, \code{t}, \code{estimand}
-(\code{"R_eff"}), \code{central} (the medoid point estimate = renewal on the
-weighted-median incidence), and one column per requested quantile
-(\code{q2.5}, \code{q25}, \code{q50}, \code{q75}, \code{q97.5}, ...) from the
-posterior reduction over members via \code{\link{weighted_quantiles}}. The
-wide \eqn{nL \times T} central matrix is attached as attribute
-\code{"central_matrix"}. Provenance attributes: \code{kernel}
-(\code{"moment_matched"}), \code{series} (\code{"infection_incidence"}),
-\code{kernel_params}, \code{ci_source}, and \code{caveat}.
+(\code{"R_eff"}), \code{central} (\strong{this direct path}: renewal on the
+weighted-MEDIAN incidence -- see the caveat below), and one column per
+requested quantile (\code{q2.5}, \code{q25}, \code{q50}, \code{q75},
+\code{q97.5}, ...) from the posterior reduction over members via
+\code{\link{weighted_quantiles}}. The wide \eqn{nL \times T} central matrix
+is attached as attribute \code{"central_matrix"}. Provenance attributes:
+\code{kernel} (\code{"moment_matched"}), \code{series}
+(\code{"infection_incidence"}), \code{kernel_params}, \code{ci_source}, and
+\code{caveat}.
 }
 \description{
 Computes the per-location, time-varying Cori (2013) instantaneous
@@ -93,9 +94,20 @@ slightly closer to 1 (less extreme in either direction) than a three-clock
 kernel would. The pooled \code{incidence} series itself does include both the
 human and environmental S->E routes; only the kernel timing is two-clock.
 
-\strong{Point estimate (central).} The headline per-location series is the
-renewal estimator applied to \code{summary$incidence$median} (the full daily
-weighted-median incidence), consistent with every other medoid-based diagnostic.
+\strong{Central definition differs from the production (re-simulation) path.}
+This cheap direct path sets \code{central} = the renewal estimator applied to
+\code{summary$incidence$median} (the full daily weighted-MEDIAN incidence). The
+\strong{production} path used by \code{\link{add_reproductive_numbers}(
+recompute_ci = TRUE)} (\code{\link{.mosaic_reff_resim_ci}}) instead sets
+\code{central} = the \strong{MEDOID trajectory's R_t} (a single coherent
+member's series) because the per-day cross-member median -- and, equivalently,
+the renewal on the median incidence -- is FLATTENED toward 1 by phase
+misalignment of member peaks and does NOT represent the epidemic's peak R_t.
+On this direct path the same caveat applies: the weighted-median incidence is a
+phase-smoothed series, so its renewal \code{central} is a calendar-date
+descriptor, not the coherent peak R_t. Use the re-simulation path
+(\code{recompute_ci = TRUE}) for the phase-coherent headline and the
+\code{peak_Rt} explosivity statistic.
 
 \strong{Posterior credible interval.} Each retained member's daily R_eff series
 is reconstructed from the per-member \code{incidence} \code{lines} and the

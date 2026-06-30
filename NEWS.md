@@ -1,3 +1,33 @@
+# MOSAIC 0.59.0
+
+## Cori R_eff: phase-coherent headline + per-member peak (underestimation fix)
+
+Investigation of "R_t sits near 1 everywhere" found the headline `central` was a
+per-calendar-day cross-member weighted MEDIAN of per-member R_t. Because members'
+R_t peaks are phase-misaligned (peak-day SD ~hundreds of days), that statistic
+regresses to ~1 even when individual trajectories are explosive — it was an
+aggregation artifact, not the biology and not a renewal-math bug (Euler-Lotka
+cross-checks pass; posterior weighting is near-uniform so not a factor).
+
+* **`central` is now the MEDOID trajectory's R_t** — a single coherent member,
+  selected with run_MOSAIC's exact medoid criterion (per-channel `central_method`,
+  default median) computed on the saved `cases_array`. Phase-coherent, so it shows
+  real peaks (e.g. MOZ 1.46 -> 4.58, COD 1.50 -> 2.23).
+* **New `peak_Rt` attribute** — per-location posterior-weighted q2.5/q50/q97.5 of
+  each member's post-burn-in time-MAX R_t (burn-in masked before the max so the IC
+  seeding transient cannot dominate). The explosivity statistic.
+* The per-calendar-day cross-member quantiles (`q2.5/q50/q97.5`) are retained as a
+  calendar-date *envelope* (no longer the headline) with attr
+  `band_definition = "per_calendar_day_cross_member_weighted_quantiles"`; attr
+  `central_definition = "medoid_trajectory"`; `medoid_member` records the selection.
+* **`plot_Reff()`** now draws the purple medoid line, a faint envelope captioned
+  to explain it is NOT the epidemic peak (phase-misaligned), and a per-member peak
+  R_t annotation.
+* `add_reproductive_numbers()` / `.mosaic_reff_resim_ci()` gain a `burn_in_days`
+  arg (from `control$likelihood$burn_in_days`) and honor
+  `control$predictions$central_method` for the medoid target (closes a lockstep
+  gap; default median matches existing behavior).
+
 # MOSAIC 0.58.1
 
 ## Bug fixes (suitability — Class-A psi flat-tail in the lstm_v2 path)

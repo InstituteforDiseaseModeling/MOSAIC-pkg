@@ -77,6 +77,68 @@ test_that("burn-in exclusion sets the leading days to NA across all columns", {
 })
 
 # -----------------------------------------------------------------------------
+# Medoid member selection (run_MOSAIC criterion) -- hand-verifiable fixture
+# -----------------------------------------------------------------------------
+test_that(".mosaic_reff_select_medoid_member picks the param set + stoch rerun nearest the central", {
+  # nL = 1, Tn = 4, nP = 3 param sets, nS = 3 stochastic reruns.
+  # Central cases = c(10, 20, 30, 40). Param set 2 sits on it; sets 1/3 are scaled
+  # far off, so the param-set medoid must be p = 2. Within p = 2 the three reruns
+  # are (0.7x, 1.0x, 1.3x) of central: the within-set stochastic MEDIAN is the
+  # middle rerun (= central exactly), so rerun s = 2 has distance 0 and is the
+  # unambiguous within-set medoid -> member id m = (2 - 1) * 3 + 2 = 5.
+  Tn <- 4L; nP <- 3L; nS <- 3L
+  ca <- array(NA_real_, dim = c(1L, Tn, nP, nS))
+  central <- c(10, 20, 30, 40)
+  ca[1, , 1, 1] <- central * 5;   ca[1, , 1, 2] <- central * 6;  ca[1, , 1, 3] <- central * 7
+  ca[1, , 2, 1] <- central * 0.7; ca[1, , 2, 2] <- central;      ca[1, , 2, 3] <- central * 1.3
+  ca[1, , 3, 1] <- central / 5;   ca[1, , 3, 2] <- central / 6;  ca[1, , 3, 3] <- central / 7
+  cen_mat <- matrix(central, nrow = 1L)
+
+  sel <- MOSAIC:::.mosaic_reff_select_medoid_member(ca, cen_mat, nP, nS)
+  expect_equal(sel$param_idx, 2L)
+  expect_equal(sel$stoch_idx, 2L)
+  expect_equal(sel$member_id, (2L - 1L) * nP + 2L)   # = 5
+})
+
+test_that(".mosaic_reff_select_medoid_member returns NA when central is absent/mismatched", {
+  ca <- array(1, dim = c(1L, 4L, 2L, 2L))
+  expect_true(is.na(MOSAIC:::.mosaic_reff_select_medoid_member(ca, NULL, 2L, 2L)$member_id))
+  # Length-mismatched central -> NA (defensive).
+  expect_true(is.na(MOSAIC:::.mosaic_reff_select_medoid_member(
+    ca, matrix(1, 1, 3), 2L, 2L)$member_id))
+})
+
+# -----------------------------------------------------------------------------
+# Per-member peak R_t (explosivity statistic): time-max + cross-member quantiles
+# -----------------------------------------------------------------------------
+test_that("per-member peak R_t = post-burn-in time-max reduced by weighted_quantiles", {
+  # Three members; per-member R_t series with a leading burn-in spike that must
+  # be EXCLUDED from the time-max. Members peak (post-burn-in) at 2.0, 3.0, 4.0.
+  bid <- 2L
+  M <- rbind(
+    c(9.9, 9.9, 1.0, 1.5, 2.0, 1.2),   # member 1: burn-in 9.9 excluded; peak 2.0
+    c(9.9, 9.9, 1.5, 3.0, 2.5, 1.0),   # member 2: peak 3.0
+    c(9.9, 9.9, 2.0, 2.0, 4.0, 3.0))   # member 3: peak 4.0
+  w <- c(0.1, 0.2, 0.7)         # >50% mass on member 3 (peak 4.0)
+  probs <- c(0.025, 0.5, 0.975)
+
+  burn_idx <- seq_len(bid)
+  Mm <- M; Mm[, burn_idx] <- NA_real_
+  member_peaks <- apply(Mm, 1L, function(r) { r <- r[is.finite(r)]; max(r) })
+  expect_equal(member_peaks, c(2.0, 3.0, 4.0))   # burn-in spike not the max
+
+  ref <- weighted_quantiles(member_peaks, w, probs)
+  expect_true(all(diff(ref) >= 0))
+  expect_equal(ref[2L], weighted_quantiles(c(2, 3, 4), w, 0.5))
+  # Member 3 carries 70% of the mass, so the weighted median is pulled ABOVE the
+  # unweighted median 3.0 toward its peak 4.0: the explosivity stat is posterior-
+  # weighted (hand value: weighted_quantiles(c(2,3,4), c(.1,.2,.7), .5) = 3.2857).
+  expect_gt(ref[2L], 3.0)
+  expect_equal(ref[2L], 23 / 7, tolerance = 1e-6)   # = 3.285714...
+  expect_equal(ref[3L], weighted_quantiles(c(2, 3, 4), w, 0.975))
+})
+
+# -----------------------------------------------------------------------------
 # .mosaic_build_trajectories grid (Phase-2 fix): stride = 1 -> full daily grid
 # -----------------------------------------------------------------------------
 test_that("trajectory time-stride grid yields a full daily-consecutive set at stride 1", {

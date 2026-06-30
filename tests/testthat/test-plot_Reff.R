@@ -1,17 +1,22 @@
-# Tests for plot_Reff() -- the R_eff time-series renderer.
+# Tests for plot_Reff() -- the phase-coherent R_eff time-series renderer.
 #
-# Covers: returns a ggplot for the CI-available case (ribbon drawn) and the
-# CI-NA case (ribbon suppressed, no error), single + multi-location, and
-# warm-up NA leading-row handling.
+# Covers the NEW estimand schema: the headline line is the MEDOID trajectory
+# (`central`, coherent), the 95% band (q2.5-q97.5) is the faint per-calendar-date
+# cross-member range, and the per-member peak R_t annotation comes from attr
+# `peak_Rt`. Asserts: medoid line renders, faint band + caption present,
+# peak annotation appears when peak_Rt is set and is omitted when NULL,
+# graceful all-NA handling, single + multi-location, warm-up NA trimming.
 
 # -----------------------------------------------------------------------------
-# Synthetic reproductive_numbers fixtures (mirror calc_Reff() schema)
+# Synthetic reproductive_numbers fixtures (mirror the NEW calc_Reff() schema)
 # -----------------------------------------------------------------------------
 make_reff_df <- function(locs = "LOC1", Tn = 60L, ci = TRUE,
-                         ci_source = NULL, n_warmup_na = 2L) {
+                         ci_source = NULL, n_warmup_na = 2L,
+                         peak = TRUE) {
   d0 <- as.Date("2023-01-01")
   parts <- lapply(locs, function(loc) {
-    central <- 1 + 0.5 * sin(seq_len(Tn) / 8)
+    # `central` = medoid trajectory R_t: a coherent peak around 2.5.
+    central <- 1 + 1.5 * exp(-((seq_len(Tn) - 25) / 8)^2)
     if (n_warmup_na > 0L)
       central[seq_len(min(n_warmup_na, Tn))] <- NA_real_
     df <- data.frame(
@@ -22,11 +27,14 @@ make_reff_df <- function(locs = "LOC1", Tn = 60L, ci = TRUE,
       central  = central,
       stringsAsFactors = FALSE)
     if (ci) {
-      df$q2.5  <- central - 0.3
-      df$q25   <- central - 0.1
-      df$q50   <- central
-      df$q75   <- central + 0.1
-      df$q97.5 <- central + 0.3
+      # Per-calendar-date cross-member envelope (deliberately flatter than the
+      # medoid peak: phase-misaligned member peaks pull the per-date range down).
+      env <- 1 + 0.4 * exp(-((seq_len(Tn) - 25) / 14)^2)
+      df$q2.5  <- env - 0.25
+      df$q25   <- env - 0.1
+      df$q50   <- env
+      df$q75   <- env + 0.1
+      df$q97.5 <- env + 0.25
     } else {
       df$q2.5  <- NA_real_; df$q25 <- NA_real_; df$q50 <- NA_real_
       df$q75   <- NA_real_; df$q97.5 <- NA_real_
@@ -38,33 +46,105 @@ make_reff_df <- function(locs = "LOC1", Tn = 60L, ci = TRUE,
   if (is.null(ci_source))
     ci_source <- if (ci) "weighted_quantiles_per_member" else
       "unavailable_strided_lines"
-  attr(out, "ci_source") <- ci_source
+  attr(out, "ci_source")          <- ci_source
+  attr(out, "central_definition") <- "medoid_trajectory"
+  attr(out, "band_definition")    <-
+    "per_calendar_day_cross_member_weighted_quantiles"
+  if (isTRUE(peak)) {
+    attr(out, "peak_Rt") <- data.frame(
+      location = locs,
+      q2.5     = rep(2.1, length(locs)),
+      q50      = rep(2.8, length(locs)),
+      q97.5    = rep(3.4, length(locs)),
+      n_members = rep(50L, length(locs)),
+      stringsAsFactors = FALSE)
+  }
   class(out) <- c("reproductive_numbers", "data.frame")
   out
 }
 
-test_that("plot_Reff returns a ggplot when the CI is available (ribbon drawn)", {
+test_that("plot_Reff renders the medoid central line as the headline", {
   reff <- make_reff_df(ci = TRUE)
   p <- plot_Reff(reff)
   expect_s3_class(p, "ggplot")
-  # A ribbon layer is present when q* are non-NA.
-  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
-  expect_true(any(grepl("Ribbon", geoms)))
-  expect_true(any(grepl("Line", geoms)))
+  # The bold purple line tracks `central` (the medoid), not q50.
+  line_idx <- which(vapply(p$layers,
+    function(l) inherits(l$geom, "GeomLine"), logical(1)))
+  expect_true(length(line_idx) >= 1L)
+  built <- ggplot2::ggplot_build(p)
+  ld <- built$data[[line_idx[length(line_idx)]]]
+  ld <- ld[is.finite(ld$y), , drop = FALSE]
+  src <- reff[order(reff$date), , drop = FALSE]
+  src <- src[is.finite(src$central), , drop = FALSE]
+  expect_equal(unname(ld$y), unname(src$central), tolerance = 1e-6)
+  # Confirm it is NOT tracking q50 (medoid peak is well above the envelope).
+  expect_gt(max(ld$y), max(src$q50) + 0.5)
 })
 
-test_that("plot_Reff suppresses the ribbon when the CI is all-NA (no error)", {
+test_that("plot_Reff draws the faint 95% band and an explanatory caption", {
+  reff <- make_reff_df(ci = TRUE)
+  p <- plot_Reff(reff)
+  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+  expect_true(any(grepl("Ribbon", geoms)))
+  # The 95% ribbon is rendered faint (low alpha).
+  rib <- Filter(function(l) inherits(l$geom, "GeomRibbon"), p$layers)
+  alphas <- vapply(rib, function(l) {
+    a <- l$aes_params$alpha; if (is.null(a)) NA_real_ else as.numeric(a)
+  }, numeric(1))
+  expect_true(any(is.finite(alphas) & alphas <= 0.3))
+  # Caption makes clear the band is the per-date cross-member range, not peak.
+  expect_match(p$labels$caption, "ACROSS members", ignore.case = TRUE)
+  expect_match(p$labels$caption, "peak", ignore.case = TRUE)
+})
+
+test_that("plot_Reff annotates the per-member peak R_t when peak_Rt is set", {
+  reff_single <- make_reff_df(locs = "MOZ", ci = TRUE, peak = TRUE)
+  p <- plot_Reff(reff_single)
+  # Single location -> peak annotation in the subtitle.
+  expect_false(is.null(p$labels$subtitle))
+  expect_match(p$labels$subtitle, "Peak R_t \\(per-member\\)")
+  expect_match(p$labels$subtitle, "2.80")
+  expect_match(p$labels$subtitle, "\\[2.10, 3.40\\]")
+
+  reff_multi <- make_reff_df(locs = c("LOC1", "LOC2"), ci = TRUE, peak = TRUE)
+  pm <- plot_Reff(reff_multi)
+  # Multi-location -> peak annotation as an in-panel geom_text layer.
+  has_text <- any(vapply(pm$layers,
+    function(l) inherits(l$geom, "GeomText"), logical(1)))
+  expect_true(has_text)
+})
+
+test_that("plot_Reff omits the peak annotation when peak_Rt is NULL", {
+  reff <- make_reff_df(locs = "MOZ", ci = TRUE, peak = FALSE)
+  expect_null(attr(reff, "peak_Rt"))
+  p <- plot_Reff(reff)
+  expect_s3_class(p, "ggplot")
+  expect_null(p$labels$subtitle)
+
+  reff_multi <- make_reff_df(locs = c("LOC1", "LOC2"), ci = TRUE, peak = FALSE)
+  pm <- plot_Reff(reff_multi)
+  has_text <- any(vapply(pm$layers,
+    function(l) inherits(l$geom, "GeomText"), logical(1)))
+  expect_false(has_text)
+})
+
+test_that("plot_Reff suppresses the band when the CI is all-NA (no error)", {
   reff <- make_reff_df(ci = FALSE, ci_source = "unavailable_strided_lines")
   expect_silent(p <- plot_Reff(reff))
   expect_s3_class(p, "ggplot")
   geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
-  expect_false(any(grepl("Ribbon", geoms)))   # no ribbon
-  expect_true(any(grepl("Line", geoms)))       # central line still drawn
-  # Caption notes the unavailable CI.
+  expect_false(any(grepl("Ribbon", geoms)))   # no band
+  expect_true(any(grepl("Line", geoms)))       # medoid line still drawn
   expect_match(p$labels$caption, "unavailable", ignore.case = TRUE)
 })
 
-test_that("plot_Reff facets multi-location input and titles single-location", {
+test_that("plot_Reff does not error on all-NA central", {
+  reff <- make_reff_df(ci = TRUE, n_warmup_na = 0L)
+  reff$central <- NA_real_
+  expect_error(plot_Reff(reff), "no finite")
+})
+
+test_that("plot_Reff facets multi-location and titles single-location", {
   reff_multi <- make_reff_df(locs = c("LOC1", "LOC2", "LOC3"), ci = TRUE)
   p_multi <- plot_Reff(reff_multi)
   expect_s3_class(p_multi, "ggplot")
@@ -79,12 +159,11 @@ test_that("plot_Reff drops leading warm-up NA rows without erroring", {
   reff <- make_reff_df(ci = TRUE, n_warmup_na = 5L)
   p <- plot_Reff(reff)
   expect_s3_class(p, "ggplot")
-  # The built data starts at the first finite central (warm-up trimmed).
   built <- ggplot2::ggplot_build(p)
   expect_true(nrow(built$data[[1]]) > 0L)
 })
 
-test_that("plot_Reff honors show_iqr = FALSE (only 95% ribbon)", {
+test_that("plot_Reff honors show_iqr = FALSE (only 95% band)", {
   reff <- make_reff_df(ci = TRUE)
   p_iqr  <- plot_Reff(reff, show_iqr = TRUE)
   p_noiqr <- plot_Reff(reff, show_iqr = FALSE)
@@ -94,13 +173,9 @@ test_that("plot_Reff honors show_iqr = FALSE (only 95% ribbon)", {
   expect_equal(n_ribbon(p_noiqr), 1L)
 })
 
-test_that("plot_Reff defaults to median + 95% only (purple, no 50% band)", {
+test_that("plot_Reff median line is purple (#762A83)", {
   reff <- make_reff_df(ci = TRUE)
-  p <- plot_Reff(reff)   # show_iqr defaults FALSE now
-  n_ribbon <- sum(grepl("Ribbon",
-    vapply(p$layers, function(l) class(l$geom)[1], character(1))))
-  expect_equal(n_ribbon, 1L)   # only the 95% ribbon
-  # The median line is purple (#762A83) and present.
+  p <- plot_Reff(reff)
   line_layers <- Filter(function(l) inherits(l$geom, "GeomLine"), p$layers)
   expect_true(length(line_layers) >= 1L)
   cols <- vapply(line_layers, function(l) {
@@ -108,22 +183,6 @@ test_that("plot_Reff defaults to median + 95% only (purple, no 50% band)", {
     if (is.null(cc)) NA_character_ else as.character(cc)
   }, character(1))
   expect_true("#762A83" %in% cols)
-})
-
-test_that("plot_Reff plots q50 as the median when present", {
-  reff <- make_reff_df(ci = TRUE)
-  # Make q50 distinguishable from central so we can confirm q50 is plotted.
-  reff$q50 <- reff$central + 0.25
-  p <- plot_Reff(reff)
-  built <- ggplot2::ggplot_build(p)
-  # The purple median line layer's y should track q50 (central + 0.25), not central.
-  line_idx <- which(vapply(p$layers,
-    function(l) inherits(l$geom, "GeomLine"), logical(1)))
-  ld <- built$data[[line_idx[length(line_idx)]]]
-  ld <- ld[is.finite(ld$y), , drop = FALSE]
-  pd <- reff[order(reff$date), , drop = FALSE]
-  pd <- pd[is.finite(pd$central), , drop = FALSE]
-  expect_equal(unname(ld$y), unname(pd$q50), tolerance = 1e-6)
 })
 
 test_that("plot_Reff validates input", {

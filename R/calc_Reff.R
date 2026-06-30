@@ -160,19 +160,31 @@
 #'
 #' @return A tidy long \code{data.frame} (\code{reproductive_numbers} schema) with
 #'   columns \code{location}, \code{date}, \code{t}, \code{estimand}
-#'   (\code{"R_eff"}), \code{central} (the medoid point estimate = renewal on the
-#'   weighted-median incidence), and one column per requested quantile
-#'   (\code{q2.5}, \code{q25}, \code{q50}, \code{q75}, \code{q97.5}, ...) from the
-#'   posterior reduction over members via \code{\link{weighted_quantiles}}. The
-#'   wide \eqn{nL \times T} central matrix is attached as attribute
-#'   \code{"central_matrix"}. Provenance attributes: \code{kernel}
-#'   (\code{"moment_matched"}), \code{series} (\code{"infection_incidence"}),
-#'   \code{kernel_params}, \code{ci_source}, and \code{caveat}.
+#'   (\code{"R_eff"}), \code{central} (\strong{this direct path}: renewal on the
+#'   weighted-MEDIAN incidence -- see the caveat below), and one column per
+#'   requested quantile (\code{q2.5}, \code{q25}, \code{q50}, \code{q75},
+#'   \code{q97.5}, ...) from the posterior reduction over members via
+#'   \code{\link{weighted_quantiles}}. The wide \eqn{nL \times T} central matrix
+#'   is attached as attribute \code{"central_matrix"}. Provenance attributes:
+#'   \code{kernel} (\code{"moment_matched"}), \code{series}
+#'   (\code{"infection_incidence"}), \code{kernel_params}, \code{ci_source}, and
+#'   \code{caveat}.
 #'
 #' @details
-#' \strong{Point estimate (central).} The headline per-location series is the
-#' renewal estimator applied to \code{summary$incidence$median} (the full daily
-#' weighted-median incidence), consistent with every other medoid-based diagnostic.
+#' \strong{Central definition differs from the production (re-simulation) path.}
+#' This cheap direct path sets \code{central} = the renewal estimator applied to
+#' \code{summary$incidence$median} (the full daily weighted-MEDIAN incidence). The
+#' \strong{production} path used by \code{\link{add_reproductive_numbers}(
+#' recompute_ci = TRUE)} (\code{\link{.mosaic_reff_resim_ci}}) instead sets
+#' \code{central} = the \strong{MEDOID trajectory's R_t} (a single coherent
+#' member's series) because the per-day cross-member median -- and, equivalently,
+#' the renewal on the median incidence -- is FLATTENED toward 1 by phase
+#' misalignment of member peaks and does NOT represent the epidemic's peak R_t.
+#' On this direct path the same caveat applies: the weighted-median incidence is a
+#' phase-smoothed series, so its renewal \code{central} is a calendar-date
+#' descriptor, not the coherent peak R_t. Use the re-simulation path
+#' (\code{recompute_ci = TRUE}) for the phase-coherent headline and the
+#' \code{peak_Rt} explosivity statistic.
 #'
 #' \strong{Posterior credible interval.} Each retained member's daily R_eff series
 #' is reconstructed from the per-member \code{incidence} \code{lines} and the
@@ -394,11 +406,29 @@ calc_Reff <- function(ensemble,
 #' Each member's R_eff series uses its OWN moment-matched generation-interval
 #' kernel built from that member's sampled \code{iota/gamma_1/gamma_2/sigma}.
 #'
+#' \strong{Headline statistic = the MEDOID trajectory's R_t (phase-coherent).}
+#' The per-(location, t) cross-member weighted MEDIAN of per-member R_t is a
+#' \emph{calendar-date} statistic: because members' epidemic peaks are
+#' phase-MISALIGNED (peak-day SD of hundreds of days at the national scale), at
+#' any single calendar day only a minority of members are above their own peak,
+#' so the per-day median regresses to \eqn{\approx 1} even though every coherent
+#' single trajectory peaks well above 1. It therefore does \strong{not} represent
+#' the epidemic's peak R_t and must not be sold as such. The headline
+#' \code{central} is instead the R_t of a single coherent member -- the MEDOID,
+#' selected by the SAME criterion \code{run_MOSAIC()} uses (the param set whose
+#' stochastic-median \code{reported_cases} at location 1 minimises log-scale MAE
+#' to the ensemble central cases series, then the within-param-set stochastic
+#' rerun closest to that param set's own median). The per-day cross-member
+#' quantiles are retained as the calendar-date envelope (\code{q*}), and the
+#' distribution of per-member TIME-MAX R_t (the explosivity statistic) is returned
+#' in \code{peak_Rt}.
+#'
 #' @param ensemble A \code{mosaic_ensemble} object (read from
 #'   \code{2_calibration/ensemble_candidate.rds}) carrying \code{seeds}
 #'   (= the per-member \code{parameter_seeds}), \code{parameter_weights},
 #'   \code{cases_array}, \code{n_param_sets}, \code{n_simulations_per_config},
-#'   \code{location_names}, \code{date_start}.
+#'   \code{location_names}, \code{date_start}, and the ensemble central cases
+#'   series \code{cases_median} (the medoid-selection target).
 #' @param base_config The base \code{config} list (medoid \code{config.json}) the
 #'   members were sampled from.
 #' @param priors The priors object (\code{1_inputs/priors.json}).
@@ -407,6 +437,13 @@ calc_Reff <- function(ensemble,
 #' @param max_days Generation-interval kernel truncation (days). Default 56.
 #' @param probs Quantile probabilities. Default \code{c(0.025, 0.5, 0.975)}.
 #' @param infectiousness_floor Passed to \code{.cori_reff}. Default 1.
+#' @param burn_in_days Integer \eqn{\ge 0}. Leading days excluded (set to
+#'   \code{NA} in each member's R_t series) BEFORE the per-member time-max is
+#'   taken for \code{peak_Rt}, so the initial-condition seeding transient (a
+#'   sharp day-2/3 spike) does not contaminate the explosivity statistic. The
+#'   medoid central series is computed on the full (un-masked) member R_t here;
+#'   the caller (\code{.add_reff_recompute_ci}) applies the same burn-in mask to
+#'   the assembled \code{central}/\code{q*} columns. Default \code{0L}.
 #' @param gate_rel_tol Numeric. Statistical-equivalence faithfulness gate:
 #'   maximum allowed relative total-case error between the re-simulated
 #'   \code{reported_cases} and the saved \code{cases_array}, applied to BOTH the
@@ -427,9 +464,18 @@ calc_Reff <- function(ensemble,
 #'   \code{0.95}.
 #' @param verbose Logical; emit progress. Default TRUE.
 #'
-#' @return A list with \code{qmats} (\code{nL x T x length(probs)} array of
-#'   weighted quantiles), \code{central_mat} (\code{nL x T} weighted-median of the
-#'   per-member R_eff), \code{probs}, the gate diagnostics
+#' @return A list with \code{qmats} (\code{nL x T x length(probs)} array of the
+#'   per-calendar-day cross-member weighted quantiles -- the calendar-date
+#'   envelope), \code{central_mat} (\code{nL x T} MEDOID-trajectory R_t -- a
+#'   single coherent member's series, the phase-coherent headline),
+#'   \code{central_definition} (\code{"medoid_trajectory"} or, on the documented
+#'   fallback, \code{"member_with_median_peak_Rt"}), \code{peak_Rt} (a per-location
+#'   \code{data.frame} with columns \code{location}, the posterior-weighted
+#'   quantiles of each member's post-burn-in floor-gated TIME-MAX R_t
+#'   (\code{q2.5}/\code{q50}/\code{q97.5}), and \code{n_members} -- the explosivity
+#'   statistic, schema pinned with \code{plot_Reff()}), \code{medoid_member} (the
+#'   chosen member id / param-set / stoch indices / seed), \code{probs}, the gate
+#'   diagnostics
 #'   (\code{gate_rel_err_pct}, \code{gate_rel_err_max}, \code{gate_agg_rel_err},
 #'   \code{gate_cor_median}, \code{gate_cor_min}, \code{gate_max_abs_diff},
 #'   \code{gate_n_outliers}, \code{gate_frac}), \code{n_members}, and
@@ -441,6 +487,8 @@ calc_Reff <- function(ensemble,
                                   PATHS, max_days = 56L,
                                   probs = c(0.025, 0.5, 0.975),
                                   infectiousness_floor = 1,
+                                  burn_in_days = 0L,
+                                  cases_central_method = "median",
                                   gate_rel_tol = 0.05, gate_frac = 0.95,
                                   gate_cor_min = 0.95, verbose = TRUE) {
   if (!inherits(ensemble, "mosaic_ensemble"))
@@ -471,6 +519,8 @@ calc_Reff <- function(ensemble,
   Tn    <- dim(ca)[2L]
   if (length(parameter_seeds) != nP)
     stop(".mosaic_reff_resim_ci: seeds length != n_param_sets.")
+  bid <- suppressWarnings(as.integer(burn_in_days))
+  if (length(bid) != 1L || is.na(bid) || bid < 0L) bid <- 0L
 
   # --- Reconstruct member configs (same recipe as the ensemble worker) -------
   if (verbose) message("  Re-sampling ", nP, " posterior member configs...")
@@ -603,20 +653,96 @@ calc_Reff <- function(ensemble,
                  gate_rel_tol, cor_median, gate_cor_min, n_outliers, n_compared,
                  rel_err_max))
 
-  # --- Weighted-quantile reduction per (location, t) -------------------------
-  qmats   <- array(NA_real_, dim = c(nL, Tn, length(probs)))
-  central <- matrix(NA_real_, nrow = nL, ncol = Tn)
+  # --- Calendar-date envelope: per-(location, t) cross-member weighted quantiles
+  # These are the SAME per-day cross-member weighted quantiles as before. They
+  # are NO LONGER the headline `central`: because members are phase-misaligned
+  # the per-day median regresses to ~1 and does NOT represent the epidemic peak
+  # R_t. They are retained as the "at this calendar date" envelope (q* columns).
+  qmats <- array(NA_real_, dim = c(nL, Tn, length(probs)))
   for (i in seq_len(nL)) {
     M <- reff_loc[[i]]
     for (t in seq_len(Tn)) {
-      vals <- M[, t]
-      qs <- weighted_quantiles(vals, member_w, probs)
-      qmats[i, t, ] <- qs
-      central[i, t] <- weighted_quantiles(vals, member_w, 0.5)
+      qmats[i, t, ] <- weighted_quantiles(M[, t], member_w, probs)
+    }
+  }
+
+  # --- Phase-coherent headline: the MEDOID member's R_t series ----------------
+  # Reuse run_MOSAIC()'s medoid criterion on the SAVED cases_array so the central
+  # R_t is one coherent trajectory (not the flattened per-day median). The medoid
+  # is the param set whose stochastic-MEDIAN reported_cases at location 1 is
+  # closest (log-scale MAE, eps = 1) to the ensemble central cases series; within
+  # that param set we then take the stochastic rerun closest (same metric) to the
+  # param set's own median, mapping to ONE re-simulated member id.
+  # The central cases target must use the SAME per-channel central_method as
+  # run_MOSAIC's medoid (control$predictions$central_method[["cases"]]); default
+  # "median" matches the production default. Using the wrong summary here would
+  # pick a different medoid than calibration did.
+  cases_central <- if (identical(cases_central_method, "mean") &&
+                       !is.null(ensemble$cases_mean)) {
+    ensemble$cases_mean
+  } else {
+    ensemble$cases_median
+  }
+  medoid_sel <- .mosaic_reff_select_medoid_member(ca, cases_central, nP, nS)
+  central <- matrix(NA_real_, nrow = nL, ncol = Tn)
+  central_definition <- "medoid_trajectory"
+  m_medoid <- medoid_sel$member_id
+  if (!is.na(m_medoid)) {
+    for (i in seq_len(nL)) central[i, ] <- reff_loc[[i]][m_medoid, ]
+  }
+
+  # --- Per-member peak R_t (explosivity statistic) ----------------------------
+  # For every member take its post-burn-in, floor-gated R_t series (floor-gating
+  # already applied by .cori_reff; burn-in NA-masked here so the IC seeding
+  # transient does not dominate the time-max), compute its TIME-MAX, then reduce
+  # ACROSS members with weighted_quantiles using the member weights.
+  burn_idx <- if (bid >= 1L) seq_len(min(bid, Tn)) else integer(0)
+  peak_prob_cols <- .mosaic_reff_prob_colnames(probs)
+  peak_parts <- vector("list", nL)
+  for (i in seq_len(nL)) {
+    M <- reff_loc[[i]]
+    if (length(burn_idx)) M[, burn_idx] <- NA_real_
+    member_peaks <- apply(M, 1L, function(r) {
+      r <- r[is.finite(r)]
+      if (length(r) == 0L) NA_real_ else max(r)
+    })
+    pq <- weighted_quantiles(member_peaks, member_w, probs)
+    n_eff <- sum(is.finite(member_peaks) & is.finite(member_w) & member_w > 0)
+    row <- data.frame(location = locs[i], stringsAsFactors = FALSE)
+    for (k in seq_along(probs)) row[[peak_prob_cols[k]]] <- pq[k]
+    row$n_members <- n_eff
+    peak_parts[[i]] <- row
+  }
+  # Per-location data.frame (location, q2.5/q50/q97.5, n_members): the explosivity
+  # statistic. Schema pinned with plot_Reff()'s .reff_peak_table().
+  peak_Rt <- do.call(rbind, peak_parts)
+  rownames(peak_Rt) <- NULL
+
+  # --- Fallback: if the medoid could not be mapped, use the member whose own
+  # peak R_t is the posterior-weighted MEDIAN of per-member peaks (method c).
+  if (is.na(m_medoid)) {
+    central_definition <- "member_with_median_peak_Rt"
+    # Choose globally on location 1's per-member peaks.
+    M1 <- reff_loc[[1L]]
+    if (length(burn_idx)) M1[, burn_idx] <- NA_real_
+    peaks1 <- apply(M1, 1L, function(r) {
+      r <- r[is.finite(r)]; if (length(r) == 0L) NA_real_ else max(r) })
+    med_peak <- weighted_quantiles(peaks1, member_w, 0.5)
+    ok <- is.finite(peaks1)
+    if (any(ok) && is.finite(med_peak)) {
+      m_medoid <- which(ok)[which.min(abs(peaks1[ok] - med_peak))]
+      for (i in seq_len(nL)) central[i, ] <- reff_loc[[i]][m_medoid, ]
     }
   }
 
   list(qmats = qmats, central_mat = central, probs = probs,
+       central_definition = central_definition,
+       peak_Rt = peak_Rt,
+       medoid_member = list(member_id = m_medoid,
+                            param_idx = medoid_sel$param_idx,
+                            stoch_idx = medoid_sel$stoch_idx,
+                            seed = if (!is.na(medoid_sel$param_idx))
+                              parameter_seeds[medoid_sel$param_idx] else NA_integer_),
        gate_rel_err_pct = rel_err_pct, gate_rel_err_max = rel_err_max,
        gate_agg_rel_err = agg_rel_err, gate_cor_median = cor_median,
        gate_cor_min = cor_min, gate_max_abs_diff = max_abs,
@@ -627,6 +753,55 @@ calc_Reff <- function(ensemble,
          gamma_1 = as.numeric(base_config$gamma_1)[1],
          gamma_2 = as.numeric(base_config$gamma_2)[1],
          sigma   = as.numeric(base_config$sigma)[1]))
+}
+
+#' Select the medoid re-simulated member (run_MOSAIC criterion)
+#'
+#' Reuses the medoid definition from \code{run_MOSAIC()}: the param set whose
+#' stochastic-MEDIAN \code{reported_cases} at location 1 minimises the log-scale
+#' MAE (eps = 1) to the ensemble central cases series, then -- within that param
+#' set -- the stochastic rerun closest (same metric) to that param set's own
+#' median. Returns the flattened member id \code{m = (s - 1) * nP + p} aligned to
+#' the resim path's member indexing, plus the (param_idx, stoch_idx). On failure
+#' (no central, degenerate arrays) returns \code{member_id = NA} so the caller can
+#' fall back to the median-peak member.
+#'
+#' @param ca Saved \code{cases_array} \code{[nL, T, nP, nS]} (reported_cases).
+#' @param cases_central Ensemble central cases series (\code{[nL, T]} matrix or
+#'   length-T vector); location 1 is used (matching run_MOSAIC()).
+#' @param nP,nS Number of param sets / stochastic reruns.
+#' @keywords internal
+#' @noRd
+.mosaic_reff_select_medoid_member <- function(ca, cases_central, nP, nS) {
+  na_out <- list(member_id = NA_integer_, param_idx = NA_integer_,
+                 stoch_idx = NA_integer_)
+  if (is.null(cases_central)) return(na_out)
+  cen <- if (is.matrix(cases_central)) as.numeric(cases_central[1L, ]) else
+    as.numeric(cases_central)
+  Tn <- dim(ca)[2L]
+  if (length(cen) != Tn) return(na_out)
+  eps <- 1.0
+  # Param-set medoid: median over stochastic at location 1, log-MAE to central.
+  param_dist <- vapply(seq_len(nP), function(p) {
+    med_p <- apply(matrix(ca[1L, , p, , drop = TRUE], nrow = Tn, ncol = nS),
+                   1L, stats::median, na.rm = TRUE)
+    mean(abs(log(med_p + eps) - log(cen + eps)), na.rm = TRUE)
+  }, numeric(1L))
+  if (all(!is.finite(param_dist))) return(na_out)
+  p_med <- which.min(param_dist)
+  # Within-param-set stochastic medoid: the rerun closest to the param median.
+  # NOTE: log-MAE distance vs a raw-space median is asymmetric, so at nS = 2
+  # (median = the two reruns' raw mean) the larger rerun wins an exact tie. Both
+  # are faithful coherent members of the medoid param set, so this only changes
+  # which equivalent member is the headline; it is not a correctness issue.
+  med_p <- apply(matrix(ca[1L, , p_med, , drop = TRUE], nrow = Tn, ncol = nS),
+                 1L, stats::median, na.rm = TRUE)
+  stoch_dist <- vapply(seq_len(nS), function(s) {
+    mean(abs(log(ca[1L, , p_med, s] + eps) - log(med_p + eps)), na.rm = TRUE)
+  }, numeric(1L))
+  s_med <- if (all(!is.finite(stoch_dist))) 1L else which.min(stoch_dist)
+  list(member_id = (s_med - 1L) * nP + p_med,
+       param_idx = p_med, stoch_idx = s_med)
 }
 
 #' Coerce an engine channel to an nL-by-Tn matrix (orientation-robust)
