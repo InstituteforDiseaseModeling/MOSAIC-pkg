@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -38,6 +38,13 @@
       <small>Source: <a href="https://github.com/InstituteforDiseaseModeling/MOSAIC-pkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.59.1" id="mosaic-0591">MOSAIC 0.59.1<a class="anchor" aria-label="anchor" href="#mosaic-0591"></a></h2>
+<div class="section level3">
+<h3 id="plot_reff-readability-0-59-1">plot_Reff readability<a class="anchor" aria-label="anchor" href="#plot_reff-readability-0-59-1"></a></h3>
+<ul><li>The medoid <code>central</code> is a daily series and is very noisy (the instantaneous Cori R_t on one trajectory swings sharply day-to-day); at full line weight it rendered as a solid mass that buried the band. <code><a href="../reference/plot_Reff.html">plot_Reff()</a></code> now draws a centered rolling-mean trend (<code>smooth_days</code>, default 14) as a thin headline line with the raw daily series kept faint behind it, and the cross-member envelope ribbon at higher alpha so it is visible. The per-member daily peak is unchanged (still reported in the annotation). <code>smooth_days = 1</code> restores the raw line.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.59.0" id="mosaic-0590">MOSAIC 0.59.0<a class="anchor" aria-label="anchor" href="#mosaic-0590"></a></h2>
 <div class="section level3">

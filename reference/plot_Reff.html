@@ -21,7 +21,7 @@ median which flattens phase-misaligned peaks toward 1."><meta property="og:image
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,14 @@ median which flattens phase-misaligned peaks toward 1.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_Reff</span><span class="op">(</span><span class="va">reff</span>, show_iqr <span class="op">=</span> <span class="cn">FALSE</span>, title <span class="op">=</span> <span class="cn">NULL</span>, ncol <span class="op">=</span> <span class="cn">NULL</span>, base_size <span class="op">=</span> <span class="fl">12</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_Reff</span><span class="op">(</span></span>
+<span>  <span class="va">reff</span>,</span>
+<span>  show_iqr <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  smooth_days <span class="op">=</span> <span class="fl">14L</span>,</span>
+<span>  title <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  ncol <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  base_size <span class="op">=</span> <span class="fl">12</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -89,6 +96,15 @@ the annotation and caption. Leading warm-up rows with a non-finite
 addition to the faint 95\<!-- % band. Default \code{FALSE} (the plot shows the -->
 medoid line and the faint 95\<!-- % cross-member band only). Retained for -->
 back-compatibility.</p></dd>
+
+
+<dt id="arg-smooth-days">smooth_days<a class="anchor" aria-label="anchor" href="#arg-smooth-days"></a></dt>
+<dd><p>Integer. Centered rolling-mean window (in days) applied to
+the medoid <code>central</code> line for display. The daily Cori R_t on a single
+trajectory is very noisy; smoothing yields a readable trend while the raw
+daily series is kept as a faint background and the true per-member daily
+peak is reported in the annotation. Default <code>14</code>; set <code>1</code> to plot
+the raw daily line only.</p></dd>
 
 
 <dt id="arg-title">title<a class="anchor" aria-label="anchor" href="#arg-title"></a></dt>

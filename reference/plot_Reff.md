@@ -13,7 +13,14 @@ median which flattens phase-misaligned peaks toward 1.
 ## Usage
 
 ``` r
-plot_Reff(reff, show_iqr = FALSE, title = NULL, ncol = NULL, base_size = 12)
+plot_Reff(
+  reff,
+  show_iqr = FALSE,
+  smooth_days = 14L,
+  title = NULL,
+  ncol = NULL,
+  base_size = 12
+)
 ```
 
 ## Arguments
@@ -34,6 +41,15 @@ plot_Reff(reff, show_iqr = FALSE, title = NULL, ncol = NULL, base_size = 12)
 
   Logical. Draw the inner 50\\ addition to the faint 95\\ medoid line
   and the faint 95\\ back-compatibility.
+
+- smooth_days:
+
+  Integer. Centered rolling-mean window (in days) applied to the medoid
+  `central` line for display. The daily Cori R_t on a single trajectory
+  is very noisy; smoothing yields a readable trend while the raw daily
+  series is kept as a faint background and the true per-member daily
+  peak is reported in the annotation. Default `14`; set `1` to plot the
+  raw daily line only.
 
 - title:
 
