@@ -1,3 +1,35 @@
+# MOSAIC 0.56.1
+
+## Bug fixes / refinements (Cori R_eff red-team remediation)
+
+* **Mean-preserving generation-interval kernel.** `.mosaic_generation_time_pmf()`
+  now discretizes via the EpiEstim `discr_si` (Cori 2013 / Cauchemez) formula
+  instead of a naive CDF-difference, which had inflated the effective mean by
+  ~0.5 day (+~10% for the low-shape cholera kernel) and biased R_eff upward
+  during growth. Recovered discrete mean now matches the target (5.400 d). Docs
+  `eq:gen-time-discr` updated to match.
+* **Initial-condition warm-up gate.** `calc_Reff()` / `.cori_reff()` gained an
+  `infectiousness_floor` argument (default 1 effective past infection): a step
+  whose generation-weighted denominator falls below the floor returns NA. This
+  suppresses the spurious R_eff spike at the start of a series (an IC seed gave
+  R≈3600+ at t=2) and cleans deep inter-epidemic troughs. `infectiousness_floor = 0`
+  recovers the pure Cori convention.
+* **Posterior weights indexed by member id.** `.mosaic_reff_member_quantiles()`
+  now looks up a supplied `weights` vector by member id, not per-location
+  position, fixing silent cross-location CI misalignment when a member is dropped
+  in one location. The `weights = NULL` default path is unchanged.
+* **Honest CI/estimand documentation.** Removed the incorrect claim that
+  re-capturing with `line_stride = 1` enables the posterior CI (the trajectory
+  builder cannot currently produce a daily-consecutive series; the CI ribbon
+  requires a Phase-2 builder change). Added an estimand caveat that the kernel is
+  the two-clock (latent + infectious, human-route) generation interval and
+  excludes the environmental-delay clock, so R_eff is a lower-mean-G approximation
+  in waterborne-dominated locations.
+* **Test rigor.** Added a continuous-truth Euler–Lotka regression (Gamma-MGF
+  value, independent of the discretized kernel — catches kernel-mean bias the
+  prior self-consistency test could not), plus internal-NA and t_min>1 CI-window
+  tests. `test-reproductive_numbers.R` now 75 expectations, all passing.
+
 # MOSAIC 0.56.0
 
 ## New features

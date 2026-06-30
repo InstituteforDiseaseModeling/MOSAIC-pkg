@@ -95,11 +95,26 @@ get_generation_time_distribution <- function(PATHS, mean_generation_time) {
 #'   \item shape \eqn{s = E^2/V}, rate \eqn{r = E/V}.
 #' }
 #'
-#' The pmf is tabulated over daily bins \eqn{d = 1 \ldots \texttt{max\_days}} as
-#' the Gamma-CDF difference \eqn{F(d) - F(d-1)} and renormalized so it sums to 1
-#' after truncation. This is the kernel \eqn{g(\Delta t)} consumed by the Cori
-#' renewal estimator in \code{\link{calc_Reff}}. It is deliberately separate from
-#' the legacy fixed \eqn{\mathrm{Gamma}(0.5, 0.1)} CSV path of
+#' The continuous \eqn{\mathrm{Gamma}(s, r)} is discretized onto daily bins with
+#' the canonical \strong{mean-preserving} (Cori et al. 2013 / Cauchemez)
+#' discretization used by EpiEstim's \code{discr_si}, NOT a naive Gamma-CDF
+#' difference. A plain CDF difference \eqn{F(d) - F(d-1)} over \eqn{[d-1, d]}
+#' assigns each unit interval's mass to its right endpoint \eqn{d}, which shifts
+#' the discretized mean to \eqn{\approx \mathbb{E}[\mathcal{G}] + 0.5} and inflates
+#' the renewal \eqn{R} in the growth phase (a ~3-10\% upward bias, worsening for
+#' low-shape / heavily right-skewed kernels). The mean-preserving form instead
+#' places mass so that \eqn{\sum_d d\,g(d) = \mathbb{E}[\mathcal{G}]} (the target
+#' mean, not \eqn{+0.5}), with \eqn{g} at lag 0 forced to 0 (Cori convention).
+#' Concretely, on integer support \eqn{d = 0, 1, \ldots} (using
+#' \eqn{a = ((\mu-1)/\varsigma)^2}, \eqn{b = \varsigma^2/(\mu-1)},
+#' \eqn{\mu = \mathbb{E}[\mathcal{G}]}, \eqn{\varsigma = \sqrt{\mathbb{V}[\mathcal{G}]}},
+#' \eqn{F_a = } CDF of \eqn{\mathrm{Gamma}(a, \mathrm{scale}=b)}):
+#' \deqn{w(d) = d\,F_a(d) + (d-2)\,F_a(d-2) - 2(d-1)\,F_a(d-1)
+#'   + ab\,[\,2 F_{a+1}(d-1) - F_{a+1}(d-2) - F_{a+1}(d)\,].}
+#' The mass is then truncated to \eqn{d = 1 \ldots \texttt{max\_days}} and
+#' renormalized so it sums to 1. This is the kernel \eqn{g(\Delta t)} consumed by
+#' the Cori renewal estimator in \code{\link{calc_Reff}}. It is deliberately
+#' separate from the legacy fixed \eqn{\mathrm{Gamma}(0.5, 0.1)} CSV path of
 #' \code{get_generation_time_distribution()} (left fully intact).
 #'
 #' @param iota Numeric scalar > 0. Latent-period rate (\eqn{1/\iota} = mean latent days).
@@ -143,14 +158,37 @@ get_generation_time_distribution <- function(PATHS, mean_generation_time) {
     sigma * (1 - sigma) * (1 / gamma_1 - 1 / gamma_2)^2
   V_G   <- 1 / iota^2 + V_inf
 
-  # Moment-matched Gamma(shape s, rate r). doc eq:gamma-shape-rate.
+  # Moment-matched Gamma(shape s, rate r) of the TARGET generation interval.
+  # doc eq:gamma-shape-rate. Kept as provenance attributes below.
   s <- E_G^2 / V_G
   r <- E_G / V_G
 
-  # Daily-binned pmf via the Gamma CDF difference over [d-1, d], d = 1..max_days.
-  d   <- seq_len(max_days)
-  pmf <- stats::pgamma(d, shape = s, rate = r) -
-    stats::pgamma(d - 1, shape = s, rate = r)
+  # Mean-preserving daily discretization (Cori et al. 2013 / Cauchemez; the form
+  # used by EpiEstim::discr_si), NOT a naive CDF difference. A plain F(d)-F(d-1)
+  # over [d-1, d] shifts the discretized mean to ~E[G]+0.5 day and inflates the
+  # renewal R in growth; this form places mass so the discretized mean equals
+  # E[G] exactly, with g at lag 0 forced to 0 (Cori convention).
+  #
+  # Requires mu = E[G] > 1; cholera generation intervals (~5 days) satisfy this,
+  # but guard explicitly so a degenerate parameter set fails loudly.
+  sd_G <- sqrt(V_G)
+  if (!is.finite(E_G) || E_G <= 1 || !is.finite(sd_G) || sd_G <= 0)
+    stop(".mosaic_generation_time_pmf: mean-preserving discretization requires ",
+         "E[G] > 1 and SD[G] > 0 (got E[G]=", signif(E_G, 4), ", SD[G]=",
+         signif(sd_G, 4), "); check iota/gamma_1/gamma_2/sigma")
+
+  a <- ((E_G - 1) / sd_G)^2
+  b <- sd_G^2 / (E_G - 1)
+  cdf <- function(k, shape) stats::pgamma(k, shape = shape, scale = b)
+
+  # Evaluate the discretization over integer support d = 0 .. max_days; w(0) = 0
+  # by construction, and d = 1..max_days are the daily masses.
+  d   <- 0:max_days
+  w   <- d * cdf(d, a) + (d - 2) * cdf(d - 2, a) - 2 * (d - 1) * cdf(d - 1, a) +
+    a * b * (2 * cdf(d - 1, a + 1) - cdf(d - 2, a + 1) - cdf(d, a + 1))
+  w   <- pmax(0, w)
+  # Drop lag 0 (forced to 0) and keep d = 1..max_days.
+  pmf <- w[-1L]
 
   total <- sum(pmf)
   if (!is.finite(total) || total <= 0)

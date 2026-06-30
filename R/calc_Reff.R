@@ -41,19 +41,35 @@
 #' @param g Numeric vector. The normalized generation-interval kernel pmf
 #'   (\code{g[k]} = probability the interval is \code{k} steps). Must be finite
 #'   and non-negative with positive sum; it is renormalized defensively.
+#' @param infectiousness_floor Numeric scalar \eqn{\ge 0}. Minimum
+#'   generation-weighted past infectiousness (in effective past infections)
+#'   required to report \eqn{R_{t}}. Steps whose denominator is below this floor
+#'   return \code{NA} rather than an explosive ratio. This guards two failure
+#'   modes seen on real series: (i) an initial-condition seed at \eqn{t=1}
+#'   followed by a tiny window denominator (which otherwise yields
+#'   \eqn{R \approx 10^{3}}), and (ii) deep inter-epidemic troughs where the
+#'   denominator is \eqn{\approx 0} (which otherwise yields meaningless
+#'   \eqn{R \approx 0.01}). Default \code{1} (require ~1 effective past
+#'   infection); set \code{0} to recover the pure Cori convention (only the
+#'   non-positive-denominator guard).
 #'
 #' @return A numeric vector the same length as \code{incidence} giving
-#'   \eqn{R_{t}}, with \code{NA} at warm-up steps with an empty/zero denominator.
+#'   \eqn{R_{t}}, with \code{NA} at warm-up steps with an empty window and at any
+#'   step whose generation-weighted denominator is below
+#'   \code{infectiousness_floor}.
 #'
 #' @keywords internal
 #' @noRd
-.cori_reff <- function(incidence, g) {
+.cori_reff <- function(incidence, g, infectiousness_floor = 1) {
   if (!is.numeric(incidence))
     stop(".cori_reff: incidence must be numeric")
   if (!is.numeric(g) || length(g) < 1L)
     stop(".cori_reff: g must be a non-empty numeric vector")
   if (any(!is.finite(g)) || any(g < 0))
     stop(".cori_reff: g must be finite and non-negative")
+  if (!is.numeric(infectiousness_floor) || length(infectiousness_floor) != 1L ||
+      !is.finite(infectiousness_floor) || infectiousness_floor < 0)
+    stop(".cori_reff: infectiousness_floor must be a single finite scalar >= 0")
   gsum <- sum(g)
   if (!is.finite(gsum) || gsum <= 0)
     stop(".cori_reff: g must have positive total mass")
@@ -72,7 +88,9 @@
     if (max_lag < 1L) next                       # warm-up: empty window
     lags <- seq_len(max_lag)
     denom <- sum(g[lags] * inc_hist[t - lags])
-    if (!is.finite(denom) || denom <= 0) next     # empty/zero past infectiousness
+    # Infectiousness-floor gate: below ~1 effective past infection the ratio is
+    # numerically meaningless (IC seed spikes -> R~1e3; deep troughs -> R~0.01).
+    if (!is.finite(denom) || denom <= 0 || denom < infectiousness_floor) next
     num <- incidence[t]
     if (!is.finite(num)) next
     out[t] <- num / denom
@@ -100,6 +118,20 @@
 #' is directly comparable to a surveillance-derived R_eff computed the same way;
 #' it is \emph{not} an independent first-principles basic reproductive number.
 #'
+#' \strong{Estimand limitation (two-clock generation interval).} The kernel
+#' \eqn{g} is the \strong{two-clock} (latent + infectious, human-route)
+#' generation interval, \eqn{\mathcal{G} = 1/\iota + 1/\gamma_{\mathrm{eff}}}. The
+#' documented \strong{three-clock} extension that adds an environmental-survival
+#' delay \eqn{1/\delta_{jt}} (04-model-description.Rmd, "Generation-time
+#' distribution (latent + infectious + environmental delay)") is deliberately
+#' \emph{excluded} here. Consequently, in waterborne-dominated locations where the
+#' environmental pathway carries much of the transmission, this estimator uses a
+#' shorter mean generation time than the true infection-to-infection interval and
+#' is therefore a \strong{lower-mean-\eqn{\mathcal{G}} approximation}: it will read
+#' slightly closer to 1 (less extreme in either direction) than a three-clock
+#' kernel would. The pooled \code{incidence} series itself does include both the
+#' human and environmental S->E routes; only the kernel timing is two-clock.
+#'
 #' @param ensemble Either a \code{mosaic_trajectories} artifact (the object
 #'   \code{calc_model_ensemble()} attaches as \code{$trajectories} and
 #'   \code{.mosaic_persist_trajectory_artifact()} writes to
@@ -117,6 +149,13 @@
 #'   trajectory \code{lines}.
 #' @param probs Numeric vector of credible-interval quantile probabilities.
 #'   Default \code{c(0.025, 0.25, 0.5, 0.75, 0.975)}.
+#' @param infectiousness_floor Numeric scalar \eqn{\ge 0}. Minimum
+#'   generation-weighted past infectiousness (effective past infections) required
+#'   to report \eqn{R_{t}} at a step; below it the cell is \code{NA}. Guards
+#'   initial-condition seed spikes (which otherwise yield \eqn{R \approx 10^{3}})
+#'   and deep inter-epidemic troughs (\eqn{R \approx 0.01}). Default \code{1}.
+#'   Applied identically to the central (medoid) series and to every per-member
+#'   posterior series. Set \code{0} for the pure Cori convention.
 #' @param verbose Logical; emit progress messages. Default \code{TRUE}.
 #'
 #' @return A tidy long \code{data.frame} (\code{reproductive_numbers} schema) with
@@ -148,6 +187,18 @@
 #' config across members (the thinned lines do not carry per-member kernel draws;
 #' documented approximation, plan section G.2).
 #'
+#' \strong{The posterior CI is currently unavailable on production-default
+#' artifacts.} The trajectory-capture grid in \code{calc_model_ensemble()} writes
+#' \code{lines} on a stride that does not yield a daily-consecutive run, so the
+#' \code{unavailable_strided_lines} path is taken in production and only the
+#' \code{central} (medoid) series is populated. This is \strong{not} fixable by
+#' merely re-capturing with a finer stride from the caller: the builder grid
+#' formula yields an empty-or-still-strided set at every stride setting, so the
+#' daily-consecutive precondition is unreachable until the capture grid itself is
+#' changed. Restoring a usable posterior CI requires a \strong{Phase-2 fix to the
+#' trajectory-capture grid} in \code{calc_model_ensemble()}; do not expect a
+#' \code{line_stride = 1} re-capture to enable it.
+#'
 #' @references Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework
 #'   and software to estimate time-varying reproduction numbers during epidemics.
 #'   American Journal of Epidemiology 178(9):1505-1512.
@@ -159,6 +210,7 @@ calc_Reff <- function(ensemble,
                       max_days = 56L,
                       weights  = NULL,
                       probs    = c(0.025, 0.25, 0.5, 0.75, 0.975),
+                      infectiousness_floor = 1,
                       verbose  = TRUE) {
 
   caveat <- paste0("Cori R_eff computed on SIMULATED infection incidence: a ",
@@ -187,6 +239,9 @@ calc_Reff <- function(ensemble,
   if (!is.numeric(probs) || length(probs) == 0L || any(!is.finite(probs)) ||
       any(probs < 0) || any(probs > 1))
     stop("calc_Reff: `probs` must be finite numerics in [0, 1].")
+  if (!is.numeric(infectiousness_floor) || length(infectiousness_floor) != 1L ||
+      !is.finite(infectiousness_floor) || infectiousness_floor < 0)
+    stop("calc_Reff: `infectiousness_floor` must be a single finite scalar >= 0.")
 
   # --- Kernel (shared across locations within a config) ----------------------
   g <- .mosaic_generation_time_pmf(
@@ -212,7 +267,8 @@ calc_Reff <- function(ensemble,
 
   central_mat <- matrix(NA_real_, nrow = nL, ncol = Tn)
   for (i in seq_len(nL))
-    central_mat[i, ] <- .cori_reff(as.numeric(inc_med[i, ]), g)
+    central_mat[i, ] <- .cori_reff(as.numeric(inc_med[i, ]), g,
+                                   infectiousness_floor = infectiousness_floor)
 
   # --- Date axis -------------------------------------------------------------
   d0    <- tryCatch(as.Date(traj$date_start), error = function(e) NA)
@@ -244,14 +300,17 @@ calc_Reff <- function(ensemble,
       ci_source <- "unavailable_strided_lines"
       warning("calc_Reff: per-member trajectory `lines` are time-strided ",
               "(stride != 1 day), on which the daily Cori renewal is undefined; ",
-              "returning point estimate with NA credible-interval columns. ",
-              "(Re-capture with line_stride = 1 to enable the posterior CI.)",
+              "returning point estimate with NA credible-interval columns. The ",
+              "posterior CI is unavailable on production-default artifacts and ",
+              "requires a Phase-2 fix to the trajectory-capture grid in ",
+              "calc_model_ensemble() (a finer line_stride from the caller does ",
+              "NOT enable it).",
               call. = FALSE)
     } else {
       qmats <- .mosaic_reff_member_quantiles(
         inc_lines = inc_lines, g = g, loc_names = loc_names,
         t_present = t_present, nL = nL, Tn = Tn, probs = probs,
-        weights = weights)
+        weights = weights, infectiousness_floor = infectiousness_floor)
     }
   }
 
@@ -315,14 +374,31 @@ calc_Reff <- function(ensemble,
 #' \code{g} is held fixed at the medoid config across members (documented
 #' approximation, plan section G.2).
 #'
+#' @param weights Optional named/positional global per-member weight vector. When
+#'   supplied it is indexed by \strong{member id}, not by per-location position:
+#'   a named vector (\code{names(weights)} = member ids) is looked up by name; an
+#'   unnamed vector is assumed indexed by \code{member_id} value (\code{weights[
+#'   as.character(id)]} / \code{weights[id]}). This is required because the
+#'   \code{is.finite} member set can differ across locations (a member dropped in
+#'   one location shifts every later position), so position indexing silently
+#'   mis-aligns weights to the wrong members. \code{NULL} (default) uses each
+#'   member's own carried \code{mm$weight[1]}, which is already member-aligned.
+#' @param infectiousness_floor Passed through to \code{\link{.cori_reff}}.
+#'
 #' @keywords internal
 #' @noRd
 .mosaic_reff_member_quantiles <- function(inc_lines, g, loc_names, t_present,
-                                          nL, Tn, probs, weights = NULL) {
+                                          nL, Tn, probs, weights = NULL,
+                                          infectiousness_floor = 1) {
   qmats <- array(NA_real_, dim = c(nL, Tn, length(probs)))
   # t_present is a daily-consecutive run but may not start at 1 or cover all Tn;
   # only those columns get a CI (others stay NA).
   t_min <- min(t_present); t_max <- max(t_present)
+
+  # Resolve a global weights lookup keyed by member id (NOT position). Named
+  # vectors match on names(weights); unnamed vectors are treated as indexed by
+  # the integer member_id value.
+  w_named   <- !is.null(weights) && !is.null(names(weights))
   for (i in seq_len(nL)) {
     li <- inc_lines[inc_lines$location == loc_names[i], , drop = FALSE]
     if (nrow(li) == 0L) next
@@ -332,15 +408,22 @@ calc_Reff <- function(ensemble,
     reff_by_member <- matrix(NA_real_, nrow = length(members), ncol = n_present)
     mw <- numeric(length(members))
     for (mi in seq_along(members)) {
-      mm  <- li[li$member_id == members[mi], , drop = FALSE]
+      id  <- members[mi]
+      mm  <- li[li$member_id == id, , drop = FALSE]
       ord <- order(mm$t)
       mm  <- mm[ord, , drop = FALSE]
       # Place into a dense daily vector indexed by (t - t_min + 1).
       inc_vec <- rep(NA_real_, n_present)
       inc_vec[mm$t - t_min + 1L] <- mm$value
-      reff_by_member[mi, ] <- .cori_reff(inc_vec, g)
-      w <- if (!is.null(weights)) weights[mi] else mm$weight[1]
-      mw[mi] <- if (length(w)) w[1] else NA_real_
+      reff_by_member[mi, ] <- .cori_reff(inc_vec, g,
+                                         infectiousness_floor = infectiousness_floor)
+      # Weight lookup keyed by member id, never by position.
+      w <- if (!is.null(weights)) {
+        if (w_named) weights[as.character(id)] else weights[id]
+      } else {
+        mm$weight[1]
+      }
+      mw[mi] <- if (length(w) && is.finite(w[1])) w[1] else NA_real_
     }
     # Reduce per present-time column.
     for (k in seq_len(n_present)) {

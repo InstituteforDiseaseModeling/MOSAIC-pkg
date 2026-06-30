@@ -10,6 +10,7 @@ calc_Reff(
   max_days = 56L,
   weights = NULL,
   probs = c(0.025, 0.25, 0.5, 0.75, 0.975),
+  infectiousness_floor = 1,
   verbose = TRUE
 )
 }
@@ -35,6 +36,14 @@ trajectory \code{lines}.}
 
 \item{probs}{Numeric vector of credible-interval quantile probabilities.
 Default \code{c(0.025, 0.25, 0.5, 0.75, 0.975)}.}
+
+\item{infectiousness_floor}{Numeric scalar \eqn{\ge 0}. Minimum
+generation-weighted past infectiousness (effective past infections) required
+to report \eqn{R_{t}} at a step; below it the cell is \code{NA}. Guards
+initial-condition seed spikes (which otherwise yield \eqn{R \approx 10^{3}})
+and deep inter-epidemic troughs (\eqn{R \approx 0.01}). Default \code{1}.
+Applied identically to the central (medoid) series and to every per-member
+posterior series. Set \code{0} for the pure Cori convention.}
 
 \item{verbose}{Logical; emit progress messages. Default \code{TRUE}.}
 }
@@ -70,6 +79,20 @@ computed on \emph{simulated} incidence, it describes the model trajectory and
 is directly comparable to a surveillance-derived R_eff computed the same way;
 it is \emph{not} an independent first-principles basic reproductive number.
 
+\strong{Estimand limitation (two-clock generation interval).} The kernel
+\eqn{g} is the \strong{two-clock} (latent + infectious, human-route)
+generation interval, \eqn{\mathcal{G} = 1/\iota + 1/\gamma_{\mathrm{eff}}}. The
+documented \strong{three-clock} extension that adds an environmental-survival
+delay \eqn{1/\delta_{jt}} (04-model-description.Rmd, "Generation-time
+distribution (latent + infectious + environmental delay)") is deliberately
+\emph{excluded} here. Consequently, in waterborne-dominated locations where the
+environmental pathway carries much of the transmission, this estimator uses a
+shorter mean generation time than the true infection-to-infection interval and
+is therefore a \strong{lower-mean-\eqn{\mathcal{G}} approximation}: it will read
+slightly closer to 1 (less extreme in either direction) than a three-clock
+kernel would. The pooled \code{incidence} series itself does include both the
+human and environmental S->E routes; only the kernel timing is two-clock.
+
 \strong{Point estimate (central).} The headline per-location series is the
 renewal estimator applied to \code{summary$incidence$median} (the full daily
 weighted-median incidence), consistent with every other medoid-based diagnostic.
@@ -86,6 +109,18 @@ daily-consecutive the quantile columns are returned as \code{NA} with
 fabricating a CI from sub-daily data. The kernel is held fixed at the medoid
 config across members (the thinned lines do not carry per-member kernel draws;
 documented approximation, plan section G.2).
+
+\strong{The posterior CI is currently unavailable on production-default
+artifacts.} The trajectory-capture grid in \code{calc_model_ensemble()} writes
+\code{lines} on a stride that does not yield a daily-consecutive run, so the
+\code{unavailable_strided_lines} path is taken in production and only the
+\code{central} (medoid) series is populated. This is \strong{not} fixable by
+merely re-capturing with a finer stride from the caller: the builder grid
+formula yields an empty-or-still-strided set at every stride setting, so the
+daily-consecutive precondition is unreachable until the capture grid itself is
+changed. Restoring a usable posterior CI requires a \strong{Phase-2 fix to the
+trajectory-capture grid} in \code{calc_model_ensemble()}; do not expect a
+\code{line_stride = 1} re-capture to enable it.
 }
 \references{
 Cori A, Ferguson NM, Fraser C, Cauchemez S (2013). A new framework
