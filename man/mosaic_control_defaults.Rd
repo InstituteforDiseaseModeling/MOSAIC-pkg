@@ -39,7 +39,8 @@ mosaic_control_defaults(
 \item \code{sample_mu_j}: Sample recovery rate (default: TRUE)
 \item \code{sample_iota}: Sample importation rate (default: TRUE)
 \item \code{sample_gamma_2}: Sample second dose efficacy (default: TRUE)
-\item \code{sample_alpha_1}: Sample first dose efficacy (default: TRUE)
+\item \code{sample_alpha_1}: Sample within-metapop population mixing exponent (default: TRUE)
+\item \code{sample_alpha_2}: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)
 \item ... (see \code{mosaic_control_defaults()} for complete list of 38 parameters)
 }}
 
@@ -133,6 +134,18 @@ remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 \item \code{format}: Output format, "parquet" or "csv" (default: "parquet")
 \item \code{compression}: Compression algorithm (default: "zstd")
 \item \code{compression_level}: Compression level (default: 3L)
+\item \code{persist_ensemble_arrays}: Retain the dense 4-D
+\code{cases_array}/\code{deaths_array} in the persisted ensemble RDS
+files (\code{ensemble_candidate.rds}, \code{ensemble_optimized.rds},
+\code{subset_opt.rds}, \code{medoid_ensemble.rds}). Default \code{FALSE}
+strips the arrays at save time so the on-disk artifacts are small
+(~tens of KB); every light field (central tendencies, envelopes,
+weights, seeds, obs, metadata) is preserved and all standard consumers
+(plotting, OCV, rolling CV) work unchanged. Set \code{TRUE} for a
+re-analysable raw archive (e.g. re-running subset optimization or the
+R_eff posterior-resimulation CI path from the saved file). The
+in-memory object used during the run is never affected (default:
+\code{FALSE}).
 }}
 
 \item{paths}{List of path and output settings (file management). Default is:

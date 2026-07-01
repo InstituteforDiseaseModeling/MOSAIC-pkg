@@ -314,6 +314,15 @@ add_reproductive_numbers <- function(output_dir,
     stop("recompute_ci: missing control.json at ", ctl_path)
 
   ens    <- readRDS(ens_path)
+  if (is.null(ens$cases_array)) {
+    stop("recompute_ci: ensemble_candidate.rds was saved WITHOUT the dense ",
+         "cases_array (run_MOSAIC default control$io$persist_ensemble_arrays = ",
+         "FALSE strips the 4-D arrays at save time). The posterior ",
+         "re-simulation CI path requires the per-member arrays. Re-run the ",
+         "calibration with control$io$persist_ensemble_arrays = TRUE, or use ",
+         "the trajectories-based CI path (2_calibration/trajectories_ensemble.rds).",
+         call. = FALSE)
+  }
   priors <- jsonlite::fromJSON(pri_path, simplifyVector = FALSE)
   ctl    <- jsonlite::fromJSON(ctl_path)
   control <- if (!is.null(ctl$control)) ctl$control else ctl

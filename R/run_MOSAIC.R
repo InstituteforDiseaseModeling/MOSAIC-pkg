@@ -2407,6 +2407,18 @@ run_MOSAIC <- function(config,
   log_msg("Ensemble central tendency: cases=%s, deaths=%s",
           central_method[["cases"]], central_method[["deaths"]])
 
+  # Whether to retain the dense 4-D cases_array/deaths_array in the *persisted*
+  # ensemble RDS files. Default FALSE => arrays are stripped at save time (via
+  # .mosaic_ensemble_drop_arrays()) so the on-disk artifacts are small (~tens of
+  # KB) and travel in git; every light field (central tendencies, envelopes,
+  # weights, seeds, obs, metadata) is preserved and all current consumers work.
+  # The in-memory object is NEVER stripped -- only the copy handed to saveRDS --
+  # so medoid selection, subset optimization, trajectory reduction and
+  # implied-CFR (which read the live object) are unaffected. Set TRUE for a
+  # re-analysable raw archive (e.g. re-running subset optimization or the R_eff
+  # posterior-resimulation CI path from the saved file).
+  .persist_arrays <- isTRUE(control$io$persist_ensemble_arrays)
+
   # Initialize metric variables (populated after ensemble is built/resolved)
   r2_cases_ensemble          <- NA_real_
   r2_deaths_ensemble         <- NA_real_
@@ -2517,7 +2529,9 @@ run_MOSAIC <- function(config,
 
     if (!is.null(ensemble)) {
       ensemble_rds <- file.path(dirs$calibration, "ensemble_candidate.rds")
-      saveRDS(.mosaic_stamp_artifact(ensemble), ensemble_rds)
+      saveRDS(.mosaic_stamp_artifact(
+                if (.persist_arrays) ensemble else .mosaic_ensemble_drop_arrays(ensemble)),
+              ensemble_rds)
       log_msg("Saved 2_calibration/ensemble_candidate.rds")
 
       # Persist the engine spatial-structure arrays for the "spatial" figure
@@ -2634,15 +2648,27 @@ run_MOSAIC <- function(config,
       }
 
       # Save the optimized ensemble. The tier ensemble is already on disk as
-      # ensemble_candidate.rds from the earlier ensemble-build block.
-      saveRDS(.mosaic_stamp_artifact(subset_opt$ensemble_optimized),
+      # ensemble_candidate.rds from the earlier ensemble-build block. Arrays are
+      # stripped from the on-disk copy unless persist_ensemble_arrays=TRUE; the
+      # in-memory subset_opt (used below) keeps its arrays.
+      saveRDS(.mosaic_stamp_artifact(
+                if (.persist_arrays) subset_opt$ensemble_optimized
+                else .mosaic_ensemble_drop_arrays(subset_opt$ensemble_optimized)),
               file.path(dirs$calibration, "ensemble_optimized.rds"))
       log_msg("Saved 2_calibration/ensemble_optimized.rds")
 
       # Persist the full subset-optimization result (Phase 1b / G4) so the
       # renderer can reconstruct plot_model_subset_optimization() from disk.
+      # subset_opt$ensemble_optimized re-embeds the heavy arrays, so strip them
+      # from a shallow COPY of subset_opt before this save (never mutate the
+      # in-memory subset_opt used later) unless persist_ensemble_arrays=TRUE.
       tryCatch({
-        saveRDS(.mosaic_stamp_artifact(subset_opt),
+        subset_opt_to_save <- subset_opt
+        if (!.persist_arrays) {
+          subset_opt_to_save$ensemble_optimized <-
+            .mosaic_ensemble_drop_arrays(subset_opt_to_save$ensemble_optimized)
+        }
+        saveRDS(.mosaic_stamp_artifact(subset_opt_to_save),
                 file.path(dirs$calibration, "subset_opt.rds"))
         log_msg("Saved 2_calibration/subset_opt.rds")
       }, error = function(e) log_warn("subset_opt.rds save failed: %s", e$message))
@@ -2698,6 +2724,27 @@ run_MOSAIC <- function(config,
                                auto_unbox = TRUE, digits = NA)
         }
       }
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # ensemble_optimized.rds fallback: MOSAIC-OCV (run_scenarios.R) hardcodes the
+  # filename 2_calibration/ensemble_optimized.rds. When subset optimization is
+  # disabled (control$predictions$optimize_subset != TRUE) or produced an empty
+  # subset, the block above never wrote that file. Fall back to the candidate
+  # ensemble so ensemble_optimized.rds always exists whenever an ensemble was
+  # built. Slimmed under the same persist_ensemble_arrays flag; non-fatal.
+  if (!is.null(ensemble)) {
+    ensemble_opt_path <- file.path(dirs$calibration, "ensemble_optimized.rds")
+    if (!file.exists(ensemble_opt_path)) {
+      tryCatch({
+        saveRDS(.mosaic_stamp_artifact(
+                  if (.persist_arrays) ensemble
+                  else .mosaic_ensemble_drop_arrays(ensemble)),
+                ensemble_opt_path)
+        log_msg("Saved 2_calibration/ensemble_optimized.rds (fallback: candidate ensemble; subset optimization skipped or empty)")
+      }, error = function(e)
+        log_warn("ensemble_optimized.rds fallback save failed: %s", e$message))
     }
   }
 
@@ -3056,8 +3103,12 @@ run_MOSAIC <- function(config,
         # the medoid was the one ensemble plot exposed to accidental local
         # re-simulation.
         medoid_ensemble <- .mosaic_stamp_artifact(medoid_ensemble)
+        # Strip arrays from the on-disk copy only (unless persist_ensemble_arrays
+        # =TRUE); the in-memory medoid_ensemble keeps its arrays for the metrics
+        # computed just below (though .central() reads only light fields).
         tryCatch({
-          saveRDS(medoid_ensemble,
+          saveRDS(if (.persist_arrays) medoid_ensemble
+                  else .mosaic_ensemble_drop_arrays(medoid_ensemble),
                   file.path(dirs$calibration, "medoid_ensemble.rds"))
           log_msg("Saved 2_calibration/medoid_ensemble.rds")
         }, error = function(e) log_warn("medoid_ensemble.rds save failed: %s", e$message))
@@ -3574,6 +3625,18 @@ run_mosaic <- run_MOSAIC
 #'     \item \code{format}: Output format, "parquet" or "csv" (default: "parquet")
 #'     \item \code{compression}: Compression algorithm (default: "zstd")
 #'     \item \code{compression_level}: Compression level (default: 3L)
+#'     \item \code{persist_ensemble_arrays}: Retain the dense 4-D
+#'       \code{cases_array}/\code{deaths_array} in the persisted ensemble RDS
+#'       files (\code{ensemble_candidate.rds}, \code{ensemble_optimized.rds},
+#'       \code{subset_opt.rds}, \code{medoid_ensemble.rds}). Default \code{FALSE}
+#'       strips the arrays at save time so the on-disk artifacts are small
+#'       (~tens of KB); every light field (central tendencies, envelopes,
+#'       weights, seeds, obs, metadata) is preserved and all standard consumers
+#'       (plotting, OCV, rolling CV) work unchanged. Set \code{TRUE} for a
+#'       re-analysable raw archive (e.g. re-running subset optimization or the
+#'       R_eff posterior-resimulation CI path from the saved file). The
+#'       in-memory object used during the run is never affected (default:
+#'       \code{FALSE}).
 #'   }
 #'
 #' @param paths List of path and output settings (file management). Default is:
@@ -3871,7 +3934,8 @@ mosaic_control_defaults <- function(calibration = NULL,
     load_method = "streaming",         # "streaming" (memory-safe) or "rbind" (legacy)
     load_chunk_size = 5000L,           # Files per chunk when loading many small parquets
     save_simresults = FALSE,           # Save raw per-(sim,iter,j,t) output for validation
-    verbose_weights = FALSE            # Print detailed weight calculation diagnostics
+    verbose_weights = FALSE,           # Print detailed weight calculation diagnostics
+    persist_ensemble_arrays = FALSE    # Retain dense cases_array/deaths_array in persisted ensemble RDS files (FALSE => stripped at save; small artifacts)
   )
 
   # Default logging settings

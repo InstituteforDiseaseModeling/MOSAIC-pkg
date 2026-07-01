@@ -41,6 +41,24 @@
   "expected_cases", "disease_deaths"
 )
 
+#' Drop the heavy 4-D arrays from a mosaic_ensemble (for lightweight persistence)
+#'
+#' Returns a copy of a \code{mosaic_ensemble} object with the dense
+#' \code{cases_array} and \code{deaths_array} 4-D arrays set to \code{NULL},
+#' preserving the S3 class and every light field (central tendencies, envelopes,
+#' weights, seeds, obs, metadata). Idempotent: safe to call when the arrays are
+#' already \code{NULL}. Used at \code{run_MOSAIC()} save time so persisted
+#' ensemble RDS files are small; the in-memory object is never mutated.
+#'
+#' @param ens A \code{mosaic_ensemble} object.
+#' @return The same object with \code{cases_array}/\code{deaths_array} nulled.
+#' @keywords internal
+.mosaic_ensemble_drop_arrays <- function(ens) {
+  ens$cases_array  <- NULL
+  ens$deaths_array <- NULL
+  ens
+}
+
 .mosaic_ensemble_ram_projection_gb <- function(n_locations, n_time_points,
                                                n_param_sets, n_stoch,
                                                n_capture_channels = 0L,
