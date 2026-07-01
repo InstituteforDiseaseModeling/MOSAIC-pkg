@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.59.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -116,7 +116,8 @@ calibration strategy, parameter sampling, parallelization, and output options.</
 <li><p><code>sample_mu_j</code>: Sample recovery rate (default: TRUE)</p></li>
 <li><p><code>sample_iota</code>: Sample importation rate (default: TRUE)</p></li>
 <li><p><code>sample_gamma_2</code>: Sample second dose efficacy (default: TRUE)</p></li>
-<li><p><code>sample_alpha_1</code>: Sample first dose efficacy (default: TRUE)</p></li>
+<li><p><code>sample_alpha_1</code>: Sample within-metapop population mixing exponent (default: TRUE)</p></li>
+<li><p><code>sample_alpha_2</code>: Sample frequency-dependence degree (default: FALSE; pinned, weakly identified)</p></li>
 <li><p>... (see <code>mosaic_control_defaults()</code> for complete list of 38 parameters)</p></li>
 </ul></dd>
 
@@ -209,6 +210,18 @@ remote Dask/Coiled worker count (that is <code>dask_spec$n_workers</code>).</p><
 <dd><p>List of I/O settings (output format). Default is:</p><ul><li><p><code>format</code>: Output format, "parquet" or "csv" (default: "parquet")</p></li>
 <li><p><code>compression</code>: Compression algorithm (default: "zstd")</p></li>
 <li><p><code>compression_level</code>: Compression level (default: 3L)</p></li>
+<li><p><code>persist_ensemble_arrays</code>: Retain the dense 4-D
+<code>cases_array</code>/<code>deaths_array</code> in the persisted ensemble RDS
+files (<code>ensemble_candidate.rds</code>, <code>ensemble_optimized.rds</code>,
+<code>subset_opt.rds</code>, <code>medoid_ensemble.rds</code>). Default <code>FALSE</code>
+strips the arrays at save time so the on-disk artifacts are small
+(~tens of KB); every light field (central tendencies, envelopes,
+weights, seeds, obs, metadata) is preserved and all standard consumers
+(plotting, OCV, rolling CV) work unchanged. Set <code>TRUE</code> for a
+re-analysable raw archive (e.g. re-running subset optimization or the
+R_eff posterior-resimulation CI path from the saved file). The
+in-memory object used during the run is never affected (default:
+<code>FALSE</code>).</p></li>
 </ul></dd>
 
 

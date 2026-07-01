@@ -87,7 +87,11 @@ mosaic_control_defaults(
 
   - `sample_gamma_2`: Sample second dose efficacy (default: TRUE)
 
-  - `sample_alpha_1`: Sample first dose efficacy (default: TRUE)
+  - `sample_alpha_1`: Sample within-metapop population mixing exponent
+    (default: TRUE)
+
+  - `sample_alpha_2`: Sample frequency-dependence degree (default:
+    FALSE; pinned, weakly identified)
 
   - ... (see `mosaic_control_defaults()` for complete list of 38
     parameters)
@@ -221,6 +225,19 @@ mosaic_control_defaults(
   - `compression`: Compression algorithm (default: "zstd")
 
   - `compression_level`: Compression level (default: 3L)
+
+  - `persist_ensemble_arrays`: Retain the dense 4-D
+    `cases_array`/`deaths_array` in the persisted ensemble RDS files
+    (`ensemble_candidate.rds`, `ensemble_optimized.rds`,
+    `subset_opt.rds`, `medoid_ensemble.rds`). Default `FALSE` strips the
+    arrays at save time so the on-disk artifacts are small (~tens of
+    KB); every light field (central tendencies, envelopes, weights,
+    seeds, obs, metadata) is preserved and all standard consumers
+    (plotting, OCV, rolling CV) work unchanged. Set `TRUE` for a
+    re-analysable raw archive (e.g. re-running subset optimization or
+    the R_eff posterior-resimulation CI path from the saved file). The
+    in-memory object used during the run is never affected (default:
+    `FALSE`).
 
 - paths:
 
