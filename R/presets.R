@@ -82,17 +82,18 @@ mosaic_io_presets <- function(preset = c("default", "debug", "fast", "archive"))
 #'     / 8 GiB. The cholera sim is single-threaded GIL-bound Python, so
 #'     larger VMs would idle cores; the second vCPU absorbs Dask
 #'     plumbing (network I/O, nanny, heartbeats).
-#'   \item \strong{Scheduler VM} — 5-tier graduation by worker count:
+#'   \item \strong{Scheduler VM} — 5-tier graduation by worker count on
+#'     the memory-optimized \strong{Ev6} family (Emerald Rapids, 8 GiB/vCPU):
 #'     \tabular{ll}{
-#'       \code{n_workers <= 50}   \tab \code{Standard_D2s_v6}   (2 vCPU /   8 GiB) \cr
-#'       \code{n_workers <= 100}  \tab \code{Standard_D4s_v6}   (4 vCPU /  16 GiB) \cr
-#'       \code{n_workers <= 200}  \tab \code{Standard_D8s_v6}   (8 vCPU /  32 GiB) \cr
-#'       \code{n_workers <= 350}  \tab \code{Standard_D16s_v6} (16 vCPU /  64 GiB) \cr
-#'       \code{n_workers >  350}  \tab \code{Standard_D32s_v6} (32 vCPU / 128 GiB) \cr
+#'       \code{n_workers <= 50}   \tab \code{Standard_E4s_v6}    (4 vCPU /  32 GiB) \cr
+#'       \code{n_workers <= 100}  \tab \code{Standard_E8s_v6}    (8 vCPU /  64 GiB) \cr
+#'       \code{n_workers <= 200}  \tab \code{Standard_E16s_v6}  (16 vCPU / 128 GiB) \cr
+#'       \code{n_workers <= 350}  \tab \code{Standard_E32s_v6}  (32 vCPU / 256 GiB) \cr
+#'       \code{n_workers >  350}  \tab \code{Standard_E64s_v6}  (64 vCPU / 512 GiB) \cr
 #'     }
-#'     Scheduler is mostly connection / task-graph state, not CPU-bound.
-#'     Finer tiers avoid over-provisioning at low worker counts while
-#'     keeping RAM headroom at high counts.
+#'     Scheduler is mostly connection / task-graph + result-future state,
+#'     not CPU-bound, so we pay for RAM not cores. Previous Dsv6 tiers
+#'     (4 GiB/vCPU) OOM'd at 200 workers under fast-turnover calibrations.
 #'   \item \strong{wait_for_workers} — absolute number of workers that
 #'     must be up before tasks dispatch. Equivalent to 80\% of the
 #'     pool at \code{n_workers <= 250}, 90\% above, floored at 1.
@@ -180,15 +181,19 @@ mosaic_dask_presets <- function(n_workers) {
          call. = FALSE)
   }
 
-  # 5-tier scheduler graduation. Scheduler is connection/task-graph
-  # state, not CPU-bound — these sizes give RAM headroom for the
-  # task graph (~5 KiB per task) without over-provisioning at low N.
+  # 5-tier scheduler graduation on the memory-optimized Ev6 family
+  # (Emerald Rapids, 8 GiB/vCPU vs Dsv6's 4). Scheduler is connection/
+  # task-graph + result-future state, not CPU-bound, so we pay for RAM
+  # not cores. Ev6 SKUs at each tier are one size larger than the RAM
+  # a bare task-graph would need (~5 KiB per task) to absorb result-
+  # future backlog under fast-turnover calibrations — a 200-worker run
+  # OOM'd a D8s_v6 (32 GiB), which is why we're on E16s_v6 (128 GiB) here.
   scheduler_vm <-
-    if      (n_workers <=  50L) "Standard_D2s_v6"   #  2 vCPU /   8 GiB
-    else if (n_workers <= 100L) "Standard_D4s_v6"   #  4 vCPU /  16 GiB
-    else if (n_workers <= 200L) "Standard_D8s_v6"   #  8 vCPU /  32 GiB
-    else if (n_workers <= 350L) "Standard_D16s_v6"  # 16 vCPU /  64 GiB
-    else                        "Standard_D32s_v6"  # 32 vCPU / 128 GiB
+    if      (n_workers <=  50L) "Standard_E4s_v6"   #  4 vCPU /  32 GiB
+    else if (n_workers <= 100L) "Standard_E8s_v6"   #  8 vCPU /  64 GiB
+    else if (n_workers <= 200L) "Standard_E16s_v6"  # 16 vCPU / 128 GiB
+    else if (n_workers <= 350L) "Standard_E32s_v6"  # 32 vCPU / 256 GiB
+    else                        "Standard_E64s_v6"  # 64 vCPU / 512 GiB
 
   # wait_for_workers: hold submission until this many workers are up.
   # Coiled's 0.3-default penalizes short-task calibrations (first sims

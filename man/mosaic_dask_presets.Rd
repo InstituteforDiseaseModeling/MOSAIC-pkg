@@ -34,17 +34,18 @@ Rapids), \code{Standard_D2ds_v6} (same Intel with local SSD),
 / 8 GiB. The cholera sim is single-threaded GIL-bound Python, so
 larger VMs would idle cores; the second vCPU absorbs Dask
 plumbing (network I/O, nanny, heartbeats).
-\item \strong{Scheduler VM} — 5-tier graduation by worker count:
+\item \strong{Scheduler VM} — 5-tier graduation by worker count on
+the memory-optimized \strong{Ev6} family (Emerald Rapids, 8 GiB/vCPU):
 \tabular{ll}{
-\code{n_workers <= 50}   \tab \code{Standard_D2s_v6}   (2 vCPU /   8 GiB) \cr
-\code{n_workers <= 100}  \tab \code{Standard_D4s_v6}   (4 vCPU /  16 GiB) \cr
-\code{n_workers <= 200}  \tab \code{Standard_D8s_v6}   (8 vCPU /  32 GiB) \cr
-\code{n_workers <= 350}  \tab \code{Standard_D16s_v6} (16 vCPU /  64 GiB) \cr
-\code{n_workers >  350}  \tab \code{Standard_D32s_v6} (32 vCPU / 128 GiB) \cr
+\code{n_workers <= 50}   \tab \code{Standard_E4s_v6}    (4 vCPU /  32 GiB) \cr
+\code{n_workers <= 100}  \tab \code{Standard_E8s_v6}    (8 vCPU /  64 GiB) \cr
+\code{n_workers <= 200}  \tab \code{Standard_E16s_v6}  (16 vCPU / 128 GiB) \cr
+\code{n_workers <= 350}  \tab \code{Standard_E32s_v6}  (32 vCPU / 256 GiB) \cr
+\code{n_workers >  350}  \tab \code{Standard_E64s_v6}  (64 vCPU / 512 GiB) \cr
 }
-Scheduler is mostly connection / task-graph state, not CPU-bound.
-Finer tiers avoid over-provisioning at low worker counts while
-keeping RAM headroom at high counts.
+Scheduler is mostly connection / task-graph + result-future state,
+not CPU-bound, so we pay for RAM not cores. Previous Dsv6 tiers
+(4 GiB/vCPU) OOM'd at 200 workers under fast-turnover calibrations.
 \item \strong{wait_for_workers} — absolute number of workers that
 must be up before tasks dispatch. Equivalent to 80\\% of the
 pool at \code{n_workers <= 250}, 90\\% above, floored at 1.
