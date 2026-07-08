@@ -17,7 +17,7 @@ IPs the cluster will consume. The workspace cap (1,000 total vCPUs at
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,7 @@ IPs the cluster will consume. The workspace cap (1,000 total vCPUs at
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mosaic_dask_presets</span><span class="op">(</span><span class="va">n_workers</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mosaic_dask_presets</span><span class="op">(</span><span class="va">n_workers</span>, n_sims <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -71,6 +71,19 @@ IPs the cluster will consume. The workspace cap (1,000 total vCPUs at
 <dd><p>Integer between 1 and 500 inclusive. The number of
 LASER worker VMs to provision. Each runs one cholera sim
 concurrently. Non-integer values are rounded.</p></dd>
+
+
+<dt id="arg-n-sims">n_sims<a class="anchor" aria-label="anchor" href="#arg-n-sims"></a></dt>
+<dd><p>Optional positive integer: the number of simulations
+submitted per Dask batch (the largest <code>n_simulations</code> the run
+will use). When supplied, the scheduler VM is sized to the LARGER of
+the worker-count tier and the sim-volume tier (see Details). This
+matters because the Dask path submits ALL <code>n_sims</code> futures and
+gathers them in a single blocking call, so the scheduler holds the
+whole batch's task graph + results in RAM at once — a memory load
+driven by <code>n_sims</code>, not <code>n_workers</code>. Leave <code>NULL</code>
+(default) to size the scheduler by <code>n_workers</code> alone, assuming
+the typical ~120 sims/worker batch. Non-integer values are rounded.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -88,9 +101,41 @@ Rapids), <code>Standard_D2ds_v6</code> (same Intel with local SSD),
 / 8 GiB. The cholera sim is single-threaded GIL-bound Python, so
 larger VMs would idle cores; the second vCPU absorbs Dask
 plumbing (network I/O, nanny, heartbeats).</p></li>
-<li><p><strong>Scheduler VM</strong> — 5-tier graduation by worker count:</p><table class="table table"><tr><td><code>n_workers &lt;= 50</code></td><td><code>Standard_D2s_v6</code>   (2 vCPU /   8 GiB)</td></tr><tr><td><code>n_workers &lt;= 100</code></td><td><code>Standard_D4s_v6</code>   (4 vCPU /  16 GiB)</td></tr><tr><td><code>n_workers &lt;= 200</code></td><td><code>Standard_D8s_v6</code>   (8 vCPU /  32 GiB)</td></tr><tr><td><code>n_workers &lt;= 350</code></td><td><code>Standard_D16s_v6</code> (16 vCPU /  64 GiB)</td></tr><tr><td><code>n_workers &gt;  350</code></td><td><code>Standard_D32s_v6</code> (32 vCPU / 128 GiB)</td></tr></table><p>Scheduler is mostly connection / task-graph state, not CPU-bound.
-Finer tiers avoid over-provisioning at low worker counts while
-keeping RAM headroom at high counts.</p></li>
+<li><p><strong>Scheduler VM</strong> — memory-optimized <strong>Ev6</strong> family
+(Emerald Rapids, 8 GiB/vCPU vs Dsv6's 4), sized to the LARGER of two
+5-tier ladders: one keyed on <code>n_workers</code>, one on <code>n_sims</code>
+(only when supplied). The scheduler is RAM-bound, not CPU-bound: the
+Dask calibration path submits every one of the batch's <code>n_sims</code>
+futures, keeps them all alive, and gathers them in a SINGLE blocking
+call, so the scheduler holds the whole batch's task graph (the
+per-sim JSON params are embedded in each task spec) plus the
+in-transit results at once. That memory load scales with
+<code>n_sims</code> (result/graph volume), only weakly with
+<code>n_workers</code> (heartbeats/comms) — hence the two ladders.
+Scheduler-VM cost is negligible next to a 50-500 worker fleet, so
+the tiers err toward headroom; an under-sized scheduler that OOMs
+(exit 137) kills the entire multi-hour run. A 200-worker run OOM'd a
+general-purpose <code>Standard_D8s_v6</code> (32 GiB) under fast-turnover
+calibration, which is why the ladder is on the memory-optimized
+family.</p>
+<p></p><div class="sourceCode"><pre><code><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>Shared SKU <span class="fu">ladder</span> (tier <span class="ot">-&gt;</span> VM <span class="ot">-&gt;</span> RAM)<span class="sc">:</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>\tabular{lll}{</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>  tier <span class="dv">1</span> \tab \code{Standard_E4s_v6}  \<span class="fu">tab</span> ( <span class="dv">4</span> vCPU <span class="sc">/</span>  <span class="dv">32</span> GiB) \cr</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>  tier <span class="dv">2</span> \tab \code{Standard_E8s_v6}  \<span class="fu">tab</span> ( <span class="dv">8</span> vCPU <span class="sc">/</span>  <span class="dv">64</span> GiB) \cr</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  tier <span class="dv">3</span> \tab \code{Standard_E16s_v6} \<span class="fu">tab</span> (<span class="dv">16</span> vCPU <span class="sc">/</span> <span class="dv">128</span> GiB) \cr</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  tier <span class="dv">4</span> \tab \code{Standard_E32s_v6} \<span class="fu">tab</span> (<span class="dv">32</span> vCPU <span class="sc">/</span> <span class="dv">256</span> GiB) \cr</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  tier <span class="dv">5</span> \tab \code{Standard_E64s_v6} \<span class="fu">tab</span> (<span class="dv">64</span> vCPU <span class="sc">/</span> <span class="dv">512</span> GiB) \cr</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>}</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>\code{n_workers} <span class="ot">-&gt;</span> tier<span class="sc">:</span> \code{<span class="sc">&lt;=</span><span class="dv">50</span>} t1; \code{<span class="sc">&lt;=</span><span class="dv">100</span>} t2;</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>\code{<span class="sc">&lt;=</span><span class="dv">200</span>} t3; \code{<span class="sc">&lt;=</span><span class="dv">350</span>} t4; \code{<span class="sc">&gt;</span><span class="dv">350</span>} t5. \code{n_sims} <span class="ot">-&gt;</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="fu">tier</span> (when set)<span class="sc">:</span> \code{<span class="sc">&lt;=</span><span class="dv">10000</span>} t1; \code{<span class="sc">&lt;=</span><span class="dv">25000</span>} t2;</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>\code{<span class="sc">&lt;=</span><span class="dv">50000</span>} t3; \code{<span class="sc">&lt;=</span><span class="dv">100000</span>} t4; \code{<span class="sc">&gt;</span><span class="dv">100000</span>} t5. The floor</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>is <span class="dv">32</span> <span class="fu">GiB</span> (never the old <span class="dv">8</span> GiB D2s, which is indefensible <span class="cf">for</span> a</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>gather<span class="sc">-</span>everything design). Note<span class="sc">:</span> Coiled<span class="sc">/</span>Dask schedulers do NOT spill</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>to disk, so a bigger VM — not a memory<span class="sc">-</span>limit option — is the only</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>OOM guard; that is why this helper sizes the SKU rather than passing</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>\code{scheduler_options}. Standard Esv6 quota <span class="cf">in</span> <span class="fu">westus2</span> (IDM</span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>Research <span class="dv">2</span>) is ample; no quota increase needed <span class="cf">for</span> these tiers.</span></code></pre><p></p></div></li>
 <li><p><strong>wait_for_workers</strong> — absolute number of workers that
 must be up before tasks dispatch. Equivalent to 80\<!-- % of the -->
 pool at <code>n_workers &lt;= 250</code>, 90\<!-- % above, floored at 1. -->
@@ -108,12 +153,19 @@ min, parallelized but not free) plus the 90\<!-- % wait threshold. --></p></li>
 Override globally without forking the helper by setting
 <code>options(mosaic.coiled_workspace = "your-workspace")</code>.</p></li>
 </ul><p><strong>Sizing guide</strong> (~0.7 s per LASER iteration measured on ETH
-single-location):</p><ul><li><p><code>n_workers = 25-50</code>: smoke tests, 1-5K sims, day-to-day.</p></li>
+single-location). Pass <code>n_sims</code> to size the scheduler to the
+batch you actually submit:</p><ul><li><p><code>n_workers = 25-50</code>: smoke tests, 1-5K sims, day-to-day.</p></li>
 <li><p><code>n_workers = 125</code>: typical 10K-sim fixed-budget calibrations.</p></li>
 <li><p><code>n_workers = 250</code>: 24K-sim predictive batches.</p></li>
 <li><p><code>n_workers = 500</code>: run_10-class jobs (60K+ sims). At the
 workspace 1,000-core cap.</p></li>
-</ul><p><strong>Notes:</strong></p><ul><li><p>Each worker consumes one Azure subnet IP. The
+</ul><p>If a batch runs many sims on relatively few workers (e.g. a 30K-sim
+predictive batch on 40 workers), the <code>n_workers</code> tier alone
+under-sizes the scheduler and it can OOM; pass
+<code>mosaic_dask_presets(40, n_sims = 30000)</code> so the scheduler is
+sized to the 30K-sim tier (64 GiB) instead of the 40-worker tier
+(16 GiB).</p>
+<p><strong>Notes:</strong></p><ul><li><p>Each worker consumes one Azure subnet IP. The
 <code>idm-coiled-idmad-r2</code> workspace is on a <code>/23</code> subnet
 (~507 usable IPs); under contention from other tenants, large
 clusters can fail at provisioning with <code>SubnetIsFull</code>. If
@@ -151,6 +203,10 @@ westus2 runs out.</p></li>
 <span class="r-in"><span>  dask_spec  <span class="op">=</span> <span class="fu">mosaic_dask_presets</span><span class="op">(</span>n_workers <span class="op">=</span> <span class="fl">125</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Many sims on few workers: size the scheduler to the batch, not the</span></span></span>
+<span class="r-in"><span><span class="co"># worker count, to avoid a scheduler OOM (exit 137).</span></span></span>
+<span class="r-in"><span><span class="va">spec</span> <span class="op">&lt;-</span> <span class="fu">mosaic_dask_presets</span><span class="op">(</span>n_workers <span class="op">=</span> <span class="fl">40</span>, n_sims <span class="op">=</span> <span class="fl">30000</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Max cluster with spot VMs for a long adaptive run</span></span></span>
 <span class="r-in"><span><span class="va">spec</span> <span class="op">&lt;-</span> <span class="fu">mosaic_dask_presets</span><span class="op">(</span><span class="fl">500</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">spec</span><span class="op">$</span><span class="va">spot_policy</span> <span class="op">&lt;-</span> <span class="st">"spot_with_fallback"</span></span></span>
@@ -171,7 +227,7 @@ westus2 runs out.</p></li>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>
