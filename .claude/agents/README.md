@@ -140,11 +140,6 @@ exported signatures / the `run_MOSAIC()` core loop.
   wrapper, the IP-pinned SSH alias, nohup/tmux disconnect survival, the local-PSOCK control recipe
   (Coiled hybrid is #113-invalid), monitoring, and pulling results (`HEDGEHOG_HOST=dugong`). Invoke
   via the `Skill` tool for dugong run logistics. Canonical ref: `vm/DUGONG.md`.
-- **`docker-image-update`** (`.claude/skills/docker-image-update/`) — rebuild and publish the MOSAIC
-  Coiled worker image (`idmmosaicacr.azurecr.io/mosaic-worker`): backup-tag, cross-arch
-  (`--platform linux/amd64`) build, push to ACR, delete-then-recreate the `mosaic-acr-workers` Coiled
-  env, smoke test, roll back. Turnkey via `azure/rebuild_image.sh` + `azure/refresh_coiled_env.py`.
-  Invoke via the `Skill` tool when updating the worker image after a version/dependency bump.
 
 ## Invoking
 
