@@ -394,6 +394,27 @@ def _score_window_likelihood(config: dict, model) -> float:
 # PUBLIC WORKER FUNCTION
 # =============================================================================
 
+def get_engine_versions() -> dict:
+    """Report engine versions on this worker for the orchestrator's parity guard.
+
+    Called on every worker via client.run() at cluster startup. The MOSAIC R
+    orchestrator compares each worker's laser-cholera version against its own
+    reticulate env and aborts on mismatch (silent engine drift between the
+    Coiled image and the orchestrator would otherwise change simulation results
+    without warning -- see run_MOSAIC parity guard). Reads laser.cholera only:
+    the worker path is pure Python and this is the sole image-baked package that
+    affects simulation numerics.
+    """
+    out = {}
+    try:
+        import laser.cholera
+        out["laser_cholera"] = getattr(laser.cholera, "__version__", None)
+    except Exception as exc:  # noqa: BLE001
+        out["laser_cholera"] = None
+        out["laser_cholera_error"] = str(exc)
+    return out
+
+
 def run_laser_sim(sim_id: int, n_iterations: int,
                   sampled_params_json: str, base_config: dict) -> dict:
     """

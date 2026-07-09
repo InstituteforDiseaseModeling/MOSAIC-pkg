@@ -20,6 +20,10 @@
 #     --ref <git-ref>   MOSAIC ref to install in the image (default: main)
 #     --no-backup       skip the backup-tag step (NOT recommended)
 #     --skip-smoke      skip the post-push smoke test
+#     --skip-az-login   skip the Azure CLI subscription check AND `az acr login`,
+#                       assuming the Docker daemon is ALREADY authenticated to
+#                       the registry (e.g. CI that logged in via
+#                       docker/login-action with ACR admin credentials).
 #     --yes             do not prompt before pushing (for unattended runs)
 #     -h, --help        show this help
 #
@@ -42,13 +46,15 @@ MOSAIC_REF="main"
 DO_BACKUP=1
 DO_SMOKE=1
 ASSUME_YES=0
+SKIP_AZ_LOGIN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ref)        MOSAIC_REF="$2"; shift 2 ;;
-    --no-backup)  DO_BACKUP=0; shift ;;
-    --skip-smoke) DO_SMOKE=0; shift ;;
-    --yes)        ASSUME_YES=1; shift ;;
-    -h|--help)    awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --ref)           MOSAIC_REF="$2"; shift 2 ;;
+    --no-backup)     DO_BACKUP=0; shift ;;
+    --skip-smoke)    DO_SMOKE=0; shift ;;
+    --skip-az-login) SKIP_AZ_LOGIN=1; shift ;;
+    --yes)           ASSUME_YES=1; shift ;;
+    -h|--help)       awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -64,17 +70,25 @@ say "Package version (from DESCRIPTION): $VERSION"
 # ---- prerequisites ---------------------------------------------------------
 say "Checking prerequisites"
 command -v docker >/dev/null || die "docker not found"
-command -v az     >/dev/null || die "az (Azure CLI) not found"
 docker info >/dev/null 2>&1  || die "Docker daemon not running"
 
-CUR_SUB="$(az account show --query name -o tsv 2>/dev/null || true)"
-if [[ "$CUR_SUB" != "$SUBSCRIPTION" ]]; then
-  echo "Azure subscription is '${CUR_SUB:-<none>}', expected '$SUBSCRIPTION'."
-  echo "Run: az login && az account set --subscription \"$SUBSCRIPTION\""
-  die "wrong/unset Azure subscription"
+# --skip-az-login assumes the Docker daemon is already authenticated to the
+# registry (e.g. CI logged in via docker/login-action with ACR admin creds), so
+# neither the Azure CLI nor the subscription context is required or checked.
+if [[ "$SKIP_AZ_LOGIN" -eq 1 ]]; then
+  say "--skip-az-login -> skipping az subscription check and az acr login"
+  echo "Assuming Docker is already authenticated to $REGISTRY."
+else
+  command -v az >/dev/null || die "az (Azure CLI) not found"
+  CUR_SUB="$(az account show --query name -o tsv 2>/dev/null || true)"
+  if [[ "$CUR_SUB" != "$SUBSCRIPTION" ]]; then
+    echo "Azure subscription is '${CUR_SUB:-<none>}', expected '$SUBSCRIPTION'."
+    echo "Run: az login && az account set --subscription \"$SUBSCRIPTION\""
+    die "wrong/unset Azure subscription"
+  fi
+  say "Logging in to ACR ($ACR_NAME)"
+  az acr login --name "$ACR_NAME" >/dev/null
 fi
-say "Logging in to ACR ($ACR_NAME)"
-az acr login --name "$ACR_NAME" >/dev/null
 
 # ---- keep Dockerfile LABEL in sync (metadata only) -------------------------
 LABEL_LINE="$(grep -n '^LABEL version=' "$REPO_ROOT/$DOCKERFILE" | head -1 || true)"

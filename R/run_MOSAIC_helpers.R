@@ -3171,3 +3171,74 @@
     stochastic_results = stochastic_results
   )
 }
+
+
+#' Compare orchestrator vs. Coiled-worker laser-cholera versions
+#'
+#' Pure detection helper for the Dask/Coiled parity guard in \code{run_MOSAIC()}.
+#' The remote worker path is pure Python and runs the laser-cholera engine
+#' directly, so a version drift between the orchestrator's reticulate env and the
+#' Coiled worker image silently changes simulation results. This function detects
+#' such drift; the caller decides whether to abort or warn (so it can be unit
+#' tested without a live cluster and never throws).
+#'
+#' @param local_version Character scalar: the orchestrator's laser.cholera
+#'   \code{__version__} (or NULL if it could not be determined).
+#' @param worker_versions Named list keyed by worker address, each element a list
+#'   with a \code{laser_cholera} entry (as returned by the worker
+#'   \code{get_engine_versions()} via \code{client$run()}). May be empty.
+#'
+#' @return A list with:
+#'   \describe{
+#'     \item{ok}{TRUE if no mismatch was proven (all workers match, or the check
+#'       could not run).}
+#'     \item{n_workers}{Number of worker responses inspected.}
+#'     \item{mismatches}{Character vector describing each offending worker
+#'       (empty when \code{ok} and no mismatches).}
+#'     \item{note}{Optional message when the check could not be performed
+#'       (NULL local version or zero worker responses); caller should warn, not
+#'       abort, in this case.}
+#'   }
+#' @keywords internal
+.mosaic_check_worker_versions <- function(local_version, worker_versions) {
+
+  norm <- function(x) {
+    if (is.null(x) || length(x) != 1L || is.na(x)) return(NA_character_)
+    trimws(as.character(x))
+  }
+
+  local_norm <- norm(local_version)
+  n_workers  <- if (is.null(worker_versions)) 0L else length(worker_versions)
+
+  # Infra "cannot verify" conditions: no local version to compare against, or no
+  # worker responded. Not a proven mismatch -> ok = TRUE with an explanatory
+  # note so the caller warns rather than aborts.
+  if (is.na(local_norm)) {
+    return(list(ok = TRUE, n_workers = n_workers, mismatches = character(0),
+                note = "orchestrator laser-cholera version unavailable; skipped worker version check"))
+  }
+  if (n_workers == 0L) {
+    return(list(ok = TRUE, n_workers = 0L, mismatches = character(0),
+                note = "no worker responded to the version query; skipped worker version check"))
+  }
+
+  addrs <- names(worker_versions)
+  if (is.null(addrs)) addrs <- as.character(seq_along(worker_versions))
+
+  mismatches <- character(0)
+  for (i in seq_along(worker_versions)) {
+    wv <- worker_versions[[i]]
+    wver <- norm(if (is.list(wv)) wv$laser_cholera else wv)
+    if (is.na(wver)) wver <- "unknown"
+    if (!identical(wver, local_norm)) {
+      mismatches <- c(mismatches,
+                      sprintf("%s: %s != orchestrator %s",
+                              addrs[[i]], wver, local_norm))
+    }
+  }
+
+  list(ok = length(mismatches) == 0L,
+       n_workers = n_workers,
+       mismatches = mismatches,
+       note = NULL)
+}

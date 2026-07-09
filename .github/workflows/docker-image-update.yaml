@@ -1,0 +1,83 @@
+name: Update Worker Docker Image (ACR)
+
+# Rebuilds and publishes idmmosaicacr.azurecr.io/mosaic-worker:latest and
+# refreshes the Coiled software environment, automating the runbook in
+# azure/DOCKER_IMAGE_UPDATE.md. Reuses the existing scripts as the source of
+# truth: azure/rebuild_image.sh (backup -> build amd64 -> tag -> push -> smoke)
+# and azure/refresh_coiled_env.py (delete + recreate the Coiled env).
+#
+# Required repository secrets (add under Settings -> Secrets and variables ->
+# Actions before the first run):
+#   ACR_USERNAME  ACR admin username for idmmosaicacr
+#   ACR_PASSWORD  ACR admin password  (az acr credential show --name idmmosaicacr)
+#   COILED_TOKEN  Coiled API token with access to workspace idm-coiled-idmad-r2
+#                 (only needed when "Refresh Coiled env" is enabled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mosaic_ref:
+        description: "MOSAIC git ref to install in the image"
+        default: "main"
+      refresh_coiled:
+        description: "Refresh Coiled software env after push"
+        type: boolean
+        default: true
+      skip_smoke:
+        description: "Skip the post-push smoke test"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ACR (admin credentials)
+        uses: docker/login-action@v3
+        with:
+          registry: idmmosaicacr.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build & publish image (backup -> build -> tag -> push -> smoke)
+        run: |
+          args=(--yes --skip-az-login --ref "${{ inputs.mosaic_ref }}")
+          if [ "${{ inputs.skip_smoke }}" = "true" ]; then
+            args+=(--skip-smoke)
+          fi
+          bash azure/rebuild_image.sh "${args[@]}"
+
+      - name: Refresh Coiled software environment
+        if: ${{ inputs.refresh_coiled }}
+        env:
+          DASK_COILED__TOKEN: ${{ secrets.COILED_TOKEN }}
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install coiled
+          python3 azure/refresh_coiled_env.py --yes
+
+      - name: Job summary
+        if: ${{ always() }}
+        run: |
+          VERSION="$(grep '^Version:' DESCRIPTION | awk '{print $2}')"
+          {
+            echo "## MOSAIC worker image update"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| MOSAIC ref | \`${{ inputs.mosaic_ref }}\` |"
+            echo "| Package version | \`${VERSION}\` |"
+            echo "| Published tags | \`mosaic-worker:latest\`, \`mosaic-worker:v${VERSION}\` |"
+            echo "| Coiled env refreshed | \`${{ inputs.refresh_coiled }}\` |"
+            echo "| Smoke test skipped | \`${{ inputs.skip_smoke }}\` |"
+            echo ""
+            echo "A backup tag of the previous \`:latest\` was pushed as the rollback anchor "
+            echo "(see the build step log: \`backup-<date>-v<label>\`)."
+          } >> "$GITHUB_STEP_SUMMARY"

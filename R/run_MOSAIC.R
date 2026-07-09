@@ -1412,6 +1412,39 @@ run_MOSAIC <- function(config,
     ))
     mosaic_worker <- reticulate::import("mosaic_dask_worker")
 
+    # --- Worker/orchestrator laser-cholera parity guard ---
+    # The worker path is pure Python and runs the laser-cholera engine directly,
+    # so a version drift between this orchestrator's reticulate env and the Coiled
+    # worker image would silently change simulation results (CLAUDE.md lesson #12).
+    # Query every worker and compare against the local engine version; abort by
+    # default (control$parallel$strict_worker_version), or downgrade to a warning.
+    local_lc <- tryCatch(reticulate::import("laser.cholera")[["__version__"]],
+                         error = function(e) NULL)
+    worker_versions <- tryCatch(client$run(mosaic_worker$get_engine_versions),
+                                error = function(e) list())
+    ver_chk <- .mosaic_check_worker_versions(local_lc, worker_versions)
+    if (!is.null(ver_chk$note)) {
+      log_msg("WARNING: %s", ver_chk$note)
+      cli::cli_alert_warning(ver_chk$note)
+    } else if (!ver_chk$ok) {
+      msg <- sprintf(
+        "laser-cholera version mismatch between orchestrator (%s) and %d worker(s):\n  %s",
+        local_lc %||% "unknown", length(ver_chk$mismatches),
+        paste(ver_chk$mismatches, collapse = "\n  "))
+      if (isTRUE(control$parallel$strict_worker_version)) {
+        log_fatal("%s", msg)
+        stop(msg, "\nRebuild/refresh the Coiled software environment to match, or set ",
+             "control$parallel$strict_worker_version = FALSE to proceed anyway.",
+             call. = FALSE)
+      } else {
+        log_msg("WARNING: %s (proceeding; strict_worker_version = FALSE)", msg)
+        cli::cli_alert_warning(msg)
+      }
+    } else {
+      log_msg("Worker laser-cholera verified: %s (%d workers)",
+              local_lc, ver_chk$n_workers)
+    }
+
     # Resolve likelihood settings once (avoids closure over control in batch func)
     likelihood_settings <- control$likelihood
     if (!is.null(likelihood_settings$weights_time)) {
@@ -3618,6 +3651,9 @@ run_mosaic <- run_MOSAIC
 #'       remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 #'     \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 #'     \item \code{progress}: Show progress bar (default: TRUE)
+#'     \item \code{strict_worker_version}: Coiled/Dask path only. Abort the run if
+#'       any worker's laser-cholera engine version differs from the orchestrator's
+#'       (default: TRUE). Set FALSE to downgrade a mismatch to a warning.
 #'   }
 #'
 #' @param io List of I/O settings (output format). Default is:
@@ -3853,7 +3889,9 @@ mosaic_control_defaults <- function(calibration = NULL,
     enable = FALSE,
     n_cores = 1L,
     type = "PSOCK",
-    progress = TRUE
+    progress = TRUE,
+    strict_worker_version = TRUE  # Coiled/Dask only: abort if a worker's laser-cholera
+                                  # version differs from the orchestrator's (FALSE = warn)
   )
 
   # Default path settings
