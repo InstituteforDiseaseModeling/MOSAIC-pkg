@@ -305,7 +305,7 @@ if (PHASE %in% c("all", "score")) {
      manifest <- list(
           experiment = "forecast_cv (HINDCAST / conditional model skill, realized covariates -- NOT forecast skill)",
           created = as.character(Sys.time()), mosaic_version = as.character(utils::packageVersion("MOSAIC")),
-          laser_version = tryCatch(as.character(reticulate::py_to_r(reticulate::import("laser_cholera")$`__version__`)),
+          laser_version = tryCatch(as.character(reticulate::py_to_r(reticulate::import("laser.cholera")$`__version__`)),
                                    error = function(e) NA_character_),
           git_sha = tryCatch(system(paste("git -C", shQuote(file.path(root, "MOSAIC-pkg")), "rev-parse HEAD"), intern = TRUE),
                              error = function(e) NA_character_),
