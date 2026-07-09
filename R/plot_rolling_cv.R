@@ -115,6 +115,15 @@ plot_rolling_cv <- function(predictions,
      if (!nrow(d)) stop("no rows remain after horizon truncation")
 
      cutoffs <- sort(unique(d$cutoff_date))
+     # This plotter has NO country dimension: it facets only by forecast origin.
+     # Passing multiple iso_codes superimposes them in each panel (and the title
+     # would pick an arbitrary one). Warn loudly -- callers should plot per iso.
+     if ("iso_code" %in% names(d) && length(unique(d$iso_code)) > 1L)
+          warning("plot_rolling_cv received ", length(unique(d$iso_code)),
+                  " iso_codes (", paste(utils::head(unique(d$iso_code), 5), collapse = ", "),
+                  "...); it has no country facet, so panels will SUPERIMPOSE countries. ",
+                  "Call it once per iso (subset predictions to a single iso_code).",
+                  call. = FALSE)
      iso     <- if ("iso_code" %in% names(d)) d$iso_code[1] else NA_character_
      d$panel <- factor(paste0("Forecast origin: ", format(d$cutoff_date, "%Y-%m-%d")),
                         levels = paste0("Forecast origin: ", format(cutoffs, "%Y-%m-%d")))
