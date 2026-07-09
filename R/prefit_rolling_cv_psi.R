@@ -272,7 +272,7 @@ prefit_rolling_cv_psi <- function(PATHS,
 #' @noRd
 .rcv_laser_version <- function() {
      v <- tryCatch({
-          lc <- reticulate::import("laser_cholera", delay_load = FALSE)
+          lc <- reticulate::import("laser.cholera", delay_load = FALSE)
           as.character(lc$`__version__`)
      }, error = function(e) NA_character_)
      if (length(v) != 1L || is.na(v)) NA_character_ else v
