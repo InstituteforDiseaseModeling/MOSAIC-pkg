@@ -127,6 +127,9 @@ orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never se
 remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
 \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 \item \code{progress}: Show progress bar (default: TRUE)
+\item \code{strict_worker_version}: Coiled/Dask path only. Abort the run if
+any worker's laser-cholera engine version differs from the orchestrator's
+(default: TRUE). Set FALSE to downgrade a mismatch to a warning.
 }}
 
 \item{io}{List of I/O settings (output format). Default is:
