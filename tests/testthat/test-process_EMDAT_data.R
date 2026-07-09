@@ -11,6 +11,8 @@
 #   - missing-day-of-month imputation
 #   - multiple events colliding in the same country-week
 #   - zero-fill of the country-week panel outside flood-active cells
+#   - (v7.4) the SEPARATE cyclone label: Storm + Tropical cyclone/Storm surge
+#     kept, Storm-General/Severe/Lightning dropped
 
 # Fixture file is small enough to read once per test
 .emdat_fixture <- testthat::test_path("fixtures", "public_emdat_2099-01-01_synthetic.xlsx")
@@ -36,9 +38,12 @@
 )
 
 
+# process_EMDAT_data() now returns c(flood = ..., cyclone = ...); the flood
+# tests below read the flood path explicitly.
 testthat::test_that("filters to floods and MOSAIC AFRO ISOs", {
      PATHS <- .mk_emdat_paths()
-     out_file <- MOSAIC::process_EMDAT_data(PATHS)
+     out_files <- MOSAIC::process_EMDAT_data(PATHS)
+     out_file <- out_files[["flood"]]
      d <- utils::read.csv(out_file, stringsAsFactors = FALSE)
 
      testthat::expect_true(file.exists(out_file))
@@ -53,7 +58,7 @@ testthat::test_that("filters to floods and MOSAIC AFRO ISOs", {
 
 testthat::test_that("multi-week events expand across every spanned ISO-week", {
      PATHS <- .mk_emdat_paths()
-     out_file <- MOSAIC::process_EMDAT_data(PATHS)
+     out_file <- MOSAIC::process_EMDAT_data(PATHS)[["flood"]]
      d <- utils::read.csv(out_file, stringsAsFactors = FALSE)
 
      # NGA fixture: 2015-05-04 (Mon W19) through 2015-05-24 (Sun W21)
@@ -76,7 +81,7 @@ testthat::test_that("multi-week events expand across every spanned ISO-week", {
 
 testthat::test_that("missing Start/End Day are imputed to mid-month", {
      PATHS <- .mk_emdat_paths()
-     out_file <- MOSAIC::process_EMDAT_data(PATHS)
+     out_file <- MOSAIC::process_EMDAT_data(PATHS)[["flood"]]
      d <- utils::read.csv(out_file, stringsAsFactors = FALSE)
 
      # UGA fixture: Start/End Day both NA in May 2015 -> imputed to May 15 (Fri W20)
@@ -89,7 +94,7 @@ testthat::test_that("missing Start/End Day are imputed to mid-month", {
 
 testthat::test_that("multiple events in the same country-week are summed", {
      PATHS <- .mk_emdat_paths()
-     out_file <- MOSAIC::process_EMDAT_data(PATHS)
+     out_file <- MOSAIC::process_EMDAT_data(PATHS)[["flood"]]
      d <- utils::read.csv(out_file, stringsAsFactors = FALSE)
 
      # KEN fixture: two single-day floods (100, 2) and (300, 8) both in 2015-W19
@@ -104,7 +109,7 @@ testthat::test_that("multiple events in the same country-week are summed", {
 
 testthat::test_that("panel is complete and zero-filled outside active cells", {
      PATHS <- .mk_emdat_paths()
-     out_file <- MOSAIC::process_EMDAT_data(PATHS)
+     out_file <- MOSAIC::process_EMDAT_data(PATHS)[["flood"]]
      d <- utils::read.csv(out_file, stringsAsFactors = FALSE)
 
      # Panel covers every AFRO ISO
@@ -142,4 +147,68 @@ testthat::test_that("errors if no public_emdat_*.xlsx is found", {
           MOSAIC::process_EMDAT_data(PATHS),
           "No 'public_emdat_\\*\\.xlsx' files found"
      )
+})
+
+
+# ---- Cyclone series (v7.4) --------------------------------------------------
+# The fixture adds five Storm rows: MOZ "Tropical cyclone" (KEPT), ZWE
+# "Storm surge" (KEPT), and NGA "Storm (General)" / KEN "Severe weather" /
+# MWI "Lightning/Thunderstorms" (all DROPPED). Only the first two should
+# appear as active cyclone-weeks.
+
+testthat::test_that("cyclone panel keeps only Tropical cyclone + Storm surge", {
+     PATHS <- .mk_emdat_paths()
+     out_files <- MOSAIC::process_EMDAT_data(PATHS)
+     cyc_file <- out_files[["cyclone"]]
+     testthat::expect_true(file.exists(cyc_file))
+     d <- utils::read.csv(cyc_file, stringsAsFactors = FALSE)
+
+     # Output columns match the cyclone contract
+     testthat::expect_setequal(
+          colnames(d),
+          c("iso_code", "year", "week", "date_start", "date_stop",
+            "emdat_cyclone_active", "emdat_cyclone_new",
+            "emdat_cyclone_affected", "emdat_cyclone_deaths")
+     )
+
+     active <- d[d$emdat_cyclone_active == 1, c("iso_code", "year", "week")]
+     active <- active[order(active$iso_code, active$year, active$week), ]
+     row.names(active) <- NULL
+
+     # MOZ TC: 2020-01-20 (Mon W04) .. 2020-01-26 (Sun W04) -> single week W04
+     # ZWE surge: 2021-02-08 (Mon W06) .. 2021-02-14 (Sun W06) -> single week W06
+     expected <- data.frame(
+          iso_code = c("MOZ", "ZWE"),
+          year     = c(2020,  2021),
+          week     = c(4,     6),
+          stringsAsFactors = FALSE
+     )
+     testthat::expect_equal(active, expected)
+
+     # Excluded storm subtypes produce NO active cyclone-weeks
+     testthat::expect_equal(sum(d$emdat_cyclone_active[d$iso_code == "NGA"]), 0)  # Storm (General)
+     testthat::expect_equal(sum(d$emdat_cyclone_active[d$iso_code == "KEN"]), 0)  # Severe weather
+     testthat::expect_equal(sum(d$emdat_cyclone_active[d$iso_code == "MWI"]), 0)  # Lightning
+})
+
+
+testthat::test_that("cyclone panel is complete, zero-filled, and magnitude-correct", {
+     PATHS <- .mk_emdat_paths()
+     d <- utils::read.csv(MOSAIC::process_EMDAT_data(PATHS)[["cyclone"]],
+                          stringsAsFactors = FALSE)
+
+     testthat::expect_setequal(unique(d$iso_code), sort(MOSAIC::iso_codes_mosaic))
+
+     # MOZ TC magnitude: Total Affected 5000, Deaths 50, single starting week
+     moz <- d[d$iso_code == "MOZ" & d$emdat_cyclone_active == 1, ]
+     testthat::expect_equal(nrow(moz), 1)
+     testthat::expect_equal(moz$emdat_cyclone_new, 1)
+     testthat::expect_equal(moz$emdat_cyclone_affected, log1p(5000), tolerance = 1e-9)
+     testthat::expect_equal(moz$emdat_cyclone_deaths,   log1p(50),   tolerance = 1e-9)
+
+     # Non-active cells zero everywhere
+     inactive <- d[d$emdat_cyclone_active == 0, ]
+     testthat::expect_true(all(inactive$emdat_cyclone_new      == 0))
+     testthat::expect_true(all(inactive$emdat_cyclone_affected == 0))
+     testthat::expect_true(all(inactive$emdat_cyclone_deaths   == 0))
 })

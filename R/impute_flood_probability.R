@@ -38,6 +38,16 @@
 #'   long-window precip sums computed inline by the function).
 #' @param output_col Character. Name of the new probability column.
 #'   Default \code{"emdat_flood_prob"}.
+#' @param gam_train_stop Date or character (\code{"YYYY-MM-DD"}) or
+#'   \code{NULL}. When non-\code{NULL}, the binomial GAM is FIT only on rows
+#'   with \code{date <= gam_train_stop}; the fitted model then PREDICTS every
+#'   row (so rows \code{<= gam_train_stop} are genuine in-sample and rows
+#'   \code{> gam_train_stop} are leak-free extrapolation). This is the
+#'   leakage-hygiene hook for rolling-origin forecast cross-validation, where
+#'   a fold's hazard covariates must not be informed by that fold's OOS
+#'   future. Default \code{NULL} = current full-data fit (back-compatible).
+#'   Only the fit-row subset changes; \code{select=TRUE}/fREML/the formula are
+#'   identical.
 #' @param diagnostics Logical. If \code{TRUE}, fits a rolling-year
 #'   cross-validation and writes four artefacts to \code{diag_dir}:
 #'   \code{flood_gam_smooths.png}, \code{flood_gam_calibration.png},
@@ -99,10 +109,11 @@
 #' @importFrom graphics plot abline points
 #' @export
 impute_flood_probability <- function(d,
-                                     output_col  = "emdat_flood_prob",
-                                     diagnostics = TRUE,
-                                     diag_dir    = NULL,
-                                     verbose     = TRUE) {
+                                     output_col     = "emdat_flood_prob",
+                                     gam_train_stop = NULL,
+                                     diagnostics    = TRUE,
+                                     diag_dir       = NULL,
+                                     verbose        = TRUE) {
 
      required <- .impute_flood_probability_required()
      missing_cols <- setdiff(required, names(d))
@@ -239,6 +250,14 @@ impute_flood_probability <- function(d,
                   !is.na(d_aug$precip_sum_52w) &
                   !is.na(d_aug$ENSO34_lag24) &
                   !is.na(d_aug$IOD_lag24)
+     # Leakage gate: when gam_train_stop is supplied, restrict the FIT to
+     # rows on/before the cutoff. The predict step below still covers every
+     # row, so post-cutoff rows are leak-free extrapolation from the
+     # <=cutoff-fit model.
+     if (!is.null(gam_train_stop)) {
+          train_idx <- train_idx &
+               (as.Date(d_aug$date) <= as.Date(gam_train_stop))
+     }
      train <- d_aug[train_idx, , drop = FALSE]
      if (nrow(train) < 100) {
           stop("impute_flood_probability: only ", nrow(train),
@@ -272,14 +291,23 @@ impute_flood_probability <- function(d,
                                          type = "response"))
 
      # Sentinel: country mean prob for residual NAs; global mean as last resort.
-     country_mean <- tapply(preds, d_aug$iso_code, mean, na.rm = TRUE)
+     # Leakage control: when gam_train_stop is set, the sentinel means are
+     # computed over <=stop predictions ONLY, so a residual-NA row on/before the
+     # cutoff can never be filled with a mean informed by post-cutoff rows.
+     sentinel_mask <- if (is.null(gam_train_stop)) {
+          rep(TRUE, length(preds))
+     } else {
+          as.Date(d_aug$date) <= as.Date(gam_train_stop)
+     }
+     country_mean <- tapply(preds[sentinel_mask],
+                            d_aug$iso_code[sentinel_mask], mean, na.rm = TRUE)
      na_rows <- is.na(preds)
      if (any(na_rows)) {
           preds[na_rows] <- country_mean[as.character(d_aug$iso_code[na_rows])]
      }
      still_na <- is.na(preds)
      if (any(still_na)) {
-          preds[still_na] <- mean(preds, na.rm = TRUE)
+          preds[still_na] <- mean(preds[sentinel_mask], na.rm = TRUE)
      }
 
      # Binomial-logit predictions are naturally in [0, 1] -- no scaling

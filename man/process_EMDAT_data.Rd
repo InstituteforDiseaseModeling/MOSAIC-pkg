@@ -2,7 +2,7 @@
 % Please edit documentation in R/process_EMDAT_data.R
 \name{process_EMDAT_data}
 \alias{process_EMDAT_data}
-\title{Process EM-DAT Flood Events Into a Country-Week Panel}
+\title{Process EM-DAT Flood and Tropical-Cyclone Events Into Country-Week Panels}
 \usage{
 process_EMDAT_data(PATHS)
 }
@@ -15,11 +15,12 @@ process_EMDAT_data(PATHS)
 }}
 }
 \value{
-Invisibly returns the path to the written CSV. The CSV contains
+Invisibly returns a named character vector with the paths to the
+two written CSVs (\code{flood} and \code{cyclone}). Each CSV contains
 one row per (iso_code, year, week) for every ISO-week between
 \code{date_start} (default 2000-01-03) and the latest week covered by
-any flood event in the raw extract, restricted to
-\code{iso_codes_mosaic}. Columns:
+any event of that hazard in the raw extract, restricted to
+\code{iso_codes_mosaic}. Flood columns:
 \describe{
 \item{iso_code}{ISO3 country code.}
 \item{year}{ISO-8601 year of the week.}
@@ -33,15 +34,32 @@ across overlapping events (NAs treated as 0).}
 \item{emdat_flood_deaths}{\code{log1p} of summed \code{Total Deaths}
 across overlapping events (NAs treated as 0).}
 }
+The cyclone CSV mirrors this schema with \code{emdat_cyclone_active},
+\code{emdat_cyclone_new}, \code{emdat_cyclone_affected}, and
+\code{emdat_cyclone_deaths}.
 }
 \description{
 Reads the most recent EM-DAT public-extract xlsx file in
-\code{PATHS$DATA_EMDAT_RAW}, filters to flood events in MOSAIC AFRO
-countries, expands each event across the ISO-8601 weeks it spans, and
-writes a complete country-week panel of flood-occurrence covariates to
-\code{PATHS$DATA_EMDAT/floods_country_weekly.csv}.
+\code{PATHS$DATA_EMDAT_RAW}, filters to (a) flood events and (b)
+tropical-cyclone / storm-surge events in MOSAIC AFRO countries, expands
+each event across the ISO-8601 weeks it spans, and writes two complete
+country-week panels of hazard-occurrence covariates:
+\code{PATHS$DATA_EMDAT/floods_country_weekly.csv} and
+\code{PATHS$DATA_EMDAT/cyclones_country_weekly.csv}.
 }
 \details{
+The flood label is unchanged (\code{Disaster Type == "Flood"}). The
+cyclone label is a SEPARATE series built from \code{Disaster Type ==
+"Storm"} restricted to \code{Disaster Subtype \%in\% c("Tropical
+cyclone", "Storm surge")} -- the crisply-dated, water-producing storm
+events (49 events / ~74 active weeks in the 2026-05 extract). Storm
+(General), Severe weather, Lightning/Thunderstorms, Tornado, Hail, and
+Blizzard/Winter storm are deliberately EXCLUDED: they are not reliably
+water-producing and would dilute the cyclone signal. Tropical cyclones
+were previously silently dropped by the flood-only filter, neutering the
+downstream flood GAM's wind smooth; the separate cyclone series feeds a
+dedicated wind/coastal GAM (\code{\link{impute_cyclone_probability}}).
+
 EM-DAT records carry frequent missing day-of-month and occasional missing
 end-month values. Imputation rules:
 \itemize{
