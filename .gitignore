@@ -7,6 +7,7 @@ local/
 inst/py/mosaic-python-env
 model/LAUNCH.R
 model/output/
+/output/
 **data_psi_suitability.csv
 claude/
 *.tar.gz
@@ -28,8 +29,6 @@ __pycache__/
 *.pyc
 
 .Rd2pdf*/
-MOSAIC.Rcheck/
-=
 
 # Agent local (uncommitted) memory
 .claude/agent-memory-local/
