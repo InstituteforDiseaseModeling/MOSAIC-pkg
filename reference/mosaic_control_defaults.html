@@ -31,7 +31,7 @@ paths: File management (output directories, plots)
 
     <a class="navbar-brand me-2" href="../index.html">MOSAIC</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.60.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.64.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -203,6 +203,9 @@ orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never se
 remote Dask/Coiled worker count (that is <code>dask_spec$n_workers</code>).</p></li>
 <li><p><code>type</code>: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")</p></li>
 <li><p><code>progress</code>: Show progress bar (default: TRUE)</p></li>
+<li><p><code>strict_worker_version</code>: Coiled/Dask path only. Abort the run if
+any worker's laser-cholera engine version differs from the orchestrator's
+(default: TRUE). Set FALSE to downgrade a mismatch to a warning.</p></li>
 </ul></dd>
 
 

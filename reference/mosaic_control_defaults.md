@@ -216,6 +216,11 @@ mosaic_control_defaults(
 
   - `progress`: Show progress bar (default: TRUE)
 
+  - `strict_worker_version`: Coiled/Dask path only. Abort the run if any
+    worker's laser-cholera engine version differs from the
+    orchestrator's (default: TRUE). Set FALSE to downgrade a mismatch to
+    a warning.
+
 - io:
 
   List of I/O settings (output format). Default is:
