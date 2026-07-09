@@ -4,12 +4,23 @@
 \alias{mosaic_dask_presets}
 \title{Get an Optimal Dask/Coiled Cluster Spec for a Given Worker Count}
 \usage{
-mosaic_dask_presets(n_workers)
+mosaic_dask_presets(n_workers, n_sims = NULL)
 }
 \arguments{
 \item{n_workers}{Integer between 1 and 500 inclusive. The number of
 LASER worker VMs to provision. Each runs one cholera sim
 concurrently. Non-integer values are rounded.}
+
+\item{n_sims}{Optional positive integer: the number of simulations
+submitted per Dask batch (the largest \code{n_simulations} the run
+will use). When supplied, the scheduler VM is sized to the LARGER of
+the worker-count tier and the sim-volume tier (see Details). This
+matters because the Dask path submits ALL \code{n_sims} futures and
+gathers them in a single blocking call, so the scheduler holds the
+whole batch's task graph + results in RAM at once — a memory load
+driven by \code{n_sims}, not \code{n_workers}. Leave \code{NULL}
+(default) to size the scheduler by \code{n_workers} alone, assuming
+the typical ~120 sims/worker batch. Non-integer values are rounded.}
 }
 \value{
 Named list ready to pass as the \code{dask_spec} argument of
@@ -34,17 +45,44 @@ Rapids), \code{Standard_D2ds_v6} (same Intel with local SSD),
 / 8 GiB. The cholera sim is single-threaded GIL-bound Python, so
 larger VMs would idle cores; the second vCPU absorbs Dask
 plumbing (network I/O, nanny, heartbeats).
-\item \strong{Scheduler VM} — 5-tier graduation by worker count:
-\tabular{ll}{
-\code{n_workers <= 50}   \tab \code{Standard_D2s_v6}   (2 vCPU /   8 GiB) \cr
-\code{n_workers <= 100}  \tab \code{Standard_D4s_v6}   (4 vCPU /  16 GiB) \cr
-\code{n_workers <= 200}  \tab \code{Standard_D8s_v6}   (8 vCPU /  32 GiB) \cr
-\code{n_workers <= 350}  \tab \code{Standard_D16s_v6} (16 vCPU /  64 GiB) \cr
-\code{n_workers >  350}  \tab \code{Standard_D32s_v6} (32 vCPU / 128 GiB) \cr
-}
-Scheduler is mostly connection / task-graph state, not CPU-bound.
-Finer tiers avoid over-provisioning at low worker counts while
-keeping RAM headroom at high counts.
+\item \strong{Scheduler VM} — memory-optimized \strong{Ev6} family
+(Emerald Rapids, 8 GiB/vCPU vs Dsv6's 4), sized to the LARGER of two
+5-tier ladders: one keyed on \code{n_workers}, one on \code{n_sims}
+(only when supplied). The scheduler is RAM-bound, not CPU-bound: the
+Dask calibration path submits every one of the batch's \code{n_sims}
+futures, keeps them all alive, and gathers them in a SINGLE blocking
+call, so the scheduler holds the whole batch's task graph (the
+per-sim JSON params are embedded in each task spec) plus the
+in-transit results at once. That memory load scales with
+\code{n_sims} (result/graph volume), only weakly with
+\code{n_workers} (heartbeats/comms) — hence the two ladders.
+Scheduler-VM cost is negligible next to a 50-500 worker fleet, so
+the tiers err toward headroom; an under-sized scheduler that OOMs
+(exit 137) kills the entire multi-hour run. A 200-worker run OOM'd a
+general-purpose \code{Standard_D8s_v6} (32 GiB) under fast-turnover
+calibration, which is why the ladder is on the memory-optimized
+family.
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{Shared SKU ladder (tier -> VM -> RAM):
+\\tabular\{lll\}\{
+  tier 1 \\tab \code{Standard_E4s_v6}  \\tab ( 4 vCPU /  32 GiB) \\cr
+  tier 2 \\tab \code{Standard_E8s_v6}  \\tab ( 8 vCPU /  64 GiB) \\cr
+  tier 3 \\tab \code{Standard_E16s_v6} \\tab (16 vCPU / 128 GiB) \\cr
+  tier 4 \\tab \code{Standard_E32s_v6} \\tab (32 vCPU / 256 GiB) \\cr
+  tier 5 \\tab \code{Standard_E64s_v6} \\tab (64 vCPU / 512 GiB) \\cr
+\}
+\code{n_workers} -> tier: \code{<=50} t1; \code{<=100} t2;
+\code{<=200} t3; \code{<=350} t4; \code{>350} t5. \code{n_sims} ->
+tier (when set): \code{<=10000} t1; \code{<=25000} t2;
+\code{<=50000} t3; \code{<=100000} t4; \code{>100000} t5. The floor
+is 32 GiB (never the old 8 GiB D2s, which is indefensible for a
+gather-everything design). Note: Coiled/Dask schedulers do NOT spill
+to disk, so a bigger VM — not a memory-limit option — is the only
+OOM guard; that is why this helper sizes the SKU rather than passing
+\code{scheduler_options}. Standard Esv6 quota in westus2 (IDM
+Research 2) is ample; no quota increase needed for these tiers.
+}\if{html}{\out{</div>}}
+
 \item \strong{wait_for_workers} — absolute number of workers that
 must be up before tasks dispatch. Equivalent to 80\\% of the
 pool at \code{n_workers <= 250}, 90\\% above, floored at 1.
@@ -64,7 +102,8 @@ Override globally without forking the helper by setting
 }
 
 \strong{Sizing guide} (~0.7 s per LASER iteration measured on ETH
-single-location):
+single-location). Pass \code{n_sims} to size the scheduler to the
+batch you actually submit:
 \itemize{
 \item \code{n_workers = 25-50}: smoke tests, 1-5K sims, day-to-day.
 \item \code{n_workers = 125}: typical 10K-sim fixed-budget calibrations.
@@ -72,6 +111,12 @@ single-location):
 \item \code{n_workers = 500}: run_10-class jobs (60K+ sims). At the
 workspace 1,000-core cap.
 }
+If a batch runs many sims on relatively few workers (e.g. a 30K-sim
+predictive batch on 40 workers), the \code{n_workers} tier alone
+under-sizes the scheduler and it can OOM; pass
+\code{mosaic_dask_presets(40, n_sims = 30000)} so the scheduler is
+sized to the 30K-sim tier (64 GiB) instead of the 40-worker tier
+(16 GiB).
 
 \strong{Notes:}
 \itemize{
@@ -106,6 +151,10 @@ result <- run_MOSAIC(
   ),
   dask_spec  = mosaic_dask_presets(n_workers = 125)
 )
+
+# Many sims on few workers: size the scheduler to the batch, not the
+# worker count, to avoid a scheduler OOM (exit 137).
+spec <- mosaic_dask_presets(n_workers = 40, n_sims = 30000)
 
 # Max cluster with spot VMs for a long adaptive run
 spec <- mosaic_dask_presets(500)
