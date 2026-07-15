@@ -180,7 +180,14 @@ test_that("Dask worker _apply_sampled_params preserves engine as_ndarray dtypes 
   testthat::expect_null(ser$error)
 
   # Worker config (numpy/list mix) and the local-path config (r_to_py lists).
+  # As of v0.64.3 the Dask path ships psi_jt via a separate client.scatter()
+  # rather than inline in ser$json; run_laser_sim() injects it into the
+  # config AFTER _apply_sampled_params() returns. Mirror that here so this
+  # test exercises the same effective config the production worker sees --
+  # otherwise config_w keeps the stale (uncalibrated) base_config psi_jt
+  # and diverges from config_lp end-to-end.
   config_w  <- reticulate::py$`_apply_sampled_params`(base_py, ser$json)
+  config_w[["psi_jt"]] <- reticulate::r_to_py(ser$psi_jt)
   config_lp <- reticulate::r_to_py(
     MOSAIC:::.mosaic_prepare_config_for_python(ser$params)
   )

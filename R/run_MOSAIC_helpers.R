@@ -2401,18 +2401,27 @@
 #' Extract Per-Simulation Sampled Parameters
 #'
 #' Returns only the scalar/vector parameters that sample_parameters() modifies.
-#' Most matrix fields are excluded because they live in the broadcast
-#' base_config. However, psi_jt is INCLUDED here because
-#' .apply_psi_star_calibration() modifies it in-place per simulation -- the
-#' broadcast base_config has stale (uncalibrated) psi_jt.
+#' Matrix fields are excluded because they live either in the one-shot
+#' broadcast base_config (b_jt, d_jt, ...) or -- for psi_jt -- are shipped
+#' per-sim via a separate client$scatter() from .mosaic_run_batch_dask().
+#'
+#' Historical note: psi_jt was previously INCLUDED in this JSON because
+#' .apply_psi_star_calibration() recomputes it per-sim from psi_star_*
+#' scalars and the broadcast base_config carries the stale (uncalibrated)
+#' matrix. At ~2 MB per sim (40 loc x 3165 days x float64 at digits=NA)
+#' the inlined matrix pinned the scheduler task graph and caused linear
+#' scheduler-memory growth -> OOM on multi-country batches. Now psi_jt is
+#' scattered separately per sim; the Python worker receives it as an
+#' additional positional arg to run_laser_sim() and overrides the stale
+#' base_config psi_jt after _apply_sampled_params() (v0.64.3 fix).
 #' @noRd
 .extract_sampled_params <- function(params_sim) {
   # Exclude fields that are in the broadcast base_config AND are never
-  # modified by sample_parameters().  psi_jt is intentionally NOT excluded:
-  # .apply_psi_star_calibration() recalculates it per-sim using psi_star_*
-  # params, so the per-sim version must override the broadcast base_config.
+  # modified by sample_parameters(), plus psi_jt which is shipped per-sim
+  # via client$scatter() rather than inline in this JSON (see docstring
+  # above for rationale).
   base_fields <- c(
-    "b_jt", "d_jt", "mu_jt", "nu_1_jt", "nu_2_jt",
+    "b_jt", "d_jt", "mu_jt", "psi_jt", "nu_1_jt", "nu_2_jt",
     "reported_cases", "reported_deaths",
     # Per-cell confidence-weight matrices (config_default v4.1+). These are
     # broadcast in base_config via .extract_base_config() and are NEVER modified
@@ -2438,7 +2447,12 @@
 #' parallel::parLapply() cluster. Returns a list:
 #'   $params : the full sampled-config list (NULL on failure)
 #'   $json   : the per-sim JSON string ready for the Coiled worker
-#'             (NULL on failure)
+#'             (NULL on failure); does NOT include psi_jt (shipped
+#'             separately via client$scatter() from the parent -- see
+#'             .extract_sampled_params() docstring for rationale)
+#'   $psi_jt : the per-sim calibrated psi_jt matrix (R numeric matrix,
+#'             n_locations x n_time_steps) shipped separately via
+#'             client$scatter() from the parent; NULL on failure
 #'   $error  : NULL on success; a character message on failure
 #'
 #' Reproducibility: sample_parameters() takes `seed = sim_id` and is
@@ -2474,15 +2488,18 @@
     params <- .mosaic_clamp_transmission_params(params)
 
     # Serialize the sampled (non-base) fields for shipping to the Coiled worker.
+    # psi_jt is EXCLUDED from this JSON (see .extract_sampled_params docstring)
+    # and returned separately so the parent can client$scatter() it.
     json <- jsonlite::toJSON(
       .extract_sampled_params(params),
       auto_unbox = TRUE,
       digits     = NA
     )
 
-    list(params = params, json = as.character(json), error = NULL)
+    list(params = params, json = as.character(json),
+         psi_jt = params$psi_jt, error = NULL)
   }, error = function(e) {
-    list(params = NULL, json = NULL, error = conditionMessage(e))
+    list(params = NULL, json = NULL, psi_jt = NULL, error = conditionMessage(e))
   })
 }
 
@@ -2777,6 +2794,7 @@
     map_indices  <- integer(0)    # positions in params_list/futures
     map_sim_ids  <- integer(0)
     map_jsons    <- character(0)
+    map_psis     <- list()        # per-sim psi_jt matrices; scattered below
 
     for (k in seq_along(chunk_indices)) {
       idx <- chunk_indices[k]
@@ -2802,22 +2820,48 @@
 
       params_list[[idx]] <- r$params
       if (is.null(r$params) || is.null(r$json)) next
+      # psi_jt is required (shipped via scatter, not JSON) -- skip loudly
+      # if missing so we never dispatch a task that would silently use the
+      # stale base_config psi_jt on the worker. In production configs
+      # sample_parameters() always populates params$psi_jt; a NULL here
+      # signals a malformed config.
+      if (is.null(r$psi_jt)) {
+        warning("sim ", sim_ids[idx], ": params$psi_jt is NULL after ",
+                "sampling; skipping (config likely missing psi_jt matrix)",
+                call. = FALSE, immediate. = FALSE)
+        next
+      }
 
       map_indices <- c(map_indices, idx)
       map_sim_ids <- c(map_sim_ids, as.integer(sim_ids[idx]))
       map_jsons   <- c(map_jsons, r$json)
+      map_psis[[length(map_psis) + 1L]] <- r$psi_jt
     }
 
     # --- Submit entire chunk via client$map() (single scheduler round-trip).
     # The Coiled client lives in the parent process only; submission MUST
     # stay outside the parallel block.
     if (length(map_sim_ids) > 0L) {
+      # Batch-scatter this chunk's per-sim psi_jt matrices in a SINGLE
+      # scheduler RPC (not one per sim). Each matrix (~40 loc x 3165 days,
+      # ~2 MB float64) is thereby stored on a worker, and the task-graph
+      # entry we ship to the scheduler in client$map() below carries only a
+      # Future reference (~bytes). Historically psi_jt was embedded in
+      # map_jsons and pinned ~2 MB per task in the scheduler's task graph
+      # until gather(), OOMing the scheduler on multi-country batches
+      # (Coiled scheduler linear-memory-growth incident, v0.64.3 fix).
+      # hash = FALSE skips content-hashing dedup (per-sim payloads are
+      # always distinct after psi_star calibration).
+      psi_py_list <- reticulate::r_to_py(map_psis)
+      psi_futures <- client$scatter(psi_py_list, hash = FALSE)
+
       chunk_futures <- client$map(
         mosaic_worker$run_laser_sim,
         as.list(map_sim_ids),
         as.list(rep(as.integer(n_iterations), length(map_sim_ids))),
         as.list(map_jsons),
-        as.list(rep(list(base_config_future), length(map_sim_ids)))
+        as.list(rep(list(base_config_future), length(map_sim_ids))),
+        as.list(psi_futures)
       )
       for (fi in seq_along(map_indices)) {
         futures[[ map_indices[fi] ]] <- chunk_futures[[fi]]

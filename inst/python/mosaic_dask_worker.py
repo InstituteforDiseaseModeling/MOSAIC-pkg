@@ -156,11 +156,15 @@ def _apply_sampled_params(base_config: dict, sampled_params_json: str) -> dict:
     etc.) because it was created via reticulate::r_to_py() and then scattered
     via client.scatter().
 
-    psi_jt is a special case: apply_psi_star_calibration() in R recalculates
-    it per-sim using the sampled psi_star_* params, so the updated psi_jt is
-    sent via JSON per-sim and must override the stale broadcast copy.  It
-    arrives as a list-of-lists (rows × cols) and is converted to a 2-D numpy
-    array here.
+    psi_jt handling: prior to v0.64.3 the per-sim calibrated psi_jt was
+    embedded in sampled_params_json and overwrote the stale broadcast copy
+    here. That caused ~2 MB per-task inlining into the scheduler's task
+    graph and OOMed the scheduler on multi-country batches. As of v0.64.3
+    psi_jt is shipped separately via client.scatter() and injected in the
+    caller (run_laser_sim) AFTER this function returns -- see that
+    function's docstring. The list-of-lists -> 2-D-array conversion below
+    is retained as a safety net for any legacy JSON that still carries
+    psi_jt (no-op when it doesn't).
 
     A deep copy of base_config is made to prevent mutation of the scattered
     object across simulations on the same worker.
@@ -416,7 +420,8 @@ def get_engine_versions() -> dict:
 
 
 def run_laser_sim(sim_id: int, n_iterations: int,
-                  sampled_params_json: str, base_config: dict) -> dict:
+                  sampled_params_json: str, base_config: dict,
+                  psi_jt) -> dict:
     """
     Run a single MOSAIC simulation on a Dask worker.
 
@@ -432,11 +437,22 @@ def run_laser_sim(sim_id: int, n_iterations: int,
     sampled_params_json : str
         JSON string of scalar/vector parameters sampled for this simulation
         (output of R's .extract_sampled_params()). Does NOT include matrix
-        fields — those live in base_config.
+        fields — those live in base_config, EXCEPT for psi_jt which is
+        shipped separately via the ``psi_jt`` parameter below (client-side
+        client.scatter() -> Future reference in the task spec, so the
+        scheduler task graph doesn't carry ~2 MB per sim).
     base_config : dict
         Scattered base config dict (reticulate-converted from R). Contains
-        numpy 2-D arrays for b_jt, d_jt, psi_jt, etc., plus fixed scalars
-        like date_start, location_name, N_j_initial, etc.
+        numpy 2-D arrays for b_jt, d_jt, psi_jt (STALE / uncalibrated -- see
+        ``psi_jt`` below), nu_1_jt, nu_2_jt, etc., plus fixed scalars like
+        date_start, location_name, N_j_initial, etc.
+    psi_jt : numpy.ndarray or list-of-lists
+        Per-simulation calibrated psi_jt matrix (n_locations x n_time_steps).
+        Shipped separately via a per-sim client.scatter() from the R
+        orchestrator to avoid inlining ~2 MB per task into the scheduler's
+        task graph (v0.64.3 fix for the Coiled scheduler linear-memory-
+        growth OOM). Overrides the stale base_config['psi_jt'] on this
+        worker after _apply_sampled_params() runs.
 
     Returns
     -------
@@ -487,6 +503,19 @@ def run_laser_sim(sim_id: int, n_iterations: int,
         )
 
         config = _apply_sampled_params(base_config, sampled_params_json)
+
+        # Override the stale broadcast psi_jt with the per-sim calibrated
+        # matrix shipped via client.scatter(). psi_jt is excluded from
+        # sampled_params_json (would inline ~2 MB per task into the
+        # scheduler's task graph and OOM the scheduler on multi-country
+        # batches -- v0.64.3 fix). Fail loud if the caller didn't send it.
+        if psi_jt is None:
+            raise ValueError(
+                "run_laser_sim: psi_jt argument is required (was None). "
+                "The R orchestrator must scatter the per-sim calibrated "
+                "psi_jt and pass the Future as the 5th client.map arg."
+            )
+        config["psi_jt"] = np.asarray(psi_jt, dtype=np.float64)
 
         # The sampled dict (minus matrix fields) is echoed back so the R
         # gather adapter can flatten it into parquet columns without
