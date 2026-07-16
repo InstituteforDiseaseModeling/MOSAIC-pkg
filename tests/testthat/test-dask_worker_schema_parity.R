@@ -346,9 +346,14 @@ test_that(".mosaic_sample_and_serialize captures errors instead of throwing", {
   )
 
   expect_type(bad_result, "list")
-  expect_named(bad_result, c("params", "json", "error"))
+  # psi_jt was added to the return contract in v0.64.3 (shipped via
+  # client$scatter() instead of inline in $json to fix the Coiled
+  # scheduler task-graph OOM). On the error path it must still be NULL
+  # like $params/$json so callers can uniformly detect failure.
+  expect_named(bad_result, c("params", "json", "psi_jt", "error"))
   expect_null(bad_result$params)
   expect_null(bad_result$json)
+  expect_null(bad_result$psi_jt)
   expect_type(bad_result$error, "character")
   expect_true(nzchar(bad_result$error))
 })
