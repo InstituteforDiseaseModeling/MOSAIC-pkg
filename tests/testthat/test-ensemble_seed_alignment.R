@@ -10,11 +10,20 @@
 #
 # FIX: calc_model_ensemble() now carries a per-member `seeds` vector aligned with
 # cases_array (member i <-> seeds[i]), sourced from the parameter set that
-# PRODUCED each member (precomputed param_seed, else the member's config $seed,
-# else positional parameter_seeds). optimize_ensemble_subset() carries it through
-# the sort/slice, and run_MOSAIC()'s medoid uses ensemble$seeds[medoid_idx].
+# PRODUCED each member: the member's own config $seed, else positional
+# parameter_seeds. optimize_ensemble_subset() carries it through the sort/slice,
+# and run_MOSAIC()'s medoid uses ensemble$seeds[medoid_idx].
 #
-# These tests are pure construction (no Python, no packaged data) and always run.
+# A third source used to sit ahead of those two: a `param_seed` field on the
+# result record, which existed because a Dask worker held the config the master
+# did not. Both that field and the precomputed_results argument that delivered it
+# went with the Dask backend (v0.65.0). The invariant under test is unchanged --
+# a member's seed must describe that member's own trajectory -- and is now
+# exercised through the config-$seed tier, which is what the local path uses.
+#
+# Engine output is injected by mocking the per-task worker; see
+# helper-ensemble-mock.R. These tests are pure construction (no Python, no
+# packaged data) and always run.
 
 library(testthat)
 library(MOSAIC)
@@ -31,34 +40,35 @@ base_config <- list(
 )
 np <- 4L
 
-# Result records: member p carries param_seed = 100+p and a
-# constant trajectory of p*10, so a member's seed is recoverable from its own
-# trajectory: seed == 100 + trajectory/10. param_seed is the GROUND TRUTH binding.
-make_precomp <- function(with_seed = TRUE) {
-  lapply(seq_len(np), function(p) {
-    r <- list(
-      param_idx       = p,
-      stoch_idx       = 1L,
-      reported_cases  = matrix(p * 10, nrow = 1, ncol = n_t),
-      reported_deaths = matrix(p,      nrow = 1, ncol = n_t),
-      success         = TRUE
-    )
-    if (with_seed) r$param_seed <- 100L + p
-    r
-  })
+# Result records: member p has a constant trajectory of p*10, so a member's seed
+# is recoverable from its own trajectory whenever the seed is 100 + p.
+make_records <- function() {
+  lapply(seq_len(np), function(p) list(
+    param_idx       = p,
+    stoch_idx       = 1L,
+    reported_cases  = matrix(p * 10, nrow = 1, ncol = n_t),
+    reported_deaths = matrix(p,      nrow = 1, ncol = n_t),
+    success         = TRUE
+  ))
+}
+
+# Configs whose $seed is the GROUND TRUTH binding for member p: 100 + p.
+make_seeded_configs <- function() {
+  lapply(seq_len(np), function(p) { cc <- base_config; cc$seed <- 100L + p; cc })
 }
 
 test_that("calc_model_ensemble binds member seeds to the producing param set, not a positional vector", {
+  local_mocked_ensemble_sims(make_records())
   ens <- calc_model_ensemble(
     config                   = base_config,
+    configs                  = make_seeded_configs(),
     parameter_seeds          = c(901L, 902L, 903L, 904L),  # deliberately WRONG order/values
     parameter_weights        = rep(1, np),
     n_simulations_per_config = 1L,
-    precomputed_results      = make_precomp(with_seed = TRUE),
     verbose                  = FALSE
   )
 
-  # seeds come from each member's own param_seed (ground truth), NOT the
+  # seeds come from each member's own config $seed (ground truth), NOT the
   # positional parameter_seeds vector.
   expect_equal(ens$seeds, c(101L, 102L, 103L, 104L))
   expect_false(any(ens$seeds %in% c(901L, 902L, 903L, 904L)))
@@ -72,12 +82,13 @@ test_that("calc_model_ensemble binds member seeds to the producing param set, no
 })
 
 test_that("seed<->member alignment survives optimize_ensemble_subset sort/slice", {
+  local_mocked_ensemble_sims(make_records())
   ens <- calc_model_ensemble(
     config                   = base_config,
+    configs                  = make_seeded_configs(),
     parameter_seeds          = c(901L, 902L, 903L, 904L),
     parameter_weights        = rep(1, np),
     n_simulations_per_config = 1L,
-    precomputed_results      = make_precomp(with_seed = TRUE),
     verbose                  = FALSE
   )
 
@@ -107,19 +118,20 @@ test_that("seed<->member alignment survives optimize_ensemble_subset sort/slice"
 })
 
 test_that("calc_model_ensemble seed fallbacks: config $seed, then positional parameter_seeds", {
-  precomp_noseed <- make_precomp(with_seed = FALSE)
+  local_mocked_ensemble_sims(make_records())
 
-  # (b) direct-config path: take the seed from each member's config.
+  # (a) direct-config path: take the seed from each member's config.
   cfgs <- lapply(seq_len(np), function(p) { cc <- base_config; cc$seed <- 200L + p; cc })
   ens_cfg <- calc_model_ensemble(
     config = base_config, configs = cfgs, parameter_weights = rep(1, np),
-    n_simulations_per_config = 1L, precomputed_results = precomp_noseed, verbose = FALSE)
+    n_simulations_per_config = 1L, verbose = FALSE)
   expect_equal(ens_cfg$seeds, c(201L, 202L, 203L, 204L))
 
-  # (c) last-resort positional fallback when no param_seed and no config $seed.
+  # (b) last-resort positional fallback when no config carries a $seed.
+  cfgs_noseed <- rep(list(base_config), np)   # base_config has no $seed
   ens_pos <- calc_model_ensemble(
-    config = base_config, parameter_seeds = c(301L, 302L, 303L, 304L),
-    parameter_weights = rep(1, np), n_simulations_per_config = 1L,
-    precomputed_results = precomp_noseed, verbose = FALSE)
+    config = base_config, configs = cfgs_noseed,
+    parameter_seeds = c(301L, 302L, 303L, 304L),
+    parameter_weights = rep(1, np), n_simulations_per_config = 1L, verbose = FALSE)
   expect_equal(ens_pos$seeds, c(301L, 302L, 303L, 304L))
 })

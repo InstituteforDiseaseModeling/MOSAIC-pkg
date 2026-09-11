@@ -36,7 +36,6 @@ SystemRequirements: GDAL (>= 2.0.0), PROJ (>= 4.8.0), GEOS (>= 3.4.0), UDUNITS-2
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Remotes:
   gilesjohnr/propvacc,
   COVID-19-Mobility-Data-Network/mobility
@@ -116,3 +115,4 @@ Config/testthat/parallel: true
 Config/testthat/start-first: est_initial_R_parallel, optimize_ensemble_subset,
   rolling_cv_empty_val_skip, calc_model_ensemble, est_initial_E_I,
   ensemble_cluster_robust
+Config/roxygen2/version: 8.0.0

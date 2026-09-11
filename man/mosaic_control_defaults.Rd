@@ -121,15 +121,9 @@ The number of parameter sets in the ensemble is determined by the best subset
 \item{parallel}{List of parallelization settings (infrastructure). Default is:
 \itemize{
 \item \code{enable}: Enable parallel execution (default: FALSE)
-\item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
-parallelism only: the LASER worker count on the non-Dask path, and the
-orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
-remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
+\item \code{n_cores}: Number of simulation worker processes (default: 1L)
 \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 \item \code{progress}: Show progress bar (default: TRUE)
-\item \code{strict_worker_version}: Coiled/Dask path only. Abort the run if
-any worker's laser-cholera engine version differs from the orchestrator's
-(default: TRUE). Set FALSE to downgrade a mismatch to a warning.
 }}
 
 \item{io}{List of I/O settings (output format). Default is:

@@ -93,9 +93,14 @@ test_that("#1+#2b: optimize_ensemble_subset is bit-identical to the fixed refere
 test_that("#2b: calc_model_ensemble is bit-identical to the fixed reference", {
   fx <- readRDS(test_path("fixtures", "parity_tier2.rds"))
   ci <- fx$ce_inputs
+  # The fixture's canned engine output used to be injected via
+  # precomputed_results=; that argument went with the Dask backend (v0.65.0), so
+  # it is now served through the mocked per-task worker. The aggregation math the
+  # fixture pins is untouched, so the golden values still apply.
+  local_mocked_ensemble_sims(ci$precomputed)
   new <- calc_model_ensemble(config = ci$config, configs = ci$configs,
             parameter_weights = ci$parameter_weights, n_simulations_per_config = ci$n_stoch,
-            envelope_quantiles = ci$envelope, precomputed_results = ci$precomputed,
+            envelope_quantiles = ci$envelope,
             verbose = FALSE)
   expect_equal(new$cases_median,  fx$ce$cases_median,  tolerance = testthat::testthat_tolerance())
   expect_equal(new$deaths_median, fx$ce$deaths_median, tolerance = testthat::testthat_tolerance())

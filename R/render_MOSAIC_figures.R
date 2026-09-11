@@ -17,10 +17,9 @@
 #' \code{ensemble_candidate.rds}, and \code{medoid_ensemble.rds}). A missing,
 #' corrupt, or schema-incompatible artifact causes the affected figure to be
 #' \strong{warned-and-skipped}, never rebuilt — rebuilding would trigger local
-#' simulation on the client (\code{calc_model_ensemble(precomputed_results =
-#' NULL)} falls back to PSOCK/sequential), which this function deliberately
-#' avoids. Every figure is wrapped in \code{tryCatch} so one failure never
-#' aborts the rest.
+#' simulation on the client (\code{calc_model_ensemble()} always simulates, via
+#' PSOCK or sequentially), which this function deliberately avoids. Every figure
+#' is wrapped in \code{tryCatch} so one failure never aborts the rest.
 #'
 #' @param dir_output Character. Path to a finished \code{run_MOSAIC()} output
 #'   directory (the one containing \code{1_inputs/}, \code{2_calibration/},

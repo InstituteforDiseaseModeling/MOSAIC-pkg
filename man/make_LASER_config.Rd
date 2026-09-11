@@ -185,14 +185,11 @@ model parameters.
 a \emph{rate}, not a period -- prior median ~0.71/day. The engine uses
 \code{iota * E} as the flow out of E.}
 
-\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric
->= 0, per day; "severe / symptomatic" branch).}
+\item{gamma_1}{Symptomatic shedding-duration rate \code{I_sym -> R} (numeric= 0, per day; "severe / symptomatic" branch).}
 
-\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric
->= 0, per day; "mild / asymptomatic" branch).}
+\item{gamma_2}{Asymptomatic shedding-duration rate \code{I_asym -> R} (numeric= 0, per day; "mild / asymptomatic" branch).}
 
-\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric
->= 0, per day). Distinct from vaccine waning (\code{omega_1}, \code{omega_2}).}
+\item{epsilon}{Natural-infection immunity waning rate \code{R -> S} (numeric= 0, per day). Distinct from vaccine waning (omega_1, omega_2).}
 
 \item{mu_jt}{A matrix of time-varying probabilities of mortality due to infection, with rows equal to
 length(location_name) and columns equal to length(t). All values must be numeric and between 0 and 1.

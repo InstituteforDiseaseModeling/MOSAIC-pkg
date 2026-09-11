@@ -37,7 +37,13 @@ run_LASER_R <- function(config,
      # for a component that does not exist" is both cheaper to detect and more
      # actionable than a downstream config error, and checking it second would
      # let a config problem mask it.
-     unported <- setdiff(components, names(LASER_PHASE_FUNCTIONS))
+     unknown <- setdiff(components, LASER_PIPELINE)
+     if (length(unknown)) {
+          stop(sprintf("Unknown component(s): %s. The pipeline is: %s.",
+                       paste(unknown, collapse = ", "),
+                       paste(LASER_PIPELINE, collapse = ", ")), call. = FALSE)
+     }
+     unported <- setdiff(components, names(.LASER_PHASE_FUNCTIONS))
      if (length(unported)) {
           stop(sprintf(paste0("Component(s) not yet ported to R: %s. Requesting ",
                               "an unported component errors rather than being ",
@@ -45,6 +51,17 @@ run_LASER_R <- function(config,
                               "green while simulating the wrong model."),
                        paste(unported, collapse = ", ")), call. = FALSE)
      }
+     if (anyDuplicated(components)) {
+          stop("`components` names the same component more than once: ",
+               paste(unique(components[duplicated(components)]), collapse = ", "),
+               ".", call. = FALSE)
+     }
+
+     # Phase order is fixed by the engine (`model.py:566-579`), not by the
+     # caller. Running the requested subset in the order it happened to be
+     # written in would silently simulate a different model -- `Census` before
+     # `Susceptible`, say, sums the previous tick's compartments.
+     components <- LASER_PIPELINE[LASER_PIPELINE %in% components]
 
      par <- laser_params(config, components = components)
 
@@ -68,7 +85,7 @@ run_LASER_R <- function(config,
      state <- laser_seed_state(state, par)
      state <- .laser_seed_census(state, par, ctl)
 
-     phases <- LASER_PHASE_FUNCTIONS[components]
+     phases <- .LASER_PHASE_FUNCTIONS[components]
 
      for (tick in seq.int(0L, par$nticks - 1L)) {
           for (phase in phases) {
@@ -113,7 +130,14 @@ LASER_PIPELINE <- c(
 # Phase dispatch table. Components are added here as they are ported; a
 # requested component with no entry errors rather than being silently skipped,
 # which is what would otherwise let a half-finished pipeline look green.
-LASER_PHASE_FUNCTIONS <- list(
-     Susceptible = laser_phase_susceptible,
-     Census      = laser_phase_census
+.LASER_PHASE_FUNCTIONS <- list(
+     Susceptible   = laser_phase_susceptible,
+     Exposed       = laser_phase_exposed,
+     Recovered     = laser_phase_recovered,
+     Infectious    = laser_phase_infectious,
+     Vaccinated    = laser_phase_vaccinated,
+     Census        = laser_phase_census,
+     HumanToHuman  = laser_phase_human_to_human,
+     EnvToHuman    = laser_phase_env_to_human,
+     Environmental = laser_phase_environmental
 )

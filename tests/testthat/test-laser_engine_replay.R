@@ -167,8 +167,153 @@ test_that("a run reports which draw sites it exercised", {
 test_that("requesting an unported component errors rather than being skipped", {
   # A silently short pipeline would look green while simulating the wrong
   # model, which is the failure mode CLAUDE.md lesson #6 is about.
+  #
+  # This named "HumanToHuman" until A-2 ported it. DerivedValues is the only
+  # component still outstanding; when A-3 lands it, this test needs a different
+  # subject rather than deletion -- the guard it covers is what stops a
+  # half-finished pipeline from passing.
   expect_error(
-    run_LASER_R(config = list(), components = "HumanToHuman"),
+    run_LASER_R(config = list(), components = "DerivedValues"),
     "not yet ported"
   )
+})
+
+# =============================================================================
+# A-2: Tier B on the full ported pipeline
+#
+# Nine components -- everything except DerivedValues, which A-3 ports. These are
+# the tests that certify the port: the engine is driven through the oracle's
+# recorded draw sequence and every draw argument and every result channel is
+# compared.
+#
+# What "correct" means here, precisely:
+#   * Every draw is at the expected tick, phase and site, with a bit-identical
+#     integer `n`. A one-person difference in `n` decorrelates the sequence, so
+#     this is compared exactly, not to a tolerance.
+#   * Every INTEGER result channel is bit-identical. This is the strongest claim
+#     available and it covers everything calibration consumes -- the
+#     compartments, incidence, and reported cases/deaths.
+#   * Float channels are compared with a scale-aware tolerance; see
+#     .laser_site_tol() in R/laser_rng.R for why, and for the one draw site
+#     (environmental/decay) that needs its own.
+# =============================================================================
+
+PORTED <- c("Susceptible", "Exposed", "Recovered", "Infectious", "Vaccinated",
+            "Census", "HumanToHuman", "EnvToHuman", "Environmental")
+
+# Scale-aware comparison, matching the replay assertion's criterion:
+#   |r - o| <= rtol * (|o| + max|o|)
+# The max|o| floor is what makes near-zero references (low-season Lambda,
+# empty-reservoir Psi) comparable at all -- see a2_required_tolerance.R.
+expect_channels_match <- function(got, ref, rtol = 1e-5) {
+  int_ch <- MOSAIC:::LASER_CHANNELS_INTEGER
+  for (nm in names(ref)) {
+    expect_false(is.null(got[[nm]]), info = paste("channel missing from R:", nm))
+    expect_identical(dim(got[[nm]]), dim(ref[[nm]]), info = paste("dim:", nm))
+    if (nm %in% int_ch) {
+      # Bit-identical, no tolerance.
+      expect_identical(as.integer(got[[nm]]), as.integer(ref[[nm]]),
+                       info = paste("integer channel:", nm))
+    } else {
+      o <- ref[[nm]]
+      scale <- max(abs(o))
+      if (scale == 0) {
+        # A channel the oracle left identically zero (e.g. an unused dose
+        # schedule). The scale-aware ratio would be 0/0, so require exact zero
+        # rather than skipping -- a non-zero R value here is a real bug.
+        expect_equal(max(abs(got[[nm]])), 0, info = paste("all-zero channel:", nm))
+      } else {
+        expect_lte(max(abs(got[[nm]] - o) / (abs(o) + scale)), rtol)
+      }
+    }
+  }
+}
+
+replay_fixture <- function(file) {
+  fx <- readRDS(test_path("fixtures", file))
+  out <- run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed,
+                     quiet = TRUE, components = PORTED,
+                     rng = "replay", record = fx)
+  list(fx = fx, out = out)
+}
+
+test_that("Tier B: the full ported pipeline replays the oracle draw-for-draw (40 patches)", {
+  r <- replay_fixture("replay_full_pipeline.rds")
+  # Reaching here means every draw matched: run_LASER_R asserts each one and
+  # laser_assert_replay_complete() then requires the record be fully consumed,
+  # so neither a skipped nor an extra draw can pass.
+  expect_equal(r$fx$meta$nticks, 60L)
+  expect_equal(r$fx$meta$npatches, 40L)
+  expect_equal(length(r$fx$calls$site), 1315L)
+
+  # All 22 draw sites exercised. A site with no calls is untested code wearing a
+  # passing test, so this is asserted rather than assumed.
+  cov <- attr(r$out, "laser_coverage")
+  expect_equal(sum(cov$n_calls > 0L), length(MOSAIC:::.LASER_DRAW_SITES))
+  expect_setequal(cov$site[cov$n_calls > 0L], MOSAIC:::.LASER_DRAW_SITES)
+})
+
+test_that("Tier B: all 26 result channels match, integer channels bit-identically (40 patches)", {
+  r <- replay_fixture("replay_full_pipeline.rds")
+  expect_equal(length(r$fx$results), 26L)
+  expect_channels_match(r$out$results, r$fx$results)
+})
+
+test_that("Tier B: the single-location degenerate case replays and matches", {
+  # npatches = 1 takes different paths through the per-patch reshaping (the
+  # dose-one donor matrix, the pi_ij column sums), which a 40-patch fixture
+  # cannot exercise.
+  r <- replay_fixture("replay_single_location.rds")
+  expect_equal(r$fx$meta$npatches, 1L)
+  expect_channels_match(r$out$results, r$fx$results)
+})
+
+test_that("Tier B: the full-length run matches over all 1398 ticks", {
+  # The regression anchor. 60 ticks is enough to cover every draw site but not
+  # to expose anything that accumulates -- the float32 reservoir drift in W
+  # first breached a naive 1e-6 relative tolerance at tick 37 of this config,
+  # and the Vaccinated pro-rata rounding bug that this suite caught did not
+  # surface until tick 99.
+  r <- replay_fixture("replay_full_length.rds")
+  expect_equal(r$fx$meta$nticks, 1398L)
+  expect_equal(length(r$fx$calls$site), 30751L)
+  expect_channels_match(r$out$results, r$fx$results)
+})
+
+test_that("replay is strict in both directions: a truncated record errors", {
+  fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
+  short <- fx
+  keep <- seq_len(length(fx$calls$site) - 5L)
+  short$calls <- lapply(fx$calls, function(v) v[keep])
+  expect_error(
+    run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,
+                components = PORTED, rng = "replay", record = short),
+    "Replay record exhausted")
+})
+
+test_that("a requested component that is not ported errors rather than being skipped", {
+  # DerivedValues is the remaining one (A-3). A silently short pipeline would
+  # simulate the wrong model while every assertion still passed.
+  fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
+  expect_error(
+    run_LASER_R(config = fx$meta$config_list, components = c(PORTED, "DerivedValues")),
+    "not yet ported")
+  expect_error(
+    run_LASER_R(config = fx$meta$config_list, components = c("Susceptible", "Nonsense")),
+    "Unknown component")
+})
+
+test_that("phase order is the engine's, not the caller's argument order", {
+  # Census before Susceptible would sum the previous tick's compartments. The
+  # engine sorts the requested subset into the canonical pipeline order, so a
+  # scrambled `components` still runs correctly.
+  fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
+  scrambled <- rev(PORTED)
+  out <- run_LASER_R(config = fx$meta$config_list, seed = fx$meta$seed, quiet = TRUE,
+                     components = scrambled, rng = "replay", record = fx)
+  expect_channels_match(out$results, fx$results)
+
+  expect_error(
+    run_LASER_R(config = fx$meta$config_list, components = c("Susceptible", "Susceptible")),
+    "more than once")
 })

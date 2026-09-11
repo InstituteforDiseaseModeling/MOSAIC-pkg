@@ -47,11 +47,11 @@ Benchmark scripts are in the session scratchpad `/tmp/claude-1000/-home-cliffk-i
 
 At 40 patches the vectors are far too short for NumPy's per-element speed to matter. What dominates is per-tick interpreter overhead, and R's loop is *lighter* than Python's 12-phase dispatch with `perf_counter_ns` on every phase.
 
-**Read that R number as an order-of-magnitude estimate, not a result.** It is a representative loop, not the engine: it omits state allocation, results assembly, config validation, and GC. The honest claim is "R lands in the same ballpark, plausibly faster" — the migration does not depend on R winning, only on it not being 10× worse. What the migration *does* depend on, and what is genuinely measured, is the **3.3 s per-worker import**, which on a 20-core PSOCK fan-out is 66 s of pure startup tax paid on every batch, and which goes to zero.
+**That R number was an estimate and it was wrong — see §11 for the measurement.** It timed a representative arithmetic loop, omitting state allocation, results assembly, config validation, and GC. State storage turned out to be the dominant cost, so the estimate missed the thing that mattered; the engine measures 1.183 s/run against Python's 0.698 s. The surviving claim is the weak one this paragraph already stated: R is in the same ballpark, not 10x worse. The migration does not depend on R winning on speed. What the migration *does* depend on, and what is genuinely measured, is the **3.3 s per-worker import**, which on a 20-core PSOCK fan-out is 66 s of pure startup tax paid on every batch, and which goes to zero.
 
 Arithmetic for the default budget (`calibration$max_simulations_total = 100000`, 20 cores on this laptop), using the measured *Python* per-sim time as a conservative stand-in for the not-yet-existing R engine:
 
-- 100,000 sims × 0.75 s = 75,000 core-seconds ≈ **60 minutes of engine time on 20 cores**, and that is the pessimistic bound. At the estimated R speed it is ~13 minutes.
+- 100,000 sims × 0.75 s = 75,000 core-seconds ≈ **60 minutes of engine time on 20 cores**. **Measured, not estimated (see §11): the R engine is 1.183 s/run against Python's 0.698 s, so the same 100,000 sims are ~99 minutes on 20 cores, not the ~13 this section originally guessed.** The estimate below it was wrong by about 8x; the import-tax and RAM arguments survive, the speed argument does not.
 - Likelihood evaluation and I/O plausibly dominate either way.
 - **RAM should collapse.** CLAUDE.md budgets ~2 GB per worker for the current setup, almost all of it Python interpreter + NumPy + the laser-cholera model state (the calibration workers never import TensorFlow — that is only the ψ path). The R engine's live state is 28 matrices of 1,398 × 40 doubles ≈ **12 MB per sim**; peak RSS per worker will be some multiple of that once the results list, config, and R session overhead are counted, but the order of magnitude is tens of MB, not GB.
 
@@ -489,6 +489,8 @@ Implement the RNG contract from §4.2 here (isolated stream, `on.exit()` restore
 
 **Exit:** measured numbers written into §3, replacing the estimates. If peak RSS per worker exceeds ~1 GB, land the change that caps worker count by measured memory rather than `detectCores()`. If per-sim time is worse than the Python engine's 0.75 s, stop and profile before A-4 — the migration still stands on the import-tax and RAM arguments, but we need to know.
 
+**Partly discharged early, and it tripped.** Single-run time and allocation were measured during A-2 because the first working engine was visibly slow; see §11. Per-sim time *is* worse than Python (1.183 s vs 0.698 s) even after a 2.46x fix, so this gate has fired and needs the user's decision before A-4. What A-3a still owes: the 1/10/40-patch scaling curve, sequential vs 20-worker throughput, peak RSS per worker under the real calibration worker, and end-to-end batch timing including likelihood and I/O.
+
 ### Phase A-4 — cutover and fixture freeze (1 week)
 
 `run_LASER()` becomes the R engine and, for the first time, the **only** engine entry point — `run_MOSAIC.R:452`'s direct import goes through it. Convert every row of the §4.2 cutover table marked "(A-4)", and fix the §4.6 stale references, with an exhaustive whole-repo grep and every call site named in the commit message. Freeze the Tier B/C fixtures into `tests/testthat/fixtures/` at the sizes A-0 measured, with `fixtures/ORACLE.md` recording the oracle commit SHA and wheel SHA-256; move the generator to `claude/`. Point `test-lasik_calculations.R` at the R engine — it becomes fast enough to un-gate from `skip_if_slow()`.
@@ -543,11 +545,33 @@ The earlier draft left four open. All four are now decided, so none of them bloc
 | Phase | State |
 |---|---|
 | C-0 archive freeze | **skipped** — nothing needs bit-exact preservation (§8) |
-| A-0 replay-harness spike | **done** — shim transparent, 22/22 draw sites covered, fixture size 9.3 MB, float32 gap measured at 9.9e-8 |
-| C-1 Dask/Coiled excision | **done** — ~2,200 lines of production code and ~1,900 of tests removed; one execution path remains |
+| A-0 replay-harness spike | **done, with one correction** — shim transparent, fixture size 9.3 MB, float32 gap measured at 9.9e-8. The oracle does exercise all 22 active draw sites within 60 ticks, but A-0's *label table* for them was wrong: five `infectious.py` sites were shifted onto the wrong line, `infectious/reported_deaths` was missing and a phantom `infectious/sigma_split` (actually `np.round`, not a draw) was present. The count matched at 22 because the two errors offset, so "22/22 covered" passed while five labels were wrong. Corrected in both `.LASER_DRAW_SITES` and `.LASER_ORACLE_SITE_MAP`, guarded by `claude/oracle/verify_draw_sites.py` (re-derives the list from the oracle, diffs per site) and by pure-R membership tests. See CLAUDE.md lesson #15 |
+| C-1 Dask/Coiled excision | **done and verified** — ~2,200 lines of production code and ~1,900 of tests removed; one execution path remains. Full suite 947 tests / 0 failures / 0 errors; `R CMD check` on the built tarball at 3 WARNINGs + 3 NOTEs, every one of them traced to the base commit `4c1e861` (non-ASCII string literals in `plot_Reff.R`/`run_rolling_cv.R`, six pre-existing `MOSAIC:::` self-calls, `.run_sim_worker`, a `calc_Reff.Rd` xref, and the absent `VignetteBuilder`) |
 | A-1 deterministic precomputation | **done** — Tier A green on 40-location and single-location configs; `pi_ij`'s 1.17e-6 gap diagnosed to the oracle's float32 haversine |
-| **A-2 the tick loop** | **next** |
-| A-3, A-3a, A-4, C-2, A-5 | pending |
+| **A-2 the tick loop** | **done** — all seven remaining components ported. Tier B green on three fixtures: 60t x 40p, 60t x 1p, and the full 1398t x 40p anchor. **22/22 draw sites covered, 30,751 draws matched draw-for-draw, and all 19 integer result channels bit-identical over the full 1,398 ticks.** Float channels within a scale-aware 1e-5 |
+| A-3 DerivedValues + results | **next** — the only unported component; `spatial_hazard` and `coupling` are the two missing channels |
+| **A-3a performance gate** | **pre-measured, and it contradicts this plan — see below** |
+| A-4, C-2, A-5 | pending |
+
+### A-3a, measured early: the performance premise was wrong
+
+This plan claimed the R engine would be roughly **5x faster** than Python. Measured on the same 1,398-tick 40-patch default config, same nine components, timing the run plus setup in both:
+
+| | time per run |
+|---|---|
+| Python `model.run()` + `get_parameters()` + `Model()` | **0.698 s** |
+| R `run_LASER_R()`, first working version | 2.912 s |
+| R `run_LASER_R()`, after the state-storage fix | **1.183 s** |
+
+So R is **1.69x slower**, not 5x faster. The original claim came from a microbenchmark of a representative arithmetic loop, which is exactly the trap §10 warned about and then fell into: it omitted state storage, and state storage turned out to *be* the cost.
+
+The fix was worth 2.46x on its own. Each channel was a `(nticks + 1) x npatches` matrix, and a row write `state$S[row, ] <- v` copies the whole matrix — **15 microseconds** against 0.65 for a row read. Line profiling put roughly **55%** of the run in those writes, at about 40 of them per tick. Channels are now lists of per-tick vectors, where a write is a pointer store, and the `[tick, patch]` matrices the results contract needs are assembled once at the end. Allocation fell from 4.9 GB to 987 MB per run. Note that switching the container from a list to an environment, tried first, changed nothing: `env$M[i, ] <- v` still copies, because fetching `M` bumps its reference count before the subassignment.
+
+After that the profile is flat — the hottest single line is 6.9% — so there is no second structural win of that size. Closing the remaining 1.69x in pure R would mean many small changes for diminishing returns, or a compiled inner loop, which §10 rules out of scope.
+
+**This is a decision for the user, not an implementation detail.** At 1.69x, a 40,000-simulation calibration costs about 13 CPU-hours against 8. Against that, the migration still removes reticulate, the ~2 GB-per-worker Python heap (R peaks near 700 MB), the 3.3 s per-worker import, the whole Python environment as a deployment dependency, and the orchestrator/worker version skew that silently invalidated the Coiled runs (issue #113). Whether 1.69x is an acceptable price for that is a judgement about priorities, and the honest position is that the plan oversold it by roughly a factor of 8.
+
+**One inventory correction found while verifying C-1.** `calc_model_ensemble()` invoked the Python engine through a *closure* defined inside its own body, which imported `laser.cholera.metapop.model` directly rather than going through `run_LASER()` — a third engine call site, and the one the cutover table (§6) reaches via `R/calc_model_ensemble.R:660`. That closure is now the package-level `.mosaic_ensemble_sim_task()` in `R/calc_model_ensemble_task.R`, so A-4 swaps the engine there in one place instead of editing a closure that PSOCK also `clusterExport`s. The hoist was forced by a subtler problem: `precomputed_results=` was the seam four test files used to feed synthetic engine output in, and its only *production* callers were the Dask gather and the Dask medoid dispatch. Deleting the argument silently took 25 assertions with it — on weight/seed alignment, artifact masking and trajectory reduction, all properties of the *surviving* local path. Mocking the hoisted task restores every one of them and exercises strictly more production code than the argument did, because the task list, the dispatch and the gather now run for real. `tests/testthat/helper-ensemble-mock.R` holds the seam; `parity_tier2.rds` still matches bit-for-bit through it, which is the evidence that the hoist changed no arithmetic. Two dead fragments fell out of the same removal, in the shape lesson #14 describes: `.spill_traj()` (orphaned — its only caller was the removed branch) and the record-carried `param_seed` tier of the member-seed fallback, which existed only because a Dask worker held a config the master did not.
 
 **Next action: Phase A-2 — the tick loop.** Seven components remain to port, one per commit, each extending the replay test in phase order: Exposed → Recovered → Infectious → Vaccinated → HumanToHuman → EnvToHuman → Environmental. (`Susceptible` and `Census` are done and replaying bit-identically.) `Infectious` and `Vaccinated` are the two hard ones — see §8's notes on the two different `N`s and the observable rounding order. The scaffolding they need is all in place: the draw controller with its 22-site registry, the replay assertions, the per-tick invariants, the state allocator, and the results trimming.
 

@@ -581,15 +581,6 @@ calc_model_ensemble <- function(config,
     if (.scratch_owned && isTRUE(reduce_trajectories))
       on.exit(unlink(traj_scratch, recursive = TRUE, force = TRUE), add = TRUE)
   }
-  # Spill one sim's captured channels (+ epidemic-flag inputs) to scratch.
-  .spill_traj <- function(param_idx, stoch_idx, traj, traj_epi) {
-    if (!.capture || is.null(traj) || !length(traj)) return(invisible(NULL))
-    saveRDS(list(traj = traj, traj_epi = traj_epi),
-            file.path(traj_scratch, sprintf("sim_%d_%d.rds",
-                                            as.integer(param_idx), as.integer(stoch_idx))))
-    invisible(NULL)
-  }
-
   # Capture flags resolved once; threaded explicitly into the worker (NOT via
   # closure capture, which is fragile when the task fn's environment is reset
   # to .GlobalEnv for PSOCK export).
@@ -597,83 +588,9 @@ calc_model_ensemble <- function(config,
   .traj_channels <- as.character(trajectory_channels)
   .traj_scratch  <- traj_scratch   # NULL unless capturing (set above)
 
-  # Worker function (self-contained for parallel execution)
-  run_param_stoch_simulation <- function(task_info, param_configs_list,
-                                         capture_traj = FALSE,
-                                         traj_channels = character(0),
-                                         traj_scratch = NULL) {
-    param_idx <- task_info$param_idx
-    stoch_idx <- task_info$stoch_idx
-    tryCatch({
-      if (!exists("lc", where = .GlobalEnv, inherits = FALSE)) {
-        lc <- reticulate::import("laser.cholera.metapop.model")
-        MOSAIC:::.mosaic_strip_laser_file_handler()
-      } else {
-        lc <- get("lc", envir = .GlobalEnv)
-      }
-      param_config <- param_configs_list[[param_idx]]
-      param_config$seed <- (param_idx * 1000L) + stoch_idx
-      model <- lc$run_model(
-        paramfile = MOSAIC:::.mosaic_prepare_config_for_python(param_config),
-        quiet = TRUE
-      )
-      # Extract the engine's spatial-structure arrays (J x T hazard, J x J
-      # coupling, J x J pi_ij) BEFORE the model is discarded below (F1). These
-      # are computed by the engine's DerivedValues component at the final tick
-      # and otherwise lost when the model object is gc'd. tryCatch each so an
-      # engine that drops DerivedValues simply yields NULL (warn+skip downstream).
-      sh  <- tryCatch(model$results$spatial_hazard, error = function(e) NULL)
-      cpl <- tryCatch(model$results$coupling,       error = function(e) NULL)
-      pij <- tryCatch(model$results$pi_ij,          error = function(e) NULL)
-      result <- list(param_idx = param_idx, stoch_idx = stoch_idx,
-                     reported_cases = model$results$reported_cases,
-                     reported_deaths = model$results$reported_deaths,
-                     spatial_hazard = sh,
-                     coupling       = cpl,
-                     pi_ij          = pij,
-                     success = TRUE)
-      # Trajectory channels (comprehensive internal-state capture). Harvested
-      # here, where model$results is in hand, at zero marginal sim cost --
-      # NEVER re-simulated downstream (PLAN sec 3, capture-don't-replay). Each
-      # channel tryCatch'd -> omitted if the engine build lacks it. Also carry
-      # the per-member epidemic-flag inputs (sampled per set) so epidemic_frac
-      # is reconstructable on the master regardless of backend (DM F5).
-      if (isTRUE(capture_traj) && length(traj_channels)) {
-        traj <- list()
-        for (ch in traj_channels) {
-          v <- tryCatch(model$results[[ch]], error = function(e) NULL)
-          if (!is.null(v)) traj[[ch]] <- v
-        }
-        traj_epi <- list(
-          delta_reporting_cases = tryCatch(param_config$delta_reporting_cases,
-                                           error = function(e) NULL),
-          epidemic_threshold    = tryCatch(param_config$epidemic_threshold,
-                                           error = function(e) NULL)
-        )
-        # STREAM-TO-DISK: write channels to local scratch (PSOCK workers share
-        # the master's filesystem) and do NOT carry them back on the record --
-        # this is what keeps the gather (and peak RAM) flat regardless of
-        # n_param. If no scratch dir was provided (direct call without spill),
-        # fall back to attaching them to the record for the in-process reduce.
-        if (length(traj) && !is.null(traj_scratch) && nzchar(traj_scratch)) {
-          tryCatch(
-            saveRDS(list(traj = traj, traj_epi = traj_epi),
-                    file.path(traj_scratch, sprintf("sim_%d_%d.rds",
-                                                    param_idx, stoch_idx))),
-            error = function(e) NULL)
-        } else if (length(traj)) {
-          result$traj <- traj
-          result$traj_epi <- traj_epi
-        }
-      }
-      gc(verbose = FALSE)
-      reticulate::import("gc")$collect()
-      result
-    }, error = function(e) {
-      list(param_idx = param_idx, stoch_idx = stoch_idx,
-           success = FALSE, error = as.character(e))
-    })
-  }
+  # The per-task simulation worker is the package-level
+  # .mosaic_ensemble_sim_task() (R/calc_model_ensemble_task.R). PSOCK workers
+  # resolve it from the loaded MOSAIC namespace, so it is not exported to them.
 
   task_list <- expand.grid(param_idx = seq_len(n_param_sets),
                            stoch_idx = seq_len(n_simulations_per_config))
@@ -711,8 +628,12 @@ calc_model_ensemble <- function(config,
     # so the per-task dispatch closure (below) carries no payload -- it resolves
     # both from the worker side. This keeps the robust load-balanced dispatcher
     # from re-serializing all param_configs on every task.
-    parallel::clusterExport(cl, c("param_configs", "run_param_stoch_simulation",
-                                   ".capture_traj", ".traj_channels", ".traj_scratch"),
+    # .ens_sim_task is bound here, inside the namespace, so the worker-side
+    # closure needs neither a MOSAIC::: prefix nor a namespace lookup.
+    .ens_sim_task <- .mosaic_ensemble_sim_task
+    parallel::clusterExport(cl, c("param_configs", ".ens_sim_task",
+                                   ".capture_traj", ".traj_channels",
+                                   ".traj_scratch"),
                             envir = environment())
 
     if (verbose) message("Parallel execution on ", n_cores_use, " cores...")
@@ -724,7 +645,7 @@ calc_model_ensemble <- function(config,
     # surfaces a diagnostic stop() instead of hanging.
     .ens_idle_timeout <- as.numeric(
       getOption("MOSAIC.ensemble_worker_timeout_sec", 1800))
-    .ens_task_fun <- function(row) run_param_stoch_simulation(
+    .ens_task_fun <- function(row) .ens_sim_task(
       row, param_configs, .capture_traj, .traj_channels, .traj_scratch)
     environment(.ens_task_fun) <- .GlobalEnv  # resolve names worker-side
     results_list <- .mosaic_cluster_lapply_robust(
@@ -746,9 +667,9 @@ calc_model_ensemble <- function(config,
 
     results_list <- pbapply::pblapply(
       split(task_list, seq_len(nrow(task_list))),
-      function(row) run_param_stoch_simulation(row, param_configs,
-                                               .capture_traj, .traj_channels,
-                                               .traj_scratch)
+      function(row) .mosaic_ensemble_sim_task(row, param_configs,
+                                              .capture_traj, .traj_channels,
+                                              .traj_scratch)
     )
   }
 
@@ -986,12 +907,10 @@ calc_model_ensemble <- function(config,
   # ===========================================================================
 
   member_seeds <- rep(NA_integer_, n_param_sets)
-  if (anyNA(member_seeds) && length(param_configs) == n_param_sets) {
+  if (length(param_configs) == n_param_sets) {
     for (i in seq_len(n_param_sets)) {
-      if (is.na(member_seeds[i])) {
-        s <- param_configs[[i]]$seed
-        if (!is.null(s) && length(s)) member_seeds[i] <- suppressWarnings(as.integer(s)[1])
-      }
+      s <- param_configs[[i]]$seed
+      if (!is.null(s) && length(s)) member_seeds[i] <- suppressWarnings(as.integer(s)[1])
     }
   }
   if (anyNA(member_seeds) && !is.null(parameter_seeds) &&

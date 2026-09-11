@@ -18,7 +18,40 @@ mini_config <- function(npatches = 3L, nticks = 5L, ...) {
     location_name = paste0("L", seq_len(npatches)),
     S_j_initial = rep(1000L, npatches),
     b_jt = matrix(1e-4, nrow = npatches, ncol = nticks),
-    d_jt = matrix(2e-5, nrow = npatches, ncol = nticks)
+    d_jt = matrix(2e-5, nrow = npatches, ncol = nticks),
+
+    # Dynamics parameters, so any component subset can be requested. Each
+    # component validates its own, so a config missing these can only run
+    # Susceptible + Census. Values are plausible but arbitrary: these tests are
+    # about normalisation and validation, not about dynamics -- parity with the
+    # engine is test-laser_engine_replay.R's job.
+    epsilon = 1 / 365,                                  # Recovered
+    iota = 0.5, gamma_1 = 0.2, gamma_2 = 0.25,          # Infectious
+    sigma = 0.25, rho = 0.1, rho_deaths = 0.4,
+    chi_endemic = 1, chi_epidemic = 1,
+    delta_reporting_cases = 0L, delta_reporting_deaths = 0L,
+    mu_j_baseline = rep(1e-3, npatches),
+    mu_j_slope = rep(0, npatches),
+    mu_j_epidemic_factor = rep(0, npatches),
+    epidemic_threshold = rep(0.01, npatches),
+    omega_1 = 1 / 730, omega_2 = 1 / 1095,              # Vaccinated
+    phi_1 = 0.6, phi_2 = 0.8,
+    nu_1_jt = matrix(0, nrow = npatches, ncol = nticks),
+    nu_2_jt = matrix(0, nrow = npatches, ncol = nticks),
+    tau_i = rep(0.05, npatches),                        # HumanToHuman
+    alpha_1 = rep(0.95, npatches), alpha_2 = 1,
+    beta_j0_hum = rep(0.3, npatches),
+    latitude = seq(-10, 10, length.out = npatches),
+    longitude = seq(20, 40, length.out = npatches),
+    a_1_j = rep(0.1, npatches), b_1_j = rep(0.1, npatches),
+    a_2_j = rep(0.05, npatches), b_2_j = rep(0.05, npatches),
+    p = 1L, mobility_omega = 1, mobility_gamma = 1,
+    theta_j = rep(0.2, npatches),                       # EnvToHuman
+    kappa = 1e5, beta_j0_env = rep(0.2, npatches),
+    zeta_1 = 1e6, zeta_2 = 1e5,                         # Environmental
+    psi_jt = matrix(0.5, nrow = npatches, ncol = nticks),
+    decay_days_short = 3, decay_days_long = 90,
+    decay_shape_1 = 1, decay_shape_2 = 1
   )
   utils::modifyList(cfg, list(...))
 }
@@ -184,13 +217,72 @@ test_that("I_j_initial splits by sigma and the two halves sum back exactly", {
   par <- laser_params(cfg, components = comps)
   state <- laser_seed_state(laser_alloc_state(par$nticks, par$npatches), par)
 
-  expect_identical(state$Isym[1, ] + state$Iasym[1, ], c(101L, 7L, 0L))
+  expect_identical(state$Isym[[1]] + state$Iasym[[1]], c(101L, 7L, 0L))
   # round-half-to-even: 0.5 * 101 = 50.5 -> 50, not 51
-  expect_identical(state$Isym[1, ], c(50L, 4L, 0L))
+  expect_identical(state$Isym[[1]], c(50L, 4L, 0L))
 })
 
-test_that("sigma outside [0, 1] is rejected", {
+test_that("sigma outside [0, 1] is rejected, and a per-patch sigma is too", {
   cfg <- mini_config(I_j_initial = rep(10L, 3), sigma = 1.5)
   expect_error(laser_params(cfg, components = c("Infectious", "Census")),
-               "exceeds")
+               "must be <= 1")
+
+  # sigma is a SCALAR in the engine (`params.py` scalars table). Accepting a
+  # per-patch vector here would take a config the Python engine rejects
+  # outright, so the length check has to fire.
+  cfg_vec <- mini_config(I_j_initial = rep(10L, 3), sigma = c(0.2, 0.3, 0.4))
+  expect_error(laser_params(cfg_vec, components = c("Infectious", "Census")),
+               "must be a single value")
+})
+
+# -----------------------------------------------------------------------------
+# epidemic_peaks: an oracle crash the R engine must not inherit
+#
+# `params.py:584` does `params.epidemic_peaks.iso_code` after building a
+# DataFrame, which raises AttributeError when the peak list is empty -- so a
+# config truncated to a window or a location with no recorded peak cannot be run
+# by the Python engine at all (claude/oracle/truncate_config.py deletes the key
+# to work around it; see fixtures/ORACLE.md).
+#
+# The R engine does not consume epidemic_peaks: peak-based scoring lives in
+# calc_model_likelihood(), not in the transmission model. These tests pin that,
+# so the oracle's bug is not reproduced along with its behaviour.
+# -----------------------------------------------------------------------------
+
+test_that("the engine accepts a config with empty, zero-row or absent epidemic_peaks", {
+  fx <- readRDS(test_path("fixtures", "replay_single_location.rds"))
+  base <- fx$meta$config_list
+  ported <- c("Susceptible", "Exposed", "Recovered", "Infectious", "Vaccinated",
+              "Census", "HumanToHuman", "EnvToHuman", "Environmental")
+
+  variants <- list(
+    absent      = { c <- base; c$epidemic_peaks <- NULL; c },
+    empty_list  = { c <- base; c$epidemic_peaks <- list(); c },
+    zero_row_df = { c <- base; c$epidemic_peaks <- data.frame(); c },
+    populated   = { c <- base
+                    c$epidemic_peaks <- data.frame(iso_code = "MOZ", year = 2023L,
+                                                   week = 5L, stringsAsFactors = FALSE)
+                    c }
+  )
+
+  for (nm in names(variants)) {
+    expect_no_error(
+      run_LASER_R(config = variants[[nm]], seed = 1L, quiet = TRUE,
+                  components = ported),
+      message = paste("epidemic_peaks variant:", nm)
+    )
+  }
+})
+
+test_that("epidemic_peaks does not reach the normalised parameters at all", {
+  fx <- readRDS(test_path("fixtures", "replay_single_location.rds"))
+  cfg <- fx$meta$config_list
+  cfg$epidemic_peaks <- data.frame(iso_code = "MOZ", year = 2023L, week = 5L)
+  par <- laser_params(cfg, components = c("Susceptible", "Census"))
+
+  # It is carried on `par$config` (the return contract exposes the config
+  # verbatim) but is not promoted to a normalised parameter, so no component can
+  # branch on it.
+  expect_null(par$epidemic_peaks)
+  expect_false(is.null(par$config$epidemic_peaks))
 })

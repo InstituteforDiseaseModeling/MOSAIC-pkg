@@ -21,7 +21,6 @@ run_rolling_cv(
   central_method = "median",
   est_suitability_spec = list(),
   psi_cache = NULL,
-  dask_spec = NULL,
   dir_output,
   verbose = TRUE
 )
@@ -66,7 +65,7 @@ candidate ensemble.}
 \code{c("ensemble","ensemble_opt","medoid")}). \code{"ensemble"}
 (posterior-weighted candidate) is always included. \code{"ensemble_opt"} is
 the optimizer-selected subset (only emitted when \code{optimize_subset =
-  TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
+TRUE} and \code{ensemble_optimized.rds} exists). \code{"medoid"} is
 re-simulated from its saved config (see \code{n_reps_best_medoid}).
 \code{"best"} is accepted for back-compat but is no longer produced by
 \code{run_MOSAIC()} (no \code{config_best.json}); it is skipped with a
@@ -76,7 +75,7 @@ as a value of the \code{model} column.}
 \item{n_reps_best_medoid}{Integer (default 50); number of stochastic LASER
 reruns used to build the predictive median + intervals for the \code{best}
 and \code{medoid} configs. These reruns execute locally in the calling R
-process (not on Dask), so cost scales with this value times the number of
+process, so cost scales with this value times the number of
 cutoffs and locations.}
 
 \item{central_method}{Ensemble central tendency used for the compiled
@@ -105,8 +104,6 @@ call is skipped and the frozen \code{psi_<T>.csv} is loaded from this cache
 directory instead. The run \strong{hard-errors} if a requested cutoff is
 absent from the cache manifest, or if the run's \code{est_suitability_spec}
 hash does not match the manifest \code{spec_hash} recorded for that cutoff.}
-
-\item{dask_spec}{Optional Dask/Coiled spec passed to \code{run_MOSAIC}.}
 
 \item{dir_output}{Directory for the experiment artifact (created if needed).}
 

@@ -21,7 +21,6 @@ calc_model_ensemble(
   parallel = FALSE,
   n_cores = NULL,
   root_dir = NULL,
-  precomputed_results = NULL,
   capture_trajectories = FALSE,
   trajectory_channels = .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT,
   trajectory_n_lines = 150L,
@@ -83,9 +82,7 @@ returned series here.}
 
 \item{n_cores}{Integer or \code{NULL}. Number of cores when \code{parallel = TRUE}.}
 
-\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.}
-
-\item{precomputed_results}{Optional list of pre-gathered LASER results (e.g. from Dask).
+\item{root_dir}{Character. MOSAIC root directory. Required when \code{parallel = TRUE}.
 Each element must have \code{$param_idx}, \code{$stoch_idx},
 \code{$reported_cases}, \code{$reported_deaths}, and \code{$success}.}
 

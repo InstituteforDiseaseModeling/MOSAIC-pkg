@@ -129,13 +129,13 @@ test_that("mosaic_ensemble object has expected structure", {
     }
   }
 
+  local_mocked_ensemble_sims(precomputed)
   ens <- calc_model_ensemble(
     config = mock_config,
     configs = configs,
     parameter_weights = c(0.5, 0.3, 0.2),
     n_simulations_per_config = n_stoch,
     envelope_quantiles = c(0.025, 0.975),
-    precomputed_results = precomputed,
     verbose = FALSE
   )
 
@@ -197,11 +197,11 @@ test_that("calc_model_ensemble records non-default artifact_mask without mutatin
     )
   }
 
+  local_mocked_ensemble_sims(precomputed)
   ens <- calc_model_ensemble(
     config = mock_config, configs = configs,
     n_simulations_per_config = n_stoch,
     envelope_quantiles = c(0.025, 0.975),
-    precomputed_results = precomputed,
     n_cases_warmup_mask = 3L, mask_final_deaths_step = FALSE,
     verbose = FALSE
   )
@@ -245,12 +245,12 @@ test_that("uniform weights produce same result as unweighted mean", {
     )
   })
 
+  local_mocked_ensemble_sims(precomputed)
   ens_uniform <- calc_model_ensemble(
     config = mock_config,
     configs = configs,
     parameter_weights = rep(1, n_params),
     n_simulations_per_config = 1L,
-    precomputed_results = precomputed,
     verbose = FALSE
   )
 
@@ -286,18 +286,19 @@ test_that("non-uniform weights produce different predictions than uniform", {
          reported_deaths = matrix(rep(5, n_times), nrow = 1), success = TRUE)
   )
 
+  local_mocked_ensemble_sims(precomputed)
   ens_uniform <- calc_model_ensemble(
     config = mock_config, configs = configs,
     parameter_weights = c(1, 1, 1),
     n_simulations_per_config = 1L,
-    precomputed_results = precomputed, verbose = FALSE
+    verbose = FALSE
   )
 
   ens_weighted <- calc_model_ensemble(
     config = mock_config, configs = configs,
     parameter_weights = c(10, 0.01, 0.01),
     n_simulations_per_config = 1L,
-    precomputed_results = precomputed, verbose = FALSE
+    verbose = FALSE
   )
 
   # Weighted median should differ from uniform median
@@ -333,10 +334,11 @@ test_that("ensemble weighting pairs each (param,stoch) prediction with its OWN p
       reported_deaths = matrix(vals[p], 1, 1), success = TRUE)
   }
 
+  local_mocked_ensemble_sims(precomputed)
   ens <- calc_model_ensemble(
     config = mock_config, configs = configs, parameter_weights = pw,
     n_simulations_per_config = n_stoch, envelope_quantiles = c(0.025, 0.975),
-    precomputed_results = precomputed, verbose = FALSE
+    verbose = FALSE
   )
 
   flat_vals    <- rep(vals, times = n_stoch)          # = as.vector(cases_array[1,1,,]) (param-fastest)
@@ -354,53 +356,55 @@ test_that("ensemble weighting pairs each (param,stoch) prediction with its OWN p
   )))
 })
 
-# --- R-1: precomputed param_idx <-> weight alignment guard (v0.36.2) ----------
-# When configs are compacted (dropped failed re-samples)
-# while weights were derived from the uncompacted mask, so a dropped config
-# shifted every later prediction onto the wrong weight and left a trailing all-NA
-# slice — a silent wrong ensemble. The producer fix compacts seeds+weights in
-# lockstep; this consumer-side guard makes any future mispairing fail loud.
+# --- R-1: param_idx <-> weight alignment (v0.36.2) ---------------------------
+# The original bug: configs were compacted (dropped failed re-samples) while
+# weights were derived from the uncompacted mask, so a dropped config shifted
+# every later prediction onto the wrong weight and left a trailing all-NA slice
+# -- a silent wrong ensemble. The producer fix compacts seeds+weights in
+# lockstep; these consumer-side tests keep the pairing honest.
+#
+# A third test here used to assert that an injected record with
+# param_idx > n_param_sets raised "misaligned". That guard validated the
+# precomputed_results list, which no longer exists (v0.65.0): the local path
+# builds its own task list with expand.grid(param_idx = seq_len(n_param_sets)),
+# so an out-of-range param_idx is now unrepresentable rather than merely
+# rejected. The guard could not fire, so it went with the argument.
 
-test_that("calc_model_ensemble (precomputed) errors when param_idx overflows n_param_sets (R-1)", {
+test_that("a param slice with no successful sims is dropped and survivors keep their own weights (R-1)", {
+  # Formerly asserted a "no precomputed predictions" warning on an injected list
+  # whose param_idx coverage was sparse. The local path cannot have a sparse task
+  # list, but it CAN have a parameter set whose every simulation fails -- the same
+  # trailing all-NA slice, reached the way production actually reaches it. The
+  # property that matters is unchanged and is the one the original bug violated:
+  # the survivors must stay paired with their OWN weights, renormalized over the
+  # survivors, not shifted onto a neighbour's weight.
   mock_config <- list(
     reported_cases = matrix(0, 1, 1), reported_deaths = matrix(0, 1, 1),
     location_name = "A", date_start = "2023-01-01", date_stop = "2023-01-01"
   )
-  precomputed <- list(
-    list(param_idx = 1L, stoch_idx = 1L, reported_cases = matrix(10, 1, 1),
-         reported_deaths = matrix(1, 1, 1), success = TRUE),
-    list(param_idx = 4L, stoch_idx = 1L, reported_cases = matrix(10, 1, 1),
-         reported_deaths = matrix(1, 1, 1), success = TRUE)   # 4 > n_param_sets (3)
-  )
-  expect_error(
-    calc_model_ensemble(config = mock_config, parameter_seeds = c(1L, 2L, 3L),
-                        parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 1L,
-                        precomputed_results = precomputed, verbose = FALSE),
-    "misaligned"
-  )
-})
-
-test_that("calc_model_ensemble (precomputed) warns when a param slice has no predictions (R-1)", {
-  mock_config <- list(
-    reported_cases = matrix(0, 1, 1), reported_deaths = matrix(0, 1, 1),
-    location_name = "A", date_start = "2023-01-01", date_stop = "2023-01-01"
-  )
-  # param_idx covers {1,2} but there are 3 parameter sets => the dropped-config gap
+  # Records for param sets 1 and 2 only; set 3's task finds no record -> fails.
   precomputed <- list(
     list(param_idx = 1L, stoch_idx = 1L, reported_cases = matrix(10, 1, 1),
          reported_deaths = matrix(1, 1, 1), success = TRUE),
     list(param_idx = 2L, stoch_idx = 1L, reported_cases = matrix(20, 1, 1),
          reported_deaths = matrix(2, 1, 1), success = TRUE)
   )
-  expect_warning(
-    calc_model_ensemble(config = mock_config, parameter_seeds = c(1L, 2L, 3L),
-                        parameter_weights = c(0.5, 0.3, 0.2), n_simulations_per_config = 1L,
-                        precomputed_results = precomputed, verbose = FALSE),
-    "no precomputed predictions"
-  )
+  local_mocked_ensemble_sims(precomputed)
+  # configs mode (not parameter_seeds): three parameter sets supplied directly.
+  # parameter_seeds would additionally require `priors` so the configs could be
+  # re-sampled, which is orthogonal to the weight pairing under test.
+  ens <- calc_model_ensemble(config = mock_config,
+                             configs = rep(list(mock_config), 3L),
+                             parameter_weights = c(0.5, 0.3, 0.2),
+                             n_simulations_per_config = 1L, verbose = FALSE)
+
+  # (10*0.5 + 20*0.3) / (0.5 + 0.3): param set 3 contributes nothing and its
+  # weight is renormalized away rather than dragging the mean toward zero.
+  expect_equal(as.numeric(ens$cases_mean), (10 * 0.5 + 20 * 0.3) / 0.8)
+  expect_equal(as.numeric(ens$deaths_mean), (1 * 0.5 + 2 * 0.3) / 0.8)
 })
 
-test_that("calc_model_ensemble (precomputed) pairs dense param_idx with the right weight (R-1)", {
+test_that("calc_model_ensemble pairs dense param_idx with the right weight (R-1)", {
   # The fixed production path: seeds/weights compacted in lockstep so param_idx
   # densely covers 1:n_param_sets. No warning, and the weighted mean attaches
   # each prediction to its OWN parameter weight.
@@ -414,9 +418,11 @@ test_that("calc_model_ensemble (precomputed) pairs dense param_idx with the righ
     param_idx = p, stoch_idx = 1L,
     reported_cases = matrix(vals[p], 1, 1), reported_deaths = matrix(vals[p], 1, 1),
     success = TRUE))
-  ens <- calc_model_ensemble(config = mock_config, parameter_seeds = c(1L, 2L, 3L),
+  local_mocked_ensemble_sims(precomputed)
+  ens <- calc_model_ensemble(config = mock_config,
+                             configs = rep(list(mock_config), 3L),
                              parameter_weights = pw, n_simulations_per_config = 1L,
-                             precomputed_results = precomputed, verbose = FALSE)
+                             verbose = FALSE)
   expect_equal(as.numeric(ens$cases_mean), weighted.mean(vals, pw))
 })
 

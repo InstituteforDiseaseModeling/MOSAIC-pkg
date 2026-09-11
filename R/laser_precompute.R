@@ -195,7 +195,7 @@ laser_beta_jt_env <- function(par) {
 #' Environmental decay rate from suitability
 #'
 #' \code{1 / (fast + pbeta(psi, a, b) * (slow - fast))}. The beta CDF maps
-#' suitability in [0, 1] to [0, 1], potentially non-linearly, and that factor
+#' suitability in \[0, 1\] to \[0, 1\], potentially non-linearly, and that factor
 #' interpolates the survival time between \code{decay_days_short} and
 #' \code{decay_days_long}. So decay is FAST where suitability is low
 #' (\code{psi = 0} gives \code{1 / fast}) and SLOW where it is high

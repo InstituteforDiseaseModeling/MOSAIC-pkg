@@ -583,6 +583,9 @@
 #'   estimation where multiple \code{run_MOSAIC} calls share a cluster. The
 #'   caller retains ownership of any cluster passed and is responsible for
 #'   stopping it after \code{run_MOSAIC} returns.
+#' @param ... Reserved. Supplying a removed argument (\code{dask_spec}) or any
+#'   unrecognised argument raises an error naming it rather than silently
+#'   ignoring it. See \link{deprecated_dask}.
 #'
 #' @return Invisibly returns a list with:
 #' \describe{

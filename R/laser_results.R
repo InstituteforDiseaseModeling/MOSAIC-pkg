@@ -28,14 +28,19 @@ laser_results <- function(state, par) {
      nticks <- par$nticks
      out <- list()
 
+     # State channels are lists of per-tick vectors (see laser_alloc_state); the
+     # [tick, patch] matrix the trim/transpose rules operate on is assembled
+     # here, once, rather than being maintained through the tick loop.
+     as_mat <- function(series) do.call(rbind, series)
+
      for (nm in intersect(LASER_CHANNELS_TRIM_FIRST, names(state))) {
-          out[[nm]] <- .laser_emit(state[[nm]][-1L, , drop = FALSE])
+          out[[nm]] <- .laser_emit(as_mat(state[[nm]][-1L]))
      }
      for (nm in intersect(LASER_CHANNELS_TRIM_LAST, names(state))) {
-          out[[nm]] <- .laser_emit(state[[nm]][-(nticks + 1L), , drop = FALSE])
+          out[[nm]] <- .laser_emit(as_mat(state[[nm]][-(nticks + 1L)]))
      }
      for (nm in intersect(LASER_CHANNELS_TRANSPOSE_ONLY, names(state))) {
-          out[[nm]] <- .laser_emit(state[[nm]])
+          out[[nm]] <- .laser_emit(as_mat(state[[nm]]))
      }
      for (nm in intersect(LASER_CHANNELS_PRECOMPUTED, names(par))) {
           out[[nm]] <- .laser_emit(par[[nm]])

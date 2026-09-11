@@ -5,40 +5,20 @@
 \alias{run_laser}
 \title{Run LASER Model Simulation}
 \usage{
-run_LASER(
-  config,
-  seed = NULL,
-  quiet = FALSE,
-  visualize = FALSE,
-  pdf = FALSE,
-  outdir = tempdir(),
-  py_module = NULL
-)
+run_LASER(config, seed = NULL, quiet = FALSE, ...)
 
-run_laser(
-  config,
-  seed = NULL,
-  quiet = FALSE,
-  visualize = FALSE,
-  pdf = FALSE,
-  outdir = tempdir(),
-  py_module = NULL
-)
+run_laser(config, seed = NULL, quiet = FALSE, ...)
 }
 \arguments{
-\item{config}{Character or list. Either a path to a LASER configuration file (YAML/JSON) or a configuration list object.}
+\item{config}{Character or list. Either a path to a JSON configuration file or a configuration list object.}
 
 \item{seed}{Integer or NULL. Random seed for reproducibility. If NULL (default), uses \code{config$seed} when present, otherwise defaults to 123L.}
 
 \item{quiet}{Logical. If TRUE, suppress the progress bar during model execution. Defaults to FALSE.}
 
-\item{visualize}{Logical. If TRUE, generate and display visualizations during the run. Defaults to FALSE.}
-
-\item{pdf}{Logical. If TRUE, save visualizations as PDF files. Defaults to FALSE.}
-
-\item{outdir}{Character. Directory where LASER outputs (e.g., logs, results) will be written. Defaults to a temporary directory.}
-
-\item{py_module}{Python module. An optional pre-loaded reticulate LASER module. If NULL, the module is imported via reticulate::import("laser.cholera.metapop.model").}
+\item{...}{Reserved. Supplying a removed argument (\code{py_module},
+\code{visualize}, \code{pdf}, \code{outdir}) raises an error naming it
+rather than silently ignoring it. See \link{deprecated_dask}.}
 }
 \value{
 A Python object (reticulate) representing the LASER model simulation results.
@@ -52,12 +32,9 @@ calculations when susceptible and exposed compartments are both zero.
 \dontrun{
 # Run with config file path:
 result <- run_LASER(
-  config    = "path/to/laser_params.yml",
-  seed      = 20250418L,
-  quiet     = FALSE,
-  visualize = FALSE,
-  pdf       = FALSE,
-  outdir    = "./laser_output"
+  config = "path/to/laser_params.json",
+  seed   = 20250418L,
+  quiet  = FALSE
 )
 
 # Run with config object (uses config$seed if present, else 123L):

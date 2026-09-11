@@ -22,9 +22,9 @@ and \eqn{A = H(\tilde{\mathbf w}) / \log|\mathcal B|}, with the convention
 \seealso{
 \code{\link[=calc_model_cvw]{calc_model_cvw()}}
 
-Other calibration-metrics: 
-\code{\link{calc_convergence_diagnostics}()},
-\code{\link{calc_model_cvw}()},
-\code{\link{calc_model_ess}()}
+Other calibration-metrics:
+\code{\link[=calc_convergence_diagnostics]{calc_convergence_diagnostics()}},
+\code{\link[=calc_model_cvw]{calc_model_cvw()}},
+\code{\link[=calc_model_ess]{calc_model_ess()}}
 }
 \concept{calibration-metrics}

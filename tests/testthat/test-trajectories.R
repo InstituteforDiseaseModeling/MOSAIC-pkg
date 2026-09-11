@@ -1,11 +1,14 @@
 # Trajectory capture/reduce + plotter tests. All LASER-FREE (CI-safe per PLAN
-# 14.D): capture-and-reduce is exercised via calc_model_ensemble(precomputed_
-# results=) which bypasses the engine, and the plotter via a synthetic
-# mosaic_trajectories fixture.
+# 14.D): capture-and-reduce is exercised by mocking calc_model_ensemble()'s
+# per-task worker (see helper-ensemble-mock.R), and the plotter via a synthetic
+# mosaic_trajectories fixture. Before v0.65.0 the engine was bypassed with
+# calc_model_ensemble(precomputed_results=), which went with the Dask backend;
+# mocking the worker keeps every assertion here and additionally runs the real
+# task-list/dispatch/gather and the real worker-side spill-to-scratch.
 
 # ---- helpers ---------------------------------------------------------------
 
-# A minimal single-location config (no LASER needed in precomputed mode).
+# A minimal single-location config (no LASER needed: the worker is mocked).
 .make_cfg <- function(n_time = 20L, n_loc = 1L) {
   mk <- function(scale) if (n_loc == 1L) as.numeric(scale * (1 + sin(seq_len(n_time)))) else
     matrix(scale * (1 + sin(seq_len(n_time * n_loc))), nrow = n_loc)
@@ -18,7 +21,16 @@
   )
 }
 
-# Build a synthetic precomputed_results list with the trajectory channels.
+# n_param copies of the config, each carrying its own $seed. `configs` mode is
+# used throughout rather than `parameter_seeds`, which would additionally require
+# `priors` so the configs could be re-sampled -- irrelevant to trajectory capture.
+.make_cfgs <- function(n_param = 3L, n_time = 20L, n_loc = 1L) {
+  lapply(seq_len(n_param), function(p) {
+    cc <- .make_cfg(n_time, n_loc); cc$seed <- 1000L + p; cc
+  })
+}
+
+# Build a synthetic list of engine records carrying the trajectory channels.
 .make_precomputed <- function(n_param = 3L, n_stoch = 2L, n_time = 20L,
                               n_loc = 1L, with_traj = TRUE) {
   chans <- MOSAIC:::.MOSAIC_TRAJECTORY_CHANNELS_DEFAULT
@@ -26,7 +38,7 @@
   out <- list()
   for (s in seq_len(n_stoch)) for (p in seq_len(n_param)) {
     base <- (p + s) * (1 + cos(seq_len(n_time)))
-    rec <- list(param_idx = p, stoch_idx = s, param_seed = 1000L + p,
+    rec <- list(param_idx = p, stoch_idx = s,
                 reported_cases  = vecmat(10 * base + p),
                 reported_deaths = vecmat(2 * base + p),
                 success = TRUE)
@@ -49,12 +61,13 @@
 .run_ensemble <- function(n_param = 3L, n_stoch = 2L, n_time = 20L, n_loc = 1L,
                           capture = TRUE, with_traj = TRUE) {
   cfg <- .make_cfg(n_time, n_loc)
+  local_mocked_ensemble_sims(
+    .make_precomputed(n_param, n_stoch, n_time, n_loc, with_traj))
   calc_model_ensemble(
     config                   = cfg,
-    parameter_seeds          = 1000L + seq_len(n_param),
+    configs                  = .make_cfgs(n_param, n_time, n_loc),
     parameter_weights        = rep(1, n_param),
     n_simulations_per_config = n_stoch,
-    precomputed_results      = .make_precomputed(n_param, n_stoch, n_time, n_loc, with_traj),
     capture_trajectories     = capture,
     verbose                  = FALSE
   )
@@ -107,12 +120,12 @@ test_that("deviation-#1: reported_* trajectory median honors the supplied weight
   # optimized prediction-ensemble medians. NON-UNIFORM weights: reported_cases
   # trajectory median must equal the ensemble cases_median to machine precision.
   cfg <- .make_cfg(20L, 1L)
+  local_mocked_ensemble_sims(.make_precomputed(3L, 2L, 20L, 1L, TRUE))
   ens <- calc_model_ensemble(
     config                   = cfg,
-    parameter_seeds          = 1000L + seq_len(3L),
+    configs                  = .make_cfgs(3L, 20L, 1L),
     parameter_weights        = c(0.6, 0.3, 0.1),
     n_simulations_per_config = 2L,
-    precomputed_results      = .make_precomputed(3L, 2L, 20L, 1L, TRUE),
     capture_trajectories     = TRUE,
     verbose                  = FALSE
   )
@@ -131,10 +144,11 @@ test_that(".rec_mat trims tick+1 flow channels instead of dropping them (DM Find
         as.numeric(seq_len(n_time + 1L)) else
         matrix(as.numeric(seq_len(n_loc * (n_time + 1L))), nrow = n_loc)
     }
+    local_mocked_ensemble_sims(pc)
     ens <- calc_model_ensemble(
-      config = .make_cfg(n_time, n_loc), parameter_seeds = 1000L + seq_len(n_param),
+      config = .make_cfg(n_time, n_loc), configs = .make_cfgs(n_param, n_time, n_loc),
       parameter_weights = rep(1, n_param), n_simulations_per_config = n_stoch,
-      precomputed_results = pc, capture_trajectories = TRUE, verbose = FALSE)
+      capture_trajectories = TRUE, verbose = FALSE)
     med <- ens$trajectories$summary$incidence$median
     expect_false(is.null(med))
     expect_equal(dim(med), c(n_loc, n_time))   # trimmed to n_time, not dropped
@@ -146,9 +160,10 @@ test_that("I_total guards a missing Iasym channel (treats as 0, not NA)", {
   cfg  <- .make_cfg()
   prec <- .make_precomputed()
   for (i in seq_along(prec)) prec[[i]]$traj[["Iasym"]] <- NULL  # drop Iasym
+  local_mocked_ensemble_sims(prec)
   ens <- calc_model_ensemble(
-    config = cfg, parameter_seeds = 1000L + 1:3, parameter_weights = rep(1, 3),
-    n_simulations_per_config = 2L, precomputed_results = prec,
+    config = cfg, configs = .make_cfgs(3L), parameter_weights = rep(1, 3),
+    n_simulations_per_config = 2L,
     capture_trajectories = TRUE, verbose = FALSE)
   it <- ens$trajectories$summary$I_total$median
   expect_true(!is.null(it))
@@ -161,7 +176,7 @@ test_that("epidemic_frac lag direction is correct (DM F9 t-index alignment)", {
   n_time <- 10L
   cfg <- .make_cfg(n_time)
   Isym <- rep(0, n_time); Isym[4] <- 100
-  rec <- list(param_idx = 1L, stoch_idx = 1L, param_seed = 1L,
+  rec <- list(param_idx = 1L, stoch_idx = 1L,
               reported_cases = rep(1, n_time), reported_deaths = rep(0, n_time),
               success = TRUE,
               traj = list(S = rep(1000, n_time), E = rep(0, n_time),
@@ -169,9 +184,10 @@ test_that("epidemic_frac lag direction is correct (DM F9 t-index alignment)", {
                           V1 = rep(0, n_time), V2 = rep(0, n_time),
                           N = rep(1000, n_time)),
               traj_epi = list(delta_reporting_cases = 2, epidemic_threshold = 0.01))
+  local_mocked_ensemble_sims(list(rec))
   ens <- calc_model_ensemble(
-    config = cfg, parameter_seeds = 1L, parameter_weights = 1,
-    n_simulations_per_config = 1L, precomputed_results = list(rec),
+    config = cfg, configs = .make_cfgs(1L, n_time), parameter_weights = 1,
+    n_simulations_per_config = 1L,
     capture_trajectories = TRUE, verbose = FALSE)
   ef <- ens$trajectories$summary$epidemic_frac$median
   expect_equal(ef[1, 6], 1)          # Isym[6-2]=Isym[4]=100 > 0.01*1000=10
@@ -283,10 +299,10 @@ test_that("deferred reduce returns a scratch handle; optimized-subset reduce is 
   # scratch and returns the handle WITHOUT reducing. The caller then reduces over
   # a SUBSET (the optimized members) directly from scratch -- no re-simulation.
   sd <- file.path(tempdir(), sprintf("traj_defer_%d", as.integer(runif(1, 1, 1e7))))
+  local_mocked_ensemble_sims(.make_precomputed(3L, 2L, 20L, 1L, TRUE))
   ens <- calc_model_ensemble(
-    config = .make_cfg(20L, 1L), parameter_seeds = 1000L + 1:3,
+    config = .make_cfg(20L, 1L), configs = .make_cfgs(3L),
     parameter_weights = c(0.6, 0.3, 0.1), n_simulations_per_config = 2L,
-    precomputed_results = .make_precomputed(3L, 2L, 20L, 1L, TRUE),
     capture_trajectories = TRUE, reduce_trajectories = FALSE,
     trajectory_scratch_dir = sd, verbose = FALSE)
 
@@ -326,10 +342,10 @@ test_that("reported_* central honors central_method = 'mean' per channel (FIX 2)
   # the trajectory reported_* central line must match (weighted mean), while a
   # channel without a "mean" request stays on the weighted median.
   sd <- file.path(tempdir(), sprintf("traj_mean_%d", as.integer(runif(1, 1, 1e7))))
+  local_mocked_ensemble_sims(.make_precomputed(3L, 2L, 20L, 1L, TRUE))
   ens <- calc_model_ensemble(
-    config = .make_cfg(20L, 1L), parameter_seeds = 1000L + 1:3,
+    config = .make_cfg(20L, 1L), configs = .make_cfgs(3L),
     parameter_weights = c(0.6, 0.3, 0.1), n_simulations_per_config = 2L,
-    precomputed_results = .make_precomputed(3L, 2L, 20L, 1L, TRUE),
     capture_trajectories = TRUE, reduce_trajectories = FALSE,
     trajectory_scratch_dir = sd, verbose = FALSE)
 
@@ -363,10 +379,10 @@ test_that("end-to-end: optimized-subset trajectory central == ensemble_optimized
   # members (mapped by seed, exactly as run_MOSAIC does) and assert the reported_*
   # central equals ensemble_optimized's cases_median/deaths_median.
   sd <- file.path(tempdir(), sprintf("traj_e2e_%d", as.integer(runif(1, 1, 1e7))))
+  local_mocked_ensemble_sims(.make_precomputed(5L, 2L, 20L, 1L, TRUE))
   ens <- calc_model_ensemble(
-    config = .make_cfg(20L, 1L), parameter_seeds = 1000L + 1:5,
+    config = .make_cfg(20L, 1L), configs = .make_cfgs(5L),
     parameter_weights = rep(0.2, 5), n_simulations_per_config = 2L,
-    precomputed_results = .make_precomputed(5L, 2L, 20L, 1L, TRUE),
     capture_trajectories = TRUE, reduce_trajectories = FALSE,
     trajectory_scratch_dir = sd, verbose = FALSE)
 
@@ -397,10 +413,10 @@ test_that("end-to-end: optimized-subset trajectory central == ensemble_optimized
 
 test_that("auto scratch dir is cleaned up after a standalone reduce", {
   before <- length(list.files(tempdir(), pattern = "^mosaic_traj_"))
+  local_mocked_ensemble_sims(.make_precomputed(2L, 2L, 20L, 1L, TRUE))
   ens <- calc_model_ensemble(
-    config = .make_cfg(20L, 1L), parameter_seeds = 1000L + 1:2,
+    config = .make_cfg(20L, 1L), configs = .make_cfgs(2L),
     parameter_weights = c(0.5, 0.5), n_simulations_per_config = 2L,
-    precomputed_results = .make_precomputed(2L, 2L, 20L, 1L, TRUE),
     capture_trajectories = TRUE, verbose = FALSE)  # reduce_trajectories defaults TRUE
   after <- length(list.files(tempdir(), pattern = "^mosaic_traj_"))
   expect_s3_class(ens$trajectories, "mosaic_trajectories")

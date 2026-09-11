@@ -141,3 +141,51 @@ test_that("the seed falls back to config$seed and then to 123", {
   cfg$seed <- NULL
   expect_identical(run_LASER_R(cfg, components = c("Susceptible", "Census"))$seed, 123L)
 })
+
+# -----------------------------------------------------------------------------
+# Draw-site registry consistency (v0.65.0)
+#
+# The first version of these tables mislabelled five infectious.py draw sites,
+# omitted a real one (reported_deaths) and invented a phantom one (sigma_split,
+# which is np.round(sigma * progressing), not a draw). The total still came to
+# 22, so any check that counted sites rather than comparing them passed. These
+# tests compare membership, which is what actually catches it.
+#
+# They are pure R and need no oracle. The stronger check -- re-deriving the site
+# list from the laser-cholera source and diffing per site -- lives in
+# claude/oracle/verify_draw_sites.py, which needs a checkout of the oracle at the
+# commit pinned in fixtures/ORACLE.md.
+# -----------------------------------------------------------------------------
+
+test_that("the draw-site registry and the oracle site map describe the same sites", {
+  sites <- MOSAIC:::.LASER_DRAW_SITES
+  map   <- MOSAIC:::.LASER_ORACLE_SITE_MAP
+
+  expect_setequal(sites, unname(map))
+  expect_equal(length(sites), length(map))
+})
+
+test_that("every draw site is unique and well-formed", {
+  sites <- MOSAIC:::.LASER_DRAW_SITES
+  map   <- MOSAIC:::.LASER_ORACLE_SITE_MAP
+
+  expect_false(anyDuplicated(sites) > 0L)
+  expect_false(anyDuplicated(unname(map)) > 0L)
+  expect_false(anyDuplicated(names(map)) > 0L)
+
+  # "<phase>/<what>", and the oracle keys are "<file>.py:<line>".
+  expect_true(all(grepl("^[a-z_]+/[a-z0-9_]+$", sites)))
+  expect_true(all(grepl("^[a-z_]+\\.py:[0-9]+$", names(map))))
+
+  # The phase prefix must name a component that exists in the pipeline.
+  phases <- unique(sub("/.*$", "", sites))
+  expect_setequal(phases, tolower(c(
+    "susceptible", "exposed", "recovered", "infectious", "vaccinated",
+    "humantohuman", "envtohuman", "environmental")))
+})
+
+test_that("sigma_split is not a draw site (it is np.round, not a PRNG call)", {
+  # Guards the specific phantom that made the original count look right.
+  expect_false("infectious/sigma_split" %in% MOSAIC:::.LASER_DRAW_SITES)
+  expect_true("infectious/reported_deaths" %in% MOSAIC:::.LASER_DRAW_SITES)
+})

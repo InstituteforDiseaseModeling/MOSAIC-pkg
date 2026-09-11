@@ -1,5 +1,37 @@
 # MOSAIC 0.65.0
 
+## Pure-R transmission engine (in progress)
+
+The Python `laser-cholera` transmission engine is being replaced by a pure-R
+implementation. This release lands the deterministic precomputation and the full
+tick loop; `DerivedValues` and the cutover itself are still to come, so
+`run_MOSAIC()` continues to call the Python engine. See `migrate-laser-r.md`.
+
+Nine of the ten pipeline components are ported (`Susceptible`, `Exposed`,
+`Recovered`, `Infectious`, `Vaccinated`, `Census`, `HumanToHuman`,
+`EnvToHuman`, `Environmental`). Correctness is established by replaying the
+Python engine's recorded PRNG draws: **all 22 stochastic draw sites, 30,751
+draws matched draw-for-draw, and all 19 integer result channels bit-identical
+over a full 1,398-tick 40-patch run.** Requesting the unported component errors
+rather than silently running a short pipeline.
+
+Two findings worth flagging:
+
+* **Single precision is observable.** The Python engine stores most parameters
+  and the `W`/`Lambda`/`Psi` state as float32. Where that reaches an integer --
+  `round(sigma * progressing)`, the vaccination pro-rata split, the reported-case
+  divisor, the epidemic-threshold comparisons -- the R port reproduces the stored
+  precision, because an integer differing by one decorrelates the draw sequence.
+  Where it reaches only a float, the R port stays in double and is the more
+  accurate of the two. Details in `tests/testthat/fixtures/ORACLE.md`.
+* **The engine is 1.69x slower than the Python original**, not faster as the
+  migration plan projected: 1.183 s against 0.698 s for a 1,398-tick 40-patch
+  run. An earlier version was 2.91 s; storing each channel as a list of per-tick
+  vectors rather than a matrix removed ~55% of the runtime, because a matrix row
+  write copies the whole matrix. Whether the remaining gap is an acceptable price
+  for dropping reticulate, the 2 GB-per-worker Python heap and the per-worker
+  import tax is a judgement call, flagged in the plan rather than assumed.
+
 ## Dask/Coiled distributed backend removed
 
 The distributed-compute layer existed to make the Python transmission engine
@@ -26,8 +58,20 @@ instead, rather than being silently accepted and ignored:
 * `check_coiled_workspace()`, `mosaic_dask_presets()`.
 * `control$parallel$strict_worker_version` (guarded orchestrator/worker engine
   version skew, which cannot exist with one process).
-* `precomputed_results` argument to `calc_model_ensemble()` — it only ever
-  received gathered Dask results.
+* `precomputed_results` argument to `calc_model_ensemble()` — its only
+  production callers were the Dask gather and the Dask medoid dispatch. It was
+  also the seam four test files used to inject synthetic engine output, so the
+  per-task simulation worker has been hoisted out of `calc_model_ensemble()`'s
+  body into `.mosaic_ensemble_sim_task()` (`R/calc_model_ensemble_task.R`) and
+  the tests now mock that instead. They assert strictly more than before: the
+  real task list, dispatch, gather and worker-side spill-to-scratch all run,
+  where the old argument bypassed them. `optimize_ensemble_subset()` and
+  `calc_model_ensemble()` still reproduce `fixtures/parity_tier2.rds`
+  bit-for-bit through the new seam.
+* The `param_seed` field on a result record, which sat ahead of config `$seed`
+  and positional `parameter_seeds` in `calc_model_ensemble()`'s per-member seed
+  fallback. It existed only because a Dask worker held a config the master did
+  not; the two surviving tiers are unchanged.
 * `run_LASER()`'s `py_module`, `visualize`, `pdf` and `outdir` arguments. The
   first let a caller hand in a pre-imported module; the other three drove the
   Python engine's matplotlib `Analyzer`, which is not part of the R contract.

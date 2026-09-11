@@ -38,7 +38,7 @@ likelihood port, the LASER config builders) must filter against
 biases the peak-shape likelihood terms. The internal helper
 \code{MOSAIC:::.filter_epidemic_peaks()} is the canonical filter and is
 applied at build time inside \code{make_config_default.R}, at runtime
-inside \code{run_MOSAIC()}'s Dask injector, and defensively inside
+inside \code{get_location_config()}, and defensively inside
 \code{calc_model_likelihood()}.
 
 Epidemic peaks are identified using the following methodology:
