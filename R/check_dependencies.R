@@ -132,8 +132,7 @@ check_dependencies <- function() {
                     "pytorch"          = "torch",
                     "scikit-learn"     = "sklearn",
                     "laser-cholera"    = "laser.cholera",
-                    "laser-core"       = "laser.core",
-                    "dask[distributed]" = "dask.distributed"
+                    "laser-core"       = "laser.core"
                )
 
                if (pkg_import_name %in% names(import_map)) {

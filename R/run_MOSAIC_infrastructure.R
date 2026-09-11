@@ -186,7 +186,7 @@
 #'
 #' laser-cholera/src/laser/cholera/metapop/logsetup.py adds a FileHandler to the
 #' Python root logger at import time, creating a timestamped .log file in cwd.
-#' This pollutes the working directory with empty or Coiled-only log files.
+#' This pollutes the working directory with empty log files.
 #' Call once after the first `import("laser.cholera.metapop.model")`.
 #' @noRd
 .mosaic_strip_laser_file_handler <- function() {

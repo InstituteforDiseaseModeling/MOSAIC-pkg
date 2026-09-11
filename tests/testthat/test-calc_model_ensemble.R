@@ -355,7 +355,7 @@ test_that("ensemble weighting pairs each (param,stoch) prediction with its OWN p
 })
 
 # --- R-1: precomputed param_idx <-> weight alignment guard (v0.36.2) ----------
-# On the Dask post-cal path, configs were compacted (dropped failed re-samples)
+# When configs are compacted (dropped failed re-samples)
 # while weights were derived from the uncompacted mask, so a dropped config
 # shifted every later prediction onto the wrong weight and left a trailing all-NA
 # slice — a silent wrong ensemble. The producer fix compacts seeds+weights in

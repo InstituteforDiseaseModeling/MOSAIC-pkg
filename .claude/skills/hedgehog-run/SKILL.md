@@ -2,10 +2,9 @@
 name: hedgehog-run
 description: >
   Launch, monitor, and retrieve MOSAIC calibration runs on the hedgehog Azure VM
-  (120 cores / 448 GB). Covers backend choice (local PSOCK vs Coiled hybrid + the
-  #113 hybrid-invalidity caveat), the GLIBCXX R wrapper, surviving SSH disconnect
-  (nohup+logfile default / tmux for humans), the control + dask_spec recipe,
-  monitoring by tailing the log, and pulling results (tar-then-pull_results.sh/scp).
+  (120 cores / 448 GB). Covers the GLIBCXX R wrapper, surviving SSH disconnect
+  (nohup+logfile default / tmux for humans), the control recipe, monitoring by
+  tailing the log, and pulling results (tar-then-pull_results.sh/scp).
   Use when the user wants to run, monitor, or fetch a MOSAIC calibration on hedgehog.
 ---
 
@@ -13,7 +12,7 @@ description: >
 
 Canonical reference: `vm/HEDGEHOG.md`. Helpers: `vm/launch_mosaic.R` (single/multi-country),
 `vm/launch_mosaic_individual.R` (per-country loop with resume + compression), `vm/pull_results.sh`,
-`vm/setup_mosaic.sh` / `vm/setup_mosaic_minimal.sh`, `R/presets.R`, `R/check_coiled.R`.
+`vm/setup_mosaic.sh` / `vm/setup_mosaic_minimal.sh`, `R/presets.R`.
 
 These `vm/` templates are correct as of MOSAIC v0.43.0 — use canonical control names, `NULL` (not
 `'auto'`) for adaptive mode, and the resume check points at the real `2_calibration/` artifacts. Copy
@@ -26,8 +25,6 @@ them or use the inline recipe in §3.
 - **MOSAIC version on VM:** `ssh hedgehog '~/bin/r-mosaic-Rscript -e "cat(as.character(packageVersion(\"MOSAIC\")))"'`
   (note the wrapper — §1). Expect to match `main`. If stale, update in tmux:
   `install_git(... ref="main", force=TRUE)` then `install_dependencies(force=TRUE)`.
-- **Coiled (hybrid backend only):** `ls ~/.config/dask/coiled.yaml` on the VM. If missing,
-  `coiled login --token <T> --workspace idm-coiled-idmad-r2`. Skip for local PSOCK.
 
 ## 1. The R wrapper — always use it
 hedgehog is Ubuntu 20.04; its system `libstdc++` lacks `GLIBCXX_3.4.29` needed by the venv's
@@ -37,19 +34,19 @@ laser won't import. Invoke the wrapper **normally** (shebang repaired 2026-06-16
 guard it). Only if you hit `Syntax error: "(" unexpected`: check `head -1 ~/bin/r-mosaic-Rscript`
 is `#!/usr/bin/env bash` at column 0, or prefix `bash` as a stop-gap.
 
-## 2. Choose a backend
-### (a) Local PSOCK — everything on hedgehog. RECOMMENDED for real work now.
-LASER sims AND post-processing run on hedgehog's local cores; nothing leaves the VM. Enabled by
-**omitting `dask_spec`**. Single knob `control$parallel$n_cores` IS the sim parallelism (118 of 120
-cores ≈ comfortable on 448 GB). Engine = hedgehog's laser-cholera end-to-end → VALID.
+## 2. Execution model — local PSOCK only
+Simulations AND post-processing run on hedgehog's local cores; nothing leaves the VM. A single knob,
+`control$parallel$n_cores`, IS the sim parallelism (118 of 120 cores ≈ comfortable on 448 GB).
 
-### (b) Coiled hybrid — sims on a Coiled cloud cluster, hedgehog is the Dask client.
-Two independent knobs: `dask_spec = mosaic_dask_presets(n_workers=N)` (remote workers, run sims) and
-`control$parallel = list(enable=TRUE, n_cores=M)` (local client cores for post-processing; if
-`enable=FALSE` the Dask path forces client cores to 1). Worker count comes ONLY from `dask_spec`.
-**Currently scientifically INVALID** — the worker image lags laser-cholera (issue #113): runs
-complete but give low R²/unconverged results. Use (a) until #113 is resolved. `save_simresults` is
-rejected on this path; you may not switch backends across a `resume`.
+The Coiled hybrid backend (remote Dask workers with hedgehog as client) has been **removed** from
+the package. It was already scientifically invalid (issue #113: the worker image lagged
+laser-cholera, so runs completed but gave low R²/unconverged results), and the pure-R engine
+migration removes the reason it existed. `dask_spec`, `check_coiled_workspace()` and `mosaic_dask_presets()`
+now raise an error rather than being ignored.
+
+**This skill is on notice.** Once the R engine's real throughput and per-worker memory are measured
+(migrate-laser-r.md phase A-3a), a 120-core VM may no longer be needed for calibration at all. Keep
+it for wide sweeps and psi/LSTM training until those numbers exist.
 
 ## 3. Stage and launch (run MUST survive SSH disconnect)
 1. Stage the script: `scp my_run.R hedgehog:~/`.
@@ -84,8 +81,7 @@ run_MOSAIC(config, priors, dir_output = file.path("~/MOSAIC/output", iso), contr
 ctrl  <- mosaic_control_defaults(
   calibration = list(n_simulations = 25000L, n_iterations = 3L),
   parallel    = list(enable = TRUE, n_cores = 100L))   # CLIENT cores
-spec  <- mosaic_dask_presets(n_workers = 250)           # REMOTE workers
-run_MOSAIC(config, priors, dir_output = "~/MOSAIC/output/MOZ", control = ctrl, dask_spec = spec)
+run_MOSAIC(config, priors, dir_output = "~/MOSAIC/output/MOZ", control = ctrl)
 ```
 
 ### Canonical control names (use these — the deprecated forms migrate WITH A WARNING)
@@ -137,13 +133,6 @@ Only then launch the full calibration.
 | `GLIBCXX_3.4.29 not found` / check_dependencies "BROKEN" | ran via plain `Rscript`, not the wrapper | use `~/bin/r-mosaic-Rscript` (§1) |
 | `Syntax error: "(" unexpected` | wrapper shebang corrupted + invoked bare | check `head -1` shebang at col 0, repair, or prefix `bash` |
 | hybrid run finishes but R² implausibly low | #113 worker-image version mismatch | use local PSOCK until #113 fixed |
-| Coiled run hangs / `CommClosedError` in post-processing | known TLS-heartbeat issue (code mitigates) | let it proceed |
 | `Permission denied (publickey)` after it worked | VM redeployed (fresh host key) | `ssh-copy-id` from the Mac |
 | VM unreachable | deallocated | `az vm start …`, FQDN follows the VM |
 
-## 9. Pre-flight Coiled capacity check (hybrid only)
-```r
-MOSAIC::check_coiled_workspace()   # core limit, cores in use, active clusters, subnet IP pressure
-```
-Each worker = 1 subnet IP on a /23 (~507 usable). Large clusters can fail with `SubnetIsFull` under
-contention; drop `n_workers` or wait.

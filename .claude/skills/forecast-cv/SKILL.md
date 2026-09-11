@@ -63,9 +63,8 @@ Only the first is the backtest; the other two are internals of a single psi fit.
   are ignored/harness-owned. Keep `arch_control$parallel_seeds = 1L` (see est-suitability for the RAM math).
 - `control = NULL` → an experiment-grade cheap default (fixed `n_simulations`, plots off).
 - `models = c("ensemble","ensemble_opt","medoid")`, `central_method = "median"`, `optimize_subset = TRUE`,
-  `n_reps_best_medoid = 50` (medoid reruns — see where-to-run). `dask_spec` (optional) sends the per-cutoff
-  *calibration* to Dask/Coiled (the medoid reruns stay local); local PSOCK is usually preferred (Coiled
-  dies on >50 min jobs).
+  `n_reps_best_medoid = 50` (medoid reruns — see where-to-run). Everything runs on the local PSOCK
+  cluster; the Dask/Coiled `dask_spec` option was removed (it now hard-errors).
 - **Two staleness/leakage subtleties:** (i) if `config$date_stop` runs past the climate/ENSO horizon, the
   per-cutoff ψ tail is `na.locf` flat-filled in the scored OOS segment (see est-suitability horizon
   ceiling); (ii) ICs are seeded at `ic_t0 = max(date_start, 2023-02-01)`, so cutoffs before 2023 seed

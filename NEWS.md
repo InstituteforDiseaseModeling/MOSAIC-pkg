@@ -1,3 +1,79 @@
+# MOSAIC 0.65.0
+
+## Dask/Coiled distributed backend removed
+
+The distributed-compute layer existed to make the Python transmission engine
+affordable — that engine costs ~2 GB of RAM per worker and 3.3 s of import time
+per worker process, which on a 20-core fan-out is 66 s of startup tax on every
+batch. With the engine moving to pure R (see `migrate-laser-r.md`), the reason
+for it goes away. It was also already scientifically invalid on Coiled: the
+worker image lagged `laser-cholera`, so hybrid runs completed but produced low
+R² / unconverged results (issue #113).
+
+`run_MOSAIC()` now has exactly one execution path: the local PSOCK/sequential
+cluster, sized by `control$parallel$n_cores`. This is the single largest
+simplification the package has had — ~2,200 lines of production code and ~1,900
+lines of tests removed, and `run_MOSAIC.R` alone dropped from 3,999 to 3,388
+lines.
+
+### Breaking changes
+
+Removed, and **loud** about it — every one raises an error naming what to use
+instead, rather than being silently accepted and ignored:
+
+* `dask_spec` argument to `run_MOSAIC()` and `run_rolling_cv()`. Use
+  `control$parallel$n_cores`.
+* `check_coiled_workspace()`, `mosaic_dask_presets()`.
+* `control$parallel$strict_worker_version` (guarded orchestrator/worker engine
+  version skew, which cannot exist with one process).
+* `precomputed_results` argument to `calc_model_ensemble()` — it only ever
+  received gathered Dask results.
+* `run_LASER()`'s `py_module`, `visualize`, `pdf` and `outdir` arguments. The
+  first let a caller hand in a pre-imported module; the other three drove the
+  Python engine's matplotlib `Analyzer`, which is not part of the R contract.
+  All four had zero callers.
+
+`run_MOSAIC()` and `run_LASER()` now also reject **unknown** arguments rather
+than absorbing them into `...`. This is the "unknown key validator" whose
+absence let renamed `control` parameters be silently dropped for fifteen minor
+versions (see CLAUDE.md lesson #13).
+
+`make_mosaic_cluster()` is **not** removed. Despite its Dask-era documentation it
+builds the local PSOCK cluster that the surviving backend runs on.
+
+### Also removed
+
+* `inst/python/mosaic_dask_worker.py` (727 lines), and `dask[distributed]` /
+  `coiled` from `inst/python/environment.yml`. `laser-cholera` is untouched —
+  it is still the engine until the R port lands.
+* `.mosaic_inject_likelihood_settings()` and `.extract_base_config()`, which
+  flattened likelihood settings onto the config for on-worker Python scoring.
+  This also retires the bug in CLAUDE.md lesson #12(a), where the injector
+  overwrote `get_location_config()`'s filtered `epidemic_peaks` with the full
+  unfiltered SSA dataset.
+* A dead allow-list in `.mosaic_resume_check_inputs()` that permitted resuming
+  across two `laser-cholera` versions whose on-worker Python likelihood values
+  were verified byte-identical. With scoring now always R-side its
+  `engine == "python"` condition can never be true. Shards scored by the old
+  Python path now fail the provenance check outright, which is correct — those
+  likelihoods are not reproducible here.
+
+### Tests
+
+Ten Dask test files were retired, but three carried assertions about the
+surviving code and were re-homed rather than deleted:
+
+* `test-samples_parquet_schema.R` keeps the **ISO-suffix parquet column
+  contract** (`beta_j0_tot_ETH`, never `beta_j0_tot_1`) that every downstream
+  posterior join depends on.
+* `test-calc_model_likelihood_regression.R` replaces the R-vs-Python likelihood
+  parity suite with **frozen R baselines** plus monotonicity and orientation
+  properties, guarding the shape-term scaling bugs of lessons #4 and #5.
+* `test-presets.R` keeps `mosaic_io_presets()`.
+
+New `test-removed_dask_api.R` asserts the removed surface errors rather than
+being silently absorbed.
+
 # MOSAIC 0.59.1
 
 ## plot_Reff readability

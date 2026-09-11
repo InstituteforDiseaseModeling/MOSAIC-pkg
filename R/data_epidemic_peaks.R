@@ -14,7 +14,7 @@
 #' biases the peak-shape likelihood terms. The internal helper
 #' `MOSAIC:::.filter_epidemic_peaks()` is the canonical filter and is
 #' applied at build time inside `make_config_default.R`, at runtime
-#' inside `run_MOSAIC()`'s Dask injector, and defensively inside
+#' inside `get_location_config()`, and defensively inside
 #' `calc_model_likelihood()`.
 #'
 #' @format A data frame with 6 variables:

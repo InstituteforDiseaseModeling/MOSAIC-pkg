@@ -50,7 +50,7 @@
 
      # General OpenMP thread limit — suppresses thread oversubscription and
      # reduces the surface area for cross-runtime conflicts in the main process.
-     # PSOCK workers and Dask cloud workers set their own limits independently.
+     # PSOCK workers set their own limits independently.
      if (Sys.getenv("OMP_NUM_THREADS") == "") {
           Sys.setenv(OMP_NUM_THREADS = "1")
      }

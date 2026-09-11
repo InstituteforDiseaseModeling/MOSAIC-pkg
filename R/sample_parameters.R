@@ -702,7 +702,7 @@ sample_parameters <- function(
     }
   } else if (derive_mu && !has_mu_baseline_prior) {
     # B2 requested but neither a CFR_target NOR a legacy mu_j_baseline prior is
-    # present -> version skew (stale priors object / Coiled image). Fail loud.
+    # present -> version skew (stale priors object). Fail loud.
     stop("mu_j_baseline derivation/sampling requested (sample_mu_j_baseline=TRUE) but the priors object ",
          "carries neither a CFR_target location prior (B2) nor a mu_j_baseline location prior (legacy). ",
          "This indicates a stale or mismatched priors object (Lesson #12 version-skew guard, SPEC_B2.md sec 5.3). ",

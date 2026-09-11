@@ -31,7 +31,7 @@ base_config <- list(
 )
 np <- 4L
 
-# Precomputed (Dask-style) results: member p carries param_seed = 100+p and a
+# Result records: member p carries param_seed = 100+p and a
 # constant trajectory of p*10, so a member's seed is recoverable from its own
 # trajectory: seed == 100 + trajectory/10. param_seed is the GROUND TRUTH binding.
 make_precomp <- function(with_seed = TRUE) {

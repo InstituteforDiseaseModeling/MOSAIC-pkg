@@ -1,0 +1,107 @@
+#' Assemble engine results in the downstream contract
+#'
+#' Equivalent of the Python engine's \code{RInterface}. State is held
+#' time-major (\code{[nticks + 1, npatches]}); results are patch-major
+#' (\code{[npatches, nticks]}). The three trimming rules are not
+#' interchangeable and are reproduced exactly from \code{model.py:82-165}:
+#'
+#' \itemize{
+#'   \item compartments, incidence, hazards, \code{N}, \code{W} drop the
+#'     \code{t = 0} seed row (\code{[1:, :].T});
+#'   \item event counts (births, deaths, reported) drop the \emph{last} row
+#'     (\code{[:-1, :].T}), because they are written at \code{tick} rather than
+#'     \code{tick + 1};
+#'   \item doses and the precomputed beta/delta matrices are already
+#'     \code{nticks}-shaped and are only transposed.
+#' }
+#'
+#' Storage mode is per field: counts are \code{integer}, rates and hazards are
+#' \code{double}. No dimnames -- the Python return has none and no consumer
+#' reads any.
+#'
+#' @param state State list from the run loop.
+#' @param par Parameters from \code{laser_params()}.
+#' @return Named list of \code{[npatches, nticks]} matrices.
+#' @keywords internal
+laser_results <- function(state, par) {
+
+     nticks <- par$nticks
+     out <- list()
+
+     for (nm in intersect(LASER_CHANNELS_TRIM_FIRST, names(state))) {
+          out[[nm]] <- .laser_emit(state[[nm]][-1L, , drop = FALSE])
+     }
+     for (nm in intersect(LASER_CHANNELS_TRIM_LAST, names(state))) {
+          out[[nm]] <- .laser_emit(state[[nm]][-(nticks + 1L), , drop = FALSE])
+     }
+     for (nm in intersect(LASER_CHANNELS_TRANSPOSE_ONLY, names(state))) {
+          out[[nm]] <- .laser_emit(state[[nm]])
+     }
+     for (nm in intersect(LASER_CHANNELS_PRECOMPUTED, names(par))) {
+          out[[nm]] <- .laser_emit(par[[nm]])
+     }
+     for (nm in intersect(LASER_CHANNELS_PASSTHROUGH, names(par))) {
+          # `pi_ij` and `coupling` are [npatches, npatches] and are passed
+          # through un-transposed (coupling is symmetric).
+          out[[nm]] <- par[[nm]]
+     }
+
+     out[LASER_CHANNELS[LASER_CHANNELS %in% names(out)]]
+}
+
+# Transpose to [npatches, nticks], preserving storage mode. `t()` on an
+# integer matrix returns integer, so the per-field contract is inherited
+# rather than re-asserted here.
+.laser_emit <- function(m) t(m)
+
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_TRIM_FIRST <- c(
+     "S", "E", "Isym", "Iasym", "R", "V1", "V2",
+     "new_symptomatic", "incidence", "incidence_env", "incidence_human",
+     "Lambda", "N", "Psi", "spatial_hazard", "W"
+)
+
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_TRIM_LAST <- c(
+     "births", "disease_deaths", "non_disease_deaths",
+     "reported_cases", "reported_deaths"
+)
+
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_TRANSPOSE_ONLY <- c("dose_one_doses", "dose_two_doses")
+
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_PRECOMPUTED <- c("beta_jt_env", "beta_jt_human", "delta_jt")
+
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_PASSTHROUGH <- c("pi_ij", "coupling")
+
+#' The 28 result channels, in a stable order
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS <- c(
+     LASER_CHANNELS_TRIM_FIRST, LASER_CHANNELS_TRIM_LAST,
+     LASER_CHANNELS_TRANSPOSE_ONLY, LASER_CHANNELS_PRECOMPUTED,
+     LASER_CHANNELS_PASSTHROUGH
+)
+
+# Which channels are integer counts vs continuous quantities. Asserted by the
+# return-contract test rather than left as documentation, so the table cannot
+# drift from the code.
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_INTEGER <- c(
+     "S", "E", "Isym", "Iasym", "R", "V1", "V2", "N",
+     "new_symptomatic", "incidence", "incidence_env", "incidence_human",
+     "births", "disease_deaths", "non_disease_deaths",
+     "reported_cases", "reported_deaths", "dose_one_doses", "dose_two_doses"
+)
+
+#' @rdname laser_results
+#' @keywords internal
+LASER_CHANNELS_DOUBLE <- setdiff(LASER_CHANNELS, LASER_CHANNELS_INTEGER)

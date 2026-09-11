@@ -17,6 +17,3 @@ dependencies:
       - laser-core==1.0.1
       # laser-cholera: update BOTH the tag (vX.Y.Z) and the wheel filename (X.Y.Z) when upgrading
       - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.16.1/laser_cholera-0.16.1-py3-none-any.whl
-      # Dask distributed computing and Coiled cloud orchestration (required by run_MOSAIC_dask())
-      - dask[distributed]
-      - coiled

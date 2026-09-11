@@ -84,7 +84,7 @@
 #' @param n_reps_best_medoid Integer (default 50); number of stochastic LASER
 #'   reruns used to build the predictive median + intervals for the \code{best}
 #'   and \code{medoid} configs. These reruns execute locally in the calling R
-#'   process (not on Dask), so cost scales with this value times the number of
+#'   process, so cost scales with this value times the number of
 #'   cutoffs and locations.
 #' @param central_method Ensemble central tendency used for the compiled
 #'   predictions and the in-sample calibration metrics/medoid: \code{"median"}
@@ -110,7 +110,6 @@
 #'   directory instead. The run \strong{hard-errors} if a requested cutoff is
 #'   absent from the cache manifest, or if the run's \code{est_suitability_spec}
 #'   hash does not match the manifest \code{spec_hash} recorded for that cutoff.
-#' @param dask_spec Optional Dask/Coiled spec passed to \code{run_MOSAIC}.
 #' @param dir_output Directory for the experiment artifact (created if needed).
 #' @param verbose Logical (default TRUE).
 #'
@@ -139,7 +138,6 @@ run_rolling_cv <- function(PATHS,
                            central_method       = "median",
                            est_suitability_spec = list(),
                            psi_cache            = NULL,
-                           dask_spec            = NULL,
                            dir_output,
                            verbose              = TRUE) {
 
@@ -266,7 +264,7 @@ run_rolling_cv <- function(PATHS,
 
                # 3. calibrate <= T + project full window
                MOSAIC::run_MOSAIC(config = cfg, priors = priors, dir_output = dir_k,
-                                  control = control, dask_spec = dask_spec)
+                                  control = control)
 
                # 4. compile predictions for every requested model type
                #    (ensemble candidate / optimizer subset / best / medoid)

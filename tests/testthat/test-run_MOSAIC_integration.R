@@ -13,10 +13,10 @@
 # module when none exists. By assigning a FAKE `lc` into .GlobalEnv before the
 # call, the worker and the post-calibration ensemble both dispatch through it.
 #
-# CRITICAL: the fake lives in this process's .GlobalEnv, so the run MUST use the
-# LOCAL SEQUENTIAL backend (dask_spec = NULL, control$parallel$enable = FALSE,
-# n_cores = 1). PSOCK workers are separate processes that would import the real
-# Python module and never see the fake. With parallel disabled, run_MOSAIC sets
+# CRITICAL: the fake lives in this process's .GlobalEnv, so the run MUST be
+# SEQUENTIAL (control$parallel$enable = FALSE, n_cores = 1). PSOCK workers are
+# separate processes that would import the real Python module and never see the
+# fake. With parallel disabled, run_MOSAIC sets
 # cl <- NULL (run_MOSAIC.R:1194-1196) and the worker runs in-process here.
 
 # A handful of fixed simulations through the stub is fast (the synthetic LASER
@@ -157,8 +157,7 @@ test_that("run_MOSAIC drives a full BFRS calibration on a stubbed LASER engine",
     priors     = priors,
     dir_output = dir_output,
     control    = control,
-    resume     = FALSE,
-    dask_spec  = NULL   # forces the local backend
+    resume     = FALSE
   ))
 
   # ===========================================================================

@@ -146,124 +146,6 @@
   w
 }
 
-#' Inject likelihood-control settings + epidemic_peaks into config (Dask path)
-#'
-#' Flattens the resolved \code{control$likelihood} settings and the
-#' \code{calc_likelihood = TRUE} toggle onto a copy of the config so they land
-#' on \code{model.params} for the laser-cholera analyzer to read on the worker.
-#' Used only on the Dask path; the local PSOCK/FORK path computes the
-#' likelihood in R after the LASER call and does not need these keys on the
-#' paramfile.
-#'
-#' \code{epidemic_peaks} is also overwritten here as a refresh against
-#' \code{MOSAIC::epidemic_peaks} (trimmed to \code{iso_code} / \code{peak_date}).
-#' As of config_default v3.2, the field is already shipped in \code{config_default}
-#' and surveys arriving via \code{make_LASER_config()}; the refresh guarantees
-#' worker-side peaks track the currently-installed package data even when the
-#' caller supplied an older serialised config.
-#'
-#' @param config The base config list.
-#' @param likelihood_settings Resolved \code{control$likelihood} list with
-#'   \code{.weights_time_resolved} populated by the caller.
-#' @return The config list with thirteen new keys: twelve likelihood-control
-#'   fields (\code{weight_cases}, \code{weight_deaths}, \code{weights_time}
-#'   (= \code{.weights_time_resolved}), \code{weights_location},
-#'   \code{nb_k_min_cases}, \code{nb_k_min_deaths}, \code{weight_peak_timing},
-#'   \code{weight_peak_magnitude}, \code{weight_cumulative_total},
-#'   \code{weight_wis}, \code{sigma_peak_time}, \code{sigma_peak_log}),
-#'   \code{epidemic_peaks} (two-column data.frame), and
-#'   \code{calc_likelihood = TRUE}.
-#' @noRd
-.mosaic_inject_likelihood_settings <- function(config, likelihood_settings) {
-  # Cast observed surveillance matrices to double so that NA_integer_ values
-  # (R's integer NA, sentinel = INT32_MIN) don't survive reticulate's int32
-  # serialization to workers as -2147483648 and poison the Python NB
-  # likelihood. Phase 1 / issue #101: ETH (and probably every) location's
-  # `reported_cases` / `reported_deaths` from get_location_config() store
-  # counts as integer-mode, with NA_integer_ for missing surveillance weeks.
-  # reticulate maps an R integer matrix to numpy int32, replacing NA with
-  # INT_MIN -- those huge negatives then evaluate as valid (extreme) counts
-  # in calc_model_likelihood, returning -Inf. storage.mode() preserves the
-  # matrix dim attribute and only flips the underlying type; the local-path
-  # R-side calc_model_likelihood is unaffected because it handles NA_real_
-  # and NA_integer_ identically via is.finite() masking.
-  for (fld in c("reported_cases", "reported_deaths")) {
-    if (!is.null(config[[fld]]) && storage.mode(config[[fld]]) == "integer") {
-      storage.mode(config[[fld]]) <- "double"
-    }
-  }
-
-  # Per-observation confidence-weight matrices (config_default v4.1+). These
-  # live in config already and are broadcast via .extract_base_config(); the
-  # Dask/Python scorer reads them by name exactly as the local PSOCK path reads
-  # config$reported_cases_weight. Cast to double for the same NA_integer_ ->
-  # INT_MIN reticulate-serialization reason as the count matrices above. Absent
-  # on older configs (no-op) -> Dask runs unweighted, matching local (Lesson #12).
-  for (fld in c("reported_cases_weight", "reported_deaths_weight")) {
-    if (!is.null(config[[fld]]) && storage.mode(config[[fld]]) == "integer") {
-      storage.mode(config[[fld]]) <- "double"
-    }
-  }
-
-  config$calc_likelihood          <- TRUE
-  config$weight_cases             <- likelihood_settings$weight_cases
-  config$weight_deaths            <- likelihood_settings$weight_deaths
-  config$weights_time             <- likelihood_settings$.weights_time_resolved
-  config$weights_location         <- likelihood_settings$weights_location
-  config$nb_k_min_cases           <- likelihood_settings$nb_k_min_cases
-  config$nb_k_min_deaths          <- likelihood_settings$nb_k_min_deaths
-  config$weight_peak_timing       <- likelihood_settings$weight_peak_timing
-  config$weight_peak_magnitude    <- likelihood_settings$weight_peak_magnitude
-  config$weight_cumulative_total  <- likelihood_settings$weight_cumulative_total
-  config$weight_wis               <- likelihood_settings$weight_wis
-  config$sigma_peak_time          <- likelihood_settings$sigma_peak_time
-  config$sigma_peak_log           <- likelihood_settings$sigma_peak_log
-
-  # Per-channel scored-window start indices (1-based). Re-inject the RESOLVED
-  # values so a runtime override propagates to every worker. Default 1L => the
-  # Python worker takes the no-slice path (model.log_likelihood, bit-identical
-  # to the engine analyzer). The Python worker reads these from config and, when
-  # > 1, recomputes the likelihood on the sliced arrays (mirrors the local
-  # PSOCK slice). Absent .score_window_resolved (defensive) => 1L.
-  sw <- likelihood_settings$.score_window_resolved
-  config$score_idx_cases  <- if (is.null(sw)) 1L else as.integer(sw$idx_cases)
-  config$score_idx_deaths <- if (is.null(sw)) 1L else as.integer(sw$idx_deaths)
-
-  ep <- MOSAIC::epidemic_peaks
-  ep_df <- data.frame(
-    iso_code  = as.character(ep$iso_code),
-    peak_date = as.character(ep$peak_date),
-    stringsAsFactors = FALSE
-  )
-  # laser-cholera v0.13+ asserts every iso_code in epidemic_peaks appears in
-  # location_name. Also drop peaks outside the simulation window so the
-  # peak-shape likelihood terms don't snap to t=1/t=N boundaries. When the
-  # scored window slices off a leading prefix, advance the lower filter bound to
-  # the SLICED start so the Python worker's peak date_seq (which starts at the
-  # sliced date_start) doesn't snap an out-of-window peak to its t=1.
-  s_start <- if (is.null(sw)) 1L else as.integer(min(sw$idx_cases, sw$idx_deaths))
-  ds_filter <- config$date_start
-  if (s_start > 1L) {
-    ds0 <- tryCatch(as.Date(config$date_start), error = function(e) NA)
-    if (!is.na(ds0)) ds_filter <- ds0 + (s_start - 1L)
-  }
-  config$epidemic_peaks <- .filter_epidemic_peaks(
-    peaks          = ep_df,
-    date_start     = ds_filter,
-    date_stop      = config$date_stop,
-    location_names = config$location_name
-  )
-  # Drop an empty result. A 0-row epidemic_peaks (a no-peak location, e.g. BFA,
-  # or a filter that matched nothing) JSON-round-trips to the Dask worker WITHOUT
-  # its iso_code column and crashes laser params.py:303 (`.iso_code` on a
-  # column-less DataFrame -> "'DataFrame' object has no attribute 'iso_code'"),
-  # erroring every sim. Nulling it makes the engine skip the epidemic_peaks block.
-  if (!is.null(config$epidemic_peaks) && NROW(config$epidemic_peaks) == 0L) {
-    config$epidemic_peaks <- NULL
-  }
-  config
-}
-
 # =============================================================================
 # FAST PARAMETER EXTRACTION (replaces convert_config_to_matrix in hot loop)
 # =============================================================================
@@ -382,11 +264,10 @@
   # source of truth so re-sampled medoid/ensemble configs clamp identically.
   params_sim <- .mosaic_clamp_transmission_params(params_sim)
 
-  # Defensive guard (issue #100): ensure local-path workers never trigger the
-  # Python analyzer. The analyzer requires likelihood-control keys that are
-  # only flattened onto config on the Dask path (see
-  # .mosaic_inject_likelihood_settings()). Local-path scoring happens in R
-  # after the LASER call below.
+  # Never let the engine score internally: MOSAIC computes the likelihood in R
+  # after the simulation returns. Kept explicit rather than relying on the
+  # default, because a config that arrived with calc_likelihood = TRUE would
+  # otherwise be scored twice by two different implementations.
   params_sim$calc_likelihood <- FALSE
 
   # Pre-allocate simresults collector (validation mode only)
@@ -691,29 +572,17 @@
 #'     \item the likelihood-value provenance differs -- i.e. the existing shards
 #'       were scored by a different likelihood engine or implementation than the
 #'       current session would produce (e.g. R \code{calc_model_likelihood} on
-#'       the local backend vs on-worker Python scoring on the Dask backend, or
+#'       an R likelihood-code change that altered values, or
 #'       an R likelihood-code change that altered values).
 #'   }
 #'   If the engine version cannot be determined (no record / Python not bound) the
 #'   deaths-scale check is skipped with a warning. Has no effect when no shards
 #'   exist (equivalent to a fresh run).
-#' @param cluster Optional pre-built R parallel cluster from
-#'   \code{\link{make_mosaic_cluster}}. Only used when \code{dask_spec = NULL}.
-#'   When provided, skips cluster creation and teardown, reusing existing workers.
-#'   Useful for staged estimation where multiple \code{run_MOSAIC} calls share a
-#'   cluster. When \code{dask_spec} is provided this argument is not used; the
-#'   caller retains ownership of any cluster passed and is responsible for stopping
-#'   it after \code{run_MOSAIC} returns.
-#' @param dask_spec Optional named list specifying a Dask/Coiled cluster. When
-#'   provided, simulations are dispatched to Dask workers instead of a local R
-#'   parallel cluster. Required fields: \code{type} ("coiled" or "scheduler").
-#'   Coiled fields: \code{n_workers}, \code{software}, \code{workspace} (required
-#'   for multi-workspace Coiled accounts), \code{vm_types}, \code{scheduler_vm_types},
-#'   \code{region}, \code{idle_timeout}. Scheduler fields: \code{address}.
-#'   Optional Coiled pass-through fields: \code{timeout}, \code{environ},
-#'   \code{scheduler_disk_size}, \code{worker_disk_size}, \code{scheduler_options},
-#'   \code{worker_options}, \code{spot_policy}, \code{host_setup_script}.
-#'   When \code{NULL} (default) the local R parallel backend is used.
+#' @param cluster Optional pre-built R parallel cluster. When provided, skips
+#'   cluster creation and teardown, reusing existing workers. Useful for staged
+#'   estimation where multiple \code{run_MOSAIC} calls share a cluster. The
+#'   caller retains ownership of any cluster passed and is responsible for
+#'   stopping it after \code{run_MOSAIC} returns.
 #'
 #' @return Invisibly returns a list with:
 #' \describe{
@@ -818,7 +687,7 @@ run_MOSAIC <- function(config,
                        control   = NULL,
                        resume    = FALSE,
                        cluster   = NULL,
-                       dask_spec = NULL) {
+                       ...) {
 
   # ===========================================================================
   # ARGUMENT VALIDATION
@@ -843,49 +712,9 @@ run_MOSAIC <- function(config,
   # Extract iso_code from config for logging
   iso_code <- config$location_name
 
-  # Determine backend: Dask if dask_spec provided, R parallel otherwise
-  use_dask <- !is.null(dask_spec)
-
-  # Normalise and validate dask_spec defaults
-  if (use_dask) {
-    if (!is.list(dask_spec)) {
-      stop("dask_spec must be a named list or NULL", call. = FALSE)
-    }
-    dask_spec$type               <- dask_spec$type               %||% "coiled"
-    dask_spec$software           <- dask_spec$software           %||% "mosaic-acr-workers"
-    dask_spec$vm_types           <- dask_spec$vm_types           %||% c("Standard_D8s_v6")
-    dask_spec$scheduler_vm_types <- dask_spec$scheduler_vm_types %||% c("Standard_D4s_v6")
-    dask_spec$region             <- dask_spec$region             %||% "westus2"
-    dask_spec$idle_timeout       <- dask_spec$idle_timeout       %||% "2 hours"
-    # workspace: no default -- NULL is valid for single-workspace Coiled accounts;
-    # required for multi-workspace orgs. Validate below if type = "coiled".
-    if (dask_spec$type == "coiled" && is.null(dask_spec$workspace)) {
-      message("Note: dask_spec$workspace not set. If you have multiple Coiled workspaces, ",
-              "set workspace = 'your-workspace-name' to avoid a Coiled runtime error.")
-    }
-
-    if (!dask_spec$type %in% c("coiled", "scheduler")) {
-      stop("dask_spec$type must be 'coiled' or 'scheduler'", call. = FALSE)
-    }
-    if (dask_spec$type == "scheduler" &&
-        (is.null(dask_spec$address) || !nzchar(dask_spec$address))) {
-      stop("dask_spec$address must be set when type='scheduler'", call. = FALSE)
-    }
-    # Remote worker count is governed SOLELY by dask_spec, never by
-    # control$parallel$n_cores. Require it explicitly for a Coiled cluster
-    # (mosaic_dask_presets() always sets it).
-    if (dask_spec$type == "coiled") {
-      if (is.null(dask_spec$n_workers) || !is.numeric(dask_spec$n_workers) ||
-          length(dask_spec$n_workers) != 1L || is.na(dask_spec$n_workers) ||
-          dask_spec$n_workers < 1) {
-        stop("dask_spec$n_workers must be a positive integer for type='coiled' ",
-             "(set it explicitly, e.g. via mosaic_dask_presets()). `control$parallel$n_cores` ",
-             "governs LOCAL parallelism only and no longer defaults the remote worker count.",
-             call. = FALSE)
-      }
-      dask_spec$n_workers <- as.integer(round(dask_spec$n_workers))
-    }
-  }
+  # Removed arguments (`dask_spec`, and the engine-plotting arguments) are
+  # rejected loudly rather than absorbed -- see .mosaic_reject_removed_args().
+  .mosaic_reject_removed_args(list(...), "run_MOSAIC")
 
   # ===========================================================================
   # SETUP MOSAIC ROOT DIRECTORY
@@ -973,11 +802,11 @@ run_MOSAIC <- function(config,
   .mosaic_check_blas_control()
 
   # Pin every thread pool on THIS orchestrator process to 1 regardless of backend
-  # (local-sequential, local-PSOCK, or Dask). This previously ran only inside the
-  # Dask branch, leaving the local in-process LASER path (sequential calibration +
+  # (local-sequential or local-PSOCK). This previously ran only inside the
+  # Dask branch, leaving the local in-process engine path (sequential calibration +
   # calc_model_ensemble's sequential branch) able to oversubscribe numba/MKL/
-  # OpenBLAS on a multi-core host. Idempotent with the per-worker and Dask-path
-  # pins; PSOCK/Coiled workers set their own pins separately (fresh processes).
+  # OpenBLAS on a multi-core host. Idempotent with the per-worker pins; PSOCK
+  # workers set their own pins separately (fresh processes).
   .mosaic_set_blas_threads(1L)
   try(arrow::set_cpu_count(1L), silent = TRUE)
   try(arrow::set_io_thread_count(2L), silent = TRUE)
@@ -1031,16 +860,11 @@ run_MOSAIC <- function(config,
   # Conditionally create simresults directory for validation output
   save_simresults <- isTRUE(control$io$save_simresults)
 
-  # Preflight: simresults capture is local-path only. Dask workers return
-  # per-iter scalar likelihoods (issue #101 worker schema) instead of full
-  # time-series matrices, so there is no raw (j, t) output to persist on the
-  # Dask path. Reject early rather than silently dropping diagnostics.
-  if (use_dask && save_simresults) {
-    log_fatal("save_simresults is not supported on the Dask path; use the local backend for diagnostic runs.")
-    stop("save_simresults is not supported on the Dask path; ",
-         "use the local backend for diagnostic runs.", call. = FALSE)
-  }
-
+  # `save_simresults` used to be rejected outright on the remote path, because
+  # remote workers returned per-iter scalar likelihoods rather than full
+  # time-series matrices and there was no raw (j, t) output to persist. With
+  # only the local path left, the restriction is gone and every run can capture
+  # diagnostics.
   if (save_simresults) {
     dirs$cal_simresults <- file.path(dir_output, "2_calibration/simulation_results")
     dir.create(dirs$cal_simresults, recursive = TRUE, showWarnings = FALSE)
@@ -1054,7 +878,7 @@ run_MOSAIC <- function(config,
   # persisted by the interrupted run BEFORE the setup files below overwrite
   # them. A mismatch changes the sampling/likelihood target and is a hard error.
   if (isTRUE(resume)) {
-    .mosaic_resume_check_inputs(dirs, config, priors, control, use_dask = use_dask)
+    .mosaic_resume_check_inputs(dirs, config, priors, control)
 
     # Refuse to resume into an existing consolidated samples.parquet when the
     # shards on disk would produce a SMALLER pool: combining + overwriting would
@@ -1084,12 +908,12 @@ run_MOSAIC <- function(config,
   env_snapshot <- .mosaic_capture_environment(
     config = config, priors = priors, control = control
   )
-  # Stamp the likelihood-value provenance (who/what scored the shards) so a later
-  # resume can refuse to pool incomparable likelihoods (R on the local backend
-  # vs on-worker Python scoring on the Dask backend, or across an R
-  # likelihood-code change that altered values).
+  # Stamp the likelihood-value provenance (who/what scored the shards) so a
+  # later resume can refuse to pool incomparable likelihoods across an R
+  # likelihood-code change that altered values. The scorer is now always R --
+  # the Dask path's on-worker Python scoring is gone -- but the stamp stays,
+  # because a code change on the R side is still a reason to refuse pooling.
   env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance(
-    use_dask   = use_dask,
     lc_version = tryCatch(env_snapshot$python$pkg_laser_cholera, error = function(e) NA_character_)
   )
   .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
@@ -1228,9 +1052,7 @@ run_MOSAIC <- function(config,
 
   # Resolve and normalize weights_time into the private slot used by all workers.
   # Normalize to sum to n_t (number of time points) so the scale is independent
-  # of user-supplied magnitude. Applied once here for both R and Dask paths;
-  # the Dask path also has its own copy of this logic for the likelihood_settings
-  # local variable it builds -- that redundant normalization is harmless.
+  # of user-supplied magnitude.
   if (!is.null(control$likelihood$weights_time)) {
     n_t_cfg <- if (is.matrix(config$reported_cases)) ncol(config$reported_cases) else
                  length(config$reported_cases)
@@ -1265,7 +1087,7 @@ run_MOSAIC <- function(config,
   # -- whenever the per-cell weight matrices are absent or the data are uniform,
   # preserving byte-identical prior behavior. An explicitly-supplied
   # weights_location is a deliberate caller override and is left untouched. Both
-  # R and Dask paths read control$likelihood$weights_location downstream, so
+  # Downstream consumers read control$likelihood$weights_location, so
   # resolving it here covers both backends in lockstep.
   if (is.null(control$likelihood$weights_location)) {
     derived_wl <- .mosaic_derive_weights_location(config)
@@ -1279,288 +1101,79 @@ run_MOSAIC <- function(config,
     }
   }
 
-  # Initialise Dask-related variables to NULL so the on.exit handler is always safe.
-  # Never alias the caller-provided R cluster here -- if dask_spec is provided the
-  # caller retains full ownership of any R cluster they passed; it is not used and
-  # not touched by the Dask code path.
-  client      <- NULL
-  dask_cluster <- NULL  # Dask/Coiled cluster object (distinct from R cluster arg)
+  # --- Local R parallel cluster ---
 
-  if (use_dask) {
+  # Force sequential if parallel is disabled
+  if (!isTRUE(control$parallel$enable)) {
+    control$parallel$n_cores <- 1L
+  }
 
-    # --- Dask / Coiled cluster ---
+  # Determine cluster ownership:
+  #   owns_cluster = TRUE  -> we created it, we tear it down
+  #   owns_cluster = FALSE -> caller provided it, caller tears it down
+  owns_cluster <- FALSE
 
-    # Force LOCAL sequential if parallel is disabled. Sets the orchestrator-local
-    # worker count only; does NOT affect dask_spec$n_workers (the remote cluster size).
-    if (!isTRUE(control$parallel$enable)) {
-      control$parallel$n_cores <- 1L
-    }
+  if (!is.null(cluster)) {
+    # User provided a pre-built cluster (e.g. from make_mosaic_cluster)
+    cl <- cluster
+    owns_cluster <- FALSE
+    log_msg("Using pre-built cluster (%d workers)", length(cl))
+  } else if (control$parallel$n_cores > 1L) {
+    # Create cluster internally via make_mosaic_cluster
+    cl <- make_mosaic_cluster(
+      n_cores = control$parallel$n_cores,
+      type = control$parallel$type
+    )
+    owns_cluster <- TRUE
+    log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
 
-    dask_dist <- reticulate::import("dask.distributed")
-
-    # Raise the large-graph warning threshold: chunked client$map() batches
-    # ~1000 per-sim JSON param strings per call (~60 MiB at ETH scale, more
-    # at multi-country scale), which is expected and unavoidable since
-    # per-sim params must be sent to workers.
-    dask_mod <- reticulate::import("dask")
-    dask_mod$config$set(list("distributed.admin.large-graph-warning-threshold" = "100 MiB"))
-
-    if (dask_spec$type == "coiled") {
-      coiled_mod <- reticulate::import("coiled")
-      # Remote worker count comes ONLY from dask_spec (validated above); it is
-      # deliberately NOT defaulted from control$parallel$n_cores, which governs
-      # local-machine parallelism only and must never size the remote cluster.
-      n_workers_req <- as.integer(dask_spec$n_workers)
-
-      log_msg("Creating Coiled cluster: %d workers (%s, %s)",
-              n_workers_req, dask_spec$vm_types[1], dask_spec$region)
-
-      cluster_name <- paste0("mosaic-dask-",
-                             format(Sys.time(), "%Y%m%d-%H%M%S"))
-
-      cluster_args <- list(
-        name                = cluster_name,
-        n_workers           = as.integer(n_workers_req),
-        worker_vm_types     = as.list(dask_spec$vm_types),
-        scheduler_vm_types  = as.list(dask_spec$scheduler_vm_types),
-        region              = dask_spec$region,
-        software            = dask_spec$software,
-        workspace           = dask_spec$workspace,
-        shutdown_on_close   = TRUE,
-        idle_timeout        = dask_spec$idle_timeout
-      )
-
-      # Pass through optional Coiled args from dask_spec
-      for (opt in c("timeout", "environ", "scheduler_disk_size",
-                    "worker_disk_size", "scheduler_options", "worker_options",
-                    "spot_policy", "host_setup_script", "wait_for_workers")) {
-        if (!is.null(dask_spec[[opt]])) {
-          cluster_args[[opt]] <- dask_spec[[opt]]
-          if (opt == "host_setup_script") log_msg("Using host_setup_script for worker VM init")
-        }
-      }
-
-      # Cluster creation with retry -- transient Azure provisioning failures
-      # (e.g. "Timed out waiting for process to phone home") are common and
-      # resolve on retry without any code change needed.
-      max_cluster_attempts <- 3L
-      cluster_attempt      <- 0L
-      repeat {
-        cluster_attempt <- cluster_attempt + 1L
-        tryCatch({
-          dask_cluster <- do.call(coiled_mod$Cluster, cluster_args)
-          client       <- dask_dist$Client(dask_cluster)
-          break   # success
-        }, error = function(e) {
-          try({ if (!is.null(dask_cluster)) dask_cluster$close() }, silent = TRUE)
-          dask_cluster <<- NULL
-          if (cluster_attempt >= max_cluster_attempts) {
-            log_fatal("Coiled cluster creation failed after %d attempts: %s",
-                      max_cluster_attempts, e$message)
-            stop("Coiled cluster creation failed after ", max_cluster_attempts,
-                 " attempts: ", e$message, call. = FALSE)
-          }
-          wait_secs <- 30L * cluster_attempt
-          log_msg("Cluster creation attempt %d/%d failed: %s",
-                  cluster_attempt, max_cluster_attempts, e$message)
-          log_msg("  Retrying in %ds...", wait_secs)
-          Sys.sleep(wait_secs)
-        })
-      }
-    } else {
-      log_msg("Connecting to Dask scheduler: %s", dask_spec$address)
-      client <- dask_dist$Client(dask_spec$address)
-    }
-
-    # Emit through both channels: cli::cli_alert_info() makes the URL a
-    # clickable hyperlink in interactive terminals, but bypasses log_msg and
-    # therefore never lands in run.log. Mirror via log_msg so a tailing
-    # operator (human or AI) can grep "Dask dashboard:" from the file.
-    cli::cli_alert_info("Dask dashboard: {.url {client$dashboard_link}}")
-    log_msg("Dask dashboard: %s", client$dashboard_link)
-
-    # Register cleanup (runs on normal exit OR error).
-    # client/dask_cluster are set to NULL after graceful close before post-processing,
-    # so this only fires if an error occurs during the batch loop.
+    # Register cleanup handler (will be called on normal exit or error)
     on.exit({
-      if (!is.null(client)) {
-        try({ client$close(); log_msg("Dask client closed (on.exit)") }, silent = TRUE)
-      }
-      if (!is.null(dask_cluster)) {
-        try({ dask_cluster$close(); log_msg("Dask cluster closed (on.exit)") }, silent = TRUE)
+      if (owns_cluster && !is.null(cl)) {
+        try({
+          parallel::stopCluster(cl)
+          log_msg("Cluster stopped successfully")
+        }, silent = TRUE)
       }
     }, add = TRUE)
-
-    # Upload Python worker module to all workers
-    worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
-    if (!nzchar(worker_py_path) || !file.exists(worker_py_path)) {
-      log_fatal("Cannot find inst/python/mosaic_dask_worker.py \u2014 was the package reinstalled?")
-      stop("Cannot find inst/python/mosaic_dask_worker.py \u2014 was the package reinstalled?",
-           call. = FALSE)
-    }
-    client$upload_file(worker_py_path)
-    log_msg("Uploaded mosaic_dask_worker.py to all workers")
-
-    # client$upload_file() adds the module to each worker's sys.path, but the
-    # local Python process doesn't know about it yet. Add the module's directory
-    # to local sys.path so reticulate::import() can find it here too.
-    reticulate::py_run_string(paste0(
-      "import sys\n",
-      "_mw_dir = '", dirname(worker_py_path), "'\n",
-      "if _mw_dir not in sys.path:\n",
-      "    sys.path.insert(0, _mw_dir)"
-    ))
-    mosaic_worker <- reticulate::import("mosaic_dask_worker")
-
-    # --- Worker/orchestrator laser-cholera parity guard ---
-    # The worker path is pure Python and runs the laser-cholera engine directly,
-    # so a version drift between this orchestrator's reticulate env and the Coiled
-    # worker image would silently change simulation results (CLAUDE.md lesson #12).
-    # Query every worker and compare against the local engine version; abort by
-    # default (control$parallel$strict_worker_version), or downgrade to a warning.
-    local_lc <- tryCatch(reticulate::import("laser.cholera")[["__version__"]],
-                         error = function(e) NULL)
-    worker_versions <- tryCatch(client$run(mosaic_worker$get_engine_versions),
-                                error = function(e) list())
-    ver_chk <- .mosaic_check_worker_versions(local_lc, worker_versions)
-    if (!is.null(ver_chk$note)) {
-      log_msg("WARNING: %s", ver_chk$note)
-      cli::cli_alert_warning(ver_chk$note)
-    } else if (!ver_chk$ok) {
-      msg <- sprintf(
-        "laser-cholera version mismatch between orchestrator (%s) and %d worker(s):\n  %s",
-        local_lc %||% "unknown", length(ver_chk$mismatches),
-        paste(ver_chk$mismatches, collapse = "\n  "))
-      if (isTRUE(control$parallel$strict_worker_version)) {
-        log_fatal("%s", msg)
-        stop(msg, "\nRebuild/refresh the Coiled software environment to match, or set ",
-             "control$parallel$strict_worker_version = FALSE to proceed anyway.",
-             call. = FALSE)
-      } else {
-        log_msg("WARNING: %s (proceeding; strict_worker_version = FALSE)", msg)
-        cli::cli_alert_warning(msg)
-      }
-    } else {
-      log_msg("Worker laser-cholera verified: %s (%d workers)",
-              local_lc, ver_chk$n_workers)
-    }
-
-    # Resolve likelihood settings once (avoids closure over control in batch func)
-    likelihood_settings <- control$likelihood
-    if (!is.null(likelihood_settings$weights_time)) {
-      n_t <- ncol(config$reported_cases)
-      wt_raw <- likelihood_settings$weights_time
-      if (length(wt_raw) == 1L) wt_raw <- rep(wt_raw, n_t)
-      likelihood_settings$.weights_time_resolved <- wt_raw / sum(wt_raw) * n_t
-    } else {
-      likelihood_settings$.weights_time_resolved <- NULL
-    }
-
-    # Inject likelihood-control settings + epidemic_peaks + calc_likelihood
-    # toggle onto config so the laser-cholera analyzer can score on-worker
-    # (issue #100, plan section3.1, section3.4.1). Dask path only -- local PSOCK/FORK
-    # path keeps R-side scoring.
-    config <- .mosaic_inject_likelihood_settings(config, likelihood_settings)
-
-    # Scatter base config (matrices + metadata) to all workers ONCE
-    log_msg("Broadcasting base config to workers...")
-    base_config_py     <- reticulate::r_to_py(.extract_base_config(config))
-    base_config_future <- client$scatter(base_config_py, broadcast = TRUE)
-    log_msg("  Base config broadcast complete")
-
-    # Orchestrator-local thread hygiene: pin every thread pool on THIS
-    # (orchestrator) process to 1 so arrow's CPU/IO pools and OpenBLAS don't
-    # oversubscribe the host (they are otherwise uncapped here). The PSOCK
-    # workers that run the sampling + parquet-write loops are pinned separately
-    # on each worker (they are fresh processes and do NOT inherit this pin).
-    # Remote Coiled workers set their own nthreads=1 and are unaffected.
-    .mosaic_set_all_thread_env(1L)
-    try(arrow::set_cpu_count(1L), silent = TRUE)
-    try(arrow::set_io_thread_count(2L), silent = TRUE)
-
-    # cl is not used in Dask mode
-    cl <- NULL
-
   } else {
-
-    # --- Local R parallel cluster ---
-
-    # Force sequential if parallel is disabled
-    if (!isTRUE(control$parallel$enable)) {
-      control$parallel$n_cores <- 1L
-    }
-
-    # Determine cluster ownership:
-    #   owns_cluster = TRUE  -> we created it, we tear it down
-    #   owns_cluster = FALSE -> caller provided it, caller tears it down
-    owns_cluster <- FALSE
-
-    if (!is.null(cluster)) {
-      # User provided a pre-built cluster (e.g. from make_mosaic_cluster)
-      cl <- cluster
-      owns_cluster <- FALSE
-      log_msg("Using pre-built cluster (%d workers)", length(cl))
-    } else if (control$parallel$n_cores > 1L) {
-      # Create cluster internally via make_mosaic_cluster
-      cl <- make_mosaic_cluster(
-        n_cores = control$parallel$n_cores,
-        type = control$parallel$type
-      )
-      owns_cluster <- TRUE
-      log_msg("Created %s cluster with %d cores", control$parallel$type, control$parallel$n_cores)
-
-      # Register cleanup handler (will be called on normal exit or error)
-      on.exit({
-        if (owns_cluster && !is.null(cl)) {
-          try({
-            parallel::stopCluster(cl)
-            log_msg("Cluster stopped successfully")
-          }, silent = TRUE)
-        }
-      }, add = TRUE)
-    } else {
-      log_msg("Running sequentially (n_cores = 1)")
-      cl <- NULL
-    }
-
-    # Export per-run data to workers (needed every run, even with reused cluster)
-    if (!is.null(cl)) {
-      likelihood_settings <- control$likelihood
-      io_settings <- control$io
-
-      parallel::clusterExport(cl,
-        c("n_iterations", "priors", "config", "PATHS", "param_names_all", "param_lookup",
-          "sampling_args", "dirs",
-          "likelihood_settings", "io_settings"),
-        envir = environment())
-
-      # Install worker function using the exported per-run variables
-      parallel::clusterCall(cl, function() {
-        assign(".run_sim_worker", function(sim_id) {
-          MOSAIC:::.mosaic_run_simulation_worker(
-            sim_id = sim_id,
-            n_iterations = n_iterations,
-            priors = priors,
-            config = config,
-            PATHS = PATHS,
-            dir_cal_samples = dirs$cal_samples,
-            dir_cal_simresults = dirs$cal_simresults,
-            param_names_all = param_names_all,
-            param_lookup = param_lookup,
-            sampling_args = sampling_args,
-            io = io_settings,
-            likelihood_settings = likelihood_settings
-          )
-        }, envir = .GlobalEnv)
-        NULL
-      })
-    }
-
-    # Dask variables not used in R parallel mode
-    mosaic_worker      <- NULL
-    base_config_future <- NULL
-
+    log_msg("Running sequentially (n_cores = 1)")
+    cl <- NULL
   }
+
+  # Export per-run data to workers (needed every run, even with reused cluster)
+  if (!is.null(cl)) {
+    likelihood_settings <- control$likelihood
+    io_settings <- control$io
+
+    parallel::clusterExport(cl,
+      c("n_iterations", "priors", "config", "PATHS", "param_names_all", "param_lookup",
+        "sampling_args", "dirs",
+        "likelihood_settings", "io_settings"),
+      envir = environment())
+
+    # Install worker function using the exported per-run variables
+    parallel::clusterCall(cl, function() {
+      assign(".run_sim_worker", function(sim_id) {
+        MOSAIC:::.mosaic_run_simulation_worker(
+          sim_id = sim_id,
+          n_iterations = n_iterations,
+          priors = priors,
+          config = config,
+          PATHS = PATHS,
+          dir_cal_samples = dirs$cal_samples,
+          dir_cal_simresults = dirs$cal_simresults,
+          param_names_all = param_names_all,
+          param_lookup = param_lookup,
+          sampling_args = sampling_args,
+          io = io_settings,
+          likelihood_settings = likelihood_settings
+        )
+      }, envir = .GlobalEnv)
+      NULL
+    })
+  }
+
 
   # ===========================================================================
   # DETERMINE RUN MODE: AUTO vs FIXED
@@ -1645,24 +1258,8 @@ run_MOSAIC <- function(config,
 
       batch_start_time <- Sys.time()
 
-      # Dispatch batch: Dask or R parallel/sequential
-      success_indicators <- if (use_dask) {
-        .mosaic_run_batch_dask(
-          sim_ids             = sim_ids,
-          n_iterations        = n_iterations,
-          priors              = priors,
-          config              = config,
-          PATHS               = PATHS,
-          sampling_args       = sampling_args,
-          dirs                = dirs,
-          param_names_all     = param_names_all,
-          param_lookup        = param_lookup,
-          control             = control,
-          client              = client,
-          base_config_future  = base_config_future,
-          mosaic_worker       = mosaic_worker
-        )
-      } else if (!is.null(cl)) {
+      # Dispatch batch: R parallel or sequential
+      success_indicators <- if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
         .mosaic_run_batch(
           sim_ids = sim_ids,
@@ -1770,24 +1367,8 @@ run_MOSAIC <- function(config,
       # Run batch
       batch_start_time <- Sys.time()
 
-      # Dispatch batch: Dask or R parallel/sequential
-      success_indicators <- if (use_dask) {
-        .mosaic_run_batch_dask(
-          sim_ids             = sim_ids,
-          n_iterations        = n_iterations,
-          priors              = priors,
-          config              = config,
-          PATHS               = PATHS,
-          sampling_args       = sampling_args,
-          dirs                = dirs,
-          param_names_all     = param_names_all,
-          param_lookup        = param_lookup,
-          control             = control,
-          client              = client,
-          base_config_future  = base_config_future,
-          mosaic_worker       = mosaic_worker
-        )
-      } else if (!is.null(cl)) {
+      # Dispatch batch: R parallel or sequential
+      success_indicators <- if (!is.null(cl)) {
         # Parallel: use worker function defined on cluster
         .mosaic_run_batch(
           sim_ids = sim_ids,
@@ -1850,24 +1431,9 @@ run_MOSAIC <- function(config,
   }
 
   # Stop R cluster only if we created it (not if caller provided it)
-  if (!use_dask && exists("owns_cluster") && owns_cluster && !is.null(cl)) {
+  if (exists("owns_cluster") && owns_cluster && !is.null(cl)) {
     parallel::stopCluster(cl)
     cl <- NULL
-  }
-
-  # Disconnect Dask client before R-heavy post-processing to prevent Python
-  # event loop starvation / TLS heartbeat timeouts. The cluster object stays
-  # alive (holds TLS context) so we can reconnect for post-cal ensemble sims.
-  if (use_dask && !is.null(client)) {
-    log_msg("Disconnecting Dask client (cluster stays alive for post-cal reconnect)")
-    tryCatch({
-      client$close()
-      log_msg("  Client disconnected")
-    }, error = function(e) {
-      log_msg("  Dask client disconnect failed: %s", e$message)
-    })
-    client <- NULL
-    gc(verbose = FALSE)
   }
 
   # ===========================================================================
@@ -2321,103 +1887,17 @@ run_MOSAIC <- function(config,
   # so that subset optimization, when enabled, can drive the canonical posterior)
   # ===========================================================================
 
-  # The client was disconnected before R-heavy post-processing. Now reconnect
-  # to the same (still-alive) cluster to dispatch stochastic param sims.
-
-  # Trajectory-capture flags — hoisted ABOVE the post-cal Dask reconnect dispatch
-  # below (which passes `capture_trajectories = .traj_enabled`). They were
-  # previously defined ~80 lines later, so the reconnect dispatch hit
-  # "object '.traj_enabled' not found" and forced the local-execution fallback
-  # (silent + OK for 1-loc, but HANGS the multi-loc regional post-cal ensemble).
+  # Post-calibration stochastic ensemble sims run in-process on the local
+  # cluster.
+  #
+  # Trajectory-capture flags are defined here, ahead of every consumer. They
+  # used to live ~80 lines further down, which left `capture_trajectories =
+  # .traj_enabled` reading an undefined object.
   .traj_enabled     <- isTRUE(control$predictions$capture_trajectories)
   .optimize_enabled <- isTRUE(control$predictions$optimize_subset)
   .traj_channels    <- control$predictions$trajectory_channels %||%
                          .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT
   .traj_n_lines     <- as.integer(control$predictions$trajectory_n_lines %||% 150L)
-
-  postca_dask <- NULL
-
-  if (use_dask && !is.null(dask_cluster)) {
-    postca_dask <- tryCatch({
-      log_msg("Reconnecting to Dask cluster for post-cal sims...")
-      client <- dask_cluster$get_client()
-      log_msg("  Reconnected (%s workers)",
-              {
-                n_w <- .mosaic_count_dask_workers(client)
-                if (is.na(n_w)) "?" else as.character(n_w)
-              })
-
-      # Re-upload worker module (workers may have restarted during idle)
-      worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
-      client$upload_file(worker_py_path)
-      mosaic_worker <- reticulate::import("mosaic_dask_worker")
-
-      # Build stochastic param configs (always, not just when plots = TRUE)
-      stoch_param_configs <- NULL
-      n_stochastic_per <- control$predictions$n_iter_ensemble %||% 10L
-
-      if (sum(results$is_best_subset) > 0) {
-        best_subset_results <- results[results$is_best_subset == TRUE, ]
-        nonzero <- best_subset_results$weight_best > 0
-        stoch_param_seeds   <- best_subset_results$seed_sim[nonzero]
-        stoch_param_weights <- best_subset_results$weight_best[nonzero]
-
-        if (length(stoch_param_weights) > 0) {
-          raw_configs <- lapply(stoch_param_seeds, function(seed_i) {
-            tryCatch(
-              .mosaic_clamp_transmission_params(
-                sample_parameters(PATHS = PATHS, priors = priors, config = config,
-                                  seed = seed_i, sample_args = sampling_args, verbose = FALSE)),
-              error = function(e) NULL
-            )
-          })
-          # Drop failed re-samples from configs AND their seeds/weights in
-          # lockstep. .mosaic_postca_dask() labels each task's param_idx by its
-          # position in this kept list, and those slices are paired with the
-          # weights handed to calc_model_ensemble() below. An unkeyed Filter()
-          # would shift every later config onto the wrong weight and leave a
-          # trailing all-NA slice -- a silent posterior-ensemble error (the
-          # v0.35.1 weight-misalignment class).
-          keep <- !vapply(raw_configs, is.null, logical(1))
-          if (any(!keep)) {
-            log_warn("post-cal ensemble: %d of %d best-subset seeds failed to re-sample; dropping in lockstep",
-                     sum(!keep), length(keep))
-          }
-          stoch_param_configs <- raw_configs[keep]
-          stoch_param_seeds   <- stoch_param_seeds[keep]
-          stoch_param_weights <- stoch_param_weights[keep]
-        }
-      }
-
-      # Dispatch posterior-ensemble post-cal sims
-      result <- .mosaic_postca_dask(
-        client           = client,
-        mosaic_worker    = mosaic_worker,
-        param_configs    = stoch_param_configs,
-        n_stochastic_per = n_stochastic_per,
-        capture_trajectories = .traj_enabled,
-        log_msg          = log_msg
-      )
-
-      # NOTE: Do NOT close the cluster here. It is kept alive for the best and
-      # medoid stochastic-ensemble dispatch later (Option A -- single second
-      # dispatch once the medoid seed is known). The cluster is closed after
-      # that dispatch, in the PRE-SAMPLE + DASK DISPATCH block before the
-      # posterior predictive checks (best single model) section.
-
-      result
-    }, error = function(e) {
-      log_warn("Post-cal Dask reconnect/dispatch failed: %s", e$message)
-      log_msg("  Falling back to local execution for ensemble/stochastic sims")
-      tryCatch({ if (!is.null(client)) client$close() }, error = function(e2) NULL)
-      client <<- NULL
-      if (!is.null(dask_cluster)) {
-        tryCatch(dask_cluster$close(), error = function(e2) NULL)
-        dask_cluster <<- NULL
-      }
-      NULL
-    })
-  }
 
   # Format a number-or-NA as a log-line-safe string. Replaces the prior
   # `ifelse(is.na(x), 0, x)` pattern which silently substituted 0 for NA in
@@ -2485,27 +1965,14 @@ run_MOSAIC <- function(config,
 
   param_seeds <- NULL   # initialised here; assigned inside block below if best subset exists
 
-  # Trajectory-capture flags are now hoisted ABOVE the post-cal Dask reconnect
-  # block (the .traj_enabled/.optimize_enabled/.traj_channels/.traj_n_lines defs
-  # before `postca_dask <- NULL`), so both the reconnect dispatch and this
-  # post-optimize fallback see them. Only the scratch handles remain here.
   traj_scratch_handle <- NULL   # scratch descriptor from the candidate capture run
   cand_member_seeds   <- NULL   # candidate per-member seeds (scratch-key -> seed map)
 
   if (sum(results$is_best_subset) > 0) {
-    if (!is.null(postca_dask)) {
-      # Dask precomputed path: reuse the SAME seeds/weights that were dispatched
-      # (already compacted in lockstep with any dropped re-samples above), so the
-      # weights align 1:1 with the precomputed param_idx slices. Re-deriving from
-      # the unfiltered nonzero mask here is what caused the misalignment.
-      param_seeds   <- stoch_param_seeds
-      param_weights <- stoch_param_weights
-    } else {
-      best_subset_results <- results[results$is_best_subset == TRUE, ]
-      nonzero <- best_subset_results$weight_best > 0
-      param_seeds   <- best_subset_results$seed_sim[nonzero]
-      param_weights <- best_subset_results$weight_best[nonzero]
-    }
+    best_subset_results <- results[results$is_best_subset == TRUE, ]
+    nonzero <- best_subset_results$weight_best > 0
+    param_seeds   <- best_subset_results$seed_sim[nonzero]
+    param_weights <- best_subset_results$weight_best[nonzero]
 
     if (length(param_weights) > 0) {
       param_weights <- param_weights / sum(param_weights)
@@ -2546,7 +2013,6 @@ run_MOSAIC <- function(config,
         parallel                 = control$parallel$enable,
         n_cores                  = control$parallel$n_cores,
         root_dir                 = root_dir,
-        precomputed_results      = postca_dask$stochastic_results,
         capture_trajectories     = .traj_enabled,
         trajectory_channels      = .traj_channels,
         trajectory_n_lines       = .traj_n_lines,
@@ -2976,14 +2442,10 @@ run_MOSAIC <- function(config,
   # best plot/metrics); `is_best_model` in samples.parquet still flags the
   # top-likelihood draw for diagnostics.
   #
-  # Order of operations (Option A -- dispatch the medoid sim on the still-alive
-  # Dask cluster before closing it):
+  # Order of operations:
   #   1. Sample config_medoid (non-fatal; NULL skips the medoid build).
-  #   2. If a Dask cluster is alive, dispatch medoid stochastic sims on it, then
-  #      close the cluster. Otherwise leave precomputed = NULL and
-  #      calc_model_ensemble() falls back to its local PSOCK / sequential path.
-  #   3. Build the medoid mosaic_ensemble object (consuming precomputed results
-  #      when present), compute R^2/bias, render the plot.
+  #   2. Build the medoid mosaic_ensemble object on the local PSOCK /
+  #      sequential path, compute R^2/bias, render the plot.
   # ---------------------------------------------------------------------------
 
   log_msg("Running posterior predictive checks")
@@ -3016,82 +2478,19 @@ run_MOSAIC <- function(config,
   }
 
   # ---------------------------------------------------------------------------
-  # Dask dispatch for the medoid stochastic ensemble
+  # Medoid stochastic ensemble
   # ---------------------------------------------------------------------------
-  # Dispatch the medoid via a single-element param_configs list, keeping it in
-  # the param_idx=1 seed namespace (seeds 1001..1000+N) -- the SAME namespace
-  # used by the local PSOCK / sequential fallback path in calc_model_ensemble()
-  # (R/calc_model_ensemble.R:247) so a Dask run is bit-reproducible against a
-  # local re-run.
-  #
-  # Defensive re-upload of mosaic_dask_worker.py before dispatch: workers may
-  # have restarted (preemption, OOM kill) during the long R-only window
-  # between the posterior-ensemble dispatch and now (optimize_subset,
-  # quantiles, distributions, sensitivity/correlation plots, config sampling).
-  # client$upload_file() registers the module with the scheduler so new
-  # workers receive it automatically.
-  #
-  # On any dispatch error, OR when zero sims succeeded, the precomputed list
-  # is forced to NULL so calc_model_ensemble() falls back to local execution
-  # rather than producing an all-NA ensemble.
-  # The on.exit handler at line ~1036 is a safety net if close() throws.
-  medoid_precomputed <- NULL
-
-  .pruneOrNull <- function(results_list) {
-    if (is.null(results_list) || length(results_list) == 0) return(NULL)
-    n_ok <- sum(vapply(results_list, function(r) isTRUE(r$success), logical(1)))
-    if (n_ok == 0) NULL else results_list
-  }
-
-  if (use_dask && !is.null(client)) {
-    if (!is.null(config_medoid)) {
-      log_msg("Dispatching medoid stochastic ensemble on Dask (%d reruns)...",
-              n_best_stochastic_per)
-
-      tryCatch({
-        worker_py_path <- system.file("python/mosaic_dask_worker.py", package = "MOSAIC")
-        if (nzchar(worker_py_path)) {
-          client$upload_file(worker_py_path)
-        }
-
-        medoid_result <- .mosaic_postca_dask(
-          client           = client,
-          mosaic_worker    = mosaic_worker,
-          param_configs    = list(config_medoid),
-          n_stochastic_per = n_best_stochastic_per,
-          capture_trajectories = FALSE,   # medoid never captures (B-MEDOID)
-          log_msg          = log_msg
-        )
-        medoid_precomputed <- .pruneOrNull(medoid_result$stochastic_results)
-
-        if (is.null(medoid_precomputed)) {
-          log_warn("Medoid Dask dispatch returned 0 successful sims; falling back to local")
-        } else {
-          n_ok    <- sum(vapply(medoid_precomputed, function(r) isTRUE(r$success), logical(1)))
-          n_total <- length(medoid_precomputed)
-          log_msg("  Medoid precomputed: %d/%d sims succeeded on Dask", n_ok, n_total)
-        }
-      }, error = function(e) {
-        log_warn("medoid Dask dispatch failed: %s", e$message)
-        log_msg("  Falling back to local execution for the medoid ensemble")
-        medoid_precomputed <<- NULL
-      })
-    }
-
-    log_msg("Closing Dask cluster (all post-cal sims complete)")
-    tryCatch(client$close(), error = function(e) NULL)
-    client <- NULL
-    if (!is.null(dask_cluster)) {
-      tryCatch(dask_cluster$close(), error = function(e) NULL)
-      dask_cluster <- NULL
-    }
-  }
+  # The medoid used to be dispatched remotely here, via a single-element
+  # param_configs list kept in the param_idx=1 seed namespace (seeds
+  # 1001..1000+N) so a remote run stayed bit-reproducible against a local
+  # re-run. calc_model_ensemble() now always runs it locally on that same
+  # namespace, so `medoid_precomputed` is retired along with its
+  # dispatch-failed / zero-sims-succeeded fallbacks.
 
   # ===========================================================================
   # MEDOID MODEL -- ensemble member closest to the ensemble central trajectory
   # Runs after the posterior ensemble using the same pattern: config -> LASER ->
   # R^2 -> plot.
-  # Consumes Dask precomputed_results when available; falls back to local.
   # ===========================================================================
 
   tryCatch({
@@ -3102,8 +2501,7 @@ run_MOSAIC <- function(config,
       # (central_method, median by default), consistent with the posterior ensemble.
       log_msg("Building medoid model stochastic ensemble (%d reruns, source=%s)...",
               n_best_stochastic_per,
-              if (!is.null(medoid_precomputed)) "dask-precomputed"
-              else if (isTRUE(control$parallel$enable)) "local-parallel"
+              if (isTRUE(control$parallel$enable)) "local-parallel"
               else "local-sequential")
       medoid_ensemble <- tryCatch(
         calc_model_ensemble(
@@ -3116,7 +2514,6 @@ run_MOSAIC <- function(config,
           parallel                 = isTRUE(control$parallel$enable),
           n_cores                  = control$parallel$n_cores,
           root_dir                 = root_dir,
-          precomputed_results      = medoid_precomputed,
           capture_trajectories     = FALSE,  # PLAN 14.H B-MEDOID: a median over
           # ~100 identically-weighted reruns is meaningless and nothing consumes a
           # medoid trajectory artifact -- never capture for the medoid.
@@ -3645,15 +3042,9 @@ run_mosaic <- run_MOSAIC
 #' @param parallel List of parallelization settings (infrastructure). Default is:
 #'   \itemize{
 #'     \item \code{enable}: Enable parallel execution (default: FALSE)
-#'     \item \code{n_cores}: Number of LOCAL cores (default: 1L). Governs local-machine
-#'       parallelism only: the LASER worker count on the non-Dask path, and the
-#'       orchestrator's sampling/parquet PSOCK worker count on the Dask path. It never sets the
-#'       remote Dask/Coiled worker count (that is \code{dask_spec$n_workers}).
+#'     \item \code{n_cores}: Number of simulation worker processes (default: 1L)
 #'     \item \code{type}: Cluster type, "PSOCK" or "FORK" (default: "PSOCK")
 #'     \item \code{progress}: Show progress bar (default: TRUE)
-#'     \item \code{strict_worker_version}: Coiled/Dask path only. Abort the run if
-#'       any worker's laser-cholera engine version differs from the orchestrator's
-#'       (default: TRUE). Set FALSE to downgrade a mismatch to a warning.
 #'   }
 #'
 #' @param io List of I/O settings (output format). Default is:
@@ -3889,9 +3280,7 @@ mosaic_control_defaults <- function(calibration = NULL,
     enable = FALSE,
     n_cores = 1L,
     type = "PSOCK",
-    progress = TRUE,
-    strict_worker_version = TRUE  # Coiled/Dask only: abort if a worker's laser-cholera
-                                  # version differs from the orchestrator's (FALSE = warn)
+    progress = TRUE
   )
 
   # Default path settings

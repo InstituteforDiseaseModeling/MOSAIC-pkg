@@ -5,7 +5,7 @@ description: >
   (176 cores / 1.5 TiB, Ubuntu 24.04, persistently allocated). Covers the libexpat
   LD_PRELOAD R wrapper (NOT hedgehog's GLIBCXX problem), the IP-pinned SSH alias,
   surviving SSH disconnect (nohup+logfile default / tmux for humans), the local-PSOCK
-  control recipe (Coiled hybrid is #113-invalid), monitoring by tailing the log, and
+  control recipe, monitoring by tailing the log, and
   pulling results (tar-then-scp / pull_results.sh with HEDGEHOG_HOST=dugong).
   Use when the user wants to run, monitor, or fetch a MOSAIC calibration on dugong.
 ---
@@ -14,7 +14,7 @@ description: >
 
 Canonical reference: `vm/DUGONG.md`. Helpers shared with hedgehog: `vm/launch_mosaic.R`
 (single/multi-country), `vm/launch_mosaic_individual.R` (per-country loop with resume + compression),
-`vm/pull_results.sh` (parameterized — set `HEDGEHOG_HOST=dugong`), `R/presets.R`, `R/check_coiled.R`.
+`vm/pull_results.sh` (parameterized — set `HEDGEHOG_HOST=dugong`), `R/presets.R`.
 Provisioning scripts that built this node: `claude/dugong_setup/` (`install_dugong*.sh`,
 `build_venv_dugong.sh`, `make_wrappers_dugong.sh`, `smoke_dugong.R`).
 
@@ -62,17 +62,20 @@ via `~/bin/r-mosaic-Rscript` (batch) or `~/bin/r-mosaic-R` (interactive). `check
 TensorFlow-only work PASS without the wrapper (they skip the laser/pyexpat worker path) — which masks
 the bug, so use the wrapper anyway. Recreate it with `claude/dugong_setup/make_wrappers_dugong.sh` if lost.
 
-## 2. Choose a backend
-### (a) Local PSOCK — everything on dugong. RECOMMENDED.
-LASER sims AND post-processing run on dugong's local cores; nothing leaves the VM. Enabled by
-**omitting `dask_spec`**. `control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at ~2 GB/worker
-means you can run very wide (170+ of 176 cores is comfortable). Engine = dugong's laser-cholera
-end-to-end → VALID.
+## 2. Execution model — local PSOCK only
+Simulations AND post-processing run on dugong's local cores; nothing leaves the VM.
+`control$parallel$n_cores` IS the sim parallelism — 1.5 TiB RAM at ~2 GB/worker means you can run
+very wide (170+ of 176 cores is comfortable).
 
-### (b) Coiled hybrid — sims on a Coiled cloud cluster, dugong is the Dask client.
-**Currently scientifically INVALID** — the worker image lags laser-cholera (issue #113): runs complete
-but give low R²/unconverged results. Use (a) until #113 is resolved. `save_simresults` is rejected on
-this path; you may not switch backends across a `resume`.
+The Coiled hybrid backend has been **removed** from the package. It was already scientifically
+invalid (issue #113: the worker image lagged laser-cholera, so runs completed but gave low
+R²/unconverged results), and the pure-R engine migration removes the reason it existed. `dask_spec`,
+`check_coiled_workspace()` and `mosaic_dask_presets()` now raise an error rather than being ignored.
+
+**This skill is on notice.** The ~2 GB/worker figure above is the *Python* engine's footprint; the R
+engine's live state is order tens of MB. Once real throughput and per-worker RSS are measured
+(migrate-laser-r.md phase A-3a), a 176-core VM may no longer be needed for calibration. Keep it for
+wide sweeps and psi/LSTM training until those numbers exist.
 
 ## 3. Stage and launch (run MUST survive SSH disconnect)
 1. Stage the script: `scp my_run.R dugong:~/`.

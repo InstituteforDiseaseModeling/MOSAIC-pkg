@@ -79,7 +79,7 @@ design (unmasks implied CFR), not a regression.
 ## 4. Launch
 ```r
 res <- MOSAIC::run_MOSAIC(config = cfg, priors = MOSAIC::priors_default,
-                          control = ctrl, dask_spec = NULL)   # NULL = local PSOCK
+                          control = ctrl)
 ```
 - **Single deterministic sim** (scenario exploration / teaching): `run_LASER()` with a fixed config +
   seed.

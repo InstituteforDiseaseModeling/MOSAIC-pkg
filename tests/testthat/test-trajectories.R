@@ -271,20 +271,12 @@ test_that("plot_model_trajectories draws CFR regime lines when cfr_refs present"
   expect_true(file.exists(res2$pdf))
 })
 
-test_that("R and Python trajectory channel lists are in lockstep (#12 guard)", {
-  # A single-channel divergence between .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT (R)
-  # and _TRAJ_CHANNELS (Python) would silently drop that channel on the Dask
-  # backend (the narrow #12 class). Parse both and assert identical (order incl).
-  py <- system.file("python", "mosaic_dask_worker.py", package = "MOSAIC")
-  if (!nzchar(py)) py <- testthat::test_path("..", "..", "inst", "python",
-                                             "mosaic_dask_worker.py")
-  skip_if_not(file.exists(py), "python worker source not found")
-  src <- paste(readLines(py, warn = FALSE), collapse = "\n")
-  m <- regmatches(src, regexpr("(?s)_TRAJ_CHANNELS\\s*=\\s*\\((.*?)\\)", src, perl = TRUE))
-  skip_if(length(m) == 0L, "could not locate _TRAJ_CHANNELS")
-  py_chans <- gsub('"', "", regmatches(m, gregexpr('"[^"]+"', m))[[1]])
-  expect_identical(py_chans, MOSAIC:::.MOSAIC_TRAJECTORY_CHANNELS_DEFAULT)
-})
+# The "R and Python trajectory channel lists are in lockstep (#12 guard)" test
+# lived here. It parsed _TRAJ_CHANNELS out of inst/python/mosaic_dask_worker.py
+# and asserted it matched .MOSAIC_TRAJECTORY_CHANNELS_DEFAULT, because a
+# single-channel divergence would silently drop that channel on the Dask
+# backend. With the worker deleted there is no second list to drift from, so the
+# guard has nothing to guard -- the R constant is now the only definition.
 
 test_that("deferred reduce returns a scratch handle; optimized-subset reduce is bit-identical", {
   # reduce_trajectories = FALSE (run_MOSAIC path): calc_model_ensemble spills to

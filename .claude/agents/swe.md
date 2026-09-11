@@ -3,10 +3,10 @@ name: swe
 description: >
   Use for MOSAIC software engineering: the run_MOSAIC() orchestration loop and its
   helpers/infrastructure, the reticulate <-> laser-cholera bridge (run_LASER.R),
-  Dask/PSOCK parallel execution, config plumbing (make_LASER_config.R), packaging,
+  PSOCK parallel execution, config plumbing (make_LASER_config.R), packaging,
   R CMD check, performance/RAM profiling, test infrastructure, and rendering of the
   plot_* functions. Use PROACTIVELY for refactors, parallel-worker bugs, thread-safety
-  issues, and any change to run_MOSAIC*/run_LASER/Dask paths.
+  issues, and any change to run_MOSAIC*/run_LASER/engine paths.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 model: opus
 memory: project
@@ -40,9 +40,9 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
 - **Engine bridge:** `run_LASER.R`, `make_LASER_config.R`, reticulate/env files
   (`attach_mosaic_env.R`, `check_python_env.R`, `install_dependencies.R`,
   `remove_python_env.R`, `use_mosaic_env.R`)
-- **Parallel/cluster:** `make_mosaic_cluster.R`, `check_coiled.R`, Dask worker plumbing,
+- **Parallel/cluster:** `make_mosaic_cluster.R` (local PSOCK),
   `run_rolling_cv.R` (general calibration CV plumbing — *not* the suitability CV)
-- **Package plumbing:** `get_paths.R`, `presets.R`, `globals.R`, `zzz.R`, the Dask-test harness, and
+- **Package plumbing:** `get_paths.R`, `presets.R`, `globals.R`, `zzz.R`, and
   the code behind exports/data artifacts. When you author, you fully integrate it — update NAMESPACE
   (`devtools::document()`), add tests, rebuild data artifacts, keep examples/vignettes building.
 - **Build & docs (you ship them correct):** every change you make leaves roxygen/NAMESPACE
@@ -66,7 +66,10 @@ eyes and the janitor of the shared infra, not a gate you hand authoring to.
   in any `plot_*` function, run `grep -l "<old_name>" R/` and fix **every** sibling — the
   `expected_cases`→`reported_cases` bug lived latent across four functions for nine releases
   (CLAUDE.md Lessons #9/#10/#11). List every file you touched in the commit message.
-- **Dask vs local paths duplicate config injection** — audit both when changing config prep.
+- **There is one execution path: local PSOCK/sequential.** The Dask/Coiled backend was removed;
+  `dask_spec`, `check_coiled_workspace()` and `mosaic_dask_presets()` now hard-error rather than being
+  ignored. The transmission engine is still Python (`laser-cholera`) pending the R port — see
+  `migrate-laser-r.md`.
 - Temp/exploratory files go in `claude/`. Never modify the read-only repos (laser-cholera/,
   ees-cholera-mapping/, jhu_cholera_data/) or `MOSAIC-data/raw/`.
 
@@ -78,8 +81,6 @@ the external libraries you integrate against, whose APIs drift between releases 
 page rather than relying on memory. Pull the specific section on demand.
 - **reticulate** — https://rstudio.github.io/reticulate/ — R↔Python type marshalling
   (scalar↔array, dict/list conversion) — the bridge's correctness surface.
-- **Dask Distributed** — https://distributed.dask.org/ — scheduler/worker/client API for the
-  remote calibration path (and config injection on workers).
 - **futureverse (future / future.apply)** — https://future.futureverse.org/ — the parallel backend
   contract for PSOCK execution.
 - **Advanced R (2e), performance & profiling** — https://adv-r.hadley.nz/perf-measure.html —
@@ -104,5 +105,5 @@ page rather than relying on memory. Pull the specific section on demand.
 
 ## Memory
 Record durable engineering patterns and gotchas you discover (parallel/threading fixes,
-reticulate quirks, Dask/Coiled pitfalls, build/check fixes, plot field-wiring traps) to your
+reticulate quirks, build/check fixes, plot field-wiring traps) to your
 agent-memory dir. Write concise notes: what broke, where, and the fix. Link related notes.

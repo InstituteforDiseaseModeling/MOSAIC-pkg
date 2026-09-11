@@ -32,3 +32,5 @@ __pycache__$
 ^vignettes/figures$
 ^vignettes/articles/cache$
 ^vignettes/articles/figures$
+^migrate-laser-r\.md$
+^plan-review\.md$

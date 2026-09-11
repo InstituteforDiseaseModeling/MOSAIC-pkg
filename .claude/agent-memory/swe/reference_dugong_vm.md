@@ -17,10 +17,9 @@ the 2026-06-22/23 thread.
   **libexpat** (NOT hedgehog's GLIBCXX): bare `Rscript` → PSOCK workers die with
   `undefined symbol: XML_SetAllocTrackerActivationThreshold`. `check_dependencies()`
   passes WITHOUT the wrapper (skips the laser worker path), which masks the bug.
-- **Backend:** local PSOCK (omit `dask_spec`) **OR Coiled hybrid as the Dask CLIENT**
-  (validated 2026-06-24, see [[project_coiled_dugong_client_validated]]). dugong dask/distributed
-  = 2026.6.0 matches the rebuilt worker image, so the client↔image skew that stalled the laptop
-  client (dask 2026.3.0) is gone here. **Coiled needs an LD_PRELOAD fix**, see that note.
+- **Backend:** local PSOCK only. The Coiled hybrid path (once validated here as a Dask client,
+  see [[project_coiled_dugong_client_validated]]) was REMOVED from the package in the
+  laser-to-R migration; `dask_spec` / `check_coiled_workspace()` / `mosaic_dask_presets()` now hard-error.
 - **Results:** `~/MOSAIC/output/<DIR>/`; tar then `scp`, or `HEDGEHOG_HOST=dugong
   vm/pull_results.sh` (the helper is parameterized — works for dugong unchanged).
 
@@ -31,7 +30,7 @@ the 2026-06-22/23 thread.
 - Provisioning scripts (built this node): `claude/dugong_setup/` (`install_dugong*.sh`,
   `build_venv_dugong.sh`, `make_wrappers_dugong.sh`, `smoke_dugong.R`).
 - Shared `vm/` helpers (host-agnostic): `launch_mosaic.R`, `launch_mosaic_individual.R`,
-  `pull_results.sh`, `presets.R`, `check_coiled.R`.
+  `pull_results.sh`, `presets.R`.
 
 **Provisioning gotchas (from DUGONG.md):** conda must be conda-forge-only (`~/.condarc`
 `default_channels:[conda-forge]` + `channel_priority: strict`) or `install_dependencies()`

@@ -8,9 +8,7 @@
 #       BLAS, Arrow, or Numba pool can start. This is the CLAUDE.md
 #       BLAS/Numba-deadlock landmine: parallel test workers that each spawn
 #       LASER/numpy/arrow must not oversubscribe CPU. .mosaic_set_blas_threads()
-#       sets OMP/MKL/OPENBLAS/NUMEXPR/TBB/NUMBA + ARROW_NUM_THREADS = "1" --
-#       the same values test-dask-local-separation.R / test-dask-psock-
-#       orchestrator.R assert, so this is consistent with their expectations.
+#       sets OMP/MKL/OPENBLAS/NUMEXPR/TBB/NUMBA + ARROW_NUM_THREADS = "1".
 #
 #   (b) Probe the Python interpreter and optional modules ONCE, caching the
 #       results in options(). Without this every Python-dependent test pays the
