@@ -45,10 +45,25 @@ laser_results <- function(state, par) {
      for (nm in intersect(LASER_CHANNELS_PRECOMPUTED, names(par))) {
           out[[nm]] <- .laser_emit(par[[nm]])
      }
-     for (nm in intersect(LASER_CHANNELS_PASSTHROUGH, names(par))) {
-          # `pi_ij` and `coupling` are [npatches, npatches] and are passed
-          # through un-transposed (coupling is symmetric).
-          out[[nm]] <- par[[nm]]
+     # Both [npatches, npatches] and both passed through un-transposed
+     # (`coupling` is symmetric, `pi_ij` is not but is already in the
+     # [origin, destination] orientation the contract wants). They differ only
+     # in where they live: `pi_ij` is a precomputed input, `coupling` is
+     # written into the state by DerivedValues on the final tick.
+     for (nm in intersect(LASER_CHANNELS_PASSTHROUGH, names(par)))   out[[nm]] <- par[[nm]]
+     for (nm in intersect(LASER_CHANNELS_PASSTHROUGH, names(state))) out[[nm]] <- state[[nm]]
+
+     # The two derived diagnostics exist only if `DerivedValues` ran: the
+     # Python component allocates them in its own `__init__`, so a pipeline
+     # subset without it returns neither channel. Returning the zero-filled
+     # allocation instead would be a plausible-looking wrong value -- zero
+     # correlation everywhere, no hazard anywhere -- rather than an obvious
+     # absence. (The other components' channels are allocated unconditionally
+     # and a subset run does return those as zeros; only these two are
+     # consumed as standalone diagnostics, where a zero reads as a result.)
+     if (!("DerivedValues" %in% par$components)) {
+          out$spatial_hazard <- NULL
+          out$coupling       <- NULL
      }
 
      out[LASER_CHANNELS[LASER_CHANNELS %in% names(out)]]

@@ -76,6 +76,11 @@ laser_alloc_state <- function(nticks, npatches) {
      state$dose_one_doses <- int_series(nticks)
      state$dose_two_doses <- int_series(nticks)
 
+     # `coupling` is the one channel that is not a time series: a single
+     # [npatches, npatches] correlation matrix written once by DerivedValues on
+     # the final tick. Allocated zero-filled, as the oracle does.
+     state$coupling <- matrix(0, npatches, npatches)
+
      state$.nticks   <- nticks
      state$.npatches <- npatches
      state

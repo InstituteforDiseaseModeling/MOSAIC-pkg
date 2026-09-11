@@ -226,7 +226,8 @@ laser_delta_jt <- function(par) {
 #' @keywords internal
 laser_precompute <- function(par) {
 
-     if ("HumanToHuman" %in% par$components) {
+     # `DerivedValues` needs `pi_ij` and `beta_jt_human` too; see laser_params().
+     if (any(c("HumanToHuman", "DerivedValues") %in% par$components)) {
           d <- laser_distance_matrix(par$latitude, par$longitude)
           # The gravity model's populations are the INITIAL compartment sums,
           # not the running N -- pi_ij is built once and held constant.

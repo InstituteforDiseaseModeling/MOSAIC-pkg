@@ -127,9 +127,11 @@ LASER_PIPELINE <- c(
      "Census", "HumanToHuman", "EnvToHuman", "Environmental", "DerivedValues"
 )
 
-# Phase dispatch table. Components are added here as they are ported; a
-# requested component with no entry errors rather than being silently skipped,
-# which is what would otherwise let a half-finished pipeline look green.
+# Phase dispatch table. Complete as of A-3: every component of LASER_PIPELINE
+# has an entry. The unported-component guard in run_LASER_R() is kept even so
+# -- it is what stops a half-finished pipeline from looking green, and it is
+# the check that would fire if a future component were added to the pipeline
+# list without an implementation.
 .LASER_PHASE_FUNCTIONS <- list(
      Susceptible   = laser_phase_susceptible,
      Exposed       = laser_phase_exposed,
@@ -139,5 +141,6 @@ LASER_PIPELINE <- c(
      Census        = laser_phase_census,
      HumanToHuman  = laser_phase_human_to_human,
      EnvToHuman    = laser_phase_env_to_human,
-     Environmental = laser_phase_environmental
+     Environmental = laser_phase_environmental,
+     DerivedValues = laser_phase_derived_values
 )

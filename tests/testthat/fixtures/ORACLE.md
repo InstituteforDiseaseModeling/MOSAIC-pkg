@@ -33,14 +33,16 @@ Each fixture also carries its own copy of this metadata under `$meta$oracle`.
 
 | File | Components | Ticks | Patches | Draws | Size | Role |
 |---|---|---|---|---|---|---|
-| `replay_susceptible_census.rds` | Susceptible, Census | 60 | 40 | 120 | 50 KB | A-0 spike; keeps the two-component subset path exercised |
-| `replay_full_pipeline.rds` | all 9 ported | 60 | 40 | 1,315 | 250 KB | the workhorse: every one of the 22 draw sites fires |
-| `replay_single_location.rds` | all 9 ported | 60 | 1 | 1,315 | 10 KB | `npatches = 1`, which takes different reshaping paths |
-| `replay_full_length.rds` | all 9 ported | 1,398 | 40 | 30,751 | 5.35 MB | the regression anchor |
+| `replay_susceptible_census.rds` | Susceptible, Census | 60 | 40 | 120 | 56 KB | A-0 spike; keeps the two-component subset path exercised |
+| `replay_full_pipeline.rds` | all 10 | 60 | 40 | 1,315 | 263 KB | the workhorse: every one of the 22 draw sites fires |
+| `replay_single_location.rds` | all 10 | 60 | 1 | 1,315 | 13 KB | `npatches = 1`, which takes different reshaping paths |
+| `replay_full_length.rds` | all 10 | 1,398 | 40 | 30,751 | 5.55 MB | the regression anchor |
 | `tier_a_default.rds`, `tier_a_single_location.rds` | — | — | 40 / 1 | — | 44 KB | Tier A deterministic precomputation |
 
-`DerivedValues` is absent from all of them; it is the one component still
-unported, so `spatial_hazard` and `coupling` are the two missing channels.
+The three `all 10` fixtures cover the complete pipeline and all 28 result
+channels. They were regenerated when `DerivedValues` was ported (A-3), and the
+draw counts came back **identical** to the nine-component versions — 1,315 and
+30,751 — which is the check that the component consumes no randomness.
 
 **The full-length fixture earns its 5.35 MB.** Two real port bugs survived the
 60-tick fixtures and were caught only at full length: a float32 rounding
@@ -66,17 +68,17 @@ Rscript -e 'MOSAIC:::laser_convert_oracle_dump("claude/oracle/out/a0", \
     "tests/testthat/fixtures/replay_susceptible_census.rds")'
 ```
 
-The three A-2 fixtures, which cover the nine ported components:
+The three full-pipeline fixtures:
 
 ```bash
 cd claude/oracle
-PORTED=Susceptible,Exposed,Recovered,Infectious,Vaccinated,Census,HumanToHuman,EnvToHuman,Environmental
-python dump_fixture.py --config cfg/default60.json --components $PORTED \
+ALL=Susceptible,Exposed,Recovered,Infectious,Vaccinated,Census,HumanToHuman,EnvToHuman,Environmental,DerivedValues
+python dump_fixture.py --config cfg/default60.json --components $ALL \
     --out out/full60 --label replay_full_pipeline
-python dump_fixture.py --config cfg/moz60.json --components $PORTED \
+python dump_fixture.py --config cfg/moz60.json --components $ALL \
     --out out/moz60full --label replay_single_location
 python dump_fixture.py --config ../../inst/extdata/config_default.json \
-    --components $PORTED --out out/full1398 --label replay_full_length
+    --components $ALL --out out/full1398 --label replay_full_length
 ```
 
 then convert each with `MOSAIC:::laser_convert_oracle_dump(<dump>, <rds>)`.
@@ -120,6 +122,18 @@ accurate of the two. `pi_ij` is the worked example: the oracle's haversine runs
 entirely in float32 (`params.py` stores `latitude`/`longitude` as float32 and
 `np.radians` of a float32 stays float32), which is why it needs a looser
 tolerance than the other precomputed matrices.
+
+`spatial_hazard` is the case where that choice costs the most, and it is worth
+recording because the cause is not where it looks. Its own tolerance is 1e-3
+against 1e-5 for every other float channel, but nothing in `derivedvalues.py`
+is badly conditioned: it inherits the error from `beta_jt_human`. The
+two-harmonic seasonal envelope `1 + a1 cos + b1 sin + a2 cos 2 + b2 sin 2`
+passes close to zero in the low season, and evaluating it in float32 cancels to
+a relative error of 7.0e-4 there. The hazard is linear in beta, so it picks up
+the same 7.0e-4 — the two numbers agree to within one percent, which is what
+identifies the source. `beta_jt_human` itself still passes at 1e-5 because its
+near-zero cells sit under the `max|o|` floor; the hazard's do not, because
+hazard magnitude tracks population and prevalence rather than beta.
 
 The largest such difference is the environmental reservoir `W`, and it is the
 only one that **feeds back**: the decay draw's rate is `delta_jt * W`, so W's

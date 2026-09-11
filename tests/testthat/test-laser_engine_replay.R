@@ -164,27 +164,38 @@ test_that("a run reports which draw sites it exercised", {
 # Engine guards
 # -----------------------------------------------------------------------------
 
+test_that("the dispatch table covers the whole pipeline", {
+  # With A-3 the port is complete, so no component name can reach the
+  # unported-component guard. That makes this equality the thing actually
+  # worth asserting: a component added to LASER_PIPELINE without an
+  # implementation would otherwise be caught only at run time, by a user.
+  expect_setequal(names(MOSAIC:::.LASER_PHASE_FUNCTIONS), MOSAIC:::LASER_PIPELINE)
+})
+
 test_that("requesting an unported component errors rather than being skipped", {
   # A silently short pipeline would look green while simulating the wrong
   # model, which is the failure mode CLAUDE.md lesson #6 is about.
   #
-  # This named "HumanToHuman" until A-2 ported it. DerivedValues is the only
-  # component still outstanding; when A-3 lands it, this test needs a different
-  # subject rather than deletion -- the guard it covers is what stops a
+  # This named "HumanToHuman" until A-2 ported it and "DerivedValues" until
+  # A-3 did. Every component is ported now, so the guard is exercised by
+  # emptying the dispatch table rather than by naming a real component --
+  # deleting the test instead would retire the check that stops a
   # half-finished pipeline from passing.
+  local_mocked_bindings(
+    .LASER_PHASE_FUNCTIONS = list(Susceptible = laser_phase_susceptible),
+    .package = "MOSAIC")
   expect_error(
-    run_LASER_R(config = list(), components = "DerivedValues"),
+    run_LASER_R(config = list(), components = c("Susceptible", "Census")),
     "not yet ported"
   )
 })
 
 # =============================================================================
-# A-2: Tier B on the full ported pipeline
+# Tier B on the full pipeline
 #
-# Nine components -- everything except DerivedValues, which A-3 ports. These are
-# the tests that certify the port: the engine is driven through the oracle's
-# recorded draw sequence and every draw argument and every result channel is
-# compared.
+# All ten components. These are the tests that certify the port: the engine is
+# driven through the oracle's recorded draw sequence and every draw argument
+# and every result channel is compared.
 #
 # What "correct" means here, precisely:
 #   * Every draw is at the expected tick, phase and site, with a bit-identical
@@ -198,13 +209,32 @@ test_that("requesting an unported component errors rather than being skipped", {
 #     (environmental/decay) that needs its own.
 # =============================================================================
 
-PORTED <- c("Susceptible", "Exposed", "Recovered", "Infectious", "Vaccinated",
-            "Census", "HumanToHuman", "EnvToHuman", "Environmental")
+# Taken from the package rather than restated, so a component added to the
+# pipeline cannot silently go untested here.
+PORTED <- MOSAIC:::LASER_PIPELINE
 
 # Scale-aware comparison, matching the replay assertion's criterion:
 #   |r - o| <= rtol * (|o| + max|o|)
 # The max|o| floor is what makes near-zero references (low-season Lambda,
 # empty-reservoir Psi) comparable at all -- see a2_required_tolerance.R.
+#
+# One channel carries its own tolerance, measured rather than chosen:
+#
+#   spatial_hazard -- inherits `beta_jt_human`'s float32 error rather than its
+#     own. The seasonal envelope `beta_j0_hum * (1 + a1 cos + b1 sin + ...)`
+#     passes close to zero in the low season, where computing it in float32
+#     (as the oracle does) cancels to a relative error of 7.0e-4. The hazard is
+#     linear in beta there, and its own relative error at full length is
+#     7.0e-4 -- the same number to within one percent, which is what identifies
+#     beta as the source. `beta_jt_human` itself still passes at 1e-5 because
+#     its near-zero cells are rescued by the max|o| floor; the hazard's are not,
+#     because hazard magnitude tracks population and prevalence, not beta.
+#
+# The measured requirement over the full-length fixture is 1.5e-4; 1e-3 leaves
+# the usual order of magnitude of headroom. Every other float channel, W and
+# pi_ij included, clears the 1e-5 default.
+CHANNEL_TOL <- c(spatial_hazard = 1e-3)
+
 expect_channels_match <- function(got, ref, rtol = 1e-5) {
   int_ch <- MOSAIC:::LASER_CHANNELS_INTEGER
   for (nm in names(ref)) {
@@ -216,14 +246,23 @@ expect_channels_match <- function(got, ref, rtol = 1e-5) {
                        info = paste("integer channel:", nm))
     } else {
       o <- ref[[nm]]
+      # `coupling` is NaN wherever a patch's prevalence never varied. The
+      # positions must agree exactly -- a NaN where the oracle has a number
+      # (or the reverse) is a real disagreement about whether a patch moved,
+      # and comparing only the finite cells would hide it.
+      expect_identical(is.nan(got[[nm]]), is.nan(o), info = paste("NaN cells:", nm))
+      k <- !is.nan(o)
+      o <- o[k]
+      r <- got[[nm]][k]
+      tol <- if (nm %in% names(CHANNEL_TOL)) CHANNEL_TOL[[nm]] else rtol
       scale <- max(abs(o))
       if (scale == 0) {
         # A channel the oracle left identically zero (e.g. an unused dose
         # schedule). The scale-aware ratio would be 0/0, so require exact zero
         # rather than skipping -- a non-zero R value here is a real bug.
-        expect_equal(max(abs(got[[nm]])), 0, info = paste("all-zero channel:", nm))
+        expect_equal(max(abs(r)), 0, info = paste("all-zero channel:", nm))
       } else {
-        expect_lte(max(abs(got[[nm]] - o) / (abs(o) + scale)), rtol)
+        expect_lte(max(abs(r - o) / (abs(o) + scale)), tol)
       }
     }
   }
@@ -253,10 +292,37 @@ test_that("Tier B: the full ported pipeline replays the oracle draw-for-draw (40
   expect_setequal(cov$site[cov$n_calls > 0L], MOSAIC:::.LASER_DRAW_SITES)
 })
 
-test_that("Tier B: all 26 result channels match, integer channels bit-identically (40 patches)", {
+test_that("Tier B: all 28 result channels match, integer channels bit-identically (40 patches)", {
   r <- replay_fixture("replay_full_pipeline.rds")
-  expect_equal(length(r$fx$results), 26L)
+  expect_equal(length(r$fx$results), 28L)
+  expect_setequal(names(r$fx$results), MOSAIC:::LASER_CHANNELS)
   expect_channels_match(r$out$results, r$fx$results)
+})
+
+test_that("Tier B: the end-of-run diagnostics match, including where coupling is undefined", {
+  # spatial_hazard and coupling are computed once, on the final tick, from the
+  # whole run -- so unlike every other channel they cannot be partially right:
+  # a one-row slicing error moves every cell.
+  r <- replay_fixture("replay_full_pipeline.rds")
+
+  expect_identical(dim(r$out$results$spatial_hazard), c(40L, 60L))
+  expect_identical(dim(r$out$results$coupling), c(40L, 40L))
+
+  # Patches whose prevalence never changed have no correlation with anything;
+  # the oracle leaves their rows and columns NaN. That the two engines agree on
+  # WHICH patches those are is the real assertion -- it says they agree on
+  # which patches the epidemic reached.
+  cpl <- r$out$results$coupling
+  expect_identical(is.nan(cpl), is.nan(r$fx$results$coupling))
+  expect_true(any(is.nan(cpl)))
+  varied <- !apply(is.nan(cpl), 1L, all)
+  expect_equal(diag(cpl)[varied], rep(1, sum(varied)))
+  expect_equal(cpl[varied, varied], t(cpl[varied, varied]))
+
+  # The first column is tick 1, not the seed row: spatial_hazard's t = 0 row is
+  # trimmed by the results contract, so an off-by-one here would show up as a
+  # zero column the oracle does not have.
+  expect_false(all(r$out$results$spatial_hazard[, 1L] == 0))
 })
 
 test_that("Tier B: the single-location degenerate case replays and matches", {
@@ -291,13 +357,8 @@ test_that("replay is strict in both directions: a truncated record errors", {
     "Replay record exhausted")
 })
 
-test_that("a requested component that is not ported errors rather than being skipped", {
-  # DerivedValues is the remaining one (A-3). A silently short pipeline would
-  # simulate the wrong model while every assertion still passed.
+test_that("a component name that is not in the pipeline errors", {
   fx <- readRDS(test_path("fixtures", "replay_full_pipeline.rds"))
-  expect_error(
-    run_LASER_R(config = fx$meta$config_list, components = c(PORTED, "DerivedValues")),
-    "not yet ported")
   expect_error(
     run_LASER_R(config = fx$meta$config_list, components = c("Susceptible", "Nonsense")),
     "Unknown component")

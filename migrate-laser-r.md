@@ -477,11 +477,19 @@ Implement the RNG contract from §4.2 here (isolated stream, `on.exit()` restore
 
 **Exit:** Tier B green on the default config for all 1,398 ticks, all 28 channels; **all 22 draw sites covered** across the fixture set; per-tick invariants green; record exhaustion asserted in both directions.
 
-### Phase A-3 — derived values and results (3–4 days)
+### Phase A-3 — derived values and results (3–4 days) — **done**
 
 `R/laser_derived.R` (`spatial_hazard`, `coupling` including the constant-prevalence → NaN branch), `R/laser_results.R`.
 
 **Exit:** Tier B green including `spatial_hazard`, `coupling`, `pi_ij`; the harvested schema test from `test-dask_worker_schema_parity.R` (§6.1) passes as the return-contract test — names, dims, per-field storage mode, absence of dimnames, and the `params`/`results`/`seed` top level.
+
+**Met, with one correction to this plan's own bookkeeping.** §6.1 said `test-dask_worker_schema_parity.R` encoded the result-shape contract. It did not: its 586 lines are about **`samples.parquet` column names**, and C-1 already harvested them into `test-samples_parquet_schema.R`. Nothing in the repo asserted the engine's return shape, so the return-contract test is new rather than harvested — `tests/testthat/test-laser_results_contract.R`, running free (not replayed) because the contract has to hold for an ordinary run.
+
+Three things worth recording from the port itself:
+
+- **`DerivedValues` needs `tau_i`, `pi_ij` and `beta_jt_human`, and builds none of them.** The Python component relies on `HumanToHuman` having run first; its `check()` fails outright otherwise. `laser_params()` and `laser_precompute()` now build those three for *either* component, which is the same constraint without the ordering dependency.
+- **The two outputs are sliced differently, and the difference is load-bearing.** `spatial_hazard` uses the oracle's `[1:, :]` slices, so column *t* is the state at the *end* of tick *t*; `coupling` is handed the untrimmed arrays and correlates `nticks + 1` observations, seed row included.
+- **`spatial_hazard` is not bounded below by zero, in either engine.** The unconstrained two-harmonic seasonal envelope dips below zero in the low season, so `beta_jt_human` goes negative (314 of 2,400 cells on the 60-tick fixture) and the hazard follows it into 20 negative cells — the oracle produces negatives in exactly the same places. `HumanToHuman` clamps its own rate with `pmax(..., 0)`; `derivedvalues.py` does not. Reproduced rather than fixed, per §4.1's "port the behaviour, not the intent"; it is an upstream modelling question, not a port defect.
 
 ### Phase A-3a — performance gate (2 days)
 
@@ -549,8 +557,8 @@ The earlier draft left four open. All four are now decided, so none of them bloc
 | C-1 Dask/Coiled excision | **done and verified** — ~2,200 lines of production code and ~1,900 of tests removed; one execution path remains. Full suite 947 tests / 0 failures / 0 errors; `R CMD check` on the built tarball at 3 WARNINGs + 3 NOTEs, every one of them traced to the base commit `4c1e861` (non-ASCII string literals in `plot_Reff.R`/`run_rolling_cv.R`, six pre-existing `MOSAIC:::` self-calls, `.run_sim_worker`, a `calc_Reff.Rd` xref, and the absent `VignetteBuilder`) |
 | A-1 deterministic precomputation | **done** — Tier A green on 40-location and single-location configs; `pi_ij`'s 1.17e-6 gap diagnosed to the oracle's float32 haversine |
 | **A-2 the tick loop** | **done** — all seven remaining components ported. Tier B green on three fixtures: 60t x 40p, 60t x 1p, and the full 1398t x 40p anchor. **22/22 draw sites covered, 30,751 draws matched draw-for-draw, and all 19 integer result channels bit-identical over the full 1,398 ticks.** Float channels within a scale-aware 1e-5 |
-| A-3 DerivedValues + results | **next** — the only unported component; `spatial_hazard` and `coupling` are the two missing channels |
-| **A-3a performance gate** | **pre-measured, and it contradicts this plan — see below** |
+| **A-3 DerivedValues + results** | **done** — the port is complete: all ten components, all 28 channels. Tier B re-run on all three fixtures with `DerivedValues` in the pipeline, and the draw counts came back identical (1,315 and 30,751), confirming the component consumes no randomness. `spatial_hazard` needs its own 1e-3 tolerance, traced to `beta_jt_human`'s float32 cancellation rather than to anything in `derivedvalues.py`; `coupling` matches to 1.8e-8 and the two engines agree cell-for-cell on which patches are `NaN`. New `test-laser_results_contract.R` asserts the return contract against an ordinary (non-replayed) run |
+| **A-3a performance gate** | **pre-measured, and it contradicts this plan — see below.** The user's answer: proceed with the port regardless |
 | A-4, C-2, A-5 | pending |
 
 ### A-3a, measured early: the performance premise was wrong
@@ -563,6 +571,8 @@ This plan claimed the R engine would be roughly **5x faster** than Python. Measu
 | R `run_LASER_R()`, first working version | 2.912 s |
 | R `run_LASER_R()`, after the state-storage fix | **1.183 s** |
 
+Re-measured with the complete ten-component pipeline after A-3: **1.21 s** against 1.23 s for the same run without `DerivedValues` — i.e. the two end-of-run diagnostics cost nothing measurable, because they fire once rather than per tick. The ratio below is unchanged by finishing the port.
+
 So R is **1.69x slower**, not 5x faster. The original claim came from a microbenchmark of a representative arithmetic loop, which is exactly the trap §10 warned about and then fell into: it omitted state storage, and state storage turned out to *be* the cost.
 
 The fix was worth 2.46x on its own. Each channel was a `(nticks + 1) x npatches` matrix, and a row write `state$S[row, ] <- v` copies the whole matrix — **15 microseconds** against 0.65 for a row read. Line profiling put roughly **55%** of the run in those writes, at about 40 of them per tick. Channels are now lists of per-tick vectors, where a write is a pointer store, and the `[tick, patch]` matrices the results contract needs are assembled once at the end. Allocation fell from 4.9 GB to 987 MB per run. Note that switching the container from a list to an environment, tried first, changed nothing: `env$M[i, ] <- v` still copies, because fetching `M` bumps its reference count before the subassignment.
@@ -573,6 +583,6 @@ After that the profile is flat — the hottest single line is 6.9% — so there 
 
 **One inventory correction found while verifying C-1.** `calc_model_ensemble()` invoked the Python engine through a *closure* defined inside its own body, which imported `laser.cholera.metapop.model` directly rather than going through `run_LASER()` — a third engine call site, and the one the cutover table (§6) reaches via `R/calc_model_ensemble.R:660`. That closure is now the package-level `.mosaic_ensemble_sim_task()` in `R/calc_model_ensemble_task.R`, so A-4 swaps the engine there in one place instead of editing a closure that PSOCK also `clusterExport`s. The hoist was forced by a subtler problem: `precomputed_results=` was the seam four test files used to feed synthetic engine output in, and its only *production* callers were the Dask gather and the Dask medoid dispatch. Deleting the argument silently took 25 assertions with it — on weight/seed alignment, artifact masking and trajectory reduction, all properties of the *surviving* local path. Mocking the hoisted task restores every one of them and exercises strictly more production code than the argument did, because the task list, the dispatch and the gather now run for real. `tests/testthat/helper-ensemble-mock.R` holds the seam; `parity_tier2.rds` still matches bit-for-bit through it, which is the evidence that the hoist changed no arithmetic. Two dead fragments fell out of the same removal, in the shape lesson #14 describes: `.spill_traj()` (orphaned — its only caller was the removed branch) and the record-carried `param_seed` tier of the member-seed fallback, which existed only because a Dask worker held a config the master did not.
 
-**Next action: Phase A-2 — the tick loop.** Seven components remain to port, one per commit, each extending the replay test in phase order: Exposed → Recovered → Infectious → Vaccinated → HumanToHuman → EnvToHuman → Environmental. (`Susceptible` and `Census` are done and replaying bit-identically.) `Infectious` and `Vaccinated` are the two hard ones — see §8's notes on the two different `N`s and the observable rounding order. The scaffolding they need is all in place: the draw controller with its 22-site registry, the replay assertions, the per-tick invariants, the state allocator, and the results trimming.
+**Next action: Phase A-4 — cutover.** The port is finished and proven; what remains is wiring. `run_LASER()` becomes the R engine and the only engine entry point, `run_MOSAIC.R`'s direct imports go through it, and `calc_model_ensemble()` swaps engines inside `.mosaic_ensemble_sim_task()`. Then C-2 removes the `laser-cholera` dependency and A-5 is the calibration acceptance run.
 
-A-2's exit bar is **Tier B green on the default config for all 1,398 ticks across all 28 channels, with 22/22 draw sites covered** — A-0 already established that all 22 fire within 60 ticks, so coverage is achievable on a short fixture and the full-length run is the regression anchor.
+The performance gate (A-3a) fired and the user's answer was to proceed with the port regardless; the remaining A-3a measurements — the 1/10/40-patch scaling curve, sequential vs 20-worker throughput, peak RSS per worker, end-to-end batch time — are still owed, and the one that can force a code change is peak RSS, because a worker cap by measured memory rather than `detectCores()` would have to land before A-5.

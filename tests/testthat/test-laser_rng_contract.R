@@ -104,6 +104,18 @@ test_that("a caller's non-default RNGkind is restored, and does not change resul
 test_that("PSOCK workers reproduce sequential results seed-for-seed", {
   skip_on_cran()
   skip_if_not_installed("parallel")
+  # PSOCK workers are fresh R sessions: they can only reach the engine through
+  # an INSTALLED package, not through devtools::load_all()'s in-memory
+  # namespace. Under `devtools::test()` on a checkout with no installed MOSAIC
+  # this would otherwise fail with "there is no package called 'MOSAIC'", which
+  # says nothing about reproducibility. It runs under R CMD check, where the
+  # package is installed to the check library.
+  #
+  # `skip_if_not_installed()` is the wrong detector here: under load_all the
+  # namespace is registered, so requireNamespace() succeeds for a package that
+  # is not on disk anywhere. Ask the library paths directly.
+  skip_if(length(find.package("MOSAIC", lib.loc = .libPaths(), quiet = TRUE)) == 0L,
+          "MOSAIC is not installed; PSOCK workers cannot load it")
 
   seeds <- 1:6
   sequential <- lapply(seeds, function(s) run_once(s)$results$S)

@@ -91,7 +91,13 @@ laser_params <- function(config, components = LASER_PIPELINE) {
      # -- parameters feeding the deterministic precomputation ------------------
      par$components <- components
 
-     if ("HumanToHuman" %in% components) {
+     # `DerivedValues` reads `tau_i`, `pi_ij` and `beta_jt_human` -- the three
+     # things this block and laser_precompute() build for `HumanToHuman`. The
+     # Python component does not build them itself either; it relies on
+     # HumanToHuman having run first and its `check()` fails outright if it has
+     # not. Requiring the same inputs for either component is the same
+     # constraint without the ordering dependency.
+     if (any(c("HumanToHuman", "DerivedValues") %in% components)) {
           for (nm in c("latitude", "longitude", "beta_j0_hum",
                        "a_1_j", "b_1_j", "a_2_j", "b_2_j")) {
                par[[nm]] <- .laser_patch_vector(config[[nm]], nm, par$npatches)
@@ -214,7 +220,7 @@ laser_params <- function(config, components = LASER_PIPELINE) {
           par$nu_jt_sources <- intersect(src, par$compartments)
      }
 
-     if (any(c("HumanToHuman", "EnvToHuman") %in% components)) {
+     if (any(c("HumanToHuman", "EnvToHuman", "DerivedValues") %in% components)) {
           par$tau_i <- .laser_patch_vector(config$tau_i, "tau_i", par$npatches,
                                            lower = 0, upper = 1)
           # `1 - tau_i` is a float32 array in the engine and both transmission

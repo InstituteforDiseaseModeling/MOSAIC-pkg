@@ -3,17 +3,26 @@
 ## Pure-R transmission engine (in progress)
 
 The Python `laser-cholera` transmission engine is being replaced by a pure-R
-implementation. This release lands the deterministic precomputation and the full
-tick loop; `DerivedValues` and the cutover itself are still to come, so
+implementation. This release lands the deterministic precomputation, the full
+tick loop and the result contract; the cutover itself is still to come, so
 `run_MOSAIC()` continues to call the Python engine. See `migrate-laser-r.md`.
 
-Nine of the ten pipeline components are ported (`Susceptible`, `Exposed`,
+**All ten pipeline components are ported** (`Susceptible`, `Exposed`,
 `Recovered`, `Infectious`, `Vaccinated`, `Census`, `HumanToHuman`,
-`EnvToHuman`, `Environmental`). Correctness is established by replaying the
-Python engine's recorded PRNG draws: **all 22 stochastic draw sites, 30,751
-draws matched draw-for-draw, and all 19 integer result channels bit-identical
-over a full 1,398-tick 40-patch run.** Requesting the unported component errors
-rather than silently running a short pipeline.
+`EnvToHuman`, `Environmental`, `DerivedValues`). Correctness is established by
+replaying the Python engine's recorded PRNG draws: **all 22 stochastic draw
+sites, 30,751 draws matched draw-for-draw, and all 19 integer result channels
+bit-identical over a full 1,398-tick 40-patch run**, with the 9 float channels
+inside a measured scale-aware tolerance. The return contract -- 28 channels,
+`[patch, time]` orientation, per-field storage mode, no dimnames -- is asserted
+against an ordinary (non-replayed) run.
+
+`DerivedValues` contributes the two end-of-run diagnostics `spatial_hazard` and
+`coupling`, which `calc_model_ensemble()` and the spatial plots consume. Both
+are computed once, on the final tick, from the whole run. `coupling` is a
+Pearson correlation matrix of per-patch prevalence and is `NaN` for any patch
+whose prevalence never varied (correlation with a constant series is
+undefined); the R and Python engines agree on exactly which patches those are.
 
 Two findings worth flagging:
 
@@ -24,6 +33,13 @@ Two findings worth flagging:
   precision, because an integer differing by one decorrelates the draw sequence.
   Where it reaches only a float, the R port stays in double and is the more
   accurate of the two. Details in `tests/testthat/fixtures/ORACLE.md`.
+* **`spatial_hazard` can be negative, in both engines.** The unconstrained
+  two-harmonic seasonal envelope dips below zero for some patches in the low
+  season, so `beta_jt_human` goes negative and the hazard follows it.
+  `HumanToHuman` clamps its own rate with `pmax(..., 0)`; `derivedvalues.py`
+  has no such clamp, and the R port reproduces that rather than quietly
+  changing the model. The same near-zero envelope is why `spatial_hazard`
+  needs a looser parity tolerance than any other float channel.
 * **The engine is 1.69x slower than the Python original**, not faster as the
   migration plan projected: 1.183 s against 0.698 s for a 1,398-tick 40-patch
   run. An earlier version was 2.91 s; storing each channel as a list of per-tick
