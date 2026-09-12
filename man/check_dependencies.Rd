@@ -14,4 +14,9 @@ This function checks the MOSAIC Python conda environment, verifies that the expe
 packages are installed, and confirms that the R packages \code{keras3} and \code{tensorflow} are present and
 configured correctly. It prints the currently active Python configuration and confirms whether the
 backend is working.
+
+Since v0.66.0 the transmission engine is pure R, so the Python environment exists only for the
+environmental-suitability (psi) model. What this function validates is therefore a TensorFlow
+environment, not a simulation one: a broken Python env costs you \code{est_suitability()}, not
+\code{run_MOSAIC()}.
 }

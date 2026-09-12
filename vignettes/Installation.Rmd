@@ -92,7 +92,6 @@ mkdir -p ~/MOSAIC && cd ~/MOSAIC
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-pkg.git
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-data.git
 git clone git@github.com:InstituteforDiseaseModeling/MOSAIC-docs.git
-git clone git@github.com:InstituteforDiseaseModeling/laser-cholera.git
 git clone git@github.com:InstituteforDiseaseModeling/ees-cholera-mapping.git
 ```
 

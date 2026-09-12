@@ -34,10 +34,12 @@ Provisioning scripts that built this node: `claude/dugong_setup/` (`install_dugo
   key / wiped `authorized_keys`) → re-register from the Mac: `ssh-copy-id -i ~/.ssh/id_ed25519.pub dugong`.
 - **MOSAIC version on VM:** `ssh dugong '~/bin/r-mosaic-Rscript -e "cat(as.character(packageVersion(\"MOSAIC\")))"'`
   (note the wrapper — §1). If stale, update via §1a.
-- **Engine version (laser-cholera):** `ssh dugong '~/.virtualenvs/r-mosaic/bin/python -c "import laser.cholera as lc; print(lc.__version__)"'`.
-  Keep this in lockstep with the wheel pinned in `inst/python/environment.yml`. (Updated to 0.16.0 on 2026-06-22.)
+- **Engine version:** there is no separate one to check. The transmission engine is pure R as of
+  MOSAIC v0.66.0, so the MOSAIC version above *is* the engine version. (The old check here imported
+  `laser.cholera` and compared it against the wheel pinned in `inst/python/environment.yml`; the
+  wheel left that file in v0.67.0.)
 
-### 1a. Updating MOSAIC / the engine on dugong
+### 1a. Updating MOSAIC on dugong
 Public repo — no GITHUB_PAT needed. Run via the wrapper (`~/bin/r-mosaic-R` in tmux for a long install):
 ```r
 .libPaths(c("~/R/library", .libPaths()))
@@ -46,12 +48,11 @@ remotes::install_github("InstituteforDiseaseModeling/MOSAIC-pkg",
 MOSAIC::install_dependencies(force = TRUE)   # rebuilds ~/.virtualenvs/r-mosaic from inst/python/environment.yml
 ```
 `install_dependencies()` requires conda configured **conda-forge-only** or it dies on the Anaconda
-commercial-channel ToS (see `vm/DUGONG.md` Provisioning gotchas). To bump ONLY the engine wheel
-without a full rebuild:
-```bash
-ssh dugong '~/.virtualenvs/r-mosaic/bin/pip install --no-deps --force-reinstall \
-  https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.16.0/laser_cholera-0.16.0-py3-none-any.whl'
-```
+commercial-channel ToS (see `vm/DUGONG.md` Provisioning gotchas). It is also no longer on the
+critical path for a calibration: the Python env it builds now holds only numpy + TensorFlow, which
+`est_suitability()` needs and `run_MOSAIC()` does not. Updating the R package is the whole update.
+(There used to be a `pip install --force-reinstall <laser_cholera wheel>` recipe here for bumping
+the engine without a full rebuild. The engine ships inside the R package now.)
 
 ## 1. The R wrapper — always use it
 dugong is Ubuntu 24.04 (modern `libstdc++`, so NO GLIBCXX problem), but R links the older *system*
@@ -59,8 +60,14 @@ dugong is Ubuntu 24.04 (modern `libstdc++`, so NO GLIBCXX problem), but R links 
 `libexpat 1.12.1`) the loader reuses the system copy and **PSOCK workers die with `undefined symbol:
 XML_SetAllocTrackerActivationThreshold`**. Only an `LD_PRELOAD` of the venv libexpat fixes it. Run R
 via `~/bin/r-mosaic-Rscript` (batch) or `~/bin/r-mosaic-R` (interactive). `check_dependencies()` and
-TensorFlow-only work PASS without the wrapper (they skip the laser/pyexpat worker path) — which masks
+TensorFlow-only work PASS without the wrapper (they skip the pyexpat worker path) — which masks
 the bug, so use the wrapper anyway. Recreate it with `claude/dugong_setup/make_wrappers_dugong.sh` if lost.
+
+> **Unverified, worth testing:** this whole `LD_PRELOAD` dance exists because PSOCK workers imported
+> Python. Since v0.66.0 calibration workers are pure R and import nothing, so the wrapper may be
+> unnecessary for `run_MOSAIC()` — and still required for `est_suitability()`, which does import
+> Python. Nobody has tested this on the VM. Keep using the wrapper until someone does; it is
+> harmless when unneeded.
 
 ## 2. Execution model — local PSOCK only
 Simulations AND post-processing run on dugong's local cores; nothing leaves the VM.

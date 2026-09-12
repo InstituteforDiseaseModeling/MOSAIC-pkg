@@ -43,10 +43,10 @@ test_that("psi_manifest write/read round-trips per-cutoff entries", {
   entry <- list(list(
     cutoff = "2024-01-01", csv = "psi_2024-01-01.csv",
     sha256 = "abc", spec_hash = "deadbeef", n_seeds = 10L,
-    parallel_seeds = 2L, mosaic_version = "0.0.0", laser_version = "0.0.0"))
+    parallel_seeds = 2L, mosaic_version = "0.0.0"))
   MOSAIC:::.rcv_psi_write_manifest(mpath, entry, spec = spec,
     pred_start = as.Date("2023-01-01"), pred_stop = as.Date("2025-01-01"),
-    mosaic_ver = "0.0.0", laser_ver = "0.0.0")
+    mosaic_ver = "0.0.0")
   expect_true(file.exists(mpath))
 
   man <- MOSAIC:::.rcv_psi_read_manifest(mpath)
@@ -75,12 +75,11 @@ test_that("psi_manifest write/read round-trips per-cutoff entries", {
   entry <- list(list(
     cutoff = T_chr, csv = basename(csv),
     sha256 = MOSAIC:::.rcv_file_hash(csv), spec_hash = spec_hash,
-    n_seeds = 10L, parallel_seeds = 1L,
-    mosaic_version = "0.0.0", laser_version = "0.0.0"))
+    n_seeds = 10L, parallel_seeds = 1L, mosaic_version = "0.0.0"))
   MOSAIC:::.rcv_psi_write_manifest(
     file.path(dir_cache, "psi_manifest.json"), entry, spec = spec_stripped,
     pred_start = as.Date("2023-01-01"), pred_stop = as.Date("2025-01-01"),
-    mosaic_ver = "0.0.0", laser_ver = "0.0.0")
+    mosaic_ver = "0.0.0")
   list(dir = dir_cache, csv = csv)
 }
 

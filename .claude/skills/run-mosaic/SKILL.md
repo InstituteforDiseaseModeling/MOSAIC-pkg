@@ -31,7 +31,8 @@ and versions drift — cite the source of truth (`?fn`, the version-note in `dat
 ## 0. Install & environment (verify first)
 - `MOSAIC::check_dependencies()`; if broken: `MOSAIC::remove_python_env(force = TRUE)` →
   `MOSAIC::install_dependencies(force = TRUE)` → restart R.
-- Python env at `~/.virtualenvs/r-mosaic` (laser-cholera + laser-core + numpy/h5py/pyarrow). System
+- Python env at `~/.virtualenvs/r-mosaic` (numpy + tensorflow). Needed only by `est_suitability()`;
+  simulation and calibration are pure R and run without it. System
   libs: GDAL/PROJ/GEOS. Set the root once: `MOSAIC::set_root_directory("~/MOSAIC")`.
 
 ## 1. Assemble the config

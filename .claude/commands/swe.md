@@ -3,7 +3,7 @@ description: Route to the swe agent (software engineer — SWE / SE)
 argument-hint: "[task]"
 ---
 Use the **swe** subagent — the MOSAIC software engineer (run_MOSAIC orchestration, the
-reticulate↔laser-cholera bridge, PSOCK parallelism, config plumbing, packaging, R CMD check,
+the pure-R transmission engine, PSOCK parallelism, config plumbing, packaging, R CMD check,
 performance/RAM, test infrastructure, docs/build mechanics, and plot_* rendering) — for:
 
 $ARGUMENTS

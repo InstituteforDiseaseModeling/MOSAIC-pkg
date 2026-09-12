@@ -91,14 +91,17 @@ reachable via the session's additional-directory access. Pull the specific secti
   - Initial conditions → "## Initial conditions"; transitions/vaccine terms → "## Table of stochastic transitions", "## Table of vaccination model terms"
 - **`MOSAIC-docs/05-model-calibration.Rmd`** — BFRS calibration methodology (weighting, convergence).
   **`MOSAIC-docs/03-data.Rmd`** — data sources & provenance. **`06-scenarios.Rmd`** — scenarios.
-- **`laser-cholera/src/laser/cholera/metapop/params.py`** — engine-side authoritative parameter
-  names/types (the contract the simulator actually consumes; read-only).
+- **`R/laser_params.R`** — engine-side authoritative parameter names/types (the contract the
+  simulator actually consumes), with `R/laser_results.R` for the 28-channel result contract. The
+  read-only `laser-cholera/src/laser/cholera/metapop/params.py` is the **historical** source these
+  were ported from — use it to settle *why* the engine behaves as it does, never as a statement of
+  what runs today.
 
 ---
 
 ## Package Overview
 
-**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. The transmission engine is pure R (`run_LASER()`); Python/reticulate is now used only by the keras3 environmental-suitability model. The package provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.
+**MOSAIC** (Metapopulation Outbreak Simulation And Interventions for Cholera) is a production R package for cholera transmission simulation across Sub-Saharan Africa. The transmission engine is pure R (`run_LASER()`); Python/reticulate is used only by the keras3 environmental-suitability model, and the `laser-cholera` dependency is gone entirely as of v0.67.0. The package provides functions for data processing, parameter estimation, Bayesian calibration, and visualization.
 
 **Key capabilities:** SEIR metapopulation simulation, Bayesian Filtering with Resampling (BFRS) calibration, environmental suitability modeling, vaccination/WASH intervention analysis, spatial transmission with human mobility.
 
@@ -117,7 +120,7 @@ MOSAIC/                          # Root (set via set_root_directory())
 │   └── DESCRIPTION              # Package metadata
 ├── MOSAIC-data/                 # Data repository (raw/ is READ-ONLY)
 ├── MOSAIC-docs/                 # Documentation website
-├── laser-cholera/               # Python simulation engine (READ-ONLY)
+├── laser-cholera/               # Former Python engine — READ-ONLY, historical reference only
 ├── ees-cholera-mapping/         # Web scraping tools (READ-ONLY)
 └── jhu_cholera_data/            # JHU scraper (READ-ONLY)
 ```
@@ -178,7 +181,7 @@ All shape term weights default to 0 (OFF). Non-finite LL returns -Inf.
 ## Python Integration
 
 **Environment:** `~/.virtualenvs/r-mosaic` (managed via `install_dependencies()`)
-**Core packages:** numpy, h5py, pyarrow, tensorflow/keras3 (suitability model only — the transmission engine is pure R). `laser-cholera` is still declared but no longer used by the engine; its removal is pending.
+**Core packages:** numpy, tensorflow/keras3 — the suitability model, and nothing else. Simulation and calibration are pure R and run with no Python at all; `check_dependencies()` validates a TensorFlow environment, so a broken Python env costs you `est_suitability()`, not `run_MOSAIC()`. The `laser-cholera` and `laser-core` wheels, numba, llvmlite and pyarrow were removed from `environment.yml` in v0.67.0.
 **Check:** `MOSAIC::check_dependencies()`
 **Troubleshoot:** `MOSAIC::remove_python_env()` then `MOSAIC::install_dependencies(force = TRUE)`
 

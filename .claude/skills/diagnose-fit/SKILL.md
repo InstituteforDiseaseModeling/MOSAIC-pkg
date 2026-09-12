@@ -18,9 +18,10 @@ parameter targets and prior changes for the next calibration. You drive it activ
 decide what to vary next based on what you just observed, like a modeler at a workbench.
 
 > **Engine-version note:** the parameter→behavior facts below (e.g. `beta_j0_tot` is a dead
-> parameter, the `alpha_2 < 0.4` bifurcation) are valid for the current laser-cholera engine.
-> An engine upgrade can flip a field's semantics (it has before — see CLAUDE.md Lesson #12);
-> re-verify against the engine after any laser-cholera bump.
+> parameter, the `alpha_2 < 0.4` bifurcation) were established against the Python laser-cholera
+> engine and carry over to the R engine (v0.66.0), which was ported from it behaviour-for-behaviour.
+> A change to the engine can still flip a field's semantics (it has before — see CLAUDE.md
+> Lesson #12); the engine now lives in `R/laser_engine.R` and its siblings, so re-verify there.
 
 ## The two tools
 
@@ -136,7 +137,7 @@ explosive potential. `psi_star_b` (logit offset on suitability): cases (env), un
 DIAGNOSE-FIT BRIEF
 ==================
 Run:    <path>
-Model:  MOSAIC <ver> | laser.cholera <ver> | priors v<ver> | config v<ver>
+Model:  MOSAIC <ver> | priors v<ver> | config v<ver>
 
 SCORECARD
   Bias (cases):  {PASS|WARN|FAIL} {x.xx}x      Bias (deaths): {...} {x.xx}x

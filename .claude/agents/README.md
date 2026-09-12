@@ -62,7 +62,8 @@ parameters" defines every symbol, with per-parameter derivations in the sections
 (calibration methodology in `05-model-calibration.Rmd`, data sources in `03-data.Rmd`). Read the
 relevant `.Rmd` section on demand rather than inferring meaning from a variable name; the rendered
 `docs/*.md` can be stale. The engine-side parameter contract is
-`laser-cholera/src/laser/cholera/metapop/params.py`. (Reachable via the `additionalDirectories` grant.)
+`laser-cholera/src/laser/cholera/metapop/params.py` — historical only, as the source the R engine was
+ported from; the live contract is `R/laser_params.R`. (Reachable via the `additionalDirectories` grant.)
 
 The six development & maintenance specialists share a workflow gate (per CLAUDE.md):
 `devtools::test()` before/after → `devtools::document()` if signatures/roxygen changed →

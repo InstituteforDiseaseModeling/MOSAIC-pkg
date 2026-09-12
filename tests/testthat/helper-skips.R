@@ -7,32 +7,25 @@
 # setup-python.R (options(mosaic.test.*)) instead of re-probing per test.
 # =============================================================================
 
-# --- Python-capability skips (read cached probe from setup-python.R) ---------
-
-PY_LIKELIHOOD_MODULE <- "laser.cholera.calc_model_likelihood"
-
-# Skip unless the Python laser-cholera likelihood module is importable.
-skip_if_no_python_likelihood <- function() {
-  testthat::skip_if_not_installed("reticulate")
-  testthat::skip_on_cran()
-  if (!isTRUE(getOption("mosaic.test.py_available"))) {
-    testthat::skip("Python not available via reticulate")
-  }
-  if (!isTRUE(getOption("mosaic.test.has_likelihood"))) {
-    testthat::skip(sprintf("%s not installed (requires laser-cholera >= 0.13.1)",
-                           PY_LIKELIHOOD_MODULE))
-  }
-  invisible(TRUE)
-}
+# --- Python-capability skips -------------------------------------------------
+#
+# There is exactly one of these left. skip_if_no_python_likelihood() and the
+# PY_LIKELIHOOD_MODULE constant were removed in v0.67.0: they gated the
+# R-vs-Python calc_model_likelihood parity tests, which went with the Python
+# engine, leaving the helper with zero callers. The eager probe in
+# setup-python.R that fed it went at the same time.
+#
+# TensorFlow is the only Python capability the suite still cares about, because
+# it is the only one the package still uses (the suitability model).
 
 # Skip when the Python tensorflow module is unavailable (e.g. the worker image
 # strips it). Keeps the suite portable; a no-op where TF is installed.
 #
-# LAZY PROBE: importing tensorflow costs ~10s, so setup-python.R deliberately
-# does NOT probe it at startup (no fast-tier test reads the flag). The probe is
-# performed here on first call and cached in options(mosaic.test.has_tensorflow)
-# so subsequent calls in the same process are free. Only tests that actually need
-# TF pay the cost, and only when they run.
+# LAZY PROBE: importing tensorflow costs ~10s, so it is deliberately NOT probed
+# at startup (no fast-tier test reads the flag). The probe is performed here on
+# first call and cached in options(mosaic.test.has_tensorflow) so subsequent
+# calls in the same process are free. Only tests that actually need TF pay the
+# cost, and only when they run.
 skip_without_tensorflow <- function() {
   testthat::skip_if_not_installed("reticulate")
   has_tf <- getOption("mosaic.test.has_tensorflow")  # NULL until first probe

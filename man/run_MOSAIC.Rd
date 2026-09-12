@@ -68,17 +68,19 @@ exists that the on-disk shards would shrink (start fresh, or remove it to recomp
 calibration mode (auto vs fixed) differ from those persisted in
 \code{1_inputs/} (each changes the draws or likelihood, making the pool
 incomparable);
-\item the current \code{laser-cholera} engine version crosses the v0.13
-deaths-scale boundary relative to the original run;
+\item the run directory was created before MOSAIC v0.66.0, so its shards
+came from the Python \code{laser-cholera} engine rather than the R one
+(the two agree statistically but not draw-for-draw, so pooling them
+would give a posterior from neither simulator);
 \item the likelihood-value provenance differs -- i.e. the existing shards
 were scored by a different likelihood engine or implementation than the
-current session would produce (e.g. R \code{calc_model_likelihood} on
-an R likelihood-code change that altered values, or
-an R likelihood-code change that altered values).
+current session would produce (an archived Python-scored shard, or an
+R likelihood-code change that altered values).
 }
-If the engine version cannot be determined (no record / Python not bound) the
-deaths-scale check is skipped with a warning. Has no effect when no shards
-exist (equivalent to a fresh run).}
+If the originating MOSAIC version cannot be determined (no
+\code{1_inputs/environment.json}, or an unparseable version) the engine
+check is skipped with a warning. Has no effect when no shards exist
+(equivalent to a fresh run).}
 
 \item{cluster}{Optional pre-built R parallel cluster. When provided, skips
 cluster creation and teardown, reusing existing workers. Useful for staged

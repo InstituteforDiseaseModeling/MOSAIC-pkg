@@ -10,8 +10,9 @@
 #' @param predictions_files Character vector of specific CSV file paths to use.
 #'   Overrides predictions_dir if provided.
 #' @param locations Character vector of specific locations to plot. NULL (default) uses all locations.
-#' @param model Legacy: A laser-cholera Model object (for backward compatibility).
-#'   Not recommended - use CSV-based inputs instead.
+#' @param model Legacy: a model object as returned by \code{run_LASER()}
+#'   (any list carrying \code{$results}). Not recommended - use CSV-based
+#'   inputs instead.
 #' @param output_dir Directory where PPC plots will be saved. Creates "ppc" subdirectory.
 #' @param verbose Logical indicating whether to print progress messages (default: TRUE)
 #'

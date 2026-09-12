@@ -10,7 +10,7 @@
 #'   \item Verifies the r-mosaic environment exists
 #'   \item Sets and locks the RETICULATE_PYTHON environment variable
 #'   \item Initializes Python with the r-mosaic environment
-#'   \item Imports laser.cholera to ensure it's available
+#'   \item Imports tensorflow to ensure it's available
 #'   \item Fails loudly if any step fails
 #' }
 #'
@@ -123,22 +123,28 @@ lock_python_env <- function() {
         })
     }
 
-    # Import laser-cholera to ensure it's available and lock in the environment
-    cli::cli_text("Importing laser.cholera to verify installation...")
+    # Import tensorflow to ensure it's available and lock in the environment.
+    # This used to import laser.cholera.metapop.model, back when the Python
+    # engine was what the environment existed to provide. The engine is R as of
+    # v0.66.0, so the import that proves the environment is usable is the one
+    # the suitability model needs.
+    cli::cli_text("Importing tensorflow to verify installation...")
 
-    lc <- tryCatch({
-        reticulate::import("laser.cholera.metapop.model")
+    tryCatch({
+        reticulate::import("tensorflow", delay_load = FALSE)
     }, error = function(e) {
-        cli::cli_alert_danger("Failed to import laser.cholera: {e$message}")
+        cli::cli_alert_danger("Failed to import tensorflow: {e$message}")
         cli::cli_text("")
         cli::cli_text("The r-mosaic environment may be corrupted or incomplete.")
+        cli::cli_text("Simulation and calibration are unaffected (the engine is pure R);")
+        cli::cli_text("this blocks est_suitability() only.")
         cli::cli_text("To fix:")
         cli::cli_text("  1. Check dependencies: {.run MOSAIC::check_dependencies()}")
         cli::cli_text("  2. Reinstall: {.run MOSAIC::install_dependencies()}")
-        stop("Cannot import laser.cholera from r-mosaic environment", call. = FALSE)
+        stop("Cannot import tensorflow from r-mosaic environment", call. = FALSE)
     })
 
-    cli::cli_alert_success("laser.cholera imported successfully")
+    cli::cli_alert_success("tensorflow imported successfully")
     cli::cli_text("")
 
     # Final summary

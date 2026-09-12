@@ -227,7 +227,7 @@
 
   if (is.null(params_sim)) return(FALSE)
 
-  # Guardrails: clamp transmission parameters to prevent laser-cholera ValueError
+  # Guardrails: clamp transmission parameters to prevent the engine's ValueError
   # (GitHub #24: p = -np.expm1(-rate) produces p > 1 when rate < 0). Single
   # source of truth so re-sampled medoid/ensemble configs clamp identically.
   params_sim <- .mosaic_clamp_transmission_params(params_sim)
@@ -523,17 +523,19 @@
 #'       calibration mode (auto vs fixed) differ from those persisted in
 #'       \code{1_inputs/} (each changes the draws or likelihood, making the pool
 #'       incomparable);
-#'     \item the current \code{laser-cholera} engine version crosses the v0.13
-#'       deaths-scale boundary relative to the original run;
+#'     \item the run directory was created before MOSAIC v0.66.0, so its shards
+#'       came from the Python \code{laser-cholera} engine rather than the R one
+#'       (the two agree statistically but not draw-for-draw, so pooling them
+#'       would give a posterior from neither simulator);
 #'     \item the likelihood-value provenance differs -- i.e. the existing shards
 #'       were scored by a different likelihood engine or implementation than the
-#'       current session would produce (e.g. R \code{calc_model_likelihood} on
-#'       an R likelihood-code change that altered values, or
-#'       an R likelihood-code change that altered values).
+#'       current session would produce (an archived Python-scored shard, or an
+#'       R likelihood-code change that altered values).
 #'   }
-#'   If the engine version cannot be determined (no record / Python not bound) the
-#'   deaths-scale check is skipped with a warning. Has no effect when no shards
-#'   exist (equivalent to a fresh run).
+#'   If the originating MOSAIC version cannot be determined (no
+#'   \code{1_inputs/environment.json}, or an unparseable version) the engine
+#'   check is skipped with a warning. Has no effect when no shards exist
+#'   (equivalent to a fresh run).
 #' @param cluster Optional pre-built R parallel cluster. When provided, skips
 #'   cluster creation and teardown, reusing existing workers. Useful for staged
 #'   estimation where multiple \code{run_MOSAIC} calls share a cluster. The
@@ -872,9 +874,7 @@ run_MOSAIC <- function(config,
   # likelihood-code change that altered values. The scorer is now always R --
   # the Dask path's on-worker Python scoring is gone -- but the stamp stays,
   # because a code change on the R side is still a reason to refuse pooling.
-  env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance(
-    lc_version = tryCatch(env_snapshot$python$pkg_laser_cholera, error = function(e) NA_character_)
-  )
+  env_snapshot$likelihood_provenance <- .mosaic_likelihood_provenance()
   .mosaic_write_json(env_snapshot, file.path(dirs$inputs, "environment.json"), control$io)
   log_msg("  Saved %s", "1_inputs/environment.json")
 

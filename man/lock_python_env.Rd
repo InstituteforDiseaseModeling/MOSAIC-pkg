@@ -19,7 +19,7 @@ The function:
 \item Verifies the r-mosaic environment exists
 \item Sets and locks the RETICULATE_PYTHON environment variable
 \item Initializes Python with the r-mosaic environment
-\item Imports laser.cholera to ensure it's available
+\item Imports tensorflow to ensure it's available
 \item Fails loudly if any step fails
 }
 }

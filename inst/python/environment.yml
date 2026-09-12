@@ -6,14 +6,11 @@ dependencies:
   - python=3.12            # Updated from 3.11 to match macOS arm64 environment
   - pip
   - numpy=1.26.4           # Python 3.12 compatible (1.24.x lacks 3.12 support)
-  - pyarrow=14.0.1         # 2024 Q1 release, widely compatible
-  # LASER dependencies
-  - numba=0.60.0           # Python 3.12 support added in 0.59.0 (was 0.58.1)
-  - llvmlite=0.43.0        # Required by numba 0.60 (was 0.41.1)
   - packaging=24.0         # Python dependency management
+  # This environment exists solely for the environmental-suitability (psi) model,
+  # which keras3 runs on TensorFlow. The transmission engine is pure R as of
+  # v0.66.0, so the LASER stack (laser-cholera, laser-core, numba, llvmlite) and
+  # pyarrow were removed in v0.67.0 -- nothing in the package imports them.
   - pip:
       - "numpy<2"          # Prevent pip deps from upgrading to numpy 2.x
       - tensorflow>=2.16.0,<2.21 # 2.16+ required by keras3 R; <2.21 avoids protobuf segfault on macOS Tahoe
-      - laser-core==1.0.1
-      # laser-cholera: update BOTH the tag (vX.Y.Z) and the wheel filename (X.Y.Z) when upgrading
-      - https://github.com/InstituteforDiseaseModeling/laser-cholera/releases/download/v0.16.1/laser_cholera-0.16.1-py3-none-any.whl

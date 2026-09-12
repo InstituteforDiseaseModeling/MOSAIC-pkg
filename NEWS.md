@@ -1,3 +1,69 @@
+# MOSAIC 0.67.0
+
+## The `laser-cholera` dependency is gone
+
+v0.66.0 made the R engine the only engine. This release removes the Python
+package it replaced. Nothing on the simulation or calibration path touches
+Python any more; `reticulate` survives solely for the keras3 environmental-
+suitability model, which is unchanged.
+
+### Breaking changes
+
+* **Resuming a run directory created before v0.66.0 is now a hard error.** Its
+  shards came from the Python engine, and the two engines agree statistically
+  but not draw-for-draw, so pooling them would produce a posterior from neither
+  simulator. The check reads the MOSAIC version recorded in
+  `1_inputs/environment.json`. Run directories created by v0.66.0 or later
+  resume exactly as before.
+* **`1_inputs/environment.json` no longer records `python$pkg_laser_cholera`**
+  (nor `pkg_laser_core`), and now records `pkg_tensorflow` and `pkg_keras`
+  instead. Readers of the old key get `NULL`; the resume path no longer reads it.
+* **`inst/python/environment.yml` loses `laser-cholera`, `laser-core`, `numba`,
+  `llvmlite` and `pyarrow`,** keeping `python`, `pip`, `numpy`, `packaging` and
+  the pinned `tensorflow`. A fresh `install_dependencies()` builds a
+  TensorFlow-only environment. Nothing in the package imports the removed
+  packages.
+
+### Changed
+
+* **`check_dependencies()` validates a TensorFlow environment, not a LASER
+  one.** Its "core" capability category is gone along with the packages that
+  populated it -- there is no longer a Python capability whose loss breaks
+  simulation -- so it reports one capability, suitability estimation, and says
+  plainly that a broken Python environment costs you `est_suitability()` and
+  not `run_MOSAIC()`.
+* **`lock_python_env()` verifies the environment by importing `tensorflow`**
+  rather than `laser.cholera.metapop.model`.
+* The `psi_manifest.json` written by `prefit_rolling_cv_psi()` no longer
+  carries a `laser_version` field. It was write-only provenance -- cache hits
+  key on `spec_hash` -- and psi is upstream of the transmission engine, so the
+  engine version never bore on whether a frozen psi CSV was reusable.
+
+### Removed
+
+* `.onLoad()` no longer sets `NUMBA_THREADING_LAYER=workqueue`. That workaround
+  stopped numba loading Intel's OpenMP runtime alongside data.table's; numba
+  came in with the engine and is no longer installed, so the setting named a
+  package that is not there. The `KMP_*` and `OMP_NUM_THREADS` settings stay --
+  TensorFlow can still bring its own OpenMP runtime.
+* `.mosaic_lc_pre013()` and `.mosaic_lc_deaths_scale()`, which classified two
+  laser-cholera versions against the v0.13 deaths-likelihood-scale boundary.
+  Their "current" operand was read from the installed wheel, which after the
+  v0.66.0 cutover no longer described what had simulated anything -- and once
+  the wheel left `environment.yml` the guard would have reported itself
+  SKIPPED on every single resume. Replaced by `.mosaic_run_engine()`, which
+  answers the larger question the boundary was a proxy for: which engine
+  produced these shards.
+* `.mosaic_likelihood_provenance()`'s `lc_version` argument. v0.65.0 had
+  already reduced the body to a constant, leaving a parameter every caller
+  filled and nothing read.
+* `skip_if_no_python_likelihood()` and the eager Python probe in
+  `tests/testthat/setup-python.R` that fed it. The helper had no callers left
+  once the R-vs-Python likelihood parity tests went, but the probe still paid a
+  reticulate interpreter init plus two module imports (~6 s) in every test
+  process to cache three flags nothing read. The CI step that installed the
+  wheel so those tests would not skip is gone with them.
+
 # MOSAIC 0.66.0
 
 ## The R engine is now the engine

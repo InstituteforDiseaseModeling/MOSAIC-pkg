@@ -166,13 +166,15 @@
 # Transmission-parameter guardrail
 # =============================================================================
 
-#' Clamp transmission parameters into laser-cholera-valid ranges
+#' Clamp transmission parameters into engine-valid ranges
 #'
 #' Applied to every sampled parameter set before it is simulated, so that
 #' calibration scoring and post-calibration prediction (best / medoid /
-#' posterior ensemble) use IDENTICAL clamped values. Prevents the laser-cholera
-#' ValueError where \code{p = -expm1(-rate) > 1} when \code{rate < 0}
-#' (GitHub #24) and keeps probabilities in \[0, 1\]. Idempotent -- clamping an
+#' posterior ensemble) use IDENTICAL clamped values. Prevents the error where
+#' \code{p = -expm1(-rate) > 1} when \code{rate < 0} (originally the
+#' laser-cholera ValueError of GitHub #24; the R engine inherits the same
+#' constraint, since it is a property of the chain-binomial parameterisation
+#' rather than of the implementation) and keeps probabilities in \[0, 1\]. Idempotent -- clamping an
 #' already-clamped config is a no-op -- so it is safe to apply at every sampling
 #' site without changing values that are already in range.
 #'
@@ -272,14 +274,16 @@
 
 #' Mask engine-artifact time positions in a central series for scoring
 #'
-#' Sets the laser-cholera artifact time-positions to \code{NA} in a central-series
+#' Sets the engine-artifact time-positions to \code{NA} in a central-series
 #' matrix so they are dropped pairwise by \code{calc_model_R2()}/
 #' \code{calc_bias_ratio()} (both \code{na_rm = TRUE} by default). This is applied
 #' to the EST series only; the observed series stays unmasked, and the ensemble's
 #' raw central/array fields are never mutated -- only the matrix passed here is
 #' transformed. Artifacts: (1) the first \code{cases_warmup} cases timesteps are an
 #' initial-condition warm-up transient; (2) the final deaths timestep is a
-#' structural zero (laser issue #82).
+#' structural zero (reported deaths are written at \code{tick} rather than
+#' \code{tick + 1}, so the last row is trimmed -- laser-cholera issue #82,
+#' reproduced by the R engine because the trim rule was ported verbatim).
 #'
 #' Masks by COLUMN (= time), so it is correct for any number of locations (rows);
 #' scoring sites flatten column-major via \code{as.numeric()}.
@@ -1198,40 +1202,38 @@
   state
 }
 
-#' Is a laser-cholera Version Pre-v0.13?
+#' Which Transmission Engine Produced a Run Directory?
 #'
-#' Returns TRUE for engine versions before 0.13.0, which used the raw
-#' disease_deaths deaths-likelihood scale (v0.13 switched to rho_deaths-adjusted
-#' reported_deaths). Tolerant of PEP440 suffixes (e.g. "0.12rc1", "0.13.0.dev1",
-#' "0.13.0+local"): each dotted component is reduced to its leading integer.
-#' Returns NA when the version cannot be parsed to at least major.minor.
+#' Classifies a persisted MOSAIC version string as having simulated with the
+#' Python \code{laser-cholera} engine or the pure-R engine. The cutover is
+#' v0.66.0: every earlier version called Python, every later one calls
+#' \code{run_LASER()} in R.
 #'
+#' This replaced a pair of helpers that compared two \emph{laser-cholera}
+#' versions across the v0.12 -> v0.13 deaths-likelihood-scale boundary. That
+#' comparison stopped meaning anything at the v0.66.0 cutover: its "current"
+#' operand was read from \code{importlib.metadata.version("laser-cholera")},
+#' i.e. whichever wheel happened to be installed, which no longer describes what
+#' simulated anything -- and once v0.67.0 dropped the wheel from
+#' \code{environment.yml} it would have been permanently absent, firing the
+#' guard's "SKIPPED" warning on every single resume. The hazard it guarded did
+#' not go away, though; it got larger. A change of engine is a superset of a
+#' change of deaths scale, and the MOSAIC version records it exactly, with no
+#' Python needed.
+#'
+#' Tolerant of suffixes ("0.66.0.9000", "0.65.0-dev"): each dotted component is
+#' reduced to its leading run of digits. Returns NA when the version cannot be
+#' parsed to at least major.minor.
+#'
+#' @param v A MOSAIC version string as recorded in \code{1_inputs/environment.json}.
+#' @return "python", "R", or NA_character_.
 #' @noRd
-.mosaic_lc_pre013 <- function(v) {
-  if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA)
-  # Reduce each dotted component to its leading run of digits ("12rc1" -> 12).
-  parts <- strsplit(v, "\\.")[[1]]
+.mosaic_run_engine <- function(v) {
+  if (is.null(v) || length(v) != 1L || is.na(v) || !nzchar(v)) return(NA_character_)
+  parts <- strsplit(as.character(v), "\\.")[[1]]
   nums  <- suppressWarnings(as.integer(sub("^([0-9]+).*$", "\\1", parts)))
-  if (length(nums) < 2L || is.na(nums[1]) || is.na(nums[2])) return(NA)
-  nums[1] < 1L && nums[2] < 13L
-}
-
-#' Deaths-Scale Compatibility of Two laser-cholera Versions
-#'
-#' The v0.12 -> v0.13 transition flipped the deaths-likelihood scale, so resuming
-#' across that boundary mixes incompatible scales in the on-disk shards. Two
-#' versions on the SAME side of the boundary are compatible (even if they differ).
-#'
-#' @return "incompatible" if the versions straddle the v0.13 boundary,
-#'   "compatible" if both are on the same side, "unknown" if either cannot be
-#'   classified.
-#' @noRd
-.mosaic_lc_deaths_scale <- function(persisted, current) {
-  pp <- .mosaic_lc_pre013(persisted)
-  pc <- .mosaic_lc_pre013(current)
-  if (is.na(pp) || is.na(pc)) return("unknown")
-  if (!identical(pp, pc)) return("incompatible")
-  "compatible"
+  if (length(nums) < 2L || is.na(nums[1]) || is.na(nums[2])) return(NA_character_)
+  if (nums[1] > 0L || nums[2] >= 66L) "R" else "python"
 }
 
 
@@ -1258,11 +1260,13 @@
 #' to read those and refuse to pool them with R-scored draws -- deleting the
 #' field would make an old shard indistinguishable from a current one.
 #'
-#' @param lc_version Retained for shard-compatibility comparisons against
-#'   Python-scored archives; not used for the current provenance stamp.
+#' The function took an \code{lc_version} argument until v0.67.0. It never read
+#' it: C-1 reduced the body to a constant when scoring became R-only, leaving a
+#' parameter every caller filled and nothing consumed.
+#'
 #' @return list(engine, impl_version)
 #' @noRd
-.mosaic_likelihood_provenance <- function(lc_version = NA_character_) {
+.mosaic_likelihood_provenance <- function() {
   list(
     engine       = "R",
     impl_version = .mosaic_likelihood_impl_version()
@@ -1277,9 +1281,10 @@
 #' that wrote the files (byte-exact for identical inputs); if serialization
 #' cannot be performed the check downgrades to a warning rather than blocking.
 #'
-#' Also guards the laser-cholera engine version: resuming across the v0.12 ->
-#' v0.13 deaths-likelihood-scale boundary is a hard error (the on-disk shards
-#' would mix incompatible scales). When \code{control} is supplied, the
+#' Also guards the transmission engine: resuming a run directory created before
+#' MOSAIC v0.66.0 is a hard error, because its shards came from the Python
+#' laser-cholera engine and pooling them with R-engine draws would produce a
+#' posterior from neither simulator. When \code{control} is supplied, the
 #' likelihood target (\code{control$likelihood}) is also compared, since it is
 #' not part of config.json/priors.json but changing it re-scores draws under a
 #' different target.
@@ -1379,70 +1384,48 @@
     }
   }
 
-  # laser-cholera engine version check: the v0.12 -> v0.13 transition flipped
-  # the deaths likelihood scale (raw disease_deaths -> rho_deaths-adjusted
-  # reported_deaths). Resuming a pre-v0.13 run on v0.13+ silently mixes
-  # incompatible scales in the on-disk shards.
+  # Transmission-engine check: v0.66.0 replaced the Python laser-cholera engine
+  # with the pure-R one. The two agree statistically but not draw-for-draw, so
+  # resuming a Python-engine run directory here would pool shards from two
+  # different simulators into one posterior -- a posterior from neither.
+  #
+  # The discriminator is the MOSAIC version persisted in environment.json, not
+  # a laser-cholera version: the engine no longer has a version of its own that
+  # is separable from the package's. This also removes the last reason for this
+  # function to touch Python at all.
   env_file <- file.path(dirs$inputs, "environment.json")
   persisted_env <- NULL
-  persisted_lc <- NA_character_
+  persisted_mosaic <- NA_character_
   if (file.exists(env_file)) {
     persisted_env <- tryCatch(
       jsonlite::fromJSON(env_file, simplifyVector = TRUE),
       error = function(e) NULL
     )
-    persisted_lc <- tryCatch(persisted_env$python$pkg_laser_cholera, error = function(e) NA_character_)
-    if (is.null(persisted_lc) || length(persisted_lc) != 1L) persisted_lc <- NA_character_
+    persisted_mosaic <- tryCatch(persisted_env$R$MOSAIC, error = function(e) NA_character_)
+    if (is.null(persisted_mosaic) || length(persisted_mosaic) != 1L)
+      persisted_mosaic <- NA_character_
   }
-  current_lc <- tryCatch({
-    if (reticulate::py_available(initialize = FALSE)) {
-      importlib <- reticulate::import("importlib.metadata", delay_load = FALSE)
-      as.character(importlib$version("laser-cholera"))
-    } else NA_character_
-  }, error = function(e) NA_character_)
+  persisted_engine <- .mosaic_run_engine(persisted_mosaic)
 
-  have_persisted <- !is.na(persisted_lc) && nzchar(persisted_lc)
-  have_current   <- !is.na(current_lc) && nzchar(current_lc)
-
-  if (have_persisted && have_current && persisted_lc != current_lc) {
-    # Hard-error only when the two versions straddle the v0.12 -> v0.13 boundary
-    # (the deaths-likelihood-scale flip). Two versions on the SAME side (both
-    # pre-0.13, or both >= 0.13) keep a compatible deaths scale.
-    verdict <- .mosaic_lc_deaths_scale(persisted_lc, current_lc)
-    if (identical(verdict, "incompatible")) {
-      stop(sprintf(paste0(
-        "resume: laser-cholera engine version mismatch (persisted '%s' vs current '%s'). ",
-        "The v0.12 -> v0.13 transition flipped the deaths likelihood scale (raw disease_deaths ",
-        "-> rho_deaths-adjusted reported_deaths). Resuming would silently mix incompatible ",
-        "scales in 2_calibration/samples/. Start a fresh run in a new directory."),
-        persisted_lc, current_lc), call. = FALSE)
-    } else if (identical(verdict, "unknown")) {
-      warning(sprintf(paste0(
-        "resume: could not classify laser-cholera versions (persisted '%s' vs current '%s') ",
-        "against the v0.13 deaths-scale boundary; proceeding, but verify both are on the same ",
-        "side before trusting the resumed posterior."),
-        persisted_lc, current_lc), call. = FALSE)
-    } else {
-      warning(sprintf(paste0(
-        "resume: laser-cholera engine version differs (persisted '%s' vs current '%s'), ",
-        "but both are on the same side of the v0.13 deaths-scale boundary so the schema is ",
-        "compatible. Minor numerical differences may exist. Proceeding."),
-        persisted_lc, current_lc), call. = FALSE)
-    }
-  } else if (!have_persisted || !have_current) {
-    # Surface a SKIPPED guard rather than passing silently: this is the exact
-    # condition (pre-feature run with no recorded version, or Python not bound)
-    # under which an undetected v0.13 boundary crossing could mix deaths scales.
-    reason <- if (!have_persisted && !have_current)
-      "no version recorded in 1_inputs/environment.json and laser-cholera not available in this session"
-    else if (!have_persisted)
-      "no laser-cholera version recorded in 1_inputs/environment.json"
+  if (identical(persisted_engine, "python")) {
+    stop(sprintf(paste0(
+      "resume: this run directory was created by MOSAIC %s, which simulated with the Python ",
+      "laser-cholera engine. MOSAIC %s simulates in R (run_LASER()). The two engines agree ",
+      "statistically but not draw-for-draw, so pooling their shards in 2_calibration/samples/ ",
+      "would produce a posterior from neither. Start a fresh run in a new directory."),
+      persisted_mosaic, as.character(utils::packageVersion("MOSAIC"))), call. = FALSE)
+  } else if (is.na(persisted_engine)) {
+    # Surface a SKIPPED guard rather than passing silently -- this is the exact
+    # condition (no environment.json, or an unparseable version) under which an
+    # undetected engine change could mix simulators.
+    reason <- if (!file.exists(env_file))
+      "no 1_inputs/environment.json in this run directory"
     else
-      "laser-cholera not available in this session"
+      "no parseable MOSAIC version recorded in 1_inputs/environment.json"
     warning(sprintf(paste0(
-      "resume: the laser-cholera engine deaths-scale guard was SKIPPED (%s). If the engine ",
-      "crossed the v0.13 boundary since this run started, the resumed posterior could mix ",
-      "incompatible deaths scales."), reason), call. = FALSE)
+      "resume: the transmission-engine guard was SKIPPED (%s). If this run was started before ",
+      "MOSAIC v0.66.0 its shards came from the Python engine, and the resumed posterior would ",
+      "mix two simulators."), reason), call. = FALSE)
   }
 
   # Likelihood-value provenance: refuse to pool shards scored by a different
@@ -1460,7 +1443,7 @@
   # likelihoods cannot be reproduced by the current code path.
   persisted_prov <- tryCatch(persisted_env$likelihood_provenance, error = function(e) NULL)
   if (!is.null(persisted_prov)) {
-    cur_prov <- .mosaic_likelihood_provenance(current_lc)
+    cur_prov <- .mosaic_likelihood_provenance()
     a <- serialize_obj(cur_prov); b <- serialize_obj(persisted_prov)
     if (!is.na(a) && !is.na(b) && !identical(a, b)) {
       pers_engine <- persisted_prov$engine %||% "?"
@@ -2106,9 +2089,11 @@
     #
     # Worker-death-robust gather: parLapply()/pblapply(cl=) collect results with a
     # BLOCKING unserialize() that, on Linux, hangs the master FOREVER if a PSOCK
-    # worker PROCESS dies mid-task -- a fatal C-level abort in the embedded
-    # Python/numba/laser engine, or an OOM kill (NOT an R-level error, which the
-    # worker already turns into a FALSE record). Calibration runs 10,000s of sims
+    # worker PROCESS dies mid-task -- an OOM kill, or any other fatal C-level
+    # abort (NOT an R-level error, which the worker already turns into a FALSE
+    # record). The embedded Python interpreter used to be the likeliest source
+    # of such an abort; the engine is pure R since v0.66.0, so OOM is now the
+    # realistic case, but a blocking gather is just as unrecoverable either way. Calibration runs 10,000s of sims
     # per country, the highest-exposure parallel gather in the package, so route it
     # through the same socketSelect()-timeout dispatch used by calc_model_ensemble()
     # (.mosaic_cluster_lapply_robust): a dead worker degrades on the survivors with

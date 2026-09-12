@@ -79,8 +79,12 @@ prefit_rolling_cv_psi <- function(PATHS,
      # spec_hash matches what we would compute now.
      prior <- .rcv_psi_read_manifest(manifest_path)
 
+     # The manifest used to also stamp a laser-cholera version here. That field
+     # was write-only provenance (nothing ever read it back -- cache hits key on
+     # spec_hash), and psi is upstream of the transmission engine entirely, so
+     # the engine version was never relevant to whether a frozen psi CSV is
+     # reusable. With the engine in R it would just duplicate mosaic_version.
      mosaic_ver <- as.character(utils::packageVersion("MOSAIC"))
-     laser_ver  <- .rcv_laser_version()
      n_seeds    <- .rcv_spec_n_seeds(spec)
      par_seeds  <- .rcv_spec_parallel_seeds(spec)
 
@@ -143,21 +147,19 @@ prefit_rolling_cv_psi <- function(PATHS,
                spec_hash      = spec_hash,
                n_seeds        = n_seeds,
                parallel_seeds = par_seeds,
-               mosaic_version = mosaic_ver,
-               laser_version  = laser_ver)
+               mosaic_version = mosaic_ver)
 
           # Persist after every cutoff so a long interrupted run resumes cleanly.
           .rcv_psi_write_manifest(manifest_path,
                                   prior_by_cut[as.character(cutoffs)],
                                   spec = spec, pred_start = pred_start,
-                                  pred_stop = pred_stop, mosaic_ver = mosaic_ver,
-                                  laser_ver = laser_ver)
+                                  pred_stop = pred_stop, mosaic_ver = mosaic_ver)
      }
 
      manifest <- .rcv_psi_write_manifest(
           manifest_path, prior_by_cut[as.character(cutoffs)],
           spec = spec, pred_start = pred_start, pred_stop = pred_stop,
-          mosaic_ver = mosaic_ver, laser_ver = laser_ver)
+          mosaic_ver = mosaic_ver)
 
      if (verbose)
           message(sprintf("Done: %d cutoff(s) frozen. Cache: %s",
@@ -267,17 +269,6 @@ prefit_rolling_cv_psi <- function(PATHS,
      paste(hex_words, collapse = "")
 }
 
-#' laser-cholera engine version string (best-effort; never errors).
-#' @keywords internal
-#' @noRd
-.rcv_laser_version <- function() {
-     v <- tryCatch({
-          lc <- reticulate::import("laser.cholera", delay_load = FALSE)
-          as.character(lc$`__version__`)
-     }, error = function(e) NA_character_)
-     if (length(v) != 1L || is.na(v)) NA_character_ else v
-}
-
 #' Read a prior psi_manifest.json (returns list(cutoffs=<list>) or empty).
 #' @keywords internal
 #' @noRd
@@ -297,13 +288,12 @@ prefit_rolling_cv_psi <- function(PATHS,
 #' @keywords internal
 #' @noRd
 .rcv_psi_write_manifest <- function(path, entry_list, spec, pred_start, pred_stop,
-                                    mosaic_ver, laser_ver) {
+                                    mosaic_ver) {
      entry_list <- Filter(Negate(is.null), entry_list)
      manifest <- list(
           experiment      = "rolling_cv_psi_cache",
           created         = as.character(Sys.time()),
           mosaic_version  = mosaic_ver,
-          laser_version   = laser_ver,
           pred_date_start = as.character(pred_start),
           pred_date_stop  = as.character(pred_stop),
           est_suitability_spec = spec,
