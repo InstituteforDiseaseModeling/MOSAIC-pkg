@@ -20,6 +20,23 @@
 #    this no-failed-sim fixture; the NA behavior is covered by
 #    test-optimize_ensemble_subset.R), and the optimize path was re-confirmed
 #    bit-identical at tolerance = 0 after the v0.36.9 (R-7) presort-memory refactor.
+#  * Re-baselined in v0.69.1 for the weighted_quantiles() plotting-position fix
+#    (claude/parity/rebaseline_parity_tier2.R). That fix moved the interpolation
+#    from each observation's upper weight-block edge to its midpoint, so every
+#    quantile-derived reference field legitimately changed; the INPUTS (ens, lls,
+#    seeds, ce_inputs) were asserted byte-identical and only the reference
+#    outputs were rewritten. Three things make this a re-baseline rather than a
+#    covered-up break: (i) the independent oracles #2a and #1 pass untouched at
+#    tolerance = 0, so the presorted/naive equivalence this file exists to guard
+#    is unaffected; (ii) calc_model_ensemble()'s weighted MEANS came back
+#    bit-identical (max rel 4.4e-16) and the means for the two objectives whose
+#    optimal subset did not change likewise (~6e-16) -- a quantile fix must not
+#    touch a mean, and the re-baseline script aborts if one moves; (iii) every
+#    changed cell moved UP and none moved down (cases_median 8 up / 0 down;
+#    ci_bounds 47 up / 0 down), which is the only direction correcting a
+#    downward bias can produce. The `mae` objective's optimal subset changed
+#    (optimal_n 7 -> 12) because the objective surface is computed from the
+#    corrected medians; that is a real behavioural change, recorded in NEWS.
 #  * Cross-platform tolerance (v0.36.13): the #1+#2b and #2b fixture comparisons
 #    use testthat::testthat_tolerance() (~1.5e-8), not tolerance = 0. The
 #    fixture was baked on the author's local machine; a Linux x86_64 + OpenBLAS

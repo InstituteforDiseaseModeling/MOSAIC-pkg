@@ -75,3 +75,80 @@ test_that("weighted statistics handle edge cases", {
   expect_no_error(weighted_quantiles(x, w_single, 0.5))
   expect_no_error(calc_weighted_mode(x, w_single))
 })
+# --- weighted_quantiles plotting positions (v0.69.1 fix) ---------------------
+# Until v0.69.1 the interpolation used each observation's UPPER weight-block
+# edge, cumsum(w)/sum(w), which biases every quantile downward in proportion to
+# how concentrated the weights are -- the BFRS posterior regime. These pin the
+# properties that bias violated, so the regression cannot return silently. Each
+# expected value is derived from the definition, never copied from output.
+
+test_that("weighted_quantiles places mass at weight-block midpoints", {
+  # A symmetric weight profile must return the centre. This is the function's
+  # own roxygen example; the old code returned 2.5.
+  expect_equal(weighted_quantiles(1:5, c(.1, .2, .4, .2, .1), 0.5), 3)
+
+  # Concentrating weight must pull the quantile to that value, not halfway.
+  # With two support points the interpolant approaches but cannot reach the
+  # endpoint, so assert the direction and the magnitude of the approach.
+  hi <- weighted_quantiles(c(1, 2), c(0.01, 0.99), 0.5)
+  lo <- weighted_quantiles(c(1, 2), c(0.99, 0.01), 0.5)
+  expect_equal(hi, 1.99)
+  expect_equal(lo, 1.01)
+  expect_gt(hi, 1.9)   # the old code returned 1.4949 here
+  expect_lt(lo, 1.1)
+
+  # Monotone in the weight: shifting weight toward x = 2 can only move the
+  # median up.
+  ws <- seq(0.05, 0.95, by = 0.05)
+  meds <- vapply(ws, function(p) weighted_quantiles(c(1, 2), c(1 - p, p), 0.5), 0)
+  expect_false(is.unsorted(meds))
+})
+
+test_that("weighted_quantiles reduces to the unweighted quantile at equal weights", {
+  set.seed(11)
+  x <- rnorm(50)
+  for (p in c(0.1, 0.25, 0.5, 0.75, 0.9)) {
+    expect_equal(weighted_quantiles(x, rep(1, 50), p),
+                 stats::quantile(x, p, type = 5, names = FALSE))
+  }
+  # Symmetric sample: the weighted median must equal median(). The old code
+  # returned 3 here rather than 3.5.
+  expect_equal(weighted_quantiles(c(3, 1, 4, 1, 5, 9, 2, 6), rep(1, 8), 0.5),
+               stats::median(c(3, 1, 4, 1, 5, 9, 2, 6)))
+})
+
+test_that("weighted_quantiles is invariant to weight scale and to splitting a weight", {
+  set.seed(12)
+  x <- rnorm(30); w <- runif(30)
+  expect_equal(weighted_quantiles(x, w, c(0.25, 0.5, 0.75)),
+               weighted_quantiles(x, 1000 * w, c(0.25, 0.5, 0.75)))
+  # Splitting one observation's weight across two copies of the same value
+  # must change nothing. The upper-edge form violated this.
+  expect_equal(weighted_quantiles(c(1, 2, 3), c(1, 1, 1), 0.5),
+               weighted_quantiles(c(1, 2, 2, 3), c(1, 0.5, 0.5, 1), 0.5))
+  # Endpoints clamp to the data range.
+  expect_equal(weighted_quantiles(1:5, rep(.2, 5), 0), 1)
+  expect_equal(weighted_quantiles(1:5, rep(.2, 5), 1), 5)
+})
+
+test_that("weighted_quantiles collapses tied plotting positions without warning", {
+  # Weights spanning enough orders of magnitude that cumsum() saturates: every
+  # position after the first collides. Negative-tested -- this input really does
+  # tie (2 distinct positions from 6), so the branch is exercised, not assumed.
+  w <- c(1, rep(1e-20, 5))
+  x <- c(10, 20, 30, 40, 50, 60)
+  pos <- (cumsum(w) - 0.5 * w) / sum(w)
+  expect_lt(length(unique(pos)), length(w))          # the branch will fire
+  expect_silent(res <- weighted_quantiles(x, w, 0.5))
+  expect_equal(res, 10)                              # all detectable weight on x = 10
+  expect_true(is.finite(res))
+})
+
+test_that("weighted_quantiles_presorted agrees with weighted_quantiles after the fix", {
+  set.seed(13)
+  for (i in 1:20) {
+    x <- rnorm(40); w <- runif(40); ord <- order(x)
+    expect_equal(weighted_quantiles_presorted(x[ord], w[ord], c(0.05, 0.5, 0.95)),
+                 weighted_quantiles(x, w, c(0.05, 0.5, 0.95)), tolerance = 0)
+  }
+})

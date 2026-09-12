@@ -132,9 +132,16 @@ test_that("per-member peak R_t = post-burn-in time-max reduced by weighted_quant
   expect_equal(ref[2L], weighted_quantiles(c(2, 3, 4), w, 0.5))
   # Member 3 carries 70% of the mass, so the weighted median is pulled ABOVE the
   # unweighted median 3.0 toward its peak 4.0: the explosivity stat is posterior-
-  # weighted (hand value: weighted_quantiles(c(2,3,4), c(.1,.2,.7), .5) = 3.2857).
+  # weighted. Hand value from the midpoint plotting positions
+  # (cumsum(w) - w/2)/sum(w) = (0.05, 0.20, 0.65): p = 0.5 lands between x = 3
+  # and x = 4, giving 3 + (0.5 - 0.20)/(0.65 - 0.20) = 11/3.
+  #
+  # This was 23/7 = 3.2857 before v0.69.1, when weighted_quantiles() interpolated
+  # against the upper weight-block edge and so under-credited the dominant
+  # member. The corrected value sits closer to 4.0, which is what this test's own
+  # comment asks for.
   expect_gt(ref[2L], 3.0)
-  expect_equal(ref[2L], 23 / 7, tolerance = 1e-6)   # = 3.285714...
+  expect_equal(ref[2L], 11 / 3, tolerance = 1e-6)   # = 3.666666...
   expect_equal(ref[3L], weighted_quantiles(c(2, 3, 4), w, 0.975))
 })
 

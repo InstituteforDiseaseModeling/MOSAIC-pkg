@@ -1,3 +1,51 @@
+# MOSAIC 0.69.1
+
+## Bug fix: `weighted_quantiles()` biased every weighted quantile downward
+
+`weighted_quantiles()` and `weighted_quantiles_presorted()` interpolated against each observation's **upper** weight-block edge, `cumsum(w)/sum(w)`, instead of its **midpoint**, `(cumsum(w) - w/2)/sum(w)`. This credits each observation with the whole of its own weight before interpolating to it, so every quantile was pulled toward lower values. The bias is negligible when weights are equal and spread thin, and grows with weight concentration — which is precisely the BFRS posterior regime these functions are used in.
+
+Two cases pin the defect. The function's own documented example, `x = 1:5` with `w = c(.1, .2, .4, .2, .1)`, is symmetric about 3 and returned **2.5**. With `x = c(1, 2)` and 99% of the weight on `x = 2`, it returned **1.49** rather than approaching 2. Equal weights did not reproduce `stats::quantile()`, and splitting one observation's weight across two copies of the same value changed the answer — an invariance any weighted quantile must satisfy.
+
+With the fix, equal weights reduce exactly to the standard Hazen (type-5) quantile.
+
+### What this changes
+
+Every quantile-derived output moves **upward**. Affected paths are `calc_model_ensemble()` (weighted-median central estimate, CI bounds), `optimize_ensemble_subset()`, `calc_Reff()`, `calc_model_posterior_quantiles()` and `add_reproductive_numbers()`. Weighted *means* are untouched.
+
+Size depends entirely on how concentrated the posterior is. On a realistic calibration posterior (487 parameter sets, ESS 65) the ensemble median shifted in 13.7% of cells and totals rose 0.38%. On the small, heavily-concentrated `parity_tier2` test fixture the medians moved 2–63%, and for the `mae` objective the *selected subset* changed (`optimal_n` 7 → 12) because `optimize_ensemble_subset()` scores candidates using these medians. Anyone comparing new ensemble output against runs produced before this release should expect a small upward shift in the central estimate and CI bounds.
+
+### Tie handling
+
+Weights spanning many orders of magnitude (the Gibbs weight floor is 1e-15) make consecutive plotting positions collide in double precision. These are now collapsed explicitly by their **weighted** mean, rather than left to `approx()`'s unweighted tie averaging, which also emitted one warning per call — 46,672 in a single ensemble reduce.
+
+### Verification
+
+The golden fixture `tests/testthat/fixtures/parity_tier2.rds` was re-baselined, inputs asserted byte-identical, by `claude/parity/rebaseline_parity_tier2.R`. Three independent checks distinguish a re-baseline from a covered-up break: the fixture-free oracles in `test-tier2_parity.R` (#2a, #1) pass untouched at `tolerance = 0`; weighted means came back bit-identical at ~4e-16, and the re-baseline script aborts if one moves; and every changed cell moved up with none moving down (`cases_median` 8 up / 0 down, `ci_bounds` 47 up / 0 down), the only direction correcting a downward bias can produce.
+
+Found while running the phase A-5 calibration acceptance; it affected neither arm's comparison, since both were reduced by the same function.
+
+# MOSAIC 0.69.0
+
+## The R engine is accepted
+
+Phase A-5 of `migrate-laser-r.md` is complete: the pure-R transmission engine has passed the acceptance criteria prespecified before the port began. No package code changed in this release — this version marks the acceptance itself, which is A-5's stated exit.
+
+### Tier C — free-running distributional parity
+
+Four configurations (default 40-location, single-location, high-vaccination, epidemic-threshold-crossing), 200 seeds per arm, each config's noise floor measured from a Python-vs-Python replicate pair before the R arm was compared to it. **All 36 configuration × quantity bands pass.**
+
+The three configurations beyond the default were built for this release and each was verified to reach the code path it targets before engine time was spent on it. That check earned its keep: the default configuration's `nu_2_jt` is all zeros and only 17 of 40 patches receive any `nu_1_jt`, so the entire second-dose block had never executed under Tier C until the high-vaccination configuration turned it on.
+
+### Calibration acceptance
+
+500 parameter draws from `sample_parameters()` pushed through both engines from the same config files and scored by the same R `calc_model_likelihood()`, with a Python replicate over the same draws setting the noise floor. **All 32 bands pass** — R², bias ratio, ESS (Kish and perplexity), mean log-likelihood, and the weighted posterior marginals of all 25 sampled scalar parameters.
+
+### One behavioural difference, quantified
+
+NumPy's Poisson sampler raises `ValueError('lam value too large')` above λ ≈ 9.2e18 because it returns `int64`; R's `rpois()` returns a double and samples correctly there. Consequently **13 of 500 prior draws (2.6%) run under the R engine and are rejected by the Python engine** — the same 13 under both Python replicates despite a 100,000 seed offset, so the rejection is deterministic in the draw. All 13 carry an extreme `zeta_2` and overflow at the environmental shedding draw. Their R results are ordinary (no non-finite values; 0.5–6.4M cases against 2–3.8M for the best-fitting ordinary draws), they would carry 3.2% of posterior mass, and one ranks 9th best of 500.
+
+The practical consequence is that the R engine explores a thin band of prior tail that the Python engine silently discarded. R is the correct arm; no change was made.
+
 # MOSAIC 0.68.0
 
 ## `LASER` is gone from the names too

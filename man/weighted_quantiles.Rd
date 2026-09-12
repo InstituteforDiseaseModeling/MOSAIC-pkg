@@ -17,13 +17,23 @@ weighted_quantiles(x, w, probs)
 Vector of weighted quantiles
 }
 \description{
-Calculates weighted quantiles for a vector of values using linear interpolation.
+Calculates weighted quantiles for a vector of values using linear
+interpolation between midpoint plotting positions.
 }
 \details{
 Drops non-finite values and non-positive weights, sorts the survivors by
 value, then delegates to \code{\link{weighted_quantiles_presorted}} for the
-cumulative-weight interpolation. (Splitting out the sorted core lets hot
-callers sort once and reuse the order; the public behaviour is unchanged.)
+interpolation. (Splitting out the sorted core lets hot callers sort once and
+reuse the order.)
+
+Each observation is placed at the midpoint of its own weight block,
+\eqn{(\sum_{k \le i} w_k - w_i/2) / \sum_k w_k}, and quantiles are linearly
+interpolated between those positions. For equal weights the positions are
+\eqn{(i - 0.5)/n}, so the unweighted case reduces to the standard Hazen
+(type-5) quantile. Before v0.69.1 the upper edge \eqn{\sum_{k \le i} w_k}
+was used instead, which biased every quantile downward in proportion to how
+concentrated the weights were; see NEWS for the size of the effect on
+\code{calc_model_ensemble()}.
 }
 \examples{
 x <- c(1, 2, 3, 4, 5)
